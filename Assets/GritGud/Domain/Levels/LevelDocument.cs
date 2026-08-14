@@ -190,9 +190,209 @@ namespace GritGud.Domain.Levels
     }
 
     [Serializable]
+    public sealed class LevelScenarioActorData
+    {
+        public string id = string.Empty;
+        public string templateId = string.Empty;
+        public LevelTransformData transform;
+        public bool playerControlled;
+        public bool initiallySelected;
+        public bool primaryTarget;
+
+        public void Normalize()
+        {
+            id = id ?? string.Empty;
+            templateId = templateId ?? string.Empty;
+        }
+
+        public LevelScenarioActorData DeepCopy()
+        {
+            Normalize();
+            return new LevelScenarioActorData
+            {
+                id = id,
+                templateId = templateId,
+                transform = transform,
+                playerControlled = playerControlled,
+                initiallySelected = initiallySelected,
+                primaryTarget = primaryTarget,
+            };
+        }
+    }
+
+    [Serializable]
+    public sealed class LevelScenarioObjectiveData
+    {
+        public string id = string.Empty;
+        public string entityId = string.Empty;
+        public string interactionPointId = string.Empty;
+        public string actionId = "interact";
+        public string displayName = "Objective";
+        public string activeHudText = string.Empty;
+        public string completedHudText = string.Empty;
+        public int actionPointCost = 1;
+
+        public void Normalize()
+        {
+            id = id ?? string.Empty;
+            entityId = entityId ?? string.Empty;
+            interactionPointId = interactionPointId ?? string.Empty;
+            actionId = actionId ?? string.Empty;
+            displayName = displayName ?? string.Empty;
+            activeHudText = activeHudText ?? string.Empty;
+            completedHudText = completedHudText ?? string.Empty;
+        }
+
+        public LevelScenarioObjectiveData DeepCopy()
+        {
+            Normalize();
+            return new LevelScenarioObjectiveData
+            {
+                id = id,
+                entityId = entityId,
+                interactionPointId = interactionPointId,
+                actionId = actionId,
+                displayName = displayName,
+                activeHudText = activeHudText,
+                completedHudText = completedHudText,
+                actionPointCost = actionPointCost,
+            };
+        }
+    }
+
+    [Serializable]
+    public sealed class LevelScenarioPropData
+    {
+        public string entityId = string.Empty;
+        public float mass = 25f;
+        public string sizeClass = "medium";
+        public bool startsEncounterOnAttack;
+
+        public void Normalize()
+        {
+            entityId = entityId ?? string.Empty;
+            sizeClass = sizeClass ?? string.Empty;
+        }
+
+        public LevelScenarioPropData DeepCopy()
+        {
+            Normalize();
+            return new LevelScenarioPropData
+            {
+                entityId = entityId,
+                mass = mass,
+                sizeClass = sizeClass,
+                startsEncounterOnAttack = startsEncounterOnAttack,
+            };
+        }
+    }
+
+    [Serializable]
+    public sealed class LevelScenarioVehicleData
+    {
+        public string entityId = string.Empty;
+        public float maximumSpeed = 12f;
+        public float accelerationPerTurn = 3f;
+        public float brakingPerTurn = 4f;
+        public float lowSpeedTurnDegrees = 45f;
+        public float highSpeedTurnDegrees = 15f;
+        public float baseTurningRadius = 2f;
+        public float speedTurningRadiusFactor = 0.25f;
+        public float startingSpeed;
+        public string startingOccupantActorId = string.Empty;
+        public bool startsEncounterOnAttack;
+
+        public void Normalize()
+        {
+            entityId = entityId ?? string.Empty;
+            startingOccupantActorId = startingOccupantActorId ?? string.Empty;
+        }
+
+        public LevelScenarioVehicleData DeepCopy()
+        {
+            Normalize();
+            return new LevelScenarioVehicleData
+            {
+                entityId = entityId,
+                maximumSpeed = maximumSpeed,
+                accelerationPerTurn = accelerationPerTurn,
+                brakingPerTurn = brakingPerTurn,
+                lowSpeedTurnDegrees = lowSpeedTurnDegrees,
+                highSpeedTurnDegrees = highSpeedTurnDegrees,
+                baseTurningRadius = baseTurningRadius,
+                speedTurningRadiusFactor = speedTurningRadiusFactor,
+                startingSpeed = startingSpeed,
+                startingOccupantActorId = startingOccupantActorId,
+                startsEncounterOnAttack = startsEncounterOnAttack,
+            };
+        }
+    }
+
+    [Serializable]
+    public sealed class LevelScenarioData
+    {
+        public uint randomSeed = 12648430;
+        public float minimumVoluntaryTurnSeconds = 1.25f;
+        public List<LevelScenarioActorData> actors = new List<LevelScenarioActorData>();
+        public List<LevelScenarioObjectiveData> objectives =
+            new List<LevelScenarioObjectiveData>();
+        public List<LevelScenarioPropData> props = new List<LevelScenarioPropData>();
+        public List<LevelScenarioVehicleData> vehicles =
+            new List<LevelScenarioVehicleData>();
+
+        public void Normalize()
+        {
+            actors = actors ?? new List<LevelScenarioActorData>();
+            objectives = objectives ?? new List<LevelScenarioObjectiveData>();
+            props = props ?? new List<LevelScenarioPropData>();
+            vehicles = vehicles ?? new List<LevelScenarioVehicleData>();
+
+            foreach (LevelScenarioActorData actor in actors)
+                actor?.Normalize();
+            foreach (LevelScenarioObjectiveData objective in objectives)
+                objective?.Normalize();
+            foreach (LevelScenarioPropData prop in props)
+                prop?.Normalize();
+            foreach (LevelScenarioVehicleData vehicle in vehicles)
+                vehicle?.Normalize();
+        }
+
+        public LevelScenarioData DeepCopy()
+        {
+            Normalize();
+            var copy = new LevelScenarioData
+            {
+                randomSeed = randomSeed,
+                minimumVoluntaryTurnSeconds = minimumVoluntaryTurnSeconds,
+            };
+            foreach (LevelScenarioActorData actor in actors)
+                copy.actors.Add(actor?.DeepCopy());
+            foreach (LevelScenarioObjectiveData objective in objectives)
+                copy.objectives.Add(objective?.DeepCopy());
+            foreach (LevelScenarioPropData prop in props)
+                copy.props.Add(prop?.DeepCopy());
+            foreach (LevelScenarioVehicleData vehicle in vehicles)
+                copy.vehicles.Add(vehicle?.DeepCopy());
+            return copy;
+        }
+
+        public LevelScenarioActorData FindInitiallySelectedPlayer()
+        {
+            Normalize();
+            foreach (LevelScenarioActorData actor in actors)
+            {
+                if (actor != null && actor.playerControlled && actor.initiallySelected)
+                    return actor;
+            }
+
+            return null;
+        }
+    }
+
+    [Serializable]
     public sealed class LevelDocument
     {
-        public const int CurrentSchemaVersion = 3;
+        public const int CurrentSchemaVersion = 4;
 
         public int schemaVersion = CurrentSchemaVersion;
         public string levelId = string.Empty;
@@ -202,7 +402,10 @@ namespace GritGud.Domain.Levels
             new Float3Data(50f, 10f, 50f));
         public List<LevelEntity> entities = new List<LevelEntity>();
         public List<TerrainSurfaceData> terrainSurfaces = new List<TerrainSurfaceData>();
-        public LevelPlaytestData playtest = new LevelPlaytestData();
+        public LevelScenarioData scenario = new LevelScenarioData();
+
+        [NonSerialized]
+        public LevelPlaytestData legacyPlaytest;
 
         public void Normalize()
         {
@@ -210,7 +413,8 @@ namespace GritGud.Domain.Levels
             displayName = displayName ?? string.Empty;
             entities = entities ?? new List<LevelEntity>();
             terrainSurfaces = terrainSurfaces ?? new List<TerrainSurfaceData>();
-            playtest = playtest ?? new LevelPlaytestData();
+            scenario = scenario ?? new LevelScenarioData();
+            scenario.Normalize();
 
             foreach (LevelEntity entity in entities)
             {
@@ -232,7 +436,8 @@ namespace GritGud.Domain.Levels
                 levelId = levelId,
                 displayName = displayName,
                 bounds = bounds,
-                playtest = playtest?.DeepCopy(),
+                scenario = scenario?.DeepCopy(),
+                legacyPlaytest = legacyPlaytest?.DeepCopy(),
             };
 
             foreach (LevelEntity entity in entities)

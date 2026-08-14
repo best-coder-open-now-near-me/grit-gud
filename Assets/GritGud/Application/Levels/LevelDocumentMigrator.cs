@@ -26,6 +26,7 @@ namespace GritGud.Application.Levels
                 {
                     new LevelDocumentV1ToV2Migration(),
                     new LevelDocumentV2ToV3Migration(),
+                    new LevelDocumentV3ToV4Migration(),
                 };
             }
 
@@ -128,13 +129,55 @@ namespace GritGud.Application.Levels
             }
 
             LevelDocument migrated = source.DeepCopy();
-            migrated.playtest = migrated.playtest ?? new LevelPlaytestData();
-            migrated.playtest.playerStart = new LevelTransformData(
+            migrated.legacyPlaytest = migrated.legacyPlaytest ?? new LevelPlaytestData();
+            migrated.legacyPlaytest.playerStart = new LevelTransformData(
                 new Float3Data(
                     migrated.bounds.center.x,
                     migrated.bounds.center.y + (migrated.bounds.size.y * 0.5f),
                     migrated.bounds.center.z),
                 0f);
+            migrated.schemaVersion = TargetVersion;
+            return migrated;
+        }
+    }
+
+    public sealed class LevelDocumentV3ToV4Migration : ILevelDocumentMigration
+    {
+        public int SourceVersion => 3;
+
+        public int TargetVersion => 4;
+
+        public LevelDocument Migrate(LevelDocument source)
+        {
+            if (source == null)
+            {
+                throw new ArgumentNullException(nameof(source));
+            }
+
+            LevelDocument migrated = source.DeepCopy();
+            LevelTransformData playerStart = migrated.legacyPlaytest != null
+                ? migrated.legacyPlaytest.playerStart
+                : new LevelTransformData(
+                    new Float3Data(
+                        migrated.bounds.center.x,
+                        migrated.bounds.center.y + (migrated.bounds.size.y * 0.5f),
+                        migrated.bounds.center.z),
+                    0f);
+            migrated.scenario = new LevelScenarioData
+            {
+                actors = new List<LevelScenarioActorData>
+                {
+                    new LevelScenarioActorData
+                    {
+                        id = "player",
+                        templateId = "player",
+                        transform = playerStart,
+                        playerControlled = true,
+                        initiallySelected = true,
+                    },
+                },
+            };
+            migrated.legacyPlaytest = null;
             migrated.schemaVersion = TargetVersion;
             return migrated;
         }

@@ -133,7 +133,7 @@ namespace GritGud.Presentation.LevelEditing
                 ApplyInteractionPoint,
                 DeleteInteractionPoint,
                 ApplyDestructibleDefaults);
-            gui.SyncPlayerStartFields(workspace.CreateSnapshot().playtest.playerStart);
+            gui.SyncPlayerStartFields(RequireSelectedPlayer(workspace.CreateSnapshot()).transform);
             EnsureOutlines();
             validationIssues = workspace.ValidationIssues;
 
@@ -453,13 +453,21 @@ namespace GritGud.Presentation.LevelEditing
                 return;
             }
 
-            LevelTransformData before = workspace.CreateSnapshot().playtest.playerStart;
+            LevelTransformData before = RequireSelectedPlayer(workspace.CreateSnapshot()).transform;
             var after = new LevelTransformData(
                 new Float3Data(x, y, z),
                 NormalizeYaw(yaw));
             workspace.Execute(new SetPlayerStartCommand(before, after));
             gui.SyncPlayerStartFields(after);
             SetStatus("Updated playtest player start.");
+        }
+
+        private static LevelScenarioActorData RequireSelectedPlayer(LevelDocument document)
+        {
+            LevelScenarioActorData player = document?.scenario?
+                .FindInitiallySelectedPlayer();
+            return player ?? throw new InvalidOperationException(
+                "The level scenario does not define an initially selected player actor.");
         }
 
         private void TogglePreview()

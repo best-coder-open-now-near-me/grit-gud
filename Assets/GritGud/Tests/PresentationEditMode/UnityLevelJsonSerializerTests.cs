@@ -48,7 +48,9 @@ namespace GritGud.Presentation.Tests
             Assert.That(result.entities[0].destructible.enabled, Is.True);
             Assert.That(result.entities[0].interactionPoints[0].type, Is.EqualTo("doorway"));
             Assert.That(result.entities[0].interactionPoints[0].radius, Is.EqualTo(1.25f));
-            Assert.That(result.playtest.playerStart.position.y, Is.EqualTo(7.5f));
+            Assert.That(
+                result.scenario.FindInitiallySelectedPlayer().transform.position.y,
+                Is.EqualTo(7.5f));
         }
 
         [Test]
@@ -60,6 +62,28 @@ namespace GritGud.Presentation.Tests
                 () => serializer.Deserialize(string.Empty));
 
             Assert.That(exception.Message, Does.Contain("empty"));
+        }
+
+        [Test]
+        public void VersionThreeJsonMigratesLegacyPlaytestWithoutReexportingIt()
+        {
+            const string json = "{\"schemaVersion\":3,\"levelId\":\"legacy\","
+                + "\"displayName\":\"Legacy\",\"bounds\":{\"center\":{\"x\":0,\"y\":2.5,\"z\":0},"
+                + "\"size\":{\"x\":50,\"y\":10,\"z\":50}},\"entities\":[],"
+                + "\"terrainSurfaces\":[],\"playtest\":{\"playerStart\":{\"position\":"
+                + "{\"x\":3,\"y\":4,\"z\":5},\"yawDegrees\":90}}}";
+            var serializer = new UnityLevelJsonSerializer();
+
+            LevelDocument result = serializer.Deserialize(json);
+            string currentJson = serializer.Serialize(result);
+
+            LevelScenarioActorData player = result.scenario.FindInitiallySelectedPlayer();
+            Assert.That(player.transform.position.x, Is.EqualTo(3f));
+            Assert.That(player.transform.position.y, Is.EqualTo(4f));
+            Assert.That(player.transform.position.z, Is.EqualTo(5f));
+            Assert.That(player.transform.yawDegrees, Is.EqualTo(90f));
+            Assert.That(currentJson, Does.Contain("\"scenario\""));
+            Assert.That(currentJson, Does.Not.Contain("\"playtest\""));
         }
 
         [Test]

@@ -34,7 +34,7 @@ namespace GritGud.Domain.Tests.Levels
         }
 
         [Test]
-        public void VersionOneDocumentMigratesWithTerrainAndPlaytestDefaults()
+        public void VersionOneDocumentMigratesWithTerrainAndScenarioDefaults()
         {
             LevelDocument source = LevelDocumentFactory.CreateEmpty("Legacy Level");
             source.schemaVersion = 1;
@@ -49,9 +49,36 @@ namespace GritGud.Domain.Tests.Levels
 
             Assert.That(result.schemaVersion, Is.EqualTo(LevelDocument.CurrentSchemaVersion));
             Assert.That(result.terrainSurfaces, Is.Empty);
-            Assert.That(result.playtest, Is.Not.Null);
-            Assert.That(result.playtest.playerStart.position.y, Is.EqualTo(7.5f));
+            Assert.That(result.scenario, Is.Not.Null);
+            Assert.That(result.scenario.actors, Has.Count.EqualTo(1));
+            Assert.That(
+                result.scenario.FindInitiallySelectedPlayer().transform.position.y,
+                Is.EqualTo(7.5f));
             Assert.That(result.entities.Single().id, Is.EqualTo("preserved"));
+        }
+
+        [Test]
+        public void VersionThreePlayerStartMigratesIntoSelectedScenarioActor()
+        {
+            LevelDocument source = LevelDocumentFactory.CreateEmpty("Legacy Playtest");
+            source.schemaVersion = 3;
+            source.scenario = null;
+            source.legacyPlaytest = new LevelPlaytestData
+            {
+                playerStart = new LevelTransformData(
+                    new Float3Data(4f, 2f, -6f),
+                    135f),
+            };
+
+            LevelDocument result = new LevelDocumentMigrator().MigrateToCurrent(source);
+
+            LevelScenarioActorData player = result.scenario.FindInitiallySelectedPlayer();
+            Assert.That(player.id, Is.EqualTo("player"));
+            Assert.That(player.templateId, Is.EqualTo("player"));
+            Assert.That(player.transform.position.x, Is.EqualTo(4f));
+            Assert.That(player.transform.position.z, Is.EqualTo(-6f));
+            Assert.That(player.transform.yawDegrees, Is.EqualTo(135f));
+            Assert.That(result.legacyPlaytest, Is.Null);
         }
     }
 }

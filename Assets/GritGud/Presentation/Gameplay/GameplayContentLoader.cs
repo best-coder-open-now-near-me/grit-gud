@@ -102,52 +102,140 @@ namespace GritGud.Presentation.Gameplay
                 throw new ArgumentNullException(nameof(source));
             }
 
-            GameplayContentPackage defaults = LoadDefault();
-            ScenarioContentDocument scenario = JsonUtility.FromJson<ScenarioContentDocument>(
-                JsonUtility.ToJson(defaults.Scenario));
             LevelDocument level = source.DeepCopy();
-            scenario.scenarioId = "playtest-" + level.levelId;
-            scenario.displayName = "Playtest: " + level.displayName;
-            scenario.levelId = level.levelId;
-            scenario.primaryTargetActorId = string.Empty;
-            scenario.primaryObjectiveId = string.Empty;
-            scenario.objectives.Clear();
-            scenario.props.Clear();
-            scenario.vehicles.Clear();
-            string selectedActorId = scenario.playerParty.initiallySelectedActorId;
-            if (string.IsNullOrWhiteSpace(selectedActorId))
-            {
-                throw new InvalidOperationException(
-                    "The default scenario must define an initially selected player actor for test play.");
-            }
-
-            scenario.playerParty = new ScenarioPlayerPartyData
-            {
-                actorIds = new List<string> { selectedActorId },
-                initiallySelectedActorId = selectedActorId,
-            };
-            scenario.actors = scenario.actors
-                .Where(actor => actor != null && string.Equals(actor.id, selectedActorId, StringComparison.Ordinal))
-                .ToList();
-            if (scenario.actors.Count != 1)
-            {
-                throw new InvalidOperationException(
-                    $"The default scenario does not define selected player actor '{selectedActorId}' for test play.");
-            }
-
-            Float3Data playerStart = level.playtest.playerStart.position;
-            float startX = playerStart.x - ((scenario.actors.Count - 1) * 0.75f);
-            float startY = playerStart.y;
-            for (int index = 0; index < scenario.actors.Count; index++)
-            {
-                scenario.actors[index].position = new Float3Data(
-                    startX + (index * 1.5f),
-                    startY,
-                    playerStart.z);
-                scenario.actors[index].facingDegrees = level.playtest.playerStart.yawDegrees;
-            }
-
+            GameplayContentPackage defaults = LoadDefault();
+            ScenarioContentDocument scenario = CreateSandboxScenario(
+                level,
+                defaults.Scenario);
             return CreatePackage(new GameplayContentManifestDocument(), scenario, level, true);
+        }
+
+        private static ScenarioContentDocument CreateSandboxScenario(
+            LevelDocument level,
+            ScenarioContentDocument templateSource)
+        {
+            LevelScenarioData authored = level.scenario
+                ?? throw new InvalidOperationException(
+                    "The level does not define authored scenario data.");
+            var templates = templateSource.actors
+                .Where(actor => actor != null && !string.IsNullOrWhiteSpace(actor.id))
+                .GroupBy(actor => actor.id, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+            var scenario = new ScenarioContentDocument
+            {
+                schemaVersion = ScenarioContentDocument.CurrentSchemaVersion,
+                scenarioId = "playtest-" + level.levelId,
+                displayName = "Playtest: " + level.displayName,
+                levelId = level.levelId,
+                randomSeed = authored.randomSeed,
+                timing = new ScenarioTimingData
+                {
+                    minimumVoluntaryTurnSeconds = authored.minimumVoluntaryTurnSeconds,
+                },
+            };
+
+            foreach (LevelScenarioActorData instance in authored.actors)
+            {
+                if (instance == null || !templates.TryGetValue(
+                        instance.templateId ?? string.Empty,
+                        out ScenarioActorContentData template))
+                {
+                    throw new InvalidOperationException(
+                        $"Scenario actor '{instance?.id}' references unavailable template "
+                        + $"'{instance?.templateId}'.");
+                }
+
+                ScenarioActorContentData actor = Clone(template);
+                actor.id = instance.id;
+                actor.position = instance.transform.position;
+                actor.facingDegrees = instance.transform.yawDegrees;
+                scenario.actors.Add(actor);
+                if (instance.playerControlled)
+                    scenario.playerParty.actorIds.Add(instance.id);
+                if (instance.initiallySelected)
+                    scenario.playerParty.initiallySelectedActorId = instance.id;
+                if (instance.primaryTarget)
+                    scenario.primaryTargetActorId = instance.id;
+            }
+
+            foreach (LevelScenarioObjectiveData authoredObjective in authored.objectives)
+            {
+                LevelEntity entity = level.entities.FirstOrDefault(candidate =>
+                    string.Equals(candidate?.id, authoredObjective?.entityId, StringComparison.Ordinal));
+                InteractionPointData point = entity?.interactionPoints.FirstOrDefault(candidate =>
+                    string.Equals(
+                        candidate?.id,
+                        authoredObjective?.interactionPointId,
+                        StringComparison.Ordinal));
+                if (authoredObjective == null || point == null)
+                {
+                    throw new InvalidOperationException(
+                        $"Scenario objective '{authoredObjective?.id}' does not resolve to an interaction point.");
+                }
+
+                scenario.objectives.Add(new ScenarioObjectiveContentData
+                {
+                    id = authoredObjective.id,
+                    levelInteractionPointId = authoredObjective.interactionPointId,
+                    levelInteractionPointType = point.type,
+                    actionId = authoredObjective.actionId,
+                    displayName = authoredObjective.displayName,
+                    activeHudText = authoredObjective.activeHudText,
+                    completedHudText = authoredObjective.completedHudText,
+                    turnCost = new ScenarioActionCostData
+                    {
+                        actionPoints = authoredObjective.actionPointCost,
+                        mobility = "set",
+                    },
+                });
+            }
+
+            if (scenario.objectives.Count > 0)
+                scenario.primaryObjectiveId = scenario.objectives[0].id;
+
+            foreach (LevelScenarioPropData prop in authored.props)
+            {
+                scenario.props.Add(new ScenarioPropContentData
+                {
+                    entityId = prop.entityId,
+                    mass = prop.mass,
+                    sizeClass = prop.sizeClass,
+                    attackResponse = new ScenarioAttackResponseData
+                    {
+                        startsEncounter = prop.startsEncounterOnAttack,
+                    },
+                });
+            }
+
+            foreach (LevelScenarioVehicleData vehicle in authored.vehicles)
+            {
+                scenario.vehicles.Add(new ScenarioVehicleContentData
+                {
+                    entityId = vehicle.entityId,
+                    maximumSpeed = vehicle.maximumSpeed,
+                    accelerationPerTurn = vehicle.accelerationPerTurn,
+                    brakingPerTurn = vehicle.brakingPerTurn,
+                    lowSpeedTurnDegrees = vehicle.lowSpeedTurnDegrees,
+                    highSpeedTurnDegrees = vehicle.highSpeedTurnDegrees,
+                    baseTurningRadius = vehicle.baseTurningRadius,
+                    speedTurningRadiusFactor = vehicle.speedTurningRadiusFactor,
+                    startingSpeed = vehicle.startingSpeed,
+                    startingOccupantActorId = vehicle.startingOccupantActorId,
+                    attackResponse = new ScenarioAttackResponseData
+                    {
+                        startsEncounter = vehicle.startsEncounterOnAttack,
+                    },
+                });
+            }
+
+            scenario.Normalize();
+            return scenario;
+        }
+
+        private static ScenarioActorContentData Clone(ScenarioActorContentData source)
+        {
+            return JsonUtility.FromJson<ScenarioActorContentData>(
+                JsonUtility.ToJson(source));
         }
 
         private static GameplayContentPackage CreatePackage(

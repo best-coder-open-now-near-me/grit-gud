@@ -65,8 +65,15 @@ namespace GritGud.Application.Levels
                 throw new ArgumentNullException(nameof(document));
             }
 
-            document.playtest = document.playtest ?? new LevelPlaytestData();
-            document.playtest.playerStart = value;
+            LevelScenarioActorData player = document.scenario?
+                .FindInitiallySelectedPlayer();
+            if (player == null)
+            {
+                throw new InvalidOperationException(
+                    "The scenario does not define an initially selected player actor.");
+            }
+
+            player.transform = value;
         }
     }
 

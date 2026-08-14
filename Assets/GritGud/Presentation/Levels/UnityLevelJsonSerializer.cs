@@ -7,6 +7,12 @@ namespace GritGud.Presentation.Levels
 {
     public sealed class UnityLevelJsonSerializer : ILevelSerializer
     {
+        [Serializable]
+        private sealed class LegacyPlaytestEnvelope
+        {
+            public LevelPlaytestData playtest;
+        }
+
         public const int MaximumDocumentCharacters = 2 * 1024 * 1024;
 
         private readonly LevelDocumentMigrator migrator;
@@ -54,6 +60,13 @@ namespace GritGud.Presentation.Levels
                 if (document == null)
                 {
                     throw new LevelSerializationException("The imported text did not contain a level document.");
+                }
+
+                if (document.schemaVersion <= 3)
+                {
+                    LegacyPlaytestEnvelope legacy =
+                        JsonUtility.FromJson<LegacyPlaytestEnvelope>(text);
+                    document.legacyPlaytest = legacy?.playtest;
                 }
 
                 return migrator.MigrateToCurrent(document);

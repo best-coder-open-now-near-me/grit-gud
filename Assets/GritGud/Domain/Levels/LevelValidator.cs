@@ -134,7 +134,7 @@ namespace GritGud.Domain.Levels
                 new LevelDocumentValidationRule(),
                 new LevelEntityValidationRule(),
                 new LevelGameplayMetadataValidationRule(),
-                new LevelPlaytestValidationRule(),
+                new LevelScenarioValidationRule(),
                 new LevelTerrainValidationRule(),
             });
 
@@ -269,29 +269,247 @@ namespace GritGud.Domain.Levels
         }
     }
 
-    public sealed class LevelPlaytestValidationRule : ILevelValidationRule
+    public sealed class LevelScenarioValidationRule : ILevelValidationRule
     {
         public void Evaluate(LevelValidationContext context)
         {
-            LevelPlaytestData playtest = context.Document.playtest;
-            if (playtest == null)
+            LevelScenarioData scenario = context.Document.scenario;
+            if (scenario == null)
             {
-                context.Error("playtest.missing", "The level needs playtest settings.");
+                context.Error("scenario.missing", "The level needs scenario settings.");
                 return;
             }
 
-            if (!LevelValidationMath.IsFinite(playtest.playerStart.position)
-                || !LevelValidationMath.IsFinite(playtest.playerStart.yawDegrees))
+            if (!LevelValidationMath.IsFinite(scenario.minimumVoluntaryTurnSeconds)
+                || scenario.minimumVoluntaryTurnSeconds < 0f)
             {
-                context.Error("playtest.start.not-finite", "The player start must be finite.");
+                context.Error(
+                    "scenario.timing.invalid",
+                    "The scenario minimum turn duration must be finite and non-negative.");
             }
-            else if (!LevelValidationMath.Contains(
-                         context.Document.bounds,
-                         playtest.playerStart.position))
+
+            var actorIds = new HashSet<string>(StringComparer.Ordinal);
+            int playerCount = 0;
+            int selectedPlayerCount = 0;
+            int primaryTargetCount = 0;
+            foreach (LevelScenarioActorData actor in scenario.actors)
             {
-                context.Warning(
-                    "playtest.start.outside-bounds",
-                    "The player start is outside the authored level bounds.");
+                if (actor == null)
+                {
+                    context.Error("scenario.actor.missing", "The scenario contains an empty actor.");
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(actor.id))
+                {
+                    context.Error("scenario.actor.id.missing", "A scenario actor needs a stable ID.");
+                }
+                else if (!actorIds.Add(actor.id))
+                {
+                    context.Error(
+                        "scenario.actor.id.duplicate",
+                        $"Scenario actor ID '{actor.id}' is duplicated.");
+                }
+
+                if (string.IsNullOrWhiteSpace(actor.templateId))
+                {
+                    context.Error(
+                        "scenario.actor.template.missing",
+                        $"Scenario actor '{actor.id}' needs an actor template.");
+                }
+
+                if (!LevelValidationMath.IsFinite(actor.transform.position)
+                    || !LevelValidationMath.IsFinite(actor.transform.yawDegrees))
+                {
+                    context.Error(
+                        "scenario.actor.transform.not-finite",
+                        $"Scenario actor '{actor.id}' must have a finite transform.");
+                }
+                else if (!LevelValidationMath.Contains(
+                             context.Document.bounds,
+                             actor.transform.position))
+                {
+                    context.Warning(
+                        "scenario.actor.outside-bounds",
+                        $"Scenario actor '{actor.id}' is outside the authored level bounds.");
+                }
+
+                if (actor.playerControlled)
+                    playerCount++;
+                if (actor.initiallySelected)
+                {
+                    selectedPlayerCount++;
+                    if (!actor.playerControlled)
+                    {
+                        context.Error(
+                            "scenario.actor.selection.not-player",
+                            $"Initially selected actor '{actor.id}' must be player controlled.");
+                    }
+                }
+
+                if (actor.primaryTarget)
+                {
+                    primaryTargetCount++;
+                    if (actor.playerControlled)
+                    {
+                        context.Error(
+                            "scenario.actor.target.player",
+                            $"Player actor '{actor.id}' cannot be the primary target.");
+                    }
+                }
+            }
+
+            if (playerCount == 0)
+            {
+                context.Error(
+                    "scenario.party.empty",
+                    "The scenario needs at least one player-controlled actor.");
+            }
+
+            if (selectedPlayerCount != 1)
+            {
+                context.Error(
+                    "scenario.party.selection",
+                    "The scenario needs exactly one initially selected player actor.");
+            }
+
+            if (primaryTargetCount > 1)
+            {
+                context.Error(
+                    "scenario.target.multiple",
+                    "The scenario can define at most one primary target actor.");
+            }
+
+            ValidateEntityLinks(context, scenario, actorIds);
+        }
+
+        private static void ValidateEntityLinks(
+            LevelValidationContext context,
+            LevelScenarioData scenario,
+            ISet<string> actorIds)
+        {
+            var entities = context.Document.entities
+                .Where(entity => entity != null && !string.IsNullOrWhiteSpace(entity.id))
+                .GroupBy(entity => entity.id, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+            var linkedProps = new HashSet<string>(StringComparer.Ordinal);
+            foreach (LevelScenarioPropData prop in scenario.props)
+            {
+                if (prop == null || string.IsNullOrWhiteSpace(prop.entityId))
+                {
+                    context.Error("scenario.prop.entity.missing", "A scenario prop needs an entity link.");
+                    continue;
+                }
+
+                if (!entities.ContainsKey(prop.entityId))
+                {
+                    context.Error(
+                        "scenario.prop.entity.unknown",
+                        $"Scenario prop entity '{prop.entityId}' does not exist.",
+                        prop.entityId);
+                }
+                else if (!linkedProps.Add(prop.entityId))
+                {
+                    context.Error(
+                        "scenario.prop.entity.duplicate",
+                        $"Entity '{prop.entityId}' is linked as a scenario prop more than once.",
+                        prop.entityId);
+                }
+
+                if (!LevelValidationMath.IsFinite(prop.mass) || prop.mass <= 0f)
+                {
+                    context.Error(
+                        "scenario.prop.mass",
+                        $"Scenario prop '{prop.entityId}' needs a positive finite mass.",
+                        prop.entityId);
+                }
+            }
+
+            var linkedVehicles = new HashSet<string>(StringComparer.Ordinal);
+            foreach (LevelScenarioVehicleData vehicle in scenario.vehicles)
+            {
+                if (vehicle == null || string.IsNullOrWhiteSpace(vehicle.entityId))
+                {
+                    context.Error(
+                        "scenario.vehicle.entity.missing",
+                        "A scenario vehicle needs an entity link.");
+                    continue;
+                }
+
+                if (!entities.ContainsKey(vehicle.entityId))
+                {
+                    context.Error(
+                        "scenario.vehicle.entity.unknown",
+                        $"Scenario vehicle entity '{vehicle.entityId}' does not exist.",
+                        vehicle.entityId);
+                }
+                else if (!linkedVehicles.Add(vehicle.entityId))
+                {
+                    context.Error(
+                        "scenario.vehicle.entity.duplicate",
+                        $"Entity '{vehicle.entityId}' is linked as a vehicle more than once.",
+                        vehicle.entityId);
+                }
+
+                if (!string.IsNullOrWhiteSpace(vehicle.startingOccupantActorId)
+                    && !actorIds.Contains(vehicle.startingOccupantActorId))
+                {
+                    context.Error(
+                        "scenario.vehicle.occupant.unknown",
+                        $"Vehicle '{vehicle.entityId}' references unknown actor "
+                        + $"'{vehicle.startingOccupantActorId}'.",
+                        vehicle.entityId);
+                }
+            }
+
+            var objectiveIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (LevelScenarioObjectiveData objective in scenario.objectives)
+            {
+                if (objective == null || string.IsNullOrWhiteSpace(objective.id))
+                {
+                    context.Error("scenario.objective.id.missing", "A scenario objective needs a stable ID.");
+                    continue;
+                }
+
+                if (!objectiveIds.Add(objective.id))
+                {
+                    context.Error(
+                        "scenario.objective.id.duplicate",
+                        $"Scenario objective ID '{objective.id}' is duplicated.");
+                }
+
+                if (!entities.TryGetValue(objective.entityId ?? string.Empty, out LevelEntity entity))
+                {
+                    context.Error(
+                        "scenario.objective.entity.unknown",
+                        $"Objective '{objective.id}' references an unknown entity "
+                        + $"'{objective.entityId}'.",
+                        objective.entityId);
+                    continue;
+                }
+
+                bool pointExists = entity.interactionPoints.Any(point =>
+                    point != null
+                    && string.Equals(
+                        point.id,
+                        objective.interactionPointId,
+                        StringComparison.Ordinal));
+                if (!pointExists)
+                {
+                    context.Error(
+                        "scenario.objective.interaction.unknown",
+                        $"Objective '{objective.id}' references unknown interaction point "
+                        + $"'{objective.interactionPointId}'.",
+                        objective.entityId);
+                }
+
+                if (objective.actionPointCost < 0)
+                {
+                    context.Error(
+                        "scenario.objective.cost",
+                        $"Objective '{objective.id}' cannot have a negative action-point cost.",
+                        objective.entityId);
+                }
             }
         }
     }

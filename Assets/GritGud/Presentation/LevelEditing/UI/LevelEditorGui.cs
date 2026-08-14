@@ -459,8 +459,18 @@ namespace GritGud.Presentation.LevelEditing.UI
             LevelDocument document = workspace.CreateSnapshot();
             GUILayout.Space(8f);
             GUILayout.Label("SCENARIO", GUI.skin.box);
-            LevelTransformData start = document.playtest.playerStart;
-            GUILayout.Label($"PLAYER START  ({start.position.x:0.##}, {start.position.y:0.##}, {start.position.z:0.##})");
+            LevelScenarioActorData selectedPlayer = document.scenario
+                .FindInitiallySelectedPlayer();
+            if (selectedPlayer != null)
+            {
+                LevelTransformData start = selectedPlayer.transform;
+                GUILayout.Label(
+                    $"PLAYER START  ({start.position.x:0.##}, {start.position.y:0.##}, {start.position.z:0.##})");
+            }
+            else
+            {
+                GUILayout.Label("PLAYER START  (NOT CONFIGURED)");
+            }
             GUILayout.Space(8f);
             GUILayout.Label($"ENTITIES ({document.entities.Count})", GUI.skin.box);
             hierarchySearch = GUILayout.TextField(hierarchySearch ?? string.Empty);

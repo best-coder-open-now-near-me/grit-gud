@@ -70,6 +70,36 @@ namespace GritGud.Domain.Tests.Levels
         }
 
         [Test]
+        public void ScenarioRequiresExactlyOneSelectedPlayer()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            document.scenario.actors[0].initiallySelected = false;
+
+            var issues = LevelValidator.Validate(document);
+
+            Assert.That(
+                issues.Any(item => item.Code == "scenario.party.selection"),
+                Is.True);
+        }
+
+        [Test]
+        public void ScenarioEntityLinksMustResolve()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            document.scenario.props.Add(new LevelScenarioPropData
+            {
+                entityId = "missing-prop",
+                mass = 25f,
+            });
+
+            var issues = LevelValidator.Validate(document);
+
+            Assert.That(
+                issues.Any(item => item.Code == "scenario.prop.entity.unknown"),
+                Is.True);
+        }
+
+        [Test]
         public void UnknownDestructibleStateIsRejected()
         {
             LevelDocument document = LevelDocumentFactory.CreateEmpty();

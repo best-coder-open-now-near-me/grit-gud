@@ -15,11 +15,21 @@ namespace GritGud.Application.Levels
                 bounds = new LevelBoundsData(
                     new Float3Data(0f, 2.5f, 0f),
                     new Float3Data(50f, 10f, 50f)),
-                playtest = new LevelPlaytestData
+                scenario = new LevelScenarioData
                 {
-                    playerStart = new LevelTransformData(
-                        new Float3Data(0f, 7.5f, 0f),
-                        0f),
+                    actors =
+                    {
+                        new LevelScenarioActorData
+                        {
+                            id = "player",
+                            templateId = "player",
+                            transform = new LevelTransformData(
+                                new Float3Data(0f, 7.5f, 0f),
+                                0f),
+                            playerControlled = true,
+                            initiallySelected = true,
+                        },
+                    },
                 },
             };
         }

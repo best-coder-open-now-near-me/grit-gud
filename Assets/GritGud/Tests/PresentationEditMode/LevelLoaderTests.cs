@@ -172,6 +172,73 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void SandboxPackageUsesOnlyAuthoredScenarioInstances()
+        {
+            TextAsset asset = Resources.Load<TextAsset>("Levels/basic-construction");
+            LevelDocument source = new UnityLevelJsonSerializer().Deserialize(asset.text);
+            source.levelId = "authored-scenario";
+            source.scenario = new LevelScenarioData
+            {
+                randomSeed = 42,
+                actors =
+                {
+                    new LevelScenarioActorData
+                    {
+                        id = "hero",
+                        templateId = "player",
+                        playerControlled = true,
+                        initiallySelected = true,
+                        transform = new LevelTransformData(
+                            new Float3Data(1f, 2f, 3f),
+                            45f),
+                    },
+                    new LevelScenarioActorData
+                    {
+                        id = "guard-a",
+                        templateId = "depot-rifleman",
+                        primaryTarget = true,
+                        transform = new LevelTransformData(
+                            new Float3Data(-4f, 2f, 6f),
+                            180f),
+                    },
+                },
+                props =
+                {
+                    new LevelScenarioPropData
+                    {
+                        entityId = "crate-01",
+                        mass = 31f,
+                        sizeClass = "medium",
+                        startsEncounterOnAttack = true,
+                    },
+                },
+            };
+
+            GameplayContentPackage package = GameplayContentLoader.LoadSandbox(source);
+
+            Assert.That(package.Scenario.randomSeed, Is.EqualTo(42));
+            Assert.That(package.Scenario.actors.Select(actor => actor.id),
+                Is.EquivalentTo(new[] { "hero", "guard-a" }));
+            Assert.That(package.Scenario.playerParty.actorIds,
+                Is.EqualTo(new[] { "hero" }));
+            Assert.That(package.Scenario.playerParty.initiallySelectedActorId,
+                Is.EqualTo("hero"));
+            Assert.That(package.Scenario.primaryTargetActorId,
+                Is.EqualTo("guard-a"));
+            Assert.That(package.Scenario.actors.Single(actor => actor.id == "hero")
+                .position.x, Is.EqualTo(1f));
+            Assert.That(package.Scenario.actors.Single(actor => actor.id == "guard-a")
+                .facingDegrees, Is.EqualTo(180f));
+            Assert.That(package.Scenario.props.Single().entityId,
+                Is.EqualTo("crate-01"));
+            Assert.That(package.Scenario.props.Single().mass, Is.EqualTo(31f));
+            Assert.That(package.Scenario.props.Single().attackResponse.startsEncounter,
+                Is.True);
+            Assert.That(package.Scenario.objectives, Is.Empty);
+            Assert.That(package.Scenario.vehicles, Is.Empty);
+        }
+
+        [Test]
         public void UnknownArchetypeFailsBeforeConstructingAWorld()
         {
             LevelDocument document = LevelDocumentFactory.CreateEmpty();
