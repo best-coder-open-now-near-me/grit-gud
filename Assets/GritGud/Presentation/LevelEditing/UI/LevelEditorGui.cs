@@ -18,6 +18,27 @@ namespace GritGud.Presentation.LevelEditing.UI
         public const float PaletteWidth = 300f;
         public const float InspectorWidth = 360f;
 
+        // Keep IMGUI controls deliberately uniform. Change these values when tuning the editor,
+        // rather than adjusting individual call sites.
+        private const float ToolbarControlHeight = 30f;
+        private const float PanelControlHeight = 30f;
+        private const float PanelApplyControlHeight = 32f;
+        private const float PanelPrimaryControlHeight = 34f;
+        private const float PanelCompactControlHeight = 26f;
+        private const float PanelIconControlHeight = 28f;
+        private const float PanelActorButtonHeight = 42f;
+        private const float FieldLabelWidth = 74f;
+        private const int SectionHeaderLeftPadding = 8;
+        private const int SectionHeaderVerticalPadding = 3;
+
+        // Semantic UI colors. Keep color meaning stable across the editor.
+        private static readonly Color ActiveControlColor = new Color(0.2f, 0.75f, 1f);
+        private static readonly Color PlacementControlColor = new Color(0.95f, 0.55f, 0.2f);
+        private static readonly Color PositiveControlColor = new Color(0.3f, 0.9f, 0.4f);
+        private static readonly Color WarningControlColor = new Color(1f, 0.4f, 0.25f);
+        private static readonly Color DestructiveControlColor = new Color(0.7f, 0.25f, 0.2f);
+        private static readonly Color SectionHeaderTextColor = new Color(0.88f, 0.93f, 1f);
+
         private readonly LevelEditorWorkspace workspace;
         private readonly LevelSelectionModel selection;
         private readonly LevelArchetypeCatalog catalog;
@@ -134,6 +155,7 @@ namespace GritGud.Presentation.LevelEditing.UI
         private string scenarioVehicleOccupantId = string.Empty;
         private bool scenarioVehicleStartsEncounter;
         private bool showControls;
+        private GUIStyle sectionHeaderStyle;
 
         public LevelEditorGui(
             LevelEditorWorkspace workspace,
@@ -330,62 +352,61 @@ namespace GritGud.Presentation.LevelEditing.UI
         {
             GUILayout.BeginArea(new Rect(0f, 0f, Screen.width, ToolbarHeight), GUI.skin.box);
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("BACK", GUILayout.Width(72f), GUILayout.Height(30f)))
+            if (GUILayout.Button("BACK", ToolbarButtonLayout(72f)))
             {
                 back();
             }
 
             if (GUILayout.Button(
                 previewMode ? "RETURN TO EDIT" : "LEVEL PREVIEW",
-                GUILayout.Width(128f),
-                GUILayout.Height(30f)))
+                ToolbarButtonLayout(128f)))
             {
                 togglePreview();
             }
 
             GUI.enabled = !previewMode;
-            if (GUILayout.Button("TEST PLAY", GUILayout.Width(92f), GUILayout.Height(30f)))
+            if (GUILayout.Button("TEST PLAY", ToolbarButtonLayout(92f)))
             {
                 testPlay();
             }
 
             GUI.enabled = !previewMode;
-            if (GUILayout.Button("NEW", GUILayout.Width(60f), GUILayout.Height(30f)))
+            if (GUILayout.Button("NEW", ToolbarButtonLayout(60f)))
             {
                 createNew();
             }
 
-            if (GUILayout.Button("LOAD MAIN", GUILayout.Width(100f), GUILayout.Height(30f)))
+            if (GUILayout.Button("LOAD MAIN", ToolbarButtonLayout(100f)))
             {
                 loadMainLevel();
             }
 
             GUI.enabled = workspace.CanUndo && !previewMode;
-            if (GUILayout.Button("UNDO", GUILayout.Width(64f), GUILayout.Height(30f)))
+            if (GUILayout.Button("UNDO", ToolbarButtonLayout(64f)))
             {
                 workspace.Undo();
             }
 
             GUI.enabled = workspace.CanRedo && !previewMode;
-            if (GUILayout.Button("REDO", GUILayout.Width(64f), GUILayout.Height(30f)))
+            if (GUILayout.Button("REDO", ToolbarButtonLayout(64f)))
             {
                 workspace.Redo();
             }
 
             GUI.enabled = !previewMode && selection.Primary != null;
-            if (GUILayout.Button("FRAME", GUILayout.Width(68f), GUILayout.Height(30f)))
+            if (GUILayout.Button("FRAME", ToolbarButtonLayout(68f)))
             {
                 frameSelection();
             }
 
             GUI.enabled = !previewMode && selection.Targets.Count > 0;
-            if (GUILayout.Button("DUPLICATE", GUILayout.Width(86f), GUILayout.Height(30f)))
+            if (GUILayout.Button("DUPLICATE", ToolbarButtonLayout(86f)))
             {
                 selectionTool.DuplicateSelection();
             }
 
             GUI.enabled = !previewMode;
-            if (GUILayout.Button("FRAME ALL", GUILayout.Width(86f), GUILayout.Height(30f)))
+            if (GUILayout.Button("FRAME ALL", ToolbarButtonLayout(86f)))
             {
                 frameLevel();
             }
@@ -393,8 +414,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUI.enabled = true;
             if (GUILayout.Button(
                 showControls ? "HIDE SHORTCUTS" : "SHORTCUTS",
-                GUILayout.Width(112f),
-                GUILayout.Height(30f)))
+                ToolbarButtonLayout(112f)))
             {
                 showControls = !showControls;
             }
@@ -405,7 +425,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 previewMode
                     ? "LEVEL PREVIEW — AUTHORING LOCKED"
                     : workspace.IsDirty ? "UNSAVED DRAFT" : "SAVED",
-                GUILayout.Height(30f));
+                GUILayout.Height(ToolbarControlHeight));
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
@@ -414,26 +434,25 @@ namespace GritGud.Presentation.LevelEditing.UI
                 snapSettings.Enabled,
                 "SNAP",
                 GUI.skin.button,
-                GUILayout.Width(68f),
-                GUILayout.Height(30f));
-            if (GUILayout.Button("SAVE DRAFT", GUILayout.Width(96f), GUILayout.Height(30f)))
+                ToolbarButtonLayout(68f));
+            if (GUILayout.Button("SAVE DRAFT", ToolbarButtonLayout(96f)))
             {
                 persistence.SaveDraft(workspace);
             }
 
             GUI.enabled = !previewMode && persistence.HasDraft;
-            if (GUILayout.Button("LOAD DRAFT", GUILayout.Width(96f), GUILayout.Height(30f)))
+            if (GUILayout.Button("LOAD DRAFT", ToolbarButtonLayout(96f)))
             {
                 persistence.LoadDraft();
             }
 
             GUI.enabled = !previewMode;
-            if (GUILayout.Button("EXPORT", GUILayout.Width(76f), GUILayout.Height(30f)))
+            if (GUILayout.Button("EXPORT", ToolbarButtonLayout(76f)))
             {
                 persistence.Export(workspace);
             }
 
-            if (GUILayout.Button("IMPORT", GUILayout.Width(76f), GUILayout.Height(30f)))
+            if (GUILayout.Button("IMPORT", ToolbarButtonLayout(76f)))
             {
                 persistence.RequestImport();
             }
@@ -442,7 +461,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             if (selectionTool.IsDragging)
             {
                 GUILayout.FlexibleSpace();
-                GUILayout.Label(selectionTool.DragFeedback, GUI.skin.box, GUILayout.Height(30f));
+                GUILayout.Label(selectionTool.DragFeedback, GUI.skin.box, GUILayout.Height(ToolbarControlHeight));
             }
 
             GUI.enabled = true;
@@ -480,27 +499,27 @@ namespace GritGud.Presentation.LevelEditing.UI
                 return;
             }
 
-            GUILayout.Label("TOOLS");
+            DrawSectionHeader("TOOLS");
             Color previous = GUI.backgroundColor;
             if (toolManager.ActiveTool == selectionTool)
             {
-                GUI.backgroundColor = new Color(0.2f, 0.75f, 1f);
+                GUI.backgroundColor = ActiveControlColor;
             }
 
-            if (GUILayout.Button("SELECT", GUILayout.Height(34f)))
+            if (GUILayout.Button("SELECT", PanelPrimaryButtonLayout()))
             {
                 toolManager.Activate(SelectionLevelEditorTool.ToolId);
             }
             GUI.backgroundColor = previous;
 
             GUILayout.Space(8f);
-            GUILayout.Label("TERRAIN HEIGHT");
+            DrawSectionHeader("TERRAIN HEIGHT");
             GUILayout.BeginHorizontal();
             if (terrainPanel.IsRaiseActive)
             {
-                GUI.backgroundColor = new Color(0.3f, 0.9f, 0.4f);
+                GUI.backgroundColor = PositiveControlColor;
             }
-            if (GUILayout.Button("RAISE", GUILayout.Height(30f)))
+            if (GUILayout.Button("RAISE", PanelButtonLayout()))
             {
                 terrainPanel.ActivateRaise();
             }
@@ -508,15 +527,15 @@ namespace GritGud.Presentation.LevelEditing.UI
 
             if (terrainPanel.IsLowerActive)
             {
-                GUI.backgroundColor = new Color(1f, 0.4f, 0.25f);
+                GUI.backgroundColor = WarningControlColor;
             }
-            if (GUILayout.Button("LOWER", GUILayout.Height(30f)))
+            if (GUILayout.Button("LOWER", PanelButtonLayout()))
             {
                 terrainPanel.ActivateLower();
             }
             GUI.backgroundColor = previous;
             GUILayout.EndHorizontal();
-            if (GUILayout.Button("FRAME", GUILayout.Height(30f)))
+            if (GUILayout.Button("FRAME", PanelButtonLayout()))
             {
                 terrainPanel.FrameTerrain();
             }
@@ -531,18 +550,18 @@ namespace GritGud.Presentation.LevelEditing.UI
                 1f,
                 20f));
             GUILayout.Space(8f);
-            GUILayout.Label("ARCHETYPES");
+            DrawSectionHeader("ARCHETYPES");
             GUILayout.Label("Choose a piece, then click in the world.");
             if (toolManager.ActiveTool == placementTool && placementTool.Archetype != null)
             {
                 GUILayout.Space(4f);
-                GUILayout.Label("ACTIVE STAMP", GUI.skin.box);
+                DrawSectionHeader("ACTIVE STAMP");
                 GUILayout.Label(
                     $"{placementTool.Archetype.DisplayName} · {placementTool.YawDegrees:0.#}°");
                 GUILayout.BeginHorizontal();
-                if (GUILayout.Button("↺", GUILayout.Height(28f)))
+                if (GUILayout.Button("↺", PanelIconButtonLayout()))
                     placementTool.RotatePreview(-1f);
-                if (GUILayout.Button("↻", GUILayout.Height(28f)))
+                if (GUILayout.Button("↻", PanelIconButtonLayout()))
                     placementTool.RotatePreview();
                 GUILayout.EndHorizontal();
             }
@@ -584,7 +603,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 bool isCollapsed = collapsedPaletteCategories.Contains(category);
                 string header = $"{(isCollapsed ? "▶" : "▼")} {category.ToUpperInvariant()} ({group.Count()})";
                 GUILayout.Space(8f);
-                if (GUILayout.Button(header, GUI.skin.box, GUILayout.Height(26f)))
+                if (GUILayout.Button(header, GUI.skin.box, PanelCompactButtonLayout()))
                 {
                     if (isCollapsed)
                         collapsedPaletteCategories.Remove(category);
@@ -604,10 +623,10 @@ namespace GritGud.Presentation.LevelEditing.UI
                     previous = GUI.backgroundColor;
                     if (active)
                     {
-                        GUI.backgroundColor = new Color(0.95f, 0.55f, 0.2f);
+                        GUI.backgroundColor = PlacementControlColor;
                     }
 
-                    if (GUILayout.Button(entry.DisplayName, GUILayout.Height(34f)))
+                    if (GUILayout.Button(entry.DisplayName, PanelPrimaryButtonLayout()))
                     {
                         placementTool.SelectArchetype(entry);
                         toolManager.Activate(PlacementLevelEditorTool.ToolId);
@@ -624,8 +643,8 @@ namespace GritGud.Presentation.LevelEditing.UI
         private void DrawLeftPanelTab(string label, int panel, Color previous)
         {
             if (leftPanel == panel)
-                GUI.backgroundColor = new Color(0.2f, 0.75f, 1f);
-            if (GUILayout.Button(label, GUILayout.Height(30f)))
+                GUI.backgroundColor = ActiveControlColor;
+            if (GUILayout.Button(label, PanelButtonLayout()))
                 leftPanel = panel;
             GUI.backgroundColor = previous;
         }
@@ -633,7 +652,7 @@ namespace GritGud.Presentation.LevelEditing.UI
         private void DrawShortcutsOverlay()
         {
             GUILayout.BeginArea(ShortcutOverlayRect(), GUI.skin.window);
-            GUILayout.Label("SHORTCUTS", GUI.skin.box);
+            DrawSectionHeader("SHORTCUTS");
             GUILayout.Label("CAMERA");
             GUILayout.Label("WASD/arrows: pan  ·  Shift: fast");
             GUILayout.Label("MMB/RMB drag: orbit  ·  Wheel: zoom");
@@ -657,11 +676,11 @@ namespace GritGud.Presentation.LevelEditing.UI
         {
             LevelDocument document = workspace.CreateSnapshot();
             GUILayout.Space(8f);
-            GUILayout.Label("SCENARIO COMPOSITION", GUI.skin.box);
+            DrawSectionHeader("SCENARIO COMPOSITION");
             GUILayout.Label(
                 "Actors and gameplay links here are the exact data used by Test Play.");
             GUILayout.Space(8f);
-            GUILayout.Label("ADD ACTOR AT CAMERA FOCUS");
+            DrawSectionHeader("ADD ACTOR AT CAMERA FOCUS");
             string previousGroup = null;
             foreach (ScenarioActorTemplateDefinition template in scenarioCatalog.ActorTemplates)
             {
@@ -669,15 +688,15 @@ namespace GritGud.Presentation.LevelEditing.UI
                 if (!string.Equals(previousGroup, group, StringComparison.Ordinal))
                 {
                     previousGroup = group;
-                    GUILayout.Label(group, GUI.skin.box);
+                    DrawSectionHeader(group);
                 }
 
-                if (GUILayout.Button($"+ {template.DisplayName}", GUILayout.Height(30f)))
+                if (GUILayout.Button($"+ {template.DisplayName}", PanelButtonLayout()))
                     addScenarioActor(template.TemplateId);
             }
 
             GUILayout.Space(10f);
-            GUILayout.Label($"ACTORS ({document.scenario.actors.Count})", GUI.skin.box);
+            DrawSectionHeader($"ACTORS ({document.scenario.actors.Count})");
             foreach (LevelScenarioActorData actor in document.scenario.actors
                 .Where(actor => actor != null)
                 .OrderByDescending(actor => actor.playerControlled)
@@ -689,7 +708,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                         actor.id,
                         StringComparison.Ordinal))
                 {
-                    GUI.backgroundColor = new Color(0.2f, 0.75f, 1f);
+                    GUI.backgroundColor = ActiveControlColor;
                 }
 
                 ScenarioActorTemplateDefinition template =
@@ -699,7 +718,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                     : actor.primaryTarget ? "TARGET" : "ENEMY";
                 if (GUILayout.Button(
                         $"{template.DisplayName}\n{role}",
-                        GUILayout.Height(42f)))
+                        GUILayout.Height(PanelActorButtonHeight)))
                 {
                     SyncScenarioActorFields(actor);
                 }
@@ -717,7 +736,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             }
 
             GUILayout.Space(10f);
-            GUILayout.Label("SELECTED ACTOR", GUI.skin.box);
+            DrawSectionHeader("SELECTED ACTOR");
             GUILayout.Label($"ID: {selected.id}");
             GUILayout.Label($"Template: {selected.templateId}");
             DrawLabeledField("X", ref scenarioXText);
@@ -741,7 +760,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 "Primary target");
             GUI.enabled = true;
 
-            if (GUILayout.Button("APPLY", GUILayout.Height(32f)))
+            if (GUILayout.Button("APPLY", PanelApplyButtonLayout()))
             {
                 applyScenarioActor(
                     selected.id,
@@ -754,21 +773,21 @@ namespace GritGud.Presentation.LevelEditing.UI
                     scenarioPrimaryTarget);
             }
 
-            if (GUILayout.Button("PLACE AT VIEW", GUILayout.Height(30f)))
+            if (GUILayout.Button("PLACE AT VIEW", PanelButtonLayout()))
                 placeScenarioActorAtView(selected.id);
 
             Color deleteColor = GUI.backgroundColor;
-            GUI.backgroundColor = new Color(0.7f, 0.25f, 0.2f);
-            if (GUILayout.Button("REMOVE ACTOR", GUILayout.Height(30f)))
+            GUI.backgroundColor = DestructiveControlColor;
+            if (GUILayout.Button("REMOVE ACTOR", PanelButtonLayout()))
                 deleteScenarioActor(selected.id);
             GUI.backgroundColor = deleteColor;
             DrawScenarioLinkSummary(document.scenario);
         }
 
-        private static void DrawScenarioLinkSummary(LevelScenarioData scenario)
+        private void DrawScenarioLinkSummary(LevelScenarioData scenario)
         {
             GUILayout.Space(12f);
-            GUILayout.Label("GAMEPLAY LINKS", GUI.skin.box);
+            DrawSectionHeader("GAMEPLAY LINKS");
             GUILayout.Label($"Objectives: {scenario.objectives.Count}");
             GUILayout.Label($"Physics props: {scenario.props.Count}");
             GUILayout.Label($"Vehicles: {scenario.vehicles.Count}");
@@ -778,7 +797,7 @@ namespace GritGud.Presentation.LevelEditing.UI
         {
             LevelDocument document = workspace.CreateSnapshot();
             GUILayout.Space(8f);
-            GUILayout.Label("SCENARIO", GUI.skin.box);
+            DrawSectionHeader("SCENARIO");
             LevelScenarioActorData selectedPlayer = document.scenario
                 .FindInitiallySelectedPlayer();
             if (selectedPlayer != null)
@@ -795,10 +814,10 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.Label($"OBJECTIVES  {document.scenario.objectives.Count}");
             GUILayout.Label($"PHYSICS PROPS  {document.scenario.props.Count}");
             GUILayout.Label($"VEHICLES  {document.scenario.vehicles.Count}");
-            if (GUILayout.Button("OPEN SCENARIO", GUILayout.Height(28f)))
+            if (GUILayout.Button("OPEN SCENARIO", PanelIconButtonLayout()))
                 leftPanel = 2;
             GUILayout.Space(8f);
-            GUILayout.Label("LEVEL GEOMETRY", GUI.skin.box);
+            DrawSectionHeader("LEVEL GEOMETRY");
             GUILayout.Label($"TERRAIN SURFACES  {document.terrainSurfaces.Count}");
             GUILayout.Label($"ENTITIES  {document.entities.Count}");
             hierarchySearch = GUILayout.TextField(hierarchySearch ?? string.Empty);
@@ -814,17 +833,17 @@ namespace GritGud.Presentation.LevelEditing.UI
                 if (!string.Equals(previousCategory, category, StringComparison.Ordinal))
                 {
                     previousCategory = category;
-                    GUILayout.Label(category.ToUpperInvariant(), GUI.skin.box);
+                    DrawSectionHeader(category.ToUpperInvariant());
                 }
 
                 matches++;
                 Color previous = GUI.backgroundColor;
                 if (string.Equals(selection.PrimaryEntityId, entity.id, StringComparison.Ordinal))
                 {
-                    GUI.backgroundColor = new Color(0.2f, 0.75f, 1f);
+                    GUI.backgroundColor = ActiveControlColor;
                 }
 
-                if (GUILayout.Button(EntityDisplayName(entity), GUILayout.Height(26f)))
+                if (GUILayout.Button(EntityDisplayName(entity), PanelCompactButtonLayout()))
                 {
                     focusEntity(entity.id);
                 }
@@ -872,10 +891,10 @@ namespace GritGud.Presentation.LevelEditing.UI
             bool active = string.Equals(paletteCategory, category, StringComparison.OrdinalIgnoreCase);
             if (active)
             {
-                GUI.backgroundColor = new Color(0.2f, 0.75f, 1f);
+                GUI.backgroundColor = ActiveControlColor;
             }
 
-            if (GUILayout.Button(label, GUILayout.Height(26f)))
+            if (GUILayout.Button(label, PanelCompactButtonLayout()))
             {
                 paletteCategory = category;
             }
@@ -910,7 +929,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 new Rect(left, ToolbarHeight, InspectorWidth, Screen.height - ToolbarHeight - 30f),
                 GUI.skin.box);
             inspectorScroll = GUILayout.BeginScrollView(inspectorScroll);
-            GUILayout.Label("INSPECTOR");
+            DrawSectionHeader("INSPECTOR");
             DrawPlayerStartInspector();
             if (selectedView == null)
             {
@@ -931,7 +950,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 DrawLabeledField("Y", ref yText);
                 DrawLabeledField("Z", ref zText);
                 DrawLabeledField("Yaw", ref yawText);
-                if (GUILayout.Button("APPLY", GUILayout.Height(34f)))
+                if (GUILayout.Button("APPLY", PanelPrimaryButtonLayout()))
                 {
                     applyTransform(xText, yText, zText, yawText);
                 }
@@ -949,8 +968,8 @@ namespace GritGud.Presentation.LevelEditing.UI
                 }
                 GUILayout.EndHorizontal();
                 Color previous = GUI.backgroundColor;
-                GUI.backgroundColor = new Color(0.7f, 0.25f, 0.2f);
-                if (GUILayout.Button("DELETE", GUILayout.Height(34f)))
+                GUI.backgroundColor = DestructiveControlColor;
+                if (GUILayout.Button("DELETE", PanelPrimaryButtonLayout()))
                 {
                     selectionTool.DeleteSelection();
                 }
@@ -1009,12 +1028,12 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         private void DrawPlayerStartInspector()
         {
-            GUILayout.Label("SCENARIO PLAYER START", GUI.skin.box);
+            DrawSectionHeader("SCENARIO PLAYER START");
             DrawLabeledField("X", ref playerStartXText);
             DrawLabeledField("Y", ref playerStartYText);
             DrawLabeledField("Z", ref playerStartZText);
             DrawLabeledField("Yaw", ref playerStartYawText);
-            if (GUILayout.Button("SET START", GUILayout.Height(30f)))
+            if (GUILayout.Button("SET START", PanelButtonLayout()))
             {
                 applyPlayerStart(
                     playerStartXText,
@@ -1028,7 +1047,7 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         private void DrawInteractionInspector(LevelEntity entity, LevelSelectionTarget? primary)
         {
-            GUILayout.Label("INTERACTION POINTS", GUI.skin.box);
+            DrawSectionHeader("INTERACTION POINTS");
             if (entity == null)
             {
                 return;
@@ -1050,7 +1069,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                     DrawLabeledField("Y", ref interactionYText);
                     DrawLabeledField("Z", ref interactionZText);
                     DrawLabeledField("Radius", ref interactionRadiusText);
-                    if (GUILayout.Button("APPLY POINT", GUILayout.Height(30f)))
+                    if (GUILayout.Button("APPLY POINT", PanelButtonLayout()))
                     {
                         applyInteractionPoint(
                             interactionType,
@@ -1061,8 +1080,8 @@ namespace GritGud.Presentation.LevelEditing.UI
                     }
 
                     Color previous = GUI.backgroundColor;
-                    GUI.backgroundColor = new Color(0.7f, 0.25f, 0.2f);
-                    if (GUILayout.Button("REMOVE POINT", GUILayout.Height(30f)))
+                    GUI.backgroundColor = DestructiveControlColor;
+                    if (GUILayout.Button("REMOVE POINT", PanelButtonLayout()))
                     {
                         deleteInteractionPoint();
                     }
@@ -1072,7 +1091,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 }
             }
 
-            if (GUILayout.Button("+ POINT", GUILayout.Height(30f)))
+            if (GUILayout.Button("+ POINT", PanelButtonLayout()))
             {
                 addInteractionPoint();
             }
@@ -1087,7 +1106,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             }
 
             GUILayout.Space(12f);
-            GUILayout.Label("DESTRUCTIBLE DEFAULTS", GUI.skin.box);
+            DrawSectionHeader("DESTRUCTIBLE DEFAULTS");
             DestructibleInstanceData data = entity?.destructible;
             if (!string.Equals(lastDestructibleEntityId, entity?.id, StringComparison.Ordinal))
             {
@@ -1117,7 +1136,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 _ => "intact",
             };
             DrawLabeledField("Integrity", ref destructibleIntegrity);
-            if (GUILayout.Button("APPLY DAMAGE", GUILayout.Height(30f)))
+            if (GUILayout.Button("APPLY DAMAGE", PanelButtonLayout()))
             {
                 applyDestructibleDefaults(
                     destructibleEnabled ? "true" : "false",
@@ -1148,7 +1167,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             }
 
             GUILayout.Space(12f);
-            GUILayout.Label("SCENARIO PHYSICS PROP", GUI.skin.box);
+            DrawSectionHeader("SCENARIO PHYSICS PROP");
             scenarioPropEnabled = GUILayout.Toggle(
                 scenarioPropEnabled,
                 "Physics / combat prop");
@@ -1168,7 +1187,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 scenarioPropStartsEncounter,
                 "Attack starts encounter");
             GUI.enabled = true;
-            if (GUILayout.Button("APPLY PROP", GUILayout.Height(30f)))
+            if (GUILayout.Button("APPLY PROP", PanelButtonLayout()))
             {
                 applyScenarioProp(
                     entity.id,
@@ -1205,7 +1224,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             }
 
             GUILayout.Space(12f);
-            GUILayout.Label("SCENARIO OBJECTIVE", GUI.skin.box);
+            DrawSectionHeader("SCENARIO OBJECTIVE");
             GUI.enabled = string.Equals(point.type, "objective", StringComparison.Ordinal);
             scenarioObjectiveEnabled = GUILayout.Toggle(
                 scenarioObjectiveEnabled,
@@ -1220,7 +1239,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             scenarioObjectiveCompletedText = GUILayout.TextField(scenarioObjectiveCompletedText);
             DrawLabeledField("AP cost", ref scenarioObjectiveCostText);
             GUI.enabled = true;
-            if (GUILayout.Button("APPLY GOAL", GUILayout.Height(30f)))
+            if (GUILayout.Button("APPLY GOAL", PanelButtonLayout()))
             {
                 applyScenarioObjective(
                     entity.id,
@@ -1270,7 +1289,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             }
 
             GUILayout.Space(12f);
-            GUILayout.Label("SCENARIO VEHICLE", GUI.skin.box);
+            DrawSectionHeader("SCENARIO VEHICLE");
             scenarioVehicleEnabled = GUILayout.Toggle(
                 scenarioVehicleEnabled,
                 "Driveable in test play");
@@ -1289,7 +1308,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 scenarioVehicleStartsEncounter,
                 "Attack starts encounter");
             GUI.enabled = true;
-            if (GUILayout.Button("APPLY VEHICLE", GUILayout.Height(30f)))
+            if (GUILayout.Button("APPLY VEHICLE", PanelButtonLayout()))
             {
                 applyScenarioVehicle(
                     entity.id,
@@ -1359,9 +1378,66 @@ namespace GritGud.Presentation.LevelEditing.UI
         private static void DrawLabeledField(string label, ref string value)
         {
             GUILayout.BeginHorizontal();
-            GUILayout.Label(label, GUILayout.Width(74f));
+            GUILayout.Label(label, GUILayout.Width(FieldLabelWidth));
             value = GUILayout.TextField(value);
             GUILayout.EndHorizontal();
+        }
+
+        private static GUILayoutOption[] ToolbarButtonLayout(float width)
+        {
+            return new[] { GUILayout.Width(width), GUILayout.Height(ToolbarControlHeight) };
+        }
+
+        private static GUILayoutOption[] PanelButtonLayout()
+        {
+            return new[] { GUILayout.Height(PanelControlHeight) };
+        }
+
+        private static GUILayoutOption[] PanelPrimaryButtonLayout()
+        {
+            return new[] { GUILayout.Height(PanelPrimaryControlHeight) };
+        }
+
+        private static GUILayoutOption[] PanelCompactButtonLayout()
+        {
+            return new[] { GUILayout.Height(PanelCompactControlHeight) };
+        }
+
+        private static GUILayoutOption[] PanelIconButtonLayout()
+        {
+            return new[] { GUILayout.Height(PanelIconControlHeight) };
+        }
+
+        private static GUILayoutOption[] PanelApplyButtonLayout()
+        {
+            return new[] { GUILayout.Height(PanelApplyControlHeight) };
+        }
+
+        private void DrawSectionHeader(string label)
+        {
+            GUILayout.Label(label, SectionHeaderStyle);
+        }
+
+        private GUIStyle SectionHeaderStyle
+        {
+            get
+            {
+                if (sectionHeaderStyle != null)
+                    return sectionHeaderStyle;
+
+                sectionHeaderStyle = new GUIStyle(GUI.skin.box)
+                {
+                    alignment = TextAnchor.MiddleLeft,
+                    fontStyle = FontStyle.Bold,
+                    padding = new RectOffset(
+                        SectionHeaderLeftPadding,
+                        SectionHeaderVerticalPadding,
+                        SectionHeaderLeftPadding,
+                        SectionHeaderVerticalPadding),
+                };
+                sectionHeaderStyle.normal.textColor = SectionHeaderTextColor;
+                return sectionHeaderStyle;
+            }
         }
     }
 }
