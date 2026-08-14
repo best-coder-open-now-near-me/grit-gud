@@ -5,6 +5,15 @@ and build automation. Editable third-party source packages live in a separate
 private repository and are installed only on licensed workstations and trusted
 build runners.
 
+> [!CAUTION]
+> This is a hard source-control boundary, not merely a local setup preference.
+> The canonical public Unity workspace is `E:\Projects\grit-gud-clean`.
+> Do not use the archived checkout as a source of new work, and do not copy
+> licensed files from it into public Git. Add or update those assets in
+> `best-coder-open-now-near-me/private-assets` first, preserve their `.meta`
+> files, then advance `.github/private-assets-ref` in a reviewable public
+> commit.
+
 Compiled Unity players may contain referenced licensed content. Raw FBX files,
 textures, source archives, demo projects, and other editable package contents
 must not be copied to the `gh-pages` branch or another public artifact.

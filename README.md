@@ -8,6 +8,16 @@ The current repository contains the agreed project foundation, a minimal Unity
 application shell, and the first portable level-construction/editor slice. It
 does not contain tactical character gameplay yet.
 
+> [!CAUTION]
+> **Asset boundary — read before adding or committing Unity files.**
+> `E:\Projects\grit-gud-clean` is the canonical public-source workspace.
+> Licensed or third-party editable assets—including Synty, Mixamo, animation
+> packages, textures, FBXs, demo content, and their `.meta` files—belong only
+> in `best-coder-open-now-near-me/private-assets`. Never copy those source
+> files into this public repository, its `gh-pages` branch, a build artifact,
+> or a broad `git add`. See [the private-assets guide](docs/PRIVATE_ASSETS.md)
+> before changing asset references or setting up a new workstation.
+
 ## Design pillars
 
 - Freeform positioning measured in world units; editor snapping is optional.
