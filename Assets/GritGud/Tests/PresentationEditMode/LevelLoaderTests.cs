@@ -25,6 +25,14 @@ namespace GritGud.Presentation.Tests
             Assert.That(ids, Does.Contain("structure.floor.standard"));
             Assert.That(ids, Does.Contain("prop.crate.standard"));
             Assert.That(ids, Does.Contain("vehicle.buggy.standard"));
+            Assert.That(ids, Does.Contain("structure.barrier.concrete"));
+            Assert.That(ids, Does.Contain("structure.barricade.wood"));
+            Assert.That(ids, Does.Contain("prop.pallet-stack.standard"));
+            Assert.That(ids, Does.Contain("structure.wire-fence.standard"));
+            Assert.That(ids, Does.Contain("structure.container.small"));
+            Assert.That(ids, Does.Contain("prop.generator.standard"));
+            Assert.That(ids, Does.Contain("prop.tire-stack.standard"));
+            Assert.That(ids, Does.Contain("prop.propane.standard"));
             Assert.That(
                 catalog.Entries.Single(entry => entry.ArchetypeId == "vehicle.buggy.standard")
                     .Capabilities.HasFlag(LevelArchetypeCapabilities.Vehicle),
@@ -322,6 +330,32 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 (crate.Capabilities & LevelArchetypeCapabilities.Destructible) != 0,
                 Is.True);
+        }
+
+        [Test]
+        public void CuratedPrivatePropArchetypesResolveProductionPrefabs()
+        {
+            LevelArchetypeCatalog catalog = LevelArchetypeCatalog.LoadDefault();
+            string[] privateArchetypeIds =
+            {
+                "structure.barrier.concrete",
+                "structure.barricade.wood",
+                "prop.pallet-stack.standard",
+                "structure.wire-fence.standard",
+                "structure.container.small",
+                "prop.generator.standard",
+                "prop.tire-stack.standard",
+                "prop.propane.standard",
+            };
+
+            foreach (string archetypeId in privateArchetypeIds)
+            {
+                LevelArchetypeDefinition definition = catalog.Get(archetypeId);
+                Assert.That(definition.Prefab, Is.Not.Null, archetypeId);
+                Assert.That(definition.LocalBounds.size.x, Is.GreaterThan(0f), archetypeId);
+                Assert.That(definition.LocalBounds.size.y, Is.GreaterThan(0f), archetypeId);
+                Assert.That(definition.LocalBounds.size.z, Is.GreaterThan(0f), archetypeId);
+            }
         }
     }
 }
