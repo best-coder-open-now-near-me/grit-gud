@@ -275,6 +275,7 @@ namespace GritGud.Presentation.Gameplay
                 .Replace("Middle Button", "MMB")
                 .Replace("Scroll/Y", "Wheel")
                 .Replace("Scroll Y", "Wheel")
+                .Replace("Scroll Wheel", "Wheel")
                 .Replace("Right Button", "RMB")
                 .Replace("Left Button", "LMB")
                 .ToUpperInvariant();
