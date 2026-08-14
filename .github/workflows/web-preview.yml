@@ -133,7 +133,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: editmode-test-results-${{ github.run_id }}
-          path: ${{ steps.editmode_tests.outputs.artifactsPath }}
+          path: artifacts/editmode
 
       - name: Run PlayMode lifecycle tests
         id: playmode_tests
@@ -151,7 +151,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playmode-test-results-${{ github.run_id }}
-          path: ${{ steps.playmode_tests.outputs.artifactsPath }}
+          path: artifacts/playmode
 
       - name: Restore clean workspace after tests
         shell: bash
