@@ -1,0 +1,27 @@
+* text=auto
+
+*.asmdef text eol=lf
+*.cs text eol=lf
+*.inputactions text eol=lf
+*.json text eol=lf
+*.jslib text eol=lf
+*.meta text eol=lf whitespace=-blank-at-eol
+*.mat text eol=lf whitespace=-blank-at-eol
+*.prefab text eol=lf whitespace=-blank-at-eol
+*.unity text eol=lf whitespace=-blank-at-eol
+*.asset text eol=lf whitespace=-blank-at-eol
+
+*.bmp binary
+*.exr binary
+*.gif binary
+*.jpeg binary
+*.jpg binary
+*.mp3 binary
+*.ogg binary
+*.png binary
+*.psd binary
+*.tga binary
+*.wav binary
+
+# Preserve third-party source assets exactly as supplied.
+Assets/Synty/** whitespace=-blank-at-eol,-blank-at-eof

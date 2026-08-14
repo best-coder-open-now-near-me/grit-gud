@@ -1,0 +1,95 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f6a0a5f95db14bd084561ac52a7c726f, type: 3}
+  m_Name: DefaultPlayerAnimationProfile
+  m_EditorClassIdentifier: GritGud.Presentation::GritGud.Presentation.Actors.Animation.ActorAnimationProfile
+  animatorController: {fileID: 9100000, guid: 854f15dff14271140bc28f33144a8699, type: 2}
+  locomotionReferenceSpeed: 6.5
+  turnReferenceDegreesPerSecond: 540
+  parameterDampTime: 0.08
+  maximumBodyAimCorrectionDegrees: 48
+  bodyAimDegreesPerSecond: 300
+  actorAimTurnDegreesPerSecond: 300
+  weaponAimDegreesPerSecond: 240
+  shotAlignmentToleranceDegrees: 1
+  turnInPlace:
+    activationDegreesPerSecond: 18
+    sustainDegreesPerSecond: 6
+    minimumActiveBlend: 0.65
+    releaseDelaySeconds: 0.12
+    releaseSeconds: 0.16
+    maximumMovementSpeed: 0.1
+    maximumLayerWeight: 1
+    maximumPoseBlend: 0.75
+    playbackSpeed: 0.65
+  recoilExitNormalizedTime: 0.9
+  recoilReturnTransitionSeconds: 0.12
+  weaponAnimationSets:
+  - id: pose.empty
+    poseStateName: Empty Hands
+    recoilStateName: 
+    recoilPlaybackSpeed: 1
+    animatorPoseValue: 0
+    poseLayerWeight: 0.68
+    poseTransitionSeconds: 0.12
+    recoilLayerWeight: 0
+    recoilTransitionSeconds: 0
+    recoilKickDegrees: 0
+    recoilHoldSeconds: 0
+    recoilReturnSeconds: 0.18
+  - id: pose.rifle
+    poseStateName: Rifle Aim
+    recoilStateName: Rifle Recoil
+    recoilPlaybackSpeed: 0.6
+    animatorPoseValue: 1
+    poseLayerWeight: 0.68
+    poseTransitionSeconds: 0.12
+    recoilLayerWeight: 0.8
+    recoilTransitionSeconds: 0
+    recoilKickDegrees: 9
+    recoilHoldSeconds: 0.08
+    recoilReturnSeconds: 0.42
+  - id: pose.launcher
+    poseStateName: Launcher Aim
+    recoilStateName: Launcher Recoil
+    recoilPlaybackSpeed: 1
+    animatorPoseValue: 2
+    poseLayerWeight: 0.68
+    poseTransitionSeconds: 0.12
+    recoilLayerWeight: 1
+    recoilTransitionSeconds: 0
+    recoilKickDegrees: 14
+    recoilHoldSeconds: 0.1
+    recoilReturnSeconds: 0.6
+  - id: pose.melee
+    poseStateName: Empty Hands
+    recoilStateName: 
+    recoilPlaybackSpeed: 1
+    animatorPoseValue: 3
+    poseLayerWeight: 0.68
+    poseTransitionSeconds: 0.12
+    recoilLayerWeight: 0
+    recoilTransitionSeconds: 0
+    recoilKickDegrees: 0
+    recoilHoldSeconds: 0
+    recoilReturnSeconds: 0.18
+  actionBindings:
+  - action: 0
+    triggerParameterName: Interact
+    layerName: 
+    stateName: 
+    transitionSeconds: 0.1
+  - action: 3
+    triggerParameterName: 
+    layerName: Actor Actions
+    stateName: Throw
+    transitionSeconds: 0.08

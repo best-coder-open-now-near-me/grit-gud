@@ -1,0 +1,66 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 40f1f06941524c68a73fe92694f4a079, type: 3}
+  m_Name: WeaponPresentationCatalog
+  m_EditorClassIdentifier: 
+  entries:
+  - itemId: weapon.rifle
+    prefab: {fileID: 8816951549581998864, guid: 80310d66f80c5e445a6209232ec867b1, type: 3}
+    animationSetId: pose.rifle
+    muzzleEffectPrefab: {fileID: 157586, guid: c8e3843634341ba448f0f14f9cc971fb, type: 3}
+    instantTracer: 1
+    shotEffectSeconds: 0.18
+    tracerWidth: 0.025
+    muzzleLightColor: {r: 1.8, g: 0.58, b: 0.07, a: 1}
+    muzzleLightIntensity: 3.6
+    muzzleLightRange: 3.4
+    muzzleLightSeconds: 0.055
+    maximumAimCorrectionDegrees: 18
+    attackPresentation: 0
+    contactSwingAxisLocal: {x: 0, y: 1, z: 0}
+    contactSwingDegrees: 0
+    contactStrikeSeconds: 0.34
+    contactHandExtension: 0
+  - itemId: weapon.rocket-launcher
+    prefab: {fileID: 8814187127111966184, guid: a20ee11edd52c0a41871190c48b4531e, type: 3}
+    animationSetId: pose.launcher
+    muzzleEffectPrefab: {fileID: 157586, guid: c8e3843634341ba448f0f14f9cc971fb, type: 3}
+    instantTracer: 0
+    shotEffectSeconds: 0.3
+    tracerWidth: 0.035
+    muzzleLightColor: {r: 2, g: 0.48, b: 0.04, a: 1}
+    muzzleLightIntensity: 4.2
+    muzzleLightRange: 4
+    muzzleLightSeconds: 0.085
+    maximumAimCorrectionDegrees: 12
+    attackPresentation: 0
+    contactSwingAxisLocal: {x: 0, y: 1, z: 0}
+    contactSwingDegrees: 0
+    contactStrikeSeconds: 0.34
+    contactHandExtension: 0
+  - itemId: weapon.combat-knife
+    prefab: {fileID: 3102909436067329747, guid: 7117933b3d815094e8dce8191bf95f37, type: 3}
+    animationSetId: pose.melee
+    muzzleEffectPrefab: {fileID: 0}
+    instantTracer: 0
+    shotEffectSeconds: 0.34
+    tracerWidth: 0.025
+    muzzleLightColor: {r: 0, g: 0, b: 0, a: 1}
+    muzzleLightIntensity: 0
+    muzzleLightRange: 1
+    muzzleLightSeconds: 0.01
+    maximumAimCorrectionDegrees: 1
+    attackPresentation: 1
+    contactSwingAxisLocal: {x: 0, y: 1, z: 0}
+    contactSwingDegrees: -82
+    contactStrikeSeconds: 0.38
+    contactHandExtension: 0.34

@@ -1,0 +1,52 @@
+{
+  "entries": [
+    {
+      "id": "tip.turn-mode",
+      "category": "TACTICS",
+      "title": "Control the tempo",
+      "text": "Enter turn mode when precise positioning matters. Exploration remains best for unconstrained travel.",
+      "showOnLoadingScreens": true,
+      "tutorialOrder": 10
+    },
+    {
+      "id": "tip.hotbar-remap",
+      "category": "CONTROLS",
+      "title": "Make the hotbar yours",
+      "text": "Right-click any hotbar slot to assign an available ability or item to that hotkey.",
+      "showOnLoadingScreens": true,
+      "tutorialOrder": 20
+    },
+    {
+      "id": "tip.route-planning",
+      "category": "MOVEMENT",
+      "title": "Plan before committing",
+      "text": "Turn-mode routes show their cost before commitment. Remove or cancel segments that spend more movement than intended.",
+      "showOnLoadingScreens": true,
+      "tutorialOrder": 30
+    },
+    {
+      "id": "tip.emergency-reactions",
+      "category": "COMBAT",
+      "title": "React to incoming threats",
+      "text": "Emergency reactions use a small temporary AP budget. Reposition, change stance, or seek cover before ending the reaction.",
+      "showOnLoadingScreens": true,
+      "tutorialOrder": 40
+    },
+    {
+      "id": "tip.grenade-uncertainty",
+      "category": "COMBAT",
+      "title": "Expect an uncertain landing",
+      "text": "A grenade can land anywhere in its displayed uncertainty region. Blast effects originate from the recorded landing point.",
+      "showOnLoadingScreens": true,
+      "tutorialOrder": 50
+    },
+    {
+      "id": "tip.bug-report",
+      "category": "SYSTEM",
+      "title": "Capture useful evidence",
+      "text": "Export a bug report after unexpected behavior to preserve the current session, journal, and guidance context.",
+      "showOnLoadingScreens": false,
+      "tutorialOrder": 60
+    }
+  ]
+}

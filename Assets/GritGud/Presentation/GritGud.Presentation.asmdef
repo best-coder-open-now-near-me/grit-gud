@@ -1,0 +1,20 @@
+{
+    "name": "GritGud.Presentation",
+    "rootNamespace": "GritGud.Presentation",
+    "references": [
+        "GritGud.Domain",
+        "GritGud.Application",
+        "Unity.InputSystem",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

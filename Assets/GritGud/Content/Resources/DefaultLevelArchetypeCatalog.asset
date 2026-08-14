@@ -1,0 +1,127 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e1bf67140ecb4a90af5a65c6f8bd2f56, type: 3}
+  m_Name: DefaultLevelArchetypeCatalog
+  m_EditorClassIdentifier: 
+  entries:
+  - archetypeId: structure.floor.standard
+    displayName: Floor
+    category: Structure
+    surfacePresentationId: surface.concrete
+    prefab: {fileID: 5790725157781373215, guid: 80278570906458d499abd6aa3ef03fc3, type: 3}
+    localBoundsCenter: {x: -1.25, y: 0, z: 1.25}
+    localBoundsSize: {x: 2.5, y: 0.1, z: 2.5}
+    positionSnap: 2.5
+    angleSnap: 90
+    placementSurface: 1
+    providesCover: 0
+    defaultCoverCenter: {x: 0, y: 0, z: 0}
+    defaultCoverSize: {x: 1, y: 1, z: 1}
+    destructible: 0
+    initialDestructibleState: intact
+    initialIntegrity: 0
+  - archetypeId: structure.wall.standard
+    displayName: Wall
+    category: Structure
+    surfacePresentationId: surface.concrete
+    prefab: {fileID: 1314183909916261615, guid: d6b56504304c325419b598fe3ddb95ed, type: 3}
+    localBoundsCenter: {x: -1.25, y: 1.5, z: 0}
+    localBoundsSize: {x: 2.5, y: 3, z: 0.225}
+    positionSnap: 2.5
+    angleSnap: 90
+    placementSurface: 0
+    providesCover: 1
+    defaultCoverCenter: {x: -1.25, y: 1.5, z: 0}
+    defaultCoverSize: {x: 2.5, y: 3, z: 0.225}
+    destructible: 0
+    initialDestructibleState: intact
+    initialIntegrity: 0
+  - archetypeId: structure.wall.doorway
+    displayName: Doorway Wall
+    category: Structure
+    surfacePresentationId: surface.concrete
+    prefab: {fileID: 1090055365757069019, guid: b00e173b113716a458e7d028b5a22a6e, type: 3}
+    localBoundsCenter: {x: -1.25, y: 1.5, z: 0}
+    localBoundsSize: {x: 2.5, y: 3, z: 0.225}
+    positionSnap: 2.5
+    angleSnap: 90
+    placementSurface: 0
+    providesCover: 0
+    defaultCoverCenter: {x: 0, y: 0, z: 0}
+    defaultCoverSize: {x: 1, y: 1, z: 1}
+    destructible: 0
+    initialDestructibleState: intact
+    initialIntegrity: 0
+  - archetypeId: structure.stairs.standard
+    displayName: Stairs
+    category: Structure
+    surfacePresentationId: surface.concrete
+    prefab: {fileID: 5184713431846949732, guid: d1e81d08282ca3b49b6f9b7fb3935878, type: 3}
+    localBoundsCenter: {x: -1.25, y: 0.59, z: -1.25}
+    localBoundsSize: {x: 2.5, y: 1.82, z: 2.5}
+    positionSnap: 2.5
+    angleSnap: 90
+    placementSurface: 1
+    providesCover: 0
+    defaultCoverCenter: {x: 0, y: 0, z: 0}
+    defaultCoverSize: {x: 1, y: 1, z: 1}
+    destructible: 0
+    initialDestructibleState: intact
+    initialIntegrity: 0
+  - archetypeId: prop.crate.standard
+    displayName: Crate
+    category: Props
+    surfacePresentationId: surface.wood
+    prefab: {fileID: 1414887969237499401, guid: 6e3cfe8cda1ce5449b002fd1348507fc, type: 3}
+    localBoundsCenter: {x: 0.14, y: 0.48, z: -0.32}
+    localBoundsSize: {x: 1.08, y: 0.95, z: 1.46}
+    positionSnap: 0.25
+    angleSnap: 15
+    placementSurface: 0
+    providesCover: 1
+    defaultCoverCenter: {x: 0.14, y: 0.48, z: -0.32}
+    defaultCoverSize: {x: 1.08, y: 0.95, z: 1.46}
+    destructible: 1
+    initialDestructibleState: intact
+    initialIntegrity: 10
+  - archetypeId: prop.barrel.metal
+    displayName: Metal Barrel
+    category: Props
+    surfacePresentationId: surface.metal
+    prefab: {fileID: 1982933260569691131, guid: b7d340da675b88849810a9e27edfbeee, type: 3}
+    localBoundsCenter: {x: 0, y: 0.55, z: 0}
+    localBoundsSize: {x: 0.9, y: 1.1, z: 0.9}
+    positionSnap: 0.25
+    angleSnap: 15
+    placementSurface: 0
+    providesCover: 1
+    defaultCoverCenter: {x: 0, y: 0.55, z: 0}
+    defaultCoverSize: {x: 0.9, y: 1.1, z: 0.9}
+    destructible: 1
+    initialDestructibleState: intact
+    initialIntegrity: 8
+  - archetypeId: vehicle.buggy.standard
+    displayName: Buggy
+    category: Vehicles
+    surfacePresentationId: surface.metal
+    prefab: {fileID: 1916854770252222, guid: 90a858f72a2fe1642a597df2b78b0b93, type: 3}
+    localBoundsCenter: {x: 0, y: 0.75, z: 0.25}
+    localBoundsSize: {x: 2.4, y: 1.8, z: 4.5}
+    positionSnap: 0.25
+    angleSnap: 15
+    placementSurface: 0
+    providesCover: 0
+    defaultCoverCenter: {x: 0, y: 0, z: 0}
+    defaultCoverSize: {x: 1, y: 1, z: 1}
+    destructible: 0
+    initialDestructibleState: intact
+    initialIntegrity: 0

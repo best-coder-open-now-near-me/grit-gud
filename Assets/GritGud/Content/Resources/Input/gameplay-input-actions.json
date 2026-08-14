@@ -1,0 +1,79 @@
+{
+  "name": "GameplayInputActions",
+  "maps": [
+    {
+      "name": "Gameplay",
+      "id": "449163c3-3b65-4e74-95fb-a6ac95d982ca",
+      "actions": [
+        { "name": "Move", "type": "Value", "id": "a2ee7f46-8726-49f6-823a-a20b3c22dd0f", "expectedControlType": "Vector2", "processors": "", "interactions": "", "initialStateCheck": true },
+        { "name": "Sprint", "type": "Button", "id": "d20db7a1-99bd-498b-9ff2-a32c3275ff0b", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "Look", "type": "PassThrough", "id": "a1d77430-4464-4ad3-923e-10b4c321bf0b", "expectedControlType": "Vector2", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "Aim", "type": "Button", "id": "4af37dc1-a587-453f-b776-803f3c595fc5", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "CameraZoom", "type": "PassThrough", "id": "4af37dc1-a587-453f-b776-803f3c595fc6", "expectedControlType": "Axis", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "Attack", "type": "Button", "id": "805f52f3-778f-4107-92c7-e06a783032c4", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "ToggleTurnMode", "type": "Button", "id": "7cf69911-d5b7-4f4d-8bda-207605c4665c", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "ToggleStance", "type": "Button", "id": "33be786f-5303-4d14-9ffb-65a6d26a7003", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "ToggleCameraView", "type": "Button", "id": "2ce9af8c-46ca-4458-81ed-7e8d6e5e5108", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "ExportBugReport", "type": "Button", "id": "869a353d-f0f5-44b2-872c-ff012ea9ae04", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "Interact", "type": "Button", "id": "1f5909ed-18bf-4fb4-af45-e524efc5a2b8", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "EndTurn", "type": "Button", "id": "19c980be-3fe3-48f2-8c34-c5ee8fe594ae", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "CancelRoute", "type": "Button", "id": "7045a678-aaba-4e8a-8aaa-69fcc92e1109", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "UndoRoute", "type": "Button", "id": "9cc3bbc0-9511-492c-8e1b-b19fe0fddc3e", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "ConfirmRoute", "type": "Button", "id": "6bbeb743-92f4-487c-9248-f46059d8244f", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "CyclePartyMember", "type": "Button", "id": "6bbeb743-92f4-487c-9248-f46059d82450", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "Escape", "type": "Button", "id": "ea584fb4-863c-436d-b38b-e83506d8c5aa", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "Hotbar1", "type": "Button", "id": "c29a8cb1-54d1-46a5-9826-470540123001", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "Hotbar2", "type": "Button", "id": "c29a8cb1-54d1-46a5-9826-470540123002", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "Hotbar3", "type": "Button", "id": "c29a8cb1-54d1-46a5-9826-470540123003", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "Hotbar4", "type": "Button", "id": "c29a8cb1-54d1-46a5-9826-470540123004", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "Hotbar5", "type": "Button", "id": "c29a8cb1-54d1-46a5-9826-470540123005", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "Hotbar6", "type": "Button", "id": "c29a8cb1-54d1-46a5-9826-470540123006", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "Hotbar7", "type": "Button", "id": "c29a8cb1-54d1-46a5-9826-470540123007", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "Hotbar8", "type": "Button", "id": "c29a8cb1-54d1-46a5-9826-470540123008", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false },
+        { "name": "CancelPendingAction", "type": "Button", "id": "c29a8cb1-54d1-46a5-9826-470540123009", "expectedControlType": "Button", "processors": "", "interactions": "", "initialStateCheck": false }
+      ],
+      "bindings": [
+        { "name": "WASD", "id": "55299f96-1938-4df4-9779-537397dfab83", "path": "2DVector", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Move", "isComposite": true, "isPartOfComposite": false },
+        { "name": "up", "id": "f21a9eef-0e11-4a38-873e-2f42a7c53163", "path": "<Keyboard>/w", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Move", "isComposite": false, "isPartOfComposite": true },
+        { "name": "down", "id": "36a204b1-21e4-4011-8347-215a8ab98a0b", "path": "<Keyboard>/s", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Move", "isComposite": false, "isPartOfComposite": true },
+        { "name": "left", "id": "7aad97c3-44f0-46e2-a461-913b31084f78", "path": "<Keyboard>/a", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Move", "isComposite": false, "isPartOfComposite": true },
+        { "name": "right", "id": "ad1dd3cf-6bce-40d6-9664-d6ae2e7fa046", "path": "<Keyboard>/d", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Move", "isComposite": false, "isPartOfComposite": true },
+        { "name": "", "id": "1ec010de-7983-47d2-bff8-b35f20c244c5", "path": "<Keyboard>/leftShift", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Sprint", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "797cc7fb-c49d-4faf-819a-53d1ac7f3705", "path": "<Mouse>/delta", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Look", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "39e8eb0b-ab55-48a4-b5ca-bd10b95e0bac", "path": "<Mouse>/middleButton", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Aim", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "39e8eb0b-ab55-48a4-b5ca-bd10b95e0bad", "path": "<Mouse>/scroll/y", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "CameraZoom", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "9efbfcc8-1e19-4246-bb96-3c9c5d8b3693", "path": "<Mouse>/leftButton", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Attack", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "3afdb053-3a04-4992-ae4a-f69837348325", "path": "<Keyboard>/t", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "ToggleTurnMode", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "6771ecbb-ec85-4be2-94a1-8e409272bf55", "path": "<Keyboard>/c", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "ToggleStance", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "ab44a86b-ee8a-4630-8828-d45a5851a42a", "path": "<Keyboard>/v", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "ToggleCameraView", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "63317f33-a8ff-4742-bf2a-7aa58c61c17f", "path": "<Keyboard>/f8", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "ExportBugReport", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "3ee326fb-ce63-4391-8ef5-099595d8a12c", "path": "<Keyboard>/e", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Interact", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "f2a93501-766c-4935-95e7-2be7d5f505a5", "path": "<Keyboard>/space", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "EndTurn", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "039fe55b-28e5-4709-bbbd-6ba1327b1b57", "path": "<Keyboard>/r", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "CancelRoute", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "ba1fc5b3-bdd6-4219-b97c-a403092ae800", "path": "<Keyboard>/backspace", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "UndoRoute", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "0cfa93d3-6154-4e9a-aa71-f21f41a1f070", "path": "<Keyboard>/enter", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "ConfirmRoute", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "0cfa93d3-6154-4e9a-aa71-f21f41a1f071", "path": "<Keyboard>/tab", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "CyclePartyMember", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "20ce0530-17e2-41d8-a506-380813851a07", "path": "<Keyboard>/escape", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Escape", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "d56d3752-1b5a-41dd-a79b-220540123001", "path": "<Keyboard>/1", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Hotbar1", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "d56d3752-1b5a-41dd-a79b-220540123002", "path": "<Keyboard>/2", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Hotbar2", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "d56d3752-1b5a-41dd-a79b-220540123003", "path": "<Keyboard>/3", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Hotbar3", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "d56d3752-1b5a-41dd-a79b-220540123004", "path": "<Keyboard>/4", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Hotbar4", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "d56d3752-1b5a-41dd-a79b-220540123005", "path": "<Keyboard>/5", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Hotbar5", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "d56d3752-1b5a-41dd-a79b-220540123006", "path": "<Keyboard>/6", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Hotbar6", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "d56d3752-1b5a-41dd-a79b-220540123007", "path": "<Keyboard>/7", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Hotbar7", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "d56d3752-1b5a-41dd-a79b-220540123008", "path": "<Keyboard>/8", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "Hotbar8", "isComposite": false, "isPartOfComposite": false },
+        { "name": "", "id": "d56d3752-1b5a-41dd-a79b-220540123009", "path": "<Keyboard>/escape", "interactions": "", "processors": "", "groups": "KeyboardMouse", "action": "CancelPendingAction", "isComposite": false, "isPartOfComposite": false }
+      ]
+    }
+  ],
+  "controlSchemes": [
+    {
+      "name": "KeyboardMouse",
+      "bindingGroup": "KeyboardMouse",
+      "devices": [
+        { "devicePath": "<Keyboard>", "isOptional": false, "isOR": false },
+        { "devicePath": "<Mouse>", "isOptional": false, "isOR": false }
+      ]
+    }
+  ]
+}

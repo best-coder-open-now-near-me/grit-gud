@@ -1,0 +1,263 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &7791663623579650733
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1181362185913289916}
+  - component: {fileID: 4816393051355275299}
+  - component: {fileID: 1144652654790121882}
+  - component: {fileID: 771028456193847562}
+  - component: {fileID: 340282534900913198}
+  - component: {fileID: 6393417305509046758}
+  - component: {fileID: 6217044626611956091}
+  - component: {fileID: 882139567204958673}
+  - component: {fileID: 3028598812794721758}
+  m_Layer: 0
+  m_Name: DefaultPlayerActor
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1181362185913289916
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7791663623579650733}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 3567431870559959616}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!143 &4816393051355275299
+CharacterController:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7791663623579650733}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Height: 1.8
+  m_Radius: 0.35
+  m_SlopeLimit: 50
+  m_StepOffset: 0.35
+  m_SkinWidth: 0.08
+  m_MinMoveDistance: 0.001
+  m_Center: {x: 0, y: 0.9, z: 0}
+--- !u!114 &1144652654790121882
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7791663623579650733}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7cbd191112654cd89387b6aa1705824f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: GritGud.Presentation::GritGud.Presentation.Gameplay.ActorStancePresenter
+  spatialProfile:
+    crouchedHeightFraction: 0.62
+    standingCameraPivotHeight: 1.3
+    crouchedCameraPivotHeight: 0.9
+    targetRegions:
+    - id: 0
+      standingLocalCenter: {x: 0, y: 1.62, z: 0}
+      crouchedLocalCenter: {x: 0, y: 1.08, z: 0}
+      sampleRadius: 0.14
+    - id: 1
+      standingLocalCenter: {x: 0, y: 1.18, z: 0}
+      crouchedLocalCenter: {x: 0, y: 0.78, z: 0}
+      sampleRadius: 0.2
+    - id: 2
+      standingLocalCenter: {x: -0.32, y: 1.2, z: 0}
+      crouchedLocalCenter: {x: -0.3, y: 0.8, z: 0}
+      sampleRadius: 0.12
+    - id: 3
+      standingLocalCenter: {x: 0.32, y: 1.2, z: 0}
+      crouchedLocalCenter: {x: 0.3, y: 0.8, z: 0}
+      sampleRadius: 0.12
+    - id: 4
+      standingLocalCenter: {x: -0.16, y: 0.55, z: 0}
+      crouchedLocalCenter: {x: -0.18, y: 0.38, z: 0}
+      sampleRadius: 0.15
+    - id: 5
+      standingLocalCenter: {x: 0.16, y: 0.55, z: 0}
+      crouchedLocalCenter: {x: 0.18, y: 0.38, z: 0}
+      sampleRadius: 0.15
+--- !u!114 &771028456193847562
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7791663623579650733}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c3d4e5f60718492ab2c3d4e5f6071823, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: GritGud.Presentation::GritGud.Presentation.Gameplay.ExplorationMovementInput
+  viewTransform: {fileID: 0}
+--- !u!114 &340282534900913198
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7791663623579650733}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: da6e44f35c56458e9143eb53190992f5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: GritGud.Presentation::GritGud.Presentation.Gameplay.ThirdPersonMotor
+  motionProfile: {fileID: 11400000, guid: 216b8e28cb324c1589ef04db08a42935, type: 2}
+  movementCommandSource: {fileID: 771028456193847562}
+--- !u!114 &6393417305509046758
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7791663623579650733}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9dc2ef9e8af642938cb9b25283c0cb02, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: GritGud.Presentation::GritGud.Presentation.Actors.Animation.AnimatorDriver
+  targetAnimator: {fileID: 3521644240170425072}
+--- !u!114 &6217044626611956091
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7791663623579650733}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5c4a01cb3599459fbc9657d5db232a31, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: GritGud.Presentation::GritGud.Presentation.Actors.Animation.ActorAnimationCoordinator
+  animatorDriver: {fileID: 6393417305509046758}
+  profile: {fileID: 11400000, guid: fe422a090531a3a4b866a9de0d472c8c, type: 2}
+--- !u!114 &882139567204958673
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7791663623579650733}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d4e5f60718294a3bc3d4e5f607182934, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: GritGud.Presentation::GritGud.Presentation.Actors.Animation.ActorLocomotionAnimationPresenter
+  motor: {fileID: 340282534900913198}
+  animationCoordinator: {fileID: 6217044626611956091}
+--- !u!114 &3028598812794721758
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7791663623579650733}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 31bdd6687019fc14db484d724a51d6a5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: GritGud.Presentation::GritGud.Presentation.Gameplay.ActorCelShadingPresenter
+--- !u!1001 &3570691726993520642
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 1181362185913289916}
+    m_Modifications:
+    - target: {fileID: 1938837853794670, guid: 30c23f6bcd4f35648bbfc61c9f671e51, type: 3}
+      propertyPath: m_Name
+      value: Player Visual
+      objectReference: {fileID: 0}
+    - target: {fileID: 4421512215773762, guid: 30c23f6bcd4f35648bbfc61c9f671e51, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4421512215773762, guid: 30c23f6bcd4f35648bbfc61c9f671e51, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4421512215773762, guid: 30c23f6bcd4f35648bbfc61c9f671e51, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4421512215773762, guid: 30c23f6bcd4f35648bbfc61c9f671e51, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4421512215773762, guid: 30c23f6bcd4f35648bbfc61c9f671e51, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4421512215773762, guid: 30c23f6bcd4f35648bbfc61c9f671e51, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4421512215773762, guid: 30c23f6bcd4f35648bbfc61c9f671e51, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4421512215773762, guid: 30c23f6bcd4f35648bbfc61c9f671e51, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4421512215773762, guid: 30c23f6bcd4f35648bbfc61c9f671e51, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4421512215773762, guid: 30c23f6bcd4f35648bbfc61c9f671e51, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 95351788285682418, guid: 30c23f6bcd4f35648bbfc61c9f671e51, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: 854f15dff14271140bc28f33144a8699, type: 2}
+    - target: {fileID: 95351788285682418, guid: 30c23f6bcd4f35648bbfc61c9f671e51, type: 3}
+      propertyPath: m_ApplyRootMotion
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 30c23f6bcd4f35648bbfc61c9f671e51, type: 3}
+--- !u!95 &3521644240170425072 stripped
+Animator:
+  m_CorrespondingSourceObject: {fileID: 95351788285682418, guid: 30c23f6bcd4f35648bbfc61c9f671e51, type: 3}
+  m_PrefabInstance: {fileID: 3570691726993520642}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &3567431870559959616 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 4421512215773762, guid: 30c23f6bcd4f35648bbfc61c9f671e51, type: 3}
+  m_PrefabInstance: {fileID: 3570691726993520642}
+  m_PrefabAsset: {fileID: 0}

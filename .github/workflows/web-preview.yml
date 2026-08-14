@@ -1,0 +1,282 @@
+name: Branch preview
+
+on:
+  push:
+    branches-ignore:
+      - main
+      - gh-pages
+  delete:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag, or commit to preview
+        required: true
+        default: main
+
+permissions:
+  checks: write
+  contents: write
+
+concurrency:
+  group: branch-preview-${{ github.event_name == 'delete' && github.event.ref || inputs.ref || github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+  UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+  UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+  UNITY_LICENSING_SERVER: ${{ secrets.UNITY_LICENSING_SERVER }}
+
+jobs:
+  publish:
+    name: Build and publish preview
+    if: github.event_name != 'delete'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out preview source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.sha }}
+          lfs: true
+
+      - name: Validate tracked source and JSON
+        run: python3 tools/validate-repository.py
+
+      - name: Read licensed asset revision
+        id: licensed_asset_config
+        shell: bash
+        run: |
+          ref="$(tr -d '\r\n' < .github/private-assets-ref)"
+          if [ -z "$ref" ]; then
+            echo "The tracked private asset ref is empty." >&2
+            exit 1
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: Check out licensed build assets
+        uses: actions/checkout@v4
+        with:
+          repository: best-coder-open-now-near-me/private-assets
+          ref: ${{ steps.licensed_asset_config.outputs.ref }}
+          token: ${{ secrets.PRIVATE_ASSETS }}
+          path: .private-assets
+          lfs: true
+          persist-credentials: false
+
+      - name: Install licensed build assets
+        id: licensed_assets
+        shell: bash
+        run: |
+          if [ ! -f .private-assets/grit-gud/.grit-gud-private-assets ]; then
+            echo "The private repository does not contain the Grit Gud asset source." >&2
+            exit 1
+          fi
+          if [ ! -d .private-assets/grit-gud/Assets ]; then
+            echo "The Grit Gud private asset source must contain an Assets directory." >&2
+            exit 1
+          fi
+
+          revision="$(git -C .private-assets rev-parse HEAD)"
+          rsync -a --exclude='.git*' .private-assets/grit-gud/Assets/ Assets/
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+          rm -rf .private-assets
+
+      - name: Create preview slug
+        id: preview
+        env:
+          PREVIEW_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
+        run: |
+          slug="$(printf '%s' "$PREVIEW_REF" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+//; s/-+$//')"
+          if [ -z "$slug" ] || [ "$slug" = "." ] || [ "$slug" = ".." ]; then
+            echo "Could not create a safe preview slug from: $PREVIEW_REF" >&2
+            exit 1
+          fi
+          echo "slug=$slug" >> "$GITHUB_OUTPUT"
+          echo "Preview path: preview/$slug/"
+
+      - name: Reclaim runner disk space
+        run: |
+          echo "Disk space before cleanup:"
+          df -h /
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo apt-get clean
+          sudo docker system prune --all --force
+          echo "Disk space after cleanup:"
+          df -h /
+
+      - name: Restore Unity import cache
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Unity-Library-${{ runner.os }}-WebGL-${{ hashFiles('ProjectSettings/ProjectVersion.txt', 'Packages/manifest.json', 'Packages/packages-lock.json') }}-${{ steps.licensed_assets.outputs.revision }}
+          restore-keys: |
+            Unity-Library-${{ runner.os }}-WebGL-
+
+      - name: Run EditMode tests
+        id: editmode_tests
+        uses: game-ci/unity-test-runner@v4
+        with:
+          projectPath: .
+          unityVersion: auto
+          testMode: editmode
+          artifactsPath: artifacts/editmode
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: EditMode test results
+
+      - name: Upload EditMode test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editmode-test-results-${{ github.run_id }}
+          path: ${{ steps.editmode_tests.outputs.artifactsPath }}
+
+      - name: Run PlayMode lifecycle tests
+        id: playmode_tests
+        uses: game-ci/unity-test-runner@v4
+        with:
+          projectPath: .
+          unityVersion: auto
+          testMode: playmode
+          artifactsPath: artifacts/playmode
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: PlayMode lifecycle test results
+
+      - name: Upload PlayMode test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playmode-test-results-${{ github.run_id }}
+          path: ${{ steps.playmode_tests.outputs.artifactsPath }}
+
+      - name: Restore clean workspace after tests
+        shell: bash
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" Packages
+          if [ -d artifacts ]; then
+            sudo chown -R "$(id -u):$(id -g)" artifacts
+            rm -rf -- artifacts
+          fi
+          git restore -- Packages/manifest.json Packages/packages-lock.json
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Unity tests left unexpected workspace changes:" >&2
+            git status --short >&2
+            exit 1
+          fi
+
+      - name: Build WebGL player
+        uses: game-ci/unity-builder@v4
+        with:
+          projectPath: .
+          unityVersion: auto
+          targetPlatform: WebGL
+          buildMethod: GritGud.Editor.BuildCommand.BuildWebPreview
+
+      - name: Publish branch folder
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          PREVIEW_SLUG: ${{ steps.preview.outputs.slug }}
+        run: |
+          build_dir="$RUNNER_TEMP/web-preview-build"
+          index_script="$RUNNER_TEMP/preview-index.mjs"
+          publish_dir="$RUNNER_TEMP/gh-pages-publish"
+          mkdir -p "$build_dir"
+          cp -a Builds/Web/. "$build_dir/"
+          if [ -f tools/preview-index.mjs ]; then
+            cp tools/preview-index.mjs "$index_script"
+          else
+            git fetch origin "$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
+            git show "origin/$DEFAULT_BRANCH:tools/preview-index.mjs" > "$index_script"
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          for attempt in 1 2 3 4 5; do
+            git worktree remove --force "$publish_dir" 2>/dev/null || true
+            git worktree prune
+            git worktree add --detach --no-checkout "$publish_dir" HEAD
+
+            if git fetch origin gh-pages:refs/remotes/origin/gh-pages; then
+              git -C "$publish_dir" switch --detach origin/gh-pages
+            else
+              git -C "$publish_dir" switch --orphan "gh-pages-seed-${GITHUB_RUN_ID}-${attempt}"
+            fi
+
+            rm -rf "$publish_dir/preview/$PREVIEW_SLUG"
+            mkdir -p "$publish_dir/preview/$PREVIEW_SLUG"
+            cp -a "$build_dir/." "$publish_dir/preview/$PREVIEW_SLUG/"
+            touch "$publish_dir/.nojekyll"
+            node "$index_script" "$publish_dir"
+            git -C "$publish_dir" add --all
+            git -C "$publish_dir" commit -m "Publish preview for $PREVIEW_SLUG" || true
+
+            if git -C "$publish_dir" push origin HEAD:gh-pages; then
+              exit 0
+            fi
+
+            echo "gh-pages changed concurrently; retrying ($attempt/5)."
+            sleep $((attempt * 2))
+          done
+
+          echo "Could not publish gh-pages after five attempts." >&2
+          exit 1
+
+      - name: Report preview URL
+        env:
+          PREVIEW_SLUG: ${{ steps.preview.outputs.slug }}
+        run: |
+          url="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/preview/$PREVIEW_SLUG/"
+          echo "## WebGL branch preview" >> "$GITHUB_STEP_SUMMARY"
+          echo "[$url]($url)" >> "$GITHUB_STEP_SUMMARY"
+
+  remove:
+    name: Remove deleted branch preview
+    if: github.event_name == 'delete' && github.event.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out maintenance tools
+        uses: actions/checkout@v4
+
+      - name: Remove branch folder
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DELETED_REF: ${{ github.event.ref }}
+        run: |
+          slug="$(printf '%s' "$DELETED_REF" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+//; s/-+$//')"
+          index_script="$RUNNER_TEMP/preview-index.mjs"
+          git fetch origin "$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
+          git show "origin/$DEFAULT_BRANCH:tools/preview-index.mjs" > "$index_script"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          for attempt in 1 2 3 4 5; do
+            if ! git fetch origin gh-pages:refs/remotes/origin/gh-pages; then
+              echo "No gh-pages branch exists; nothing to remove."
+              exit 0
+            fi
+            git checkout -B gh-pages origin/gh-pages
+            rm -rf "preview/$slug"
+            touch .nojekyll
+            node "$index_script" .
+            git add --all
+            if git diff --cached --quiet; then
+              echo "No preview exists for $DELETED_REF."
+              exit 0
+            fi
+            git commit -m "Remove preview for $slug"
+
+            if git push origin HEAD:gh-pages; then
+              exit 0
+            fi
+
+            echo "gh-pages changed concurrently; retrying ($attempt/5)."
+            sleep $((attempt * 2))
+          done
+
+          echo "Could not update gh-pages after five attempts." >&2
+          exit 1

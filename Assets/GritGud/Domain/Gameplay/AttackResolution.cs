@@ -1,0 +1,583 @@
+using System;
+
+namespace GritGud.Domain.Gameplay
+{
+    public readonly struct ActorWoundSnapshot
+    {
+        public ActorWoundSnapshot(
+            string actorId,
+            int woundCount,
+            float movementPenalty)
+            : this(
+                actorId,
+                headWounds: 0,
+                torsoWounds: 0,
+                leftArmWounds: 0,
+                rightArmWounds: 0,
+                leftLegWounds: 0,
+                rightLegWounds: 0,
+                unlocalizedWounds: woundCount,
+                movementPenalty: movementPenalty)
+        {
+        }
+
+        public ActorWoundSnapshot(
+            string actorId,
+            int headWounds,
+            int torsoWounds,
+            int leftArmWounds,
+            int rightArmWounds,
+            int leftLegWounds,
+            int rightLegWounds,
+            float movementPenalty)
+            : this(
+                actorId,
+                headWounds,
+                torsoWounds,
+                leftArmWounds,
+                rightArmWounds,
+                leftLegWounds,
+                rightLegWounds,
+                unlocalizedWounds: 0,
+                movementPenalty: movementPenalty)
+        {
+        }
+
+        public ActorWoundSnapshot(
+            string actorId,
+            int headWounds,
+            int torsoWounds,
+            int leftArmWounds,
+            int rightArmWounds,
+            int leftLegWounds,
+            int rightLegWounds,
+            int unlocalizedWounds,
+            float movementPenalty)
+        {
+            if (string.IsNullOrWhiteSpace(actorId))
+            {
+                throw new ArgumentException(
+                    "Wound snapshots require an actor identifier.",
+                    nameof(actorId));
+            }
+
+            if (headWounds < 0
+                || torsoWounds < 0
+                || leftArmWounds < 0
+                || rightArmWounds < 0
+                || leftLegWounds < 0
+                || rightLegWounds < 0
+                || unlocalizedWounds < 0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(headWounds),
+                    "Regional wound counts cannot be negative.");
+            }
+
+            int woundCount = checked(
+                headWounds
+                + torsoWounds
+                + leftArmWounds
+                + rightArmWounds
+                + leftLegWounds
+                + rightLegWounds
+                + unlocalizedWounds);
+
+            if (float.IsNaN(movementPenalty)
+                || float.IsInfinity(movementPenalty)
+                || movementPenalty < 0f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(movementPenalty));
+            }
+
+            if ((woundCount == 0) != (movementPenalty == 0f))
+            {
+                throw new ArgumentException(
+                    "Wound count and movement penalty must describe the same state.",
+                    nameof(movementPenalty));
+            }
+
+            ActorId = actorId;
+            WoundCount = woundCount;
+            MovementPenalty = movementPenalty;
+            HeadWounds = headWounds;
+            TorsoWounds = torsoWounds;
+            LeftArmWounds = leftArmWounds;
+            RightArmWounds = rightArmWounds;
+            LeftLegWounds = leftLegWounds;
+            RightLegWounds = rightLegWounds;
+            UnlocalizedWounds = unlocalizedWounds;
+        }
+
+        public string ActorId { get; }
+
+        public int WoundCount { get; }
+
+        public float MovementPenalty { get; }
+
+        public int HeadWounds { get; }
+
+        public int TorsoWounds { get; }
+
+        public int LeftArmWounds { get; }
+
+        public int RightArmWounds { get; }
+
+        public int LeftLegWounds { get; }
+
+        public int RightLegWounds { get; }
+
+        public int UnlocalizedWounds { get; }
+
+        public int GetWoundCount(TargetRegionId region)
+        {
+            switch (region)
+            {
+                case TargetRegionId.Head:
+                    return HeadWounds;
+                case TargetRegionId.Torso:
+                    return TorsoWounds;
+                case TargetRegionId.LeftArm:
+                    return LeftArmWounds;
+                case TargetRegionId.RightArm:
+                    return RightArmWounds;
+                case TargetRegionId.LeftLeg:
+                    return LeftLegWounds;
+                case TargetRegionId.RightLeg:
+                    return RightLegWounds;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(region));
+            }
+        }
+
+        public ActorWoundSnapshot AddWound(
+            TargetRegionId region,
+            float movementPenalty)
+        {
+            if (!Enum.IsDefined(typeof(TargetRegionId), region))
+            {
+                throw new ArgumentOutOfRangeException(nameof(region));
+            }
+
+            if (float.IsNaN(movementPenalty)
+                || float.IsInfinity(movementPenalty)
+                || movementPenalty <= 0f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(movementPenalty));
+            }
+
+            return new ActorWoundSnapshot(
+                ActorId,
+                HeadWounds + (region == TargetRegionId.Head ? 1 : 0),
+                TorsoWounds + (region == TargetRegionId.Torso ? 1 : 0),
+                LeftArmWounds + (region == TargetRegionId.LeftArm ? 1 : 0),
+                RightArmWounds + (region == TargetRegionId.RightArm ? 1 : 0),
+                LeftLegWounds + (region == TargetRegionId.LeftLeg ? 1 : 0),
+                RightLegWounds + (region == TargetRegionId.RightLeg ? 1 : 0),
+                UnlocalizedWounds,
+                MovementPenalty + movementPenalty);
+        }
+
+        public ActorWoundSnapshot AddUnlocalizedWound(float movementPenalty)
+        {
+            if (float.IsNaN(movementPenalty)
+                || float.IsInfinity(movementPenalty)
+                || movementPenalty <= 0f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(movementPenalty));
+            }
+
+            return new ActorWoundSnapshot(
+                ActorId,
+                HeadWounds,
+                TorsoWounds,
+                LeftArmWounds,
+                RightArmWounds,
+                LeftLegWounds,
+                RightLegWounds,
+                UnlocalizedWounds + 1,
+                MovementPenalty + movementPenalty);
+        }
+
+        public bool HasSameState(ActorWoundSnapshot other) =>
+            string.Equals(ActorId, other.ActorId, StringComparison.Ordinal)
+            && WoundCount == other.WoundCount
+            && MovementPenalty == other.MovementPenalty
+            && HeadWounds == other.HeadWounds
+            && TorsoWounds == other.TorsoWounds
+            && LeftArmWounds == other.LeftArmWounds
+            && RightArmWounds == other.RightArmWounds
+            && LeftLegWounds == other.LeftLegWounds
+            && RightLegWounds == other.RightLegWounds
+            && UnlocalizedWounds == other.UnlocalizedWounds;
+    }
+
+    public sealed class ActorWoundRecord
+    {
+        public ActorWoundRecord(
+            TargetRegionId region,
+            float appliedMovementPenalty,
+            ActorWoundSnapshot previous,
+            ActorWoundSnapshot resulting)
+        {
+            if (!Enum.IsDefined(typeof(TargetRegionId), region))
+            {
+                throw new ArgumentOutOfRangeException(nameof(region));
+            }
+
+            if (float.IsNaN(appliedMovementPenalty)
+                || float.IsInfinity(appliedMovementPenalty)
+                || appliedMovementPenalty <= 0f)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(appliedMovementPenalty));
+            }
+
+            if (!string.Equals(
+                    previous.ActorId,
+                    resulting.ActorId,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "A wound record cannot change actor identity.",
+                    nameof(resulting));
+            }
+
+            ActorWoundSnapshot expected = previous.AddWound(
+                region,
+                appliedMovementPenalty);
+            if (!resulting.HasSameState(expected))
+            {
+                throw new ArgumentException(
+                    "The resulting wound state does not match the applied regional wound.",
+                    nameof(resulting));
+            }
+
+            Region = region;
+            AppliedMovementPenalty = appliedMovementPenalty;
+            Previous = previous;
+            Resulting = resulting;
+        }
+
+        public string ActorId => Previous.ActorId;
+
+        public TargetRegionId Region { get; }
+
+        public float AppliedMovementPenalty { get; }
+
+        public ActorWoundSnapshot Previous { get; }
+
+        public ActorWoundSnapshot Resulting { get; }
+    }
+
+    public sealed class AttackResolutionRecord
+    {
+        public AttackResolutionRecord(
+            long sequence,
+            uint resolutionSeed,
+            TargetExposureSnapshot exposure,
+            AccuracyDecayDefinition accuracyDecay,
+            float distance,
+            ActorWoundSnapshot targetWoundsBefore,
+            int hitRoll,
+            int regionRoll,
+            TargetRegionId? hitRegion,
+            ActorWoundRecord wound,
+            float? maximumReach = null)
+        {
+            if (sequence <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(sequence));
+            }
+
+            Exposure = exposure ?? throw new ArgumentNullException(nameof(exposure));
+            AccuracyDecay = accuracyDecay ?? throw new ArgumentNullException(
+                nameof(accuracyDecay));
+            if (float.IsNaN(distance)
+                || float.IsInfinity(distance)
+                || distance < 0f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(distance));
+            }
+            if (maximumReach.HasValue
+                && (float.IsNaN(maximumReach.Value)
+                    || float.IsInfinity(maximumReach.Value)
+                    || maximumReach.Value <= 0f))
+            {
+                throw new ArgumentOutOfRangeException(nameof(maximumReach));
+            }
+            if (maximumReach.HasValue
+                && distance > maximumReach.Value + 0.0001f)
+            {
+                throw new ArgumentException(
+                    "Contact attack records cannot exceed their authored reach.",
+                    nameof(distance));
+            }
+            if (!string.Equals(
+                    exposure.TargetId,
+                    targetWoundsBefore.ActorId,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Attack exposure and wound state must describe the same target.",
+                    nameof(targetWoundsBefore));
+            }
+
+            if (hitRoll < 1 || hitRoll > 100)
+            {
+                throw new ArgumentOutOfRangeException(nameof(hitRoll));
+            }
+
+            int hitChance = AttackHitChanceRules.CalculateFinalHitChancePercent(
+                exposure,
+                accuracyDecay,
+                distance);
+            bool hit = hitRoll <= hitChance;
+            if (hit)
+            {
+                if (!hitRegion.HasValue || wound == null)
+                {
+                    throw new ArgumentException(
+                        "Hits require a recorded region and wound.",
+                        nameof(wound));
+                }
+
+                if (regionRoll < 1 || regionRoll > exposure.VisibleSampleCount)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(regionRoll));
+                }
+
+                TargetRegionId selected = TargetExposureRules.SelectVisibleRegion(
+                    exposure,
+                    regionRoll);
+                if (selected != hitRegion.Value
+                    || wound.Region != hitRegion.Value
+                    || !WoundsMatch(wound.Previous, targetWoundsBefore))
+                {
+                    throw new ArgumentException(
+                        "The wound does not match the recorded region roll.",
+                        nameof(wound));
+                }
+            }
+            else if (regionRoll != 0 || hitRegion.HasValue || wound != null)
+            {
+                throw new ArgumentException(
+                    "Misses cannot contain a region or wound outcome.",
+                    nameof(wound));
+            }
+
+            AttackResolutionRules.ValidateRecordedRolls(
+                resolutionSeed,
+                exposure.VisibleSampleCount,
+                hit,
+                hitRoll,
+                regionRoll);
+
+            Sequence = sequence;
+            ResolutionSeed = resolutionSeed;
+            Distance = distance;
+            MaximumReach = maximumReach;
+            TargetWoundsBefore = targetWoundsBefore;
+            HitRoll = hitRoll;
+            RegionRoll = regionRoll;
+            HitRegion = hitRegion;
+            Wound = wound;
+        }
+
+        public long Sequence { get; }
+
+        public uint ResolutionSeed { get; }
+
+        public string AttackerId => Exposure.ObserverId;
+
+        public string TargetId => Exposure.TargetId;
+
+        public TargetExposureSnapshot Exposure { get; }
+
+        public AccuracyDecayDefinition AccuracyDecay { get; }
+
+        public float Distance { get; }
+
+        public float? MaximumReach { get; }
+
+        public bool IsContactAttack => MaximumReach.HasValue;
+
+        public ActorWoundSnapshot TargetWoundsBefore { get; }
+
+        public ActorWoundSnapshot TargetWoundsAfter =>
+            Wound == null ? TargetWoundsBefore : Wound.Resulting;
+
+        public int BaseHitChancePercent => 100;
+
+        public int ExposureModifierPercent =>
+            GeometricHitChancePercent - BaseHitChancePercent;
+
+        public int GeometricHitChancePercent =>
+            TargetExposureRules.CalculateHitChancePercent(Exposure);
+
+        public float AccuracyPercent =>
+            AccuracyDecay.EvaluatePercent(Distance);
+
+        public int AccuracyModifierPercent =>
+            FinalHitChancePercent - GeometricHitChancePercent;
+
+        public int FinalHitChancePercent =>
+            AttackHitChanceRules.CalculateFinalHitChancePercent(
+                Exposure,
+                AccuracyDecay,
+                Distance);
+
+        public int HitRoll { get; }
+
+        public bool Hit => HitRoll <= FinalHitChancePercent;
+
+        public int RegionRoll { get; }
+
+        public TargetRegionId? HitRegion { get; }
+
+        public ActorWoundRecord Wound { get; }
+
+        private static bool WoundsMatch(
+            ActorWoundSnapshot left,
+            ActorWoundSnapshot right)
+        {
+            return left.HasSameState(right);
+        }
+    }
+
+    public static class AttackResolutionRules
+    {
+        internal static void ValidateRecordedRolls(
+            uint resolutionSeed,
+            int visibleSampleCount,
+            bool hit,
+            int hitRoll,
+            int regionRoll)
+        {
+            var rolls = new SeededAttackRolls(resolutionSeed);
+            if (rolls.Roll(100) != hitRoll
+                || (hit && rolls.Roll(visibleSampleCount) != regionRoll))
+            {
+                throw new ArgumentException(
+                    "The recorded rolls do not match the resolution seed.",
+                    nameof(hitRoll));
+            }
+        }
+
+        public static uint DeriveResolutionSeed(uint scenarioSeed, long sequence)
+        {
+            if (sequence <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(sequence));
+            }
+
+            unchecked
+            {
+                uint mixedSequence = (uint)sequence * 0x9E3779B9u;
+                mixedSequence ^= (uint)(sequence >> 32);
+                return scenarioSeed ^ mixedSequence ^ 0xA341316Cu;
+            }
+        }
+
+        public static AttackResolutionRecord Resolve(
+            long sequence,
+            uint resolutionSeed,
+            TargetExposureSnapshot exposure,
+            AccuracyDecayDefinition accuracyDecay,
+            float distance,
+            ActorWoundSnapshot targetWoundsBefore,
+            float woundMovementPenalty,
+            ContactAttackDefinition contact = null)
+        {
+            if (exposure == null)
+            {
+                throw new ArgumentNullException(nameof(exposure));
+            }
+
+            if (accuracyDecay == null)
+            {
+                throw new ArgumentNullException(nameof(accuracyDecay));
+            }
+
+            accuracyDecay.EvaluatePercent(distance);
+
+            if (float.IsNaN(woundMovementPenalty)
+                || float.IsInfinity(woundMovementPenalty)
+                || woundMovementPenalty <= 0f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(woundMovementPenalty));
+            }
+
+            var rolls = new SeededAttackRolls(resolutionSeed);
+            int hitRoll = rolls.Roll(100);
+            int hitChance = AttackHitChanceRules.CalculateFinalHitChancePercent(
+                exposure,
+                accuracyDecay,
+                distance);
+            if (hitRoll > hitChance)
+            {
+                return new AttackResolutionRecord(
+                    sequence,
+                    resolutionSeed,
+                    exposure,
+                    accuracyDecay,
+                    distance,
+                    targetWoundsBefore,
+                    hitRoll,
+                    regionRoll: 0,
+                    hitRegion: null,
+                    wound: null,
+                    maximumReach: contact?.MaximumReach);
+            }
+
+            int regionRoll = rolls.Roll(exposure.VisibleSampleCount);
+            TargetRegionId hitRegion = TargetExposureRules.SelectVisibleRegion(
+                exposure,
+                regionRoll);
+            ActorWoundSnapshot resultingWounds =
+                targetWoundsBefore.AddWound(
+                    hitRegion,
+                    woundMovementPenalty);
+            var wound = new ActorWoundRecord(
+                hitRegion,
+                woundMovementPenalty,
+                targetWoundsBefore,
+                resultingWounds);
+            return new AttackResolutionRecord(
+                sequence,
+                resolutionSeed,
+                exposure,
+                accuracyDecay,
+                distance,
+                targetWoundsBefore,
+                hitRoll,
+                regionRoll,
+                hitRegion,
+                wound,
+                contact?.MaximumReach);
+        }
+
+        private sealed class SeededAttackRolls
+        {
+            private uint state;
+
+            public SeededAttackRolls(uint seed)
+            {
+                state = seed != 0u ? seed : 0x6D2B79F5u;
+            }
+
+            public int Roll(int inclusiveMaximum)
+            {
+                if (inclusiveMaximum <= 0)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(inclusiveMaximum));
+                }
+
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                return (int)(state % (uint)inclusiveMaximum) + 1;
+            }
+        }
+    }
+}

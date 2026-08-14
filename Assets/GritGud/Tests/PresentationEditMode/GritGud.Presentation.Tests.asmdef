@@ -1,0 +1,27 @@
+{
+    "name": "GritGud.Presentation.Tests",
+    "rootNamespace": "GritGud.Presentation.Tests",
+    "references": [
+        "GritGud.Domain",
+        "GritGud.Application",
+        "GritGud.Presentation",
+        "GritGud.Editor",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false,
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ]
+}

@@ -1,0 +1,9 @@
+<linker>
+  <!-- GameObject.CreatePrimitive adds these through native code, so managed
+       stripping cannot discover the dependency from the call site. -->
+  <assembly fullname="UnityEngine.PhysicsModule">
+    <type fullname="UnityEngine.BoxCollider" preserve="all" />
+    <type fullname="UnityEngine.CapsuleCollider" preserve="all" />
+    <type fullname="UnityEngine.SphereCollider" preserve="all" />
+  </assembly>
+</linker>

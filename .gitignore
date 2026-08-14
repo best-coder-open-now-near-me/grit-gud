@@ -1,0 +1,64 @@
+# Unity-generated directories
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+[Tt]est[Rr]esults/
+
+# IDE and editor state
+.vs/
+.vscode/
+.idea/
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Unity and platform output
+*.apk
+*.aab
+*.app
+*.unitypackage
+sysinfo.txt
+
+# Licensed source assets are installed from the private build-assets repository.
+/Assets/Basic Shooter Pack/
+/Assets/Basic Shooter Pack.meta
+/Assets/DoubleL/
+/Assets/DoubleL.meta
+/Assets/Kevin Iglesias/
+/Assets/Kevin Iglesias.meta
+/Assets/Input Sprites for TextMesh Pro/
+/Assets/Input Sprites for TextMesh Pro.meta
+/Assets/Modern GDR - Free icons pack/
+/Assets/Modern GDR - Free icons pack.meta
+/Assets/Mixamo/
+/Assets/Mixamo.meta
+/Assets/UCLAGameLab/
+/Assets/UCLAGameLab.meta
+# Licensed Synty source packages are installed from the private build-assets repository.
+/Assets/Synty/
+/Assets/Synty.meta
+/.private-assets/
+
+# Crash and diagnostic output
+crashlytics-build.properties
+mono_crash.*
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini

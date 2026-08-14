@@ -1,0 +1,579 @@
+{
+  "schemaVersion": 12,
+  "scenarioId": "depot-yard",
+  "displayName": "Depot Yard",
+  "levelId": "main-depot-yard-v1",
+  "playerParty": {
+    "actorIds": ["player", "oren-vale"],
+    "initiallySelectedActorId": "player"
+  },
+  "primaryTargetActorId": "depot-rifleman",
+  "primaryObjectiveId": "raised-deck",
+  "randomSeed": 12648430,
+  "timing": { "minimumVoluntaryTurnSeconds": 1.25 },
+  "actors": [
+    {
+      "id": "player",
+      "displayName": "Player Actor",
+      "presentationId": "actor.player.default",
+      "targetable": false,
+      "position": { "x": 1.25, "y": 2.0, "z": -8.75 },
+      "facingDegrees": 0.0,
+      "stance": "standing",
+      "turnBudget": { "actionPoints": 4 },
+      "mass": 80.0,
+      "sizeClass": "medium",
+      "control": {
+        "talentId": "talent.leverage",
+        "talentModifier": 2
+      },
+      "combat": {
+        "allegianceId": "player",
+        "hostileAllegianceIds": ["raider"],
+        "maximumWounds": 3
+      },
+      "displacementAbility": {
+        "id": "ability.displace",
+        "displayName": "Displace",
+        "hotbarSlot": 4,
+        "actions": [
+          {
+            "id": "close-quarters.push",
+            "displayName": "Push",
+            "intent": "push",
+            "cost": {
+              "actionPoints": 1,
+              "movementOpportunity": 0.0,
+              "mobility": "mobile"
+            },
+            "acceptedSubjectKinds": ["prop", "combatant"],
+            "reach": 2.0,
+            "maximumDistance": 3.0,
+            "maximumSubjectMass": 90.0,
+            "handRequirement": "none",
+            "autoStowPolicy": "never",
+            "contestPolicy": "close-quarters-control",
+            "allowedResults": []
+          },
+          {
+            "id": "close-quarters.throw",
+            "displayName": "Throw",
+            "intent": "throw",
+            "cost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "acceptedSubjectKinds": ["prop", "combatant"],
+            "reach": 2.0,
+            "maximumDistance": 6.0,
+            "maximumSubjectMass": 90.0,
+            "maximumSubjectSize": "medium",
+            "distanceDecay": {
+              "fullDistanceMass": 15.0,
+              "minimumDistance": 0.75,
+              "exponent": 1.0
+            },
+            "handRequirement": "both-hands-free",
+            "autoStowPolicy": "allowed",
+            "contestPolicy": "close-quarters-control",
+            "allowedResults": []
+          }
+        ]
+      },
+      "characterProfile": {
+        "identityId": "character.mara-vance",
+        "displayName": "Mara Vance",
+        "archetype": "Field Operative",
+        "attributes": [
+          { "id": "attribute.strength", "rating": 3 },
+          { "id": "attribute.dexterity", "rating": 4 },
+          { "id": "attribute.grit", "rating": 4 },
+          { "id": "attribute.charisma", "rating": 3 }
+        ],
+        "skills": [
+          { "id": "skill.firearms", "rating": 4 },
+          { "id": "skill.demolitions", "rating": 2 },
+          { "id": "skill.fieldcraft", "rating": 3 },
+          { "id": "skill.close-quarters", "rating": 5 }
+        ],
+        "talentIds": ["talent.steady-hands", "talent.combat-awareness", "talent.leverage"],
+        "startingProgressionPoints": 1,
+        "advancementOptions": [
+          {
+            "id": "advance.demolitions-drill",
+            "skillId": "skill.demolitions",
+            "pointCost": 1,
+            "maximumBonus": 1
+          }
+        ]
+      },
+      "initiallyEquippedItemId": "weapon.rifle",
+      "inventory": [
+        {
+          "id": "weapon.rifle",
+          "displayName": "Rifle",
+          "hotbarSlot": 1,
+          "kind": "weapon",
+          "occupiedHands": 2,
+          "equipmentCost": {
+            "actionPoints": 1,
+            "movementOpportunity": 0.0,
+            "mobility": "set"
+          },
+          "equippedEffects": { "movementSpeedMultiplier": 0.9 },
+          "attackCapability": {
+            "enabled": true,
+            "actionId": "attack.rifle",
+            "displayName": "Fire rifle",
+            "turnCost": {
+              "actionPoints": 1,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "woundMovementPenalty": 2.0,
+            "accuracyDecay": {
+              "halfLifeDistance": 60.0,
+              "minimumAccuracyPercent": 5.0
+            }
+          }
+        },
+        {
+          "id": "weapon.rocket-launcher",
+          "displayName": "Launcher",
+          "hotbarSlot": 2,
+          "kind": "weapon",
+          "occupiedHands": 2,
+          "equipmentCost": {
+            "actionPoints": 1,
+            "movementOpportunity": 0.0,
+            "mobility": "set"
+          },
+          "equippedEffects": { "movementSpeedMultiplier": 0.78 },
+          "attackCapability": {
+            "enabled": true,
+            "actionId": "attack.rocket",
+            "displayName": "Launch rocket",
+            "turnCost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "woundMovementPenalty": 2.0,
+            "projectile": {
+              "enabled": true,
+              "id": "projectile.rocket.synty",
+              "speedPerTurn": 4.0,
+              "radius": 0.12,
+              "maximumRange": 24.0,
+              "standingLaunchHeight": 1.35,
+              "crouchedLaunchHeight": 0.9,
+              "opensEmergencyReactionWindow": true,
+              "blastRadius": 5.0,
+              "blastWoundMovementPenalty": 2.0,
+              "blastIntegrityDamage": 4.0
+            }
+          }
+        },
+        {
+          "id": "item.frag-grenade",
+          "displayName": "Frag Grenade",
+          "hotbarSlot": 3,
+          "kind": "consumable",
+          "occupiedHands": 0,
+          "quantity": 3,
+          "equipmentCost": {
+            "actionPoints": 0,
+            "movementOpportunity": 0.0,
+            "mobility": "mobile"
+          },
+          "equippedEffects": { "movementSpeedMultiplier": 1.0 },
+          "consumablePower": {
+            "type": "thrown-explosive",
+            "thrownExplosive": {
+              "turnCost": {
+                "actionPoints": 2,
+                "movementOpportunity": 0.0,
+                "mobility": "mobile"
+              },
+              "maximumRange": 12.0,
+              "standingLaunchHeight": 1.2,
+              "crouchedLaunchHeight": 0.82,
+              "baseUncertaintyRadius": 0.75,
+              "uncertaintyPerMeter": 0.12,
+              "blastRadius": 5.0,
+              "blastWoundMovementPenalty": 2.0,
+              "blastIntegrityDamage": 4.0
+            }
+          }
+        },
+        {
+          "id": "item.smoke-grenade",
+          "displayName": "Smoke Grenade",
+          "hotbarSlot": 6,
+          "kind": "consumable",
+          "occupiedHands": 0,
+          "quantity": 2,
+          "equipmentCost": {
+            "actionPoints": 0,
+            "movementOpportunity": 0.0,
+            "mobility": "mobile"
+          },
+          "equippedEffects": { "movementSpeedMultiplier": 1.0 },
+          "consumablePower": {
+            "type": "thrown-explosive",
+            "thrownExplosive": {
+              "turnCost": {
+                "actionPoints": 2,
+                "movementOpportunity": 0.0,
+                "mobility": "mobile"
+              },
+              "maximumRange": 12.0,
+              "standingLaunchHeight": 1.2,
+              "crouchedLaunchHeight": 0.82,
+              "baseUncertaintyRadius": 0.55,
+              "uncertaintyPerMeter": 0.08,
+              "blastRadius": 0.0,
+              "blastWoundMovementPenalty": 0.0,
+              "blastIntegrityDamage": 0.0,
+              "smokeField": {
+                "radius": 4.0,
+                "height": 2.8,
+                "explorationDurationSeconds": 24.0,
+                "durationTurnEnds": 4,
+                "minimumObscuredPath": 0.75
+              }
+            }
+          }
+        },
+        {
+          "id": "weapon.combat-knife",
+          "displayName": "Combat Knife",
+          "hotbarSlot": 5,
+          "kind": "weapon",
+          "occupiedHands": 1,
+          "equipmentCost": {
+            "actionPoints": 1,
+            "movementOpportunity": 0.0,
+            "mobility": "mobile"
+          },
+          "equippedEffects": { "movementSpeedMultiplier": 1.0 },
+          "attackCapability": {
+            "enabled": true,
+            "actionId": "attack.combat-knife",
+            "displayName": "Knife strike",
+            "turnCost": {
+              "actionPoints": 1,
+              "movementOpportunity": 0.0,
+              "mobility": "mobile"
+            },
+            "woundMovementPenalty": 2.0,
+            "contact": { "enabled": true, "maximumReach": 2.0 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "oren-vale",
+      "displayName": "Oren Vale",
+      "presentationId": "actor.player.default",
+      "targetable": false,
+      "position": { "x": -1.0, "y": 2.0, "z": -8.75 },
+      "facingDegrees": 0.0,
+      "stance": "standing",
+      "turnBudget": { "actionPoints": 4 },
+      "mass": 74.0,
+      "sizeClass": "medium",
+      "control": { "talentId": "", "talentModifier": 0 },
+      "combat": {
+        "allegianceId": "player",
+        "hostileAllegianceIds": ["raider"],
+        "maximumWounds": 3
+      },
+      "displacementAbility": {
+        "id": "ability.displace",
+        "displayName": "Displace",
+        "hotbarSlot": 4,
+        "actions": [
+          {
+            "id": "close-quarters.push",
+            "displayName": "Push",
+            "intent": "push",
+            "cost": {
+              "actionPoints": 1,
+              "movementOpportunity": 0.0,
+              "mobility": "mobile"
+            },
+            "acceptedSubjectKinds": ["prop", "combatant"],
+            "reach": 2.0,
+            "maximumDistance": 3.0,
+            "maximumSubjectMass": 90.0,
+            "handRequirement": "none",
+            "autoStowPolicy": "never",
+            "contestPolicy": "close-quarters-control",
+            "allowedResults": []
+          },
+          {
+            "id": "close-quarters.throw",
+            "displayName": "Throw",
+            "intent": "throw",
+            "cost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "acceptedSubjectKinds": ["prop", "combatant"],
+            "reach": 2.0,
+            "maximumDistance": 6.0,
+            "maximumSubjectMass": 90.0,
+            "maximumSubjectSize": "medium",
+            "distanceDecay": {
+              "fullDistanceMass": 15.0,
+              "minimumDistance": 0.75,
+              "exponent": 1.0
+            },
+            "handRequirement": "both-hands-free",
+            "autoStowPolicy": "allowed",
+            "contestPolicy": "close-quarters-control",
+            "allowedResults": []
+          }
+        ]
+      },
+      "characterProfile": {
+        "identityId": "character.oren-vale",
+        "displayName": "Oren Vale",
+        "archetype": "Scout",
+        "attributes": [
+          { "id": "attribute.strength", "rating": 2 },
+          { "id": "attribute.dexterity", "rating": 5 },
+          { "id": "attribute.grit", "rating": 3 },
+          { "id": "attribute.charisma", "rating": 4 }
+        ],
+        "skills": [
+          { "id": "skill.firearms", "rating": 3 },
+          { "id": "skill.demolitions", "rating": 1 },
+          { "id": "skill.fieldcraft", "rating": 5 },
+          { "id": "skill.close-quarters", "rating": 3 }
+        ],
+        "talentIds": ["talent.combat-awareness"],
+        "startingProgressionPoints": 1,
+        "advancementOptions": [
+          {
+            "id": "advance.fieldcraft-drill",
+            "skillId": "skill.fieldcraft",
+            "pointCost": 1,
+            "maximumBonus": 1
+          }
+        ]
+      },
+      "initiallyEquippedItemId": "weapon.rifle",
+      "inventory": [
+        {
+          "id": "weapon.rifle",
+          "displayName": "Rifle",
+          "hotbarSlot": 1,
+          "kind": "weapon",
+          "occupiedHands": 2,
+          "equipmentCost": {
+            "actionPoints": 1,
+            "movementOpportunity": 0.0,
+            "mobility": "set"
+          },
+          "equippedEffects": { "movementSpeedMultiplier": 0.9 },
+          "attackCapability": {
+            "enabled": true,
+            "actionId": "attack.rifle",
+            "displayName": "Fire rifle",
+            "turnCost": {
+              "actionPoints": 1,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "woundMovementPenalty": 2.0,
+            "accuracyDecay": {
+              "halfLifeDistance": 60.0,
+              "minimumAccuracyPercent": 5.0
+            }
+          }
+        },
+        {
+          "id": "item.smoke-grenade",
+          "displayName": "Smoke Grenade",
+          "hotbarSlot": 6,
+          "kind": "consumable",
+          "occupiedHands": 0,
+          "quantity": 2,
+          "equipmentCost": {
+            "actionPoints": 0,
+            "movementOpportunity": 0.0,
+            "mobility": "mobile"
+          },
+          "equippedEffects": { "movementSpeedMultiplier": 1.0 },
+          "consumablePower": {
+            "type": "thrown-explosive",
+            "thrownExplosive": {
+              "turnCost": {
+                "actionPoints": 2,
+                "movementOpportunity": 0.0,
+                "mobility": "mobile"
+              },
+              "maximumRange": 12.0,
+              "standingLaunchHeight": 1.2,
+              "crouchedLaunchHeight": 0.82,
+              "baseUncertaintyRadius": 0.55,
+              "uncertaintyPerMeter": 0.08,
+              "blastRadius": 0.0,
+              "blastWoundMovementPenalty": 0.0,
+              "blastIntegrityDamage": 0.0,
+              "smokeField": {
+                "radius": 4.0,
+                "height": 2.8,
+                "explorationDurationSeconds": 24.0,
+                "durationTurnEnds": 4,
+                "minimumObscuredPath": 0.75
+              }
+            }
+          }
+        },
+        {
+          "id": "weapon.combat-knife",
+          "displayName": "Combat Knife",
+          "hotbarSlot": 5,
+          "kind": "weapon",
+          "occupiedHands": 1,
+          "equipmentCost": {
+            "actionPoints": 1,
+            "movementOpportunity": 0.0,
+            "mobility": "mobile"
+          },
+          "equippedEffects": { "movementSpeedMultiplier": 1.0 },
+          "attackCapability": {
+            "enabled": true,
+            "actionId": "attack.combat-knife",
+            "displayName": "Knife strike",
+            "turnCost": {
+              "actionPoints": 1,
+              "movementOpportunity": 0.0,
+              "mobility": "mobile"
+            },
+            "woundMovementPenalty": 2.0,
+            "contact": { "enabled": true, "maximumReach": 2.0 }
+          }
+        }
+      ]
+    },
+    {
+      "id": "depot-rifleman",
+      "displayName": "Depot Rifleman",
+      "presentationId": "actor.enemy.rifleman",
+      "targetable": true,
+      "position": { "x": 5.0, "y": 2.0, "z": 0.0 },
+      "facingDegrees": 180.0,
+      "stance": "standing",
+      "turnBudget": { "actionPoints": 4 },
+      "mass": 80.0,
+      "sizeClass": "medium",
+      "control": { "talentId": "", "talentModifier": 0 },
+      "attackResponse": { "startsEncounter": true },
+      "combat": {
+        "allegianceId": "raider",
+        "hostileAllegianceIds": ["player"],
+        "maximumWounds": 2,
+        "enemyBehavior": {
+          "behaviorId": "behavior.rifleman",
+          "perceptionRange": 30.0,
+          "viewAngleDegrees": 120.0,
+          "preferredEngagementRange": 14.0,
+          "movementSearchRadius": 6.0,
+          "maximumAttacksPerTurn": 1
+        }
+      },
+      "characterProfile": {
+        "identityId": "character.depot-rifleman",
+        "displayName": "Depot Rifleman",
+        "archetype": "Raider Rifleman",
+        "attributes": [
+          { "id": "attribute.strength", "rating": 3 },
+          { "id": "attribute.dexterity", "rating": 3 },
+          { "id": "attribute.grit", "rating": 3 },
+          { "id": "attribute.charisma", "rating": 1 }
+        ],
+        "skills": [
+          { "id": "skill.firearms", "rating": 3 },
+          { "id": "skill.close-quarters", "rating": 4 }
+        ],
+        "talentIds": [],
+        "startingProgressionPoints": 0,
+        "advancementOptions": []
+      },
+      "initiallyEquippedItemId": "weapon.rifle",
+      "inventory": [
+        {
+          "id": "weapon.rifle",
+          "displayName": "Rifle",
+          "hotbarSlot": 1,
+          "kind": "weapon",
+          "occupiedHands": 2,
+          "equipmentCost": {
+            "actionPoints": 1,
+            "movementOpportunity": 0.0,
+            "mobility": "set"
+          },
+          "equippedEffects": { "movementSpeedMultiplier": 0.9 },
+          "attackCapability": {
+            "enabled": true,
+            "actionId": "attack.rifle",
+            "displayName": "Fire rifle",
+            "turnCost": {
+              "actionPoints": 1,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "woundMovementPenalty": 2.0,
+            "accuracyDecay": {
+              "halfLifeDistance": 45.0,
+              "minimumAccuracyPercent": 5.0
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "objectives": [
+    {
+      "id": "raised-deck",
+      "levelInteractionPointId": "raised-deck",
+      "levelInteractionPointType": "objective",
+      "actionId": "secure-raised-deck",
+      "displayName": "Secure raised deck",
+      "activeHudText": "REACH THE RAISED DECK AND INTERACT",
+      "completedHudText": "RAISED DECK SECURED",
+      "turnCost": {
+        "actionPoints": 1,
+        "movementOpportunity": 1.0,
+        "mobility": "set"
+      }
+    }
+  ],
+  "props": [
+    {
+      "entityId": "crate-exposure-demo",
+      "mass": 35.0,
+      "sizeClass": "medium"
+    }
+  ],
+  "vehicles": [
+    {
+      "entityId": "yard-runner",
+      "maximumSpeed": 10.0,
+      "accelerationPerTurn": 4.0,
+      "brakingPerTurn": 2.0,
+      "lowSpeedTurnDegrees": 75.0,
+      "highSpeedTurnDegrees": 25.0,
+      "baseTurningRadius": 0.6,
+      "speedTurningRadiusFactor": 0.16,
+      "startingSpeed": 4.0,
+      "startingOccupantActorId": ""
+    }
+  ]
+}

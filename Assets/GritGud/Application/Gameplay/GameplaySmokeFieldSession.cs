@@ -1,0 +1,281 @@
+using System;
+using System.Collections.Generic;
+using GritGud.Domain.Gameplay;
+
+namespace GritGud.Application.Gameplay
+{
+    public sealed class GameplaySmokeFieldSession :
+        ISightObscuranceQuery,
+        IDisposable
+    {
+        private const float IntersectionTolerance = 0.000001f;
+
+        private sealed class ActiveField
+        {
+            public ActiveField(SmokeFieldRecord field)
+            {
+                Field = field;
+                RemainingFraction = 1f;
+            }
+
+            public SmokeFieldRecord Field { get; }
+
+            public float RemainingFraction { get; set; }
+        }
+
+        private readonly GameplaySession gameplay;
+        private readonly Dictionary<string, ActiveField> active =
+            new Dictionary<string, ActiveField>(StringComparer.Ordinal);
+        private readonly List<string> expiredIds = new List<string>();
+        private bool disposed;
+
+        public GameplaySmokeFieldSession(GameplaySession gameplaySession)
+        {
+            gameplay = gameplaySession ?? throw new ArgumentNullException(
+                nameof(gameplaySession));
+            gameplay.TurnEnded += HandleTurnEnded;
+        }
+
+        public long Revision { get; private set; }
+
+        public int ActiveCount => active.Count;
+
+        public event Action<SmokeFieldRecord> FieldDeployed;
+
+        public event Action<SmokeFieldRecord> FieldExpired;
+
+        public IReadOnlyList<SmokeFieldSnapshot> CaptureActiveFields()
+        {
+            ThrowIfDisposed();
+            var snapshots = new List<SmokeFieldSnapshot>(active.Count);
+            foreach (ActiveField state in active.Values)
+            {
+                snapshots.Add(new SmokeFieldSnapshot(
+                    state.Field,
+                    state.RemainingFraction));
+            }
+
+            snapshots.Sort((left, right) => string.CompareOrdinal(
+                left.Field.Id,
+                right.Field.Id));
+            return snapshots.AsReadOnly();
+        }
+
+        public bool TryGetField(
+            string fieldId,
+            out SmokeFieldSnapshot snapshot)
+        {
+            ThrowIfDisposed();
+            if (fieldId != null
+                && active.TryGetValue(fieldId, out ActiveField state))
+            {
+                snapshot = new SmokeFieldSnapshot(
+                    state.Field,
+                    state.RemainingFraction);
+                return true;
+            }
+
+            snapshot = default;
+            return false;
+        }
+
+        public void Deploy(SmokeFieldRecord field)
+        {
+            ThrowIfDisposed();
+            if (field == null)
+                throw new ArgumentNullException(nameof(field));
+            if (!active.TryAdd(field.Id, new ActiveField(field)))
+                throw new InvalidOperationException(
+                    $"Smoke field '{field.Id}' is already active.");
+
+            Revision++;
+            FieldDeployed?.Invoke(field);
+        }
+
+        public void AdvanceContinuousTime(float deltaTime)
+        {
+            ThrowIfDisposed();
+            if (float.IsNaN(deltaTime)
+                || float.IsInfinity(deltaTime)
+                || deltaTime < 0f)
+                throw new ArgumentOutOfRangeException(nameof(deltaTime));
+            if (deltaTime <= 0f
+                || gameplay.Mode != GameplaySessionMode.Exploration)
+                return;
+
+            AdvanceFields(state => deltaTime
+                / state.Field.Definition.ExplorationDurationSeconds);
+        }
+
+        public bool BlocksSight(
+            GameplayPosition origin,
+            GameplayPosition destination)
+        {
+            ThrowIfDisposed();
+            foreach (ActiveField state in active.Values)
+            {
+                SmokeFieldRecord field = state.Field;
+                if (CalculateTraversalLength(
+                        origin,
+                        destination,
+                        field.Origin,
+                        field.Definition.Radius,
+                        field.Definition.Height)
+                    >= field.Definition.MinimumObscuredPath)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public void Dispose()
+        {
+            if (disposed)
+                return;
+            gameplay.TurnEnded -= HandleTurnEnded;
+            active.Clear();
+            expiredIds.Clear();
+            FieldDeployed = null;
+            FieldExpired = null;
+            disposed = true;
+        }
+
+        internal static float CalculateTraversalLength(
+            GameplayPosition origin,
+            GameplayPosition destination,
+            GameplayPosition fieldOrigin,
+            float radius,
+            float height)
+        {
+            float dx = destination.X - origin.X;
+            float dy = destination.Y - origin.Y;
+            float dz = destination.Z - origin.Z;
+            float segmentLength = (float)Math.Sqrt(
+                (dx * dx) + (dy * dy) + (dz * dz));
+            if (segmentLength <= IntersectionTolerance)
+                return 0f;
+
+            float radialStartX = origin.X - fieldOrigin.X;
+            float radialStartZ = origin.Z - fieldOrigin.Z;
+            if (!TryGetRadialInterval(
+                    radialStartX,
+                    radialStartZ,
+                    dx,
+                    dz,
+                    radius,
+                    out float radialMinimum,
+                    out float radialMaximum)
+                || !TryGetAxisInterval(
+                    origin.Y,
+                    dy,
+                    fieldOrigin.Y,
+                    fieldOrigin.Y + height,
+                    out float verticalMinimum,
+                    out float verticalMaximum))
+                return 0f;
+
+            float minimum = Math.Max(
+                0f,
+                Math.Max(radialMinimum, verticalMinimum));
+            float maximum = Math.Min(
+                1f,
+                Math.Min(radialMaximum, verticalMaximum));
+            return maximum > minimum
+                ? segmentLength * (maximum - minimum)
+                : 0f;
+        }
+
+        private void HandleTurnEnded(TurnEndRecord _)
+        {
+            AdvanceFields(state => 1f
+                / state.Field.Definition.DurationTurnEnds);
+        }
+
+        private void AdvanceFields(Func<ActiveField, float> getStep)
+        {
+            expiredIds.Clear();
+            foreach (KeyValuePair<string, ActiveField> entry in active)
+            {
+                entry.Value.RemainingFraction = Math.Max(
+                    0f,
+                    entry.Value.RemainingFraction - getStep(entry.Value));
+                if (entry.Value.RemainingFraction <= 0f)
+                    expiredIds.Add(entry.Key);
+            }
+
+            foreach (string id in expiredIds)
+            {
+                SmokeFieldRecord field = active[id].Field;
+                active.Remove(id);
+                Revision++;
+                FieldExpired?.Invoke(field);
+            }
+            expiredIds.Clear();
+        }
+
+        private static bool TryGetRadialInterval(
+            float startX,
+            float startZ,
+            float deltaX,
+            float deltaZ,
+            float radius,
+            out float minimum,
+            out float maximum)
+        {
+            float a = (deltaX * deltaX) + (deltaZ * deltaZ);
+            float c = (startX * startX) + (startZ * startZ)
+                - (radius * radius);
+            if (a <= IntersectionTolerance)
+            {
+                minimum = 0f;
+                maximum = 1f;
+                return c <= 0f;
+            }
+
+            float b = 2f * ((startX * deltaX) + (startZ * deltaZ));
+            float discriminant = (b * b) - (4f * a * c);
+            if (discriminant < 0f)
+            {
+                minimum = 0f;
+                maximum = 0f;
+                return false;
+            }
+
+            float root = (float)Math.Sqrt(discriminant);
+            minimum = (-b - root) / (2f * a);
+            maximum = (-b + root) / (2f * a);
+            return maximum >= 0f && minimum <= 1f;
+        }
+
+        private static bool TryGetAxisInterval(
+            float start,
+            float delta,
+            float lower,
+            float upper,
+            out float minimum,
+            out float maximum)
+        {
+            if (Math.Abs(delta) <= IntersectionTolerance)
+            {
+                minimum = 0f;
+                maximum = 1f;
+                return start >= lower && start <= upper;
+            }
+
+            float first = (lower - start) / delta;
+            float second = (upper - start) / delta;
+            minimum = Math.Min(first, second);
+            maximum = Math.Max(first, second);
+            return maximum >= 0f && minimum <= 1f;
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (disposed)
+                throw new ObjectDisposedException(
+                    nameof(GameplaySmokeFieldSession));
+        }
+    }
+}

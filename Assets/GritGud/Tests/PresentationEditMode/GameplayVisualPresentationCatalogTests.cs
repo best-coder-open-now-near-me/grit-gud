@@ -1,0 +1,117 @@
+using System.Linq;
+using GritGud.Presentation.Gameplay;
+using GritGud.Presentation.Levels.Runtime;
+using NUnit.Framework;
+using UnityEngine;
+
+namespace GritGud.Presentation.Tests
+{
+    public sealed class GameplayVisualPresentationCatalogTests
+    {
+        [Test]
+        public void DefaultThemeOwnsGlobalVisualCadence()
+        {
+            GameplayVisualTheme theme = GameplayVisualTheme.LoadDefault();
+
+            Assert.That(theme.PostProcessing.BloomIntensity, Is.GreaterThan(0f));
+            Assert.That(theme.CelSurface.Softness, Is.GreaterThan(0f));
+            Assert.That(theme.Outlines.EnvironmentWidth, Is.GreaterThan(0f));
+            Assert.That(theme.Grounding.Enabled, Is.True);
+            Assert.That(
+                theme.TacticalTransition.DurationSeconds,
+                Is.GreaterThan(0f));
+        }
+
+        [Test]
+        public void DepotLightingProfileOwnsFixturesAndAmbientEffects()
+        {
+            LevelLightingProfile profile = LevelLightingCatalog
+                .LoadDefault()
+                .Get("main-depot-yard-v1");
+
+            Assert.That(profile.PracticalLights.Count, Is.EqualTo(5));
+            Assert.That(profile.AmbientEffects.Count, Is.EqualTo(3));
+            Assert.That(
+                profile.PracticalLights.Count(light => light.Color.r > light.Color.b),
+                Is.EqualTo(2));
+            Assert.That(
+                profile.AmbientEffects.All(effect => effect.Prefab != null),
+                Is.True);
+        }
+
+        [Test]
+        public void SurfaceCatalogSeparatesMaterialAndImpactResponse()
+        {
+            SurfacePresentationCatalog catalog =
+                SurfacePresentationCatalog.LoadDefault();
+            SurfacePresentationDefinition concrete = catalog.Get("surface.concrete");
+            SurfacePresentationDefinition metal = catalog.Get("surface.metal");
+            SurfacePresentationDefinition actor = catalog.Get("surface.actor");
+
+            Assert.That(metal.Smoothness, Is.GreaterThan(concrete.Smoothness));
+            Assert.That(
+                metal.SpecularStrength,
+                Is.GreaterThan(concrete.SpecularStrength));
+            Assert.That(concrete.ImpactEffectPrefab, Is.Not.Null);
+            Assert.That(metal.ImpactEffectPrefab, Is.Not.Null);
+            Assert.That(actor.ImpactEffectPrefab, Is.Not.Null);
+            Assert.That(actor.DecalDiameter, Is.Zero);
+        }
+
+        [Test]
+        public void SmokeGrenadeOwnsSparsePersistentPresentation()
+        {
+            ThrownExplosivePresentationDefinition smoke =
+                ConsumablePresentationCatalog.LoadDefault()
+                    .GetThrownExplosive("item.smoke-grenade");
+
+            Assert.That(smoke.ProjectilePrefab, Is.Not.Null);
+            Assert.That(smoke.ImpactEffectPrefab, Is.Null);
+            Assert.That(smoke.PersistentAreaEffectPrefab, Is.Not.Null);
+            Assert.That(smoke.PersistentEffectScalePerRadius,
+                Is.GreaterThan(0f));
+            Assert.That(smoke.PersistentParticleEmissionMultiplier,
+                Is.InRange(0.1f, 0.5f));
+            Assert.That(smoke.HideParticlesWhenCameraInside, Is.True);
+            Assert.That(smoke.PersistentParticlesCastShadows, Is.False);
+            Assert.That(smoke.PersistentParticlesReceiveShadows, Is.True);
+            Assert.That(smoke.InsideOverlayMaximumAlpha,
+                Is.InRange(0.05f, 0.15f));
+        }
+
+        [Test]
+        public void EveryLevelArchetypeSelectsAnAvailableSurface()
+        {
+            LevelArchetypeCatalog archetypes = LevelArchetypeCatalog.LoadDefault();
+            SurfacePresentationCatalog surfaces =
+                SurfacePresentationCatalog.LoadDefault();
+
+            Assert.That(archetypes.Entries, Is.Not.Empty);
+            foreach (LevelArchetypeDefinition archetype in archetypes.Entries)
+            {
+                Assert.That(
+                    surfaces.TryGet(archetype.SurfacePresentationId, out _),
+                    Is.True,
+                    archetype.ArchetypeId);
+            }
+        }
+
+        [Test]
+        public void ActorCatalogOwnsPrefabAndInitialInputPolicy()
+        {
+            ActorPresentationCatalog catalog =
+                ActorPresentationCatalog.LoadDefault();
+
+            ActorPresentationDefinition player = catalog.Get(
+                ActorPresentationIds.DefaultPlayer);
+            ActorPresentationDefinition rifleman = catalog.Get(
+                ActorPresentationIds.RiflemanEnemy);
+
+            Assert.That(player.Prefab, Is.Not.Null);
+            Assert.That(player.MovementInputEnabled, Is.True);
+            Assert.That(rifleman.Prefab, Is.Not.Null);
+            Assert.That(rifleman.MovementInputEnabled, Is.False);
+        }
+
+    }
+}
