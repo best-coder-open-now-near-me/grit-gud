@@ -20,7 +20,11 @@ The normal mutation flow is:
    a `LevelSessionChangedEventArgs` containing the affected stable entity IDs.
 4. `LevelWorldProjector` updates only those entity views. Replacement documents
    and commands marked for full projection use the staging loader instead.
-5. Selection and UI refresh from the projected world and detached read models.
+5. The controller caches one detached `LevelEditorViewState` per workspace
+   revision. All IMGUI panels render that same snapshot instead of cloning the
+   document independently.
+6. `LevelEditorPresentationState` coordinates workspace navigation, create mode,
+   and exclusive Inspector focus across world selections and scenario actors.
 
 Play preview always uses a deep document snapshot. Runtime state must never be
 copied back into the authoring workspace.
@@ -35,12 +39,21 @@ copied back into the authoring workspace.
 | Core presentation services | Input capture, camera control, snapping, and scene queries |
 | Runtime projection | Validated construction and incremental entity-view updates |
 | Persistence coordinator | Drafts, import/export, platform transfer, and publish validation |
-| UI adapter | Temporary IMGUI rendering and user intents |
-| Controller | Composition, lifecycle, preview boundary, and cross-service routing |
+| Presentation state | Create/Outline/Scenario navigation and contextual Inspector focus |
+| UI action contract | Typed boundary for user intents, persistence, and history operations |
+| UI shell and panels | IMGUI rendering, transient text fields, and local disclosure state |
+| Scenario authoring coordinator | Scenario invariants, transactions, and actor/link use cases |
+| Controller | Composition, Unity lifecycle, preview boundary, and cross-service routing |
 
 Domain and Application assemblies have no Unity references. Unity asset paths,
 prefabs, raycasts, cameras, input devices, `PlayerPrefs`, browser JavaScript,
 and GUI calls remain in Presentation.
+
+The GUI must not query `LevelEditorWorkspace` or persistence services directly.
+It receives an immutable view state and submits intent through
+`ILevelEditorGuiActions`. GUI dimensions live in `LevelEditorGuiMetrics`, skin-
+dependent styles in `LevelEditorGuiStyles`, and semantic UI/world colors in
+`LevelEditorTheme`.
 
 ## Adding a tool
 
@@ -101,6 +114,9 @@ not on prefab names or third-party asset paths.
 ## Scaling rules
 
 - Prefer a new tool or service over another mode flag in the controller.
+- Keep document selection and Inspector focus coordinated; do not store a
+  second selected object privately inside a panel.
+- Render every panel from the same revision snapshot.
 - Prefer typed portable data plus a migration over stringly typed metadata.
 - Prefer stable IDs over object references across commands and persistence.
 - Prefer a composite command over several independently undoable fragments of

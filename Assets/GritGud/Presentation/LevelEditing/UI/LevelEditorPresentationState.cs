@@ -96,6 +96,14 @@ namespace GritGud.Presentation.LevelEditing.UI
                 Changed?.Invoke();
         }
 
+        public void SynchronizeCreateMode(LevelEditorCreateMode mode)
+        {
+            if (CreateMode == mode)
+                return;
+            CreateMode = mode;
+            Changed?.Invoke();
+        }
+
         public void FocusWorldSelection(LevelSelectionTarget? target)
         {
             LevelEditorInspectorTarget replacement = target == null

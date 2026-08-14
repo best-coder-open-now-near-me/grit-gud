@@ -63,5 +63,17 @@ namespace GritGud.Presentation.Tests
 
             Assert.That(changes, Is.Zero);
         }
+
+        [Test]
+        public void ToolSynchronizationDoesNotChangeWorkspacePage()
+        {
+            var state = new LevelEditorPresentationState();
+            state.ShowPage(LevelEditorWorkspacePage.Outline);
+
+            state.SynchronizeCreateMode(LevelEditorCreateMode.Place);
+
+            Assert.That(state.Page, Is.EqualTo(LevelEditorWorkspacePage.Outline));
+            Assert.That(state.CreateMode, Is.EqualTo(LevelEditorCreateMode.Place));
+        }
     }
 }

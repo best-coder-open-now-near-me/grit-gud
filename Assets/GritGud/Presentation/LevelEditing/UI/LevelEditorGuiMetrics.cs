@@ -15,6 +15,12 @@ namespace GritGud.Presentation.LevelEditing.UI
         public const float PanelIconControlHeight = 28f;
         public const float PanelActorButtonHeight = 42f;
         public const float FieldLabelWidth = 74f;
+        public const float SearchLabelWidth = 50f;
+        public const float SpaceSmall = 4f;
+        public const float SpaceSection = 8f;
+        public const float SpaceGroup = 10f;
+        public const float SpaceInspectorSection = 12f;
+        public const float SpaceMajor = 16f;
 
         public const int SectionHeaderLeftPadding = 8;
         public const int SectionHeaderRightPadding = 3;

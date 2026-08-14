@@ -25,13 +25,13 @@ namespace GritGud.Domain.Tests.Levels
         }
 
         [Test]
-        public void SelectionSupportsFutureSubElementsAndMultipleTargets()
+        public void SelectionSupportsInteractionPointsAndMultipleTargets()
         {
             var selection = new LevelSelectionModel();
             selection.Set(new[]
             {
                 new LevelSelectionTarget("entity-1"),
-                new LevelSelectionTarget("entity-2", LevelSelectionKind.CoverVolume, "primary"),
+                new LevelSelectionTarget("entity-2", LevelSelectionKind.InteractionPoint, "primary"),
             });
 
             Assert.That(selection.Targets, Has.Count.EqualTo(2));
@@ -39,7 +39,7 @@ namespace GritGud.Domain.Tests.Levels
 
             selection.Toggle(new LevelSelectionTarget(
                 "entity-2",
-                LevelSelectionKind.CoverVolume,
+                LevelSelectionKind.InteractionPoint,
                 "primary"));
 
             Assert.That(selection.Targets, Has.Count.EqualTo(1));

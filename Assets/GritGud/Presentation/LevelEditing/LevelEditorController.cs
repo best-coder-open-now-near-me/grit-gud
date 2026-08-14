@@ -40,6 +40,7 @@ namespace GritGud.Presentation.LevelEditing
         private LevelEditorGui gui;
         private LevelEditorPresentationState presentationState;
         private LevelDocument viewDocument;
+        private ScenarioAuthoringCoordinator scenarioAuthoring;
         private LevelEntityView selectedView;
         private RuntimeBoundsOutline selectionOutline;
         private RuntimeBoundsOutline hoverOutline;
@@ -117,8 +118,16 @@ namespace GritGud.Presentation.LevelEditing
                 terrainTool,
                 FrameTerrain);
             presentationState = new LevelEditorPresentationState();
-            gui = new LevelEditorGui(
+            toolManager.ActiveToolChanged += HandleActiveToolChanged;
+            scenarioAuthoring = new ScenarioAuthoringCoordinator(
                 workspace,
+                scenarioCatalog,
+                cameraController.CaptureState);
+            scenarioAuthoring.StatusChanged += SetStatus;
+            scenarioAuthoring.ActorFocusRequested += HandleScenarioActorFocusRequested;
+            scenarioAuthoring.ActorChanged += HandleScenarioActorChanged;
+            scenarioAuthoring.PlayerStartChanged += HandlePlayerStartChanged;
+            gui = new LevelEditorGui(
                 selection,
                 catalog,
                 scenarioCatalog,
@@ -127,7 +136,6 @@ namespace GritGud.Presentation.LevelEditing
                 terrainPanel,
                 selectionTool,
                 snapSettings,
-                persistence,
                 presentationState,
                 this);
             gui.SyncPlayerStartFields(RequireSelectedPlayer(workspace.CreateSnapshot()).transform);
@@ -167,6 +175,15 @@ namespace GritGud.Presentation.LevelEditing
                 persistence.Dispose();
             }
 
+            if (toolManager != null)
+                toolManager.ActiveToolChanged -= HandleActiveToolChanged;
+            if (scenarioAuthoring != null)
+            {
+                scenarioAuthoring.StatusChanged -= SetStatus;
+                scenarioAuthoring.ActorFocusRequested -= HandleScenarioActorFocusRequested;
+                scenarioAuthoring.ActorChanged -= HandleScenarioActorChanged;
+                scenarioAuthoring.PlayerStartChanged -= HandlePlayerStartChanged;
+            }
             toolManager?.Dispose();
             projector?.Dispose();
             terrainProjector?.Dispose();
@@ -220,6 +237,38 @@ namespace GritGud.Presentation.LevelEditing
             suspended = false;
             viewDocument = null;
             enabled = false;
+        }
+
+        private void HandleScenarioActorFocusRequested(string actorId)
+        {
+            selection?.Clear();
+            gui?.SelectScenarioActor(actorId);
+            LevelScenarioActorData actor = viewDocument?.scenario?.actors.FirstOrDefault(candidate =>
+                string.Equals(candidate?.id, actorId, StringComparison.Ordinal));
+            if (actor != null)
+                gui?.SyncScenarioActorFields(actor);
+        }
+
+        private void HandleScenarioActorChanged(LevelScenarioActorData actor)
+        {
+            gui?.SyncScenarioActorFields(actor);
+        }
+
+        private void HandlePlayerStartChanged(LevelTransformData transformData)
+        {
+            gui?.SyncPlayerStartFields(transformData);
+        }
+
+        private void HandleActiveToolChanged(ILevelEditorTool tool)
+        {
+            if (tool == null || presentationState == null)
+                return;
+            if (tool.Id == PlacementLevelEditorTool.ToolId)
+                presentationState.SynchronizeCreateMode(LevelEditorCreateMode.Place);
+            else if (tool.Id == TerrainHeightLevelEditorTool.ToolId)
+                presentationState.SynchronizeCreateMode(LevelEditorCreateMode.Terrain);
+            else
+                presentationState.SynchronizeCreateMode(LevelEditorCreateMode.Select);
         }
 
         private void Update()
@@ -420,18 +469,18 @@ namespace GritGud.Presentation.LevelEditing
             SetStatus("Framed terrain surfaces.");
         }
 
-        private void FocusValidationEntity(string entityId)
+        private void FocusEntity(string entityId)
         {
             if (string.IsNullOrWhiteSpace(entityId)
                 || !projector.TryGetEntity(entityId, out LevelEntityView view))
             {
-                SetStatus("The validation issue does not reference a loaded entity.");
+                SetStatus("The requested entity is not loaded.");
                 return;
             }
 
             selection.SetSingle(entityId);
             cameraController.Frame(view.GetWorldBounds());
-            SetStatus($"Focused validation issue on {entityId}.");
+            SetStatus($"Focused entity '{entityId}'.");
         }
 
         private void ApplyInspectorTransform(
@@ -462,418 +511,12 @@ namespace GritGud.Presentation.LevelEditing
             SetStatus("Applied numeric transform.");
         }
 
-        private void ApplyPlayerStart(
-            string xText,
-            string yText,
-            string zText,
-            string yawText)
-        {
-            if (!TryParse(xText, out float x)
-                || !TryParse(yText, out float y)
-                || !TryParse(zText, out float z)
-                || !TryParse(yawText, out float yaw))
-            {
-                SetStatus("Player-start values must be finite numbers.");
-                return;
-            }
-
-            LevelTransformData before = RequireSelectedPlayer(workspace.CreateSnapshot()).transform;
-            var after = new LevelTransformData(
-                new Float3Data(x, y, z),
-                NormalizeYaw(yaw));
-            workspace.Execute(new SetPlayerStartCommand(before, after));
-            gui.SyncPlayerStartFields(after);
-            SetStatus("Updated the selected scenario player's start.");
-        }
-
         private static LevelScenarioActorData RequireSelectedPlayer(LevelDocument document)
         {
             LevelScenarioActorData player = document?.scenario?
                 .FindInitiallySelectedPlayer();
             return player ?? throw new InvalidOperationException(
                 "The level scenario does not define an initially selected player actor.");
-        }
-
-        private void AddScenarioActor(string templateId)
-        {
-            ScenarioActorTemplateDefinition template = scenarioCatalog.GetActor(templateId);
-            LevelDocument snapshot = workspace.CreateSnapshot();
-            LevelEditorCameraState cameraState = cameraController.CaptureState();
-            bool playerControlled = template.PlayerTemplate;
-            bool hasSelectedPlayer = snapshot.scenario.FindInitiallySelectedPlayer() != null;
-            bool hasPrimaryTarget = snapshot.scenario.actors.Any(actor => actor?.primaryTarget == true);
-            var actor = new LevelScenarioActorData
-            {
-                id = "actor-" + LevelDocumentFactory.NewStableId(),
-                templateId = template.TemplateId,
-                transform = new LevelTransformData(
-                    new Float3Data(
-                        cameraState.target.x,
-                        cameraState.target.y,
-                        cameraState.target.z),
-                    NormalizeYaw(cameraState.yaw)),
-                playerControlled = playerControlled,
-                initiallySelected = playerControlled && !hasSelectedPlayer,
-                primaryTarget = !playerControlled && !hasPrimaryTarget,
-            };
-            workspace.Execute(new AddScenarioActorCommand(actor));
-            gui.SelectScenarioActor(actor.id);
-            SetStatus($"Added {template.DisplayName} to the scenario at the camera focus.");
-        }
-
-        private void ApplyScenarioActor(
-            string actorId,
-            string xText,
-            string yText,
-            string zText,
-            string yawText,
-            bool playerControlled,
-            bool initiallySelected,
-            bool primaryTarget)
-        {
-            if (!TryParse(xText, out float x)
-                || !TryParse(yText, out float y)
-                || !TryParse(zText, out float z)
-                || !TryParse(yawText, out float yaw))
-            {
-                SetStatus("Scenario actor transforms must contain finite numbers.");
-                return;
-            }
-
-            LevelDocument snapshot = workspace.CreateSnapshot();
-            LevelScenarioActorData before = FindScenarioActor(snapshot, actorId);
-            if (before == null)
-                return;
-            if (initiallySelected && !playerControlled)
-            {
-                SetStatus("The initially selected actor must be player controlled.");
-                return;
-            }
-
-            if (primaryTarget && playerControlled)
-            {
-                SetStatus("A player actor cannot also be the primary target.");
-                return;
-            }
-
-            if (before.initiallySelected && !initiallySelected)
-            {
-                SetStatus("Select another player actor before clearing the current selection.");
-                return;
-            }
-
-            var commands = new List<ILevelEditCommand>();
-            if (initiallySelected)
-            {
-                foreach (LevelScenarioActorData other in snapshot.scenario.actors.Where(actor =>
-                    actor != null
-                    && actor.initiallySelected
-                    && !string.Equals(actor.id, actorId, StringComparison.Ordinal)))
-                {
-                    LevelScenarioActorData replacement = other.DeepCopy();
-                    replacement.initiallySelected = false;
-                    commands.Add(new SetScenarioActorCommand(
-                        other.id,
-                        other,
-                        replacement));
-                }
-            }
-
-            if (primaryTarget)
-            {
-                foreach (LevelScenarioActorData other in snapshot.scenario.actors.Where(actor =>
-                    actor != null
-                    && actor.primaryTarget
-                    && !string.Equals(actor.id, actorId, StringComparison.Ordinal)))
-                {
-                    LevelScenarioActorData replacement = other.DeepCopy();
-                    replacement.primaryTarget = false;
-                    commands.Add(new SetScenarioActorCommand(
-                        other.id,
-                        other,
-                        replacement));
-                }
-            }
-
-            LevelScenarioActorData after = before.DeepCopy();
-            after.transform = new LevelTransformData(
-                new Float3Data(x, y, z),
-                NormalizeYaw(yaw));
-            after.playerControlled = playerControlled;
-            after.initiallySelected = initiallySelected;
-            after.primaryTarget = primaryTarget;
-            commands.Add(new SetScenarioActorCommand(actorId, before, after));
-            ExecuteScenarioCommands("Edit scenario actor", commands);
-            if (after.initiallySelected)
-                gui.SyncPlayerStartFields(after.transform);
-            gui.SyncScenarioActorFields(after);
-            SetStatus($"Updated scenario actor '{actorId}'.");
-        }
-
-        private void DeleteScenarioActor(string actorId)
-        {
-            LevelDocument snapshot = workspace.CreateSnapshot();
-            LevelScenarioActorData actor = FindScenarioActor(snapshot, actorId);
-            if (actor == null)
-                return;
-            LevelScenarioActorData[] otherPlayers = snapshot.scenario.actors
-                .Where(candidate => candidate != null
-                    && candidate.playerControlled
-                    && !string.Equals(candidate.id, actorId, StringComparison.Ordinal))
-                .ToArray();
-            if (actor.playerControlled && otherPlayers.Length == 0)
-            {
-                SetStatus("A scenario must keep at least one player actor.");
-                return;
-            }
-
-            var commands = new List<ILevelEditCommand>();
-            LevelScenarioData linksAfter = snapshot.scenario.DeepCopy();
-            bool clearedOccupant = false;
-            foreach (LevelScenarioVehicleData vehicle in linksAfter.vehicles.Where(vehicle =>
-                string.Equals(
-                    vehicle?.startingOccupantActorId,
-                    actorId,
-                    StringComparison.Ordinal)))
-            {
-                vehicle.startingOccupantActorId = string.Empty;
-                clearedOccupant = true;
-            }
-            if (clearedOccupant)
-            {
-                commands.Add(new SetScenarioConfigurationCommand(
-                    "Clear deleted vehicle occupant",
-                    snapshot.scenario,
-                    linksAfter,
-                    linksAfter.vehicles.Select(vehicle => vehicle?.entityId)));
-            }
-
-            if (actor.initiallySelected)
-            {
-                LevelScenarioActorData next = otherPlayers[0];
-                LevelScenarioActorData selected = next.DeepCopy();
-                selected.initiallySelected = true;
-                commands.Add(new SetScenarioActorCommand(next.id, next, selected));
-            }
-
-            commands.Add(new DeleteScenarioActorCommand(actorId));
-            ExecuteScenarioCommands("Delete scenario actor", commands);
-            gui.SelectScenarioActor(null);
-            LevelScenarioActorData selectedPlayer = workspace.CreateSnapshot().scenario
-                .FindInitiallySelectedPlayer();
-            if (selectedPlayer != null)
-                gui.SyncPlayerStartFields(selectedPlayer.transform);
-            SetStatus($"Deleted scenario actor '{actorId}'.");
-        }
-
-        private void PlaceScenarioActorAtView(string actorId)
-        {
-            LevelDocument snapshot = workspace.CreateSnapshot();
-            LevelScenarioActorData before = FindScenarioActor(snapshot, actorId);
-            if (before == null)
-                return;
-            LevelEditorCameraState cameraState = cameraController.CaptureState();
-            LevelScenarioActorData after = before.DeepCopy();
-            after.transform = new LevelTransformData(
-                new Float3Data(
-                    cameraState.target.x,
-                    cameraState.target.y,
-                    cameraState.target.z),
-                after.transform.yawDegrees);
-            workspace.Execute(new SetScenarioActorCommand(actorId, before, after));
-            gui.SyncScenarioActorFields(after);
-            if (after.initiallySelected)
-                gui.SyncPlayerStartFields(after.transform);
-            SetStatus($"Placed scenario actor '{actorId}' at the camera focus.");
-        }
-
-        private void ApplyScenarioProp(
-            string entityId,
-            bool enabled,
-            string massText,
-            string sizeClass,
-            bool startsEncounter)
-        {
-            LevelDocument snapshot = workspace.CreateSnapshot();
-            LevelScenarioData after = snapshot.scenario.DeepCopy();
-            after.props.RemoveAll(prop =>
-                string.Equals(prop?.entityId, entityId, StringComparison.Ordinal));
-            if (enabled)
-            {
-                if (!TryParse(massText, out float mass) || mass <= 0f)
-                {
-                    SetStatus("Scenario prop mass must be a positive finite number.");
-                    return;
-                }
-
-                if (!IsSupportedSizeClass(sizeClass))
-                {
-                    SetStatus("Choose a supported scenario prop size.");
-                    return;
-                }
-
-                after.props.Add(new LevelScenarioPropData
-                {
-                    entityId = entityId,
-                    mass = mass,
-                    sizeClass = sizeClass,
-                    startsEncounterOnAttack = startsEncounter,
-                });
-            }
-
-            workspace.Execute(new SetScenarioConfigurationCommand(
-                enabled ? "Configure scenario prop" : "Remove scenario prop",
-                snapshot.scenario,
-                after,
-                new[] { entityId }));
-            SetStatus(enabled
-                ? "Linked the selected entity as a gameplay physics prop."
-                : "Removed the selected entity's gameplay prop link.");
-        }
-
-        private void ApplyScenarioObjective(
-            string entityId,
-            string pointId,
-            bool enabled,
-            string displayName,
-            string activeText,
-            string completedText,
-            string costText)
-        {
-            LevelDocument snapshot = workspace.CreateSnapshot();
-            LevelScenarioData after = snapshot.scenario.DeepCopy();
-            LevelScenarioObjectiveData existing = after.objectives.FirstOrDefault(objective =>
-                string.Equals(objective?.entityId, entityId, StringComparison.Ordinal)
-                && string.Equals(
-                    objective?.interactionPointId,
-                    pointId,
-                    StringComparison.Ordinal));
-            after.objectives.Remove(existing);
-            if (enabled)
-            {
-                if (!int.TryParse(
-                        costText,
-                        NumberStyles.Integer,
-                        CultureInfo.InvariantCulture,
-                        out int actionPointCost)
-                    || actionPointCost < 0)
-                {
-                    SetStatus("Objective action-point cost must be a non-negative whole number.");
-                    return;
-                }
-
-                if (string.IsNullOrWhiteSpace(displayName))
-                {
-                    SetStatus("An enabled objective needs a display name.");
-                    return;
-                }
-
-                after.objectives.Add(new LevelScenarioObjectiveData
-                {
-                    id = existing?.id ?? "objective-" + LevelDocumentFactory.NewStableId(),
-                    entityId = entityId,
-                    interactionPointId = pointId,
-                    actionId = existing?.actionId ?? "interact",
-                    displayName = displayName.Trim(),
-                    activeHudText = activeText?.Trim() ?? string.Empty,
-                    completedHudText = completedText?.Trim() ?? string.Empty,
-                    actionPointCost = actionPointCost,
-                });
-            }
-
-            workspace.Execute(new SetScenarioConfigurationCommand(
-                enabled ? "Configure scenario objective" : "Remove scenario objective",
-                snapshot.scenario,
-                after,
-                new[] { entityId }));
-            SetStatus(enabled
-                ? "Linked the interaction point as a scenario objective."
-                : "Removed the interaction point's scenario objective link.");
-        }
-
-        private void ApplyScenarioVehicle(
-            string entityId,
-            bool enabled,
-            string maximumSpeedText,
-            string accelerationText,
-            string brakingText,
-            string lowTurnText,
-            string highTurnText,
-            string baseRadiusText,
-            string radiusFactorText,
-            string startingSpeedText,
-            string occupantActorId,
-            bool startsEncounter)
-        {
-            LevelDocument snapshot = workspace.CreateSnapshot();
-            LevelScenarioData after = snapshot.scenario.DeepCopy();
-            after.vehicles.RemoveAll(vehicle =>
-                string.Equals(vehicle?.entityId, entityId, StringComparison.Ordinal));
-            if (enabled)
-            {
-                if (!TryParse(maximumSpeedText, out float maximumSpeed)
-                    || !TryParse(accelerationText, out float acceleration)
-                    || !TryParse(brakingText, out float braking)
-                    || !TryParse(lowTurnText, out float lowTurn)
-                    || !TryParse(highTurnText, out float highTurn)
-                    || !TryParse(baseRadiusText, out float baseRadius)
-                    || !TryParse(radiusFactorText, out float radiusFactor)
-                    || !TryParse(startingSpeedText, out float startingSpeed)
-                    || maximumSpeed <= 0f
-                    || acceleration < 0f
-                    || braking < 0f
-                    || lowTurn < 0f
-                    || highTurn < 0f
-                    || baseRadius <= 0f
-                    || radiusFactor < 0f
-                    || startingSpeed < 0f
-                    || startingSpeed > maximumSpeed)
-                {
-                    SetStatus(
-                        "Vehicle values must be finite and non-negative; start speed cannot exceed max speed.");
-                    return;
-                }
-
-                string occupant = occupantActorId?.Trim() ?? string.Empty;
-                if (!string.IsNullOrEmpty(occupant)
-                    && FindScenarioActor(snapshot, occupant) == null)
-                {
-                    SetStatus($"Vehicle occupant actor '{occupant}' does not exist.");
-                    return;
-                }
-
-                after.vehicles.Add(new LevelScenarioVehicleData
-                {
-                    entityId = entityId,
-                    maximumSpeed = maximumSpeed,
-                    accelerationPerTurn = acceleration,
-                    brakingPerTurn = braking,
-                    lowSpeedTurnDegrees = lowTurn,
-                    highSpeedTurnDegrees = highTurn,
-                    baseTurningRadius = baseRadius,
-                    speedTurningRadiusFactor = radiusFactor,
-                    startingSpeed = startingSpeed,
-                    startingOccupantActorId = occupant,
-                    startsEncounterOnAttack = startsEncounter,
-                });
-            }
-
-            workspace.Execute(new SetScenarioConfigurationCommand(
-                enabled ? "Configure scenario vehicle" : "Remove scenario vehicle",
-                snapshot.scenario,
-                after,
-                new[] { entityId }));
-            SetStatus(enabled
-                ? "Linked the selected entity as a driveable scenario vehicle."
-                : "Removed the selected entity's scenario vehicle link.");
-        }
-
-        private static bool IsSupportedSizeClass(string value)
-        {
-            return string.Equals(value, "small", StringComparison.Ordinal)
-                || string.Equals(value, "medium", StringComparison.Ordinal)
-                || string.Equals(value, "large", StringComparison.Ordinal)
-                || string.Equals(value, "huge", StringComparison.Ordinal);
         }
 
         private void ExecuteScenarioCommands(
@@ -884,14 +527,6 @@ namespace GritGud.Presentation.LevelEditing
                 workspace.Execute(commands[0]);
             else
                 workspace.ExecuteTransaction(description, commands);
-        }
-
-        private static LevelScenarioActorData FindScenarioActor(
-            LevelDocument document,
-            string actorId)
-        {
-            return document?.scenario?.actors.FirstOrDefault(actor =>
-                string.Equals(actor?.id, actorId, StringComparison.Ordinal));
         }
 
         private void TogglePreview()
@@ -1273,6 +908,28 @@ namespace GritGud.Presentation.LevelEditing
 
         void ILevelEditorGuiActions.ReturnToMenu() => GameBootstrap.Instance.ReturnToMenu();
 
+        bool ILevelEditorGuiActions.HasDraft => persistence.HasDraft;
+
+        bool ILevelEditorGuiActions.UsesBrowserFileDialog => persistence.UsesBrowserFileDialog;
+
+        string ILevelEditorGuiActions.DesktopImportPath
+        {
+            get => persistence.DesktopImportPath;
+            set => persistence.DesktopImportPath = value;
+        }
+
+        void ILevelEditorGuiActions.Undo() => workspace.Undo();
+
+        void ILevelEditorGuiActions.Redo() => workspace.Redo();
+
+        void ILevelEditorGuiActions.SaveDraft() => persistence.SaveDraft(workspace);
+
+        void ILevelEditorGuiActions.LoadDraft() => persistence.LoadDraft();
+
+        void ILevelEditorGuiActions.Export() => persistence.Export(workspace);
+
+        void ILevelEditorGuiActions.RequestImport() => persistence.RequestImport();
+
         void ILevelEditorGuiActions.TogglePreview() => TogglePreview();
 
         void ILevelEditorGuiActions.StartTestPlay() => StartTestPlay();
@@ -1286,7 +943,7 @@ namespace GritGud.Presentation.LevelEditing
         void ILevelEditorGuiActions.FrameLevel() => FrameLevel();
 
         void ILevelEditorGuiActions.FocusEntity(string entityId) =>
-            FocusValidationEntity(entityId);
+            FocusEntity(entityId);
 
         void ILevelEditorGuiActions.ApplyEntityTransform(
             string x,
@@ -1298,7 +955,7 @@ namespace GritGud.Presentation.LevelEditing
             string x,
             string y,
             string z,
-            string yaw) => ApplyPlayerStart(x, y, z, yaw);
+            string yaw) => scenarioAuthoring.ApplyPlayerStart(x, y, z, yaw);
 
         void ILevelEditorGuiActions.AddInteractionPoint() => AddInteractionPoint();
 
@@ -1317,7 +974,7 @@ namespace GritGud.Presentation.LevelEditing
             string integrity) => ApplyDestructibleDefaults(enabled, state, integrity);
 
         void ILevelEditorGuiActions.AddScenarioActor(string templateId) =>
-            AddScenarioActor(templateId);
+            scenarioAuthoring.AddActor(templateId);
 
         void ILevelEditorGuiActions.ApplyScenarioActor(
             string actorId,
@@ -1327,7 +984,7 @@ namespace GritGud.Presentation.LevelEditing
             string yaw,
             bool playerControlled,
             bool initiallySelected,
-            bool primaryTarget) => ApplyScenarioActor(
+            bool primaryTarget) => scenarioAuthoring.ApplyActor(
                 actorId,
                 x,
                 y,
@@ -1338,17 +995,17 @@ namespace GritGud.Presentation.LevelEditing
                 primaryTarget);
 
         void ILevelEditorGuiActions.DeleteScenarioActor(string actorId) =>
-            DeleteScenarioActor(actorId);
+            scenarioAuthoring.DeleteActor(actorId);
 
         void ILevelEditorGuiActions.PlaceScenarioActorAtView(string actorId) =>
-            PlaceScenarioActorAtView(actorId);
+            scenarioAuthoring.PlaceActorAtView(actorId);
 
         void ILevelEditorGuiActions.ApplyScenarioProp(
             string entityId,
             bool enabled,
             string mass,
             string sizeClass,
-            bool startsEncounter) => ApplyScenarioProp(
+            bool startsEncounter) => scenarioAuthoring.ApplyProp(
                 entityId,
                 enabled,
                 mass,
@@ -1362,7 +1019,7 @@ namespace GritGud.Presentation.LevelEditing
             string displayName,
             string activeText,
             string completedText,
-            string actionPointCost) => ApplyScenarioObjective(
+            string actionPointCost) => scenarioAuthoring.ApplyObjective(
                 entityId,
                 pointId,
                 enabled,
@@ -1383,7 +1040,7 @@ namespace GritGud.Presentation.LevelEditing
             string radiusFactor,
             string startingSpeed,
             string occupantActorId,
-            bool startsEncounter) => ApplyScenarioVehicle(
+            bool startsEncounter) => scenarioAuthoring.ApplyVehicle(
                 entityId,
                 enabled,
                 maximumSpeed,

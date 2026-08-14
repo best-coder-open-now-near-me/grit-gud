@@ -42,6 +42,11 @@ namespace GritGud.Presentation.LevelEditing.UI
             toolManager.Activate(TerrainHeightLevelEditorTool.ToolId);
         }
 
+        public void Activate()
+        {
+            toolManager.Activate(TerrainHeightLevelEditorTool.ToolId);
+        }
+
         public void ActivateLower()
         {
             tool.LowerTerrain = true;

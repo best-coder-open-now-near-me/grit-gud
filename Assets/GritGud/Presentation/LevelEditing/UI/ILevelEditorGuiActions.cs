@@ -2,7 +2,25 @@ namespace GritGud.Presentation.LevelEditing.UI
 {
     public interface ILevelEditorGuiActions
     {
+        bool HasDraft { get; }
+
+        bool UsesBrowserFileDialog { get; }
+
+        string DesktopImportPath { get; set; }
+
         void ReturnToMenu();
+
+        void Undo();
+
+        void Redo();
+
+        void SaveDraft();
+
+        void LoadDraft();
+
+        void Export();
+
+        void RequestImport();
 
         void TogglePreview();
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using GritGud.Application.Levels;
 using GritGud.Domain.Levels;
 using GritGud.Presentation.Levels.Runtime;
@@ -30,17 +31,19 @@ namespace GritGud.Presentation.LevelEditing
 
     public sealed class InteractionPointHandleProjector : IDisposable
     {
-        private readonly List<GameObject> handles = new List<GameObject>();
-        private readonly HashSet<string> renderedEntityIds = new HashSet<string>(StringComparer.Ordinal);
+        private readonly Dictionary<string, GameObject> handles =
+            new Dictionary<string, GameObject>(StringComparer.Ordinal);
 
         public void Refresh(LevelDocument document, LevelSelectionModel selection, LevelWorldProjector projector)
         {
-            Clear();
             if (document == null || selection == null || projector == null)
             {
+                Clear();
                 return;
             }
 
+            var retainedKeys = new HashSet<string>(StringComparer.Ordinal);
+            var renderedEntityIds = new HashSet<string>(StringComparer.Ordinal);
             foreach (LevelSelectionTarget target in selection.Targets)
             {
                 if ((target.Kind != LevelSelectionKind.Entity
@@ -65,14 +68,31 @@ namespace GritGud.Presentation.LevelEditing
                         continue;
                     }
 
-                    CreateHandle(view.transform, entity.id, point);
+                    string key = BuildKey(entity.id, point.id);
+                    retainedKeys.Add(key);
+                    if (!handles.TryGetValue(key, out GameObject handle) || handle == null)
+                    {
+                        handle = CreateHandle(view.transform, entity.id, point);
+                        handles[key] = handle;
+                    }
+                    else
+                    {
+                        handle.transform.SetParent(view.transform, false);
+                        handle.GetComponent<InteractionPointHandle>().Initialize(entity.id, point);
+                    }
                 }
             }
+
+            foreach (string key in handles.Keys.Where(key => !retainedKeys.Contains(key)).ToArray())
+                DestroyHandle(key);
         }
 
         public void Dispose() => Clear();
 
-        private void CreateHandle(Transform parent, string entityId, InteractionPointData point)
+        private GameObject CreateHandle(
+            Transform parent,
+            string entityId,
+            InteractionPointData point)
         {
             GameObject handle = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             handle.transform.SetParent(parent, false);
@@ -86,30 +106,38 @@ namespace GritGud.Presentation.LevelEditing
             materialProperties.SetColor("_Color", color);
             materialProperties.SetColor("_BaseColor", color);
             renderer.SetPropertyBlock(materialProperties);
-            handles.Add(handle);
+            return handle;
         }
 
         private void Clear()
         {
-            foreach (GameObject handle in handles)
-            {
-                if (handle == null)
-                {
-                    continue;
-                }
-
-                if (UnityEngine.Application.isPlaying)
-                {
-                    Object.Destroy(handle);
-                }
-                else
-                {
-                    Object.DestroyImmediate(handle);
-                }
-            }
+            foreach (GameObject handle in handles.Values)
+                DestroyObject(handle);
 
             handles.Clear();
-            renderedEntityIds.Clear();
+        }
+
+        private void DestroyHandle(string key)
+        {
+            if (!handles.TryGetValue(key, out GameObject handle))
+                return;
+            handles.Remove(key);
+            DestroyObject(handle);
+        }
+
+        private static void DestroyObject(GameObject handle)
+        {
+            if (handle == null)
+                return;
+            if (UnityEngine.Application.isPlaying)
+                Object.Destroy(handle);
+            else
+                Object.DestroyImmediate(handle);
+        }
+
+        private static string BuildKey(string entityId, string pointId)
+        {
+            return entityId + ":" + pointId;
         }
     }
 }
