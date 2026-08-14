@@ -8,6 +8,99 @@ namespace GritGud.Domain.Tests.Levels
     public sealed class TerrainSurfaceTests
     {
         [Test]
+        public void NewLevelFactoryCreatesFlatTerrainAcrossItsBounds()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateNew("Fresh Terrain");
+
+            Assert.That(document.terrainSurfaces, Has.Count.EqualTo(1));
+            TerrainSurfaceData terrain = document.terrainSurfaces[0];
+            Assert.That(terrain.id, Is.EqualTo("ground"));
+            Assert.That(terrain.origin.x, Is.EqualTo(-25f));
+            Assert.That(terrain.origin.z, Is.EqualTo(-25f));
+            Assert.That(terrain.sampleCountX, Is.EqualTo(26));
+            Assert.That(terrain.sampleCountZ, Is.EqualTo(26));
+            Assert.That(terrain.sampleSpacing, Is.EqualTo(2f));
+            Assert.That(terrain.heightSamples, Has.Count.EqualTo(26 * 26));
+            Assert.That(terrain.heightSamples.All(sample => sample == 0), Is.True);
+            Assert.That(
+                document.scenario.FindInitiallySelectedPlayer().transform.position.y,
+                Is.EqualTo(2f));
+            Assert.That(LevelValidator.HasErrors(LevelValidator.Validate(document)), Is.False);
+        }
+
+        [Test]
+        public void ResizeTerrainPreservesCenterAndResamplesAuthoredShape()
+        {
+            TerrainSurfaceData source = CreateDocument().terrainSurfaces[0];
+            source.heightSamples = Enumerable.Range(0, 9).ToList();
+
+            TerrainSurfaceData resized = TerrainSurfaceAuthoring.Resize(source, 4f, 2f, 1f);
+
+            Assert.That(resized.origin.x, Is.EqualTo(-2f));
+            Assert.That(resized.origin.z, Is.EqualTo(-1f));
+            Assert.That(resized.sampleCountX, Is.EqualTo(5));
+            Assert.That(resized.sampleCountZ, Is.EqualTo(3));
+            Assert.That(resized.heightSamples, Has.Count.EqualTo(15));
+            Assert.That(resized.heightSamples[0], Is.EqualTo(0));
+            Assert.That(resized.heightSamples[4], Is.EqualTo(2));
+            Assert.That(resized.heightSamples[10], Is.EqualTo(6));
+            Assert.That(resized.heightSamples[14], Is.EqualTo(8));
+            Assert.That(source.sampleCountX, Is.EqualTo(3));
+            Assert.That(source.heightSamples, Is.EqualTo(Enumerable.Range(0, 9)));
+        }
+
+        [Test]
+        public void ResizeTerrainCommandIsUndoableAndRequiresFullProjection()
+        {
+            LevelDocument document = CreateDocument();
+            TerrainSurfaceData before = document.terrainSurfaces[0];
+            TerrainSurfaceData after = TerrainSurfaceAuthoring.Resize(before, 4f, 2f, 1f);
+            var command = new SetTerrainSurfaceCommand("ground", before, after);
+            var session = new LevelSession(document);
+
+            session.Execute(command);
+            Assert.That(session.CreateSnapshot().terrainSurfaces[0].sampleCountX, Is.EqualTo(5));
+            Assert.That(command.RequiresFullProjection, Is.True);
+
+            session.Undo();
+            Assert.That(session.CreateSnapshot().terrainSurfaces[0].sampleCountX, Is.EqualTo(3));
+
+            session.Redo();
+            Assert.That(session.CreateSnapshot().terrainSurfaces[0].sampleCountX, Is.EqualTo(5));
+        }
+
+        [Test]
+        public void AddFlatTerrainCommandIsUndoableForTerrainlessLevels()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty("Legacy Terrainless");
+            TerrainSurfaceData terrain = TerrainSurfaceAuthoring.CreateFlat(
+                "ground",
+                document.bounds,
+                TerrainSurfaceAuthoring.DefaultSampleSpacing);
+            var command = new AddTerrainSurfaceCommand(terrain);
+            var session = new LevelSession(document);
+
+            session.Execute(command);
+            Assert.That(session.CreateSnapshot().terrainSurfaces, Has.Count.EqualTo(1));
+            Assert.That(command.RequiresFullProjection, Is.True);
+
+            session.Undo();
+            Assert.That(session.CreateSnapshot().terrainSurfaces, Is.Empty);
+
+            session.Redo();
+            Assert.That(session.CreateSnapshot().terrainSurfaces, Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public void ResizeTerrainRejectsDimensionsThatDoNotAlignToTheGrid()
+        {
+            TerrainSurfaceData source = CreateDocument().terrainSurfaces[0];
+
+            Assert.Throws<System.ArgumentException>(() =>
+                TerrainSurfaceAuthoring.Resize(source, 3.5f, 2f, 1f));
+        }
+
+        [Test]
         public void TerrainPatchUndoAndRedoRestoreExactSamples()
         {
             LevelDocument document = CreateDocument();

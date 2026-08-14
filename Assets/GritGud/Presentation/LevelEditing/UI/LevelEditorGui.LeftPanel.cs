@@ -53,7 +53,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                     DrawSelectCreatePanel();
                     break;
                 case LevelEditorCreateMode.Terrain:
-                    DrawTerrainCreatePanel();
+                    DrawTerrainCreatePanel(document);
                     break;
                 default:
                     DrawPlacementCreatePanel();
@@ -119,8 +119,48 @@ namespace GritGud.Presentation.LevelEditing.UI
         }
 
 
-        private void DrawTerrainCreatePanel()
+        private void DrawTerrainCreatePanel(LevelDocument document)
         {
+            terrainPanel.Synchronize(document);
+            DrawSectionHeader("TERRAIN SURFACE");
+            if (!terrainPanel.HasTerrain)
+            {
+                GUILayout.Label("This level has no terrain surface.");
+                if (GUILayout.Button("ADD FLAT TERRAIN", PanelPrimaryButtonLayout()))
+                    terrainPanel.CreateFlatTerrain();
+                GUILayout.Label("The new surface covers the current level bounds.");
+                return;
+            }
+
+            if (terrainPanel.SurfaceIds.Count > 1)
+            {
+                GUILayout.Label("Surface");
+                terrainPanel.SelectedSurfaceIndex = GUILayout.SelectionGrid(
+                    terrainPanel.SelectedSurfaceIndex,
+                    terrainPanel.SurfaceIds.ToArray(),
+                    1);
+            }
+            else
+            {
+                GUILayout.Label($"Surface: {terrainPanel.SelectedSurfaceId}");
+            }
+
+            string widthText = terrainPanel.WidthText;
+            string depthText = terrainPanel.DepthText;
+            string spacingText = terrainPanel.SampleSpacingText;
+            DrawLabeledField("Width (m)", ref widthText);
+            DrawLabeledField("Depth (m)", ref depthText);
+            DrawLabeledField("Grid (m)", ref spacingText);
+            terrainPanel.WidthText = widthText;
+            terrainPanel.DepthText = depthText;
+            terrainPanel.SampleSpacingText = spacingText;
+            if (GUILayout.Button("RESIZE TERRAIN", PanelApplyButtonLayout()))
+                terrainPanel.ResizeTerrain();
+            GUILayout.Label("Width and depth must be whole multiples of the grid size.");
+            if (GUILayout.Button("FRAME TERRAIN", PanelButtonLayout()))
+                terrainPanel.FrameTerrain();
+
+            GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
             DrawSectionHeader("TERRAIN HEIGHT");
             Color previous = GUI.backgroundColor;
             GUILayout.BeginHorizontal();
@@ -149,8 +189,6 @@ namespace GritGud.Presentation.LevelEditing.UI
                 terrainPanel.ActivateFlatten();
             GUI.backgroundColor = previous;
             GUILayout.EndHorizontal();
-            if (GUILayout.Button("FRAME TERRAIN", PanelButtonLayout()))
-                terrainPanel.FrameTerrain();
             GUILayout.Label($"Radius: {terrainPanel.RadiusInSamples} samples");
             terrainPanel.RadiusInSamples = Mathf.RoundToInt(GUILayout.HorizontalSlider(
                 terrainPanel.RadiusInSamples,

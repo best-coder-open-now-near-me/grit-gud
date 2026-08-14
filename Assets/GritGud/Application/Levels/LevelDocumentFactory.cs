@@ -34,6 +34,20 @@ namespace GritGud.Application.Levels
             };
         }
 
+        public static LevelDocument CreateNew(string displayName = "Untitled Level")
+        {
+            LevelDocument document = CreateEmpty(displayName);
+            LevelScenarioActorData player = document.scenario.FindInitiallySelectedPlayer();
+            player.transform = new LevelTransformData(
+                new Float3Data(0f, 2f, 0f),
+                0f);
+            document.terrainSurfaces.Add(TerrainSurfaceAuthoring.CreateFlat(
+                "ground",
+                document.bounds,
+                TerrainSurfaceAuthoring.DefaultSampleSpacing));
+            return document;
+        }
+
         public static string NewStableId()
         {
             return Guid.NewGuid().ToString("N");

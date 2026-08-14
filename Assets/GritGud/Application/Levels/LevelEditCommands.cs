@@ -206,6 +206,137 @@ namespace GritGud.Application.Levels
         }
     }
 
+    public sealed class AddTerrainSurfaceCommand : ILevelEditCommand
+    {
+        private readonly TerrainSurfaceData surface;
+        private int insertionIndex = -1;
+
+        public AddTerrainSurfaceCommand(TerrainSurfaceData surface)
+        {
+            this.surface = surface?.DeepCopy() ?? throw new ArgumentNullException(nameof(surface));
+            if (string.IsNullOrWhiteSpace(this.surface.id))
+            {
+                throw new ArgumentException("The terrain surface needs a stable ID.", nameof(surface));
+            }
+        }
+
+        public string Description => "Add terrain surface";
+
+        public IReadOnlyCollection<string> AffectedEntityIds => Array.Empty<string>();
+
+        public bool RequiresFullProjection => true;
+
+        public void Apply(LevelDocument document)
+        {
+            AddEntityCommand.RequireDocument(document);
+            if (FindSurfaceIndex(document, surface.id) >= 0)
+            {
+                throw new InvalidOperationException(
+                    $"Terrain surface '{surface.id}' already exists.");
+            }
+
+            if (insertionIndex < 0 || insertionIndex > document.terrainSurfaces.Count)
+            {
+                insertionIndex = document.terrainSurfaces.Count;
+            }
+
+            document.terrainSurfaces.Insert(insertionIndex, surface.DeepCopy());
+        }
+
+        public void Revert(LevelDocument document)
+        {
+            int index = RequireSurfaceIndex(document, surface.id);
+            insertionIndex = index;
+            document.terrainSurfaces.RemoveAt(index);
+        }
+
+        internal static int FindSurfaceIndex(LevelDocument document, string surfaceId)
+        {
+            for (int index = 0; index < document.terrainSurfaces.Count; index++)
+            {
+                if (string.Equals(
+                    document.terrainSurfaces[index]?.id,
+                    surfaceId,
+                    StringComparison.Ordinal))
+                {
+                    return index;
+                }
+            }
+
+            return -1;
+        }
+
+        internal static int RequireSurfaceIndex(LevelDocument document, string surfaceId)
+        {
+            AddEntityCommand.RequireDocument(document);
+            int index = FindSurfaceIndex(document, surfaceId);
+            if (index < 0)
+            {
+                throw new InvalidOperationException(
+                    $"Terrain surface '{surfaceId}' does not exist.");
+            }
+
+            return index;
+        }
+    }
+
+    public sealed class SetTerrainSurfaceCommand : ILevelEditCommand
+    {
+        private readonly string surfaceId;
+        private readonly TerrainSurfaceData before;
+        private readonly TerrainSurfaceData after;
+
+        public SetTerrainSurfaceCommand(
+            string surfaceId,
+            TerrainSurfaceData before,
+            TerrainSurfaceData after)
+        {
+            this.surfaceId = string.IsNullOrWhiteSpace(surfaceId)
+                ? throw new ArgumentException("A terrain surface ID is required.", nameof(surfaceId))
+                : surfaceId;
+            this.before = RequireMatchingSurface(before, nameof(before));
+            this.after = RequireMatchingSurface(after, nameof(after));
+        }
+
+        public string Description => "Resize terrain surface";
+
+        public IReadOnlyCollection<string> AffectedEntityIds => Array.Empty<string>();
+
+        public bool RequiresFullProjection => true;
+
+        public void Apply(LevelDocument document)
+        {
+            Replace(document, after);
+        }
+
+        public void Revert(LevelDocument document)
+        {
+            Replace(document, before);
+        }
+
+        private TerrainSurfaceData RequireMatchingSurface(
+            TerrainSurfaceData value,
+            string parameterName)
+        {
+            TerrainSurfaceData copy = value?.DeepCopy()
+                ?? throw new ArgumentNullException(parameterName);
+            if (!string.Equals(copy.id, surfaceId, StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    $"Terrain surface '{copy.id}' does not match '{surfaceId}'.",
+                    parameterName);
+            }
+
+            return copy;
+        }
+
+        private void Replace(LevelDocument document, TerrainSurfaceData replacement)
+        {
+            int index = AddTerrainSurfaceCommand.RequireSurfaceIndex(document, surfaceId);
+            document.terrainSurfaces[index] = replacement.DeepCopy();
+        }
+    }
+
     public sealed class AddEntityCommand : ILevelEditCommand
     {
         private readonly LevelEntity entity;

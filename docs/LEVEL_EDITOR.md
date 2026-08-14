@@ -81,6 +81,13 @@ restores the authored terrain without adding history.
 Use **Frame Terrain** in the terrain panel to fit every authored terrain surface
 in the camera view, including its minimum and maximum sampled elevations.
 
+New levels begin with one flat `ground` surface covering their 50 × 50 meter
+authored bounds. The Terrain Surface section edits the selected surface's width,
+depth, and grid spacing; resizing keeps the surface centered, resamples existing
+height detail, rebuilds its projection, and participates in undo/redo. Width and
+depth must be whole multiples of the grid spacing. Imported legacy levels with
+no terrain expose **Add Flat Terrain** in the same panel.
+
 The toolbar is split into navigation/history and persistence rows so controls do
 not run together on ordinary window sizes. The left panel has three stable
 workspaces: **Create**, **Outline**, and **Scenario**. Create then switches among

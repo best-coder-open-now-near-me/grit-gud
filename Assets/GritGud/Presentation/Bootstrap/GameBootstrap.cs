@@ -77,7 +77,7 @@ namespace GritGud.Presentation.Bootstrap
             EnsureStartMenu();
             OpenLevelTool(
                 startInPreview: false,
-                LevelDocumentFactory.CreateEmpty(),
+                LevelDocumentFactory.CreateNew(),
                 "new level");
         }
 

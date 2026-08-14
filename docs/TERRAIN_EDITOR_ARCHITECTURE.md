@@ -136,6 +136,9 @@ Before adding painting or additional terrain selection modes:
 - **Implemented:** `TerrainToolPanelModel` owns terrain-panel state, clamping,
   activation intents, and framing delegation instead of exposing the terrain
   tool directly to the GUI;
+- **Implemented:** `TerrainAuthoringCoordinator` owns flat-surface creation and
+  footprint-resize intents. Whole-surface changes use full-projection commands,
+  while height brushes retain their region-specific patch commands;
 - **Implemented:** `LevelEditorOutlinePresenter` owns selection, hover,
   placement, and secondary-outline creation, visibility, and disposal outside
   `LevelEditorController`; and

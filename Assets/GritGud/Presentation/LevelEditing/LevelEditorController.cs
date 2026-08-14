@@ -39,6 +39,7 @@ namespace GritGud.Presentation.LevelEditing
         private LevelEditorPresentationState presentationState;
         private LevelDocument viewDocument;
         private ScenarioAuthoringCoordinator scenarioAuthoring;
+        private TerrainAuthoringCoordinator terrainAuthoring;
         private LevelEntityView selectedView;
         private LevelEditorOutlinePresenter outlinePresenter;
         private IReadOnlyList<LevelValidationIssue> validationIssues =
@@ -136,9 +137,12 @@ namespace GritGud.Presentation.LevelEditing
             toolManager.Register(placementTool);
             toolManager.Register(terrainTool);
             toolManager.ActivateDefault();
+            terrainAuthoring = new TerrainAuthoringCoordinator(workspace);
+            terrainAuthoring.StatusChanged += SetStatus;
             var terrainPanel = new TerrainToolPanelModel(
                 toolManager,
                 terrainTool,
+                terrainAuthoring,
                 FrameTerrain);
             presentationState = new LevelEditorPresentationState();
             toolManager.ActiveToolChanged += HandleActiveToolChanged;
@@ -207,6 +211,8 @@ namespace GritGud.Presentation.LevelEditing
                 scenarioAuthoring.ActorChanged -= HandleScenarioActorChanged;
                 scenarioAuthoring.PlayerStartChanged -= HandlePlayerStartChanged;
             }
+            if (terrainAuthoring != null)
+                terrainAuthoring.StatusChanged -= SetStatus;
             toolManager?.Dispose();
             projector?.Dispose();
             terrainProjector?.Dispose();
@@ -224,6 +230,7 @@ namespace GritGud.Presentation.LevelEditing
             persistence = null;
             placementTool = null;
             terrainTool = null;
+            terrainAuthoring = null;
             selectedView = null;
             outlinePresenter = null;
             sceneQuery = null;
@@ -729,10 +736,10 @@ namespace GritGud.Presentation.LevelEditing
 
         private void CreateNewLevel()
         {
-            sourceDocument = LevelDocumentFactory.CreateEmpty();
+            sourceDocument = LevelDocumentFactory.CreateNew();
             sourceLabel = "new level";
             ReplaceWorkspaceDocument(sourceDocument.DeepCopy());
-            SetStatus("Created a new empty level. Choose an archetype to begin placing.");
+            SetStatus("Created a new level with flat terrain covering its bounds.");
         }
 
         private void ReloadSourceLevel()
