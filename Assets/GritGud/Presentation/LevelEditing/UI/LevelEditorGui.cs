@@ -575,7 +575,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             {
                 string category = group.Key;
                 bool isCollapsed = collapsedPaletteCategories.Contains(category);
-                string header = $"{(isCollapsed ? \"▶\" : \"▼\")} {category.ToUpperInvariant()} ({group.Count()})";
+                string header = $"{(isCollapsed ? "▶" : "▼")} {category.ToUpperInvariant()} ({group.Count()})";
                 GUILayout.Space(8f);
                 if (GUILayout.Button(header, GUI.skin.box, GUILayout.Height(26f)))
                 {
