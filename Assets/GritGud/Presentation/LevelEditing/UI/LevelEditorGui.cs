@@ -330,70 +330,70 @@ namespace GritGud.Presentation.LevelEditing.UI
         {
             GUILayout.BeginArea(new Rect(0f, 0f, Screen.width, ToolbarHeight), GUI.skin.box);
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("BACK", GUILayout.Width(52f), GUILayout.Height(30f)))
+            if (GUILayout.Button("BACK", GUILayout.Width(72f), GUILayout.Height(30f)))
             {
                 back();
             }
 
             if (GUILayout.Button(
-                previewMode ? "EDIT" : "PREVIEW",
-                GUILayout.Width(80f),
+                previewMode ? "RETURN TO EDIT" : "LEVEL PREVIEW",
+                GUILayout.Width(128f),
                 GUILayout.Height(30f)))
             {
                 togglePreview();
             }
 
             GUI.enabled = !previewMode;
-            if (GUILayout.Button("TEST", GUILayout.Width(56f), GUILayout.Height(30f)))
+            if (GUILayout.Button("TEST PLAY", GUILayout.Width(92f), GUILayout.Height(30f)))
             {
                 testPlay();
             }
 
             GUI.enabled = !previewMode;
-            if (GUILayout.Button("NEW", GUILayout.Width(48f), GUILayout.Height(30f)))
+            if (GUILayout.Button("NEW", GUILayout.Width(60f), GUILayout.Height(30f)))
             {
                 createNew();
             }
 
-            if (GUILayout.Button("MAIN", GUILayout.Width(54f), GUILayout.Height(30f)))
+            if (GUILayout.Button("LOAD MAIN", GUILayout.Width(100f), GUILayout.Height(30f)))
             {
                 loadMainLevel();
             }
 
             GUI.enabled = workspace.CanUndo && !previewMode;
-            if (GUILayout.Button("UNDO", GUILayout.Width(54f), GUILayout.Height(30f)))
+            if (GUILayout.Button("UNDO", GUILayout.Width(64f), GUILayout.Height(30f)))
             {
                 workspace.Undo();
             }
 
             GUI.enabled = workspace.CanRedo && !previewMode;
-            if (GUILayout.Button("REDO", GUILayout.Width(54f), GUILayout.Height(30f)))
+            if (GUILayout.Button("REDO", GUILayout.Width(64f), GUILayout.Height(30f)))
             {
                 workspace.Redo();
             }
 
             GUI.enabled = !previewMode && selection.Primary != null;
-            if (GUILayout.Button("FRAME", GUILayout.Width(54f), GUILayout.Height(30f)))
+            if (GUILayout.Button("FRAME", GUILayout.Width(68f), GUILayout.Height(30f)))
             {
                 frameSelection();
             }
 
             GUI.enabled = !previewMode && selection.Targets.Count > 0;
-            if (GUILayout.Button("DUP", GUILayout.Width(48f), GUILayout.Height(30f)))
+            if (GUILayout.Button("DUPLICATE", GUILayout.Width(86f), GUILayout.Height(30f)))
             {
                 selectionTool.DuplicateSelection();
             }
 
             GUI.enabled = !previewMode;
-            if (GUILayout.Button("ALL", GUILayout.Width(48f), GUILayout.Height(30f)))
+            if (GUILayout.Button("FRAME ALL", GUILayout.Width(86f), GUILayout.Height(30f)))
             {
                 frameLevel();
             }
 
             GUI.enabled = true;
             if (GUILayout.Button(
-                "SHORTCUTS",
-                GUILayout.Width(82f),
+                showControls ? "HIDE SHORTCUTS" : "SHORTCUTS",
+                GUILayout.Width(112f),
                 GUILayout.Height(30f)))
             {
                 showControls = !showControls;
@@ -414,26 +414,26 @@ namespace GritGud.Presentation.LevelEditing.UI
                 snapSettings.Enabled,
                 "SNAP",
                 GUI.skin.button,
-                GUILayout.Width(52f),
+                GUILayout.Width(68f),
                 GUILayout.Height(30f));
-            if (GUILayout.Button("SAVE", GUILayout.Width(56f), GUILayout.Height(30f)))
+            if (GUILayout.Button("SAVE DRAFT", GUILayout.Width(96f), GUILayout.Height(30f)))
             {
                 persistence.SaveDraft(workspace);
             }
 
             GUI.enabled = !previewMode && persistence.HasDraft;
-            if (GUILayout.Button("DRAFT", GUILayout.Width(60f), GUILayout.Height(30f)))
+            if (GUILayout.Button("LOAD DRAFT", GUILayout.Width(96f), GUILayout.Height(30f)))
             {
                 persistence.LoadDraft();
             }
 
             GUI.enabled = !previewMode;
-            if (GUILayout.Button("EXPORT", GUILayout.Width(60f), GUILayout.Height(30f)))
+            if (GUILayout.Button("EXPORT", GUILayout.Width(76f), GUILayout.Height(30f)))
             {
                 persistence.Export(workspace);
             }
 
-            if (GUILayout.Button("IMPORT", GUILayout.Width(60f), GUILayout.Height(30f)))
+            if (GUILayout.Button("IMPORT", GUILayout.Width(76f), GUILayout.Height(30f)))
             {
                 persistence.RequestImport();
             }
