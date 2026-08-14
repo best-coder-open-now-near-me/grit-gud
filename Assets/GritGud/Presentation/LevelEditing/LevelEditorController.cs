@@ -16,7 +16,7 @@ using UnityEngine;
 
 namespace GritGud.Presentation.LevelEditing
 {
-    public sealed class LevelEditorController : MonoBehaviour
+    public sealed class LevelEditorController : MonoBehaviour, ILevelEditorGuiActions
     {
         private const string MainLevelResourceName = "Levels/main-level";
 
@@ -38,6 +38,8 @@ namespace GritGud.Presentation.LevelEditing
         private PlacementLevelEditorTool placementTool;
         private TerrainHeightLevelEditorTool terrainTool;
         private LevelEditorGui gui;
+        private LevelEditorPresentationState presentationState;
+        private LevelDocument viewDocument;
         private LevelEntityView selectedView;
         private RuntimeBoundsOutline selectionOutline;
         private RuntimeBoundsOutline hoverOutline;
@@ -77,6 +79,7 @@ namespace GritGud.Presentation.LevelEditing
             }
 
             workspace = new LevelEditorWorkspace(LoadMainLevel(), catalog.CreateKnownIdSet());
+            viewDocument = workspace.CreateSnapshot();
             workspace.Changed += HandleWorkspaceChanged;
             selection = new LevelSelectionModel();
             selection.Changed += HandleSelectionChanged;
@@ -113,6 +116,7 @@ namespace GritGud.Presentation.LevelEditing
                 toolManager,
                 terrainTool,
                 FrameTerrain);
+            presentationState = new LevelEditorPresentationState();
             gui = new LevelEditorGui(
                 workspace,
                 selection,
@@ -124,27 +128,8 @@ namespace GritGud.Presentation.LevelEditing
                 selectionTool,
                 snapSettings,
                 persistence,
-                () => GameBootstrap.Instance.ReturnToMenu(),
-                TogglePreview,
-                StartTestPlay,
-                CreateNewLevel,
-                ReloadMainLevel,
-                FrameSelection,
-                FrameLevel,
-                FocusValidationEntity,
-                ApplyInspectorTransform,
-                ApplyPlayerStart,
-                AddInteractionPoint,
-                ApplyInteractionPoint,
-                DeleteInteractionPoint,
-                ApplyDestructibleDefaults,
-                AddScenarioActor,
-                ApplyScenarioActor,
-                DeleteScenarioActor,
-                PlaceScenarioActorAtView,
-                ApplyScenarioProp,
-                ApplyScenarioObjective,
-                ApplyScenarioVehicle);
+                presentationState,
+                this);
             gui.SyncPlayerStartFields(RequireSelectedPlayer(workspace.CreateSnapshot()).transform);
             EnsureOutlines();
             validationIssues = workspace.ValidationIssues;
@@ -233,6 +218,7 @@ namespace GritGud.Presentation.LevelEditing
             hoverOutline = null;
             placementOutline = null;
             suspended = false;
+            viewDocument = null;
             enabled = false;
         }
 
@@ -274,9 +260,18 @@ namespace GritGud.Presentation.LevelEditing
 
         private void OnGUI()
         {
-            if (!suspended)
+            if (!suspended && workspace != null && viewDocument != null)
             {
-                gui?.Draw(previewMode, selectedView, validationIssues, statusMessage);
+                gui?.Draw(new LevelEditorViewState(
+                    viewDocument,
+                    workspace.Revision,
+                    workspace.CanUndo,
+                    workspace.CanRedo,
+                    workspace.IsDirty,
+                    previewMode,
+                    selectedView,
+                    validationIssues,
+                    statusMessage));
             }
         }
 
@@ -950,6 +945,7 @@ namespace GritGud.Presentation.LevelEditing
             try
             {
                 LevelDocument snapshot = workspace.CreateSnapshot();
+                viewDocument = snapshot;
                 projector.Apply(snapshot, args.SessionChange);
                 terrainProjector.Apply(snapshot, args.SessionChange);
                 RefreshSelectedView();
@@ -966,6 +962,7 @@ namespace GritGud.Presentation.LevelEditing
 
         private void HandleSelectionChanged()
         {
+            presentationState?.FocusWorldSelection(selection?.Primary);
             RefreshSelectedView();
             if (!previewMode && workspace != null)
             {
@@ -1160,19 +1157,19 @@ namespace GritGud.Presentation.LevelEditing
             var selectionObject = new GameObject("Selection Outline");
             selectionObject.transform.SetParent(transform, false);
             selectionOutline = selectionObject.AddComponent<RuntimeBoundsOutline>();
-            selectionOutline.Initialize(new Color(0.2f, 0.8f, 1f));
+            selectionOutline.Initialize(LevelEditorTheme.SelectionOutline);
             selectionOutline.gameObject.SetActive(false);
 
             var hoverObject = new GameObject("Hover Outline");
             hoverObject.transform.SetParent(transform, false);
             hoverOutline = hoverObject.AddComponent<RuntimeBoundsOutline>();
-            hoverOutline.Initialize(new Color(1f, 0.9f, 0.25f));
+            hoverOutline.Initialize(LevelEditorTheme.HoverOutline);
             hoverOutline.gameObject.SetActive(false);
 
             var placementObject = new GameObject("Placement Outline");
             placementObject.transform.SetParent(transform, false);
             placementOutline = placementObject.AddComponent<RuntimeBoundsOutline>();
-            placementOutline.Initialize(new Color(1f, 0.6f, 0.15f));
+            placementOutline.Initialize(LevelEditorTheme.PlacementOutline);
             placementOutline.gameObject.SetActive(false);
         }
 
@@ -1220,7 +1217,7 @@ namespace GritGud.Presentation.LevelEditing
                         var outlineObject = new GameObject("Secondary Selection Outline");
                         outlineObject.transform.SetParent(transform, false);
                         outline = outlineObject.AddComponent<RuntimeBoundsOutline>();
-                        outline.Initialize(new Color(0.35f, 1f, 0.65f));
+                        outline.Initialize(LevelEditorTheme.SecondarySelectionOutline);
                         secondarySelectionOutlines.Add(target.EntityId, outline);
                     }
 
@@ -1273,6 +1270,132 @@ namespace GritGud.Presentation.LevelEditing
         {
             statusMessage = message ?? string.Empty;
         }
+
+        void ILevelEditorGuiActions.ReturnToMenu() => GameBootstrap.Instance.ReturnToMenu();
+
+        void ILevelEditorGuiActions.TogglePreview() => TogglePreview();
+
+        void ILevelEditorGuiActions.StartTestPlay() => StartTestPlay();
+
+        void ILevelEditorGuiActions.CreateNewLevel() => CreateNewLevel();
+
+        void ILevelEditorGuiActions.ReloadMainLevel() => ReloadMainLevel();
+
+        void ILevelEditorGuiActions.FrameSelection() => FrameSelection();
+
+        void ILevelEditorGuiActions.FrameLevel() => FrameLevel();
+
+        void ILevelEditorGuiActions.FocusEntity(string entityId) =>
+            FocusValidationEntity(entityId);
+
+        void ILevelEditorGuiActions.ApplyEntityTransform(
+            string x,
+            string y,
+            string z,
+            string yaw) => ApplyInspectorTransform(x, y, z, yaw);
+
+        void ILevelEditorGuiActions.ApplyPlayerStart(
+            string x,
+            string y,
+            string z,
+            string yaw) => ApplyPlayerStart(x, y, z, yaw);
+
+        void ILevelEditorGuiActions.AddInteractionPoint() => AddInteractionPoint();
+
+        void ILevelEditorGuiActions.ApplyInteractionPoint(
+            string type,
+            string x,
+            string y,
+            string z,
+            string radius) => ApplyInteractionPoint(type, x, y, z, radius);
+
+        void ILevelEditorGuiActions.DeleteInteractionPoint() => DeleteInteractionPoint();
+
+        void ILevelEditorGuiActions.ApplyDestructibleDefaults(
+            string enabled,
+            string state,
+            string integrity) => ApplyDestructibleDefaults(enabled, state, integrity);
+
+        void ILevelEditorGuiActions.AddScenarioActor(string templateId) =>
+            AddScenarioActor(templateId);
+
+        void ILevelEditorGuiActions.ApplyScenarioActor(
+            string actorId,
+            string x,
+            string y,
+            string z,
+            string yaw,
+            bool playerControlled,
+            bool initiallySelected,
+            bool primaryTarget) => ApplyScenarioActor(
+                actorId,
+                x,
+                y,
+                z,
+                yaw,
+                playerControlled,
+                initiallySelected,
+                primaryTarget);
+
+        void ILevelEditorGuiActions.DeleteScenarioActor(string actorId) =>
+            DeleteScenarioActor(actorId);
+
+        void ILevelEditorGuiActions.PlaceScenarioActorAtView(string actorId) =>
+            PlaceScenarioActorAtView(actorId);
+
+        void ILevelEditorGuiActions.ApplyScenarioProp(
+            string entityId,
+            bool enabled,
+            string mass,
+            string sizeClass,
+            bool startsEncounter) => ApplyScenarioProp(
+                entityId,
+                enabled,
+                mass,
+                sizeClass,
+                startsEncounter);
+
+        void ILevelEditorGuiActions.ApplyScenarioObjective(
+            string entityId,
+            string pointId,
+            bool enabled,
+            string displayName,
+            string activeText,
+            string completedText,
+            string actionPointCost) => ApplyScenarioObjective(
+                entityId,
+                pointId,
+                enabled,
+                displayName,
+                activeText,
+                completedText,
+                actionPointCost);
+
+        void ILevelEditorGuiActions.ApplyScenarioVehicle(
+            string entityId,
+            bool enabled,
+            string maximumSpeed,
+            string acceleration,
+            string braking,
+            string lowSpeedTurn,
+            string highSpeedTurn,
+            string baseRadius,
+            string radiusFactor,
+            string startingSpeed,
+            string occupantActorId,
+            bool startsEncounter) => ApplyScenarioVehicle(
+                entityId,
+                enabled,
+                maximumSpeed,
+                acceleration,
+                braking,
+                lowSpeedTurn,
+                highSpeedTurn,
+                baseRadius,
+                radiusFactor,
+                startingSpeed,
+                occupantActorId,
+                startsEncounter);
 
         private static bool TryParse(string text, out float value)
         {

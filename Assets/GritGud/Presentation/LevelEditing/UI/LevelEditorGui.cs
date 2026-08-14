@@ -14,31 +14,6 @@ namespace GritGud.Presentation.LevelEditing.UI
 {
     public sealed class LevelEditorGui
     {
-        public const float ToolbarHeight = 92f;
-        public const float PaletteWidth = 300f;
-        public const float InspectorWidth = 360f;
-
-        // Keep IMGUI controls deliberately uniform. Change these values when tuning the editor,
-        // rather than adjusting individual call sites.
-        private const float ToolbarControlHeight = 30f;
-        private const float PanelControlHeight = 30f;
-        private const float PanelApplyControlHeight = 32f;
-        private const float PanelPrimaryControlHeight = 34f;
-        private const float PanelCompactControlHeight = 26f;
-        private const float PanelIconControlHeight = 28f;
-        private const float PanelActorButtonHeight = 42f;
-        private const float FieldLabelWidth = 74f;
-        private const int SectionHeaderLeftPadding = 8;
-        private const int SectionHeaderVerticalPadding = 3;
-
-        // Semantic UI colors. Keep color meaning stable across the editor.
-        private static readonly Color ActiveControlColor = new Color(0.2f, 0.75f, 1f);
-        private static readonly Color PlacementControlColor = new Color(0.95f, 0.55f, 0.2f);
-        private static readonly Color PositiveControlColor = new Color(0.3f, 0.9f, 0.4f);
-        private static readonly Color WarningControlColor = new Color(1f, 0.4f, 0.25f);
-        private static readonly Color DestructiveControlColor = new Color(0.7f, 0.25f, 0.2f);
-        private static readonly Color SectionHeaderTextColor = new Color(0.88f, 0.93f, 1f);
-
         private readonly LevelEditorWorkspace workspace;
         private readonly LevelSelectionModel selection;
         private readonly LevelArchetypeCatalog catalog;
@@ -49,54 +24,8 @@ namespace GritGud.Presentation.LevelEditing.UI
         private readonly SelectionLevelEditorTool selectionTool;
         private readonly LevelSnapSettings snapSettings;
         private readonly LevelEditorPersistenceCoordinator persistence;
-        private readonly Action back;
-        private readonly Action togglePreview;
-        private readonly Action testPlay;
-        private readonly Action createNew;
-        private readonly Action loadMainLevel;
-        private readonly Action frameSelection;
-        private readonly Action frameLevel;
-        private readonly Action<string> focusEntity;
-        private readonly Action<string, string, string, string> applyTransform;
-        private readonly Action<string, string, string, string> applyPlayerStart;
-        private readonly Action addInteractionPoint;
-        private readonly Action<string, string, string, string, string> applyInteractionPoint;
-        private readonly Action deleteInteractionPoint;
-        private readonly Action<string, string, string> applyDestructibleDefaults;
-        private readonly Action<string> addScenarioActor;
-        private readonly Action<
-            string,
-            string,
-            string,
-            string,
-            string,
-            bool,
-            bool,
-            bool> applyScenarioActor;
-        private readonly Action<string> deleteScenarioActor;
-        private readonly Action<string> placeScenarioActorAtView;
-        private readonly Action<string, bool, string, string, bool> applyScenarioProp;
-        private readonly Action<
-            string,
-            string,
-            bool,
-            string,
-            string,
-            string,
-            string> applyScenarioObjective;
-        private readonly Action<
-            string,
-            bool,
-            string,
-            string,
-            string,
-            string,
-            string,
-            string,
-            string,
-            string,
-            string,
-            bool> applyScenarioVehicle;
+        private readonly LevelEditorPresentationState presentationState;
+        private readonly ILevelEditorGuiActions actions;
         private Vector2 paletteScroll;
         private Vector2 inspectorScroll;
         private string xText = "0";
@@ -122,7 +51,6 @@ namespace GritGud.Presentation.LevelEditing.UI
         private readonly HashSet<string> collapsedPaletteCategories =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private string hierarchySearch = string.Empty;
-        private int leftPanel;
         private string selectedScenarioActorId = string.Empty;
         private string scenarioXText = "0";
         private string scenarioYText = "0";
@@ -168,30 +96,8 @@ namespace GritGud.Presentation.LevelEditing.UI
             SelectionLevelEditorTool selectionTool,
             LevelSnapSettings snapSettings,
             LevelEditorPersistenceCoordinator persistence,
-            Action back,
-            Action togglePreview,
-            Action testPlay,
-            Action createNew,
-            Action loadMainLevel,
-            Action frameSelection,
-            Action frameLevel,
-            Action<string> focusEntity,
-            Action<string, string, string, string> applyTransform,
-            Action<string, string, string, string> applyPlayerStart,
-            Action addInteractionPoint,
-            Action<string, string, string, string, string> applyInteractionPoint,
-            Action deleteInteractionPoint,
-            Action<string, string, string> applyDestructibleDefaults,
-            Action<string> addScenarioActor,
-            Action<string, string, string, string, string, bool, bool, bool>
-                applyScenarioActor,
-            Action<string> deleteScenarioActor,
-            Action<string> placeScenarioActorAtView,
-            Action<string, bool, string, string, bool> applyScenarioProp,
-            Action<string, string, bool, string, string, string, string>
-                applyScenarioObjective,
-            Action<string, bool, string, string, string, string, string, string,
-                string, string, string, bool> applyScenarioVehicle)
+            LevelEditorPresentationState presentationState,
+            ILevelEditorGuiActions actions)
         {
             this.workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
             this.selection = selection ?? throw new ArgumentNullException(nameof(selection));
@@ -204,67 +110,34 @@ namespace GritGud.Presentation.LevelEditing.UI
             this.selectionTool = selectionTool ?? throw new ArgumentNullException(nameof(selectionTool));
             this.snapSettings = snapSettings ?? throw new ArgumentNullException(nameof(snapSettings));
             this.persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
-            this.back = back ?? throw new ArgumentNullException(nameof(back));
-            this.togglePreview = togglePreview ?? throw new ArgumentNullException(nameof(togglePreview));
-            this.testPlay = testPlay ?? throw new ArgumentNullException(nameof(testPlay));
-            this.createNew = createNew ?? throw new ArgumentNullException(nameof(createNew));
-            this.loadMainLevel = loadMainLevel
-                ?? throw new ArgumentNullException(nameof(loadMainLevel));
-            this.frameSelection = frameSelection
-                ?? throw new ArgumentNullException(nameof(frameSelection));
-            this.frameLevel = frameLevel ?? throw new ArgumentNullException(nameof(frameLevel));
-            this.focusEntity = focusEntity
-                ?? throw new ArgumentNullException(nameof(focusEntity));
-            this.applyTransform = applyTransform ?? throw new ArgumentNullException(nameof(applyTransform));
-            this.applyPlayerStart = applyPlayerStart
-                ?? throw new ArgumentNullException(nameof(applyPlayerStart));
-            this.addInteractionPoint = addInteractionPoint
-                ?? throw new ArgumentNullException(nameof(addInteractionPoint));
-            this.applyInteractionPoint = applyInteractionPoint
-                ?? throw new ArgumentNullException(nameof(applyInteractionPoint));
-            this.deleteInteractionPoint = deleteInteractionPoint
-                ?? throw new ArgumentNullException(nameof(deleteInteractionPoint));
-            this.applyDestructibleDefaults = applyDestructibleDefaults
-                ?? throw new ArgumentNullException(nameof(applyDestructibleDefaults));
-            this.addScenarioActor = addScenarioActor
-                ?? throw new ArgumentNullException(nameof(addScenarioActor));
-            this.applyScenarioActor = applyScenarioActor
-                ?? throw new ArgumentNullException(nameof(applyScenarioActor));
-            this.deleteScenarioActor = deleteScenarioActor
-                ?? throw new ArgumentNullException(nameof(deleteScenarioActor));
-            this.placeScenarioActorAtView = placeScenarioActorAtView
-                ?? throw new ArgumentNullException(nameof(placeScenarioActorAtView));
-            this.applyScenarioProp = applyScenarioProp
-                ?? throw new ArgumentNullException(nameof(applyScenarioProp));
-            this.applyScenarioObjective = applyScenarioObjective
-                ?? throw new ArgumentNullException(nameof(applyScenarioObjective));
-            this.applyScenarioVehicle = applyScenarioVehicle
-                ?? throw new ArgumentNullException(nameof(applyScenarioVehicle));
+            this.presentationState = presentationState
+                ?? throw new ArgumentNullException(nameof(presentationState));
+            this.actions = actions ?? throw new ArgumentNullException(nameof(actions));
         }
 
-        public void Draw(
-            bool previewMode,
-            LevelEntityView selectedView,
-            IReadOnlyList<LevelValidationIssue> validationIssues,
-            string statusMessage)
+        public void Draw(LevelEditorViewState state)
         {
-            DrawToolbar(previewMode);
-            if (!previewMode)
+            if (state == null)
+                throw new ArgumentNullException(nameof(state));
+
+            DrawToolbar(state);
+            if (!state.PreviewMode)
             {
-                DrawPalette();
-                DrawInspector(selectedView, validationIssues);
+                DrawPalette(state.Document);
+                DrawInspector(state);
             }
 
             if (showControls)
                 DrawShortcutsOverlay();
 
-            DrawStatusBar(statusMessage);
+            DrawStatusBar(state.StatusMessage);
         }
 
         public bool IsPointerOverInterface(Vector2 screenPosition)
         {
             float guiY = Screen.height - screenPosition.y;
-            if (guiY <= ToolbarHeight || guiY >= Screen.height - 30f)
+            if (guiY <= LevelEditorGuiMetrics.ToolbarHeight
+                || guiY >= Screen.height - LevelEditorGuiMetrics.StatusBarHeight)
             {
                 return true;
             }
@@ -274,8 +147,8 @@ namespace GritGud.Presentation.LevelEditing.UI
                 return true;
             }
 
-            return screenPosition.x <= PaletteWidth
-                || screenPosition.x >= Screen.width - InspectorWidth;
+            return screenPosition.x <= LevelEditorGuiMetrics.LeftPanelWidth
+                || screenPosition.x >= Screen.width - LevelEditorGuiMetrics.InspectorWidth;
         }
 
         public void SyncTransformFields(LevelTransformData value)
@@ -297,6 +170,7 @@ namespace GritGud.Presentation.LevelEditing.UI
         public void SelectScenarioActor(string actorId)
         {
             selectedScenarioActorId = actorId ?? string.Empty;
+            presentationState.FocusScenarioActor(selectedScenarioActorId);
             LevelScenarioActorData actor = workspace.CreateSnapshot().scenario.actors
                 .FirstOrDefault(candidate => string.Equals(
                     candidate?.id,
@@ -311,6 +185,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             if (actor == null)
                 return;
             selectedScenarioActorId = actor.id;
+            presentationState.FocusScenarioActor(actor.id);
             scenarioXText = actor.transform.position.x.ToString(
                 "0.###",
                 CultureInfo.InvariantCulture);
@@ -348,46 +223,49 @@ namespace GritGud.Presentation.LevelEditing.UI
                 selectedScenarioActorId = string.Empty;
         }
 
-        private void DrawToolbar(bool previewMode)
+        private void DrawToolbar(LevelEditorViewState state)
         {
-            GUILayout.BeginArea(new Rect(0f, 0f, Screen.width, ToolbarHeight), GUI.skin.box);
+            bool previewMode = state.PreviewMode;
+            GUILayout.BeginArea(
+                new Rect(0f, 0f, Screen.width, LevelEditorGuiMetrics.ToolbarHeight),
+                GUI.skin.box);
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("BACK", ToolbarButtonLayout(72f)))
             {
-                back();
+                actions.ReturnToMenu();
             }
 
             if (GUILayout.Button(
                 previewMode ? "RETURN TO EDIT" : "LEVEL PREVIEW",
                 ToolbarButtonLayout(128f)))
             {
-                togglePreview();
+                actions.TogglePreview();
             }
 
             GUI.enabled = !previewMode;
             if (GUILayout.Button("TEST PLAY", ToolbarButtonLayout(92f)))
             {
-                testPlay();
+                actions.StartTestPlay();
             }
 
             GUI.enabled = !previewMode;
             if (GUILayout.Button("NEW", ToolbarButtonLayout(60f)))
             {
-                createNew();
+                actions.CreateNewLevel();
             }
 
             if (GUILayout.Button("LOAD MAIN", ToolbarButtonLayout(100f)))
             {
-                loadMainLevel();
+                actions.ReloadMainLevel();
             }
 
-            GUI.enabled = workspace.CanUndo && !previewMode;
+            GUI.enabled = state.CanUndo && !previewMode;
             if (GUILayout.Button("UNDO", ToolbarButtonLayout(64f)))
             {
                 workspace.Undo();
             }
 
-            GUI.enabled = workspace.CanRedo && !previewMode;
+            GUI.enabled = state.CanRedo && !previewMode;
             if (GUILayout.Button("REDO", ToolbarButtonLayout(64f)))
             {
                 workspace.Redo();
@@ -396,7 +274,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUI.enabled = !previewMode && selection.Primary != null;
             if (GUILayout.Button("FRAME", ToolbarButtonLayout(68f)))
             {
-                frameSelection();
+                actions.FrameSelection();
             }
 
             GUI.enabled = !previewMode && selection.Targets.Count > 0;
@@ -408,7 +286,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUI.enabled = !previewMode;
             if (GUILayout.Button("FRAME ALL", ToolbarButtonLayout(86f)))
             {
-                frameLevel();
+                actions.FrameLevel();
             }
 
             GUI.enabled = true;
@@ -424,8 +302,8 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.Label(
                 previewMode
                     ? "LEVEL PREVIEW — AUTHORING LOCKED"
-                    : workspace.IsDirty ? "UNSAVED DRAFT" : "SAVED",
-                GUILayout.Height(ToolbarControlHeight));
+                    : state.IsDirty ? "UNSAVED DRAFT" : "SAVED",
+                GUILayout.Height(LevelEditorGuiMetrics.ToolbarControlHeight));
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
@@ -461,7 +339,10 @@ namespace GritGud.Presentation.LevelEditing.UI
             if (selectionTool.IsDragging)
             {
                 GUILayout.FlexibleSpace();
-                GUILayout.Label(selectionTool.DragFeedback, GUI.skin.box, GUILayout.Height(ToolbarControlHeight));
+                GUILayout.Label(
+                    selectionTool.DragFeedback,
+                    GUI.skin.box,
+                    GUILayout.Height(LevelEditorGuiMetrics.ToolbarControlHeight));
             }
 
             GUI.enabled = true;
@@ -469,31 +350,37 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.EndArea();
         }
 
-        private void DrawPalette()
+        private void DrawPalette(LevelDocument document)
         {
             GUILayout.BeginArea(
-                new Rect(0f, ToolbarHeight, PaletteWidth, Screen.height - ToolbarHeight - 30f),
+                new Rect(
+                    0f,
+                    LevelEditorGuiMetrics.ToolbarHeight,
+                    LevelEditorGuiMetrics.LeftPanelWidth,
+                    Screen.height
+                    - LevelEditorGuiMetrics.ToolbarHeight
+                    - LevelEditorGuiMetrics.StatusBarHeight),
                 GUI.skin.box);
             paletteScroll = GUILayout.BeginScrollView(paletteScroll);
             GUILayout.BeginHorizontal();
             Color panelToggleColor = GUI.backgroundColor;
-            DrawLeftPanelTab("LIBRARY", 0, panelToggleColor);
-            DrawLeftPanelTab("SCENE", 1, panelToggleColor);
-            DrawLeftPanelTab("SCENARIO", 2, panelToggleColor);
+            DrawLeftPanelTab("CREATE", LevelEditorWorkspacePage.Create, panelToggleColor);
+            DrawLeftPanelTab("OUTLINE", LevelEditorWorkspacePage.Outline, panelToggleColor);
+            DrawLeftPanelTab("SCENARIO", LevelEditorWorkspacePage.Scenario, panelToggleColor);
             GUI.backgroundColor = panelToggleColor;
             GUILayout.EndHorizontal();
 
-            if (leftPanel == 1)
+            if (presentationState.Page == LevelEditorWorkspacePage.Outline)
             {
-                DrawHierarchy();
+                DrawHierarchy(document);
                 GUILayout.EndScrollView();
                 GUILayout.EndArea();
                 return;
             }
 
-            if (leftPanel == 2)
+            if (presentationState.Page == LevelEditorWorkspacePage.Scenario)
             {
-                DrawScenario();
+                DrawScenario(document);
                 GUILayout.EndScrollView();
                 GUILayout.EndArea();
                 return;
@@ -503,7 +390,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             Color previous = GUI.backgroundColor;
             if (toolManager.ActiveTool == selectionTool)
             {
-                GUI.backgroundColor = ActiveControlColor;
+                GUI.backgroundColor = LevelEditorTheme.Active;
             }
 
             if (GUILayout.Button("SELECT", PanelPrimaryButtonLayout()))
@@ -517,7 +404,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.BeginHorizontal();
             if (terrainPanel.IsRaiseActive)
             {
-                GUI.backgroundColor = PositiveControlColor;
+                GUI.backgroundColor = LevelEditorTheme.Positive;
             }
             if (GUILayout.Button("RAISE", PanelButtonLayout()))
             {
@@ -527,7 +414,7 @@ namespace GritGud.Presentation.LevelEditing.UI
 
             if (terrainPanel.IsLowerActive)
             {
-                GUI.backgroundColor = WarningControlColor;
+                GUI.backgroundColor = LevelEditorTheme.Warning;
             }
             if (GUILayout.Button("LOWER", PanelButtonLayout()))
             {
@@ -623,7 +510,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                     previous = GUI.backgroundColor;
                     if (active)
                     {
-                        GUI.backgroundColor = PlacementControlColor;
+                        GUI.backgroundColor = LevelEditorTheme.Placement;
                     }
 
                     if (GUILayout.Button(entry.DisplayName, PanelPrimaryButtonLayout()))
@@ -640,12 +527,15 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.EndArea();
         }
 
-        private void DrawLeftPanelTab(string label, int panel, Color previous)
+        private void DrawLeftPanelTab(
+            string label,
+            LevelEditorWorkspacePage page,
+            Color previous)
         {
-            if (leftPanel == panel)
-                GUI.backgroundColor = ActiveControlColor;
+            if (presentationState.Page == page)
+                GUI.backgroundColor = LevelEditorTheme.Active;
             if (GUILayout.Button(label, PanelButtonLayout()))
-                leftPanel = panel;
+                presentationState.ShowPage(page);
             GUI.backgroundColor = previous;
         }
 
@@ -669,12 +559,11 @@ namespace GritGud.Presentation.LevelEditing.UI
         private static Rect ShortcutOverlayRect()
         {
             float width = Mathf.Min(420f, Screen.width - 16f);
-            return new Rect(8f, ToolbarHeight, width, 202f);
+            return new Rect(8f, LevelEditorGuiMetrics.ToolbarHeight, width, 202f);
         }
 
-        private void DrawScenario()
+        private void DrawScenario(LevelDocument document)
         {
-            LevelDocument document = workspace.CreateSnapshot();
             GUILayout.Space(8f);
             DrawSectionHeader("SCENARIO COMPOSITION");
             GUILayout.Label(
@@ -692,7 +581,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 }
 
                 if (GUILayout.Button($"+ {template.DisplayName}", PanelButtonLayout()))
-                    addScenarioActor(template.TemplateId);
+                    actions.AddScenarioActor(template.TemplateId);
             }
 
             GUILayout.Space(10f);
@@ -708,7 +597,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                         actor.id,
                         StringComparison.Ordinal))
                 {
-                    GUI.backgroundColor = ActiveControlColor;
+                    GUI.backgroundColor = LevelEditorTheme.Active;
                 }
 
                 ScenarioActorTemplateDefinition template =
@@ -718,7 +607,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                     : actor.primaryTarget ? "TARGET" : "ENEMY";
                 if (GUILayout.Button(
                         $"{template.DisplayName}\n{role}",
-                        GUILayout.Height(PanelActorButtonHeight)))
+                        GUILayout.Height(LevelEditorGuiMetrics.PanelActorButtonHeight)))
                 {
                     SyncScenarioActorFields(actor);
                 }
@@ -762,7 +651,7 @@ namespace GritGud.Presentation.LevelEditing.UI
 
             if (GUILayout.Button("APPLY", PanelApplyButtonLayout()))
             {
-                applyScenarioActor(
+                actions.ApplyScenarioActor(
                     selected.id,
                     scenarioXText,
                     scenarioYText,
@@ -774,12 +663,12 @@ namespace GritGud.Presentation.LevelEditing.UI
             }
 
             if (GUILayout.Button("PLACE AT VIEW", PanelButtonLayout()))
-                placeScenarioActorAtView(selected.id);
+                actions.PlaceScenarioActorAtView(selected.id);
 
             Color deleteColor = GUI.backgroundColor;
-            GUI.backgroundColor = DestructiveControlColor;
+            GUI.backgroundColor = LevelEditorTheme.Destructive;
             if (GUILayout.Button("REMOVE ACTOR", PanelButtonLayout()))
-                deleteScenarioActor(selected.id);
+                actions.DeleteScenarioActor(selected.id);
             GUI.backgroundColor = deleteColor;
             DrawScenarioLinkSummary(document.scenario);
         }
@@ -793,9 +682,8 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.Label($"Vehicles: {scenario.vehicles.Count}");
         }
 
-        private void DrawHierarchy()
+        private void DrawHierarchy(LevelDocument document)
         {
-            LevelDocument document = workspace.CreateSnapshot();
             GUILayout.Space(8f);
             DrawSectionHeader("SCENARIO");
             LevelScenarioActorData selectedPlayer = document.scenario
@@ -815,7 +703,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.Label($"PHYSICS PROPS  {document.scenario.props.Count}");
             GUILayout.Label($"VEHICLES  {document.scenario.vehicles.Count}");
             if (GUILayout.Button("OPEN SCENARIO", PanelIconButtonLayout()))
-                leftPanel = 2;
+                presentationState.ShowPage(LevelEditorWorkspacePage.Scenario);
             GUILayout.Space(8f);
             DrawSectionHeader("LEVEL GEOMETRY");
             GUILayout.Label($"TERRAIN SURFACES  {document.terrainSurfaces.Count}");
@@ -840,12 +728,12 @@ namespace GritGud.Presentation.LevelEditing.UI
                 Color previous = GUI.backgroundColor;
                 if (string.Equals(selection.PrimaryEntityId, entity.id, StringComparison.Ordinal))
                 {
-                    GUI.backgroundColor = ActiveControlColor;
+                    GUI.backgroundColor = LevelEditorTheme.Active;
                 }
 
                 if (GUILayout.Button(EntityDisplayName(entity), PanelCompactButtonLayout()))
                 {
-                    focusEntity(entity.id);
+                    actions.FocusEntity(entity.id);
                 }
 
                 GUI.backgroundColor = previous;
@@ -891,7 +779,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             bool active = string.Equals(paletteCategory, category, StringComparison.OrdinalIgnoreCase);
             if (active)
             {
-                GUI.backgroundColor = ActiveControlColor;
+                GUI.backgroundColor = LevelEditorTheme.Active;
             }
 
             if (GUILayout.Button(label, PanelCompactButtonLayout()))
@@ -920,13 +808,19 @@ namespace GritGud.Presentation.LevelEditing.UI
                 || entry.Category.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        private void DrawInspector(
-            LevelEntityView selectedView,
-            IReadOnlyList<LevelValidationIssue> validationIssues)
+        private void DrawInspector(LevelEditorViewState state)
         {
-            float left = Screen.width - InspectorWidth;
+            LevelEntityView selectedView = state.SelectedView;
+            IReadOnlyList<LevelValidationIssue> validationIssues = state.ValidationIssues;
+            float left = Screen.width - LevelEditorGuiMetrics.InspectorWidth;
             GUILayout.BeginArea(
-                new Rect(left, ToolbarHeight, InspectorWidth, Screen.height - ToolbarHeight - 30f),
+                new Rect(
+                    left,
+                    LevelEditorGuiMetrics.ToolbarHeight,
+                    LevelEditorGuiMetrics.InspectorWidth,
+                    Screen.height
+                    - LevelEditorGuiMetrics.ToolbarHeight
+                    - LevelEditorGuiMetrics.StatusBarHeight),
                 GUI.skin.box);
             inspectorScroll = GUILayout.BeginScrollView(inspectorScroll);
             DrawSectionHeader("INSPECTOR");
@@ -939,7 +833,11 @@ namespace GritGud.Presentation.LevelEditing.UI
             {
                 GUILayout.Label(selectedView.Archetype.DisplayName);
                 GUILayout.Label($"ID: {selection.PrimaryEntityId}");
-                LevelEntity entity = workspace.FindEntitySnapshot(selection.PrimaryEntityId);
+                LevelEntity entity = state.Document.entities.FirstOrDefault(candidate =>
+                    string.Equals(
+                        candidate?.id,
+                        selection.PrimaryEntityId,
+                        StringComparison.Ordinal));
                 LevelSelectionTarget? primary = selection.Primary;
                 if (selection.Targets.Count > 1)
                 {
@@ -952,7 +850,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 DrawLabeledField("Yaw", ref yawText);
                 if (GUILayout.Button("APPLY", PanelPrimaryButtonLayout()))
                 {
-                    applyTransform(xText, yText, zText, yawText);
+                    actions.ApplyEntityTransform(xText, yText, zText, yawText);
                 }
 
                 GUILayout.BeginHorizontal();
@@ -968,7 +866,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 }
                 GUILayout.EndHorizontal();
                 Color previous = GUI.backgroundColor;
-                GUI.backgroundColor = DestructiveControlColor;
+                GUI.backgroundColor = LevelEditorTheme.Destructive;
                 if (GUILayout.Button("DELETE", PanelPrimaryButtonLayout()))
                 {
                     selectionTool.DeleteSelection();
@@ -976,10 +874,10 @@ namespace GritGud.Presentation.LevelEditing.UI
                 GUI.backgroundColor = previous;
 
                 GUILayout.Space(12f);
-                DrawInteractionInspector(entity, primary);
+                DrawInteractionInspector(entity, primary, state.Document.scenario);
                 DrawDestructibleInspector(selectedView, entity);
-                DrawScenarioPropInspector(selectedView, entity);
-                DrawScenarioVehicleInspector(selectedView, entity);
+                DrawScenarioPropInspector(selectedView, entity, state.Document.scenario);
+                DrawScenarioVehicleInspector(selectedView, entity, state.Document.scenario);
             }
 
             GUILayout.Space(16f);
@@ -999,7 +897,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                     }
                     else if (GUILayout.Button(issueText))
                     {
-                        focusEntity(issue.EntityId);
+                        actions.FocusEntity(issue.EntityId);
                     }
                 }
 
@@ -1035,7 +933,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawLabeledField("Yaw", ref playerStartYawText);
             if (GUILayout.Button("SET START", PanelButtonLayout()))
             {
-                applyPlayerStart(
+                actions.ApplyPlayerStart(
                     playerStartXText,
                     playerStartYText,
                     playerStartZText,
@@ -1045,7 +943,10 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.Space(12f);
         }
 
-        private void DrawInteractionInspector(LevelEntity entity, LevelSelectionTarget? primary)
+        private void DrawInteractionInspector(
+            LevelEntity entity,
+            LevelSelectionTarget? primary,
+            LevelScenarioData scenario)
         {
             DrawSectionHeader("INTERACTION POINTS");
             if (entity == null)
@@ -1071,7 +972,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                     DrawLabeledField("Radius", ref interactionRadiusText);
                     if (GUILayout.Button("APPLY POINT", PanelButtonLayout()))
                     {
-                        applyInteractionPoint(
+                        actions.ApplyInteractionPoint(
                             interactionType,
                             interactionXText,
                             interactionYText,
@@ -1080,20 +981,20 @@ namespace GritGud.Presentation.LevelEditing.UI
                     }
 
                     Color previous = GUI.backgroundColor;
-                    GUI.backgroundColor = DestructiveControlColor;
+                    GUI.backgroundColor = LevelEditorTheme.Destructive;
                     if (GUILayout.Button("REMOVE POINT", PanelButtonLayout()))
                     {
-                        deleteInteractionPoint();
+                        actions.DeleteInteractionPoint();
                     }
                     GUI.backgroundColor = previous;
-                    DrawScenarioObjectiveInspector(entity, point);
+                    DrawScenarioObjectiveInspector(entity, point, scenario);
                     return;
                 }
             }
 
             if (GUILayout.Button("+ POINT", PanelButtonLayout()))
             {
-                addInteractionPoint();
+                actions.AddInteractionPoint();
             }
             GUILayout.Label("Select a pink world handle to edit an existing point.");
         }
@@ -1138,19 +1039,22 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawLabeledField("Integrity", ref destructibleIntegrity);
             if (GUILayout.Button("APPLY DAMAGE", PanelButtonLayout()))
             {
-                applyDestructibleDefaults(
+                actions.ApplyDestructibleDefaults(
                     destructibleEnabled ? "true" : "false",
                     destructibleState,
                     destructibleIntegrity);
             }
         }
 
-        private void DrawScenarioPropInspector(LevelEntityView view, LevelEntity entity)
+        private void DrawScenarioPropInspector(
+            LevelEntityView view,
+            LevelEntity entity,
+            LevelScenarioData scenario)
         {
             if ((view.Archetype.Capabilities & LevelArchetypeCapabilities.Destructible) == 0)
                 return;
 
-            LevelScenarioPropData configured = workspace.CreateSnapshot().scenario.props
+            LevelScenarioPropData configured = scenario.props
                 .FirstOrDefault(prop => string.Equals(
                     prop?.entityId,
                     entity.id,
@@ -1189,7 +1093,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUI.enabled = true;
             if (GUILayout.Button("APPLY PROP", PanelButtonLayout()))
             {
-                applyScenarioProp(
+                actions.ApplyScenarioProp(
                     entity.id,
                     scenarioPropEnabled,
                     scenarioPropMassText,
@@ -1200,10 +1104,11 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         private void DrawScenarioObjectiveInspector(
             LevelEntity entity,
-            InteractionPointData point)
+            InteractionPointData point,
+            LevelScenarioData scenario)
         {
             string key = entity.id + ":" + point.id;
-            LevelScenarioObjectiveData configured = workspace.CreateSnapshot().scenario.objectives
+            LevelScenarioObjectiveData configured = scenario.objectives
                 .FirstOrDefault(objective =>
                     string.Equals(objective?.entityId, entity.id, StringComparison.Ordinal)
                     && string.Equals(
@@ -1241,7 +1146,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUI.enabled = true;
             if (GUILayout.Button("APPLY GOAL", PanelButtonLayout()))
             {
-                applyScenarioObjective(
+                actions.ApplyScenarioObjective(
                     entity.id,
                     point.id,
                     scenarioObjectiveEnabled,
@@ -1254,12 +1159,15 @@ namespace GritGud.Presentation.LevelEditing.UI
                 GUILayout.Label("Set point type to Objective to enable this link.");
         }
 
-        private void DrawScenarioVehicleInspector(LevelEntityView view, LevelEntity entity)
+        private void DrawScenarioVehicleInspector(
+            LevelEntityView view,
+            LevelEntity entity,
+            LevelScenarioData scenario)
         {
             if ((view.Archetype.Capabilities & LevelArchetypeCapabilities.Vehicle) == 0)
                 return;
 
-            LevelScenarioVehicleData configured = workspace.CreateSnapshot().scenario.vehicles
+            LevelScenarioVehicleData configured = scenario.vehicles
                 .FirstOrDefault(vehicle => string.Equals(
                     vehicle?.entityId,
                     entity.id,
@@ -1310,7 +1218,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUI.enabled = true;
             if (GUILayout.Button("APPLY VEHICLE", PanelButtonLayout()))
             {
-                applyScenarioVehicle(
+                actions.ApplyScenarioVehicle(
                     entity.id,
                     scenarioVehicleEnabled,
                     scenarioVehicleMaximumSpeedText,
@@ -1366,10 +1274,12 @@ namespace GritGud.Presentation.LevelEditing.UI
         {
             GUILayout.BeginArea(
                 new Rect(
-                    PaletteWidth,
-                    Screen.height - 30f,
-                    Screen.width - PaletteWidth - InspectorWidth,
-                    30f),
+                    LevelEditorGuiMetrics.LeftPanelWidth,
+                    Screen.height - LevelEditorGuiMetrics.StatusBarHeight,
+                    Screen.width
+                    - LevelEditorGuiMetrics.LeftPanelWidth
+                    - LevelEditorGuiMetrics.InspectorWidth,
+                    LevelEditorGuiMetrics.StatusBarHeight),
                 GUI.skin.box);
             GUILayout.Label(statusMessage ?? string.Empty);
             GUILayout.EndArea();
@@ -1378,39 +1288,43 @@ namespace GritGud.Presentation.LevelEditing.UI
         private static void DrawLabeledField(string label, ref string value)
         {
             GUILayout.BeginHorizontal();
-            GUILayout.Label(label, GUILayout.Width(FieldLabelWidth));
+            GUILayout.Label(label, GUILayout.Width(LevelEditorGuiMetrics.FieldLabelWidth));
             value = GUILayout.TextField(value);
             GUILayout.EndHorizontal();
         }
 
         private static GUILayoutOption[] ToolbarButtonLayout(float width)
         {
-            return new[] { GUILayout.Width(width), GUILayout.Height(ToolbarControlHeight) };
+            return new[]
+            {
+                GUILayout.Width(width),
+                GUILayout.Height(LevelEditorGuiMetrics.ToolbarControlHeight),
+            };
         }
 
         private static GUILayoutOption[] PanelButtonLayout()
         {
-            return new[] { GUILayout.Height(PanelControlHeight) };
+            return new[] { GUILayout.Height(LevelEditorGuiMetrics.PanelControlHeight) };
         }
 
         private static GUILayoutOption[] PanelPrimaryButtonLayout()
         {
-            return new[] { GUILayout.Height(PanelPrimaryControlHeight) };
+            return new[] { GUILayout.Height(LevelEditorGuiMetrics.PanelPrimaryControlHeight) };
         }
 
         private static GUILayoutOption[] PanelCompactButtonLayout()
         {
-            return new[] { GUILayout.Height(PanelCompactControlHeight) };
+            return new[] { GUILayout.Height(LevelEditorGuiMetrics.PanelCompactControlHeight) };
         }
 
         private static GUILayoutOption[] PanelIconButtonLayout()
         {
-            return new[] { GUILayout.Height(PanelIconControlHeight) };
+            return new[] { GUILayout.Height(LevelEditorGuiMetrics.PanelIconControlHeight) };
         }
 
         private static GUILayoutOption[] PanelApplyButtonLayout()
         {
-            return new[] { GUILayout.Height(PanelApplyControlHeight) };
+            return new[] { GUILayout.Height(LevelEditorGuiMetrics.PanelApplyControlHeight) };
         }
 
         private void DrawSectionHeader(string label)
@@ -1430,12 +1344,12 @@ namespace GritGud.Presentation.LevelEditing.UI
                     alignment = TextAnchor.MiddleLeft,
                     fontStyle = FontStyle.Bold,
                     padding = new RectOffset(
-                        SectionHeaderLeftPadding,
-                        SectionHeaderVerticalPadding,
-                        SectionHeaderLeftPadding,
-                        SectionHeaderVerticalPadding),
+                        LevelEditorGuiMetrics.SectionHeaderLeftPadding,
+                        LevelEditorGuiMetrics.SectionHeaderRightPadding,
+                        LevelEditorGuiMetrics.SectionHeaderVerticalPadding,
+                        LevelEditorGuiMetrics.SectionHeaderVerticalPadding),
                 };
-                sectionHeaderStyle.normal.textColor = SectionHeaderTextColor;
+                sectionHeaderStyle.normal.textColor = LevelEditorTheme.SectionHeaderText;
                 return sectionHeaderStyle;
             }
         }

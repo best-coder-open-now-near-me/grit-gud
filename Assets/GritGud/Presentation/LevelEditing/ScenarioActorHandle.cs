@@ -73,10 +73,10 @@ namespace GritGud.Presentation.LevelEditing
             Renderer renderer = handle.GetComponent<Renderer>();
             var materialProperties = new MaterialPropertyBlock();
             Color color = actor.playerControlled
-                ? new Color(0.15f, 0.65f, 1f)
+                ? LevelEditorTheme.PlayerActor
                 : actor.primaryTarget
-                    ? new Color(1f, 0.22f, 0.15f)
-                    : new Color(1f, 0.62f, 0.15f);
+                    ? LevelEditorTheme.PrimaryTargetActor
+                    : LevelEditorTheme.EnemyActor;
             materialProperties.SetColor("_Color", color);
             materialProperties.SetColor("_BaseColor", color);
             renderer.SetPropertyBlock(materialProperties);

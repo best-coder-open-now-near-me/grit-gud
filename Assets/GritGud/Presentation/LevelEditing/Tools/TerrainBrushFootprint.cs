@@ -40,8 +40,8 @@ namespace GritGud.Presentation.LevelEditing.Tools
             line.positionCount = points.Length;
             line.SetPositions(points);
             Color color = lower
-                ? new Color(1f, 0.35f, 0.2f)
-                : new Color(0.3f, 1f, 0.45f);
+                ? LevelEditorTheme.LowerTerrain
+                : LevelEditorTheme.RaiseTerrain;
             line.startColor = line.endColor = color;
             if (material != null)
             {

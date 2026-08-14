@@ -82,7 +82,7 @@ namespace GritGud.Presentation.LevelEditing
             marker.Initialize(entityId, point);
             Renderer renderer = handle.GetComponent<Renderer>();
             var materialProperties = new MaterialPropertyBlock();
-            Color color = new Color(1f, 0.35f, 0.9f);
+            Color color = LevelEditorTheme.InteractionPoint;
             materialProperties.SetColor("_Color", color);
             materialProperties.SetColor("_BaseColor", color);
             renderer.SetPropertyBlock(materialProperties);
