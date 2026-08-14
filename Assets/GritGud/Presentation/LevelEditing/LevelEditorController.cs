@@ -5,6 +5,7 @@ using System.Linq;
 using GritGud.Application.Levels;
 using GritGud.Domain.Levels;
 using GritGud.Presentation.Bootstrap;
+using GritGud.Presentation.Gameplay;
 using GritGud.Presentation.LevelEditing.Core;
 using GritGud.Presentation.LevelEditing.Persistence;
 using GritGud.Presentation.LevelEditing.Tools;
@@ -80,8 +81,9 @@ namespace GritGud.Presentation.LevelEditing
             sourceLabel = string.IsNullOrWhiteSpace(initialSourceLabel)
                 ? initialDocument.displayName
                 : initialSourceLabel.Trim();
-            catalog = LevelArchetypeCatalog.LoadDefault();
-            scenarioCatalog = ScenarioAuthoringCatalog.LoadDefault();
+            GameplayContentPackage defaultContent = GameplayContentLoader.LoadDefault();
+            catalog = defaultContent.Archetypes;
+            scenarioCatalog = ScenarioAuthoringCatalog.Create(defaultContent.Scenario);
             LevelTextTransfer textTransfer = GetComponent<LevelTextTransfer>();
             if (textTransfer == null)
             {
@@ -92,7 +94,7 @@ namespace GritGud.Presentation.LevelEditing
                 new UnityLevelJsonSerializer(),
                 new PlayerPrefsLevelDraftStore(),
                 textTransfer,
-                catalog);
+                defaultContent.ValidationContent);
             persistence.DocumentLoaded += HandleDocumentLoaded;
             persistence.StatusChanged += SetStatus;
             Camera sceneCamera = Camera.main;
@@ -103,7 +105,7 @@ namespace GritGud.Presentation.LevelEditing
 
             workspace = new LevelEditorWorkspace(
                 sourceDocument.DeepCopy(),
-                catalog.CreateKnownIdSet());
+                defaultContent.ValidationContent);
             viewDocument = workspace.CreateSnapshot();
             workspace.Changed += HandleWorkspaceChanged;
             selection = new LevelSelectionModel();
@@ -363,17 +365,6 @@ namespace GritGud.Presentation.LevelEditing
             if (LevelValidator.HasErrors(workspace.Validate(LevelValidationProfile.Publish)))
             {
                 SetStatus("Fix publish validation errors before test play.");
-                return;
-            }
-
-            LevelScenarioActorData unavailableTemplate = snapshot.scenario.actors
-                .FirstOrDefault(actor => actor != null
-                    && !scenarioCatalog.ContainsActor(actor.templateId));
-            if (unavailableTemplate != null)
-            {
-                SetStatus(
-                    $"Actor '{unavailableTemplate.id}' uses unavailable template "
-                    + $"'{unavailableTemplate.templateId}'.");
                 return;
             }
 

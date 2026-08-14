@@ -1,4 +1,5 @@
 using GritGud.Application.Levels;
+using GritGud.Presentation.Gameplay;
 using GritGud.Presentation.Levels;
 using NUnit.Framework;
 
@@ -23,6 +24,8 @@ namespace GritGud.Presentation.Tests
                     entry.CanPlay,
                     Is.True,
                     $"{entry.ResourceKey}: {entry.StatusMessage}");
+                Assert.DoesNotThrow(() => GameplayContentLoader.LoadCommitted(
+                    library.OpenForPlay(entry.ResourceKey)));
             }
         }
 

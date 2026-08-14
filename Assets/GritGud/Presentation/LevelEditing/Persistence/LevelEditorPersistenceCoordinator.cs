@@ -4,7 +4,6 @@ using GritGud.Application.Levels;
 using GritGud.Domain.Levels;
 using GritGud.Presentation.Levels;
 using GritGud.Presentation.Levels.Persistence;
-using GritGud.Presentation.Levels.Runtime;
 
 namespace GritGud.Presentation.LevelEditing.Persistence
 {
@@ -28,21 +27,20 @@ namespace GritGud.Presentation.LevelEditing.Persistence
         private readonly UnityLevelJsonSerializer serializer;
         private readonly ILevelDraftStore draftStore;
         private readonly LevelTextTransfer textTransfer;
-        private readonly LevelArchetypeCatalog catalog;
+        private readonly LevelValidationContent validationContent;
         private bool disposed;
 
         public LevelEditorPersistenceCoordinator(
             UnityLevelJsonSerializer serializer,
             ILevelDraftStore draftStore,
             LevelTextTransfer textTransfer,
-            LevelArchetypeCatalog catalog)
+            LevelValidationContent validationContent)
         {
             this.serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             this.draftStore = draftStore ?? throw new ArgumentNullException(nameof(draftStore));
             this.textTransfer = textTransfer ?? throw new ArgumentNullException(nameof(textTransfer));
-            this.catalog = catalog != null
-                ? catalog
-                : throw new ArgumentNullException(nameof(catalog));
+            this.validationContent = validationContent
+                ?? throw new ArgumentNullException(nameof(validationContent));
             textTransfer.ImportCompleted += HandleImportedText;
             textTransfer.ImportFailed += HandleImportFailure;
         }
@@ -70,9 +68,9 @@ namespace GritGud.Presentation.LevelEditing.Persistence
         public void SaveDraft(LevelEditorWorkspace workspace)
         {
             ThrowIfDisposed();
-            if (!CanPublish(workspace, "saving the draft"))
+            if (workspace == null)
             {
-                return;
+                throw new ArgumentNullException(nameof(workspace));
             }
 
             try
@@ -92,7 +90,10 @@ namespace GritGud.Presentation.LevelEditing.Persistence
             ThrowIfDisposed();
             try
             {
-                AdoptSerializedDocument(draftStore.LoadDraft(DraftSlot), "draft");
+                AdoptSerializedDocument(
+                    draftStore.LoadDraft(DraftSlot),
+                    "draft",
+                    requireAuthoringValidity: false);
             }
             catch (Exception exception)
             {
@@ -170,7 +171,10 @@ namespace GritGud.Presentation.LevelEditing.Persistence
         {
             try
             {
-                AdoptSerializedDocument(text, "import");
+                AdoptSerializedDocument(
+                    text,
+                    "import",
+                    requireAuthoringValidity: true);
             }
             catch (Exception exception)
             {
@@ -183,20 +187,26 @@ namespace GritGud.Presentation.LevelEditing.Persistence
             Report(message);
         }
 
-        private void AdoptSerializedDocument(string text, string sourceLabel)
+        private void AdoptSerializedDocument(
+            string text,
+            string sourceLabel,
+            bool requireAuthoringValidity)
         {
             LevelDocument imported = serializer.Deserialize(text);
-            var issues = LevelValidator.Validate(
-                imported,
-                catalog.CreateKnownIdSet(),
-                LevelValidationProfile.Authoring);
-            if (LevelValidator.HasErrors(issues))
+            if (requireAuthoringValidity)
             {
-                string firstError = issues
-                    .First(issue => issue.Severity == LevelValidationSeverity.Error)
-                    .Message;
-                throw new LevelSerializationException(
-                    $"The {sourceLabel} was not loaded: {firstError}");
+                var issues = LevelValidator.Validate(
+                    imported,
+                    validationContent,
+                    LevelValidationProfile.Authoring);
+                if (LevelValidator.HasErrors(issues))
+                {
+                    string firstError = issues
+                        .First(issue => issue.Severity == LevelValidationSeverity.Error)
+                        .Message;
+                    throw new LevelSerializationException(
+                        $"The {sourceLabel} was not loaded: {firstError}");
+                }
             }
 
             DocumentLoaded?.Invoke(

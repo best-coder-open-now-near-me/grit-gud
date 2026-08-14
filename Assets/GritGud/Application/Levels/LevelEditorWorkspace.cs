@@ -22,16 +22,22 @@ namespace GritGud.Application.Levels
     public sealed class LevelEditorWorkspace : IDisposable
     {
         private readonly LevelSession session;
-        private readonly ISet<string> knownArchetypeIds;
+        private readonly LevelValidationContent validationContent;
         private IReadOnlyList<LevelValidationIssue> validationIssues;
         private bool disposed;
 
         public LevelEditorWorkspace(LevelDocument document, ISet<string> knownArchetypeIds = null)
+            : this(document, new LevelValidationContent(knownArchetypeIds))
+        {
+        }
+
+        public LevelEditorWorkspace(
+            LevelDocument document,
+            LevelValidationContent validationContent)
         {
             session = new LevelSession(document);
-            this.knownArchetypeIds = knownArchetypeIds == null
-                ? null
-                : new HashSet<string>(knownArchetypeIds, StringComparer.Ordinal);
+            this.validationContent = validationContent
+                ?? throw new ArgumentNullException(nameof(validationContent));
             validationIssues = Validate(LevelValidationProfile.Authoring);
             session.Changed += HandleSessionChanged;
         }
@@ -105,7 +111,7 @@ namespace GritGud.Application.Levels
         public IReadOnlyList<LevelValidationIssue> Validate(LevelValidationProfile profile)
         {
             ThrowIfDisposed();
-            return LevelValidator.Validate(session.CreateSnapshot(), knownArchetypeIds, profile);
+            return LevelValidator.Validate(session.CreateSnapshot(), validationContent, profile);
         }
 
         public void Dispose()

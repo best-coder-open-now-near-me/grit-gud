@@ -1,6 +1,6 @@
 using System.Linq;
 using GritGud.Application.Levels;
-using GritGud.Presentation.Levels.Runtime;
+using GritGud.Presentation.Gameplay;
 using UnityEngine;
 
 namespace GritGud.Presentation.Levels
@@ -13,7 +13,7 @@ namespace GritGud.Presentation.Levels
 
         public static CommittedLevelLibrary LoadDefault()
         {
-            LevelArchetypeCatalog catalog = LevelArchetypeCatalog.LoadDefault();
+            GameplayContentPackage content = GameplayContentLoader.LoadDefault();
             CommittedLevelSource[] sources = Resources
                 .LoadAll<TextAsset>(PublishedResourceFolder)
                 .Select(asset => new CommittedLevelSource(
@@ -24,7 +24,7 @@ namespace GritGud.Presentation.Levels
             return new CommittedLevelLibrary(
                 sources,
                 new UnityLevelJsonSerializer(),
-                catalog.CreateKnownIdSet());
+                content.ValidationContent);
         }
     }
 }

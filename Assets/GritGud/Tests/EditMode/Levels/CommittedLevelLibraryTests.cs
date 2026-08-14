@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using GritGud.Application.Levels;
 using GritGud.Domain.Levels;
 using NUnit.Framework;
@@ -20,7 +21,8 @@ namespace GritGud.Domain.Tests.Levels
                     new CommittedLevelSource("levels/bravo", "bravo", "bravo"),
                     new CommittedLevelSource("levels/alpha", "alpha", "alpha"),
                 },
-                serializer);
+                serializer,
+                CreateValidationContent());
 
             Assert.That(library.Entries[0].DisplayName, Is.EqualTo("Alpha"));
             Assert.That(library.Entries[1].DisplayName, Is.EqualTo("Bravo"));
@@ -44,7 +46,8 @@ namespace GritGud.Domain.Tests.Levels
                     new CommittedLevelSource("levels/broken", "Broken", "broken"),
                     new CommittedLevelSource("levels/valid", "Valid", "valid"),
                 },
-                serializer);
+                serializer,
+                CreateValidationContent());
 
             CommittedLevelEntry broken = library.Find("levels/broken");
             Assert.That(broken, Is.Not.Null);
@@ -66,7 +69,8 @@ namespace GritGud.Domain.Tests.Levels
                     new CommittedLevelSource("levels/one", "One", "one"),
                     new CommittedLevelSource("levels/two", "Two", "two"),
                 },
-                serializer);
+                serializer,
+                CreateValidationContent());
 
             Assert.That(library.Entries.Count, Is.EqualTo(2));
             Assert.That(library.Entries[0].CanEdit, Is.False);
@@ -76,11 +80,45 @@ namespace GritGud.Domain.Tests.Levels
                 () => library.OpenForPlay("levels/one"));
         }
 
+        [Test]
+        public void UnknownActorTemplateRemainsEditableButCannotPlay()
+        {
+            LevelDocument document = CreateLevel("unknown-template", "Unknown Template");
+            document.scenario.actors[0].templateId = "missing-template";
+            var serializer = new StubSerializer(("level", document));
+            var library = new CommittedLevelLibrary(
+                new[]
+                {
+                    new CommittedLevelSource("levels/unknown", "Unknown", "level"),
+                },
+                serializer,
+                CreateValidationContent());
+
+            CommittedLevelEntry entry = library.Entries.Single();
+
+            Assert.That(entry.CanEdit, Is.True);
+            Assert.That(entry.CanPlay, Is.False);
+            Assert.That(
+                entry.PublishIssues,
+                Has.Some.Matches<LevelValidationIssue>(issue =>
+                    issue.Code == "scenario.actor.template.unknown"));
+        }
+
         private static LevelDocument CreateLevel(string id, string displayName)
         {
             LevelDocument document = LevelDocumentFactory.CreateEmpty(displayName);
             document.levelId = id;
             return document;
+        }
+
+        private static LevelValidationContent CreateValidationContent()
+        {
+            return new LevelValidationContent(
+                actorPresentationsByTemplateId: new[]
+                {
+                    new KeyValuePair<string, string>("player", "actor.player.default"),
+                },
+                knownActorPresentationIds: new[] { "actor.player.default" });
         }
 
         private sealed class StubSerializer : ILevelSerializer

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using GritGud.Domain.Gameplay;
-using UnityEngine;
+using GritGud.Presentation.Gameplay;
 
 namespace GritGud.Presentation.LevelEditing
 {
@@ -31,8 +31,6 @@ namespace GritGud.Presentation.LevelEditing
 
     public sealed class ScenarioAuthoringCatalog
     {
-        internal const string DefaultTemplateResource = "Scenarios/depot-yard";
-
         private readonly Dictionary<string, ScenarioActorTemplateDefinition> actors;
 
         private ScenarioAuthoringCatalog(
@@ -51,17 +49,17 @@ namespace GritGud.Presentation.LevelEditing
 
         public static ScenarioAuthoringCatalog LoadDefault()
         {
-            TextAsset asset = Resources.Load<TextAsset>(DefaultTemplateResource);
-            if (asset == null)
+            return Create(GameplayContentLoader.LoadDefault().Scenario);
+        }
+
+        internal static ScenarioAuthoringCatalog Create(
+            ScenarioContentDocument document)
+        {
+            if (document == null)
             {
-                throw new InvalidOperationException(
-                    $"Scenario actor templates '{DefaultTemplateResource}' were not found.");
+                throw new ArgumentNullException(nameof(document));
             }
 
-            ScenarioContentDocument document =
-                JsonUtility.FromJson<ScenarioContentDocument>(asset.text)
-                ?? throw new InvalidOperationException(
-                    $"Scenario actor templates '{DefaultTemplateResource}' are invalid JSON.");
             document.Normalize();
             var playerTemplateIds = new HashSet<string>(
                 document.playerParty.actorIds,

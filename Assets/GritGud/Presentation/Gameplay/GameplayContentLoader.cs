@@ -37,6 +37,14 @@ namespace GritGud.Presentation.Gameplay
             Archetypes = archetypes;
             ActorPresentations = actorPresentations;
             Assembly = assembly;
+            ValidationContent = new LevelValidationContent(
+                archetypes.CreateKnownIdSet(),
+                scenario.actors
+                    .Where(actor => actor != null && !string.IsNullOrWhiteSpace(actor.id))
+                    .Select(actor => new KeyValuePair<string, string>(
+                        actor.id,
+                        actor.presentationId)),
+                actorPresentations.CreateKnownIdSet());
             IsSandbox = isSandbox;
         }
 
@@ -51,6 +59,9 @@ namespace GritGud.Presentation.Gameplay
         public ActorPresentationCatalog ActorPresentations { get; }
 
         public GameplayScenarioAssembly Assembly { get; }
+
+        public LevelValidationContent ValidationContent { get; }
+
         public bool IsSandbox { get; }
     }
 

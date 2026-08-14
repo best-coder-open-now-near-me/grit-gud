@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Collections.Generic;
 using GritGud.Application.Levels;
 using GritGud.Domain.Levels;
 using NUnit.Framework;
@@ -138,6 +139,56 @@ namespace GritGud.Domain.Tests.Levels
             Assert.That(publishIssues.Single().Code, Is.EqualTo("test.publish"));
         }
 
+        [Test]
+        public void UnknownActorTemplateWarnsDuringAuthoringAndBlocksPublish()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            document.scenario.actors[0].templateId = "missing-template";
+            LevelValidationContent content = CreateValidationContent();
+
+            var authoringIssues = LevelValidator.Validate(
+                document,
+                content,
+                LevelValidationProfile.Authoring);
+            var publishIssues = LevelValidator.Validate(
+                document,
+                content,
+                LevelValidationProfile.Publish);
+
+            Assert.That(
+                authoringIssues.Single(issue =>
+                    issue.Code == "scenario.actor.template.unknown").Severity,
+                Is.EqualTo(LevelValidationSeverity.Warning));
+            Assert.That(LevelValidator.HasErrors(authoringIssues), Is.False);
+            Assert.That(
+                publishIssues.Single(issue =>
+                    issue.Code == "scenario.actor.template.unknown").Severity,
+                Is.EqualTo(LevelValidationSeverity.Error));
+        }
+
+        [Test]
+        public void UnavailableActorPresentationBlocksPublish()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            var content = new LevelValidationContent(
+                actorPresentationsByTemplateId: new[]
+                {
+                    new KeyValuePair<string, string>("player", "presentation.missing"),
+                },
+                knownActorPresentationIds: new[] { "presentation.available" });
+
+            var issues = LevelValidator.Validate(
+                document,
+                content,
+                LevelValidationProfile.Publish);
+
+            Assert.That(
+                issues,
+                Has.Some.Matches<LevelValidationIssue>(issue =>
+                    issue.Code == "scenario.actor.presentation.unknown"
+                    && issue.Severity == LevelValidationSeverity.Error));
+        }
+
         private sealed class PublishMarkerRule : ILevelValidationRule
         {
             public void Evaluate(LevelValidationContext context)
@@ -147,6 +198,16 @@ namespace GritGud.Domain.Tests.Levels
                     context.Warning("test.publish", "Publish validation ran.");
                 }
             }
+        }
+
+        private static LevelValidationContent CreateValidationContent()
+        {
+            return new LevelValidationContent(
+                actorPresentationsByTemplateId: new[]
+                {
+                    new KeyValuePair<string, string>("player", "actor.player.default"),
+                },
+                knownActorPresentationIds: new[] { "actor.player.default" });
         }
 
         private static LevelEntity CreateEntity(string id)

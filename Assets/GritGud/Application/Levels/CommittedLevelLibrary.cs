@@ -138,7 +138,7 @@ namespace GritGud.Application.Levels
         public CommittedLevelLibrary(
             IEnumerable<CommittedLevelSource> sources,
             ILevelSerializer serializer,
-            ISet<string> knownArchetypeIds = null)
+            LevelValidationContent validationContent)
         {
             if (sources == null)
             {
@@ -150,9 +150,16 @@ namespace GritGud.Application.Levels
                 throw new ArgumentNullException(nameof(serializer));
             }
 
+            if (validationContent?.HasActorTemplateCatalog != true)
+            {
+                throw new ArgumentException(
+                    "Committed levels require an actor-template validation catalog.",
+                    nameof(validationContent));
+            }
+
             Candidate[] candidates = sources
                 .Where(source => source != null)
-                .Select(source => BuildCandidate(source, serializer, knownArchetypeIds))
+                .Select(source => BuildCandidate(source, serializer, validationContent))
                 .ToArray();
             RejectDuplicateResourceKeys(candidates);
             RejectDuplicateLevelIds(candidates);
@@ -210,7 +217,7 @@ namespace GritGud.Application.Levels
         private static Candidate BuildCandidate(
             CommittedLevelSource source,
             ILevelSerializer serializer,
-            ISet<string> knownArchetypeIds)
+            LevelValidationContent validationContent)
         {
             var candidate = new Candidate { Source = source };
             try
@@ -218,11 +225,11 @@ namespace GritGud.Application.Levels
                 candidate.Document = serializer.Deserialize(source.SerializedDocument);
                 candidate.AuthoringIssues = LevelValidator.Validate(
                     candidate.Document,
-                    knownArchetypeIds,
+                    validationContent,
                     LevelValidationProfile.Authoring);
                 candidate.PublishIssues = LevelValidator.Validate(
                     candidate.Document,
-                    knownArchetypeIds,
+                    validationContent,
                     LevelValidationProfile.Publish);
             }
             catch (LevelSerializationException exception)

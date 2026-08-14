@@ -46,19 +46,21 @@ namespace GritGud.Domain.Levels
 
         internal LevelValidationContext(
             LevelDocument document,
-            ISet<string> knownArchetypeIds,
+            LevelValidationContent content,
             LevelValidationProfile profile,
             ICollection<LevelValidationIssue> issues)
         {
             Document = document ?? throw new ArgumentNullException(nameof(document));
-            KnownArchetypeIds = knownArchetypeIds;
+            Content = content;
             Profile = profile;
             this.issues = issues ?? throw new ArgumentNullException(nameof(issues));
         }
 
         public LevelDocument Document { get; }
 
-        public ISet<string> KnownArchetypeIds { get; }
+        public LevelValidationContent Content { get; }
+
+        public ISet<string> KnownArchetypeIds => Content?.KnownArchetypeIds;
 
         public LevelValidationProfile Profile { get; }
 
@@ -102,6 +104,17 @@ namespace GritGud.Domain.Levels
             ISet<string> knownArchetypeIds = null,
             LevelValidationProfile profile = LevelValidationProfile.Authoring)
         {
+            return Validate(
+                source,
+                new LevelValidationContent(knownArchetypeIds),
+                profile);
+        }
+
+        public IReadOnlyList<LevelValidationIssue> Validate(
+            LevelDocument source,
+            LevelValidationContent content,
+            LevelValidationProfile profile = LevelValidationProfile.Authoring)
+        {
             var issues = new List<LevelValidationIssue>();
             if (source == null)
             {
@@ -114,7 +127,7 @@ namespace GritGud.Domain.Levels
 
             LevelDocument document = source.DeepCopy();
             document.Normalize();
-            var context = new LevelValidationContext(document, knownArchetypeIds, profile, issues);
+            var context = new LevelValidationContext(document, content, profile, issues);
             foreach (ILevelValidationRule rule in rules)
             {
                 rule.Evaluate(context);
@@ -144,6 +157,14 @@ namespace GritGud.Domain.Levels
             LevelValidationProfile profile = LevelValidationProfile.Authoring)
         {
             return DefaultService.Validate(document, knownArchetypeIds, profile);
+        }
+
+        public static IReadOnlyList<LevelValidationIssue> Validate(
+            LevelDocument document,
+            LevelValidationContent content,
+            LevelValidationProfile profile = LevelValidationProfile.Authoring)
+        {
+            return DefaultService.Validate(document, content, profile);
         }
 
         public static bool HasErrors(IReadOnlyList<LevelValidationIssue> issues)
@@ -317,6 +338,10 @@ namespace GritGud.Domain.Levels
                         "scenario.actor.template.missing",
                         $"Scenario actor '{actor.id}' needs an actor template.");
                 }
+                else
+                {
+                    ValidateActorTemplate(context, actor);
+                }
 
                 if (!LevelValidationMath.IsFinite(actor.transform.position)
                     || !LevelValidationMath.IsFinite(actor.transform.yawDegrees))
@@ -381,6 +406,65 @@ namespace GritGud.Domain.Levels
             }
 
             ValidateEntityLinks(context, scenario, actorIds);
+        }
+
+        private static void ValidateActorTemplate(
+            LevelValidationContext context,
+            LevelScenarioActorData actor)
+        {
+            LevelValidationContent content = context.Content;
+            if (content?.HasActorTemplateCatalog != true)
+            {
+                return;
+            }
+
+            if (!content.TryGetActorPresentationId(
+                    actor.templateId,
+                    out string presentationId))
+            {
+                ReportRuntimeContentIssue(
+                    context,
+                    "scenario.actor.template.unknown",
+                    $"Scenario actor '{actor.id}' references unavailable template "
+                    + $"'{actor.templateId}'.",
+                    actor.id);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(presentationId))
+            {
+                ReportRuntimeContentIssue(
+                    context,
+                    "scenario.actor.presentation.missing",
+                    $"Actor template '{actor.templateId}' does not define a presentation.",
+                    actor.id);
+            }
+            else if (content.HasActorPresentationCatalog
+                && !content.KnownActorPresentationIds.Contains(presentationId))
+            {
+                ReportRuntimeContentIssue(
+                    context,
+                    "scenario.actor.presentation.unknown",
+                    $"Actor template '{actor.templateId}' references unavailable presentation "
+                    + $"'{presentationId}'.",
+                    actor.id);
+            }
+        }
+
+        private static void ReportRuntimeContentIssue(
+            LevelValidationContext context,
+            string code,
+            string message,
+            string actorId)
+        {
+            if (context.Profile == LevelValidationProfile.Authoring)
+            {
+                context.Warning(code, message, actorId);
+            }
+            else
+            {
+                context.Error(code, message, actorId);
+            }
         }
 
         private static void ValidateEntityLinks(
