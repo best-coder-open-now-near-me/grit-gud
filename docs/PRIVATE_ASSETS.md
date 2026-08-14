@@ -27,6 +27,8 @@ grit-gud/
     Input Sprites for TextMesh Pro/
     Kevin Iglesias.meta
     Kevin Iglesias/
+    Mixamo.meta
+    Mixamo/
     Modern GDR - Free icons pack.meta
     Modern GDR - Free icons pack/
     UCLAGameLab.meta
