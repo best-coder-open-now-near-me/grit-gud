@@ -39,6 +39,7 @@ An invalid import therefore leaves the currently loaded level untouched.
 | `F` | Frame the selected entity |
 | `Home` | Frame the authored level bounds |
 | Palette button, then left click | Place the selected archetype |
+| Palette ↺ / ↻ buttons | Rotate the active placement stamp left / right |
 | Left click | Select an entity |
 | `Ctrl` + left click | Add or remove an entity from the selection |
 | Left drag | Move the selected entity on its current elevation |

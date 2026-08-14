@@ -233,6 +233,9 @@ namespace GritGud.Presentation.LevelEditing.UI
                 DrawInspector(selectedView, validationIssues);
             }
 
+            if (showControls)
+                DrawShortcutsOverlay();
+
             DrawStatusBar(statusMessage);
         }
 
@@ -240,6 +243,14 @@ namespace GritGud.Presentation.LevelEditing.UI
         {
             float guiY = Screen.height - screenPosition.y;
             if (guiY <= ToolbarHeight || guiY >= Screen.height - 30f)
+            {
+                return true;
+            }
+
+            if (showControls
+                && guiY >= ToolbarHeight
+                && guiY <= ToolbarHeight + 170f
+                && screenPosition.x <= 490f)
             {
                 return true;
             }
@@ -384,8 +395,8 @@ namespace GritGud.Presentation.LevelEditing.UI
 
             GUI.enabled = true;
             if (GUILayout.Button(
-                showControls ? "HIDE HELP" : "CONTROLS",
-                GUILayout.Width(88f),
+                showControls ? "HIDE SHORTCUTS" : "SHORTCUTS",
+                GUILayout.Width(112f),
                 GUILayout.Height(30f)))
             {
                 showControls = !showControls;
@@ -485,20 +496,6 @@ namespace GritGud.Presentation.LevelEditing.UI
             }
             GUI.backgroundColor = previous;
 
-            if (showControls)
-            {
-                GUILayout.Space(6f);
-                GUILayout.Label("CAMERA", GUI.skin.box);
-                GUILayout.Label("WASD / arrows — pan (Shift: fast)");
-                GUILayout.Label("Right-drag — orbit; middle-drag — pan");
-                GUILayout.Label("Wheel — zoom; F — frame; Home — frame all");
-                GUILayout.Label("EDITING", GUI.skin.box);
-                GUILayout.Label("Click — select; Ctrl-click — add/remove");
-                GUILayout.Label("R — rotate; Delete — remove; Esc — cancel");
-                GUILayout.Label("Ctrl+C / Ctrl+V — copy / paste; Ctrl+D — duplicate");
-                GUILayout.Label("Ctrl+Z / Ctrl+Y — undo / redo");
-            }
-
             GUILayout.Space(8f);
             GUILayout.Label("TERRAIN HEIGHT");
             GUILayout.BeginHorizontal();
@@ -539,6 +536,19 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.Space(8f);
             GUILayout.Label("ARCHETYPES");
             GUILayout.Label("Choose a piece, then click in the world.");
+            if (toolManager.ActiveTool == placementTool && placementTool.Archetype != null)
+            {
+                GUILayout.Space(4f);
+                GUILayout.Label("ACTIVE STAMP", GUI.skin.box);
+                GUILayout.Label(
+                    $"{placementTool.Archetype.DisplayName} · {placementTool.YawDegrees:0.#}°");
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button("↺ ROTATE", GUILayout.Height(28f)))
+                    placementTool.RotatePreview(-1f);
+                if (GUILayout.Button("ROTATE ↻", GUILayout.Height(28f)))
+                    placementTool.RotatePreview();
+                GUILayout.EndHorizontal();
+            }
             GUILayout.BeginHorizontal();
             GUILayout.Label("Search", GUILayout.Width(50f));
             paletteSearch = GUILayout.TextField(paletteSearch ?? string.Empty);
@@ -621,6 +631,22 @@ namespace GritGud.Presentation.LevelEditing.UI
             if (GUILayout.Button(label, GUILayout.Height(30f)))
                 leftPanel = panel;
             GUI.backgroundColor = previous;
+        }
+
+        private void DrawShortcutsOverlay()
+        {
+            const float width = 480f;
+            const float height = 164f;
+            GUILayout.BeginArea(new Rect(8f, ToolbarHeight, width, height), GUI.skin.window);
+            GUILayout.Label("SHORTCUTS", GUI.skin.box);
+            GUILayout.Label("CAMERA  ·  WASD / arrows pan  ·  Shift moves faster");
+            GUILayout.Label("Middle-drag or right-drag orbit  ·  Wheel zoom");
+            GUILayout.Label("F frame selection  ·  Home frame level");
+            GUILayout.Space(4f);
+            GUILayout.Label("AUTHORING  ·  Click select/place  ·  Ctrl-click add/remove");
+            GUILayout.Label("R rotate stamp or selection  ·  Delete remove  ·  Esc cancel");
+            GUILayout.Label("Ctrl+C / Ctrl+V copy/paste  ·  Ctrl+D duplicate  ·  Ctrl+Z / Ctrl+Y undo/redo");
+            GUILayout.EndArea();
         }
 
         private void DrawScenario()
