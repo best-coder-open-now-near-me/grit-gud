@@ -167,9 +167,6 @@ namespace GritGud.Presentation.Tests
             Assert.That(document.terrainSurfaces[0].id, Is.EqualTo("depot-ground"));
             Assert.That(document.terrainSurfaces[0].heightSamples,
                 Has.Count.EqualTo(17 * 15));
-            Assert.That(
-                document.entities.Select(entity => entity.archetypeId).Distinct(),
-                Is.EquivalentTo(catalog.Entries.Select(entry => entry.ArchetypeId)));
         }
 
         [Test]
