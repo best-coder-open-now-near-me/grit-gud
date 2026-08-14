@@ -98,6 +98,8 @@ namespace GritGud.Presentation.LevelEditing.UI
         private string lastDestructibleEntityId = string.Empty;
         private string paletteSearch = string.Empty;
         private string paletteCategory = string.Empty;
+        private readonly HashSet<string> collapsedPaletteCategories =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private string hierarchySearch = string.Empty;
         private int leftPanel;
         private string selectedScenarioActorId = string.Empty;
@@ -556,7 +558,6 @@ namespace GritGud.Presentation.LevelEditing.UI
             }
             GUILayout.EndHorizontal();
 
-            string category = null;
             IReadOnlyList<LevelArchetypeDefinition> filteredEntries = catalog.Entries
                 .Where(MatchesPaletteFilter)
                 .ToArray();
@@ -565,30 +566,48 @@ namespace GritGud.Presentation.LevelEditing.UI
                 GUILayout.Label("No archetypes match this filter.");
             }
 
-            foreach (LevelArchetypeDefinition entry in filteredEntries)
+            bool searchIsActive = !string.IsNullOrWhiteSpace(paletteSearch);
+            foreach (IGrouping<string, LevelArchetypeDefinition> group in filteredEntries
+                .GroupBy(entry => string.IsNullOrWhiteSpace(entry.Category)
+                    ? "Uncategorized"
+                    : entry.Category, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase))
             {
-                if (!string.Equals(category, entry.Category, StringComparison.Ordinal))
+                string category = group.Key;
+                bool isCollapsed = collapsedPaletteCategories.Contains(category);
+                string header = $"{(isCollapsed ? \"▶\" : \"▼\")} {category.ToUpperInvariant()} ({group.Count()})";
+                GUILayout.Space(8f);
+                if (GUILayout.Button(header, GUI.skin.box, GUILayout.Height(26f)))
                 {
-                    category = entry.Category;
-                    GUILayout.Space(8f);
-                    GUILayout.Label(category.ToUpperInvariant());
+                    if (isCollapsed)
+                        collapsedPaletteCategories.Remove(category);
+                    else
+                        collapsedPaletteCategories.Add(category);
                 }
 
-                bool active = toolManager.ActiveTool == placementTool
-                    && ReferenceEquals(placementTool.Archetype, entry);
-                previous = GUI.backgroundColor;
-                if (active)
-                {
-                    GUI.backgroundColor = new Color(0.95f, 0.55f, 0.2f);
-                }
+                if (isCollapsed && !searchIsActive)
+                    continue;
 
-                if (GUILayout.Button(entry.DisplayName, GUILayout.Height(34f)))
+                foreach (LevelArchetypeDefinition entry in group.OrderBy(
+                    entry => entry.DisplayName,
+                    StringComparer.OrdinalIgnoreCase))
                 {
-                    placementTool.SelectArchetype(entry);
-                    toolManager.Activate(PlacementLevelEditorTool.ToolId);
-                }
+                    bool active = toolManager.ActiveTool == placementTool
+                        && ReferenceEquals(placementTool.Archetype, entry);
+                    previous = GUI.backgroundColor;
+                    if (active)
+                    {
+                        GUI.backgroundColor = new Color(0.95f, 0.55f, 0.2f);
+                    }
 
-                GUI.backgroundColor = previous;
+                    if (GUILayout.Button(entry.DisplayName, GUILayout.Height(34f)))
+                    {
+                        placementTool.SelectArchetype(entry);
+                        toolManager.Activate(PlacementLevelEditorTool.ToolId);
+                    }
+
+                    GUI.backgroundColor = previous;
+                }
             }
 
             GUILayout.EndScrollView();
