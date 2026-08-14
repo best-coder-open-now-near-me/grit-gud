@@ -171,6 +171,14 @@ namespace GritGud.Presentation.Gameplay
             return profile;
         }
 
+        public LevelLightingProfile GetOrAny(string levelId)
+        {
+            EnsureIndex();
+            return index.TryGetValue(levelId ?? string.Empty, out LevelLightingProfile profile)
+                ? profile
+                : GetAny();
+        }
+
         public LevelLightingProfile GetAny()
         {
             EnsureIndex();

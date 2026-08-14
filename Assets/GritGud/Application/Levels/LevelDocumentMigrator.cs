@@ -27,6 +27,7 @@ namespace GritGud.Application.Levels
                     new LevelDocumentV1ToV2Migration(),
                     new LevelDocumentV2ToV3Migration(),
                     new LevelDocumentV3ToV4Migration(),
+                    new LevelDocumentV4ToV5Migration(),
                 };
             }
 
@@ -178,6 +179,34 @@ namespace GritGud.Application.Levels
                 },
             };
             migrated.legacyPlaytest = null;
+            migrated.schemaVersion = TargetVersion;
+            return migrated;
+        }
+    }
+
+    public sealed class LevelDocumentV4ToV5Migration : ILevelDocumentMigration
+    {
+        public int SourceVersion => 4;
+
+        public int TargetVersion => 5;
+
+        public LevelDocument Migrate(LevelDocument source)
+        {
+            if (source == null)
+            {
+                throw new ArgumentNullException(nameof(source));
+            }
+
+            LevelDocument migrated = source.DeepCopy();
+            foreach (LevelScenarioObjectiveData objective in
+                migrated.scenario.objectives)
+            {
+                if (objective != null && string.IsNullOrWhiteSpace(objective.mobility))
+                {
+                    objective.mobility = "set";
+                }
+            }
+
             migrated.schemaVersion = TargetVersion;
             return migrated;
         }

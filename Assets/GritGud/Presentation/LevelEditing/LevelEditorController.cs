@@ -18,8 +18,6 @@ namespace GritGud.Presentation.LevelEditing
 {
     public sealed class LevelEditorController : MonoBehaviour, ILevelEditorGuiActions
     {
-        private const string MainLevelResourceName = "Levels/main-level";
-
         private LevelArchetypeCatalog catalog;
         private ScenarioAuthoringCatalog scenarioCatalog;
         private LevelEditorPersistenceCoordinator persistence;
@@ -51,13 +49,40 @@ namespace GritGud.Presentation.LevelEditing
             Array.Empty<LevelValidationIssue>();
         private bool previewMode;
         private bool suspended;
+        private LevelDocument sourceDocument;
+        private string sourceLabel = string.Empty;
         private string statusMessage = string.Empty;
 
         public void Begin(bool startInPreview)
         {
+            CommittedLevelLibrary levels = UnityCommittedLevelLibrary.LoadDefault();
+            CommittedLevelEntry entry = levels.Find(
+                UnityCommittedLevelLibrary.DefaultResourceKey)
+                ?? throw new InvalidOperationException(
+                    "The default committed level was not found.");
+            Begin(
+                startInPreview,
+                levels.OpenForEditing(entry.ResourceKey),
+                entry.DisplayName);
+        }
+
+        public void Begin(
+            bool startInPreview,
+            LevelDocument initialDocument,
+            string initialSourceLabel)
+        {
+            if (initialDocument == null)
+            {
+                throw new ArgumentNullException(nameof(initialDocument));
+            }
+
             EndSession();
             suspended = false;
             enabled = true;
+            sourceDocument = initialDocument.DeepCopy();
+            sourceLabel = string.IsNullOrWhiteSpace(initialSourceLabel)
+                ? initialDocument.displayName
+                : initialSourceLabel.Trim();
             catalog = LevelArchetypeCatalog.LoadDefault();
             scenarioCatalog = ScenarioAuthoringCatalog.LoadDefault();
             LevelTextTransfer textTransfer = GetComponent<LevelTextTransfer>();
@@ -79,7 +104,9 @@ namespace GritGud.Presentation.LevelEditing
                 throw new InvalidOperationException("The bootstrap scene needs a Main Camera.");
             }
 
-            workspace = new LevelEditorWorkspace(LoadMainLevel(), catalog.CreateKnownIdSet());
+            workspace = new LevelEditorWorkspace(
+                sourceDocument.DeepCopy(),
+                catalog.CreateKnownIdSet());
             viewDocument = workspace.CreateSnapshot();
             workspace.Changed += HandleWorkspaceChanged;
             selection = new LevelSelectionModel();
@@ -747,14 +774,16 @@ namespace GritGud.Presentation.LevelEditing
 
         private void CreateNewLevel()
         {
-            ReplaceWorkspaceDocument(LevelDocumentFactory.CreateEmpty());
+            sourceDocument = LevelDocumentFactory.CreateEmpty();
+            sourceLabel = "new level";
+            ReplaceWorkspaceDocument(sourceDocument.DeepCopy());
             SetStatus("Created a new empty level. Choose an archetype to begin placing.");
         }
 
-        private void ReloadMainLevel()
+        private void ReloadSourceLevel()
         {
-            ReplaceWorkspaceDocument(LoadMainLevel());
-            SetStatus("Reloaded the committed main level.");
+            ReplaceWorkspaceDocument(sourceDocument.DeepCopy());
+            SetStatus($"Reloaded {sourceLabel}.");
         }
 
         private void ReplaceWorkspaceDocument(LevelDocument document)
@@ -771,20 +800,10 @@ namespace GritGud.Presentation.LevelEditing
 
         private void HandleDocumentLoaded(object sender, LevelDocumentLoadedEventArgs args)
         {
-            ReplaceWorkspaceDocument(args.Document);
+            sourceDocument = args.Document.DeepCopy();
+            sourceLabel = args.SourceLabel;
+            ReplaceWorkspaceDocument(sourceDocument.DeepCopy());
             SetStatus($"Loaded level from {args.SourceLabel}.");
-        }
-
-        private LevelDocument LoadMainLevel()
-        {
-            TextAsset level = Resources.Load<TextAsset>(MainLevelResourceName);
-            if (level == null)
-            {
-                throw new InvalidOperationException(
-                    $"Main level '{MainLevelResourceName}' was not found.");
-            }
-
-            return persistence.Deserialize(level.text);
         }
 
         private void EnsureOutlines()
@@ -936,7 +955,7 @@ namespace GritGud.Presentation.LevelEditing
 
         void ILevelEditorGuiActions.CreateNewLevel() => CreateNewLevel();
 
-        void ILevelEditorGuiActions.ReloadMainLevel() => ReloadMainLevel();
+        void ILevelEditorGuiActions.ReloadSourceLevel() => ReloadSourceLevel();
 
         void ILevelEditorGuiActions.FrameSelection() => FrameSelection();
 
@@ -1019,14 +1038,18 @@ namespace GritGud.Presentation.LevelEditing
             string displayName,
             string activeText,
             string completedText,
-            string actionPointCost) => scenarioAuthoring.ApplyObjective(
+            string actionPointCost,
+            string movementOpportunityCost,
+            string mobility) => scenarioAuthoring.ApplyObjective(
                 entityId,
                 pointId,
                 enabled,
                 displayName,
                 activeText,
                 completedText,
-                actionPointCost);
+                actionPointCost,
+                movementOpportunityCost,
+                mobility);
 
         void ILevelEditorGuiActions.ApplyScenarioVehicle(
             string entityId,

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 5,
   "levelId": "main-depot-yard-v1",
   "displayName": "Depot Yard",
   "bounds": {
@@ -212,5 +212,81 @@
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
       ]
     }
-  ]
+  ],
+  "scenario": {
+    "randomSeed": 12648430,
+    "minimumVoluntaryTurnSeconds": 1.25,
+    "actors": [
+      {
+        "id": "player",
+        "templateId": "player",
+        "transform": {
+          "position": { "x": 1.25, "y": 2.0, "z": -8.75 },
+          "yawDegrees": 0.0
+        },
+        "playerControlled": true,
+        "initiallySelected": true,
+        "primaryTarget": false
+      },
+      {
+        "id": "oren-vale",
+        "templateId": "oren-vale",
+        "transform": {
+          "position": { "x": -1.0, "y": 2.0, "z": -8.75 },
+          "yawDegrees": 0.0
+        },
+        "playerControlled": true,
+        "initiallySelected": false,
+        "primaryTarget": false
+      },
+      {
+        "id": "depot-rifleman",
+        "templateId": "depot-rifleman",
+        "transform": {
+          "position": { "x": 5.0, "y": 2.0, "z": 0.0 },
+          "yawDegrees": 180.0
+        },
+        "playerControlled": false,
+        "initiallySelected": false,
+        "primaryTarget": true
+      }
+    ],
+    "objectives": [
+      {
+        "id": "raised-deck",
+        "entityId": "deck-floor-r02-c03",
+        "interactionPointId": "raised-deck",
+        "actionId": "secure-raised-deck",
+        "displayName": "Secure raised deck",
+        "activeHudText": "REACH THE RAISED DECK AND INTERACT",
+        "completedHudText": "RAISED DECK SECURED",
+        "actionPointCost": 1,
+        "movementOpportunityCost": 1.0,
+        "mobility": "set"
+      }
+    ],
+    "props": [
+      {
+        "entityId": "crate-exposure-demo",
+        "mass": 35.0,
+        "sizeClass": "medium",
+        "startsEncounterOnAttack": false
+      }
+    ],
+    "vehicles": [
+      {
+        "entityId": "yard-runner",
+        "maximumSpeed": 10.0,
+        "accelerationPerTurn": 4.0,
+        "brakingPerTurn": 2.0,
+        "lowSpeedTurnDegrees": 75.0,
+        "highSpeedTurnDegrees": 25.0,
+        "baseTurningRadius": 0.6,
+        "speedTurningRadiusFactor": 0.16,
+        "startingSpeed": 4.0,
+        "startingOccupantActorId": "",
+        "startsEncounterOnAttack": false
+      }
+    ]
+  }
 }

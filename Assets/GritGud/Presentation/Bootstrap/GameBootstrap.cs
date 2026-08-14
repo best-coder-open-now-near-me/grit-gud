@@ -1,7 +1,10 @@
 using System.Collections;
+using System.Collections.Generic;
+using GritGud.Application.Levels;
 using GritGud.Presentation.LevelEditing;
 using GritGud.Presentation.Gameplay;
 using GritGud.Domain.Levels;
+using GritGud.Presentation.Levels;
 using UnityEngine;
 
 namespace GritGud.Presentation.Bootstrap
@@ -20,11 +23,21 @@ namespace GritGud.Presentation.Bootstrap
         private LevelEditorController levelEditor;
         private GameplayController gameplay;
         private Coroutine gameplayStartRoutine;
+        private CommittedLevelLibrary committedLevels;
         private bool editorTestActive;
 
         public static GameBootstrap Instance { get; private set; }
 
         public ApplicationMode CurrentMode { get; private set; } = ApplicationMode.Menu;
+
+        public IReadOnlyList<CommittedLevelEntry> CommittedLevels
+        {
+            get
+            {
+                EnsureCommittedLevels();
+                return committedLevels.Entries;
+            }
+        }
 
         private void Awake()
         {
@@ -36,23 +49,54 @@ namespace GritGud.Presentation.Bootstrap
 
             Instance = this;
             DontDestroyOnLoad(gameObject);
+            EnsureCommittedLevels();
             EnsureStartMenu();
         }
 
         public void OpenLevelEditor()
         {
+            OpenCommittedLevelEditor(
+                RequireDefaultCommittedLevel(requirePlayable: false).ResourceKey);
+        }
+
+        public void OpenCommittedLevelEditor(string resourceKey)
+        {
+            EnsureCommittedLevels();
             EnsureStartMenu();
-            OpenLevelTool(startInPreview: false);
+            CommittedLevelEntry entry = committedLevels.Find(resourceKey)
+                ?? throw new System.InvalidOperationException(
+                    $"Committed level resource '{resourceKey}' was not found.");
+            OpenLevelTool(
+                startInPreview: false,
+                committedLevels.OpenForEditing(resourceKey),
+                entry.DisplayName);
+        }
+
+        public void OpenNewLevelEditor()
+        {
+            EnsureStartMenu();
+            OpenLevelTool(
+                startInPreview: false,
+                LevelDocumentFactory.CreateEmpty(),
+                "new level");
         }
 
         public void PlayMainLevel()
+        {
+            PlayCommittedLevel(
+                RequireDefaultCommittedLevel(requirePlayable: true).ResourceKey);
+        }
+
+        public void PlayCommittedLevel(string resourceKey)
         {
             if (gameplayStartRoutine != null || CurrentMode == ApplicationMode.Gameplay)
             {
                 return;
             }
 
-            gameplayStartRoutine = StartCoroutine(BeginGameplayOnNextFrame());
+            EnsureCommittedLevels();
+            LevelDocument level = committedLevels.OpenForPlay(resourceKey);
+            gameplayStartRoutine = StartCoroutine(BeginGameplayOnNextFrame(level));
         }
 
         public void PlayEditorTest(LevelDocument snapshot)
@@ -65,7 +109,7 @@ namespace GritGud.Presentation.Bootstrap
             gameplayStartRoutine = StartCoroutine(BeginEditorTestOnNextFrame(snapshot.DeepCopy()));
         }
 
-        private IEnumerator BeginGameplayOnNextFrame()
+        private IEnumerator BeginGameplayOnNextFrame(LevelDocument level)
         {
             EnsureStartMenu();
             editorTestActive = false;
@@ -83,7 +127,7 @@ namespace GritGud.Presentation.Bootstrap
 
             try
             {
-                gameplay.Begin();
+                gameplay.BeginCommitted(level);
                 CurrentMode = ApplicationMode.Gameplay;
             }
             catch
@@ -173,7 +217,10 @@ namespace GritGud.Presentation.Bootstrap
             }
         }
 
-        private void OpenLevelTool(bool startInPreview)
+        private void OpenLevelTool(
+            bool startInPreview,
+            LevelDocument initialDocument,
+            string sourceLabel)
         {
             EnsureStartMenu();
             CancelPendingGameplayStart();
@@ -184,8 +231,41 @@ namespace GritGud.Presentation.Bootstrap
                 levelEditor = gameObject.AddComponent<LevelEditorController>();
             }
 
-            levelEditor.Begin(startInPreview);
+            levelEditor.Begin(startInPreview, initialDocument, sourceLabel);
             CurrentMode = ApplicationMode.LevelEditor;
+        }
+
+        private CommittedLevelEntry RequireDefaultCommittedLevel(bool requirePlayable)
+        {
+            EnsureCommittedLevels();
+            CommittedLevelEntry configured = committedLevels.Find(
+                UnityCommittedLevelLibrary.DefaultResourceKey);
+            if (configured != null
+                && (requirePlayable ? configured.CanPlay : configured.CanEdit))
+            {
+                return configured;
+            }
+
+            foreach (CommittedLevelEntry entry in committedLevels.Entries)
+            {
+                if (requirePlayable ? entry.CanPlay : entry.CanEdit)
+                {
+                    return entry;
+                }
+            }
+
+            throw new System.InvalidOperationException(
+                requirePlayable
+                    ? "No playable committed levels were found."
+                    : "No editable committed levels were found.");
+        }
+
+        private void EnsureCommittedLevels()
+        {
+            if (committedLevels == null)
+            {
+                committedLevels = UnityCommittedLevelLibrary.LoadDefault();
+            }
         }
 
         private void CancelPendingGameplayStart()

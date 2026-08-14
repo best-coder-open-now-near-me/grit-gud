@@ -1,8 +1,9 @@
 # Basic Level Editor
 
 The basic level editor is a runtime tool shared by Windows and WebGL builds.
-Open it from **Level Editor** on the start menu. **Play Main Level** opens the
-same portable main level through the gameplay-side loader with authoring locked.
+Choose a committed level on the start menu, then use **Edit Selected** or
+**Play Selected**. Both routes begin from detached snapshots of the same
+portable document.
 
 ## Source of truth
 
@@ -20,8 +21,10 @@ Portable JSON contains:
 - stable archetype IDs rather than Unity paths or asset GUIDs;
 - world-space position and yaw;
 - interaction points plus legacy cover-volume compatibility data;
-- optional initial destructible state and integrity; and
-- typed, quantized heightfield terrain surfaces.
+- optional initial destructible state and integrity;
+- typed, quantized heightfield terrain surfaces; and
+- scenario actor instances, objectives, props, vehicles, and complete objective
+  action costs.
 
 The loader validates the whole document before exposing a replacement world.
 An invalid import therefore leaves the currently loaded level untouched.
@@ -121,9 +124,12 @@ working state, not as the version-controlled source of truth.
 in the inspector first. Imported text is size-limited, deserialized, and fully
 validated before it can replace the active document.
 
-The runtime and editor start from the committed main level at
-`Assets/GritGud/Content/Resources/Levels/main-level.json`. The smaller
-`basic-construction.json` remains a focused automated-test fixture.
+The runtime and editor level chooser discovers committed JSON files directly
+under `Assets/GritGud/Content/Resources/Levels/Published/`. Uploading one
+exported JSON file to that folder is enough for the next build to validate it
+and add it to the menu; there is no separate manifest to maintain. The smaller
+`basic-construction.json` outside that folder remains a focused automated-test
+fixture and is not shown in the player-facing library.
 The main Depot Yard now includes a flat `depot-ground` heightfield covering its
 authored bounds, so terrain tools are immediately usable when the editor opens.
 
@@ -147,9 +153,8 @@ resumes the same authoring workspace.
 - Legacy cover-volume data remains readable for file compatibility but has no
   authoring surface. Destructible metadata is authored through entity capability
   controls.
-- No runtime navigation bake, terrain sculpting, arbitrary asset import, or
-  encounter scripting is included. Terrain's planned ownership and delivery
-  boundaries are documented in the
+- No runtime navigation bake, arbitrary asset import, or encounter scripting is
+  included. Terrain's ownership and delivery boundaries are documented in the
   [terrain-editor architecture plan](TERRAIN_EDITOR_ARCHITECTURE.md).
 - The runtime UI is intentionally code-driven while the final visual language
   and broader gameplay UI remain unsettled.

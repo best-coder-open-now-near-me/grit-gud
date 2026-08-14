@@ -80,5 +80,25 @@ namespace GritGud.Domain.Tests.Levels
             Assert.That(player.transform.yawDegrees, Is.EqualTo(135f));
             Assert.That(result.legacyPlaytest, Is.Null);
         }
+
+        [Test]
+        public void VersionFourObjectiveGainsCompleteActionCostDefaults()
+        {
+            LevelDocument source = LevelDocumentFactory.CreateEmpty("Legacy Objective");
+            source.schemaVersion = 4;
+            source.scenario.objectives.Add(new LevelScenarioObjectiveData
+            {
+                id = "objective",
+                mobility = null,
+            });
+
+            LevelDocument result = new LevelDocumentMigrator().MigrateToCurrent(source);
+
+            Assert.That(result.schemaVersion, Is.EqualTo(5));
+            Assert.That(
+                result.scenario.objectives[0].movementOpportunityCost,
+                Is.Zero);
+            Assert.That(result.scenario.objectives[0].mobility, Is.EqualTo("set"));
+        }
     }
 }

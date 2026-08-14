@@ -28,7 +28,7 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         void CreateNewLevel();
 
-        void ReloadMainLevel();
+        void ReloadSourceLevel();
 
         void FrameSelection();
 
@@ -78,7 +78,9 @@ namespace GritGud.Presentation.LevelEditing.UI
             string displayName,
             string activeText,
             string completedText,
-            string actionPointCost);
+            string actionPointCost,
+            string movementOpportunityCost,
+            string mobility);
 
         void ApplyScenarioVehicle(
             string entityId,

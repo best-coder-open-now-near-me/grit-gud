@@ -407,6 +407,10 @@ namespace GritGud.Presentation.LevelEditing.UI
                     ?? "Objective complete";
                 scenarioObjectiveCostText = (configured?.actionPointCost ?? 1).ToString(
                     CultureInfo.InvariantCulture);
+                scenarioObjectiveMovementCostText =
+                    (configured?.movementOpportunityCost ?? 0f).ToString(
+                        CultureInfo.InvariantCulture);
+                scenarioObjectiveMobility = configured?.mobility ?? "set";
             }
 
             GUILayout.Space(LevelEditorGuiMetrics.SpaceInspectorSection);
@@ -424,6 +428,17 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.Label("Completed HUD text");
             scenarioObjectiveCompletedText = GUILayout.TextField(scenarioObjectiveCompletedText);
             DrawLabeledField("AP cost", ref scenarioObjectiveCostText);
+            DrawLabeledField(
+                "Move cost",
+                ref scenarioObjectiveMovementCostText);
+            GUILayout.Label("Mobility");
+            int mobilityIndex = Array.IndexOf(
+                ObjectiveMobilityValues,
+                scenarioObjectiveMobility);
+            mobilityIndex = GUILayout.Toolbar(
+                Mathf.Max(0, mobilityIndex),
+                ObjectiveMobilityLabels);
+            scenarioObjectiveMobility = ObjectiveMobilityValues[mobilityIndex];
             GUI.enabled = true;
             if (GUILayout.Button("APPLY GOAL", PanelButtonLayout()))
             {
@@ -434,7 +449,9 @@ namespace GritGud.Presentation.LevelEditing.UI
                     scenarioObjectiveDisplayName,
                     scenarioObjectiveActiveText,
                     scenarioObjectiveCompletedText,
-                    scenarioObjectiveCostText);
+                    scenarioObjectiveCostText,
+                    scenarioObjectiveMovementCostText,
+                    scenarioObjectiveMobility);
             }
             if (!string.Equals(point.type, "objective", StringComparison.Ordinal))
                 GUILayout.Label("Set point type to Objective to enable this link.");

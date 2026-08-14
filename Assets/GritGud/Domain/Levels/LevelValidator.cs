@@ -535,11 +535,15 @@ namespace GritGud.Domain.Levels
                         objective.entityId);
                 }
 
-                if (objective.actionPointCost < 0)
+                if (objective.actionPointCost < 0
+                    || !LevelValidationMath.IsFinite(
+                        objective.movementOpportunityCost)
+                    || objective.movementOpportunityCost < 0f
+                    || !IsSupportedMobility(objective.mobility))
                 {
                     context.Error(
                         "scenario.objective.cost",
-                        $"Objective '{objective.id}' cannot have a negative action-point cost.",
+                        $"Objective '{objective.id}' has an invalid action cost.",
                         objective.entityId);
                 }
                 if (string.IsNullOrWhiteSpace(objective.actionId)
@@ -559,6 +563,13 @@ namespace GritGud.Domain.Levels
                 || string.Equals(value, "medium", StringComparison.Ordinal)
                 || string.Equals(value, "large", StringComparison.Ordinal)
                 || string.Equals(value, "huge", StringComparison.Ordinal);
+        }
+
+        private static bool IsSupportedMobility(string value)
+        {
+            return string.Equals(value, "mobile", StringComparison.Ordinal)
+                || string.Equals(value, "momentum", StringComparison.Ordinal)
+                || string.Equals(value, "set", StringComparison.Ordinal);
         }
     }
 

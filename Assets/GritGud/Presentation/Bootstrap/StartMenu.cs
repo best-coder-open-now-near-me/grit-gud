@@ -1,3 +1,8 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using GritGud.Application.Levels;
+using GritGud.Presentation.Levels;
 using UnityEngine;
 
 namespace GritGud.Presentation.Bootstrap
@@ -27,10 +32,23 @@ namespace GritGud.Presentation.Bootstrap
         private GUIStyle titleStyle;
         private GUIStyle subtitleStyle;
         private GUIStyle buttonStyle;
+        private GUIStyle levelButtonStyle;
+        private GUIStyle statusStyle;
         private Texture2D whiteTexture;
         private Texture2D buttonNormalTexture;
         private Texture2D buttonHoverTexture;
         private Texture2D buttonActiveTexture;
+        private IReadOnlyList<CommittedLevelEntry> committedLevels =
+            Array.Empty<CommittedLevelEntry>();
+        private string selectedResourceKey = string.Empty;
+        private Vector2 levelScroll;
+
+        internal string SelectedResourceKey => selectedResourceKey;
+
+        private void OnEnable()
+        {
+            RefreshCommittedLevels();
+        }
 
         private void OnGUI()
         {
@@ -72,26 +90,120 @@ namespace GritGud.Presentation.Bootstrap
 
         private void DrawMenu()
         {
+            if (committedLevels.Count == 0)
+            {
+                RefreshCommittedLevels();
+            }
+
             GUI.Label(new Rect(90f, 112f, 440f, 105f), "GRIT GUD", titleStyle);
             GUI.Label(new Rect(94f, 211f, 420f, 42f), "TACTICAL ROLE-PLAYING", subtitleStyle);
             DrawGlowLine(new Rect(94f, 261f, 88f, 2f), SignalColor);
             DrawGlowLine(new Rect(186f, 261f, 248f, 1f), MutedSignalColor);
 
-            if (DrawMenuButton(new Rect(92f, 320f, 350f, 62f), "PLAY MAIN LEVEL"))
+            GUI.Label(
+                new Rect(94f, 278f, 350f, 32f),
+                "COMMITTED LEVELS",
+                subtitleStyle);
+            DrawLevelList(new Rect(92f, 312f, 350f, 166f));
+
+            CommittedLevelEntry selected = FindSelectedLevel();
+            string status = selected == null
+                ? "No committed levels were found. You can still create a new level."
+                : selected.LevelId + "\n" + selected.StatusMessage;
+            GUI.Label(new Rect(94f, 486f, 420f, 48f), status, statusStyle);
+
+            bool previousEnabled = GUI.enabled;
+            GUI.enabled = selected?.CanPlay == true;
+            if (DrawMenuButton(new Rect(92f, 542f, 350f, 48f), "PLAY SELECTED"))
             {
-                GameBootstrap.Instance.PlayMainLevel();
+                GameBootstrap.Instance.PlayCommittedLevel(selected.ResourceKey);
             }
 
-            if (DrawMenuButton(new Rect(92f, 401f, 350f, 62f), "LEVEL EDITOR"))
+            GUI.enabled = selected?.CanEdit == true;
+            if (DrawMenuButton(new Rect(92f, 602f, 350f, 48f), "EDIT SELECTED"))
             {
-                GameBootstrap.Instance.OpenLevelEditor();
+                GameBootstrap.Instance.OpenCommittedLevelEditor(
+                    selected.ResourceKey);
             }
 
-            if (DrawMenuButton(new Rect(92f, 482f, 350f, 62f), "QUIT"))
+            GUI.enabled = previousEnabled;
+            if (DrawMenuButton(new Rect(92f, 662f, 350f, 48f), "NEW LEVEL"))
+            {
+                GameBootstrap.Instance.OpenNewLevelEditor();
+            }
+
+            if (DrawMenuButton(new Rect(92f, 722f, 350f, 48f), "QUIT"))
             {
                 Quit();
             }
+        }
 
+        private void DrawLevelList(Rect rectangle)
+        {
+            GUILayout.BeginArea(rectangle, GUI.skin.box);
+            levelScroll = GUILayout.BeginScrollView(levelScroll);
+            foreach (CommittedLevelEntry entry in committedLevels)
+            {
+                bool selected = string.Equals(
+                    selectedResourceKey,
+                    entry.ResourceKey,
+                    StringComparison.Ordinal);
+                Color previousBackground = GUI.backgroundColor;
+                if (selected)
+                {
+                    GUI.backgroundColor = SignalColor;
+                }
+
+                string readiness = entry.CanPlay ? string.Empty : "! ";
+                if (GUILayout.Button(
+                    (selected ? "> " : string.Empty) + readiness + entry.DisplayName,
+                    levelButtonStyle,
+                    GUILayout.Height(38f)))
+                {
+                    selectedResourceKey = entry.ResourceKey;
+                }
+
+                GUI.backgroundColor = previousBackground;
+            }
+
+            GUILayout.EndScrollView();
+            GUILayout.EndArea();
+        }
+
+        internal void RefreshCommittedLevels()
+        {
+            GameBootstrap bootstrap = GameBootstrap.Instance;
+            committedLevels = bootstrap?.CommittedLevels
+                ?? Array.Empty<CommittedLevelEntry>();
+            if (FindSelectedLevel() != null)
+            {
+                return;
+            }
+
+            CommittedLevelEntry preferred = committedLevels.FirstOrDefault(entry =>
+                entry.ResourceKey == UnityCommittedLevelLibrary.DefaultResourceKey
+                && entry.CanPlay)
+                ?? committedLevels.FirstOrDefault(entry => entry.CanPlay)
+                ?? committedLevels.FirstOrDefault(entry => entry.CanEdit)
+                ?? committedLevels.FirstOrDefault();
+
+            selectedResourceKey = preferred?.ResourceKey ?? string.Empty;
+        }
+
+        private CommittedLevelEntry FindSelectedLevel()
+        {
+            foreach (CommittedLevelEntry entry in committedLevels)
+            {
+                if (string.Equals(
+                    selectedResourceKey,
+                    entry.ResourceKey,
+                    StringComparison.Ordinal))
+                {
+                    return entry;
+                }
+            }
+
+            return null;
         }
 
         private bool DrawMenuButton(Rect rectangle, string label)
@@ -175,6 +287,18 @@ namespace GritGud.Presentation.Bootstrap
                     background = buttonActiveTexture,
                     textColor = PrimaryTextColor,
                 },
+            };
+            levelButtonStyle = new GUIStyle(buttonStyle)
+            {
+                fontSize = 16,
+                padding = new RectOffset(14, 10, 0, 0),
+            };
+            statusStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.UpperLeft,
+                fontSize = 13,
+                wordWrap = true,
+                normal = { textColor = GameplayVisualPalette.TextSecondary },
             };
         }
 

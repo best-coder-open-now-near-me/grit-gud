@@ -181,8 +181,11 @@ and invalid data produces actionable validation errors.
 unchanged by a desktop build.
 
 The core editor architecture and construction workflow are implemented. The
-remaining metadata-authoring work and the recommended order for expanding the
-editor are tracked in the [level-editor expansion plan](LEVEL_EDITOR_NEXT_STEPS.md).
+metadata-authoring path and folder-discovered committed level library are also
+implemented: a browser export uploaded as one JSON file can be validated,
+listed, edited, and played by the next branch preview. The recommended order
+for further expansion is tracked in the
+[level-editor expansion plan](LEVEL_EDITOR_NEXT_STEPS.md).
 
 ## 3. Gridless turn slice
 

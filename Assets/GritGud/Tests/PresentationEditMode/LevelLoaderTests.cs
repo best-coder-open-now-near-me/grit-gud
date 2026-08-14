@@ -82,7 +82,8 @@ namespace GritGud.Presentation.Tests
         [Test]
         public void MainLevelIsValidAndSubstantial()
         {
-            TextAsset asset = Resources.Load<TextAsset>("Levels/main-level");
+            TextAsset asset = Resources.Load<TextAsset>(
+                "Levels/Published/main-level");
             Assert.That(asset, Is.Not.Null);
             var serializer = new UnityLevelJsonSerializer();
             LevelDocument document = serializer.Deserialize(asset.text);

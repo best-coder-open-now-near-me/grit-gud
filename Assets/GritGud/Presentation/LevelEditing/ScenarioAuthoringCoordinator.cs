@@ -265,7 +265,9 @@ namespace GritGud.Presentation.LevelEditing
             string displayName,
             string activeText,
             string completedText,
-            string costText)
+            string actionPointCostText,
+            string movementOpportunityCostText,
+            string mobility)
         {
             LevelDocument snapshot = workspace.CreateSnapshot();
             LevelScenarioData after = snapshot.scenario.DeepCopy();
@@ -275,10 +277,34 @@ namespace GritGud.Presentation.LevelEditing
             after.objectives.Remove(existing);
             if (enabled)
             {
-                if (!int.TryParse(costText, NumberStyles.Integer, CultureInfo.InvariantCulture,
+                if (!int.TryParse(
+                        actionPointCostText,
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
                         out int actionPointCost) || actionPointCost < 0)
                 {
                     Report("Objective action-point cost must be a non-negative whole number.");
+                    return;
+                }
+                if (!float.TryParse(
+                        movementOpportunityCostText,
+                        NumberStyles.Float,
+                        CultureInfo.InvariantCulture,
+                        out float movementOpportunityCost)
+                    || float.IsNaN(movementOpportunityCost)
+                    || float.IsInfinity(movementOpportunityCost)
+                    || movementOpportunityCost < 0f)
+                {
+                    Report("Objective movement cost must be a non-negative finite number.");
+                    return;
+                }
+                string normalizedMobility = mobility?.Trim().ToLowerInvariant()
+                    ?? string.Empty;
+                if (!string.Equals(normalizedMobility, "mobile", StringComparison.Ordinal)
+                    && !string.Equals(normalizedMobility, "momentum", StringComparison.Ordinal)
+                    && !string.Equals(normalizedMobility, "set", StringComparison.Ordinal))
+                {
+                    Report("Objective mobility must be Mobile, Momentum, or Set.");
                     return;
                 }
                 if (string.IsNullOrWhiteSpace(displayName))
@@ -296,6 +322,8 @@ namespace GritGud.Presentation.LevelEditing
                     activeHudText = activeText?.Trim() ?? string.Empty,
                     completedHudText = completedText?.Trim() ?? string.Empty,
                     actionPointCost = actionPointCost,
+                    movementOpportunityCost = movementOpportunityCost,
+                    mobility = normalizedMobility,
                 });
             }
             workspace.Execute(new SetScenarioConfigurationCommand(

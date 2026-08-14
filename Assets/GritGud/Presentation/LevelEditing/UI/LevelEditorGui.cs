@@ -14,6 +14,11 @@ namespace GritGud.Presentation.LevelEditing.UI
 {
     public sealed partial class LevelEditorGui
     {
+        private static readonly string[] ObjectiveMobilityLabels =
+            { "MOBILE", "MOMENTUM", "SET" };
+        private static readonly string[] ObjectiveMobilityValues =
+            { "mobile", "momentum", "set" };
+
         private readonly LevelSelectionModel selection;
         private readonly LevelArchetypeCatalog catalog;
         private readonly ScenarioAuthoringCatalog scenarioCatalog;
@@ -67,6 +72,8 @@ namespace GritGud.Presentation.LevelEditing.UI
         private string scenarioObjectiveActiveText = "Complete the objective";
         private string scenarioObjectiveCompletedText = "Objective complete";
         private string scenarioObjectiveCostText = "1";
+        private string scenarioObjectiveMovementCostText = "0";
+        private string scenarioObjectiveMobility = "set";
         private string lastScenarioVehicleEntityId = string.Empty;
         private bool scenarioVehicleEnabled;
         private string scenarioVehicleMaximumSpeedText = "12";
@@ -248,9 +255,9 @@ namespace GritGud.Presentation.LevelEditing.UI
                 actions.CreateNewLevel();
             }
 
-            if (GUILayout.Button("LOAD MAIN", ToolbarButtonLayout(100f)))
+            if (GUILayout.Button("RELOAD SOURCE", ToolbarButtonLayout(116f)))
             {
-                actions.ReloadMainLevel();
+                actions.ReloadSourceLevel();
             }
 
             GUI.enabled = state.CanUndo && !previewMode;

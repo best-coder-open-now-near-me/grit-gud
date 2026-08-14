@@ -97,6 +97,18 @@ namespace GritGud.Presentation.Gameplay
 
         public static GameplayContentPackage LoadSandbox(LevelDocument source)
         {
+            return LoadAuthored(source, isSandbox: true);
+        }
+
+        public static GameplayContentPackage LoadCommitted(LevelDocument source)
+        {
+            return LoadAuthored(source, isSandbox: false);
+        }
+
+        private static GameplayContentPackage LoadAuthored(
+            LevelDocument source,
+            bool isSandbox)
+        {
             if (source == null)
             {
                 throw new ArgumentNullException(nameof(source));
@@ -104,15 +116,21 @@ namespace GritGud.Presentation.Gameplay
 
             LevelDocument level = source.DeepCopy();
             GameplayContentPackage defaults = LoadDefault();
-            ScenarioContentDocument scenario = CreateSandboxScenario(
+            ScenarioContentDocument scenario = CreateAuthoredScenario(
                 level,
-                defaults.Scenario);
-            return CreatePackage(new GameplayContentManifestDocument(), scenario, level, true);
+                defaults.Scenario,
+                isSandbox);
+            return CreatePackage(
+                new GameplayContentManifestDocument(),
+                scenario,
+                level,
+                isSandbox);
         }
 
-        private static ScenarioContentDocument CreateSandboxScenario(
+        private static ScenarioContentDocument CreateAuthoredScenario(
             LevelDocument level,
-            ScenarioContentDocument templateSource)
+            ScenarioContentDocument templateSource,
+            bool isSandbox)
         {
             LevelScenarioData authored = level.scenario
                 ?? throw new InvalidOperationException(
@@ -124,8 +142,10 @@ namespace GritGud.Presentation.Gameplay
             var scenario = new ScenarioContentDocument
             {
                 schemaVersion = ScenarioContentDocument.CurrentSchemaVersion,
-                scenarioId = "playtest-" + level.levelId,
-                displayName = "Playtest: " + level.displayName,
+                scenarioId = (isSandbox ? "playtest-" : "committed-") + level.levelId,
+                displayName = isSandbox
+                    ? "Playtest: " + level.displayName
+                    : level.displayName,
                 levelId = level.levelId,
                 randomSeed = authored.randomSeed,
                 timing = new ScenarioTimingData
@@ -185,7 +205,9 @@ namespace GritGud.Presentation.Gameplay
                     turnCost = new ScenarioActionCostData
                     {
                         actionPoints = authoredObjective.actionPointCost,
-                        mobility = "set",
+                        movementOpportunity =
+                            authoredObjective.movementOpportunityCost,
+                        mobility = authoredObjective.mobility,
                     },
                 });
             }

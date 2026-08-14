@@ -231,6 +231,8 @@ namespace GritGud.Domain.Levels
         public string activeHudText = string.Empty;
         public string completedHudText = string.Empty;
         public int actionPointCost = 1;
+        public float movementOpportunityCost;
+        public string mobility = "set";
 
         public void Normalize()
         {
@@ -241,6 +243,7 @@ namespace GritGud.Domain.Levels
             displayName = displayName ?? string.Empty;
             activeHudText = activeHudText ?? string.Empty;
             completedHudText = completedHudText ?? string.Empty;
+            mobility = mobility ?? string.Empty;
         }
 
         public LevelScenarioObjectiveData DeepCopy()
@@ -256,6 +259,8 @@ namespace GritGud.Domain.Levels
                 activeHudText = activeHudText,
                 completedHudText = completedHudText,
                 actionPointCost = actionPointCost,
+                movementOpportunityCost = movementOpportunityCost,
+                mobility = mobility,
             };
         }
     }
@@ -392,7 +397,7 @@ namespace GritGud.Domain.Levels
     [Serializable]
     public sealed class LevelDocument
     {
-        public const int CurrentSchemaVersion = 4;
+        public const int CurrentSchemaVersion = 5;
 
         public int schemaVersion = CurrentSchemaVersion;
         public string levelId = string.Empty;

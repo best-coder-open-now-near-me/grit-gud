@@ -286,6 +286,11 @@ namespace GritGud.Presentation.Gameplay
             Begin(GameplayContentLoader.LoadDefault());
         }
 
+        public void BeginCommitted(LevelDocument level)
+        {
+            Begin(GameplayContentLoader.LoadCommitted(level));
+        }
+
         public void BeginSandbox(LevelDocument level)
         {
             Begin(GameplayContentLoader.LoadSandbox(level));
@@ -315,7 +320,7 @@ namespace GritGud.Presentation.Gameplay
             LevelLightingCatalog lightingCatalog = LevelLightingCatalog.LoadDefault();
             LevelLightingProfile lightingProfile = content.IsSandbox
                 ? lightingCatalog.GetAny()
-                : lightingCatalog.Get(content.Level.levelId);
+                : lightingCatalog.GetOrAny(content.Level.levelId);
             environmentLighting = GameplayEnvironmentLighting.Create(
                 levelWorld.Root.transform,
                 lightingProfile);

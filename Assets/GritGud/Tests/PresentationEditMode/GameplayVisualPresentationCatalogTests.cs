@@ -40,6 +40,16 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void UnknownCommittedLevelUsesCatalogLightingFallback()
+        {
+            LevelLightingCatalog catalog = LevelLightingCatalog.LoadDefault();
+
+            Assert.That(
+                catalog.GetOrAny("uploaded-level-without-lighting-sidecar"),
+                Is.SameAs(catalog.GetAny()));
+        }
+
+        [Test]
         public void SurfaceCatalogSeparatesMaterialAndImpactResponse()
         {
             SurfacePresentationCatalog catalog =

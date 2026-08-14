@@ -99,5 +99,46 @@ namespace GritGud.Presentation.Tests
             Assert.That(restored.scenario.vehicles[0].startingOccupantActorId,
                 Is.EqualTo(opponent.id));
         }
+
+        [Test]
+        public void ObjectiveAuthoringPreservesTheCompleteActionCost()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            document.entities.Add(new LevelEntity
+            {
+                id = "terminal",
+                archetypeId = "prop.crate.standard",
+                interactionPoints =
+                {
+                    new InteractionPointData
+                    {
+                        id = "activate",
+                        type = "objective",
+                    },
+                },
+            });
+            using var workspace = new LevelEditorWorkspace(document);
+            var coordinator = new ScenarioAuthoringCoordinator(
+                workspace,
+                ScenarioAuthoringCatalog.LoadDefault(),
+                () => new LevelEditorCameraState());
+
+            coordinator.ApplyObjective(
+                "terminal",
+                "activate",
+                true,
+                "Activate terminal",
+                "ACTIVATE THE TERMINAL",
+                "TERMINAL ACTIVE",
+                "2",
+                "1.5",
+                "momentum");
+
+            LevelScenarioObjectiveData objective = workspace.CreateSnapshot()
+                .scenario.objectives.Single();
+            Assert.That(objective.actionPointCost, Is.EqualTo(2));
+            Assert.That(objective.movementOpportunityCost, Is.EqualTo(1.5f));
+            Assert.That(objective.mobility, Is.EqualTo("momentum"));
+        }
     }
 }
