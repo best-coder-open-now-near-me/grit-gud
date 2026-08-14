@@ -22,14 +22,15 @@ namespace GritGud.Presentation.LevelEditing.Tools
 
         public int QuantizedStrength { get; set; } = 1;
 
-        public bool LowerTerrain { get; set; }
+        public TerrainBrushMode BrushMode { get; set; } = TerrainBrushMode.Raise;
 
         public void Activate(LevelEditorToolContext context)
         {
             this.context = context ?? throw new ArgumentNullException(nameof(context));
             context.Selection.Clear();
             footprint = new TerrainBrushFootprint();
-            context.SetStatus("Drag on terrain to sculpt one undoable stroke. Shift lowers.");
+            context.SetStatus(
+                "Drag on terrain to sculpt one undoable stroke. Shift temporarily lowers Raise.");
         }
 
         public void Deactivate()
@@ -71,11 +72,12 @@ namespace GritGud.Presentation.LevelEditing.Tools
                 return;
             }
 
-            bool lower = LowerTerrain || input.FastCameraMovement;
-            footprint.Show(surface, point, RadiusInSamples, lower);
+            TerrainBrushMode effectiveMode = stroke?.Mode
+                ?? ResolveBrushMode(input.FastCameraMovement);
+            footprint.Show(surface, point, RadiusInSamples, effectiveMode);
             if (input.PrimaryPressed)
             {
-                stroke = new TerrainStrokeAccumulator(surface, lower ? -1 : 1);
+                stroke = new TerrainStrokeAccumulator(surface, effectiveMode, point);
                 PreviewPoint(point);
                 return;
             }
@@ -127,7 +129,7 @@ namespace GritGud.Presentation.LevelEditing.Tools
 
         private void CommitStroke()
         {
-            bool lower = stroke.Direction < 0;
+            TerrainBrushMode mode = stroke.Mode;
             SetTerrainHeightsCommand command = stroke.CreateCommand();
             stroke = null;
             if (command == null)
@@ -136,7 +138,21 @@ namespace GritGud.Presentation.LevelEditing.Tools
             }
 
             context.Workspace.Execute(command);
-            context.SetStatus(lower ? "Lowered terrain stroke." : "Raised terrain stroke.");
+            context.SetStatus(mode switch
+            {
+                TerrainBrushMode.Raise => "Raised terrain stroke.",
+                TerrainBrushMode.Lower => "Lowered terrain stroke.",
+                TerrainBrushMode.Smooth => "Smoothed terrain stroke.",
+                TerrainBrushMode.Flatten => "Flattened terrain stroke.",
+                _ => "Applied terrain stroke.",
+            });
+        }
+
+        private TerrainBrushMode ResolveBrushMode(bool lowerModifier)
+        {
+            return lowerModifier && BrushMode == TerrainBrushMode.Raise
+                ? TerrainBrushMode.Lower
+                : BrushMode;
         }
 
         private void CancelStroke()

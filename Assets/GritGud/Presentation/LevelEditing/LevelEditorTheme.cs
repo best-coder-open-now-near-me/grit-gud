@@ -21,5 +21,7 @@ namespace GritGud.Presentation.LevelEditing
         public static readonly Color EnemyActor = new Color(1f, 0.62f, 0.15f);
         public static readonly Color RaiseTerrain = new Color(0.3f, 1f, 0.45f);
         public static readonly Color LowerTerrain = new Color(1f, 0.35f, 0.2f);
+        public static readonly Color SmoothTerrain = new Color(0.2f, 0.8f, 1f);
+        public static readonly Color FlattenTerrain = new Color(0.75f, 0.45f, 1f);
     }
 }

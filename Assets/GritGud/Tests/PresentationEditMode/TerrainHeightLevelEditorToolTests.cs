@@ -28,7 +28,7 @@ namespace GritGud.Presentation.Tests
                 new Vector3(1f, 0f, 1f),
                 1,
                 2,
-                1);
+                TerrainBrushMode.Raise);
             command.Apply(document);
 
             Assert.That(surface.heightSamples,
@@ -53,14 +53,14 @@ namespace GritGud.Presentation.Tests
             };
             LevelDocument document = LevelDocumentFactory.CreateEmpty("Clamp Test");
             document.terrainSurfaces.Add(surface);
-            var command = TerrainBrushCommandFactory.Create(
+            SetTerrainHeightsCommand command = TerrainBrushCommandFactory.Create(
                 surface,
                 Vector3.zero,
                 4,
                 10,
-                1);
-            command.Apply(document);
+                TerrainBrushMode.Raise);
 
+            Assert.That(command, Is.Null);
             Assert.That(surface.heightSamples.All(value =>
                 value == LevelTerrainValidationRule.MaximumQuantizedHeight), Is.True);
         }
@@ -90,7 +90,10 @@ namespace GritGud.Presentation.Tests
                 elevationIncrement = 0.1f,
                 heightSamples = Enumerable.Repeat(0, 15).ToList(),
             };
-            var stroke = new TerrainStrokeAccumulator(surface, 1);
+            var stroke = new TerrainStrokeAccumulator(
+                surface,
+                TerrainBrushMode.Raise,
+                new Vector3(1f, 0f, 1f));
 
             Assert.That(stroke.ApplyPoint(new Vector3(1f, 0f, 1f), 1, 1), Is.Not.Null);
             Assert.That(stroke.ApplyPoint(new Vector3(1f, 0f, 1f), 1, 1), Is.Null);
@@ -101,6 +104,65 @@ namespace GritGud.Presentation.Tests
             Assert.That(command.Width, Is.EqualTo(5));
             Assert.That(command.Depth, Is.EqualTo(3));
             Assert.That(surface.heightSamples, Is.EqualTo(new int[15]));
+        }
+
+        [Test]
+        public void SmoothBrushReducesPeakWithoutChangingSamplesOutsideRadius()
+        {
+            var heights = Enumerable.Repeat(0, 25).ToList();
+            heights[12] = 18;
+            var surface = new TerrainSurfaceData
+            {
+                id = "ground",
+                sampleCountX = 5,
+                sampleCountZ = 5,
+                sampleSpacing = 1f,
+                elevationIncrement = 0.1f,
+                heightSamples = heights,
+            };
+            LevelDocument document = LevelDocumentFactory.CreateEmpty("Smooth Test");
+            document.terrainSurfaces.Add(surface);
+
+            SetTerrainHeightsCommand command = TerrainBrushCommandFactory.Create(
+                surface,
+                new Vector3(2f, 0f, 2f),
+                1,
+                4,
+                TerrainBrushMode.Smooth);
+            command.Apply(document);
+
+            Assert.That(surface.heightSamples[12], Is.EqualTo(14));
+            Assert.That(surface.heightSamples[0], Is.Zero);
+            command.Revert(document);
+            Assert.That(surface.heightSamples[12], Is.EqualTo(18));
+        }
+
+        [Test]
+        public void FlattenStrokeKeepsInitialTargetAcrossDraggedPoints()
+        {
+            var heights = Enumerable.Repeat(0, 15).ToList();
+            heights[6] = 4;
+            heights[8] = 10;
+            var surface = new TerrainSurfaceData
+            {
+                id = "ground",
+                sampleCountX = 5,
+                sampleCountZ = 3,
+                sampleSpacing = 1f,
+                elevationIncrement = 0.1f,
+                heightSamples = heights,
+            };
+            var stroke = new TerrainStrokeAccumulator(
+                surface,
+                TerrainBrushMode.Flatten,
+                new Vector3(1f, 0.4f, 1f));
+
+            stroke.ApplyPoint(new Vector3(1f, 0f, 1f), 1, 2);
+            stroke.ApplyPoint(new Vector3(3f, 0f, 1f), 1, 2);
+
+            Assert.That(stroke.FlattenTargetHeight, Is.EqualTo(4));
+            Assert.That(stroke.PreviewSurface.heightSamples[8], Is.EqualTo(8));
+            Assert.That(stroke.CreateCommand(), Is.Not.Null);
         }
     }
 }

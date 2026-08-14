@@ -136,6 +136,19 @@ namespace GritGud.Presentation.LevelEditing.UI
                 terrainPanel.ActivateLower();
             GUI.backgroundColor = previous;
             GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            if (terrainPanel.IsSmoothActive)
+                GUI.backgroundColor = LevelEditorTheme.SmoothTerrain;
+            if (GUILayout.Button("SMOOTH", PanelButtonLayout()))
+                terrainPanel.ActivateSmooth();
+            GUI.backgroundColor = previous;
+
+            if (terrainPanel.IsFlattenActive)
+                GUI.backgroundColor = LevelEditorTheme.FlattenTerrain;
+            if (GUILayout.Button("FLATTEN", PanelButtonLayout()))
+                terrainPanel.ActivateFlatten();
+            GUI.backgroundColor = previous;
+            GUILayout.EndHorizontal();
             if (GUILayout.Button("FRAME TERRAIN", PanelButtonLayout()))
                 terrainPanel.FrameTerrain();
             GUILayout.Label($"Radius: {terrainPanel.RadiusInSamples} samples");
@@ -148,7 +161,8 @@ namespace GritGud.Presentation.LevelEditing.UI
                 terrainPanel.QuantizedStrength,
                 1f,
                 20f));
-            GUILayout.Label("Drag on the terrain to apply one undoable brush stroke.");
+            GUILayout.Label(
+                "Drag to apply one undoable stroke. Flatten captures its target height on press.");
         }
 
 

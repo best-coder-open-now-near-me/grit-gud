@@ -50,8 +50,8 @@ An invalid import therefore leaves the currently loaded level untouched.
 | `Delete` | Delete the selected entity |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
 | `Esc` | Cancel placement or clear selection |
-| Create → Terrain Raise/Lower, then left click | Adjust height samples with the configured brush |
-| `Shift` while using the terrain brush | Temporarily lower terrain |
+| Create → Terrain, then left drag | Raise, lower, smooth, or flatten with the configured brush |
+| `Shift` while using Raise | Temporarily lower terrain |
 
 A primary touch uses the same press, drag, and release lifecycle as a left
 mouse gesture. This supports selection, placement, and complete terrain-stroke
@@ -69,13 +69,15 @@ Rotation and deletion apply to the complete selection as one undoable
 transaction. Entity-specific validation messages are buttons that select and
 frame the affected entity.
 
-The Terrain create mode exposes raise/lower modes plus brush radius and quantized
-strength. A green or red world-space footprint previews the raise or lower brush
-radius under the pointer. Press and drag to preview a continuous stroke; moving
-into a new terrain sample applies the brush once at that sample. Releasing the
-pointer commits the complete stroke as one reversible patch command and rebuilds
-only affected terrain chunks. `Esc` restores the authored terrain without adding
-history.
+The Terrain create mode exposes Raise, Lower, Smooth, and Flatten plus brush
+radius and quantized strength. The world-space footprint changes color with the
+active mode. Smooth moves samples toward their local neighborhood average;
+Flatten captures the quantized elevation beneath the pointer when the stroke
+begins and moves every visited sample toward that fixed height. Press and drag
+to preview a continuous stroke; moving into a new terrain sample applies the
+brush once at that sample. Releasing commits the complete stroke as one
+reversible patch command and rebuilds only affected terrain chunks. `Esc`
+restores the authored terrain without adding history.
 Use **Frame Terrain** in the terrain panel to fit every authored terrain surface
 in the camera view, including its minimum and maximum sampled elevations.
 

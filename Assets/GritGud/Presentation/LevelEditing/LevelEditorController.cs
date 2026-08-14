@@ -40,11 +40,7 @@ namespace GritGud.Presentation.LevelEditing
         private LevelDocument viewDocument;
         private ScenarioAuthoringCoordinator scenarioAuthoring;
         private LevelEntityView selectedView;
-        private RuntimeBoundsOutline selectionOutline;
-        private RuntimeBoundsOutline hoverOutline;
-        private RuntimeBoundsOutline placementOutline;
-        private readonly Dictionary<string, RuntimeBoundsOutline> secondarySelectionOutlines =
-            new Dictionary<string, RuntimeBoundsOutline>(StringComparer.Ordinal);
+        private LevelEditorOutlinePresenter outlinePresenter;
         private IReadOnlyList<LevelValidationIssue> validationIssues =
             Array.Empty<LevelValidationIssue>();
         private bool previewMode;
@@ -166,7 +162,7 @@ namespace GritGud.Presentation.LevelEditing
                 presentationState,
                 this);
             gui.SyncPlayerStartFields(RequireSelectedPlayer(workspace.CreateSnapshot()).transform);
-            EnsureOutlines();
+            outlinePresenter = new LevelEditorOutlinePresenter(transform);
             validationIssues = workspace.ValidationIssues;
 
             if (startInPreview)
@@ -216,6 +212,7 @@ namespace GritGud.Presentation.LevelEditing
             terrainProjector?.Dispose();
             interactionPointHandles?.Dispose();
             scenarioActorHandles?.Dispose();
+            outlinePresenter?.Dispose();
             workspace?.Dispose();
             toolManager = null;
             projector = null;
@@ -228,39 +225,12 @@ namespace GritGud.Presentation.LevelEditing
             placementTool = null;
             terrainTool = null;
             selectedView = null;
+            outlinePresenter = null;
             sceneQuery = null;
             snapSettings = null;
             preferencesStore = null;
             gui = null;
 
-            if (selectionOutline != null)
-            {
-                Destroy(selectionOutline.gameObject);
-            }
-
-            if (hoverOutline != null)
-            {
-                Destroy(hoverOutline.gameObject);
-            }
-
-            if (placementOutline != null)
-            {
-                Destroy(placementOutline.gameObject);
-            }
-
-            foreach (RuntimeBoundsOutline outline in secondarySelectionOutlines.Values)
-            {
-                if (outline != null)
-                {
-                    Destroy(outline.gameObject);
-                }
-            }
-
-            secondarySelectionOutlines.Clear();
-
-            selectionOutline = null;
-            hoverOutline = null;
-            placementOutline = null;
             suspended = false;
             viewDocument = null;
             enabled = false;
@@ -363,16 +333,7 @@ namespace GritGud.Presentation.LevelEditing
             projector.SetVisible(false);
             terrainProjector.SetVisible(false);
             scenarioActorHandles.SetVisible(false);
-            selectionOutline.gameObject.SetActive(false);
-            hoverOutline.gameObject.SetActive(false);
-            placementOutline.gameObject.SetActive(false);
-            foreach (RuntimeBoundsOutline outline in secondarySelectionOutlines.Values)
-            {
-                if (outline != null)
-                {
-                    outline.gameObject.SetActive(false);
-                }
-            }
+            outlinePresenter.HideAll();
         }
 
         public void ResumeFromTestPlay()
@@ -574,8 +535,7 @@ namespace GritGud.Presentation.LevelEditing
             toolManager.ActivateDefault();
             selection.Clear();
             previewMode = true;
-            selectionOutline.gameObject.SetActive(false);
-            placementOutline.gameObject.SetActive(false);
+            outlinePresenter.HideAll();
             projector.Replace(workspace.CreateSnapshot());
             terrainProjector.Replace(workspace.CreateSnapshot());
             interactionPointHandles.Refresh(workspace.CreateSnapshot(), selection, projector);
@@ -761,11 +721,6 @@ namespace GritGud.Presentation.LevelEditing
                 projector?.TryGetEntity(entityId, out selectedView);
             }
 
-            if (selectionOutline != null)
-            {
-                selectionOutline.gameObject.SetActive(selectedView != null && !previewMode);
-            }
-
             if (selectedView != null)
             {
                 SyncInspectorFields(selectedView.ReadTransform());
@@ -806,93 +761,28 @@ namespace GritGud.Presentation.LevelEditing
             SetStatus($"Loaded level from {args.SourceLabel}.");
         }
 
-        private void EnsureOutlines()
-        {
-            var selectionObject = new GameObject("Selection Outline");
-            selectionObject.transform.SetParent(transform, false);
-            selectionOutline = selectionObject.AddComponent<RuntimeBoundsOutline>();
-            selectionOutline.Initialize(LevelEditorTheme.SelectionOutline);
-            selectionOutline.gameObject.SetActive(false);
-
-            var hoverObject = new GameObject("Hover Outline");
-            hoverObject.transform.SetParent(transform, false);
-            hoverOutline = hoverObject.AddComponent<RuntimeBoundsOutline>();
-            hoverOutline.Initialize(LevelEditorTheme.HoverOutline);
-            hoverOutline.gameObject.SetActive(false);
-
-            var placementObject = new GameObject("Placement Outline");
-            placementObject.transform.SetParent(transform, false);
-            placementOutline = placementObject.AddComponent<RuntimeBoundsOutline>();
-            placementOutline.Initialize(LevelEditorTheme.PlacementOutline);
-            placementOutline.gameObject.SetActive(false);
-        }
-
         private void UpdateOutlines()
         {
-            if (selectionOutline != null && selectedView != null && !previewMode)
-            {
-                selectionOutline.gameObject.SetActive(true);
-                selectionOutline.SetBounds(selectedView.GetWorldBounds());
-            }
-
-            UpdateSecondarySelectionOutlines();
-
-            if (placementOutline != null
-                && !previewMode
+            outlinePresenter.PresentSelection(
+                selectedView,
+                selection.Targets,
+                projector,
+                !previewMode);
+            if (!previewMode
                 && toolManager.ActiveTool == placementTool
                 && placementTool.TryGetPreviewBounds(out Bounds previewBounds))
             {
-                placementOutline.gameObject.SetActive(true);
-                placementOutline.SetBounds(previewBounds);
+                outlinePresenter.PresentPlacement(previewBounds);
             }
-            else if (placementOutline != null)
+            else
             {
-                placementOutline.gameObject.SetActive(false);
-            }
-        }
-
-        private void UpdateSecondarySelectionOutlines()
-        {
-            var visibleIds = new HashSet<string>(StringComparer.Ordinal);
-            if (!previewMode)
-            {
-                foreach (LevelSelectionTarget target in selection.Targets.Skip(1))
-                {
-                    if (!visibleIds.Add(target.EntityId)
-                        || !projector.TryGetEntity(target.EntityId, out LevelEntityView view))
-                    {
-                        continue;
-                    }
-
-                    if (!secondarySelectionOutlines.TryGetValue(
-                        target.EntityId,
-                        out RuntimeBoundsOutline outline))
-                    {
-                        var outlineObject = new GameObject("Secondary Selection Outline");
-                        outlineObject.transform.SetParent(transform, false);
-                        outline = outlineObject.AddComponent<RuntimeBoundsOutline>();
-                        outline.Initialize(LevelEditorTheme.SecondarySelectionOutline);
-                        secondarySelectionOutlines.Add(target.EntityId, outline);
-                    }
-
-                    outline.gameObject.SetActive(true);
-                    outline.SetBounds(view.GetWorldBounds());
-                }
-            }
-
-            foreach (KeyValuePair<string, RuntimeBoundsOutline> entry
-                in secondarySelectionOutlines)
-            {
-                if (!visibleIds.Contains(entry.Key))
-                {
-                    entry.Value.gameObject.SetActive(false);
-                }
+                outlinePresenter.PresentPlacement(null);
             }
         }
 
         private void UpdateHover(Vector2 pointerPosition, bool pointerBlocked)
         {
-            if (hoverOutline == null)
+            if (outlinePresenter == null)
             {
                 return;
             }
@@ -907,12 +797,11 @@ namespace GritGud.Presentation.LevelEditing
                     view.EntityId,
                     StringComparison.Ordinal)))
             {
-                hoverOutline.gameObject.SetActive(true);
-                hoverOutline.SetBounds(view.GetWorldBounds());
+                outlinePresenter.PresentHover(view);
                 return;
             }
 
-            hoverOutline.gameObject.SetActive(false);
+            outlinePresenter.PresentHover(null);
         }
 
         private void SyncInspectorFields(LevelTransformData value)

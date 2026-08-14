@@ -20,9 +20,13 @@ namespace GritGud.Presentation.LevelEditing.UI
             this.frameTerrain = frameTerrain ?? throw new ArgumentNullException(nameof(frameTerrain));
         }
 
-        public bool IsRaiseActive => IsActive && !tool.LowerTerrain;
+        public bool IsRaiseActive => IsModeActive(TerrainBrushMode.Raise);
 
-        public bool IsLowerActive => IsActive && tool.LowerTerrain;
+        public bool IsLowerActive => IsModeActive(TerrainBrushMode.Lower);
+
+        public bool IsSmoothActive => IsModeActive(TerrainBrushMode.Smooth);
+
+        public bool IsFlattenActive => IsModeActive(TerrainBrushMode.Flatten);
 
         public int RadiusInSamples
         {
@@ -38,8 +42,7 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         public void ActivateRaise()
         {
-            tool.LowerTerrain = false;
-            toolManager.Activate(TerrainHeightLevelEditorTool.ToolId);
+            ActivateMode(TerrainBrushMode.Raise);
         }
 
         public void Activate()
@@ -49,7 +52,22 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         public void ActivateLower()
         {
-            tool.LowerTerrain = true;
+            ActivateMode(TerrainBrushMode.Lower);
+        }
+
+        public void ActivateSmooth()
+        {
+            ActivateMode(TerrainBrushMode.Smooth);
+        }
+
+        public void ActivateFlatten()
+        {
+            ActivateMode(TerrainBrushMode.Flatten);
+        }
+
+        private void ActivateMode(TerrainBrushMode mode)
+        {
+            tool.BrushMode = mode;
             toolManager.Activate(TerrainHeightLevelEditorTool.ToolId);
         }
 
@@ -59,5 +77,8 @@ namespace GritGud.Presentation.LevelEditing.UI
         }
 
         private bool IsActive => ReferenceEquals(toolManager.ActiveTool, tool);
+
+        private bool IsModeActive(TerrainBrushMode mode) =>
+            IsActive && tool.BrushMode == mode;
     }
 }

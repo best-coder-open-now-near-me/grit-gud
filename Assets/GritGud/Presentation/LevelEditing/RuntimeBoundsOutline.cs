@@ -18,7 +18,7 @@ namespace GritGud.Presentation.LevelEditing
                 GameObject edge = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 edge.name = $"Edge {index + 1}";
                 edge.transform.SetParent(transform, false);
-                Destroy(edge.GetComponent<Collider>());
+                DestroyObject(edge.GetComponent<Collider>());
                 edge.GetComponent<Renderer>().sharedMaterial = material;
                 edges[index] = edge.transform;
             }
@@ -58,7 +58,24 @@ namespace GritGud.Presentation.LevelEditing
         {
             if (material != null)
             {
-                Destroy(material);
+                DestroyObject(material);
+            }
+        }
+
+        private static void DestroyObject(Object target)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            if (UnityEngine.Application.isPlaying)
+            {
+                Object.Destroy(target);
+            }
+            else
+            {
+                Object.DestroyImmediate(target);
             }
         }
 
