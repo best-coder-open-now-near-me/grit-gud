@@ -350,7 +350,8 @@ namespace GritGud.Presentation.Tests
 
             foreach (string archetypeId in privateArchetypeIds)
             {
-                LevelArchetypeDefinition definition = catalog.Get(archetypeId);
+                LevelArchetypeDefinition definition = catalog.Entries.Single(
+                    entry => entry.ArchetypeId == archetypeId);
                 Assert.That(definition.Prefab, Is.Not.Null, archetypeId);
                 Assert.That(definition.LocalBounds.size.x, Is.GreaterThan(0f), archetypeId);
                 Assert.That(definition.LocalBounds.size.y, Is.GreaterThan(0f), archetypeId);
