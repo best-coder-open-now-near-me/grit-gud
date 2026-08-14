@@ -33,7 +33,7 @@ An invalid import therefore leaves the currently loaded level untouched.
 | `WASD` or arrow keys | Pan the camera |
 | `Q` / `E` | Rotate the camera |
 | Right-mouse drag | Orbit the camera and adjust its pitch |
-| Middle-mouse drag | Pan relative to the view |
+| Middle-mouse drag | Orbit the camera and adjust its pitch |
 | Mouse wheel | Zoom in responsive, distance-relative steps |
 | `Shift` while using movement keys | Pan the camera three times faster |
 | `F` | Frame the selected entity |

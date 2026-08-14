@@ -96,14 +96,7 @@ namespace GritGud.Presentation.LevelEditing.Core
                 * Time.unscaledDeltaTime;
             yaw += input.CameraRotation * KeyboardOrbitSpeed * Time.unscaledDeltaTime;
 
-            if (input.MiddleHeld && !input.PointerBlocked)
-            {
-                target += (-right * input.PointerDelta.x - forward * input.PointerDelta.y)
-                    * distance
-                    * 0.0025f;
-            }
-
-            if (input.SecondaryHeld && !input.PointerBlocked)
+            if ((input.MiddleHeld || input.SecondaryHeld) && !input.PointerBlocked)
             {
                 yaw += input.PointerDelta.x * PointerOrbitSensitivity;
                 pitch = Mathf.Clamp(

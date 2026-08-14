@@ -41,6 +41,22 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void MiddleDragOrbitsCameraInYawAndPitch()
+        {
+            Quaternion before = camera.transform.rotation;
+
+            controller.Tick(new LevelEditorInputState
+            {
+                MiddleHeld = true,
+                PointerDelta = new Vector2(40f, 20f),
+            });
+
+            Assert.That(Quaternion.Angle(before, camera.transform.rotation), Is.GreaterThan(1f));
+            Assert.That(camera.transform.eulerAngles.x, Is.EqualTo(50f).Within(0.01f));
+            Assert.That(camera.transform.eulerAngles.y, Is.EqualTo(10f).Within(0.01f));
+        }
+
+        [Test]
         public void ScrollZoomUsesAUsefulStepForSmallBrowserDeltas()
         {
             Vector3 target = camera.transform.position + camera.transform.forward * 15f;
