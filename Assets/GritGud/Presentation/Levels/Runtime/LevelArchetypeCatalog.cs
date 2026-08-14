@@ -12,6 +12,7 @@ namespace GritGud.Presentation.Levels.Runtime
         PlacementSurface = 1 << 0,
         Cover = 1 << 1,
         Destructible = 1 << 2,
+        Vehicle = 1 << 3,
     }
 
     public readonly struct LevelArchetypePlacementRules
@@ -97,6 +98,7 @@ namespace GritGud.Presentation.Levels.Runtime
         [SerializeField] private Vector3 defaultCoverCenter;
         [SerializeField] private Vector3 defaultCoverSize = Vector3.one;
         [SerializeField] private bool destructible;
+        [SerializeField] private bool vehicle;
         [SerializeField] private string initialDestructibleState = "intact";
         [SerializeField] private float initialIntegrity = 10f;
 
@@ -130,7 +132,8 @@ namespace GritGud.Presentation.Levels.Runtime
         public LevelArchetypeCapabilities Capabilities =>
             (placementSurface ? LevelArchetypeCapabilities.PlacementSurface : LevelArchetypeCapabilities.None)
             | (providesCover ? LevelArchetypeCapabilities.Cover : LevelArchetypeCapabilities.None)
-            | (destructible ? LevelArchetypeCapabilities.Destructible : LevelArchetypeCapabilities.None);
+            | (destructible ? LevelArchetypeCapabilities.Destructible : LevelArchetypeCapabilities.None)
+            | (vehicle ? LevelArchetypeCapabilities.Vehicle : LevelArchetypeCapabilities.None);
 
         public LevelArchetypeGameplayDefaults GameplayDefaults => new LevelArchetypeGameplayDefaults(
             providesCover,

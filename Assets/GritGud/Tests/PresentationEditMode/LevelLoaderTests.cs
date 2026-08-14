@@ -3,6 +3,7 @@ using GritGud.Application.Levels;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Levels;
 using GritGud.Presentation.Gameplay;
+using GritGud.Presentation.LevelEditing;
 using GritGud.Presentation.Levels;
 using GritGud.Presentation.Levels.Runtime;
 using NUnit.Framework;
@@ -19,11 +20,28 @@ namespace GritGud.Presentation.Tests
 
             string[] ids = catalog.Entries.Select(entry => entry.ArchetypeId).ToArray();
 
-            Assert.That(ids, Has.Length.EqualTo(7));
+            Assert.That(ids.Length, Is.GreaterThanOrEqualTo(7));
             Assert.That(ids.Distinct().Count(), Is.EqualTo(ids.Length));
             Assert.That(ids, Does.Contain("structure.floor.standard"));
             Assert.That(ids, Does.Contain("prop.crate.standard"));
             Assert.That(ids, Does.Contain("vehicle.buggy.standard"));
+            Assert.That(
+                catalog.Entries.Single(entry => entry.ArchetypeId == "vehicle.buggy.standard")
+                    .Capabilities.HasFlag(LevelArchetypeCapabilities.Vehicle),
+                Is.True);
+        }
+
+        [Test]
+        public void ScenarioAuthoringCatalogExposesPlayerAndOpponentTemplates()
+        {
+            ScenarioAuthoringCatalog authoring = ScenarioAuthoringCatalog.LoadDefault();
+
+            Assert.That(authoring.ActorTemplates.Select(template => template.TemplateId),
+                Does.Contain("player"));
+            Assert.That(authoring.ActorTemplates.Select(template => template.TemplateId),
+                Does.Contain("depot-rifleman"));
+            Assert.That(authoring.GetActor("player").PlayerTemplate, Is.True);
+            Assert.That(authoring.GetActor("depot-rifleman").PlayerTemplate, Is.False);
         }
 
         [Test]

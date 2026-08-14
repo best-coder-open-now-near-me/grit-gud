@@ -15,12 +15,13 @@ namespace GritGud.Presentation.LevelEditing.UI
     public sealed class LevelEditorGui
     {
         public const float ToolbarHeight = 92f;
-        public const float PaletteWidth = 240f;
-        public const float InspectorWidth = 330f;
+        public const float PaletteWidth = 300f;
+        public const float InspectorWidth = 360f;
 
         private readonly LevelEditorWorkspace workspace;
         private readonly LevelSelectionModel selection;
         private readonly LevelArchetypeCatalog catalog;
+        private readonly ScenarioAuthoringCatalog scenarioCatalog;
         private readonly LevelEditorToolManager toolManager;
         private readonly PlacementLevelEditorTool placementTool;
         private readonly TerrainToolPanelModel terrainPanel;
@@ -41,6 +42,40 @@ namespace GritGud.Presentation.LevelEditing.UI
         private readonly Action<string, string, string, string, string> applyInteractionPoint;
         private readonly Action deleteInteractionPoint;
         private readonly Action<string, string, string> applyDestructibleDefaults;
+        private readonly Action<string> addScenarioActor;
+        private readonly Action<
+            string,
+            string,
+            string,
+            string,
+            string,
+            bool,
+            bool,
+            bool> applyScenarioActor;
+        private readonly Action<string> deleteScenarioActor;
+        private readonly Action<string> placeScenarioActorAtView;
+        private readonly Action<string, bool, string, string, bool> applyScenarioProp;
+        private readonly Action<
+            string,
+            string,
+            bool,
+            string,
+            string,
+            string,
+            string> applyScenarioObjective;
+        private readonly Action<
+            string,
+            bool,
+            string,
+            string,
+            string,
+            string,
+            string,
+            string,
+            string,
+            string,
+            string,
+            bool> applyScenarioVehicle;
         private Vector2 paletteScroll;
         private Vector2 inspectorScroll;
         private string xText = "0";
@@ -64,13 +99,45 @@ namespace GritGud.Presentation.LevelEditing.UI
         private string paletteSearch = string.Empty;
         private string paletteCategory = string.Empty;
         private string hierarchySearch = string.Empty;
-        private bool showScenePanel;
+        private int leftPanel;
+        private string selectedScenarioActorId = string.Empty;
+        private string scenarioXText = "0";
+        private string scenarioYText = "0";
+        private string scenarioZText = "0";
+        private string scenarioYawText = "0";
+        private bool scenarioPlayerControlled;
+        private bool scenarioInitiallySelected;
+        private bool scenarioPrimaryTarget;
+        private string lastScenarioPropEntityId = string.Empty;
+        private bool scenarioPropEnabled;
+        private string scenarioPropMassText = "25";
+        private string scenarioPropSize = "medium";
+        private bool scenarioPropStartsEncounter;
+        private string lastScenarioObjectiveKey = string.Empty;
+        private bool scenarioObjectiveEnabled;
+        private string scenarioObjectiveDisplayName = "Objective";
+        private string scenarioObjectiveActiveText = "Complete the objective";
+        private string scenarioObjectiveCompletedText = "Objective complete";
+        private string scenarioObjectiveCostText = "1";
+        private string lastScenarioVehicleEntityId = string.Empty;
+        private bool scenarioVehicleEnabled;
+        private string scenarioVehicleMaximumSpeedText = "12";
+        private string scenarioVehicleAccelerationText = "3";
+        private string scenarioVehicleBrakingText = "4";
+        private string scenarioVehicleLowTurnText = "45";
+        private string scenarioVehicleHighTurnText = "15";
+        private string scenarioVehicleBaseRadiusText = "2";
+        private string scenarioVehicleRadiusFactorText = "0.25";
+        private string scenarioVehicleStartingSpeedText = "0";
+        private string scenarioVehicleOccupantId = string.Empty;
+        private bool scenarioVehicleStartsEncounter;
         private bool showControls;
 
         public LevelEditorGui(
             LevelEditorWorkspace workspace,
             LevelSelectionModel selection,
             LevelArchetypeCatalog catalog,
+            ScenarioAuthoringCatalog scenarioCatalog,
             LevelEditorToolManager toolManager,
             PlacementLevelEditorTool placementTool,
             TerrainToolPanelModel terrainPanel,
@@ -90,11 +157,23 @@ namespace GritGud.Presentation.LevelEditing.UI
             Action addInteractionPoint,
             Action<string, string, string, string, string> applyInteractionPoint,
             Action deleteInteractionPoint,
-            Action<string, string, string> applyDestructibleDefaults)
+            Action<string, string, string> applyDestructibleDefaults,
+            Action<string> addScenarioActor,
+            Action<string, string, string, string, string, bool, bool, bool>
+                applyScenarioActor,
+            Action<string> deleteScenarioActor,
+            Action<string> placeScenarioActorAtView,
+            Action<string, bool, string, string, bool> applyScenarioProp,
+            Action<string, string, bool, string, string, string, string>
+                applyScenarioObjective,
+            Action<string, bool, string, string, string, string, string, string,
+                string, string, string, bool> applyScenarioVehicle)
         {
             this.workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
             this.selection = selection ?? throw new ArgumentNullException(nameof(selection));
             this.catalog = catalog != null ? catalog : throw new ArgumentNullException(nameof(catalog));
+            this.scenarioCatalog = scenarioCatalog
+                ?? throw new ArgumentNullException(nameof(scenarioCatalog));
             this.toolManager = toolManager ?? throw new ArgumentNullException(nameof(toolManager));
             this.placementTool = placementTool ?? throw new ArgumentNullException(nameof(placementTool));
             this.terrainPanel = terrainPanel ?? throw new ArgumentNullException(nameof(terrainPanel));
@@ -123,6 +202,20 @@ namespace GritGud.Presentation.LevelEditing.UI
                 ?? throw new ArgumentNullException(nameof(deleteInteractionPoint));
             this.applyDestructibleDefaults = applyDestructibleDefaults
                 ?? throw new ArgumentNullException(nameof(applyDestructibleDefaults));
+            this.addScenarioActor = addScenarioActor
+                ?? throw new ArgumentNullException(nameof(addScenarioActor));
+            this.applyScenarioActor = applyScenarioActor
+                ?? throw new ArgumentNullException(nameof(applyScenarioActor));
+            this.deleteScenarioActor = deleteScenarioActor
+                ?? throw new ArgumentNullException(nameof(deleteScenarioActor));
+            this.placeScenarioActorAtView = placeScenarioActorAtView
+                ?? throw new ArgumentNullException(nameof(placeScenarioActorAtView));
+            this.applyScenarioProp = applyScenarioProp
+                ?? throw new ArgumentNullException(nameof(applyScenarioProp));
+            this.applyScenarioObjective = applyScenarioObjective
+                ?? throw new ArgumentNullException(nameof(applyScenarioObjective));
+            this.applyScenarioVehicle = applyScenarioVehicle
+                ?? throw new ArgumentNullException(nameof(applyScenarioVehicle));
         }
 
         public void Draw(
@@ -167,6 +260,60 @@ namespace GritGud.Presentation.LevelEditing.UI
             playerStartYText = value.position.y.ToString("0.###", CultureInfo.InvariantCulture);
             playerStartZText = value.position.z.ToString("0.###", CultureInfo.InvariantCulture);
             playerStartYawText = value.yawDegrees.ToString("0.###", CultureInfo.InvariantCulture);
+        }
+
+        public void SelectScenarioActor(string actorId)
+        {
+            selectedScenarioActorId = actorId ?? string.Empty;
+            LevelScenarioActorData actor = workspace.CreateSnapshot().scenario.actors
+                .FirstOrDefault(candidate => string.Equals(
+                    candidate?.id,
+                    selectedScenarioActorId,
+                    StringComparison.Ordinal));
+            if (actor != null)
+                SyncScenarioActorFields(actor);
+        }
+
+        public void SyncScenarioActorFields(LevelScenarioActorData actor)
+        {
+            if (actor == null)
+                return;
+            selectedScenarioActorId = actor.id;
+            scenarioXText = actor.transform.position.x.ToString(
+                "0.###",
+                CultureInfo.InvariantCulture);
+            scenarioYText = actor.transform.position.y.ToString(
+                "0.###",
+                CultureInfo.InvariantCulture);
+            scenarioZText = actor.transform.position.z.ToString(
+                "0.###",
+                CultureInfo.InvariantCulture);
+            scenarioYawText = actor.transform.yawDegrees.ToString(
+                "0.###",
+                CultureInfo.InvariantCulture);
+            scenarioPlayerControlled = actor.playerControlled;
+            scenarioInitiallySelected = actor.initiallySelected;
+            scenarioPrimaryTarget = actor.primaryTarget;
+        }
+
+        public void SyncScenarioFields(LevelDocument document)
+        {
+            lastScenarioPropEntityId = string.Empty;
+            lastScenarioObjectiveKey = string.Empty;
+            lastScenarioVehicleEntityId = string.Empty;
+            LevelScenarioActorData player = document?.scenario?
+                .FindInitiallySelectedPlayer();
+            if (player != null)
+                SyncPlayerStartFields(player.transform);
+            LevelScenarioActorData selected = document?.scenario?.actors
+                .FirstOrDefault(actor => string.Equals(
+                    actor?.id,
+                    selectedScenarioActorId,
+                    StringComparison.Ordinal));
+            if (selected != null)
+                SyncScenarioActorFields(selected);
+            else
+                selectedScenarioActorId = string.Empty;
         }
 
         private void DrawToolbar(bool previewMode)
@@ -301,29 +448,23 @@ namespace GritGud.Presentation.LevelEditing.UI
             paletteScroll = GUILayout.BeginScrollView(paletteScroll);
             GUILayout.BeginHorizontal();
             Color panelToggleColor = GUI.backgroundColor;
-            if (!showScenePanel)
-            {
-                GUI.backgroundColor = new Color(0.2f, 0.75f, 1f);
-            }
-            if (GUILayout.Button("LIBRARY", GUILayout.Height(30f)))
-            {
-                showScenePanel = false;
-            }
-            GUI.backgroundColor = panelToggleColor;
-            if (showScenePanel)
-            {
-                GUI.backgroundColor = new Color(0.2f, 0.75f, 1f);
-            }
-            if (GUILayout.Button("SCENE", GUILayout.Height(30f)))
-            {
-                showScenePanel = true;
-            }
+            DrawLeftPanelTab("LIBRARY", 0, panelToggleColor);
+            DrawLeftPanelTab("SCENE", 1, panelToggleColor);
+            DrawLeftPanelTab("SCENARIO", 2, panelToggleColor);
             GUI.backgroundColor = panelToggleColor;
             GUILayout.EndHorizontal();
 
-            if (showScenePanel)
+            if (leftPanel == 1)
             {
                 DrawHierarchy();
+                GUILayout.EndScrollView();
+                GUILayout.EndArea();
+                return;
+            }
+
+            if (leftPanel == 2)
+            {
+                DrawScenario();
                 GUILayout.EndScrollView();
                 GUILayout.EndArea();
                 return;
@@ -454,6 +595,136 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.EndArea();
         }
 
+        private void DrawLeftPanelTab(string label, int panel, Color previous)
+        {
+            if (leftPanel == panel)
+                GUI.backgroundColor = new Color(0.2f, 0.75f, 1f);
+            if (GUILayout.Button(label, GUILayout.Height(30f)))
+                leftPanel = panel;
+            GUI.backgroundColor = previous;
+        }
+
+        private void DrawScenario()
+        {
+            LevelDocument document = workspace.CreateSnapshot();
+            GUILayout.Space(8f);
+            GUILayout.Label("SCENARIO COMPOSITION", GUI.skin.box);
+            GUILayout.Label(
+                "Actors and gameplay links here are the exact data used by Test Play.");
+            GUILayout.Space(8f);
+            GUILayout.Label("ADD ACTOR AT CAMERA FOCUS");
+            string previousGroup = null;
+            foreach (ScenarioActorTemplateDefinition template in scenarioCatalog.ActorTemplates)
+            {
+                string group = template.PlayerTemplate ? "PLAYER PARTY" : "OPPONENTS";
+                if (!string.Equals(previousGroup, group, StringComparison.Ordinal))
+                {
+                    previousGroup = group;
+                    GUILayout.Label(group, GUI.skin.box);
+                }
+
+                if (GUILayout.Button($"+ {template.DisplayName}", GUILayout.Height(30f)))
+                    addScenarioActor(template.TemplateId);
+            }
+
+            GUILayout.Space(10f);
+            GUILayout.Label($"ACTORS ({document.scenario.actors.Count})", GUI.skin.box);
+            foreach (LevelScenarioActorData actor in document.scenario.actors
+                .Where(actor => actor != null)
+                .OrderByDescending(actor => actor.playerControlled)
+                .ThenBy(actor => actor.id, StringComparer.Ordinal))
+            {
+                Color previous = GUI.backgroundColor;
+                if (string.Equals(
+                        selectedScenarioActorId,
+                        actor.id,
+                        StringComparison.Ordinal))
+                {
+                    GUI.backgroundColor = new Color(0.2f, 0.75f, 1f);
+                }
+
+                ScenarioActorTemplateDefinition template =
+                    scenarioCatalog.GetActor(actor.templateId);
+                string role = actor.playerControlled
+                    ? actor.initiallySelected ? "PLAYER • SELECTED" : "PLAYER"
+                    : actor.primaryTarget ? "TARGET" : "ENEMY";
+                if (GUILayout.Button(
+                        $"{template.DisplayName}\n{role}",
+                        GUILayout.Height(42f)))
+                {
+                    SyncScenarioActorFields(actor);
+                }
+                GUI.backgroundColor = previous;
+            }
+
+            LevelScenarioActorData selected = document.scenario.actors.FirstOrDefault(actor =>
+                string.Equals(actor?.id, selectedScenarioActorId, StringComparison.Ordinal));
+            if (selected == null)
+            {
+                GUILayout.Space(8f);
+                GUILayout.Label("Choose an actor to edit its start position and role.");
+                DrawScenarioLinkSummary(document.scenario);
+                return;
+            }
+
+            GUILayout.Space(10f);
+            GUILayout.Label("SELECTED ACTOR", GUI.skin.box);
+            GUILayout.Label($"ID: {selected.id}");
+            GUILayout.Label($"Template: {selected.templateId}");
+            DrawLabeledField("X", ref scenarioXText);
+            DrawLabeledField("Y", ref scenarioYText);
+            DrawLabeledField("Z", ref scenarioZText);
+            DrawLabeledField("Yaw", ref scenarioYawText);
+            scenarioPlayerControlled = GUILayout.Toggle(
+                scenarioPlayerControlled,
+                "Player controlled");
+            if (scenarioPlayerControlled)
+                scenarioPrimaryTarget = false;
+            else
+                scenarioInitiallySelected = false;
+            GUI.enabled = scenarioPlayerControlled;
+            scenarioInitiallySelected = GUILayout.Toggle(
+                scenarioInitiallySelected,
+                "Initially selected party actor");
+            GUI.enabled = !scenarioPlayerControlled;
+            scenarioPrimaryTarget = GUILayout.Toggle(
+                scenarioPrimaryTarget,
+                "Primary target");
+            GUI.enabled = true;
+
+            if (GUILayout.Button("APPLY ACTOR", GUILayout.Height(32f)))
+            {
+                applyScenarioActor(
+                    selected.id,
+                    scenarioXText,
+                    scenarioYText,
+                    scenarioZText,
+                    scenarioYawText,
+                    scenarioPlayerControlled,
+                    scenarioInitiallySelected,
+                    scenarioPrimaryTarget);
+            }
+
+            if (GUILayout.Button("PLACE AT CAMERA FOCUS", GUILayout.Height(30f)))
+                placeScenarioActorAtView(selected.id);
+
+            Color deleteColor = GUI.backgroundColor;
+            GUI.backgroundColor = new Color(0.7f, 0.25f, 0.2f);
+            if (GUILayout.Button("DELETE ACTOR", GUILayout.Height(30f)))
+                deleteScenarioActor(selected.id);
+            GUI.backgroundColor = deleteColor;
+            DrawScenarioLinkSummary(document.scenario);
+        }
+
+        private static void DrawScenarioLinkSummary(LevelScenarioData scenario)
+        {
+            GUILayout.Space(12f);
+            GUILayout.Label("GAMEPLAY LINKS", GUI.skin.box);
+            GUILayout.Label($"Objectives: {scenario.objectives.Count}");
+            GUILayout.Label($"Physics props: {scenario.props.Count}");
+            GUILayout.Label($"Vehicles: {scenario.vehicles.Count}");
+        }
+
         private void DrawHierarchy()
         {
             LevelDocument document = workspace.CreateSnapshot();
@@ -471,8 +742,16 @@ namespace GritGud.Presentation.LevelEditing.UI
             {
                 GUILayout.Label("PLAYER START  (NOT CONFIGURED)");
             }
+            GUILayout.Label($"ACTORS  {document.scenario.actors.Count}");
+            GUILayout.Label($"OBJECTIVES  {document.scenario.objectives.Count}");
+            GUILayout.Label($"PHYSICS PROPS  {document.scenario.props.Count}");
+            GUILayout.Label($"VEHICLES  {document.scenario.vehicles.Count}");
+            if (GUILayout.Button("OPEN SCENARIO COMPOSITION", GUILayout.Height(28f)))
+                leftPanel = 2;
             GUILayout.Space(8f);
-            GUILayout.Label($"ENTITIES ({document.entities.Count})", GUI.skin.box);
+            GUILayout.Label("LEVEL GEOMETRY", GUI.skin.box);
+            GUILayout.Label($"TERRAIN SURFACES  {document.terrainSurfaces.Count}");
+            GUILayout.Label($"ENTITIES  {document.entities.Count}");
             hierarchySearch = GUILayout.TextField(hierarchySearch ?? string.Empty);
             string previousCategory = null;
             int matches = 0;
@@ -631,6 +910,8 @@ namespace GritGud.Presentation.LevelEditing.UI
                 GUILayout.Space(12f);
                 DrawInteractionInspector(entity, primary);
                 DrawDestructibleInspector(selectedView, entity);
+                DrawScenarioPropInspector(selectedView, entity);
+                DrawScenarioVehicleInspector(selectedView, entity);
             }
 
             GUILayout.Space(16f);
@@ -679,7 +960,7 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         private void DrawPlayerStartInspector()
         {
-            GUILayout.Label("PLAYTEST PLAYER START", GUI.skin.box);
+            GUILayout.Label("SCENARIO PLAYER START", GUI.skin.box);
             DrawLabeledField("X", ref playerStartXText);
             DrawLabeledField("Y", ref playerStartYText);
             DrawLabeledField("Z", ref playerStartZText);
@@ -737,6 +1018,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                         deleteInteractionPoint();
                     }
                     GUI.backgroundColor = previous;
+                    DrawScenarioObjectiveInspector(entity, point);
                     return;
                 }
             }
@@ -795,6 +1077,187 @@ namespace GritGud.Presentation.LevelEditing.UI
             }
         }
 
+        private void DrawScenarioPropInspector(LevelEntityView view, LevelEntity entity)
+        {
+            if ((view.Archetype.Capabilities & LevelArchetypeCapabilities.Destructible) == 0)
+                return;
+
+            LevelScenarioPropData configured = workspace.CreateSnapshot().scenario.props
+                .FirstOrDefault(prop => string.Equals(
+                    prop?.entityId,
+                    entity.id,
+                    StringComparison.Ordinal));
+            if (!string.Equals(lastScenarioPropEntityId, entity.id, StringComparison.Ordinal))
+            {
+                lastScenarioPropEntityId = entity.id;
+                scenarioPropEnabled = configured != null;
+                scenarioPropMassText = (configured?.mass ?? 25f).ToString(
+                    "0.###",
+                    CultureInfo.InvariantCulture);
+                scenarioPropSize = configured?.sizeClass ?? "medium";
+                scenarioPropStartsEncounter = configured?.startsEncounterOnAttack ?? false;
+            }
+
+            GUILayout.Space(12f);
+            GUILayout.Label("SCENARIO PHYSICS PROP", GUI.skin.box);
+            scenarioPropEnabled = GUILayout.Toggle(
+                scenarioPropEnabled,
+                "Participates in displacement and combat");
+            GUI.enabled = scenarioPropEnabled;
+            DrawLabeledField("Mass", ref scenarioPropMassText);
+            scenarioPropSize = GUILayout.SelectionGrid(
+                ScenarioSizeIndex(scenarioPropSize),
+                new[] { "SMALL", "MEDIUM", "LARGE", "HUGE" },
+                4) switch
+            {
+                0 => "small",
+                2 => "large",
+                3 => "huge",
+                _ => "medium",
+            };
+            scenarioPropStartsEncounter = GUILayout.Toggle(
+                scenarioPropStartsEncounter,
+                "Attack starts encounter");
+            GUI.enabled = true;
+            if (GUILayout.Button("APPLY PHYSICS PROP", GUILayout.Height(30f)))
+            {
+                applyScenarioProp(
+                    entity.id,
+                    scenarioPropEnabled,
+                    scenarioPropMassText,
+                    scenarioPropSize,
+                    scenarioPropStartsEncounter);
+            }
+        }
+
+        private void DrawScenarioObjectiveInspector(
+            LevelEntity entity,
+            InteractionPointData point)
+        {
+            string key = entity.id + ":" + point.id;
+            LevelScenarioObjectiveData configured = workspace.CreateSnapshot().scenario.objectives
+                .FirstOrDefault(objective =>
+                    string.Equals(objective?.entityId, entity.id, StringComparison.Ordinal)
+                    && string.Equals(
+                        objective?.interactionPointId,
+                        point.id,
+                        StringComparison.Ordinal));
+            if (!string.Equals(lastScenarioObjectiveKey, key, StringComparison.Ordinal))
+            {
+                lastScenarioObjectiveKey = key;
+                scenarioObjectiveEnabled = configured != null;
+                scenarioObjectiveDisplayName = configured?.displayName ?? "Objective";
+                scenarioObjectiveActiveText = configured?.activeHudText
+                    ?? "Complete the objective";
+                scenarioObjectiveCompletedText = configured?.completedHudText
+                    ?? "Objective complete";
+                scenarioObjectiveCostText = (configured?.actionPointCost ?? 1).ToString(
+                    CultureInfo.InvariantCulture);
+            }
+
+            GUILayout.Space(12f);
+            GUILayout.Label("SCENARIO OBJECTIVE", GUI.skin.box);
+            GUI.enabled = string.Equals(point.type, "objective", StringComparison.Ordinal);
+            scenarioObjectiveEnabled = GUILayout.Toggle(
+                scenarioObjectiveEnabled,
+                "Use this point as an objective");
+            GUI.enabled = scenarioObjectiveEnabled
+                && string.Equals(point.type, "objective", StringComparison.Ordinal);
+            GUILayout.Label("Display name");
+            scenarioObjectiveDisplayName = GUILayout.TextField(scenarioObjectiveDisplayName);
+            GUILayout.Label("Active HUD text");
+            scenarioObjectiveActiveText = GUILayout.TextField(scenarioObjectiveActiveText);
+            GUILayout.Label("Completed HUD text");
+            scenarioObjectiveCompletedText = GUILayout.TextField(scenarioObjectiveCompletedText);
+            DrawLabeledField("AP cost", ref scenarioObjectiveCostText);
+            GUI.enabled = true;
+            if (GUILayout.Button("APPLY OBJECTIVE", GUILayout.Height(30f)))
+            {
+                applyScenarioObjective(
+                    entity.id,
+                    point.id,
+                    scenarioObjectiveEnabled,
+                    scenarioObjectiveDisplayName,
+                    scenarioObjectiveActiveText,
+                    scenarioObjectiveCompletedText,
+                    scenarioObjectiveCostText);
+            }
+            if (!string.Equals(point.type, "objective", StringComparison.Ordinal))
+                GUILayout.Label("Change the interaction type to Objective before enabling this link.");
+        }
+
+        private void DrawScenarioVehicleInspector(LevelEntityView view, LevelEntity entity)
+        {
+            if ((view.Archetype.Capabilities & LevelArchetypeCapabilities.Vehicle) == 0)
+                return;
+
+            LevelScenarioVehicleData configured = workspace.CreateSnapshot().scenario.vehicles
+                .FirstOrDefault(vehicle => string.Equals(
+                    vehicle?.entityId,
+                    entity.id,
+                    StringComparison.Ordinal));
+            if (!string.Equals(lastScenarioVehicleEntityId, entity.id, StringComparison.Ordinal))
+            {
+                lastScenarioVehicleEntityId = entity.id;
+                scenarioVehicleEnabled = configured != null;
+                scenarioVehicleMaximumSpeedText = (configured?.maximumSpeed ?? 12f)
+                    .ToString("0.###", CultureInfo.InvariantCulture);
+                scenarioVehicleAccelerationText = (configured?.accelerationPerTurn ?? 3f)
+                    .ToString("0.###", CultureInfo.InvariantCulture);
+                scenarioVehicleBrakingText = (configured?.brakingPerTurn ?? 4f)
+                    .ToString("0.###", CultureInfo.InvariantCulture);
+                scenarioVehicleLowTurnText = (configured?.lowSpeedTurnDegrees ?? 45f)
+                    .ToString("0.###", CultureInfo.InvariantCulture);
+                scenarioVehicleHighTurnText = (configured?.highSpeedTurnDegrees ?? 15f)
+                    .ToString("0.###", CultureInfo.InvariantCulture);
+                scenarioVehicleBaseRadiusText = (configured?.baseTurningRadius ?? 2f)
+                    .ToString("0.###", CultureInfo.InvariantCulture);
+                scenarioVehicleRadiusFactorText = (configured?.speedTurningRadiusFactor ?? 0.25f)
+                    .ToString("0.###", CultureInfo.InvariantCulture);
+                scenarioVehicleStartingSpeedText = (configured?.startingSpeed ?? 0f)
+                    .ToString("0.###", CultureInfo.InvariantCulture);
+                scenarioVehicleOccupantId = configured?.startingOccupantActorId ?? string.Empty;
+                scenarioVehicleStartsEncounter = configured?.startsEncounterOnAttack ?? false;
+            }
+
+            GUILayout.Space(12f);
+            GUILayout.Label("SCENARIO VEHICLE", GUI.skin.box);
+            scenarioVehicleEnabled = GUILayout.Toggle(
+                scenarioVehicleEnabled,
+                "Driveable in Test Play");
+            GUI.enabled = scenarioVehicleEnabled;
+            DrawLabeledField("Max", ref scenarioVehicleMaximumSpeedText);
+            DrawLabeledField("Accel", ref scenarioVehicleAccelerationText);
+            DrawLabeledField("Brake", ref scenarioVehicleBrakingText);
+            DrawLabeledField("Low turn", ref scenarioVehicleLowTurnText);
+            DrawLabeledField("High turn", ref scenarioVehicleHighTurnText);
+            DrawLabeledField("Radius", ref scenarioVehicleBaseRadiusText);
+            DrawLabeledField("Radius ×", ref scenarioVehicleRadiusFactorText);
+            DrawLabeledField("Start", ref scenarioVehicleStartingSpeedText);
+            GUILayout.Label("Starting occupant actor ID (optional)");
+            scenarioVehicleOccupantId = GUILayout.TextField(scenarioVehicleOccupantId);
+            scenarioVehicleStartsEncounter = GUILayout.Toggle(
+                scenarioVehicleStartsEncounter,
+                "Attack starts encounter");
+            GUI.enabled = true;
+            if (GUILayout.Button("APPLY VEHICLE", GUILayout.Height(30f)))
+            {
+                applyScenarioVehicle(
+                    entity.id,
+                    scenarioVehicleEnabled,
+                    scenarioVehicleMaximumSpeedText,
+                    scenarioVehicleAccelerationText,
+                    scenarioVehicleBrakingText,
+                    scenarioVehicleLowTurnText,
+                    scenarioVehicleHighTurnText,
+                    scenarioVehicleBaseRadiusText,
+                    scenarioVehicleRadiusFactorText,
+                    scenarioVehicleStartingSpeedText,
+                    scenarioVehicleOccupantId,
+                    scenarioVehicleStartsEncounter);
+            }
+        }
+
         private void SyncInteractionFields(InteractionPointData point)
         {
             if (string.Equals(lastInteractionSelectionId, point.id, StringComparison.Ordinal))
@@ -818,6 +1281,17 @@ namespace GritGud.Presentation.LevelEditing.UI
             }
 
             return string.Equals(value, "destroyed", StringComparison.OrdinalIgnoreCase) ? 2 : 0;
+        }
+
+        private static int ScenarioSizeIndex(string value)
+        {
+            if (string.Equals(value, "small", StringComparison.OrdinalIgnoreCase))
+                return 0;
+            if (string.Equals(value, "large", StringComparison.OrdinalIgnoreCase))
+                return 2;
+            if (string.Equals(value, "huge", StringComparison.OrdinalIgnoreCase))
+                return 3;
+            return 1;
         }
 
         private static void DrawStatusBar(string statusMessage)

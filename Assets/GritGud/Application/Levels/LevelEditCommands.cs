@@ -289,6 +289,7 @@ namespace GritGud.Application.Levels
     {
         private readonly string entityId;
         private LevelEntity deletedEntity;
+        private LevelScenarioData scenarioBeforeDeletion;
         private int deletedIndex = -1;
 
         public DeleteEntityCommand(string entityId)
@@ -308,6 +309,13 @@ namespace GritGud.Application.Levels
         {
             deletedIndex = AddEntityCommand.RequireEntityIndex(document, entityId);
             deletedEntity = document.entities[deletedIndex].DeepCopy();
+            scenarioBeforeDeletion = document.scenario.DeepCopy();
+            document.scenario.objectives.RemoveAll(objective =>
+                string.Equals(objective?.entityId, entityId, StringComparison.Ordinal));
+            document.scenario.props.RemoveAll(prop =>
+                string.Equals(prop?.entityId, entityId, StringComparison.Ordinal));
+            document.scenario.vehicles.RemoveAll(vehicle =>
+                string.Equals(vehicle?.entityId, entityId, StringComparison.Ordinal));
             document.entities.RemoveAt(deletedIndex);
         }
 
@@ -325,6 +333,9 @@ namespace GritGud.Application.Levels
             }
 
             document.entities.Insert(Math.Min(deletedIndex, document.entities.Count), deletedEntity.DeepCopy());
+            document.scenario = scenarioBeforeDeletion?.DeepCopy()
+                ?? throw new InvalidOperationException(
+                    "The deleted entity did not capture its scenario links.");
         }
     }
 
@@ -501,6 +512,7 @@ namespace GritGud.Application.Levels
         private readonly string entityId;
         private readonly string pointId;
         private InteractionPointData deletedPoint;
+        private LevelScenarioData scenarioBeforeDeletion;
         private int deletedIndex = -1;
 
         public DeleteInteractionPointCommand(string entityId, string pointId)
@@ -522,6 +534,13 @@ namespace GritGud.Application.Levels
             LevelEntity entity = AddInteractionPointCommand.RequireEntity(document, entityId);
             deletedIndex = AddInteractionPointCommand.RequirePointIndex(entity, pointId);
             deletedPoint = entity.interactionPoints[deletedIndex].DeepCopy();
+            scenarioBeforeDeletion = document.scenario.DeepCopy();
+            document.scenario.objectives.RemoveAll(objective =>
+                string.Equals(objective?.entityId, entityId, StringComparison.Ordinal)
+                && string.Equals(
+                    objective?.interactionPointId,
+                    pointId,
+                    StringComparison.Ordinal));
             entity.interactionPoints.RemoveAt(deletedIndex);
         }
 
@@ -542,6 +561,9 @@ namespace GritGud.Application.Levels
             entity.interactionPoints.Insert(
                 Math.Min(deletedIndex, entity.interactionPoints.Count),
                 deletedPoint.DeepCopy());
+            document.scenario = scenarioBeforeDeletion?.DeepCopy()
+                ?? throw new InvalidOperationException(
+                    "The deleted interaction point did not capture its scenario links.");
         }
     }
 
@@ -574,6 +596,189 @@ namespace GritGud.Application.Levels
         private void Set(LevelDocument document, DestructibleInstanceData value)
         {
             AddInteractionPointCommand.RequireEntity(document, entityId).destructible = value?.DeepCopy();
+        }
+    }
+
+    public sealed class AddScenarioActorCommand : ILevelEditCommand
+    {
+        private readonly LevelScenarioActorData actor;
+        private int insertionIndex = -1;
+
+        public AddScenarioActorCommand(LevelScenarioActorData actor)
+        {
+            this.actor = actor?.DeepCopy() ?? throw new ArgumentNullException(nameof(actor));
+            if (string.IsNullOrWhiteSpace(this.actor.id))
+                throw new ArgumentException("A scenario actor ID is required.", nameof(actor));
+        }
+
+        public string Description => "Add scenario actor";
+
+        public IReadOnlyCollection<string> AffectedEntityIds => Array.Empty<string>();
+
+        public bool RequiresFullProjection => false;
+
+        public void Apply(LevelDocument document)
+        {
+            LevelScenarioData scenario = RequireScenario(document);
+            if (FindActorIndex(scenario, actor.id) >= 0)
+                throw new InvalidOperationException($"Scenario actor '{actor.id}' already exists.");
+            if (insertionIndex < 0 || insertionIndex > scenario.actors.Count)
+                insertionIndex = scenario.actors.Count;
+            scenario.actors.Insert(insertionIndex, actor.DeepCopy());
+        }
+
+        public void Revert(LevelDocument document)
+        {
+            LevelScenarioData scenario = RequireScenario(document);
+            insertionIndex = RequireActorIndex(scenario, actor.id);
+            scenario.actors.RemoveAt(insertionIndex);
+        }
+
+        internal static LevelScenarioData RequireScenario(LevelDocument document)
+        {
+            AddEntityCommand.RequireDocument(document);
+            return document.scenario ?? throw new InvalidOperationException(
+                "The level does not define scenario data.");
+        }
+
+        internal static int FindActorIndex(LevelScenarioData scenario, string actorId)
+        {
+            for (int index = 0; index < scenario.actors.Count; index++)
+            {
+                if (string.Equals(scenario.actors[index]?.id, actorId, StringComparison.Ordinal))
+                    return index;
+            }
+
+            return -1;
+        }
+
+        internal static int RequireActorIndex(LevelScenarioData scenario, string actorId)
+        {
+            int index = FindActorIndex(scenario, actorId);
+            if (index < 0)
+                throw new InvalidOperationException($"Scenario actor '{actorId}' does not exist.");
+            return index;
+        }
+    }
+
+    public sealed class SetScenarioActorCommand : ILevelEditCommand
+    {
+        private readonly string actorId;
+        private readonly LevelScenarioActorData before;
+        private readonly LevelScenarioActorData after;
+
+        public SetScenarioActorCommand(
+            string actorId,
+            LevelScenarioActorData before,
+            LevelScenarioActorData after)
+        {
+            this.actorId = string.IsNullOrWhiteSpace(actorId)
+                ? throw new ArgumentException("A scenario actor ID is required.", nameof(actorId))
+                : actorId;
+            this.before = before?.DeepCopy() ?? throw new ArgumentNullException(nameof(before));
+            this.after = after?.DeepCopy() ?? throw new ArgumentNullException(nameof(after));
+            if (!string.Equals(this.before.id, actorId, StringComparison.Ordinal)
+                || !string.Equals(this.after.id, actorId, StringComparison.Ordinal))
+            {
+                throw new ArgumentException("Scenario actor edits cannot change actor identity.");
+            }
+        }
+
+        public string Description => "Edit scenario actor";
+
+        public IReadOnlyCollection<string> AffectedEntityIds => Array.Empty<string>();
+
+        public bool RequiresFullProjection => false;
+
+        public void Apply(LevelDocument document) => Set(document, after);
+
+        public void Revert(LevelDocument document) => Set(document, before);
+
+        private void Set(LevelDocument document, LevelScenarioActorData value)
+        {
+            LevelScenarioData scenario = AddScenarioActorCommand.RequireScenario(document);
+            scenario.actors[AddScenarioActorCommand.RequireActorIndex(scenario, actorId)] =
+                value.DeepCopy();
+        }
+    }
+
+    public sealed class DeleteScenarioActorCommand : ILevelEditCommand
+    {
+        private readonly string actorId;
+        private LevelScenarioActorData deletedActor;
+        private int deletedIndex = -1;
+
+        public DeleteScenarioActorCommand(string actorId)
+        {
+            this.actorId = string.IsNullOrWhiteSpace(actorId)
+                ? throw new ArgumentException("A scenario actor ID is required.", nameof(actorId))
+                : actorId;
+        }
+
+        public string Description => "Delete scenario actor";
+
+        public IReadOnlyCollection<string> AffectedEntityIds => Array.Empty<string>();
+
+        public bool RequiresFullProjection => false;
+
+        public void Apply(LevelDocument document)
+        {
+            LevelScenarioData scenario = AddScenarioActorCommand.RequireScenario(document);
+            deletedIndex = AddScenarioActorCommand.RequireActorIndex(scenario, actorId);
+            deletedActor = scenario.actors[deletedIndex].DeepCopy();
+            scenario.actors.RemoveAt(deletedIndex);
+        }
+
+        public void Revert(LevelDocument document)
+        {
+            LevelScenarioData scenario = AddScenarioActorCommand.RequireScenario(document);
+            if (deletedActor == null || deletedIndex < 0)
+                throw new InvalidOperationException("The scenario actor delete has not been applied.");
+            if (AddScenarioActorCommand.FindActorIndex(scenario, actorId) >= 0)
+                throw new InvalidOperationException($"Scenario actor '{actorId}' already exists.");
+            scenario.actors.Insert(
+                Math.Min(deletedIndex, scenario.actors.Count),
+                deletedActor.DeepCopy());
+        }
+    }
+
+    public sealed class SetScenarioConfigurationCommand : ILevelEditCommand
+    {
+        private readonly LevelScenarioData before;
+        private readonly LevelScenarioData after;
+        private readonly string[] affectedEntityIds;
+
+        public SetScenarioConfigurationCommand(
+            string description,
+            LevelScenarioData before,
+            LevelScenarioData after,
+            IEnumerable<string> affectedEntityIds = null)
+        {
+            Description = string.IsNullOrWhiteSpace(description)
+                ? throw new ArgumentException("A scenario edit description is required.", nameof(description))
+                : description;
+            this.before = before?.DeepCopy() ?? throw new ArgumentNullException(nameof(before));
+            this.after = after?.DeepCopy() ?? throw new ArgumentNullException(nameof(after));
+            this.affectedEntityIds = affectedEntityIds?
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Distinct(StringComparer.Ordinal)
+                .ToArray() ?? Array.Empty<string>();
+        }
+
+        public string Description { get; }
+
+        public IReadOnlyCollection<string> AffectedEntityIds => affectedEntityIds;
+
+        public bool RequiresFullProjection => false;
+
+        public void Apply(LevelDocument document) => Set(document, after);
+
+        public void Revert(LevelDocument document) => Set(document, before);
+
+        private static void Set(LevelDocument document, LevelScenarioData value)
+        {
+            AddEntityCommand.RequireDocument(document);
+            document.scenario = value.DeepCopy();
         }
     }
 

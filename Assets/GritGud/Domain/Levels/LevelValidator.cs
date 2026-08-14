@@ -423,6 +423,14 @@ namespace GritGud.Domain.Levels
                         $"Scenario prop '{prop.entityId}' needs a positive finite mass.",
                         prop.entityId);
                 }
+                if (!IsSupportedSizeClass(prop.sizeClass))
+                {
+                    context.Error(
+                        "scenario.prop.size",
+                        $"Scenario prop '{prop.entityId}' has unsupported size "
+                        + $"'{prop.sizeClass}'.",
+                        prop.entityId);
+                }
             }
 
             var linkedVehicles = new HashSet<string>(StringComparer.Ordinal);
@@ -458,6 +466,30 @@ namespace GritGud.Domain.Levels
                         "scenario.vehicle.occupant.unknown",
                         $"Vehicle '{vehicle.entityId}' references unknown actor "
                         + $"'{vehicle.startingOccupantActorId}'.",
+                        vehicle.entityId);
+                }
+
+                if (!LevelValidationMath.IsFinite(vehicle.maximumSpeed)
+                    || !LevelValidationMath.IsFinite(vehicle.accelerationPerTurn)
+                    || !LevelValidationMath.IsFinite(vehicle.brakingPerTurn)
+                    || !LevelValidationMath.IsFinite(vehicle.lowSpeedTurnDegrees)
+                    || !LevelValidationMath.IsFinite(vehicle.highSpeedTurnDegrees)
+                    || !LevelValidationMath.IsFinite(vehicle.baseTurningRadius)
+                    || !LevelValidationMath.IsFinite(vehicle.speedTurningRadiusFactor)
+                    || !LevelValidationMath.IsFinite(vehicle.startingSpeed)
+                    || vehicle.maximumSpeed <= 0f
+                    || vehicle.accelerationPerTurn < 0f
+                    || vehicle.brakingPerTurn < 0f
+                    || vehicle.lowSpeedTurnDegrees < 0f
+                    || vehicle.highSpeedTurnDegrees < 0f
+                    || vehicle.baseTurningRadius <= 0f
+                    || vehicle.speedTurningRadiusFactor < 0f
+                    || vehicle.startingSpeed < 0f
+                    || vehicle.startingSpeed > vehicle.maximumSpeed)
+                {
+                    context.Error(
+                        "scenario.vehicle.motion",
+                        $"Scenario vehicle '{vehicle.entityId}' has invalid motion settings.",
                         vehicle.entityId);
                 }
             }
@@ -510,7 +542,23 @@ namespace GritGud.Domain.Levels
                         $"Objective '{objective.id}' cannot have a negative action-point cost.",
                         objective.entityId);
                 }
+                if (string.IsNullOrWhiteSpace(objective.actionId)
+                    || string.IsNullOrWhiteSpace(objective.displayName))
+                {
+                    context.Error(
+                        "scenario.objective.presentation",
+                        $"Objective '{objective.id}' needs an action and display name.",
+                        objective.entityId);
+                }
             }
+        }
+
+        private static bool IsSupportedSizeClass(string value)
+        {
+            return string.Equals(value, "small", StringComparison.Ordinal)
+                || string.Equals(value, "medium", StringComparison.Ordinal)
+                || string.Equals(value, "large", StringComparison.Ordinal)
+                || string.Equals(value, "huge", StringComparison.Ordinal);
         }
     }
 

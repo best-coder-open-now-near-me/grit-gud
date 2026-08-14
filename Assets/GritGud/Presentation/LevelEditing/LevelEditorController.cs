@@ -21,12 +21,14 @@ namespace GritGud.Presentation.LevelEditing
         private const string MainLevelResourceName = "Levels/main-level";
 
         private LevelArchetypeCatalog catalog;
+        private ScenarioAuthoringCatalog scenarioCatalog;
         private LevelEditorPersistenceCoordinator persistence;
         private LevelEditorWorkspace workspace;
         private LevelSelectionModel selection;
         private LevelWorldProjector projector;
         private TerrainWorldProjector terrainProjector;
         private InteractionPointHandleProjector interactionPointHandles;
+        private ScenarioActorHandleProjector scenarioActorHandles;
         private LevelEditorInputRouter inputRouter;
         private LevelEditorCameraController cameraController;
         private LevelSnapSettings snapSettings;
@@ -54,6 +56,7 @@ namespace GritGud.Presentation.LevelEditing
             suspended = false;
             enabled = true;
             catalog = LevelArchetypeCatalog.LoadDefault();
+            scenarioCatalog = ScenarioAuthoringCatalog.LoadDefault();
             LevelTextTransfer textTransfer = GetComponent<LevelTextTransfer>();
             if (textTransfer == null)
             {
@@ -80,6 +83,7 @@ namespace GritGud.Presentation.LevelEditing
             projector = new LevelWorldProjector(catalog, transform);
             terrainProjector = new TerrainWorldProjector(transform);
             interactionPointHandles = new InteractionPointHandleProjector();
+            scenarioActorHandles = new ScenarioActorHandleProjector(transform);
             inputRouter = new LevelEditorInputRouter();
             cameraController = new LevelEditorCameraController(sceneCamera);
             cameraController.Frame(workspace.CreateSnapshot().bounds);
@@ -113,6 +117,7 @@ namespace GritGud.Presentation.LevelEditing
                 workspace,
                 selection,
                 catalog,
+                scenarioCatalog,
                 toolManager,
                 placementTool,
                 terrainPanel,
@@ -132,7 +137,14 @@ namespace GritGud.Presentation.LevelEditing
                 AddInteractionPoint,
                 ApplyInteractionPoint,
                 DeleteInteractionPoint,
-                ApplyDestructibleDefaults);
+                ApplyDestructibleDefaults,
+                AddScenarioActor,
+                ApplyScenarioActor,
+                DeleteScenarioActor,
+                PlaceScenarioActorAtView,
+                ApplyScenarioProp,
+                ApplyScenarioObjective,
+                ApplyScenarioVehicle);
             gui.SyncPlayerStartFields(RequireSelectedPlayer(workspace.CreateSnapshot()).transform);
             EnsureOutlines();
             validationIssues = workspace.ValidationIssues;
@@ -145,6 +157,7 @@ namespace GritGud.Presentation.LevelEditing
             {
                 projector.Replace(workspace.CreateSnapshot());
                 terrainProjector.Replace(workspace.CreateSnapshot());
+                scenarioActorHandles.Refresh(workspace.CreateSnapshot());
                 SetStatus("Edit the main level or choose New to start from an empty level.");
             }
         }
@@ -173,11 +186,13 @@ namespace GritGud.Presentation.LevelEditing
             projector?.Dispose();
             terrainProjector?.Dispose();
             interactionPointHandles?.Dispose();
+            scenarioActorHandles?.Dispose();
             workspace?.Dispose();
             toolManager = null;
             projector = null;
             terrainProjector = null;
             interactionPointHandles = null;
+            scenarioActorHandles = null;
             workspace = null;
             selection = null;
             persistence = null;
@@ -276,6 +291,7 @@ namespace GritGud.Presentation.LevelEditing
             suspended = true;
             projector.SetVisible(false);
             terrainProjector.SetVisible(false);
+            scenarioActorHandles.SetVisible(false);
             selectionOutline.gameObject.SetActive(false);
             hoverOutline.gameObject.SetActive(false);
             placementOutline.gameObject.SetActive(false);
@@ -298,18 +314,31 @@ namespace GritGud.Presentation.LevelEditing
             suspended = false;
             projector.SetVisible(true);
             terrainProjector.SetVisible(true);
+            scenarioActorHandles.SetVisible(!previewMode);
             SetStatus("Returned from isolated test play.");
         }
 
         private void StartTestPlay()
         {
+            LevelDocument snapshot = workspace.CreateSnapshot();
             if (LevelValidator.HasErrors(workspace.Validate(LevelValidationProfile.Publish)))
             {
                 SetStatus("Fix publish validation errors before test play.");
                 return;
             }
 
-            GameBootstrap.Instance.PlayEditorTest(workspace.CreateSnapshot());
+            LevelScenarioActorData unavailableTemplate = snapshot.scenario.actors
+                .FirstOrDefault(actor => actor != null
+                    && !scenarioCatalog.ContainsActor(actor.templateId));
+            if (unavailableTemplate != null)
+            {
+                SetStatus(
+                    $"Actor '{unavailableTemplate.id}' uses unavailable template "
+                    + $"'{unavailableTemplate.templateId}'.");
+                return;
+            }
+
+            GameBootstrap.Instance.PlayEditorTest(snapshot);
         }
 
         private void HandleGlobalShortcuts(LevelEditorInputState input)
@@ -459,7 +488,7 @@ namespace GritGud.Presentation.LevelEditing
                 NormalizeYaw(yaw));
             workspace.Execute(new SetPlayerStartCommand(before, after));
             gui.SyncPlayerStartFields(after);
-            SetStatus("Updated playtest player start.");
+            SetStatus("Updated the selected scenario player's start.");
         }
 
         private static LevelScenarioActorData RequireSelectedPlayer(LevelDocument document)
@@ -468,6 +497,406 @@ namespace GritGud.Presentation.LevelEditing
                 .FindInitiallySelectedPlayer();
             return player ?? throw new InvalidOperationException(
                 "The level scenario does not define an initially selected player actor.");
+        }
+
+        private void AddScenarioActor(string templateId)
+        {
+            ScenarioActorTemplateDefinition template = scenarioCatalog.GetActor(templateId);
+            LevelDocument snapshot = workspace.CreateSnapshot();
+            LevelEditorCameraState cameraState = cameraController.CaptureState();
+            bool playerControlled = template.PlayerTemplate;
+            bool hasSelectedPlayer = snapshot.scenario.FindInitiallySelectedPlayer() != null;
+            bool hasPrimaryTarget = snapshot.scenario.actors.Any(actor => actor?.primaryTarget == true);
+            var actor = new LevelScenarioActorData
+            {
+                id = "actor-" + LevelDocumentFactory.NewStableId(),
+                templateId = template.TemplateId,
+                transform = new LevelTransformData(
+                    new Float3Data(
+                        cameraState.target.x,
+                        cameraState.target.y,
+                        cameraState.target.z),
+                    NormalizeYaw(cameraState.yaw)),
+                playerControlled = playerControlled,
+                initiallySelected = playerControlled && !hasSelectedPlayer,
+                primaryTarget = !playerControlled && !hasPrimaryTarget,
+            };
+            workspace.Execute(new AddScenarioActorCommand(actor));
+            gui.SelectScenarioActor(actor.id);
+            SetStatus($"Added {template.DisplayName} to the scenario at the camera focus.");
+        }
+
+        private void ApplyScenarioActor(
+            string actorId,
+            string xText,
+            string yText,
+            string zText,
+            string yawText,
+            bool playerControlled,
+            bool initiallySelected,
+            bool primaryTarget)
+        {
+            if (!TryParse(xText, out float x)
+                || !TryParse(yText, out float y)
+                || !TryParse(zText, out float z)
+                || !TryParse(yawText, out float yaw))
+            {
+                SetStatus("Scenario actor transforms must contain finite numbers.");
+                return;
+            }
+
+            LevelDocument snapshot = workspace.CreateSnapshot();
+            LevelScenarioActorData before = FindScenarioActor(snapshot, actorId);
+            if (before == null)
+                return;
+            if (initiallySelected && !playerControlled)
+            {
+                SetStatus("The initially selected actor must be player controlled.");
+                return;
+            }
+
+            if (primaryTarget && playerControlled)
+            {
+                SetStatus("A player actor cannot also be the primary target.");
+                return;
+            }
+
+            if (before.initiallySelected && !initiallySelected)
+            {
+                SetStatus("Select another player actor before clearing the current selection.");
+                return;
+            }
+
+            var commands = new List<ILevelEditCommand>();
+            if (initiallySelected)
+            {
+                foreach (LevelScenarioActorData other in snapshot.scenario.actors.Where(actor =>
+                    actor != null
+                    && actor.initiallySelected
+                    && !string.Equals(actor.id, actorId, StringComparison.Ordinal)))
+                {
+                    LevelScenarioActorData replacement = other.DeepCopy();
+                    replacement.initiallySelected = false;
+                    commands.Add(new SetScenarioActorCommand(
+                        other.id,
+                        other,
+                        replacement));
+                }
+            }
+
+            if (primaryTarget)
+            {
+                foreach (LevelScenarioActorData other in snapshot.scenario.actors.Where(actor =>
+                    actor != null
+                    && actor.primaryTarget
+                    && !string.Equals(actor.id, actorId, StringComparison.Ordinal)))
+                {
+                    LevelScenarioActorData replacement = other.DeepCopy();
+                    replacement.primaryTarget = false;
+                    commands.Add(new SetScenarioActorCommand(
+                        other.id,
+                        other,
+                        replacement));
+                }
+            }
+
+            LevelScenarioActorData after = before.DeepCopy();
+            after.transform = new LevelTransformData(
+                new Float3Data(x, y, z),
+                NormalizeYaw(yaw));
+            after.playerControlled = playerControlled;
+            after.initiallySelected = initiallySelected;
+            after.primaryTarget = primaryTarget;
+            commands.Add(new SetScenarioActorCommand(actorId, before, after));
+            ExecuteScenarioCommands("Edit scenario actor", commands);
+            if (after.initiallySelected)
+                gui.SyncPlayerStartFields(after.transform);
+            gui.SyncScenarioActorFields(after);
+            SetStatus($"Updated scenario actor '{actorId}'.");
+        }
+
+        private void DeleteScenarioActor(string actorId)
+        {
+            LevelDocument snapshot = workspace.CreateSnapshot();
+            LevelScenarioActorData actor = FindScenarioActor(snapshot, actorId);
+            if (actor == null)
+                return;
+            LevelScenarioActorData[] otherPlayers = snapshot.scenario.actors
+                .Where(candidate => candidate != null
+                    && candidate.playerControlled
+                    && !string.Equals(candidate.id, actorId, StringComparison.Ordinal))
+                .ToArray();
+            if (actor.playerControlled && otherPlayers.Length == 0)
+            {
+                SetStatus("A scenario must keep at least one player actor.");
+                return;
+            }
+
+            var commands = new List<ILevelEditCommand>();
+            LevelScenarioData linksAfter = snapshot.scenario.DeepCopy();
+            bool clearedOccupant = false;
+            foreach (LevelScenarioVehicleData vehicle in linksAfter.vehicles.Where(vehicle =>
+                string.Equals(
+                    vehicle?.startingOccupantActorId,
+                    actorId,
+                    StringComparison.Ordinal)))
+            {
+                vehicle.startingOccupantActorId = string.Empty;
+                clearedOccupant = true;
+            }
+            if (clearedOccupant)
+            {
+                commands.Add(new SetScenarioConfigurationCommand(
+                    "Clear deleted vehicle occupant",
+                    snapshot.scenario,
+                    linksAfter,
+                    linksAfter.vehicles.Select(vehicle => vehicle?.entityId)));
+            }
+
+            if (actor.initiallySelected)
+            {
+                LevelScenarioActorData next = otherPlayers[0];
+                LevelScenarioActorData selected = next.DeepCopy();
+                selected.initiallySelected = true;
+                commands.Add(new SetScenarioActorCommand(next.id, next, selected));
+            }
+
+            commands.Add(new DeleteScenarioActorCommand(actorId));
+            ExecuteScenarioCommands("Delete scenario actor", commands);
+            gui.SelectScenarioActor(null);
+            LevelScenarioActorData selectedPlayer = workspace.CreateSnapshot().scenario
+                .FindInitiallySelectedPlayer();
+            if (selectedPlayer != null)
+                gui.SyncPlayerStartFields(selectedPlayer.transform);
+            SetStatus($"Deleted scenario actor '{actorId}'.");
+        }
+
+        private void PlaceScenarioActorAtView(string actorId)
+        {
+            LevelDocument snapshot = workspace.CreateSnapshot();
+            LevelScenarioActorData before = FindScenarioActor(snapshot, actorId);
+            if (before == null)
+                return;
+            LevelEditorCameraState cameraState = cameraController.CaptureState();
+            LevelScenarioActorData after = before.DeepCopy();
+            after.transform = new LevelTransformData(
+                new Float3Data(
+                    cameraState.target.x,
+                    cameraState.target.y,
+                    cameraState.target.z),
+                after.transform.yawDegrees);
+            workspace.Execute(new SetScenarioActorCommand(actorId, before, after));
+            gui.SyncScenarioActorFields(after);
+            if (after.initiallySelected)
+                gui.SyncPlayerStartFields(after.transform);
+            SetStatus($"Placed scenario actor '{actorId}' at the camera focus.");
+        }
+
+        private void ApplyScenarioProp(
+            string entityId,
+            bool enabled,
+            string massText,
+            string sizeClass,
+            bool startsEncounter)
+        {
+            LevelDocument snapshot = workspace.CreateSnapshot();
+            LevelScenarioData after = snapshot.scenario.DeepCopy();
+            after.props.RemoveAll(prop =>
+                string.Equals(prop?.entityId, entityId, StringComparison.Ordinal));
+            if (enabled)
+            {
+                if (!TryParse(massText, out float mass) || mass <= 0f)
+                {
+                    SetStatus("Scenario prop mass must be a positive finite number.");
+                    return;
+                }
+
+                if (!IsSupportedSizeClass(sizeClass))
+                {
+                    SetStatus("Choose a supported scenario prop size.");
+                    return;
+                }
+
+                after.props.Add(new LevelScenarioPropData
+                {
+                    entityId = entityId,
+                    mass = mass,
+                    sizeClass = sizeClass,
+                    startsEncounterOnAttack = startsEncounter,
+                });
+            }
+
+            workspace.Execute(new SetScenarioConfigurationCommand(
+                enabled ? "Configure scenario prop" : "Remove scenario prop",
+                snapshot.scenario,
+                after,
+                new[] { entityId }));
+            SetStatus(enabled
+                ? "Linked the selected entity as a gameplay physics prop."
+                : "Removed the selected entity's gameplay prop link.");
+        }
+
+        private void ApplyScenarioObjective(
+            string entityId,
+            string pointId,
+            bool enabled,
+            string displayName,
+            string activeText,
+            string completedText,
+            string costText)
+        {
+            LevelDocument snapshot = workspace.CreateSnapshot();
+            LevelScenarioData after = snapshot.scenario.DeepCopy();
+            LevelScenarioObjectiveData existing = after.objectives.FirstOrDefault(objective =>
+                string.Equals(objective?.entityId, entityId, StringComparison.Ordinal)
+                && string.Equals(
+                    objective?.interactionPointId,
+                    pointId,
+                    StringComparison.Ordinal));
+            after.objectives.Remove(existing);
+            if (enabled)
+            {
+                if (!int.TryParse(
+                        costText,
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
+                        out int actionPointCost)
+                    || actionPointCost < 0)
+                {
+                    SetStatus("Objective action-point cost must be a non-negative whole number.");
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(displayName))
+                {
+                    SetStatus("An enabled objective needs a display name.");
+                    return;
+                }
+
+                after.objectives.Add(new LevelScenarioObjectiveData
+                {
+                    id = existing?.id ?? "objective-" + LevelDocumentFactory.NewStableId(),
+                    entityId = entityId,
+                    interactionPointId = pointId,
+                    actionId = existing?.actionId ?? "interact",
+                    displayName = displayName.Trim(),
+                    activeHudText = activeText?.Trim() ?? string.Empty,
+                    completedHudText = completedText?.Trim() ?? string.Empty,
+                    actionPointCost = actionPointCost,
+                });
+            }
+
+            workspace.Execute(new SetScenarioConfigurationCommand(
+                enabled ? "Configure scenario objective" : "Remove scenario objective",
+                snapshot.scenario,
+                after,
+                new[] { entityId }));
+            SetStatus(enabled
+                ? "Linked the interaction point as a scenario objective."
+                : "Removed the interaction point's scenario objective link.");
+        }
+
+        private void ApplyScenarioVehicle(
+            string entityId,
+            bool enabled,
+            string maximumSpeedText,
+            string accelerationText,
+            string brakingText,
+            string lowTurnText,
+            string highTurnText,
+            string baseRadiusText,
+            string radiusFactorText,
+            string startingSpeedText,
+            string occupantActorId,
+            bool startsEncounter)
+        {
+            LevelDocument snapshot = workspace.CreateSnapshot();
+            LevelScenarioData after = snapshot.scenario.DeepCopy();
+            after.vehicles.RemoveAll(vehicle =>
+                string.Equals(vehicle?.entityId, entityId, StringComparison.Ordinal));
+            if (enabled)
+            {
+                if (!TryParse(maximumSpeedText, out float maximumSpeed)
+                    || !TryParse(accelerationText, out float acceleration)
+                    || !TryParse(brakingText, out float braking)
+                    || !TryParse(lowTurnText, out float lowTurn)
+                    || !TryParse(highTurnText, out float highTurn)
+                    || !TryParse(baseRadiusText, out float baseRadius)
+                    || !TryParse(radiusFactorText, out float radiusFactor)
+                    || !TryParse(startingSpeedText, out float startingSpeed)
+                    || maximumSpeed <= 0f
+                    || acceleration < 0f
+                    || braking < 0f
+                    || lowTurn < 0f
+                    || highTurn < 0f
+                    || baseRadius <= 0f
+                    || radiusFactor < 0f
+                    || startingSpeed < 0f
+                    || startingSpeed > maximumSpeed)
+                {
+                    SetStatus(
+                        "Vehicle values must be finite and non-negative; start speed cannot exceed max speed.");
+                    return;
+                }
+
+                string occupant = occupantActorId?.Trim() ?? string.Empty;
+                if (!string.IsNullOrEmpty(occupant)
+                    && FindScenarioActor(snapshot, occupant) == null)
+                {
+                    SetStatus($"Vehicle occupant actor '{occupant}' does not exist.");
+                    return;
+                }
+
+                after.vehicles.Add(new LevelScenarioVehicleData
+                {
+                    entityId = entityId,
+                    maximumSpeed = maximumSpeed,
+                    accelerationPerTurn = acceleration,
+                    brakingPerTurn = braking,
+                    lowSpeedTurnDegrees = lowTurn,
+                    highSpeedTurnDegrees = highTurn,
+                    baseTurningRadius = baseRadius,
+                    speedTurningRadiusFactor = radiusFactor,
+                    startingSpeed = startingSpeed,
+                    startingOccupantActorId = occupant,
+                    startsEncounterOnAttack = startsEncounter,
+                });
+            }
+
+            workspace.Execute(new SetScenarioConfigurationCommand(
+                enabled ? "Configure scenario vehicle" : "Remove scenario vehicle",
+                snapshot.scenario,
+                after,
+                new[] { entityId }));
+            SetStatus(enabled
+                ? "Linked the selected entity as a driveable scenario vehicle."
+                : "Removed the selected entity's scenario vehicle link.");
+        }
+
+        private static bool IsSupportedSizeClass(string value)
+        {
+            return string.Equals(value, "small", StringComparison.Ordinal)
+                || string.Equals(value, "medium", StringComparison.Ordinal)
+                || string.Equals(value, "large", StringComparison.Ordinal)
+                || string.Equals(value, "huge", StringComparison.Ordinal);
+        }
+
+        private void ExecuteScenarioCommands(
+            string description,
+            IReadOnlyList<ILevelEditCommand> commands)
+        {
+            if (commands.Count == 1)
+                workspace.Execute(commands[0]);
+            else
+                workspace.ExecuteTransaction(description, commands);
+        }
+
+        private static LevelScenarioActorData FindScenarioActor(
+            LevelDocument document,
+            string actorId)
+        {
+            return document?.scenario?.actors.FirstOrDefault(actor =>
+                string.Equals(actor?.id, actorId, StringComparison.Ordinal));
         }
 
         private void TogglePreview()
@@ -493,6 +922,7 @@ namespace GritGud.Presentation.LevelEditing
             projector.Replace(workspace.CreateSnapshot());
             terrainProjector.Replace(workspace.CreateSnapshot());
             interactionPointHandles.Refresh(workspace.CreateSnapshot(), selection, projector);
+            scenarioActorHandles.SetVisible(false);
             SetStatus("Level Preview uses an isolated snapshot; authored data is locked.");
         }
 
@@ -502,6 +932,8 @@ namespace GritGud.Presentation.LevelEditing
             projector.Replace(workspace.CreateSnapshot());
             terrainProjector.Replace(workspace.CreateSnapshot());
             interactionPointHandles.Refresh(workspace.CreateSnapshot(), selection, projector);
+            scenarioActorHandles.Refresh(workspace.CreateSnapshot());
+            scenarioActorHandles.SetVisible(true);
             SetStatus("Returned to the authored level.");
         }
 
@@ -522,6 +954,8 @@ namespace GritGud.Presentation.LevelEditing
                 terrainProjector.Apply(snapshot, args.SessionChange);
                 RefreshSelectedView();
                 interactionPointHandles.Refresh(snapshot, selection, projector);
+                scenarioActorHandles.Refresh(snapshot);
+                gui.SyncScenarioFields(snapshot);
             }
             catch (LevelLoadException exception)
             {
@@ -596,7 +1030,31 @@ namespace GritGud.Presentation.LevelEditing
             after.type = type;
             after.localPosition = new Float3Data(x, y, z);
             after.radius = radius;
-            workspace.Execute(new SetInteractionPointCommand(entity.id, before.id, before, after));
+            var commands = new List<ILevelEditCommand>
+            {
+                new SetInteractionPointCommand(entity.id, before.id, before, after),
+            };
+            if (!string.Equals(type, "objective", StringComparison.Ordinal))
+            {
+                LevelScenarioData scenarioBefore = workspace.CreateSnapshot().scenario;
+                LevelScenarioData scenarioAfter = scenarioBefore.DeepCopy();
+                int removed = scenarioAfter.objectives.RemoveAll(objective =>
+                    string.Equals(objective?.entityId, entity.id, StringComparison.Ordinal)
+                    && string.Equals(
+                        objective?.interactionPointId,
+                        before.id,
+                        StringComparison.Ordinal));
+                if (removed > 0)
+                {
+                    commands.Add(new SetScenarioConfigurationCommand(
+                        "Remove incompatible objective link",
+                        scenarioBefore,
+                        scenarioAfter,
+                        new[] { entity.id }));
+                }
+            }
+
+            ExecuteScenarioCommands("Edit interaction point", commands);
             SetStatus("Updated interaction point.");
         }
 
@@ -674,6 +1132,9 @@ namespace GritGud.Presentation.LevelEditing
             selection.Clear();
             workspace.ReplaceDocument(document);
             cameraController.Frame(document.bounds);
+            scenarioActorHandles.Refresh(document);
+            gui.SelectScenarioActor(null);
+            gui.SyncScenarioFields(document);
         }
 
         private void HandleDocumentLoaded(object sender, LevelDocumentLoadedEventArgs args)
