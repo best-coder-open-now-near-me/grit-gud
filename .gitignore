@@ -62,3 +62,8 @@ mono_crash.*
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Local Supabase project configuration. The publishable key is safe for a
+# shipped client, but each developer/test environment uses its own project.
+/Assets/GritGud/Content/Resources/SupabaseConfiguration.asset
+/Assets/GritGud/Content/Resources/SupabaseConfiguration.asset.meta
