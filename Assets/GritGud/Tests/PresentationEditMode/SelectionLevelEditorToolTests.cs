@@ -121,6 +121,57 @@ namespace GritGud.Presentation.Tests
             }
         }
 
+        [Test]
+        public void RotationKeepsCustomPivotFixedInWorldSpace()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            LevelEntity entity = CreateEntity("crate", 0f);
+            entity.rotationPivot = new LevelRotationPivotData
+            {
+                localPosition = new Float3Data(1f, 0f, 0f),
+            };
+            document.entities.Add(entity);
+            var root = new GameObject("Pivot Rotation Test");
+            var cameraObject = new GameObject("Pivot Rotation Camera");
+
+            try
+            {
+                using var workspace = new LevelEditorWorkspace(document);
+                var selection = new LevelSelectionModel();
+                using var projector = new LevelWorldProjector(
+                    LevelArchetypeCatalog.LoadDefault(), root.transform);
+                using var terrainProjector = new TerrainWorldProjector(root.transform);
+                projector.Replace(document);
+                var context = new LevelEditorToolContext(
+                    workspace,
+                    selection,
+                    projector,
+                    terrainProjector,
+                    new LevelEditorSceneQuery(cameraObject.AddComponent<Camera>()),
+                    new LevelSnapSettings(),
+                    _ => { },
+                    _ => { });
+                var tool = new SelectionLevelEditorTool();
+                tool.Activate(context);
+                selection.SetSingle("crate");
+
+                tool.RotateSelection(90f);
+
+                LevelTransformData result = workspace.FindEntitySnapshot("crate").transform;
+                Assert.That(result.yawDegrees, Is.EqualTo(90f));
+                Assert.That(result.position.x, Is.EqualTo(1f).Within(0.001f));
+                Assert.That(result.position.z, Is.EqualTo(1f).Within(0.001f));
+                Assert.That(projector.TryGetEntity("crate", out LevelEntityView view), Is.True);
+                Assert.That(view.GetRotationPivotWorld().x, Is.EqualTo(1f).Within(0.001f));
+                Assert.That(view.GetRotationPivotWorld().z, Is.EqualTo(0f).Within(0.001f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(cameraObject);
+                Object.DestroyImmediate(root);
+            }
+        }
+
         private static LevelEntity CreateEntity(string id, float x)
         {
             return new LevelEntity

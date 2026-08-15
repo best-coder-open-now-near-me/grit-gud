@@ -315,8 +315,17 @@ namespace GritGud.Presentation.LevelEditing.Tools
                 }
 
                 LevelTransformData after = entity.transform;
-                after.yawDegrees = NormalizeYaw(
+                float nextYaw = NormalizeYaw(
                     after.yawDegrees + (amount ?? view.Archetype.PlacementRules.AngleSnap));
+                if (entity.rotationPivot != null)
+                {
+                    Vector3 pivot = ToVector(entity.rotationPivot.localPosition);
+                    Vector3 beforeOffset = Quaternion.Euler(0f, after.yawDegrees, 0f) * pivot;
+                    Vector3 afterOffset = Quaternion.Euler(0f, nextYaw, 0f) * pivot;
+                    Vector3 position = ToVector(after.position) + beforeOffset - afterOffset;
+                    after.position = new Float3Data(position.x, position.y, position.z);
+                }
+                after.yawDegrees = nextYaw;
                 commands.Add(new SetEntityTransformCommand(entity.id, entity.transform, after));
             }
 
@@ -328,6 +337,9 @@ namespace GritGud.Presentation.LevelEditing.Tools
             ExecuteSelectionCommands("Rotate entities", commands);
             context.SetStatus(commands.Count == 1 ? "Rotated entity." : "Rotated selected entities.");
         }
+
+        private static Vector3 ToVector(Float3Data value) =>
+            new Vector3(value.x, value.y, value.z);
 
         public void DeleteSelection()
         {

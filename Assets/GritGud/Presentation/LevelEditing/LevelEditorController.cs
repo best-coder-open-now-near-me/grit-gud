@@ -692,6 +692,75 @@ namespace GritGud.Presentation.LevelEditing
             SetStatus("Applied numeric transform.");
         }
 
+        private void SetEntityRotationPivot(float normalizedX, float normalizedZ)
+        {
+            var commands = new List<ILevelEditCommand>();
+            foreach (string entityId in selection.Targets
+                .Select(target => target.EntityId)
+                .Distinct(StringComparer.Ordinal))
+            {
+                LevelEntity entity = workspace.FindEntitySnapshot(entityId);
+                if (entity == null
+                    || !projector.TryGetEntity(entityId, out LevelEntityView view))
+                {
+                    continue;
+                }
+
+                Bounds bounds = LevelEntityView.CalculateVisualLocalBounds(
+                    view.Archetype.Presentation.Prefab,
+                    view.Archetype.Presentation.LocalBounds);
+                Vector3 pivot = LevelEntityView.CalculateBoundsPivot(
+                    bounds,
+                    Mathf.Clamp(normalizedX, -1f, 1f),
+                    Mathf.Clamp(normalizedZ, -1f, 1f));
+                var after = new LevelRotationPivotData
+                {
+                    mode = "bounds",
+                    localPosition = new Float3Data(pivot.x, pivot.y, pivot.z),
+                };
+                commands.Add(new SetEntityRotationPivotCommand(
+                    entity.id,
+                    entity.rotationPivot,
+                    after));
+            }
+
+            if (commands.Count == 0)
+                return;
+
+            workspace.Execute(commands.Count == 1
+                ? commands[0]
+                : new CompositeLevelEditCommand("Set entity rotation pivots", commands));
+            SetStatus(commands.Count == 1
+                ? "Set rotation pivot."
+                : "Set rotation pivots for selected entities.");
+        }
+
+        private void ResetEntityRotationPivot()
+        {
+            var commands = new List<ILevelEditCommand>();
+            foreach (string entityId in selection.Targets
+                .Select(target => target.EntityId)
+                .Distinct(StringComparer.Ordinal))
+            {
+                LevelEntity entity = workspace.FindEntitySnapshot(entityId);
+                if (entity?.rotationPivot != null)
+                {
+                    commands.Add(new SetEntityRotationPivotCommand(
+                        entity.id,
+                        entity.rotationPivot,
+                        null));
+                }
+            }
+
+            if (commands.Count == 0)
+                return;
+
+            workspace.Execute(commands.Count == 1
+                ? commands[0]
+                : new CompositeLevelEditCommand("Reset entity rotation pivots", commands));
+            SetStatus("Restored asset rotation pivot.");
+        }
+
         private void ApplyLevelDisplayName(string displayName)
         {
             string normalized = displayName?.Trim() ?? string.Empty;
@@ -1350,6 +1419,12 @@ namespace GritGud.Presentation.LevelEditing
             string y,
             string z,
             string yaw) => ApplyInspectorTransform(x, y, z, yaw);
+
+        void ILevelEditorGuiActions.SetEntityRotationPivot(float normalizedX, float normalizedZ) =>
+            SetEntityRotationPivot(normalizedX, normalizedZ);
+
+        void ILevelEditorGuiActions.ResetEntityRotationPivot() =>
+            ResetEntityRotationPivot();
 
         void ILevelEditorGuiActions.ApplyPlayerStart(
             string x,

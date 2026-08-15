@@ -125,6 +125,10 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         void ApplyEntityTransform(string x, string y, string z, string yaw);
 
+        void SetEntityRotationPivot(float normalizedX, float normalizedZ);
+
+        void ResetEntityRotationPivot();
+
         void ApplyPlayerStart(string x, string y, string z, string yaw);
 
         void AddInteractionPoint();

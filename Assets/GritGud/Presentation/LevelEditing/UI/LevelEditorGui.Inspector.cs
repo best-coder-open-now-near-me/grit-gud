@@ -85,6 +85,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             if (GUILayout.Button($"{angleSnap:0.#}° ↻"))
                 RotateInspectorSelection(angleSnap);
             GUILayout.EndHorizontal();
+            DrawRotationPivotPicker(entity, selectedView);
             Color previous = GUI.backgroundColor;
             GUI.backgroundColor = LevelEditorTheme.Destructive;
             if (GUILayout.Button("DELETE", PanelPrimaryButtonLayout()))
@@ -94,6 +95,54 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.Space(LevelEditorGuiMetrics.SpaceInspectorSection);
             DrawInteractionInspector(entity, primary);
             DrawDestructibleInspector(selectedView, entity);
+        }
+
+        private void DrawRotationPivotPicker(LevelEntity entity, LevelEntityView selectedView)
+        {
+            GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
+            GUILayout.Label("ROTATION PIVOT — TOP VIEW (X/Z)");
+            GUILayout.Label("Choose the point that stays fixed while yaw rotates.");
+
+            Bounds bounds = LevelEntityView.CalculateVisualLocalBounds(
+                selectedView.Archetype.Presentation.Prefab,
+                selectedView.Archetype.Presentation.LocalBounds);
+            for (int zIndex = 1; zIndex >= -1; zIndex--)
+            {
+                GUILayout.BeginHorizontal();
+                for (int xIndex = -1; xIndex <= 1; xIndex++)
+                {
+                    float normalizedX = xIndex;
+                    float normalizedZ = zIndex;
+                    Vector3 candidate = LevelEntityView.CalculateBoundsPivot(
+                        bounds,
+                        normalizedX,
+                        normalizedZ);
+                    bool selected = entity?.rotationPivot != null
+                        && Approximately(entity.rotationPivot.localPosition, candidate);
+                    Color previous = GUI.backgroundColor;
+                    if (selected)
+                        GUI.backgroundColor = LevelEditorTheme.SelectionOutline;
+                    if (GUILayout.Button(selected ? "●" : "○"))
+                        actions.SetEntityRotationPivot(normalizedX, normalizedZ);
+                    GUI.backgroundColor = previous;
+                }
+                GUILayout.EndHorizontal();
+            }
+
+            bool usesAssetPivot = entity?.rotationPivot == null;
+            Color assetPrevious = GUI.backgroundColor;
+            if (usesAssetPivot)
+                GUI.backgroundColor = LevelEditorTheme.SelectionOutline;
+            if (GUILayout.Button(usesAssetPivot ? "● ASSET PIVOT" : "○ ASSET PIVOT"))
+                actions.ResetEntityRotationPivot();
+            GUI.backgroundColor = assetPrevious;
+        }
+
+        private static bool Approximately(Float3Data value, Vector3 candidate)
+        {
+            return Mathf.Approximately(value.x, candidate.x)
+                && Mathf.Approximately(value.y, candidate.y)
+                && Mathf.Approximately(value.z, candidate.z);
         }
 
         private void RotateInspectorSelection(float amount)

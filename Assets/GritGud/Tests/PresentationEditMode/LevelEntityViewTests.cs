@@ -7,6 +7,16 @@ namespace GritGud.Presentation.Tests
     public sealed class LevelEntityViewTests
     {
         [Test]
+        public void BoundsPivotMapsTopViewCoordinatesToBottomFace()
+        {
+            var bounds = new Bounds(new Vector3(2f, 3f, 4f), new Vector3(6f, 8f, 10f));
+
+            Vector3 pivot = LevelEntityView.CalculateBoundsPivot(bounds, -1f, 1f);
+
+            Assert.That(pivot, Is.EqualTo(new Vector3(-1f, -1f, 9f)));
+        }
+
+        [Test]
         public void TransformBoundsAccountsForEntityYaw()
         {
             var owner = new GameObject("Rotated Bounds Test");

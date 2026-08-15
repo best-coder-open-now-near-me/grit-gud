@@ -13,6 +13,8 @@ namespace GritGud.Presentation.LevelEditing
         private readonly RuntimeBoundsOutline selectionOutline;
         private readonly RuntimeBoundsOutline hoverOutline;
         private readonly RuntimeBoundsOutline placementOutline;
+        private readonly Transform rotationPivotMarker;
+        private readonly Material rotationPivotMaterial;
         private readonly Dictionary<string, RuntimeBoundsOutline> secondaryOutlines =
             new Dictionary<string, RuntimeBoundsOutline>(StringComparer.Ordinal);
         private readonly HashSet<string> visibleSecondaryIds =
@@ -27,6 +29,17 @@ namespace GritGud.Presentation.LevelEditing
             selectionOutline = Create("Selection Outline", LevelEditorTheme.SelectionOutline);
             hoverOutline = Create("Hover Outline", LevelEditorTheme.HoverOutline);
             placementOutline = Create("Placement Outline", LevelEditorTheme.PlacementOutline);
+            GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            marker.name = "Rotation Pivot Marker";
+            marker.transform.SetParent(parent, false);
+            marker.transform.localScale = Vector3.one * 0.22f;
+            Destroy(marker.GetComponent<Collider>());
+            rotationPivotMaterial = RuntimeMaterialFactory.CreateColor(
+                LevelEditorTheme.SelectionOutline,
+                "Rotation Pivot Marker Material");
+            marker.GetComponent<Renderer>().sharedMaterial = rotationPivotMaterial;
+            rotationPivotMarker = marker.transform;
+            rotationPivotMarker.gameObject.SetActive(false);
         }
 
         public void PresentSelection(
@@ -39,7 +52,9 @@ namespace GritGud.Presentation.LevelEditing
             if (visible && primaryView != null)
             {
                 selectionOutline.SetBounds(primaryView.GetWorldBounds());
+                rotationPivotMarker.position = primaryView.GetRotationPivotWorld();
             }
+            rotationPivotMarker.gameObject.SetActive(visible && primaryView != null);
 
             visibleSecondaryIds.Clear();
             if (visible && targets != null && projector != null)
@@ -116,6 +131,7 @@ namespace GritGud.Presentation.LevelEditing
             selectionOutline.gameObject.SetActive(false);
             hoverOutline.gameObject.SetActive(false);
             placementOutline.gameObject.SetActive(false);
+            rotationPivotMarker.gameObject.SetActive(false);
             foreach (RuntimeBoundsOutline outline in secondaryOutlines.Values)
             {
                 outline.gameObject.SetActive(false);
@@ -127,6 +143,8 @@ namespace GritGud.Presentation.LevelEditing
             Destroy(selectionOutline?.gameObject);
             Destroy(hoverOutline?.gameObject);
             Destroy(placementOutline?.gameObject);
+            Destroy(rotationPivotMarker?.gameObject);
+            Destroy(rotationPivotMaterial);
             foreach (RuntimeBoundsOutline outline in secondaryOutlines.Values)
             {
                 Destroy(outline?.gameObject);

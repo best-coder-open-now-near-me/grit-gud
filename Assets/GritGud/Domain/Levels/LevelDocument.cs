@@ -49,6 +49,22 @@ namespace GritGud.Domain.Levels
     }
 
     [Serializable]
+    public sealed class LevelRotationPivotData
+    {
+        public string mode = "bounds";
+        public Float3Data localPosition;
+
+        public LevelRotationPivotData DeepCopy()
+        {
+            return new LevelRotationPivotData
+            {
+                mode = mode ?? string.Empty,
+                localPosition = localPosition,
+            };
+        }
+    }
+
+    [Serializable]
     public struct LevelBoundsData
     {
         public LevelBoundsData(Float3Data center, Float3Data size)
@@ -289,6 +305,7 @@ namespace GritGud.Domain.Levels
         public string archetypeId = string.Empty;
         public string groupId = string.Empty;
         public LevelTransformData transform;
+        public LevelRotationPivotData rotationPivot;
         public List<CoverVolumeData> coverVolumes = new List<CoverVolumeData>();
         public List<InteractionPointData> interactionPoints = new List<InteractionPointData>();
         public DestructibleInstanceData destructible;
@@ -310,6 +327,7 @@ namespace GritGud.Domain.Levels
                 archetypeId = archetypeId ?? string.Empty,
                 groupId = groupId ?? string.Empty,
                 transform = transform,
+                rotationPivot = rotationPivot?.DeepCopy(),
                 destructible = destructible?.DeepCopy(),
             };
 

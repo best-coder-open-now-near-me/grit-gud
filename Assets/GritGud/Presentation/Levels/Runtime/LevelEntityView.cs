@@ -5,6 +5,7 @@ namespace GritGud.Presentation.Levels.Runtime
 {
     public sealed class LevelEntityView : MonoBehaviour
     {
+        private Vector3 rotationPivotLocal;
         private LevelArchetypeDefinition archetype;
 
         public string EntityId { get; private set; }
@@ -31,6 +32,9 @@ namespace GritGud.Presentation.Levels.Runtime
 
             EntityId = entity.id;
             ArchetypeId = entity.archetypeId;
+            rotationPivotLocal = entity.rotationPivot == null
+                ? Vector3.zero
+                : ToVector(entity.rotationPivot.localPosition);
             ApplyTransform(entity.transform);
         }
 
@@ -57,6 +61,19 @@ namespace GritGud.Presentation.Levels.Runtime
                 archetype.Presentation.Prefab,
                 archetype.Presentation.LocalBounds);
             return TransformBounds(localBounds, transform);
+        }
+
+        public Vector3 GetRotationPivotWorld()
+        {
+            return transform.TransformPoint(rotationPivotLocal);
+        }
+
+        public static Vector3 CalculateBoundsPivot(Bounds bounds, float normalizedX, float normalizedZ)
+        {
+            return new Vector3(
+                Mathf.Lerp(bounds.min.x, bounds.max.x, (normalizedX + 1f) * 0.5f),
+                bounds.min.y,
+                Mathf.Lerp(bounds.min.z, bounds.max.z, (normalizedZ + 1f) * 0.5f));
         }
 
         public static Bounds CalculateVisualLocalBounds(GameObject prefab, Bounds fallback)
@@ -122,5 +139,8 @@ namespace GritGud.Presentation.Levels.Runtime
         {
             return Mathf.Repeat(yaw + 180f, 360f) - 180f;
         }
+
+        private static Vector3 ToVector(Float3Data value) =>
+            new Vector3(value.x, value.y, value.z);
     }
 }

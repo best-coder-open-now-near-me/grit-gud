@@ -1107,6 +1107,16 @@ namespace GritGud.Domain.Levels
                         "The entity origin is outside the authored level bounds.",
                         entityId);
                 }
+
+                if (entity.rotationPivot != null
+                    && (!string.Equals(entity.rotationPivot.mode, "bounds", StringComparison.Ordinal)
+                    || !LevelValidationMath.IsFinite(entity.rotationPivot.localPosition)))
+                {
+                    context.Error(
+                        "entity.rotation-pivot.invalid",
+                        "Entity rotation pivots must use a finite bounds-relative position.",
+                        entityId);
+                }
             }
         }
     }

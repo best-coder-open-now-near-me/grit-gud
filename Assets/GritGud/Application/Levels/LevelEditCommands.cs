@@ -847,6 +847,41 @@ namespace GritGud.Application.Levels
         }
     }
 
+    public sealed class SetEntityRotationPivotCommand : ILevelEditCommand
+    {
+        private readonly string entityId;
+        private readonly LevelRotationPivotData before;
+        private readonly LevelRotationPivotData after;
+
+        public SetEntityRotationPivotCommand(
+            string entityId,
+            LevelRotationPivotData before,
+            LevelRotationPivotData after)
+        {
+            this.entityId = string.IsNullOrWhiteSpace(entityId)
+                ? throw new ArgumentException("An entity ID is required.", nameof(entityId))
+                : entityId;
+            this.before = before?.DeepCopy();
+            this.after = after?.DeepCopy();
+        }
+
+        public string Description => "Set entity rotation pivot";
+
+        public IReadOnlyCollection<string> AffectedEntityIds => new[] { entityId };
+
+        public bool RequiresFullProjection => false;
+
+        public void Apply(LevelDocument document) => SetPivot(document, after);
+
+        public void Revert(LevelDocument document) => SetPivot(document, before);
+
+        private void SetPivot(LevelDocument document, LevelRotationPivotData value)
+        {
+            int index = AddEntityCommand.RequireEntityIndex(document, entityId);
+            document.entities[index].rotationPivot = value?.DeepCopy();
+        }
+    }
+
     public sealed class AddInteractionPointCommand : ILevelEditCommand
     {
         private readonly string entityId;

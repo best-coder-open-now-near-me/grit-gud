@@ -89,6 +89,16 @@ Snapping is optional. Structural pieces default to the Synty kit's 2.5-unit
 module and 90-degree rotation; props use finer position and angle increments.
 Snapping affects authoring only and does not introduce a gameplay grid.
 
+The Selection Inspector includes a **Rotation Pivot — Top View (X/Z)** picker.
+Its nine points place the pivot at the bottom corners, edge centers, or center of
+the object's visible bounds. The selected point remains fixed when the yaw
+buttons rotate the object, which supports both centered props and corner- or
+edge-pivoted modular pieces. **Asset Pivot** restores the prefab's authored
+origin. A blue marker identifies the active pivot in the viewport; pivot changes
+are portable, per entity, multi-selection aware, and undoable. This first slice
+is deliberately yaw-only; a future transform gizmo can extend the stored local
+pivot to unrestricted three-axis rotation.
+
 Hovering an entity in selection mode shows a yellow outline; the selected entity
 uses a blue outline, and additional selected entities use green outlines.
 Rotation and deletion apply to the complete selection as one undoable

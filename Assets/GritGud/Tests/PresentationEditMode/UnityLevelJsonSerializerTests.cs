@@ -19,6 +19,10 @@ namespace GritGud.Presentation.Tests
                 archetypeId = "prop.crate.standard",
                 groupId = "props",
                 transform = new LevelTransformData(new Float3Data(2.5f, 0f, -5f), 90f),
+                rotationPivot = new LevelRotationPivotData
+                {
+                    localPosition = new Float3Data(0.5f, 0f, -0.5f),
+                },
                 destructible = new DestructibleInstanceData
                 {
                     enabled = true,
@@ -86,6 +90,8 @@ namespace GritGud.Presentation.Tests
             Assert.That(result.groups.Single().displayName, Is.EqualTo("Gameplay Props"));
             Assert.That(result.groups.Single().locked, Is.True);
             Assert.That(result.entities[0].transform.position.z, Is.EqualTo(-5f));
+            Assert.That(result.entities[0].rotationPivot.mode, Is.EqualTo("bounds"));
+            Assert.That(result.entities[0].rotationPivot.localPosition.x, Is.EqualTo(0.5f));
             Assert.That(result.entities[0].destructible.initialState, Is.EqualTo("intact"));
             Assert.That(result.entities[0].destructible.enabled, Is.True);
             Assert.That(result.entities[0].interactionPoints[0].type, Is.EqualTo("doorway"));
