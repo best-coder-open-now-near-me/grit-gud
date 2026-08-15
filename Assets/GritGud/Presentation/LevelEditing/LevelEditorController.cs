@@ -67,7 +67,8 @@ namespace GritGud.Presentation.LevelEditing
         public void Begin(
             bool startInPreview,
             LevelDocument initialDocument,
-            string initialSourceLabel)
+            string initialSourceLabel,
+            bool initialDocumentIsSaved = true)
         {
             if (initialDocument == null)
             {
@@ -75,6 +76,28 @@ namespace GritGud.Presentation.LevelEditing
             }
 
             EndSession();
+            try
+            {
+                InitializeSession(
+                    startInPreview,
+                    initialDocument,
+                    initialSourceLabel,
+                    initialDocumentIsSaved);
+            }
+            catch
+            {
+                EndSession();
+                throw;
+            }
+        }
+
+        private void InitializeSession(
+            bool startInPreview,
+            LevelDocument initialDocument,
+            string initialSourceLabel,
+            bool initialDocumentIsSaved)
+        {
+            previewMode = false;
             suspended = false;
             enabled = true;
             sourceDocument = initialDocument.DeepCopy();
@@ -105,7 +128,8 @@ namespace GritGud.Presentation.LevelEditing
 
             workspace = new LevelEditorWorkspace(
                 sourceDocument.DeepCopy(),
-                defaultContent.ValidationContent);
+                defaultContent.ValidationContent,
+                initialDocumentIsSaved);
             viewDocument = workspace.CreateSnapshot();
             workspace.Changed += HandleWorkspaceChanged;
             selection = new LevelSelectionModel();
@@ -167,7 +191,7 @@ namespace GritGud.Presentation.LevelEditing
                 snapSettings,
                 presentationState,
                 this);
-            gui.SyncPlayerStartFields(RequireSelectedPlayer(workspace.CreateSnapshot()).transform);
+            gui.SyncScenarioFields(viewDocument);
             outlinePresenter = new LevelEditorOutlinePresenter(transform);
             validationIssues = workspace.ValidationIssues;
 
@@ -233,6 +257,12 @@ namespace GritGud.Presentation.LevelEditing
             placementTool = null;
             terrainTool = null;
             terrainAuthoring = null;
+            catalog = null;
+            scenarioCatalog = null;
+            inputRouter = null;
+            cameraController = null;
+            presentationState = null;
+            scenarioAuthoring = null;
             selectedView = null;
             outlinePresenter = null;
             sceneQuery = null;
@@ -240,8 +270,13 @@ namespace GritGud.Presentation.LevelEditing
             preferencesStore = null;
             gui = null;
 
+            previewMode = false;
             suspended = false;
             viewDocument = null;
+            validationIssues = Array.Empty<LevelValidationIssue>();
+            sourceDocument = null;
+            sourceLabel = string.Empty;
+            statusMessage = string.Empty;
             enabled = false;
         }
 
@@ -457,16 +492,38 @@ namespace GritGud.Presentation.LevelEditing
 
         private void FocusEntity(string entityId)
         {
-            if (string.IsNullOrWhiteSpace(entityId)
-                || !projector.TryGetEntity(entityId, out LevelEntityView view))
+            if (string.IsNullOrWhiteSpace(entityId))
             {
                 SetStatus("The requested entity is not loaded.");
                 return;
             }
 
-            selection.SetSingle(entityId);
-            cameraController.Frame(view.GetWorldBounds());
-            SetStatus($"Focused entity '{entityId}'.");
+            if (projector.TryGetEntity(entityId, out LevelEntityView view))
+            {
+                selection.SetSingle(entityId);
+                cameraController.Frame(view.GetWorldBounds());
+                SetStatus($"Focused entity '{entityId}'.");
+                return;
+            }
+
+            LevelScenarioActorData actor = viewDocument?.scenario?.actors.FirstOrDefault(candidate =>
+                string.Equals(candidate?.id, entityId, StringComparison.Ordinal));
+            if (actor == null)
+            {
+                SetStatus("The requested entity is not loaded.");
+                return;
+            }
+
+            selection.Clear();
+            gui.SelectScenarioActor(actor.id);
+            gui.SyncScenarioActorFields(actor);
+            if (scenarioActorHandles.TryGetHandle(actor.id, out GameObject handle))
+            {
+                Collider collider = handle.GetComponent<Collider>();
+                if (collider != null)
+                    cameraController.Frame(collider.bounds);
+            }
+            SetStatus($"Focused scenario actor '{actor.id}'.");
         }
 
         private void ApplyInspectorTransform(
@@ -495,14 +552,6 @@ namespace GritGud.Presentation.LevelEditing
                 NormalizeYaw(yaw));
             workspace.Execute(new SetEntityTransformCommand(entity.id, entity.transform, after));
             SetStatus("Applied numeric transform.");
-        }
-
-        private static LevelScenarioActorData RequireSelectedPlayer(LevelDocument document)
-        {
-            LevelScenarioActorData player = document?.scenario?
-                .FindInitiallySelectedPlayer();
-            return player ?? throw new InvalidOperationException(
-                "The level scenario does not define an initially selected player actor.");
         }
 
         private void ExecuteScenarioCommands(
@@ -729,7 +778,7 @@ namespace GritGud.Presentation.LevelEditing
         {
             sourceDocument = LevelDocumentFactory.CreateNew();
             sourceLabel = "new level";
-            ReplaceWorkspaceDocument(sourceDocument.DeepCopy());
+            ReplaceWorkspaceDocument(sourceDocument.DeepCopy(), isSaved: false);
             SetStatus("Created a new level with flat terrain covering its bounds.");
         }
 
@@ -739,12 +788,12 @@ namespace GritGud.Presentation.LevelEditing
             SetStatus($"Reloaded {sourceLabel}.");
         }
 
-        private void ReplaceWorkspaceDocument(LevelDocument document)
+        private void ReplaceWorkspaceDocument(LevelDocument document, bool isSaved = true)
         {
             placementTool.SelectArchetype(null);
             toolManager.ActivateDefault();
             selection.Clear();
-            workspace.ReplaceDocument(document);
+            workspace.ReplaceDocument(document, isSaved);
             cameraController.Frame(document.bounds);
             scenarioActorHandles.Refresh(document);
             gui.SelectScenarioActor(null);

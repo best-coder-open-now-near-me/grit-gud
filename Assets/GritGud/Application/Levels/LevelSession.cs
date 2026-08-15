@@ -47,9 +47,10 @@ namespace GritGud.Application.Levels
         private int savedHistoryPosition;
         private int revision;
 
-        public LevelSession(LevelDocument document)
+        public LevelSession(LevelDocument document, bool initiallySaved = true)
         {
             this.document = document?.DeepCopy() ?? throw new ArgumentNullException(nameof(document));
+            savedHistoryPosition = initiallySaved ? 0 : -1;
         }
 
         public event EventHandler<LevelSessionChangedEventArgs> Changed;
@@ -132,12 +133,12 @@ namespace GritGud.Application.Levels
             return true;
         }
 
-        public void ReplaceDocument(LevelDocument document)
+        public void ReplaceDocument(LevelDocument document, bool isSaved = true)
         {
             this.document = document?.DeepCopy() ?? throw new ArgumentNullException(nameof(document));
             history.Clear();
             historyPosition = 0;
-            savedHistoryPosition = 0;
+            savedHistoryPosition = isSaved ? 0 : -1;
             revision++;
             Changed?.Invoke(this, new LevelSessionChangedEventArgs(
                 LevelSessionChangeKind.ReplaceDocument,

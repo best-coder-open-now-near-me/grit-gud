@@ -29,6 +29,8 @@ namespace GritGud.Presentation.LevelEditing.UI
         private readonly LevelSnapSettings snapSettings;
         private readonly LevelEditorPresentationState presentationState;
         private readonly ILevelEditorGuiActions actions;
+        private readonly LevelEditorDocumentActionConfirmation documentActionConfirmation =
+            new LevelEditorDocumentActionConfirmation();
         private Vector2 paletteScroll;
         private Vector2 inspectorScroll;
         private string xText = "0";
@@ -129,7 +131,8 @@ namespace GritGud.Presentation.LevelEditing.UI
             if (state == null)
                 throw new ArgumentNullException(nameof(state));
 
-            DrawToolbar(state);
+            DrawToolbar(state, !documentActionConfirmation.HasPendingAction);
+            GUI.enabled = !documentActionConfirmation.HasPendingAction;
             if (!state.PreviewMode)
             {
                 DrawPalette(state.Document);
@@ -139,11 +142,17 @@ namespace GritGud.Presentation.LevelEditing.UI
             if (showControls)
                 DrawShortcutsOverlay();
 
+            GUI.enabled = true;
             DrawStatusBar(state.StatusMessage);
+            if (documentActionConfirmation.HasPendingAction)
+                DrawUnsavedChangesConfirmation();
         }
 
         public bool IsPointerOverInterface(Vector2 screenPosition)
         {
+            if (documentActionConfirmation.HasPendingAction)
+                return true;
+
             float guiY = Screen.height - screenPosition.y;
             if (guiY <= LevelEditorGuiMetrics.ToolbarHeight
                 || guiY >= Screen.height - LevelEditorGuiMetrics.StatusBarHeight)
@@ -178,6 +187,7 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         public void SelectScenarioActor(string actorId)
         {
+            presentationState.ShowPage(LevelEditorWorkspacePage.Scenario);
             presentationState.FocusScenarioActor(actorId);
         }
 
@@ -224,16 +234,20 @@ namespace GritGud.Presentation.LevelEditing.UI
                 presentationState.ClearInspectorFocus();
         }
 
-        private void DrawToolbar(LevelEditorViewState state)
+        private void DrawToolbar(LevelEditorViewState state, bool interactionsEnabled)
         {
             bool previewMode = state.PreviewMode;
             GUILayout.BeginArea(
                 new Rect(0f, 0f, Screen.width, LevelEditorGuiMetrics.ToolbarHeight),
                 GUI.skin.box);
             GUILayout.BeginHorizontal();
+            GUI.enabled = interactionsEnabled;
             if (GUILayout.Button("BACK", ToolbarButtonLayout(72f)))
             {
-                actions.ReturnToMenu();
+                documentActionConfirmation.Request(
+                    state.IsDirty,
+                    "Return to the main menu and discard this level's unsaved changes?",
+                    actions.ReturnToMenu);
             }
 
             if (GUILayout.Button(
@@ -243,54 +257,60 @@ namespace GritGud.Presentation.LevelEditing.UI
                 actions.TogglePreview();
             }
 
-            GUI.enabled = !previewMode;
+            GUI.enabled = interactionsEnabled && !previewMode;
             if (GUILayout.Button("TEST PLAY", ToolbarButtonLayout(92f)))
             {
                 actions.StartTestPlay();
             }
 
-            GUI.enabled = !previewMode;
+            GUI.enabled = interactionsEnabled && !previewMode;
             if (GUILayout.Button("NEW", ToolbarButtonLayout(60f)))
             {
-                actions.CreateNewLevel();
+                documentActionConfirmation.Request(
+                    state.IsDirty,
+                    "Create a new level and discard the current unsaved changes?",
+                    actions.CreateNewLevel);
             }
 
             if (GUILayout.Button("RELOAD SOURCE", ToolbarButtonLayout(116f)))
             {
-                actions.ReloadSourceLevel();
+                documentActionConfirmation.Request(
+                    state.IsDirty,
+                    "Reload the source level and discard the current unsaved changes?",
+                    actions.ReloadSourceLevel);
             }
 
-            GUI.enabled = state.CanUndo && !previewMode;
+            GUI.enabled = interactionsEnabled && state.CanUndo && !previewMode;
             if (GUILayout.Button("UNDO", ToolbarButtonLayout(64f)))
             {
                 actions.Undo();
             }
 
-            GUI.enabled = state.CanRedo && !previewMode;
+            GUI.enabled = interactionsEnabled && state.CanRedo && !previewMode;
             if (GUILayout.Button("REDO", ToolbarButtonLayout(64f)))
             {
                 actions.Redo();
             }
 
-            GUI.enabled = !previewMode && selection.Primary != null;
+            GUI.enabled = interactionsEnabled && !previewMode && selection.Primary != null;
             if (GUILayout.Button("FRAME", ToolbarButtonLayout(68f)))
             {
                 actions.FrameSelection();
             }
 
-            GUI.enabled = !previewMode && selection.Targets.Count > 0;
+            GUI.enabled = interactionsEnabled && !previewMode && selection.Targets.Count > 0;
             if (GUILayout.Button("DUPLICATE", ToolbarButtonLayout(86f)))
             {
                 selectionTool.DuplicateSelection();
             }
 
-            GUI.enabled = !previewMode;
+            GUI.enabled = interactionsEnabled && !previewMode;
             if (GUILayout.Button("FRAME ALL", ToolbarButtonLayout(86f)))
             {
                 actions.FrameLevel();
             }
 
-            GUI.enabled = true;
+            GUI.enabled = interactionsEnabled;
             if (GUILayout.Button(
                 showControls ? "HIDE SHORTCUTS" : "SHORTCUTS",
                 ToolbarButtonLayout(112f)))
@@ -298,7 +318,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 showControls = !showControls;
             }
 
-            GUI.enabled = true;
+            GUI.enabled = interactionsEnabled;
             GUILayout.FlexibleSpace();
             GUILayout.Label(
                 previewMode
@@ -308,7 +328,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
-            GUI.enabled = !previewMode;
+            GUI.enabled = interactionsEnabled && !previewMode;
             snapSettings.Enabled = GUILayout.Toggle(
                 snapSettings.Enabled,
                 "SNAP",
@@ -319,13 +339,16 @@ namespace GritGud.Presentation.LevelEditing.UI
                 actions.SaveDraft();
             }
 
-            GUI.enabled = !previewMode && actions.HasDraft;
+            GUI.enabled = interactionsEnabled && !previewMode && actions.HasDraft;
             if (GUILayout.Button("LOAD DRAFT", ToolbarButtonLayout(96f)))
             {
-                actions.LoadDraft();
+                documentActionConfirmation.Request(
+                    state.IsDirty,
+                    "Load the saved draft and discard the current unsaved changes?",
+                    actions.LoadDraft);
             }
 
-            GUI.enabled = !previewMode;
+            GUI.enabled = interactionsEnabled && !previewMode;
             if (GUILayout.Button("EXPORT", ToolbarButtonLayout(76f)))
             {
                 actions.Export();
@@ -333,10 +356,13 @@ namespace GritGud.Presentation.LevelEditing.UI
 
             if (GUILayout.Button("IMPORT", ToolbarButtonLayout(76f)))
             {
-                actions.RequestImport();
+                documentActionConfirmation.Request(
+                    state.IsDirty,
+                    "Import another level and discard the current unsaved changes?",
+                    actions.RequestImport);
             }
 
-            GUI.enabled = true;
+            GUI.enabled = interactionsEnabled;
             if (selectionTool.IsDragging)
             {
                 GUILayout.FlexibleSpace();
@@ -347,6 +373,29 @@ namespace GritGud.Presentation.LevelEditing.UI
             }
 
             GUI.enabled = true;
+            GUILayout.EndHorizontal();
+            GUILayout.EndArea();
+        }
+
+        private void DrawUnsavedChangesConfirmation()
+        {
+            const float width = 480f;
+            const float height = 176f;
+            Rect panel = new Rect(
+                Mathf.Max(8f, (Screen.width - width) * 0.5f),
+                Mathf.Max(8f, (Screen.height - height) * 0.5f),
+                Mathf.Min(width, Screen.width - 16f),
+                height);
+            GUILayout.BeginArea(panel, "UNSAVED CHANGES", GUI.skin.window);
+            GUILayout.Space(LevelEditorGuiMetrics.SpaceGroup);
+            GUILayout.Label(documentActionConfirmation.Prompt);
+            GUILayout.Label("Save a draft or export first if you want to keep this work.");
+            GUILayout.FlexibleSpace();
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("KEEP EDITING", PanelPrimaryButtonLayout()))
+                documentActionConfirmation.Cancel();
+            if (GUILayout.Button("DISCARD & CONTINUE", PanelPrimaryButtonLayout()))
+                documentActionConfirmation.ConfirmDiscard();
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
         }

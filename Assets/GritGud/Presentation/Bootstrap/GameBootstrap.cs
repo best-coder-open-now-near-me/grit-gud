@@ -78,7 +78,8 @@ namespace GritGud.Presentation.Bootstrap
             OpenLevelTool(
                 startInPreview: false,
                 LevelDocumentFactory.CreateNew(),
-                "new level");
+                "new level",
+                initialDocumentIsSaved: false);
         }
 
         public void PlayMainLevel()
@@ -220,7 +221,8 @@ namespace GritGud.Presentation.Bootstrap
         private void OpenLevelTool(
             bool startInPreview,
             LevelDocument initialDocument,
-            string sourceLabel)
+            string sourceLabel,
+            bool initialDocumentIsSaved = true)
         {
             EnsureStartMenu();
             CancelPendingGameplayStart();
@@ -231,8 +233,21 @@ namespace GritGud.Presentation.Bootstrap
                 levelEditor = gameObject.AddComponent<LevelEditorController>();
             }
 
-            levelEditor.Begin(startInPreview, initialDocument, sourceLabel);
-            CurrentMode = ApplicationMode.LevelEditor;
+            try
+            {
+                levelEditor.Begin(
+                    startInPreview,
+                    initialDocument,
+                    sourceLabel,
+                    initialDocumentIsSaved);
+                CurrentMode = ApplicationMode.LevelEditor;
+            }
+            catch
+            {
+                levelEditor.EndSession();
+                startMenu.enabled = true;
+                throw;
+            }
         }
 
         private CommittedLevelEntry RequireDefaultCommittedLevel(bool requirePlayable)

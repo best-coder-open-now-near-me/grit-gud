@@ -26,16 +26,20 @@ namespace GritGud.Application.Levels
         private IReadOnlyList<LevelValidationIssue> validationIssues;
         private bool disposed;
 
-        public LevelEditorWorkspace(LevelDocument document, ISet<string> knownArchetypeIds = null)
-            : this(document, new LevelValidationContent(knownArchetypeIds))
+        public LevelEditorWorkspace(
+            LevelDocument document,
+            ISet<string> knownArchetypeIds = null,
+            bool initiallySaved = true)
+            : this(document, new LevelValidationContent(knownArchetypeIds), initiallySaved)
         {
         }
 
         public LevelEditorWorkspace(
             LevelDocument document,
-            LevelValidationContent validationContent)
+            LevelValidationContent validationContent,
+            bool initiallySaved = true)
         {
-            session = new LevelSession(document);
+            session = new LevelSession(document, initiallySaved);
             this.validationContent = validationContent
                 ?? throw new ArgumentNullException(nameof(validationContent));
             validationIssues = Validate(LevelValidationProfile.Authoring);
@@ -78,10 +82,10 @@ namespace GritGud.Application.Levels
             return session.Redo();
         }
 
-        public void ReplaceDocument(LevelDocument document)
+        public void ReplaceDocument(LevelDocument document, bool isSaved = true)
         {
             ThrowIfDisposed();
-            session.ReplaceDocument(document);
+            session.ReplaceDocument(document, isSaved);
         }
 
         public void MarkSaved()

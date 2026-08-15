@@ -7,6 +7,20 @@ namespace GritGud.Domain.Tests.Levels
     public sealed class LevelEditorWorkspaceTests
     {
         [Test]
+        public void WorkspaceCanRepresentAnUnsavedInitialDocument()
+        {
+            using var workspace = new LevelEditorWorkspace(
+                LevelDocumentFactory.CreateEmpty(),
+                initiallySaved: false);
+
+            Assert.That(workspace.IsDirty, Is.True);
+
+            workspace.MarkSaved();
+
+            Assert.That(workspace.IsDirty, Is.False);
+        }
+
+        [Test]
         public void WorkspacePublishesHistoryAndValidationTogether()
         {
             using var workspace = new LevelEditorWorkspace(LevelDocumentFactory.CreateEmpty());

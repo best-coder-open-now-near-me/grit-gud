@@ -8,6 +8,37 @@ namespace GritGud.Domain.Tests.Levels
     public sealed class LevelSessionTests
     {
         [Test]
+        public void NewUnsavedSessionStartsDirtyUntilMarkedSaved()
+        {
+            var session = new LevelSession(
+                LevelDocumentFactory.CreateEmpty(),
+                initiallySaved: false);
+
+            Assert.That(session.IsDirty, Is.True);
+
+            session.MarkSaved();
+
+            Assert.That(session.IsDirty, Is.False);
+        }
+
+        [Test]
+        public void UnsavedReplacementClearsHistoryAndRemainsDirty()
+        {
+            var session = new LevelSession(LevelDocumentFactory.CreateEmpty());
+            session.Execute(new AddEntityCommand(new LevelEntity
+            {
+                id = "entity-1",
+                archetypeId = "prop.crate.standard",
+            }));
+
+            session.ReplaceDocument(LevelDocumentFactory.CreateEmpty(), isSaved: false);
+
+            Assert.That(session.CanUndo, Is.False);
+            Assert.That(session.CanRedo, Is.False);
+            Assert.That(session.IsDirty, Is.True);
+        }
+
+        [Test]
         public void PlaceUndoAndRedoPreserveEntityIdentity()
         {
             var session = new LevelSession(LevelDocumentFactory.CreateEmpty());
