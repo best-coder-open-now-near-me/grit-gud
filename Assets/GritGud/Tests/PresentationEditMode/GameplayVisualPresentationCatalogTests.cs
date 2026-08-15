@@ -23,26 +23,20 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
-        public void DepotLightingProfileOwnsUnityAmbientEffectReferencesOnly()
+        public void DressingCatalogOwnsPortableAmbientEffectReferences()
         {
-            LevelLightingProfile profile = LevelLightingCatalog
-                .LoadDefault()
-                .Get("main-depot-yard-v1");
+            LevelDressingCatalog catalog = LevelDressingCatalog.LoadDefault();
 
-            Assert.That(profile.AmbientEffects.Count, Is.EqualTo(3));
+            Assert.That(catalog.AmbientEffects.Count, Is.EqualTo(2));
             Assert.That(
-                profile.AmbientEffects.All(effect => effect.Prefab != null),
+                catalog.AmbientEffects.All(effect => effect.Prefab != null),
                 Is.True);
-        }
-
-        [Test]
-        public void UnknownCommittedLevelUsesCatalogLightingFallback()
-        {
-            LevelLightingCatalog catalog = LevelLightingCatalog.LoadDefault();
-
             Assert.That(
-                catalog.GetOrAny("uploaded-level-without-lighting-sidecar"),
-                Is.SameAs(catalog.GetAny()));
+                catalog.TryGetAmbientEffect("dust-air", out _),
+                Is.True);
+            Assert.That(
+                catalog.TryGetAmbientEffect("ground-haze", out _),
+                Is.True);
         }
 
         [Test]

@@ -31,6 +31,33 @@ namespace GritGud.Domain.Tests.Levels
         }
 
         [Test]
+        public void InvalidPortableDressingIsRejected()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            document.dressing.decals.Add(new LevelDecalData
+            {
+                id = "shared",
+                displayName = "Broken Decal",
+                styleId = "unsupported",
+                size = new Float3Data(0f, 2f, 1f),
+            });
+            document.dressing.audioZones.Add(new LevelAudioZoneData
+            {
+                id = "shared",
+                displayName = "Broken Audio",
+                soundId = "unknown",
+                size = new Float3Data(2f, 2f, 2f),
+                volume = 2f,
+            });
+
+            var issues = LevelValidator.Validate(document);
+
+            Assert.That(issues.Any(issue => issue.Code == "dressing.decal.invalid"), Is.True);
+            Assert.That(issues.Any(issue => issue.Code == "dressing.audio.invalid"), Is.True);
+            Assert.That(issues.Any(issue => issue.Code == "dressing.id"), Is.True);
+        }
+
+        [Test]
         public void EntityGroupsRequireStableUniqueIdsAndResolvableMembership()
         {
             LevelDocument document = LevelDocumentFactory.CreateEmpty();

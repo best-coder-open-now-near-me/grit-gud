@@ -134,6 +134,6 @@ transform feedback are also complete.
 Encounter scripting should wait until its portable runtime contracts are known.
 
 Portable heightfield terrain, patch-command history, chunked projection,
-per-surface appearance, on-demand playability diagnostics, and the transient
-slope heatmap are implemented. The next production slices are portable dressing
-zones and encounter authoring.
+per-surface appearance, on-demand playability diagnostics, the transient slope
+heatmap, surface decals, ambient-VFX placements, and spatial audio zones are
+implemented. The next production slice is encounter authoring.

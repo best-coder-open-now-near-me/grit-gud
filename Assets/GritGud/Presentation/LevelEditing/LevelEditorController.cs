@@ -21,6 +21,7 @@ namespace GritGud.Presentation.LevelEditing
     {
         private LevelArchetypeCatalog catalog;
         private ScenarioAuthoringCatalog scenarioCatalog;
+        private LevelDressingCatalog dressingCatalog;
         private LevelEditorPersistenceCoordinator persistence;
         private LevelEditorWorkspace workspace;
         private LevelSelectionModel selection;
@@ -48,13 +49,16 @@ namespace GritGud.Presentation.LevelEditing
         private LevelEditorOrganizationModel organizationModel;
         private LevelEditorOrganizationCoordinator organizationAuthoring;
         private LevelEditorPlayabilityCoordinator playabilityAuthoring;
+        private LevelDressingAuthoringCoordinator dressingAuthoring;
         private GameplayEnvironmentLighting environmentLighting;
+        private LevelDressingProjector dressingProjector;
         private LevelEntityView selectedView;
         private LevelEditorOutlinePresenter outlinePresenter;
         private IReadOnlyList<LevelValidationIssue> validationIssues =
             Array.Empty<LevelValidationIssue>();
         private bool previewMode;
         private bool suspended;
+        private bool audioZonePreviewEnabled;
         private LevelDocument sourceDocument;
         private bool sourceDocumentIsSaved;
         private string sourceLabel = string.Empty;
@@ -117,6 +121,7 @@ namespace GritGud.Presentation.LevelEditing
             GameplayContentPackage defaultContent = GameplayContentLoader.LoadDefault();
             catalog = defaultContent.Archetypes;
             scenarioCatalog = ScenarioAuthoringCatalog.Create(defaultContent.Scenario);
+            dressingCatalog = LevelDressingCatalog.LoadDefault();
             LevelTextTransfer textTransfer = GetComponent<LevelTextTransfer>();
             if (textTransfer == null)
             {
@@ -146,6 +151,7 @@ namespace GritGud.Presentation.LevelEditing
             selection.Changed += HandleSelectionChanged;
             projector = new LevelWorldProjector(catalog, transform);
             terrainProjector = new TerrainWorldProjector(transform);
+            dressingProjector = new LevelDressingProjector(transform, dressingCatalog);
             interactionPointHandles = new InteractionPointHandleProjector();
             scenarioActorHandles = new ScenarioActorHandleProjector(transform);
             inputRouter = new LevelEditorInputRouter();
@@ -214,6 +220,11 @@ namespace GritGud.Presentation.LevelEditing
             environmentAuthoring.StatusChanged += SetStatus;
             environmentAuthoring.PracticalLightFocusRequested +=
                 HandlePracticalLightFocusRequested;
+            dressingAuthoring = new LevelDressingAuthoringCoordinator(
+                workspace,
+                cameraController.CaptureState);
+            dressingAuthoring.StatusChanged += SetStatus;
+            dressingAuthoring.FocusRequested += HandleDressingFocusRequested;
             layoutAuthoring = new LevelEditorLayoutCoordinator(
                 workspace,
                 selection,
@@ -230,6 +241,7 @@ namespace GritGud.Presentation.LevelEditing
                 selection,
                 catalog,
                 scenarioCatalog,
+                dressingCatalog,
                 toolManager,
                 placementTool,
                 terrainPanel,
@@ -239,6 +251,7 @@ namespace GritGud.Presentation.LevelEditing
                 this);
             gui.SyncScenarioFields(viewDocument, forceLevelIdentity: true);
             gui.SyncEnvironmentFields(viewDocument, force: true);
+            gui.SyncDressingFields(viewDocument, force: true);
             gui.SyncLayoutFields(viewDocument, gridSettings, force: true);
             gui.SyncOrganizationFields(viewDocument, force: true);
             outlinePresenter = new LevelEditorOutlinePresenter(transform);
@@ -253,6 +266,10 @@ namespace GritGud.Presentation.LevelEditing
             {
                 projector.Replace(workspace.CreateSnapshot());
                 terrainProjector.Replace(workspace.CreateSnapshot());
+                dressingProjector.Replace(
+                    viewDocument.dressing,
+                    showZoneGizmos: true,
+                    playAudio: audioZonePreviewEnabled);
                 scenarioActorHandles.Refresh(workspace.CreateSnapshot());
                 organizationModel.ApplyProjection(projector);
                 SetStatus("Edit the main level or choose New to start from an empty level.");
@@ -300,6 +317,11 @@ namespace GritGud.Presentation.LevelEditing
                 environmentAuthoring.PracticalLightFocusRequested -=
                     HandlePracticalLightFocusRequested;
             }
+            if (dressingAuthoring != null)
+            {
+                dressingAuthoring.StatusChanged -= SetStatus;
+                dressingAuthoring.FocusRequested -= HandleDressingFocusRequested;
+            }
             if (layoutAuthoring != null)
                 layoutAuthoring.StatusChanged -= SetStatus;
             if (organizationAuthoring != null)
@@ -315,6 +337,7 @@ namespace GritGud.Presentation.LevelEditing
             toolManager?.Dispose();
             projector?.Dispose();
             terrainProjector?.Dispose();
+            dressingProjector?.Dispose();
             interactionPointHandles?.Dispose();
             scenarioActorHandles?.Dispose();
             gridPresenter?.Dispose();
@@ -323,6 +346,7 @@ namespace GritGud.Presentation.LevelEditing
             toolManager = null;
             projector = null;
             terrainProjector = null;
+            dressingProjector = null;
             interactionPointHandles = null;
             scenarioActorHandles = null;
             workspace = null;
@@ -333,6 +357,7 @@ namespace GritGud.Presentation.LevelEditing
             terrainAuthoring = null;
             playabilityAuthoring = null;
             environmentAuthoring = null;
+            dressingAuthoring = null;
             layoutAuthoring = null;
             organizationAuthoring = null;
             organizationModel = null;
@@ -341,6 +366,7 @@ namespace GritGud.Presentation.LevelEditing
             gridSettings = null;
             catalog = null;
             scenarioCatalog = null;
+            dressingCatalog = null;
             inputRouter = null;
             cameraController = null;
             presentationState = null;
@@ -354,6 +380,7 @@ namespace GritGud.Presentation.LevelEditing
 
             previewMode = false;
             suspended = false;
+            audioZonePreviewEnabled = false;
             viewDocument = null;
             validationIssues = Array.Empty<LevelValidationIssue>();
             sourceDocument = null;
@@ -467,6 +494,7 @@ namespace GritGud.Presentation.LevelEditing
             suspended = true;
             projector.SetVisible(false);
             terrainProjector.SetVisible(false);
+            dressingProjector.SetVisible(false);
             scenarioActorHandles.SetVisible(false);
             gridPresenter.SetVisible(false);
             outlinePresenter.HideAll();
@@ -484,6 +512,10 @@ namespace GritGud.Presentation.LevelEditing
             suspended = false;
             projector.SetVisible(true);
             terrainProjector.SetVisible(true);
+            dressingProjector.SetVisible(true);
+            dressingProjector.SetEditorPresentation(
+                showZoneGizmos: !previewMode,
+                playAudio: previewMode || audioZonePreviewEnabled);
             scenarioActorHandles.SetVisible(!previewMode);
             gridPresenter.Refresh(workspace.CreateSnapshot().bounds, gridSettings);
             gridPresenter.SetVisible(!previewMode && gridSettings.Visible);
@@ -712,6 +744,10 @@ namespace GritGud.Presentation.LevelEditing
             outlinePresenter.HideAll();
             projector.Replace(workspace.CreateSnapshot());
             terrainProjector.Replace(workspace.CreateSnapshot());
+            dressingProjector.Replace(
+                workspace.CreateSnapshot().dressing,
+                showZoneGizmos: false,
+                playAudio: true);
             interactionPointHandles.Refresh(workspace.CreateSnapshot(), selection, projector);
             scenarioActorHandles.SetVisible(false);
             gridPresenter.SetVisible(false);
@@ -723,6 +759,10 @@ namespace GritGud.Presentation.LevelEditing
             previewMode = false;
             projector.Replace(workspace.CreateSnapshot());
             terrainProjector.Replace(workspace.CreateSnapshot());
+            dressingProjector.Replace(
+                workspace.CreateSnapshot().dressing,
+                showZoneGizmos: true,
+                playAudio: audioZonePreviewEnabled);
             interactionPointHandles.Refresh(workspace.CreateSnapshot(), selection, projector);
             scenarioActorHandles.Refresh(workspace.CreateSnapshot());
             scenarioActorHandles.SetVisible(true);
@@ -765,6 +805,15 @@ namespace GritGud.Presentation.LevelEditing
                 {
                     gui.SyncEnvironmentFields(snapshot, force: true);
                     RefreshEnvironmentLighting(snapshot);
+                }
+                if (args.SessionChange.RequiresFullProjection
+                    || IsDressingCommand(args.SessionChange.Command))
+                {
+                    gui.SyncDressingFields(snapshot, force: true);
+                    dressingProjector.Replace(
+                        snapshot.dressing,
+                        showZoneGizmos: true,
+                        playAudio: audioZonePreviewEnabled);
                 }
                 if (args.SessionChange.RequiresFullProjection
                     || IsBoundsCommand(args.SessionChange.Command))
@@ -956,6 +1005,7 @@ namespace GritGud.Presentation.LevelEditing
             gui.SelectScenarioActor(null);
             gui.SyncScenarioFields(document, forceLevelIdentity: true);
             gui.SyncEnvironmentFields(document, force: true);
+            gui.SyncDressingFields(document, force: true);
             gui.SyncLayoutFields(document, gridSettings, force: true);
             gui.SyncOrganizationFields(document, force: true);
         }
@@ -966,17 +1016,15 @@ namespace GritGud.Presentation.LevelEditing
                 return;
 
             environmentLighting?.Dispose();
-            LevelLightingProfile profile = LevelLightingCatalog.LoadDefault()
-                .GetOrAny(document.levelId);
-            IReadOnlyList<AmbientEffectPlacementDefinition> ambientEffects =
-                string.Equals(profile.LevelId, document.levelId, StringComparison.Ordinal)
-                    ? profile.AmbientEffects
-                    : Array.Empty<AmbientEffectPlacementDefinition>();
             environmentLighting = GameplayEnvironmentLighting.Create(
                 transform,
-                document.environment,
-                ambientEffects);
+                document.environment);
         }
+
+        private void HandleDressingFocusRequested(
+            LevelDressingTargetKind kind,
+            string id) =>
+            gui?.SelectDressingItem(kind, id, workspace?.CreateSnapshot());
 
         private void HandlePracticalLightFocusRequested(string lightId)
         {
@@ -1007,6 +1055,15 @@ namespace GritGud.Presentation.LevelEditing
                 return true;
             if (command is ILevelEditCommandGroup group)
                 return group.Commands.Any(IsOrganizationCommand);
+            return false;
+        }
+
+        private static bool IsDressingCommand(ILevelEditCommand command)
+        {
+            if (command is ILevelDressingEditCommand)
+                return true;
+            if (command is ILevelEditCommandGroup group)
+                return group.Commands.Any(IsDressingCommand);
             return false;
         }
 
@@ -1153,6 +1210,9 @@ namespace GritGud.Presentation.LevelEditing
         bool ILevelEditorGuiActions.SlopeOverlayEnabled =>
             playabilityAuthoring.SlopeOverlayEnabled;
 
+        bool ILevelEditorGuiActions.AudioZonePreviewEnabled =>
+            audioZonePreviewEnabled;
+
         void ILevelEditorGuiActions.Undo() => workspace.Undo();
 
         void ILevelEditorGuiActions.Redo() => workspace.Redo();
@@ -1247,6 +1307,43 @@ namespace GritGud.Presentation.LevelEditing
 
         void ILevelEditorGuiActions.DeletePracticalLight(string lightId) =>
             environmentAuthoring.DeletePracticalLight(lightId);
+
+        void ILevelEditorGuiActions.AddDecal() => dressingAuthoring.AddDecal();
+
+        void ILevelEditorGuiActions.ApplyDecal(LevelDecalAuthoringRequest request) =>
+            dressingAuthoring.ApplyDecal(request);
+
+        void ILevelEditorGuiActions.DeleteDecal(string decalId) =>
+            dressingAuthoring.DeleteDecal(decalId);
+
+        void ILevelEditorGuiActions.AddAmbientVfx() =>
+            dressingAuthoring.AddAmbientVfx();
+
+        void ILevelEditorGuiActions.ApplyAmbientVfx(
+            LevelAmbientVfxAuthoringRequest request) =>
+            dressingAuthoring.ApplyAmbientVfx(request);
+
+        void ILevelEditorGuiActions.DeleteAmbientVfx(string effectId) =>
+            dressingAuthoring.DeleteAmbientVfx(effectId);
+
+        void ILevelEditorGuiActions.AddAudioZone() => dressingAuthoring.AddAudioZone();
+
+        void ILevelEditorGuiActions.ApplyAudioZone(LevelAudioZoneAuthoringRequest request) =>
+            dressingAuthoring.ApplyAudioZone(request);
+
+        void ILevelEditorGuiActions.DeleteAudioZone(string zoneId) =>
+            dressingAuthoring.DeleteAudioZone(zoneId);
+
+        void ILevelEditorGuiActions.SetAudioZonePreviewEnabled(bool enabled)
+        {
+            audioZonePreviewEnabled = enabled;
+            dressingProjector?.SetEditorPresentation(
+                showZoneGizmos: !previewMode,
+                playAudio: previewMode || enabled);
+            SetStatus(enabled
+                ? "Ambient audio preview enabled."
+                : "Ambient audio preview muted.");
+        }
 
         void ILevelEditorGuiActions.ApplyEntityTransform(
             string x,

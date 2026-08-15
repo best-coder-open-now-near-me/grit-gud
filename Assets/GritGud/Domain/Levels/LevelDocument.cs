@@ -634,7 +634,7 @@ namespace GritGud.Domain.Levels
     [Serializable]
     public sealed class LevelDocument
     {
-        public const int CurrentSchemaVersion = 8;
+        public const int CurrentSchemaVersion = 9;
         public const int MaximumEntityGroupCount = 64;
 
         public int schemaVersion = CurrentSchemaVersion;
@@ -644,6 +644,7 @@ namespace GritGud.Domain.Levels
             new Float3Data(0f, 2.5f, 0f),
             new Float3Data(50f, 10f, 50f));
         public LevelEnvironmentData environment = new LevelEnvironmentData();
+        public LevelDressingData dressing = new LevelDressingData();
         public List<LevelEntityGroupData> groups = new List<LevelEntityGroupData>();
         public List<LevelEntity> entities = new List<LevelEntity>();
         public List<TerrainSurfaceData> terrainSurfaces = new List<TerrainSurfaceData>();
@@ -658,6 +659,8 @@ namespace GritGud.Domain.Levels
             displayName = displayName ?? string.Empty;
             environment = environment ?? new LevelEnvironmentData();
             environment.Normalize();
+            dressing = dressing ?? new LevelDressingData();
+            dressing.Normalize();
             groups = groups ?? new List<LevelEntityGroupData>();
             foreach (LevelEntityGroupData group in groups)
                 group?.Normalize();
@@ -686,6 +689,7 @@ namespace GritGud.Domain.Levels
                 displayName = displayName ?? string.Empty,
                 bounds = bounds,
                 environment = environment?.DeepCopy() ?? new LevelEnvironmentData(),
+                dressing = dressing?.DeepCopy() ?? new LevelDressingData(),
                 scenario = scenario?.DeepCopy() ?? new LevelScenarioData(),
                 legacyPlaytest = legacyPlaytest?.DeepCopy(),
             };

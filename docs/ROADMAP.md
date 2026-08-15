@@ -97,8 +97,9 @@ Work resumes in this order:
    runtime state. A dedicated roster surface supports click or Tab selection
    during exploration and communicates initiative-owned control during combat.
 9. Complete a restrained visual-presentation pass without moving gameplay rules
-   into effects. **Complete:** the depot now uses a level-authored lighting and
-   atmosphere profile with practical pools, depth fog, and placed dust/haze;
+   into effects. **Complete:** the depot now uses level-authored lighting,
+   atmosphere, practical pools, depth fog, portable decals, placed dust/haze,
+   and spatial ambient-audio zones;
    the global theme owns grade, cel response, outlines, grounding, and tactical
    transition cadence; and archetypes select surface-authored concrete, wood,
    metal, or actor response for both shading and physical impacts. Rifle and

@@ -28,8 +28,7 @@ namespace GritGud.Presentation.Gameplay
 
         public static GameplayEnvironmentLighting Create(
             Transform parent,
-            LevelEnvironmentData environment,
-            IReadOnlyList<AmbientEffectPlacementDefinition> ambientEffects = null)
+            LevelEnvironmentData environment)
         {
             if (parent == null)
             {
@@ -71,14 +70,6 @@ namespace GritGud.Presentation.Gameplay
                         fixtureMaterial,
                         data.lensEmissionIntensity,
                         materials);
-                }
-            }
-
-            if (ambientEffects != null)
-            {
-                foreach (AmbientEffectPlacementDefinition ambient in ambientEffects)
-                {
-                    CreateAmbientEffect(lightingRoot.transform, ambient);
                 }
             }
 
@@ -292,31 +283,6 @@ namespace GritGud.Presentation.Gameplay
             }
 
             return material;
-        }
-
-        private static void CreateAmbientEffect(
-            Transform parent,
-            AmbientEffectPlacementDefinition definition)
-        {
-            if (definition?.Prefab == null)
-            {
-                return;
-            }
-
-            GameObject effect = UnityEngine.Object.Instantiate(
-                definition.Prefab,
-                definition.Position,
-                definition.Rotation,
-                parent);
-            effect.name = definition.Name;
-            effect.transform.localScale = Vector3.Scale(
-                definition.Prefab.transform.localScale,
-                definition.Scale);
-            foreach (ParticleSystem particles in
-                effect.GetComponentsInChildren<ParticleSystem>(true))
-            {
-                particles.Play(withChildren: true);
-            }
         }
 
         private static Light CreateLight(Transform parent, string name)

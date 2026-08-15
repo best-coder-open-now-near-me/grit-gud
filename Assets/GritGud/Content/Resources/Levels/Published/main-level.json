@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 8,
+  "schemaVersion": 9,
   "levelId": "main-depot-yard-v1",
   "displayName": "Depot Yard",
   "bounds": {
@@ -37,6 +37,24 @@
       { "id": "deck-security-flood", "displayName": "Deck Security Flood", "position": { "x": 10.5, "y": 8.0, "z": 7.5 }, "target": { "x": 9.5, "y": 3.0, "z": 5.0 }, "color": { "r": 0.11, "g": 0.56, "b": 1.42, "a": 1.0 }, "intensity": 4.5, "range": 17.0, "spotAngle": 52.0, "innerSpotFraction": 0.58, "baseHeight": 3.0 },
       { "id": "warehouse-loading-flood", "displayName": "Warehouse Loading Flood", "position": { "x": -8.5, "y": 5.2, "z": 4.75 }, "target": { "x": -7.5, "y": 0.0, "z": 1.5 }, "color": { "r": 0.08, "g": 0.64, "b": 1.5, "a": 1.0 }, "intensity": 4.2, "range": 16.0, "spotAngle": 50.0, "innerSpotFraction": 0.6, "baseHeight": 0.0 },
       { "id": "north-yard-work-light", "displayName": "North Yard Work Light", "position": { "x": -3.5, "y": 5.4, "z": 8.5 }, "target": { "x": 0.0, "y": 0.0, "z": 4.5 }, "color": { "r": 1.35, "g": 0.32, "b": 0.025, "a": 1.0 }, "intensity": 2.4, "range": 13.0, "spotAngle": 48.0, "innerSpotFraction": 0.55, "baseHeight": 0.0 }
+    ]
+  },
+  "dressing": {
+    "decals": [
+      { "id": "decal-workshop-oil", "displayName": "Workshop Oil Stain", "styleId": "oil", "position": { "x": 8.25, "y": 0.03, "z": -4.0 }, "rotationEuler": { "x": -90.0, "y": 0.0, "z": 18.0 }, "size": { "x": 2.8, "y": 1.7, "z": 1.0 }, "color": { "r": 0.025, "g": 0.035, "b": 0.05, "a": 0.62 } },
+      { "id": "decal-south-hazard", "displayName": "South Gate Hazard Marking", "styleId": "hazard", "position": { "x": 0.5, "y": 0.035, "z": -7.4 }, "rotationEuler": { "x": -90.0, "y": 0.0, "z": 0.0 }, "size": { "x": 4.5, "y": 1.1, "z": 1.0 }, "color": { "r": 0.95, "g": 0.52, "b": 0.06, "a": 0.72 } },
+      { "id": "decal-deck-arrow", "displayName": "Raised Deck Direction", "styleId": "arrow", "position": { "x": 3.4, "y": 0.035, "z": 2.2 }, "rotationEuler": { "x": -90.0, "y": 0.0, "z": -90.0 }, "size": { "x": 2.0, "y": 3.2, "z": 1.0 }, "color": { "r": 0.2, "g": 0.74, "b": 1.0, "a": 0.68 } },
+      { "id": "decal-warehouse-grime", "displayName": "Warehouse Floor Grime", "styleId": "grime", "position": { "x": -8.0, "y": 0.028, "z": -1.2 }, "rotationEuler": { "x": -90.0, "y": 0.0, "z": -12.0 }, "size": { "x": 3.6, "y": 2.8, "z": 1.0 }, "color": { "r": 0.045, "g": 0.07, "b": 0.075, "a": 0.48 } }
+    ],
+    "ambientVfx": [
+      { "id": "vfx-yard-dust", "displayName": "Yard Dust", "effectId": "dust-air", "position": { "x": 0.0, "y": 1.25, "z": -1.5 }, "rotationEuler": { "x": 0.0, "y": 12.0, "z": 0.0 }, "scale": { "x": 2.2, "y": 1.4, "z": 2.2 } },
+      { "id": "vfx-workshop-dust", "displayName": "Workshop Dust", "effectId": "dust-air", "position": { "x": 8.0, "y": 1.0, "z": -4.25 }, "rotationEuler": { "x": 0.0, "y": -25.0, "z": 0.0 }, "scale": { "x": 1.25, "y": 0.9, "z": 1.25 } },
+      { "id": "vfx-warehouse-haze", "displayName": "Warehouse Ground Haze", "effectId": "ground-haze", "position": { "x": -7.5, "y": 0.18, "z": 2.5 }, "rotationEuler": { "x": 0.0, "y": 0.0, "z": 0.0 }, "scale": { "x": 1.6, "y": 0.55, "z": 1.6 } }
+    ],
+    "audioZones": [
+      { "id": "audio-yard-wind", "displayName": "Open Yard Wind", "soundId": "wind", "center": { "x": 0.0, "y": 2.0, "z": -1.5 }, "size": { "x": 14.0, "y": 5.0, "z": 15.0 }, "volume": 0.14, "fadeDistance": 4.0 },
+      { "id": "audio-warehouse-hum", "displayName": "Warehouse Electrical Hum", "soundId": "industrial-hum", "center": { "x": -7.5, "y": 2.0, "z": -1.0 }, "size": { "x": 8.0, "y": 5.0, "z": 11.0 }, "volume": 0.16, "fadeDistance": 4.0 },
+      { "id": "audio-workshop-vent", "displayName": "Workshop Ventilation", "soundId": "ventilation", "center": { "x": 8.0, "y": 2.0, "z": -4.5 }, "size": { "x": 7.0, "y": 5.0, "z": 7.0 }, "volume": 0.16, "fadeDistance": 4.0 }
     ]
   },
   "groups": [],

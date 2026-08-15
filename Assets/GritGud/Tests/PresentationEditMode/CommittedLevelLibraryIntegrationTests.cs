@@ -45,6 +45,9 @@ namespace GritGud.Presentation.Tests
             var first = library.OpenForEditing(entry.ResourceKey);
             Assert.That(first.schemaVersion, Is.EqualTo(LevelDocument.CurrentSchemaVersion));
             Assert.That(first.environment.practicalLights, Has.Count.EqualTo(5));
+            Assert.That(first.dressing.decals, Has.Count.EqualTo(4));
+            Assert.That(first.dressing.ambientVfx, Has.Count.EqualTo(3));
+            Assert.That(first.dressing.audioZones, Has.Count.EqualTo(3));
             first.displayName = "Changed";
 
             Assert.That(

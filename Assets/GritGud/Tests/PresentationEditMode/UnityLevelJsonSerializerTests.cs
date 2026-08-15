@@ -54,6 +54,25 @@ namespace GritGud.Presentation.Tests
                 displayName = "Gameplay Props",
                 locked = true,
             });
+            document.dressing.decals.Add(new LevelDecalData
+            {
+                id = "loading-arrow",
+                displayName = "Loading Arrow",
+                styleId = "arrow",
+                position = new Float3Data(2f, 0.02f, 3f),
+                size = new Float3Data(2f, 3f, 1f),
+                color = new FloatColorData(0.2f, 0.8f, 1f, 0.65f),
+            });
+            document.dressing.audioZones.Add(new LevelAudioZoneData
+            {
+                id = "loading-hum",
+                displayName = "Loading Hum",
+                soundId = "industrial-hum",
+                center = new Float3Data(2f, 2f, 3f),
+                size = new Float3Data(8f, 4f, 8f),
+                volume = 0.2f,
+                fadeDistance = 3f,
+            });
             var serializer = new UnityLevelJsonSerializer();
 
             string json = serializer.Serialize(document);
@@ -75,6 +94,10 @@ namespace GritGud.Presentation.Tests
             Assert.That(result.environment.practicalLights[0].displayName,
                 Is.EqualTo("Loading Flood"));
             Assert.That(result.environment.practicalLights[0].color.r, Is.EqualTo(1.2f));
+            Assert.That(result.dressing.decals.Single().styleId, Is.EqualTo("arrow"));
+            Assert.That(result.dressing.decals.Single().color.a, Is.EqualTo(0.65f));
+            Assert.That(result.dressing.audioZones.Single().soundId,
+                Is.EqualTo("industrial-hum"));
             Assert.That(
                 result.scenario.FindInitiallySelectedPlayer().transform.position.y,
                 Is.EqualTo(7.5f));

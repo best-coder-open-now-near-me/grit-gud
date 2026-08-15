@@ -152,5 +152,21 @@ namespace GritGud.Domain.Tests.Levels
             Assert.That(result.terrainSurfaces[0].appearance.slopeBlendEndDegrees,
                 Is.GreaterThan(result.terrainSurfaces[0].appearance.slopeBlendStartDegrees));
         }
+
+        [Test]
+        public void VersionEightDocumentGainsPortableDressingDefaults()
+        {
+            LevelDocument source = LevelDocumentFactory.CreateEmpty("Legacy Dressing");
+            source.schemaVersion = 8;
+            source.dressing = null;
+
+            LevelDocument result = new LevelDocumentMigrator().MigrateToCurrent(source);
+
+            Assert.That(result.schemaVersion, Is.EqualTo(LevelDocument.CurrentSchemaVersion));
+            Assert.That(result.dressing, Is.Not.Null);
+            Assert.That(result.dressing.decals, Is.Empty);
+            Assert.That(result.dressing.ambientVfx, Is.Empty);
+            Assert.That(result.dressing.audioZones, Is.Empty);
+        }
     }
 }

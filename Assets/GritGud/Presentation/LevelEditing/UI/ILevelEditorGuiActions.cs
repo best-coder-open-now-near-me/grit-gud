@@ -29,6 +29,8 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         bool SlopeOverlayEnabled { get; }
 
+        bool AudioZonePreviewEnabled { get; }
+
         void ReturnToMenu();
 
         void Undo();
@@ -100,6 +102,26 @@ namespace GritGud.Presentation.LevelEditing.UI
         void ApplyPracticalLight(LevelPracticalLightAuthoringRequest request);
 
         void DeletePracticalLight(string lightId);
+
+        void AddDecal();
+
+        void ApplyDecal(LevelDecalAuthoringRequest request);
+
+        void DeleteDecal(string decalId);
+
+        void AddAmbientVfx();
+
+        void ApplyAmbientVfx(LevelAmbientVfxAuthoringRequest request);
+
+        void DeleteAmbientVfx(string effectId);
+
+        void AddAudioZone();
+
+        void ApplyAudioZone(LevelAudioZoneAuthoringRequest request);
+
+        void DeleteAudioZone(string zoneId);
+
+        void SetAudioZonePreviewEnabled(bool enabled);
 
         void ApplyEntityTransform(string x, string y, string z, string yaw);
 

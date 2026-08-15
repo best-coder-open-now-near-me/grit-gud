@@ -46,6 +46,7 @@ Portable JSON contains:
 - typed, quantized heightfield terrain surfaces with portable appearance;
 - portable atmosphere, fog, directional-key, fixture, and practical-light data;
 - stable practical-light IDs with cross-platform fixture limits;
+- portable surface decals, ambient-VFX placements, and spatial audio zones;
 - scenario actor instances, objectives, props, vehicles, and complete objective
   action costs; and
 - named entity groups plus their portable locked and hidden authoring state.
@@ -147,8 +148,8 @@ depth must be whole multiples of the grid spacing. Imported legacy levels with
 no terrain expose **Add Flat Terrain** in the same panel.
 
 The toolbar is split into navigation/history and persistence rows so controls do
-not run together on ordinary window sizes. The left panel has four stable
-workspaces: **Create**, **Outline**, **Scenario**, and **Env**. Create then switches among
+not run together on ordinary window sizes. The left panel has five stable
+workspaces: **Create**, **Outline**, **Scenario**, **Env**, and **Dressing**. Create then switches among
 Select, Place, and Terrain and shows only the active mode's controls. Outline
 searches both world entities and scenario objects. Scenario owns player-start
 and actor management; selecting an actor opens its editable properties in the
@@ -161,6 +162,14 @@ can be added at the current camera focus, selected from the list, aimed with a
 target position, edited, and deleted. Each apply is one undoable command. The
 portable environment is projected live in the editor and is the exact data used
 by Test Play; HDR color channels may be greater than `1`.
+
+**Dressing** authors surface decals, ambient VFX, and box-shaped audio zones at
+the current camera focus. Decals provide grime, oil, hazard-stripe, and arrow
+styles with portable transform, size, color, and opacity. Ambient VFX select
+curated stable effect IDs rather than prefab paths. Audio zones select a stable
+procedural ambience, volume, bounds, and fade distance; blue boxes visualize
+the bounds only while editing. Audio preview is opt-in in Edit mode and always
+enabled in Level Preview and Test Play. Every add, apply, and delete is undoable.
 
 ## Archetype catalog
 
@@ -236,7 +245,8 @@ into saved levels.
 
 **Test Play** launches the normal gameplay runtime from an isolated snapshot.
 It uses exactly the authored scenario party, actor starts, objectives, physics
-props, vehicles, hostiles, atmosphere, and practical lights. Return to Editor discards gameplay state and
+props, vehicles, hostiles, atmosphere, practical lights, decals, ambient VFX,
+and audio zones. Return to Editor discards gameplay state and
 resumes the same authoring workspace.
 
 ## Current limits

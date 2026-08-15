@@ -20,6 +20,7 @@ namespace GritGud.Presentation.Gameplay
         private GameplayWorldRegistry worldRegistry;
         private ThirdPersonMotor player;
         private GameplayEnvironmentLighting environmentLighting;
+        private LevelDressingProjector dressingProjector;
         private GameplayEnvironmentStyle environmentStyle;
         private GameplayPostProcessing postProcessing;
         private GameplayVisualTheme visualTheme;
@@ -221,21 +222,16 @@ namespace GritGud.Presentation.Gameplay
             levelWorld = new LevelLoader(content.Archetypes).Load(content.Level);
             visualTheme = GameplayVisualTheme.LoadDefault();
             surfacePresentationCatalog = SurfacePresentationCatalog.LoadDefault();
-            LevelLightingCatalog lightingCatalog = LevelLightingCatalog.LoadDefault();
-            LevelLightingProfile lightingProfile = content.IsSandbox
-                ? lightingCatalog.GetAny()
-                : lightingCatalog.GetOrAny(content.Level.levelId);
-            IReadOnlyList<AmbientEffectPlacementDefinition> ambientEffects =
-                string.Equals(
-                    lightingProfile.LevelId,
-                    content.Level.levelId,
-                    StringComparison.Ordinal)
-                    ? lightingProfile.AmbientEffects
-                    : Array.Empty<AmbientEffectPlacementDefinition>();
             environmentLighting = GameplayEnvironmentLighting.Create(
                 levelWorld.Root.transform,
-                content.Level.environment,
-                ambientEffects);
+                content.Level.environment);
+            dressingProjector = new LevelDressingProjector(
+                levelWorld.Root.transform,
+                LevelDressingCatalog.LoadDefault());
+            dressingProjector.Replace(
+                content.Level.dressing,
+                showZoneGizmos: false,
+                playAudio: true);
             environmentStyle = GameplayEnvironmentStyle.Create(
                 levelWorld.Root.transform,
                 visualTheme,
@@ -567,6 +563,8 @@ namespace GritGud.Presentation.Gameplay
             environmentStyle = null;
             environmentLighting?.Dispose();
             environmentLighting = null;
+            dressingProjector?.Dispose();
+            dressingProjector = null;
             surfacePresentationCatalog = null;
             visualTheme = null;
             levelWorld?.Dispose();

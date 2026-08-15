@@ -53,6 +53,41 @@ namespace GritGud.Application.Levels
     {
     }
 
+    public interface ILevelDressingEditCommand : ILevelEditCommand
+    {
+    }
+
+    public sealed class SetLevelDressingCommand : ILevelDressingEditCommand
+    {
+        private readonly LevelDressingData before;
+        private readonly LevelDressingData after;
+        private readonly string description;
+
+        public SetLevelDressingCommand(
+            LevelDressingData before,
+            LevelDressingData after,
+            string description = "Edit level dressing")
+        {
+            this.before = before?.DeepCopy() ?? throw new ArgumentNullException(nameof(before));
+            this.after = after?.DeepCopy() ?? throw new ArgumentNullException(nameof(after));
+            this.description = string.IsNullOrWhiteSpace(description)
+                ? "Edit level dressing"
+                : description;
+        }
+
+        public string Description => description;
+        public IReadOnlyCollection<string> AffectedEntityIds => Array.Empty<string>();
+        public bool RequiresFullProjection => false;
+        public void Apply(LevelDocument document) => Set(document, after);
+        public void Revert(LevelDocument document) => Set(document, before);
+
+        private static void Set(LevelDocument document, LevelDressingData value)
+        {
+            AddEntityCommand.RequireDocument(document);
+            document.dressing = value.DeepCopy();
+        }
+    }
+
     public sealed class AddLevelGroupCommand : ILevelOrganizationEditCommand
     {
         private readonly LevelEntityGroupData group;

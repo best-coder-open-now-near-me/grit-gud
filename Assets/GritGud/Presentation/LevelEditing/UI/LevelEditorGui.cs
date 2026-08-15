@@ -22,6 +22,7 @@ namespace GritGud.Presentation.LevelEditing.UI
         private readonly LevelSelectionModel selection;
         private readonly LevelArchetypeCatalog catalog;
         private readonly ScenarioAuthoringCatalog scenarioCatalog;
+        private readonly LevelDressingCatalog dressingCatalog;
         private readonly LevelEditorToolManager toolManager;
         private readonly PlacementLevelEditorTool placementTool;
         private readonly TerrainToolPanelModel terrainPanel;
@@ -106,6 +107,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             LevelSelectionModel selection,
             LevelArchetypeCatalog catalog,
             ScenarioAuthoringCatalog scenarioCatalog,
+            LevelDressingCatalog dressingCatalog,
             LevelEditorToolManager toolManager,
             PlacementLevelEditorTool placementTool,
             TerrainToolPanelModel terrainPanel,
@@ -118,6 +120,8 @@ namespace GritGud.Presentation.LevelEditing.UI
             this.catalog = catalog != null ? catalog : throw new ArgumentNullException(nameof(catalog));
             this.scenarioCatalog = scenarioCatalog
                 ?? throw new ArgumentNullException(nameof(scenarioCatalog));
+            this.dressingCatalog = dressingCatalog
+                ?? throw new ArgumentNullException(nameof(dressingCatalog));
             this.toolManager = toolManager ?? throw new ArgumentNullException(nameof(toolManager));
             this.placementTool = placementTool ?? throw new ArgumentNullException(nameof(placementTool));
             this.terrainPanel = terrainPanel ?? throw new ArgumentNullException(nameof(terrainPanel));
