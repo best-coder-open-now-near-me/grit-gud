@@ -22,6 +22,8 @@ namespace GritGud.Domain.Tests.Levels
             Assert.That(terrain.sampleSpacing, Is.EqualTo(2f));
             Assert.That(terrain.heightSamples, Has.Count.EqualTo(26 * 26));
             Assert.That(terrain.heightSamples.All(sample => sample == 0), Is.True);
+            Assert.That(terrain.materialSamples, Has.Count.EqualTo(26 * 26));
+            Assert.That(terrain.materialSamples.All(sample => sample == 0), Is.True);
             Assert.That(
                 document.scenario.FindInitiallySelectedPlayer().transform.position.y,
                 Is.EqualTo(2f));
@@ -178,6 +180,34 @@ namespace GritGud.Domain.Tests.Levels
         }
 
         [Test]
+        public void TerrainMaterialPatchIsIncrementalUndoableAndVisualOnly()
+        {
+            LevelDocument document = CreateDocument();
+            var command = new SetTerrainMaterialsCommand(
+                "ground",
+                1,
+                1,
+                2,
+                1,
+                new[] { 2, 3 });
+            var session = new LevelSession(document);
+
+            session.Execute(command);
+            TerrainSurfaceData painted = session.CreateSnapshot().terrainSurfaces[0];
+            Assert.That(painted.materialSamples[4], Is.EqualTo(2));
+            Assert.That(painted.materialSamples[5], Is.EqualTo(3));
+            Assert.That(command.RequiresFullProjection, Is.False);
+            Assert.That(command.AffectsNavigation, Is.False);
+
+            session.Undo();
+            Assert.That(session.CreateSnapshot().terrainSurfaces[0].materialSamples,
+                Is.All.Zero);
+            session.Redo();
+            Assert.That(session.CreateSnapshot().terrainSurfaces[0].materialSamples[4],
+                Is.EqualTo(2));
+        }
+
+        [Test]
         public void ValidationRejectsInvalidTerrainAppearance()
         {
             LevelDocument document = CreateDocument();
@@ -319,6 +349,7 @@ namespace GritGud.Domain.Tests.Levels
                 minimumElevation = 0f,
                 elevationIncrement = 0.1f,
                 heightSamples = Enumerable.Repeat(0, 9).ToList(),
+                materialSamples = Enumerable.Repeat(0, 9).ToList(),
             });
             return document;
         }

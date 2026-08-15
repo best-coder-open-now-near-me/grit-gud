@@ -107,6 +107,37 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void MaterialStrokePreservesEarlierPaintAndCommitsVisitedRegion()
+        {
+            var surface = new TerrainSurfaceData
+            {
+                id = "ground",
+                sampleCountX = 5,
+                sampleCountZ = 3,
+                sampleSpacing = 1f,
+                elevationIncrement = 0.1f,
+                heightSamples = Enumerable.Repeat(0, 15).ToList(),
+                materialSamples = Enumerable.Repeat(0, 15).ToList(),
+            };
+            surface.materialSamples[0] = 4;
+            var stroke = new TerrainMaterialStrokeAccumulator(surface);
+
+            Assert.That(stroke.ApplyPoint(new Vector3(2f, 0f, 1f), 1, 2), Is.Not.Null);
+            Assert.That(stroke.ApplyPoint(new Vector3(2f, 0f, 1f), 1, 2), Is.Null);
+            SetTerrainMaterialsCommand command = stroke.CreateCommand();
+            LevelDocument document = LevelDocumentFactory.CreateEmpty("Material Stroke");
+            document.terrainSurfaces.Add(surface);
+            command.Apply(document);
+
+            Assert.That(surface.materialSamples[0], Is.EqualTo(4));
+            Assert.That(surface.materialSamples[7], Is.EqualTo(2));
+            Assert.That(surface.materialSamples.Count(value => value == 2), Is.EqualTo(5));
+            command.Revert(document);
+            Assert.That(surface.materialSamples[0], Is.EqualTo(4));
+            Assert.That(surface.materialSamples.Count(value => value == 2), Is.Zero);
+        }
+
+        [Test]
         public void SmoothBrushReducesPeakWithoutChangingSamplesOutsideRadius()
         {
             var heights = Enumerable.Repeat(0, 25).ToList();

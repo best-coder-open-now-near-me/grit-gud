@@ -144,8 +144,7 @@ pile settling with authored colliders or a visible-bounds fallback. The next
 increment is destructible-cover pile testing and richer viewport transform tools.
 Encounter authoring remains deferred until combat structure is stable.
 
-The terrain appearance review identified regional material painting as the next
-terrain-specific slice. Surface themes are now explicitly staged and applied to
-the whole surface; a later schema increment should add portable per-cell preset
-samples, reuse the existing stroke/footprint lifecycle, and rebuild only affected
-visual chunks without touching terrain collision or navigation.
+The terrain appearance review's regional-material slice is complete. Surface
+themes remain explicit whole-surface edits, while portable per-cell material
+samples use the shared stroke/footprint lifecycle, undo as one patch, and rebuild
+only affected visual chunks without invalidating collision or navigation.
