@@ -375,10 +375,12 @@ Hotbar activation now routes the authored grenade into a Unity world-query
 adapter: the pointer chooses the intended point, collision determines the
 recorded landing point, and actor blast exposure is frozen before playback.
 Hotbar activation now enters an explicit grenade-aiming state before commitment.
-The intended landing point displays separate ground rings for the deterministic
-uncertainty region and authored blast radius; pressing the reassigned hotkey a
-second time commits the throw, while the shared cancel command dismisses the
-preview without spending AP or sampling a landing. Committed throws now play a
+The actor holds the selected grenade ready in their right hand while a sampled
+trajectory connects that presentation origin to the intended landing point.
+Separate ground rings display the deterministic uncertainty region and authored
+blast radius; pressing the reassigned hotkey a second time commits the throw,
+while the shared cancel command dismisses the held grenade and preview without
+spending AP or sampling a landing. Committed throws now play a
 short arc to the recorded landing point and a blast-radius-scaled impact flash;
 their recorded exposure applies authoritative wound and movement consequences,
 including friendly fire, without repeating the world query during replay.
