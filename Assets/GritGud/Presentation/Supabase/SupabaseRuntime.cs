@@ -63,21 +63,6 @@ namespace GritGud.Presentation.Supabase
                 StartCoroutine(client.SignInAnonymously(HandleSignedIn, HandleSignInFailed));
         }
 
-        public void SaveLevelDraft(string slot, string serializedLevel, Action<string> completed)
-        {
-            if (!IsReady)
-            {
-                completed?.Invoke(Status);
-                return;
-            }
-            StartCoroutine(Documents.SaveLevelDraft(
-                slot,
-                serializedLevel,
-                Session,
-                () => completed?.Invoke("Saved the level draft to cloud."),
-                error => completed?.Invoke(error)));
-        }
-
         public void SaveCharacter(
             GritGud.Domain.Characters.CharacterDocument character,
             string serializedCharacter,
@@ -94,12 +79,6 @@ namespace GritGud.Presentation.Supabase
                 Session,
                 () => completed?.Invoke("Saved the character to cloud."),
                 error => completed?.Invoke(error)));
-        }
-
-        public void LoadLevelDraft(string slot, Action<string> succeeded, Action<string> failed)
-        {
-            if (!IsReady) { failed?.Invoke(Status); return; }
-            StartCoroutine(Documents.LoadLevelDraft(slot, Session, succeeded, failed));
         }
 
         public void LoadCharacter(string characterId, Action<string> succeeded, Action<string> failed)
@@ -119,9 +98,13 @@ namespace GritGud.Presentation.Supabase
             }
             pendingRefreshToken = session.RefreshToken;
             anonymousSignInRequired = false;
-            Documents = new SupabaseDocumentStore(client);
-            DraftLibrary = new LevelDraftLibraryService(
-                new SupabaseLevelDraftRepository(this, client, () => Session));
+            if (Documents == null)
+                Documents = new SupabaseDocumentStore(client);
+            if (DraftLibrary == null)
+            {
+                DraftLibrary = new LevelDraftLibraryService(
+                    new SupabaseLevelDraftRepository(this, client, () => Session));
+            }
             Status = "Cloud saves connected.";
         }
 

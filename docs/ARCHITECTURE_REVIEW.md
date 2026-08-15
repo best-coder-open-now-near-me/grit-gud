@@ -117,6 +117,25 @@ richer viewport transform tools.
    displacement must not leave the weapon stowed or spend only part of the
    budget.
 
+## Cloud draft library decision — 2026-08-15
+
+Private cloud drafts use the same ports-and-adapters direction as the rest of
+the editor. Application owns immutable draft identity, name policy, revision
+conflicts, records, and repository use cases. Presentation owns Supabase auth,
+HTTP transport, coroutine bridging, operation cancellation, navigation, and UI.
+
+A cloud draft UUID never changes. Its user-facing name is independent and
+unique per account. Saves carry an expected revision; the database commits the
+document and immutable revision snapshot atomically or reports a conflict.
+Local PlayerPrefs storage is recovery, not the cloud-library identity.
+
+`LevelDraftLibraryCoordinator` is the shared Presentation state boundary for
+menu and editor operations. UI renders its immutable Application summaries and
+submits intents; it does not construct Supabase requests. Async navigation is
+cancellable and must verify the application mode before opening gameplay or an
+editor. Cloud play-test uses Runtime validation and sandbox semantics rather
+than bypassing the committed-level readiness boundary.
+
 ## What is working well
 
 ### Assembly direction

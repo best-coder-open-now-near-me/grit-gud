@@ -13,25 +13,6 @@ namespace GritGud.Presentation.Supabase
             this.client = client ?? throw new ArgumentNullException(nameof(client));
         }
 
-        public IEnumerator SaveLevelDraft(
-            string slot,
-            string serializedLevel,
-            SupabaseSession session,
-            Action succeeded,
-            Action<string> failed)
-        {
-            if (string.IsNullOrWhiteSpace(slot))
-                throw new ArgumentException("A level draft slot is required.", nameof(slot));
-            return client.UpsertDocument(
-                "level_drafts",
-                "owner_id,slot",
-                "{\"slot\":" + QuoteJsonString(slot.Trim())
-                    + ",\"document\":" + RequireJson(serializedLevel) + "}",
-                session,
-                succeeded,
-                failed);
-        }
-
         public IEnumerator SaveCharacter(
             CharacterDocument character,
             string serializedCharacter,
@@ -53,9 +34,6 @@ namespace GritGud.Presentation.Supabase
                 succeeded,
                 failed);
         }
-
-        public IEnumerator LoadLevelDraft(string slot, SupabaseSession session, Action<string> succeeded, Action<string> failed) =>
-            client.LoadDocument("load_level_draft", "{\"requested_slot\":" + QuoteJsonString(slot) + "}", session, succeeded, failed);
 
         public IEnumerator LoadCharacter(string characterId, SupabaseSession session, Action<string> succeeded, Action<string> failed) =>
             client.LoadDocument("load_character_document", "{\"requested_character_id\":" + QuoteJsonString(characterId) + "}", session, succeeded, failed);
