@@ -38,6 +38,7 @@ namespace GritGud.Presentation.LevelEditing
         private LevelEditorSceneQuery sceneQuery;
         private LevelEditorToolManager toolManager;
         private PlacementLevelEditorTool placementTool;
+        private SpatialRecordPlacementTool spatialPlacementTool;
         private TerrainHeightLevelEditorTool terrainTool;
         private LevelEditorGui gui;
         private LevelEditorPresentationState presentationState;
@@ -187,10 +188,12 @@ namespace GritGud.Presentation.LevelEditing
                 organizationModel);
             toolManager = new LevelEditorToolManager(toolContext, SelectionLevelEditorTool.ToolId);
             placementTool = new PlacementLevelEditorTool();
+            spatialPlacementTool = new SpatialRecordPlacementTool(PlaceSpatialRecord);
             terrainTool = new TerrainHeightLevelEditorTool();
             var selectionTool = new SelectionLevelEditorTool();
             toolManager.Register(selectionTool);
             toolManager.Register(placementTool);
+            toolManager.Register(spatialPlacementTool);
             toolManager.Register(terrainTool);
             toolManager.ActivateDefault();
             terrainAuthoring = new TerrainAuthoringCoordinator(workspace);
@@ -416,10 +419,31 @@ namespace GritGud.Presentation.LevelEditing
                 return;
             if (tool.Id == PlacementLevelEditorTool.ToolId)
                 presentationState.SynchronizeCreateMode(LevelEditorCreateMode.Place);
+            else if (tool.Id == SpatialRecordPlacementTool.ToolId)
+                presentationState.SynchronizeCreateMode(LevelEditorCreateMode.Place);
             else if (tool.Id == TerrainHeightLevelEditorTool.ToolId)
                 presentationState.SynchronizeCreateMode(LevelEditorCreateMode.Terrain);
             else
                 presentationState.SynchronizeCreateMode(LevelEditorCreateMode.Select);
+        }
+
+        private void PlaceSpatialRecord(LevelSpatialPlacementKind kind, Vector3 position)
+        {
+            switch (kind)
+            {
+                case LevelSpatialPlacementKind.PracticalLight:
+                    environmentAuthoring.AddPracticalLightAt(position);
+                    break;
+                case LevelSpatialPlacementKind.AmbientVfx:
+                    dressingAuthoring.AddAmbientVfxAt(position);
+                    break;
+                case LevelSpatialPlacementKind.AudioZone:
+                    dressingAuthoring.AddAudioZoneAt(position);
+                    break;
+                default:
+                    dressingAuthoring.AddDecalAt(position);
+                    break;
+            }
         }
 
         private void Update()
@@ -1202,6 +1226,12 @@ namespace GritGud.Presentation.LevelEditing
             {
                 outlinePresenter.PresentPlacement(previewBounds);
             }
+            else if (!previewMode
+                && toolManager.ActiveTool == spatialPlacementTool
+                && spatialPlacementTool.HasPreview)
+            {
+                outlinePresenter.PresentPlacement(spatialPlacementTool.GetPreviewBounds());
+            }
             else
             {
                 outlinePresenter.PresentPlacement(null);
@@ -1369,6 +1399,12 @@ namespace GritGud.Presentation.LevelEditing
 
         void ILevelEditorGuiActions.AddPracticalLight() =>
             environmentAuthoring.AddPracticalLight();
+
+        void ILevelEditorGuiActions.QueueSpatialPlacement(LevelSpatialPlacementKind kind)
+        {
+            spatialPlacementTool.Queue(kind);
+            toolManager.Activate(SpatialRecordPlacementTool.ToolId);
+        }
 
         void ILevelEditorGuiActions.ApplyPracticalLight(
             LevelPracticalLightAuthoringRequest request) =>

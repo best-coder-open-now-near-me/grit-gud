@@ -4,6 +4,7 @@ using System.Linq;
 using GritGud.Application.Levels;
 using GritGud.Domain.Levels;
 using GritGud.Presentation.LevelEditing.Core;
+using UnityEngine;
 
 namespace GritGud.Presentation.LevelEditing
 {
@@ -71,6 +72,12 @@ namespace GritGud.Presentation.LevelEditing
 
         public void AddDecal()
         {
+            LevelEditorCameraState camera = captureCameraState();
+            AddDecalAt(new Vector3(camera.target.x, camera.target.y, camera.target.z));
+        }
+
+        public void AddDecalAt(Vector3 position)
+        {
             LevelDressingData before = workspace.CreateSnapshot().dressing;
             if (before.decals.Count >= LevelDressingData.MaximumDecalCount)
             {
@@ -78,14 +85,13 @@ namespace GritGud.Presentation.LevelEditing
                 return;
             }
 
-            LevelEditorCameraState camera = captureCameraState();
             LevelDressingData after = before.DeepCopy();
             string id = "decal-" + LevelDocumentFactory.NewStableId();
             after.decals.Add(new LevelDecalData
             {
                 id = id,
                 displayName = $"Decal {after.decals.Count + 1}",
-                position = new Float3Data(camera.target.x, camera.target.y + 0.02f, camera.target.z),
+                position = new Float3Data(position.x, position.y + 0.02f, position.z),
             });
             Execute(before, after, "Add decal", "Added a decal at the camera focus.");
             FocusRequested?.Invoke(LevelDressingTargetKind.Decal, id);
@@ -138,6 +144,12 @@ namespace GritGud.Presentation.LevelEditing
 
         public void AddAmbientVfx()
         {
+            LevelEditorCameraState camera = captureCameraState();
+            AddAmbientVfxAt(new Vector3(camera.target.x, camera.target.y, camera.target.z));
+        }
+
+        public void AddAmbientVfxAt(Vector3 position)
+        {
             LevelDressingData before = workspace.CreateSnapshot().dressing;
             if (before.ambientVfx.Count >= LevelDressingData.MaximumAmbientVfxCount)
             {
@@ -145,14 +157,13 @@ namespace GritGud.Presentation.LevelEditing
                 return;
             }
 
-            LevelEditorCameraState camera = captureCameraState();
             LevelDressingData after = before.DeepCopy();
             string id = "vfx-" + LevelDocumentFactory.NewStableId();
             after.ambientVfx.Add(new LevelAmbientVfxData
             {
                 id = id,
                 displayName = $"Ambient VFX {after.ambientVfx.Count + 1}",
-                position = new Float3Data(camera.target.x, camera.target.y, camera.target.z),
+                position = new Float3Data(position.x, position.y, position.z),
             });
             Execute(before, after, "Add ambient VFX", "Added ambient VFX at the camera focus.");
             FocusRequested?.Invoke(LevelDressingTargetKind.AmbientVfx, id);
@@ -203,6 +214,12 @@ namespace GritGud.Presentation.LevelEditing
 
         public void AddAudioZone()
         {
+            LevelEditorCameraState camera = captureCameraState();
+            AddAudioZoneAt(new Vector3(camera.target.x, camera.target.y, camera.target.z));
+        }
+
+        public void AddAudioZoneAt(Vector3 position)
+        {
             LevelDressingData before = workspace.CreateSnapshot().dressing;
             if (before.audioZones.Count >= LevelDressingData.MaximumAudioZoneCount)
             {
@@ -210,14 +227,13 @@ namespace GritGud.Presentation.LevelEditing
                 return;
             }
 
-            LevelEditorCameraState camera = captureCameraState();
             LevelDressingData after = before.DeepCopy();
             string id = "audio-" + LevelDocumentFactory.NewStableId();
             after.audioZones.Add(new LevelAudioZoneData
             {
                 id = id,
                 displayName = $"Audio Zone {after.audioZones.Count + 1}",
-                center = new Float3Data(camera.target.x, camera.target.y, camera.target.z),
+                center = new Float3Data(position.x, position.y, position.z),
             });
             Execute(before, after, "Add audio zone", "Added an audio zone at the camera focus.");
             FocusRequested?.Invoke(LevelDressingTargetKind.AudioZone, id);

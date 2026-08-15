@@ -1,5 +1,6 @@
 using GritGud.Domain.Levels;
 using GritGud.Presentation.LevelEditing.Core;
+using GritGud.Presentation.LevelEditing.Tools;
 
 namespace GritGud.Presentation.LevelEditing.UI
 {
@@ -98,6 +99,8 @@ namespace GritGud.Presentation.LevelEditing.UI
         void ApplyEnvironment(LevelEnvironmentAuthoringRequest request);
 
         void AddPracticalLight();
+
+        void QueueSpatialPlacement(LevelSpatialPlacementKind kind);
 
         void ApplyPracticalLight(LevelPracticalLightAuthoringRequest request);
 

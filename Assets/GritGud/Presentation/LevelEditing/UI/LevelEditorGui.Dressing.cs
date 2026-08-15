@@ -115,8 +115,8 @@ namespace GritGud.Presentation.LevelEditing.UI
             foreach (LevelDecalData decal in dressing.decals.Where(value => value != null))
                 DrawDressingItemButton(LevelDressingTargetKind.Decal, decal.id, decal.displayName);
             GUI.enabled = dressing.decals.Count < LevelDressingData.MaximumDecalCount;
-            if (GUILayout.Button("+ ADD AT VIEW", PanelButtonLayout()))
-                actions.AddDecal();
+            if (GUILayout.Button("PLACE DECAL", PanelButtonLayout()))
+                actions.QueueSpatialPlacement(LevelSpatialPlacementKind.Decal);
             GUI.enabled = true;
 
             LevelDecalData selected = selectedDressingKind == LevelDressingTargetKind.Decal
@@ -152,8 +152,8 @@ namespace GritGud.Presentation.LevelEditing.UI
             foreach (LevelAmbientVfxData effect in dressing.ambientVfx.Where(value => value != null))
                 DrawDressingItemButton(LevelDressingTargetKind.AmbientVfx, effect.id, effect.displayName);
             GUI.enabled = dressing.ambientVfx.Count < LevelDressingData.MaximumAmbientVfxCount;
-            if (GUILayout.Button("+ ADD AT VIEW", PanelButtonLayout()))
-                actions.AddAmbientVfx();
+            if (GUILayout.Button("PLACE AMBIENT VFX", PanelButtonLayout()))
+                actions.QueueSpatialPlacement(LevelSpatialPlacementKind.AmbientVfx);
             GUI.enabled = true;
 
             LevelAmbientVfxData selected = selectedDressingKind == LevelDressingTargetKind.AmbientVfx
@@ -186,8 +186,8 @@ namespace GritGud.Presentation.LevelEditing.UI
             foreach (LevelAudioZoneData zone in dressing.audioZones.Where(value => value != null))
                 DrawDressingItemButton(LevelDressingTargetKind.AudioZone, zone.id, zone.displayName);
             GUI.enabled = dressing.audioZones.Count < LevelDressingData.MaximumAudioZoneCount;
-            if (GUILayout.Button("+ ADD AT VIEW", PanelButtonLayout()))
-                actions.AddAudioZone();
+            if (GUILayout.Button("PLACE AUDIO ZONE", PanelButtonLayout()))
+                actions.QueueSpatialPlacement(LevelSpatialPlacementKind.AudioZone);
             GUI.enabled = true;
 
             LevelAudioZoneData selected = selectedDressingKind == LevelDressingTargetKind.AudioZone

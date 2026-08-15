@@ -175,7 +175,8 @@ button to show or hide the input reference without leaving the editor.
 
 **Env** edits ambient sky/horizon/ground colors, fog, the directional key, and
 fixture presentation with invariant-culture numeric fields. Practical lights
-can be added at the current camera focus, selected from the list, aimed with a
+are queued from the panel, previewed under the pointer, and placed with a map
+click; they can then be selected from the list, aimed with a
 target position, edited, and deleted. Each apply is one undoable command. The
 portable environment is projected live in the editor and is the exact data used
 by Test Play; HDR color channels may be greater than `1`. Sky, horizon, and ground
@@ -186,7 +187,9 @@ visible while editing any atmosphere, key-light, or fixture field. Environment
 fields are intentionally applied as one undoable batch rather than on every keystroke.
 
 **Dressing** separates surface decals, ambient VFX, and box-shaped audio zones
-into dedicated tabs and authors the active type at the current camera focus.
+into dedicated tabs. **Place** queues the active type, previews its approximate
+footprint under the pointer, and stamps it with a map click; placement remains
+armed for repeated dressing until canceled.
 Decals provide grime, oil, hazard-stripe, and arrow
 styles with portable transform, size, color, and opacity. Ambient VFX select
 curated stable effect IDs rather than prefab paths. Audio zones select a stable

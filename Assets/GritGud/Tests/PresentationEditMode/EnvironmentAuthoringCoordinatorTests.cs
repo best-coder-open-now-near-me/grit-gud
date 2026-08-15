@@ -89,6 +89,23 @@ namespace GritGud.Presentation.Tests
             Assert.That(workspace.CreateSnapshot().environment.practicalLights, Has.Count.EqualTo(1));
         }
 
+        [Test]
+        public void AddsPracticalLightAtRequestedMapPosition()
+        {
+            using var workspace = new LevelEditorWorkspace(
+                LevelDocumentFactory.CreateEmpty("Light placement"));
+            var coordinator = CreateCoordinator(workspace);
+
+            coordinator.AddPracticalLightAt(new Vector3(2f, 4f, 6f));
+
+            LevelPracticalLightData light = workspace.CreateSnapshot()
+                .environment.practicalLights[0];
+            Assert.That(light.position.x, Is.EqualTo(2f));
+            Assert.That(light.position.y, Is.EqualTo(7f));
+            Assert.That(light.target.z, Is.EqualTo(7f));
+            Assert.That(light.baseHeight, Is.EqualTo(4f));
+        }
+
         private static EnvironmentAuthoringCoordinator CreateCoordinator(
             LevelEditorWorkspace workspace)
         {

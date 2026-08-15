@@ -4,6 +4,7 @@ using System.Linq;
 using GritGud.Application.Levels;
 using GritGud.Domain.Levels;
 using GritGud.Presentation.LevelEditing.Core;
+using UnityEngine;
 
 namespace GritGud.Presentation.LevelEditing
 {
@@ -142,6 +143,29 @@ namespace GritGud.Presentation.LevelEditing
 
         public void AddPracticalLight()
         {
+            LevelEditorCameraState camera = captureCameraState();
+            AddPracticalLight(
+                new Vector3(camera.target.x - 3f, camera.target.y + 6f, camera.target.z - 3f),
+                new Vector3(camera.target.x, camera.target.y, camera.target.z),
+                camera.target.y,
+                "Added a practical light aimed at the camera focus.");
+        }
+
+        public void AddPracticalLightAt(Vector3 target)
+        {
+            AddPracticalLight(
+                target + Vector3.up * 3f,
+                target + Vector3.forward,
+                target.y,
+                "Added a practical light at the selected map position.");
+        }
+
+        private void AddPracticalLight(
+            Vector3 position,
+            Vector3 target,
+            float baseHeight,
+            string status)
+        {
             LevelEnvironmentData before = workspace.CreateSnapshot().environment;
             if (before.practicalLights.Count >= LevelEnvironmentData.MaximumPracticalLights)
             {
@@ -149,26 +173,22 @@ namespace GritGud.Presentation.LevelEditing
                 return;
             }
 
-            LevelEditorCameraState camera = captureCameraState();
             LevelEnvironmentData after = before.DeepCopy();
             string id = "light-" + LevelDocumentFactory.NewStableId();
             after.practicalLights.Add(new LevelPracticalLightData
             {
                 id = id,
                 displayName = $"Practical Light {after.practicalLights.Count + 1}",
-                position = new Float3Data(
-                    camera.target.x - 3f,
-                    camera.target.y + 6f,
-                    camera.target.z - 3f),
-                target = new Float3Data(camera.target.x, camera.target.y, camera.target.z),
-                baseHeight = camera.target.y,
+                position = new Float3Data(position.x, position.y, position.z),
+                target = new Float3Data(target.x, target.y, target.z),
+                baseHeight = baseHeight,
             });
             workspace.Execute(new SetLevelEnvironmentCommand(
                 before,
                 after,
                 "Add practical light"));
             PracticalLightFocusRequested?.Invoke(id);
-            Report("Added a practical light aimed at the camera focus.");
+            Report(status);
         }
 
         public void ApplyPracticalLight(LevelPracticalLightAuthoringRequest request)

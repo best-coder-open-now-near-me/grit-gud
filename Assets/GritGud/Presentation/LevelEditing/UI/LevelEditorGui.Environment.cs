@@ -106,8 +106,8 @@ namespace GritGud.Presentation.LevelEditing.UI
 
             GUI.enabled = document.environment.practicalLights.Count
                 < LevelEnvironmentData.MaximumPracticalLights;
-            if (GUILayout.Button("+ ADD AT VIEW", PanelButtonLayout()))
-                actions.AddPracticalLight();
+            if (GUILayout.Button("PLACE PRACTICAL LIGHT", PanelButtonLayout()))
+                actions.QueueSpatialPlacement(LevelSpatialPlacementKind.PracticalLight);
             GUI.enabled = true;
 
             LevelPracticalLightData selected = document.environment.practicalLights

@@ -39,6 +39,25 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void AddsEveryDressingTypeAtRequestedMapPosition()
+        {
+            using var workspace = new LevelEditorWorkspace(
+                LevelDocumentFactory.CreateEmpty("Dressing placement"));
+            LevelDressingAuthoringCoordinator coordinator = CreateCoordinator(workspace);
+            var point = new Vector3(2f, 4f, 6f);
+
+            coordinator.AddDecalAt(point);
+            coordinator.AddAmbientVfxAt(point);
+            coordinator.AddAudioZoneAt(point);
+
+            LevelDressingData dressing = workspace.CreateSnapshot().dressing;
+            Assert.That(dressing.decals.Single().position.x, Is.EqualTo(2f));
+            Assert.That(dressing.decals.Single().position.y, Is.EqualTo(4.02f));
+            Assert.That(dressing.ambientVfx.Single().position.z, Is.EqualTo(6f));
+            Assert.That(dressing.audioZones.Single().center.y, Is.EqualTo(4f));
+        }
+
+        [Test]
         public void AppliesPortableDecalVfxAndAudioValues()
         {
             using var workspace = new LevelEditorWorkspace(
