@@ -73,6 +73,54 @@ namespace GritGud.Presentation.Tests
             }
         }
 
+        [Test]
+        public void RotationWorksAfterReturningFromPlacementTool()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            document.entities.Add(CreateEntity("crate", 0f));
+            var root = new GameObject("Selection Rotation Test");
+            var cameraObject = new GameObject("Selection Rotation Camera");
+
+            try
+            {
+                using var workspace = new LevelEditorWorkspace(document);
+                var selection = new LevelSelectionModel();
+                using var projector = new LevelWorldProjector(
+                    LevelArchetypeCatalog.LoadDefault(), root.transform);
+                using var terrainProjector = new TerrainWorldProjector(root.transform);
+                projector.Replace(document);
+                var context = new LevelEditorToolContext(
+                    workspace,
+                    selection,
+                    projector,
+                    terrainProjector,
+                    new LevelEditorSceneQuery(cameraObject.AddComponent<Camera>()),
+                    new LevelSnapSettings(),
+                    _ => { },
+                    _ => { });
+                var selectionTool = new SelectionLevelEditorTool();
+                var placementTool = new PlacementLevelEditorTool();
+                using var manager = new LevelEditorToolManager(
+                    context, SelectionLevelEditorTool.ToolId);
+                manager.Register(selectionTool);
+                manager.Register(placementTool);
+                manager.Activate(PlacementLevelEditorTool.ToolId);
+                selection.SetSingle("crate");
+
+                manager.ActivateDefault();
+                selectionTool.RotateSelection(15f);
+
+                Assert.That(
+                    workspace.FindEntitySnapshot("crate").transform.yawDegrees,
+                    Is.EqualTo(15f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(cameraObject);
+                Object.DestroyImmediate(root);
+            }
+        }
+
         private static LevelEntity CreateEntity(string id, float x)
         {
             return new LevelEntity

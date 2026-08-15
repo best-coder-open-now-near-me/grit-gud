@@ -153,7 +153,10 @@ workspaces: **Create**, **Outline**, **Scenario**, **Env**, and **Dressing**. Cr
 Select, Place, and Terrain and shows only the active mode's controls. Outline
 searches both world entities and scenario objects. Scenario owns player-start
 and actor management; selecting an actor opens its editable properties in the
-right Inspector. The Inspector separates **Selection** transforms and physical
+right Inspector. Selection and stamp outlines follow rendered prefab mesh geometry,
+not the potentially larger authored gameplay or cover bounds. Inspector rotation
+buttons leave stamp mode before rotating the selected object. The Inspector separates
+**Selection** transforms and physical
 defaults from **Gameplay** links such as objectives, props, vehicles, and actors.
 The **Level** tab owns document-wide validation, portable-file guidance, and
 recovery snapshots, so selecting a world object does not bury its contextual

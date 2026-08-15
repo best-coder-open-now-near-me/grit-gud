@@ -104,7 +104,9 @@ namespace GritGud.Presentation.LevelEditing.Tools
                 return false;
             }
 
-            Bounds local = archetype.Presentation.LocalBounds;
+            Bounds local = LevelEntityView.CalculateVisualLocalBounds(
+                archetype.Presentation.Prefab,
+                archetype.Presentation.LocalBounds);
             Quaternion rotation = Quaternion.Euler(0f, yaw, 0f);
             bounds = new Bounds(
                 pointerWorld + rotation * local.center,

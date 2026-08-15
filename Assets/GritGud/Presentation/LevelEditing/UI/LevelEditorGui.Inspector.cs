@@ -81,9 +81,9 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.BeginHorizontal();
             float angleSnap = selectedView.Archetype.PlacementRules.AngleSnap;
             if (GUILayout.Button($"↺ {angleSnap:0.#}°"))
-                selectionTool.RotateSelection(-angleSnap);
+                RotateInspectorSelection(-angleSnap);
             if (GUILayout.Button($"{angleSnap:0.#}° ↻"))
-                selectionTool.RotateSelection(angleSnap);
+                RotateInspectorSelection(angleSnap);
             GUILayout.EndHorizontal();
             Color previous = GUI.backgroundColor;
             GUI.backgroundColor = LevelEditorTheme.Destructive;
@@ -94,6 +94,15 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.Space(LevelEditorGuiMetrics.SpaceInspectorSection);
             DrawInteractionInspector(entity, primary);
             DrawDestructibleInspector(selectedView, entity);
+        }
+
+        private void RotateInspectorSelection(float amount)
+        {
+            // A newly stamped object remains selected while the placement tool stays
+            // active. Switch to selection before invoking its command so the inspector
+            // controls work for both stamped and ordinarily selected objects.
+            toolManager.ActivateDefault();
+            selectionTool.RotateSelection(amount);
         }
 
         private void DrawGameplayInspector(

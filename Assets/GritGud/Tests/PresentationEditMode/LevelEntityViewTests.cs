@@ -50,5 +50,38 @@ namespace GritGud.Presentation.Tests
                 Object.DestroyImmediate(owner);
             }
         }
+
+        [Test]
+        public void CalculateVisualLocalBoundsUsesMeshGeometryInsteadOfAuthoredFallback()
+        {
+            var root = new GameObject("Visual Bounds Root");
+            var child = new GameObject("Offset Mesh");
+            var mesh = new Mesh
+            {
+                vertices = new[]
+                {
+                    new Vector3(-0.5f, -0.5f, -0.5f),
+                    new Vector3(0.5f, 0.5f, 0.5f),
+                },
+            };
+            child.transform.SetParent(root.transform, false);
+            child.transform.localPosition = new Vector3(2f, 1f, -1f);
+            child.AddComponent<MeshFilter>().sharedMesh = mesh;
+
+            try
+            {
+                Bounds bounds = LevelEntityView.CalculateVisualLocalBounds(
+                    root,
+                    new Bounds(Vector3.zero, Vector3.one * 20f));
+
+                Assert.That(bounds.center, Is.EqualTo(new Vector3(2f, 1f, -1f)));
+                Assert.That(bounds.size, Is.EqualTo(Vector3.one));
+            }
+            finally
+            {
+                Object.DestroyImmediate(mesh);
+                Object.DestroyImmediate(root);
+            }
+        }
     }
 }
