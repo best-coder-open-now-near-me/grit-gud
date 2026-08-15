@@ -35,6 +35,7 @@ namespace GritGud.Application.Levels
                 minimumElevation = 0f,
                 elevationIncrement = DefaultElevationIncrement,
                 heightSamples = CreateFlatSamples(sampleCountX, sampleCountZ),
+                materialSamples = CreateFlatSamples(sampleCountX, sampleCountZ),
             };
         }
 
@@ -68,6 +69,7 @@ namespace GritGud.Application.Levels
             resized.sampleCountZ = sampleCountZ;
             resized.sampleSpacing = sampleSpacing;
             resized.heightSamples = Resample(working, sampleCountX, sampleCountZ);
+            resized.materialSamples = ResampleMaterials(working, sampleCountX, sampleCountZ);
             return resized;
         }
 
@@ -195,6 +197,28 @@ namespace GritGud.Application.Levels
                 }
             }
 
+            return result;
+        }
+
+        private static List<int> ResampleMaterials(
+            TerrainSurfaceData source,
+            int sampleCountX,
+            int sampleCountZ)
+        {
+            var result = new List<int>(sampleCountX * sampleCountZ);
+            bool complete = source.materialSamples != null
+                && source.materialSamples.Count == source.sampleCountX * source.sampleCountZ;
+            for (int z = 0; z < sampleCountZ; z++)
+            {
+                int sourceZ = (int)Math.Round(z * (source.sampleCountZ - 1d) / (sampleCountZ - 1d));
+                for (int x = 0; x < sampleCountX; x++)
+                {
+                    int sourceX = (int)Math.Round(x * (source.sampleCountX - 1d) / (sampleCountX - 1d));
+                    result.Add(complete
+                        ? source.materialSamples[sourceZ * source.sampleCountX + sourceX]
+                        : 0);
+                }
+            }
             return result;
         }
 

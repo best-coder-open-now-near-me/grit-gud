@@ -410,6 +410,7 @@ namespace GritGud.Domain.Levels
         public float elevationIncrement = 0.01f;
         public TerrainAppearanceData appearance = new TerrainAppearanceData();
         public List<int> heightSamples = new List<int>();
+        public List<int> materialSamples = new List<int>();
 
         public void Normalize()
         {
@@ -417,6 +418,17 @@ namespace GritGud.Domain.Levels
             appearance = appearance ?? new TerrainAppearanceData();
             appearance.Normalize();
             heightSamples = heightSamples ?? new List<int>();
+            materialSamples = materialSamples ?? new List<int>();
+            long expectedSampleCount = (long)sampleCountX * sampleCountZ;
+            int expectedSamples = expectedSampleCount > 0 && expectedSampleCount <= int.MaxValue
+                ? (int)expectedSampleCount
+                : 0;
+            if (materialSamples.Count == 0 && expectedSamples > 0)
+            {
+                materialSamples.Capacity = expectedSamples;
+                for (int index = 0; index < expectedSamples; index++)
+                    materialSamples.Add(0);
+            }
         }
 
         public TerrainSurfaceData DeepCopy()
@@ -433,6 +445,9 @@ namespace GritGud.Domain.Levels
                 appearance = appearance?.DeepCopy() ?? new TerrainAppearanceData(),
                 heightSamples = heightSamples != null
                     ? new List<int>(heightSamples)
+                    : new List<int>(),
+                materialSamples = materialSamples != null
+                    ? new List<int>(materialSamples)
                     : new List<int>(),
             };
         }
@@ -668,7 +683,7 @@ namespace GritGud.Domain.Levels
     [Serializable]
     public sealed class LevelDocument
     {
-        public const int CurrentSchemaVersion = 10;
+        public const int CurrentSchemaVersion = 11;
         public const int MaximumEntityGroupCount = 64;
 
         public int schemaVersion = CurrentSchemaVersion;

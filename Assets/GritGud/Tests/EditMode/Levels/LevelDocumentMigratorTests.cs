@@ -188,5 +188,23 @@ namespace GritGud.Domain.Tests.Levels
             Assert.That(result.entities[0].transform.yawDegrees, Is.EqualTo(45f));
             Assert.That(result.entities[0].transform.rollDegrees, Is.Zero);
         }
+        [Test]
+        public void VersionTenTerrainGainsUnpaintedMaterialSamples()
+        {
+            LevelDocument source = LevelDocumentFactory.CreateEmpty("Legacy terrain paint");
+            source.schemaVersion = 10;
+            source.terrainSurfaces.Add(TerrainSurfaceAuthoring.CreateFlat(
+                "ground",
+                source.bounds,
+                2f));
+            source.terrainSurfaces[0].materialSamples.Clear();
+
+            LevelDocument result = new LevelDocumentMigrator().MigrateToCurrent(source);
+
+            Assert.That(result.schemaVersion, Is.EqualTo(LevelDocument.CurrentSchemaVersion));
+            Assert.That(result.terrainSurfaces[0].materialSamples,
+                Has.Count.EqualTo(result.terrainSurfaces[0].heightSamples.Count));
+            Assert.That(result.terrainSurfaces[0].materialSamples, Is.All.Zero);
+        }
     }
 }

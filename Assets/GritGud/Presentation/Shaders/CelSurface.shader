@@ -18,6 +18,7 @@ Shader "GritGud/CelSurface"
         _SpecularColor ("Specular Color", Color) = (0.8, 0.9, 1, 1)
         _EdgeSheenStrength ("Edge Sheen Strength", Range(0, 1)) = 0
         [Toggle] _TerrainSlopeEnabled ("Terrain Slope Tint", Float) = 0
+        [Toggle] _TerrainVertexColorEnabled ("Terrain Painted Materials", Float) = 0
         _SteepColor ("Terrain Steep Color", Color) = (0.2, 0.2, 0.2, 1)
         _SlopeBlendStartCos ("Terrain Slope Start Cosine", Float) = 0.848
         _SlopeBlendEndCos ("Terrain Slope End Cosine", Float) = 0.53
@@ -63,6 +64,7 @@ Shader "GritGud/CelSurface"
                 float4 positionOS : POSITION;
                 half3 normalOS : NORMAL;
                 float2 uv : TEXCOORD0;
+                half4 color : COLOR;
             };
 
             struct Varyings
@@ -72,6 +74,7 @@ Shader "GritGud/CelSurface"
                 half3 normalWS : TEXCOORD1;
                 float2 uv : TEXCOORD2;
                 half fogFactor : TEXCOORD3;
+                half4 color : COLOR;
             };
 
             TEXTURE2D(_BaseMap);
@@ -95,6 +98,7 @@ Shader "GritGud/CelSurface"
                 half _EdgeSheenStrength;
                 half4 _SteepColor;
                 half _TerrainSlopeEnabled;
+                half _TerrainVertexColorEnabled;
                 half _SlopeBlendStartCos;
                 half _SlopeBlendEndCos;
                 half _TerrainDiagnosticsEnabled;
@@ -114,6 +118,7 @@ Shader "GritGud/CelSurface"
                 output.normalWS = normalInputs.normalWS;
                 output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
                 output.fogFactor = ComputeFogFactor(positionInputs.positionCS.z);
+                output.color = input.color;
                 return output;
             }
 
@@ -161,6 +166,10 @@ Shader "GritGud/CelSurface"
                 half3 normalWS = normalize(input.normalWS);
                 half4 baseSample = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv);
                 half4 baseColor = baseSample * _BaseColor;
+                baseColor.rgb = lerp(
+                    baseColor.rgb,
+                    input.color.rgb,
+                    saturate(_TerrainVertexColorEnabled) * input.color.a);
                 half slopeBlend = 1.0h - smoothstep(
                     _SlopeBlendEndCos,
                     _SlopeBlendStartCos,

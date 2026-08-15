@@ -140,6 +140,12 @@ to preview a continuous stroke; moving into a new terrain sample applies the
 brush once at that sample. Releasing commits the complete stroke as one
 reversible patch command and rebuilds only affected terrain chunks. `Esc`
 restores the authored terrain without adding history.
+
+The same panel also supports regional material painting. Choose Slate, Grass,
+Sand, Snow, or Concrete, activate the material brush, and drag in the viewport.
+Changing the selected material leaves earlier strokes intact, every drag is one
+undoable edit, and **Surface** erases regional paint back to the surface-wide
+appearance.
 Use **Frame Terrain** in the terrain panel to fit every authored terrain surface
 in the camera view, including its minimum and maximum sampled elevations.
 
@@ -307,7 +313,8 @@ not enter portable JSON or Test Play.
 - Dragging preserves the entity's current elevation.
 - Legacy cover-volume data remains readable for file compatibility but has no
   authoring surface. Destructible metadata is authored through entity capability
-  controls.
+controls.
+
 - No runtime navigation bake or arbitrary asset import is included. Terrain's
   ownership and delivery boundaries are documented in the
   [terrain-editor architecture plan](TERRAIN_EDITOR_ARCHITECTURE.md).

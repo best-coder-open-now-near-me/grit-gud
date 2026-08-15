@@ -229,6 +229,25 @@ namespace GritGud.Presentation.LevelEditing.UI
                 terrainPanel.ApplyAppearance();
 
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
+            DrawSectionHeader("MATERIAL PAINTING");
+            GUILayout.Label("Choose a material, then drag on the map. Existing painted regions stay unchanged.");
+            string[] materialNames = TerrainToolPanelModel.PaintMaterialNames.ToArray();
+            int selectedMaterial = GUILayout.SelectionGrid(
+                terrainPanel.PaintMaterialIndex,
+                materialNames,
+                2);
+            if (selectedMaterial != terrainPanel.PaintMaterialIndex)
+                terrainPanel.ActivatePaint(selectedMaterial);
+            if (GUILayout.Button("ACTIVATE MATERIAL BRUSH", PanelPrimaryButtonLayout()))
+                terrainPanel.ActivatePaint(selectedMaterial);
+            GUILayout.Label($"Paint radius: {terrainPanel.RadiusInSamples} samples");
+            terrainPanel.RadiusInSamples = Mathf.RoundToInt(GUILayout.HorizontalSlider(
+                terrainPanel.RadiusInSamples,
+                1f,
+                16f));
+            GUILayout.Label("SURFACE erases regional paint and reveals the surface-wide appearance.");
+
+            GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
             DrawSectionHeader("HEIGHT SCULPTING");
             GUILayout.Label("The brush below changes elevation only.");
             Color previous = GUI.backgroundColor;

@@ -90,6 +90,15 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         public bool IsFlattenActive => IsModeActive(TerrainBrushMode.Flatten);
 
+        public bool IsPaintActive => IsModeActive(TerrainBrushMode.Paint);
+
+        public int PaintMaterialIndex => tool.PaintMaterialIndex;
+
+        public static IReadOnlyList<string> PaintMaterialNames { get; } = new[]
+        {
+            "SURFACE", "SLATE", "GRASS", "SAND", "SNOW", "CONCRETE",
+        };
+
         public int RadiusInSamples
         {
             get => tool.RadiusInSamples;
@@ -125,6 +134,12 @@ namespace GritGud.Presentation.LevelEditing.UI
         public void ActivateFlatten()
         {
             ActivateMode(TerrainBrushMode.Flatten);
+        }
+
+        public void ActivatePaint(int materialIndex)
+        {
+            tool.PaintMaterialIndex = Mathf.Clamp(materialIndex, 0, PaintMaterialNames.Count - 1);
+            ActivateMode(TerrainBrushMode.Paint);
         }
 
         private void ActivateMode(TerrainBrushMode mode)

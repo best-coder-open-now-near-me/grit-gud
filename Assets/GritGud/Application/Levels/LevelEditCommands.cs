@@ -29,6 +29,8 @@ namespace GritGud.Application.Levels
         int Width { get; }
 
         int Depth { get; }
+
+        bool AffectsNavigation { get; }
     }
 
     public interface ITerrainAppearanceEditCommand : ILevelEditCommand
@@ -469,6 +471,8 @@ namespace GritGud.Application.Levels
 
         public int Depth { get; }
 
+        public bool AffectsNavigation => true;
+
         public void Apply(LevelDocument document)
         {
             TerrainSurfaceData surface = RequireSurface(document);
@@ -539,6 +543,89 @@ namespace GritGud.Application.Levels
                         values[z * Width + x];
                 }
             }
+        }
+    }
+
+    public sealed class SetTerrainMaterialsCommand : ITerrainLevelEditCommand
+    {
+        private readonly int[] after;
+        private int[] before;
+
+        public SetTerrainMaterialsCommand(
+            string surfaceId,
+            int startX,
+            int startZ,
+            int width,
+            int depth,
+            IEnumerable<int> materialSamples)
+        {
+            SurfaceId = string.IsNullOrWhiteSpace(surfaceId)
+                ? throw new ArgumentException("A terrain surface ID is required.", nameof(surfaceId))
+                : surfaceId;
+            if (startX < 0 || startZ < 0 || width <= 0 || depth <= 0)
+                throw new ArgumentOutOfRangeException(nameof(width), "The terrain patch must be positive.");
+            StartX = startX;
+            StartZ = startZ;
+            Width = width;
+            Depth = depth;
+            after = materialSamples?.ToArray() ?? throw new ArgumentNullException(nameof(materialSamples));
+            if (after.Length != width * depth)
+                throw new ArgumentException("The terrain patch sample count does not match its size.", nameof(materialSamples));
+        }
+
+        public string Description => "Paint terrain materials";
+        public IReadOnlyCollection<string> AffectedEntityIds => Array.Empty<string>();
+        public bool RequiresFullProjection => false;
+        public string SurfaceId { get; }
+        public int StartX { get; }
+        public int StartZ { get; }
+        public int Width { get; }
+        public int Depth { get; }
+
+        public bool AffectsNavigation => false;
+
+        public void Apply(LevelDocument document)
+        {
+            TerrainSurfaceData surface = RequireSurface(document);
+            before = before ?? ReadPatch(surface);
+            WritePatch(surface, after);
+        }
+
+        public void Revert(LevelDocument document)
+        {
+            if (before == null)
+                throw new InvalidOperationException("The terrain command has not been applied.");
+            WritePatch(RequireSurface(document), before);
+        }
+
+        private TerrainSurfaceData RequireSurface(LevelDocument document)
+        {
+            AddEntityCommand.RequireDocument(document);
+            TerrainSurfaceData surface = document.terrainSurfaces.FirstOrDefault(candidate =>
+                string.Equals(candidate?.id, SurfaceId, StringComparison.Ordinal));
+            if (surface == null)
+                throw new InvalidOperationException($"Terrain surface '{SurfaceId}' does not exist.");
+            if (StartX + Width > surface.sampleCountX || StartZ + Depth > surface.sampleCountZ)
+                throw new InvalidOperationException("The terrain patch extends outside the surface.");
+            if (surface.materialSamples.Count != surface.sampleCountX * surface.sampleCountZ)
+                throw new InvalidOperationException($"Terrain surface '{SurfaceId}' does not have a complete material array.");
+            return surface;
+        }
+
+        private int[] ReadPatch(TerrainSurfaceData surface)
+        {
+            var values = new int[after.Length];
+            for (int z = 0; z < Depth; z++)
+                for (int x = 0; x < Width; x++)
+                    values[z * Width + x] = surface.materialSamples[(StartZ + z) * surface.sampleCountX + StartX + x];
+            return values;
+        }
+
+        private void WritePatch(TerrainSurfaceData surface, IReadOnlyList<int> values)
+        {
+            for (int z = 0; z < Depth; z++)
+                for (int x = 0; x < Width; x++)
+                    surface.materialSamples[(StartZ + z) * surface.sampleCountX + StartX + x] = values[z * Width + x];
         }
     }
 

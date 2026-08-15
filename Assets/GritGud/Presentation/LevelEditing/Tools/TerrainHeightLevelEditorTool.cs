@@ -13,6 +13,7 @@ namespace GritGud.Presentation.LevelEditing.Tools
         private LevelEditorToolContext context;
         private TerrainBrushFootprint footprint;
         private TerrainStrokeAccumulator stroke;
+        private TerrainMaterialStrokeAccumulator materialStroke;
 
         public string Id => ToolId;
 
@@ -24,13 +25,15 @@ namespace GritGud.Presentation.LevelEditing.Tools
 
         public TerrainBrushMode BrushMode { get; set; } = TerrainBrushMode.Raise;
 
+        public int PaintMaterialIndex { get; set; } = 1;
+
         public void Activate(LevelEditorToolContext context)
         {
             this.context = context ?? throw new ArgumentNullException(nameof(context));
             context.Selection.Clear();
             footprint = new TerrainBrushFootprint();
             context.SetStatus(
-                "Drag on terrain to sculpt one undoable stroke. Shift temporarily lowers Raise.");
+                "Drag on terrain for one undoable sculpt or material-paint stroke. Shift temporarily lowers Raise.");
         }
 
         public void Deactivate()
@@ -48,7 +51,7 @@ namespace GritGud.Presentation.LevelEditing.Tools
                 return;
             }
 
-            if (stroke != null && input.PrimaryReleased)
+            if ((stroke != null || materialStroke != null) && input.PrimaryReleased)
             {
                 CommitStroke();
                 return;
@@ -72,19 +75,24 @@ namespace GritGud.Presentation.LevelEditing.Tools
                 return;
             }
 
-            TerrainBrushMode effectiveMode = stroke?.Mode
-                ?? ResolveBrushMode(input.FastCameraMovement);
+            TerrainBrushMode effectiveMode = materialStroke != null
+                ? TerrainBrushMode.Paint
+                : stroke?.Mode ?? ResolveBrushMode(input.FastCameraMovement);
             footprint.Show(surface, point, RadiusInSamples, effectiveMode);
             if (input.PrimaryPressed)
             {
-                stroke = new TerrainStrokeAccumulator(surface, effectiveMode, point);
+                if (effectiveMode == TerrainBrushMode.Paint)
+                    materialStroke = new TerrainMaterialStrokeAccumulator(surface);
+                else
+                    stroke = new TerrainStrokeAccumulator(surface, effectiveMode, point);
                 PreviewPoint(point);
                 return;
             }
 
-            if (stroke != null
+            string activeSurfaceId = materialStroke?.SurfaceId ?? stroke?.SurfaceId;
+            if ((stroke != null || materialStroke != null)
                 && input.PrimaryHeld
-                && string.Equals(stroke.SurfaceId, surfaceId, StringComparison.Ordinal))
+                && string.Equals(activeSurfaceId, surfaceId, StringComparison.Ordinal))
             {
                 PreviewPoint(point);
             }
@@ -92,7 +100,7 @@ namespace GritGud.Presentation.LevelEditing.Tools
 
         public bool Cancel()
         {
-            if (stroke != null)
+            if (stroke != null || materialStroke != null)
             {
                 CancelStroke();
                 context.SetStatus("Cancelled terrain stroke.");
@@ -110,6 +118,22 @@ namespace GritGud.Presentation.LevelEditing.Tools
 
         private void PreviewPoint(Vector3 point)
         {
+            if (materialStroke != null)
+            {
+                SetTerrainMaterialsCommand materialPatch = materialStroke.ApplyPoint(
+                    point,
+                    RadiusInSamples,
+                    PaintMaterialIndex);
+                if (materialPatch != null)
+                    context.TerrainProjector.PreviewPatch(
+                        materialStroke.PreviewSurface,
+                        materialPatch.StartX,
+                        materialPatch.StartZ,
+                        materialPatch.Width,
+                        materialPatch.Depth);
+                return;
+            }
+
             SetTerrainHeightsCommand patch = stroke.ApplyPoint(
                 point,
                 RadiusInSamples,
@@ -129,6 +153,18 @@ namespace GritGud.Presentation.LevelEditing.Tools
 
         private void CommitStroke()
         {
+            if (materialStroke != null)
+            {
+                SetTerrainMaterialsCommand materialCommand = materialStroke.CreateCommand();
+                materialStroke = null;
+                if (materialCommand != null)
+                {
+                    context.Workspace.Execute(materialCommand);
+                    context.SetStatus("Painted terrain material stroke.");
+                }
+                return;
+            }
+
             TerrainBrushMode mode = stroke.Mode;
             SetTerrainHeightsCommand command = stroke.CreateCommand();
             stroke = null;
@@ -157,12 +193,13 @@ namespace GritGud.Presentation.LevelEditing.Tools
 
         private void CancelStroke()
         {
-            if (stroke == null)
+            if (stroke == null && materialStroke == null)
             {
                 return;
             }
 
             stroke = null;
+            materialStroke = null;
             context?.TerrainProjector.Replace(context.Workspace.CreateSnapshot());
         }
     }

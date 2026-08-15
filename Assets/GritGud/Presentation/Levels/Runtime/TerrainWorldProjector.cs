@@ -200,13 +200,16 @@ namespace GritGud.Presentation.Levels.Runtime
                     terrainChange.StartZ,
                     terrainChange.Width,
                     terrainChange.Depth);
-                NavigationInvalidated?.Invoke(new TerrainNavigationInvalidation(
-                    terrainChange.SurfaceId,
-                    terrainChange.StartX,
-                    terrainChange.StartZ,
-                    terrainChange.Width,
-                    terrainChange.Depth,
-                    false));
+                if (terrainChange.AffectsNavigation)
+                {
+                    NavigationInvalidated?.Invoke(new TerrainNavigationInvalidation(
+                        terrainChange.SurfaceId,
+                        terrainChange.StartX,
+                        terrainChange.StartZ,
+                        terrainChange.Width,
+                        terrainChange.Depth,
+                        false));
+                }
             }
         }
 
@@ -380,6 +383,7 @@ namespace GritGud.Presentation.Levels.Runtime
                 SetColor(material, "_Color", baseColor);
                 SetColor(material, "_SteepColor", ToColor(appearance.steepColor));
                 SetFloat(material, "_TerrainSlopeEnabled", 1f);
+                SetFloat(material, "_TerrainVertexColorEnabled", 1f);
                 SetFloat(
                     material,
                     "_SlopeBlendStartCos",

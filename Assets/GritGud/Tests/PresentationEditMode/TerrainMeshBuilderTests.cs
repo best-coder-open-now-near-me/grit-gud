@@ -90,6 +90,25 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void BuildChunkMapsPaintedMaterialSamplesToVertexColors()
+        {
+            TerrainSurfaceData surface = CreateSurface(3, 3);
+            surface.materialSamples[4] = 2;
+
+            Mesh mesh = TerrainMeshBuilder.BuildChunk(surface, 0, 0, 32);
+            try
+            {
+                Assert.That(mesh.colors32[0].a, Is.Zero);
+                Assert.That(mesh.colors32[4], Is.EqualTo(TerrainMeshBuilder.MaterialColor(2)));
+                Assert.That(mesh.colors32[4].a, Is.EqualTo(255));
+            }
+            finally
+            {
+                Object.DestroyImmediate(mesh);
+            }
+        }
+
+        [Test]
         public void CalculateBoundsIncludesSurfaceExtentsAndQuantizedHeights()
         {
             TerrainSurfaceData surface = CreateSurface(3, 2);
@@ -376,6 +395,7 @@ namespace GritGud.Presentation.Tests
                 sampleSpacing = 1f,
                 elevationIncrement = 1f,
                 heightSamples = Enumerable.Repeat(0, countX * countZ).ToList(),
+                materialSamples = Enumerable.Repeat(0, countX * countZ).ToList(),
             };
         }
     }

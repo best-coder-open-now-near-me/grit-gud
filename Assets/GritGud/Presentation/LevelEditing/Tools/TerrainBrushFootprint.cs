@@ -44,6 +44,7 @@ namespace GritGud.Presentation.LevelEditing.Tools
                 TerrainBrushMode.Lower => LevelEditorTheme.LowerTerrain,
                 TerrainBrushMode.Smooth => LevelEditorTheme.SmoothTerrain,
                 TerrainBrushMode.Flatten => LevelEditorTheme.FlattenTerrain,
+                TerrainBrushMode.Paint => Color.cyan,
                 _ => LevelEditorTheme.RaiseTerrain,
             };
             line.startColor = line.endColor = color;

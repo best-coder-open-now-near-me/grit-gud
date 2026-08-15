@@ -248,6 +248,20 @@ namespace GritGud.Domain.Levels
                         + $"expected {expectedSamples}.");
                 }
 
+                if (surface.materialSamples.Count != expectedSamples)
+                {
+                    context.Error(
+                        "terrain.material-samples",
+                        $"Terrain '{surface.id}' has {surface.materialSamples.Count} material samples; "
+                        + $"expected {expectedSamples}.");
+                }
+                else if (surface.materialSamples.Any(value => value < 0 || value > 5))
+                {
+                    context.Error(
+                        "terrain.material-range",
+                        $"Terrain '{surface.id}' contains an unsupported painted material index.");
+                }
+
                 if (!LevelValidationMath.IsFinite(surface.origin)
                     || !LevelValidationMath.IsFinite(surface.sampleSpacing)
                     || !LevelValidationMath.IsFinite(surface.minimumElevation)

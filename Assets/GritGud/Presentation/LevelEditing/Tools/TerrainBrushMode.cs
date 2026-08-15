@@ -6,5 +6,6 @@ namespace GritGud.Presentation.LevelEditing.Tools
         Lower,
         Smooth,
         Flatten,
+        Paint,
     }
 }

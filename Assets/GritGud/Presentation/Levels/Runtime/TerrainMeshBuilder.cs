@@ -65,6 +65,7 @@ namespace GritGud.Presentation.Levels.Runtime
             var vertices = new Vector3[vertexCountX * vertexCountZ];
             var normals = new Vector3[vertices.Length];
             var uvs = new Vector2[vertices.Length];
+            var colors = new Color32[vertices.Length];
             for (int z = 0; z < vertexCountZ; z++)
             {
                 for (int x = 0; x < vertexCountX; x++)
@@ -83,6 +84,11 @@ namespace GritGud.Presentation.Levels.Runtime
                     uvs[vertexIndex] = new Vector2(
                         sampleX / (float)(surface.sampleCountX - 1),
                         sampleZ / (float)(surface.sampleCountZ - 1));
+                    int materialIndex = surface.materialSamples != null
+                        && surface.materialSamples.Count == surface.sampleCountX * surface.sampleCountZ
+                        ? surface.materialSamples[sampleZ * surface.sampleCountX + sampleX]
+                        : 0;
+                    colors[vertexIndex] = MaterialColor(materialIndex);
                 }
             }
 
@@ -112,10 +118,24 @@ namespace GritGud.Presentation.Levels.Runtime
                 vertices = vertices,
                 normals = normals,
                 uv = uvs,
+                colors32 = colors,
                 triangles = triangles,
             };
             mesh.RecalculateBounds();
             return mesh;
+        }
+
+        public static Color32 MaterialColor(int materialIndex)
+        {
+            return materialIndex switch
+            {
+                1 => new Color32(58, 72, 78, 255),
+                2 => new Color32(58, 108, 48, 255),
+                3 => new Color32(166, 126, 66, 255),
+                4 => new Color32(205, 220, 225, 255),
+                5 => new Color32(108, 112, 116, 255),
+                _ => new Color32(255, 255, 255, 0),
+            };
         }
 
         private static Vector3 CalculateNormal(
