@@ -56,7 +56,18 @@ namespace GritGud.Presentation.Supabase
                 yield break;
             }
 
-            succeeded(new SupabaseSession(response.access_token, response.user.id));
+            succeeded(CreateSession(response));
+        }
+
+        public IEnumerator RefreshSession(string refreshToken, Action<SupabaseSession> succeeded, Action<string> failed)
+        {
+            if (string.IsNullOrWhiteSpace(refreshToken)) throw new ArgumentException("A refresh token is required.", nameof(refreshToken));
+            using UnityWebRequest request = CreateRequest("/auth/v1/token?grant_type=refresh_token", UnityWebRequest.kHttpVerbPOST, "{\"refresh_token\":\"" + refreshToken.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"}");
+            yield return request.SendWebRequest();
+            if (request.result != UnityWebRequest.Result.Success) { failed(DescribeFailure(request)); yield break; }
+            AnonymousSignInResponse response = JsonUtility.FromJson<AnonymousSignInResponse>(request.downloadHandler.text);
+            if (response?.user == null || string.IsNullOrWhiteSpace(response.access_token) || string.IsNullOrWhiteSpace(response.user.id)) { failed("Supabase did not return a refreshed session."); yield break; }
+            succeeded(CreateSession(response));
         }
 
         public IEnumerator UpsertDocument(
@@ -113,10 +124,14 @@ namespace GritGud.Presentation.Supabase
                 : "Supabase request failed: " + detail;
         }
 
+        private static SupabaseSession CreateSession(AnonymousSignInResponse response) =>
+            new SupabaseSession(response.access_token, response.refresh_token, response.user.id);
+
         [Serializable]
         private sealed class AnonymousSignInResponse
         {
             public string access_token;
+            public string refresh_token;
             public User user;
         }
 

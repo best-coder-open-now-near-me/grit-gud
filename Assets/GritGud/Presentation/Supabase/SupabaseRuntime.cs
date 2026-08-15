@@ -6,6 +6,7 @@ namespace GritGud.Presentation.Supabase
     public sealed class SupabaseRuntime : MonoBehaviour
     {
         private const string ConfigurationResourceKey = "SupabaseConfiguration";
+        private const string RefreshTokenKey = "grit-gud.supabase.refresh-token";
         private SupabaseClient client;
 
         public SupabaseSession Session { get; private set; }
@@ -30,7 +31,11 @@ namespace GritGud.Presentation.Supabase
 
             client = new SupabaseClient(configuration);
             Status = "Signing in to cloud saves…";
-            StartCoroutine(client.SignInAnonymously(HandleSignedIn, HandleSignInFailed));
+            string refreshToken = PlayerPrefs.GetString(RefreshTokenKey, string.Empty);
+            if (string.IsNullOrWhiteSpace(refreshToken))
+                StartCoroutine(client.SignInAnonymously(HandleSignedIn, HandleSignInFailed));
+            else
+                StartCoroutine(client.RefreshSession(refreshToken, HandleSignedIn, HandleRefreshFailed));
         }
 
         public void SaveLevelDraft(string slot, string serializedLevel, Action<string> completed)
@@ -69,6 +74,11 @@ namespace GritGud.Presentation.Supabase
         private void HandleSignedIn(SupabaseSession session)
         {
             Session = session;
+            if (!string.IsNullOrWhiteSpace(session.RefreshToken))
+            {
+                PlayerPrefs.SetString(RefreshTokenKey, session.RefreshToken);
+                PlayerPrefs.Save();
+            }
             Documents = new SupabaseDocumentStore(client);
             Status = "Cloud saves connected.";
         }
@@ -76,6 +86,13 @@ namespace GritGud.Presentation.Supabase
         private void HandleSignInFailed(string error)
         {
             Status = error;
+        }
+
+        private void HandleRefreshFailed(string error)
+        {
+            PlayerPrefs.DeleteKey(RefreshTokenKey);
+            PlayerPrefs.Save();
+            StartCoroutine(client.SignInAnonymously(HandleSignedIn, HandleSignInFailed));
         }
     }
 }
