@@ -27,11 +27,14 @@ namespace GritGud.Presentation.Tests
             root = new GameObject("Outline Presenter Test");
             presenter = new LevelEditorOutlinePresenter(root.transform);
 
-            Assert.That(root.transform.childCount, Is.EqualTo(3));
+            Assert.That(root.transform.childCount, Is.EqualTo(4));
             Assert.That(root.transform.Find("Selection Outline").gameObject.activeSelf, Is.False);
             Assert.That(root.transform.Find("Hover Outline").gameObject.activeSelf, Is.False);
             Transform placement = root.transform.Find("Placement Outline");
             Assert.That(placement.gameObject.activeSelf, Is.False);
+            Assert.That(
+                root.transform.Find("Rotation Pivot Marker").gameObject.activeSelf,
+                Is.False);
 
             presenter.PresentPlacement(new Bounds(Vector3.one, Vector3.one * 2f));
 

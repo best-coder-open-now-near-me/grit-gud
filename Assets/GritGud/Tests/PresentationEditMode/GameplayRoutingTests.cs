@@ -258,7 +258,10 @@ namespace GritGud.Presentation.Tests
                     "DEX ",
                     gameplay.DialogueLog.Entries[0].Message);
                 StringAssert.Contains(
-                    " + d",
+                    "→ advance ",
+                    gameplay.DialogueLog.Entries[0].Message);
+                StringAssert.Contains(
+                    "Dexterity affects reaction only",
                     gameplay.DialogueLog.Entries[0].Message);
                 Assert.That(
                     dialogueDrawer.Log,
