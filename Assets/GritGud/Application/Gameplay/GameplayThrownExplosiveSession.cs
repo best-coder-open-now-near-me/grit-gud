@@ -283,16 +283,31 @@ namespace GritGud.Application.Gameplay
             if (outcome.Record.SmokeField != null && smokeFields == null)
                 throw new InvalidOperationException(
                     "Thrown smoke requires an authoritative smoke-field session.");
-            gameplay.CommitAction(action);
+            if (outcome.Record.SmokeField != null
+                && smokeFields.TryGetField(
+                    outcome.Record.SmokeField.Id,
+                    out _))
+            {
+                throw new InvalidOperationException(
+                    $"Smoke field '{outcome.Record.SmokeField.Id}' is already active.");
+            }
+
+            var notifications = new GameplayNotificationBatch();
+            gameplay.CommitAction(action, notifications);
             throws.Add(outcome.Record);
             consequences.Apply(
                 outcome.Record.BlastEffects,
                 outcome.Record.Definition.BlastWoundMovementPenalty,
-                outcome.Record.Definition.BlastIntegrityDamage);
+                outcome.Record.Definition.BlastIntegrityDamage,
+                notifications);
             if (outcome.Record.SmokeField != null)
             {
-                smokeFields.Deploy(outcome.Record.SmokeField);
+                smokeFields.Deploy(
+                    outcome.Record.SmokeField,
+                    notifications);
             }
+
+            notifications.Publish();
         }
 
         private static bool TryGetOutcomes(

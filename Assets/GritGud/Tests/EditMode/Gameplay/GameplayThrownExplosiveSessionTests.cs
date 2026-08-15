@@ -201,6 +201,40 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void ObserverFailuresRunAfterTheWholeThrowIsCommitted()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            gameplay.BeginEncounter();
+            var session = CreateThrownSession(
+                gameplay,
+                new FixedWorldQuery(),
+                new FixedSampler(new GameplayPosition(4f, 0f, 1f)));
+            int successfulObservers = 0;
+            gameplay.ActorCapabilityChanged += _ =>
+                throw new InvalidOperationException("observer failed");
+            gameplay.ActorCapabilityChanged += _ => successfulObservers++;
+
+            Assert.Throws<AggregateException>(() =>
+                session.TryThrowItem(
+                    "player",
+                    "item.grenade",
+                    new GameplayPosition(4f, 0f, 0f),
+                    out _,
+                    out _));
+
+            Assert.That(successfulObservers, Is.EqualTo(2));
+            Assert.That(session.Throws, Has.Count.EqualTo(1));
+            Assert.That(gameplay.ResolvedActions, Has.Count.EqualTo(1));
+            Assert.That(
+                gameplay.GetInventoryQuantity("player", "item.grenade"),
+                Is.EqualTo(2));
+            Assert.That(gameplay.GetActor("enemy").Wounds.WoundCount,
+                Is.EqualTo(1));
+            Assert.That(gameplay.GetActor("player").Wounds.WoundCount,
+                Is.EqualTo(1));
+        }
+
+        [Test]
         public void PreparedResponsiveBlastCommitsBeforeBeginningEncounter()
         {
             GameplaySession gameplay = CreateGameplay(

@@ -253,7 +253,8 @@ namespace GritGud.Application.Gameplay
                     "The projectile launch is not the next authoritative launch.");
             }
 
-            gameplay.CommitAction(action);
+            var notifications = new GameplayNotificationBatch();
+            gameplay.CommitAction(action, notifications);
             launches.Add(launch);
             flights.Add(
                 launch.ProjectileId,
@@ -263,6 +264,7 @@ namespace GritGud.Application.Gameplay
                     distanceTraveled: 0f,
                     elapsedTurnTime: 0f,
                     ProjectileFlightStatus.InFlight));
+            notifications.Publish();
         }
 
         public ProjectileAdvanceRecord Advance(

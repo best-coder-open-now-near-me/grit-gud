@@ -118,6 +118,27 @@ namespace GritGud.Application.Gameplay
             float requestedDamage,
             out DestructibleDamageRecord record)
         {
+            var notifications = new GameplayNotificationBatch();
+            bool applied = TryApplyDamage(
+                propId,
+                requestedDamage,
+                out record,
+                notifications);
+            notifications.Publish();
+            return applied;
+        }
+
+        internal bool TryApplyDamage(
+            string propId,
+            float requestedDamage,
+            out DestructibleDamageRecord record,
+            GameplayNotificationBatch notifications)
+        {
+            if (notifications == null)
+            {
+                throw new ArgumentNullException(nameof(notifications));
+            }
+
             if (float.IsNaN(requestedDamage)
                 || float.IsInfinity(requestedDamage)
                 || requestedDamage <= 0f)
@@ -153,12 +174,26 @@ namespace GritGud.Application.Gameplay
                 appliedDamage,
                 previous,
                 resulting);
-            CommitDamage(record);
+            CommitDamage(record, notifications);
             return true;
         }
 
         public void CommitDamage(DestructibleDamageRecord record)
         {
+            var notifications = new GameplayNotificationBatch();
+            CommitDamage(record, notifications);
+            notifications.Publish();
+        }
+
+        internal void CommitDamage(
+            DestructibleDamageRecord record,
+            GameplayNotificationBatch notifications)
+        {
+            if (notifications == null)
+            {
+                throw new ArgumentNullException(nameof(notifications));
+            }
+
             if (record == null)
             {
                 throw new ArgumentNullException(nameof(record));
@@ -198,7 +233,7 @@ namespace GritGud.Application.Gameplay
             props[record.PropId] = record.Resulting;
             damageRecords.Add(record);
             Journal.RecordDestructibleDamaged(record);
-            Damaged?.Invoke(record);
+            notifications.Add(Damaged, record);
         }
 
         public void CommitDisplacement(DisplacementRecord record)

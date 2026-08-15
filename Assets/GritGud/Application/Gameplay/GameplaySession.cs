@@ -1024,6 +1024,20 @@ namespace GritGud.Application.Gameplay
 
         public void CommitAction(GameplayActionRecord record)
         {
+            var notifications = new GameplayNotificationBatch();
+            CommitAction(record, notifications);
+            notifications.Publish();
+        }
+
+        internal void CommitAction(
+            GameplayActionRecord record,
+            GameplayNotificationBatch notifications)
+        {
+            if (notifications == null)
+            {
+                throw new ArgumentNullException(nameof(notifications));
+            }
+
             ValidateActionCommit(record);
 
             ActorState actor = Mode == GameplaySessionMode.TurnBased
@@ -1033,7 +1047,7 @@ namespace GritGud.Application.Gameplay
             foreach (GameplayActionOutcome outcome in record.Outcomes)
             {
                 ApplyActionFacing(actor, outcome);
-                ApplyActionOutcome(outcome);
+                ApplyActionOutcome(outcome, notifications);
             }
 
             resolvedActions.Add(record);
@@ -1207,7 +1221,9 @@ namespace GritGud.Application.Gameplay
             }
         }
 
-        private void ApplyActionOutcome(GameplayActionOutcome outcome)
+        private void ApplyActionOutcome(
+            GameplayActionOutcome outcome,
+            GameplayNotificationBatch notifications)
         {
             switch (outcome)
             {
@@ -1218,7 +1234,9 @@ namespace GritGud.Application.Gameplay
                 case AttackResolvedActionOutcome attackResolved:
                     RequireActor(attackResolved.TargetId).ApplyAttack(
                         attackResolved.Attack);
-                    ActorCapabilityChanged?.Invoke(attackResolved.TargetId);
+                    notifications.Add(
+                        ActorCapabilityChanged,
+                        attackResolved.TargetId);
                     break;
 
                 case WeaponDischargedActionOutcome _:
@@ -1240,7 +1258,7 @@ namespace GritGud.Application.Gameplay
                             : RequireActorDefinition(change.ActorId)
                                 .GetInventoryItem(change.ResultingEquippedItemId);
                     actor.ApplyEquipment(item);
-                    EquipmentChanged?.Invoke(change);
+                    notifications.Add(EquipmentChanged, change);
                     break;
 
                 case ThrownExplosiveActionOutcome thrownExplosive:
@@ -1611,8 +1629,28 @@ namespace GritGud.Application.Gameplay
             TargetRegionId? region,
             float woundMovementPenalty)
         {
+            var notifications = new GameplayNotificationBatch();
+            ApplyBlastInjury(
+                actorId,
+                region,
+                woundMovementPenalty,
+                notifications);
+            notifications.Publish();
+        }
+
+        internal void ApplyBlastInjury(
+            string actorId,
+            TargetRegionId? region,
+            float woundMovementPenalty,
+            GameplayNotificationBatch notifications)
+        {
+            if (notifications == null)
+            {
+                throw new ArgumentNullException(nameof(notifications));
+            }
+
             RequireActor(actorId).ApplyBlast(region, woundMovementPenalty);
-            ActorCapabilityChanged?.Invoke(actorId);
+            notifications.Add(ActorCapabilityChanged, actorId);
         }
 
         private void ValidateEquipmentChangeOutcome(

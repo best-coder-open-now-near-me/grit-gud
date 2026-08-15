@@ -335,6 +335,15 @@ namespace GritGud.Presentation.Gameplay
             GameplayWorldStart worldStart)
         {
             string initiallySelectedActorId = worldStart.InitiallySelectedActorId;
+            uint attackRandomSeed = GameplayRandomStreams.DeriveSeed(
+                scenarioAssembly.RandomSeed,
+                GameplayRandomStreams.AttackResolution);
+            uint displacementRandomSeed = GameplayRandomStreams.DeriveSeed(
+                scenarioAssembly.RandomSeed,
+                GameplayRandomStreams.DisplacementControl);
+            uint thrownExplosiveRandomSeed = GameplayRandomStreams.DeriveSeed(
+                scenarioAssembly.RandomSeed,
+                GameplayRandomStreams.ThrownExplosiveUncertainty);
             targetAcquisitionPresenter.Bind(
                 session,
                 worldRegistry,
@@ -348,6 +357,7 @@ namespace GritGud.Presentation.Gameplay
                 levelWorld,
                 worldRegistry,
                 scenarioAssembly,
+                displacementRandomSeed,
                 targetAcquisitionPresenter,
                 dialogueLog,
                 sessionPresenter.TryBeginEncounterFromAction);
@@ -371,7 +381,7 @@ namespace GritGud.Presentation.Gameplay
                 targetAcquisitionPresenter,
                 dialogueLog,
                 initiallySelectedActorId,
-                scenarioAssembly.RandomSeed,
+                attackRandomSeed,
                 sessionPresenter.TryBeginEncounterFromAction);
             surfaceImpactPresenter.Bind(
                 attackController,
@@ -413,7 +423,7 @@ namespace GritGud.Presentation.Gameplay
                 targetAcquisitionPresenter,
                 dialogueLog,
                 initiallySelectedActorId,
-                scenarioAssembly.RandomSeed,
+                thrownExplosiveRandomSeed,
                 sessionPresenter.TryBeginEncounterFromAction,
                 smokeFieldSession: smokeFieldSession);
             consumableController = new GameplayConsumableController(

@@ -752,8 +752,10 @@ namespace GritGud.Application.Gameplay
                 outcomes);
             gameplay.ValidateActionCommit(action);
             ValidateCommit(record);
-            gameplay.CommitAction(action);
+            var notifications = new GameplayNotificationBatch();
+            gameplay.CommitAction(action, notifications);
             Commit(record);
+            notifications.Publish();
             failure = DisplacementResolutionFailure.None;
             return true;
         }
