@@ -34,6 +34,7 @@ namespace GritGud.Presentation.Bootstrap
         private GUIStyle buttonStyle;
         private GUIStyle levelButtonStyle;
         private GUIStyle statusStyle;
+        private GUIStyle releaseStyle;
         private Texture2D whiteTexture;
         private Texture2D buttonNormalTexture;
         private Texture2D buttonHoverTexture;
@@ -86,6 +87,10 @@ namespace GritGud.Presentation.Bootstrap
             DrawGlowLine(new Rect(60f, 72f, 128f, 2f), SignalColor);
             DrawGlowLine(new Rect(188f, 72f, 368f, 1f), MutedSignalColor);
             DrawGlowLine(new Rect(60f, 787f, 496f, 1f), MutedSignalColor);
+            GUI.Label(
+                new Rect(78f, 806f, 460f, 24f),
+                GameReleaseInfo.Format(Application.version),
+                releaseStyle);
         }
 
         private void DrawMenu()
@@ -299,6 +304,18 @@ namespace GritGud.Presentation.Bootstrap
                 fontSize = 13,
                 wordWrap = true,
                 normal = { textColor = GameplayVisualPalette.TextSecondary },
+            };
+            releaseStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleRight,
+                fontSize = 12,
+                fontStyle = FontStyle.Bold,
+                normal =
+                {
+                    textColor = GameplayVisualPalette.WithAlpha(
+                        GameplayVisualPalette.TextSecondary,
+                        0.82f),
+                },
             };
         }
 
