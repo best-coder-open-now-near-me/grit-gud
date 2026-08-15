@@ -9,7 +9,7 @@ namespace GritGud.Presentation.Tests
         [Test]
         public void QueueSelectsRequestedKindAndCancelClearsPlacement()
         {
-            var tool = new SpatialRecordPlacementTool((_, _) => { });
+            var tool = new SpatialRecordPlacementTool((_, _, _) => { });
 
             tool.Queue(LevelSpatialPlacementKind.AudioZone);
 
@@ -20,6 +20,18 @@ namespace GritGud.Presentation.Tests
             Assert.That(tool.Cancel(), Is.False);
             Assert.That(tool.IsQueued, Is.False);
             Assert.That(tool.HasPreview, Is.False);
+        }
+
+        [Test]
+        public void QueueRetainsExistingRecordIdentityForRelocation()
+        {
+            var tool = new SpatialRecordPlacementTool((_, _, _) => { });
+
+            tool.Queue(LevelSpatialPlacementKind.Decal, "decal-1");
+
+            Assert.That(tool.TargetId, Is.EqualTo("decal-1"));
+            tool.Cancel();
+            Assert.That(tool.TargetId, Is.Empty);
         }
     }
 }

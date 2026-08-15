@@ -21,12 +21,12 @@ namespace GritGud.Presentation.LevelEditing.Tools
         public const string ToolId = "spatial-record-place";
 
         private readonly Plane fallbackPlane = new Plane(Vector3.up, Vector3.zero);
-        private readonly Action<LevelSpatialPlacementKind, Vector3> commit;
+        private readonly Action<LevelSpatialPlacementKind, string, Vector3> commit;
         private LevelEditorToolContext context;
         private Vector3 pointerWorld;
 
         public SpatialRecordPlacementTool(
-            Action<LevelSpatialPlacementKind, Vector3> commit)
+            Action<LevelSpatialPlacementKind, string, Vector3> commit)
         {
             this.commit = commit ?? throw new ArgumentNullException(nameof(commit));
         }
@@ -41,11 +41,14 @@ namespace GritGud.Presentation.LevelEditing.Tools
 
         public bool HasPreview { get; private set; }
 
+        public string TargetId { get; private set; } = string.Empty;
+
         public Vector3 PreviewPosition => pointerWorld;
 
-        public void Queue(LevelSpatialPlacementKind kind)
+        public void Queue(LevelSpatialPlacementKind kind, string targetId = null)
         {
             Kind = kind;
+            TargetId = targetId ?? string.Empty;
             IsQueued = true;
             HasPreview = false;
         }
@@ -54,7 +57,9 @@ namespace GritGud.Presentation.LevelEditing.Tools
         {
             this.context = context ?? throw new ArgumentNullException(nameof(context));
             context.Selection.Clear();
-            context.SetStatus($"Placing {DisplayKind(Kind)}. Click the map to place; Esc cancels.");
+            context.SetStatus(
+                $"{(string.IsNullOrEmpty(TargetId) ? "Placing" : "Moving")} "
+                + $"{DisplayKind(Kind)}. Click the map to commit; Esc cancels.");
         }
 
         public void Deactivate()
@@ -78,14 +83,22 @@ namespace GritGud.Presentation.LevelEditing.Tools
             if (!input.PrimaryPressed || input.PointerBlocked || !HasPreview)
                 return;
 
-            commit(Kind, pointerWorld);
-            context.SetStatus(
-                $"Placed {DisplayKind(Kind)}. Click again to continue; Esc cancels.");
+            string targetId = TargetId;
+            commit(Kind, targetId, pointerWorld);
+            if (!string.IsNullOrEmpty(targetId))
+            {
+                IsQueued = false;
+                TargetId = string.Empty;
+                HasPreview = false;
+                return;
+            }
+            context.SetStatus($"Placed {DisplayKind(Kind)}. Click again to continue; Esc cancels.");
         }
 
         public bool Cancel()
         {
             IsQueued = false;
+            TargetId = string.Empty;
             HasPreview = false;
             return false;
         }

@@ -104,6 +104,8 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         void QueueSpatialPlacement(LevelSpatialPlacementKind kind);
 
+        void QueueSpatialRelocation(LevelSpatialPlacementKind kind, string targetId);
+
         void ApplyPracticalLight(LevelPracticalLightAuthoringRequest request);
 
         void DeletePracticalLight(string lightId);

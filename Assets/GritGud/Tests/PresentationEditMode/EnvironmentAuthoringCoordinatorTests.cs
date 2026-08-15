@@ -106,6 +106,27 @@ namespace GritGud.Presentation.Tests
             Assert.That(light.baseHeight, Is.EqualTo(4f));
         }
 
+        [Test]
+        public void MovesPracticalLightBaseAndPreservesAimOffset()
+        {
+            using var workspace = new LevelEditorWorkspace(
+                LevelDocumentFactory.CreateEmpty("Move light"));
+            var coordinator = CreateCoordinator(workspace);
+            coordinator.AddPracticalLightAt(new Vector3(2f, 4f, 6f));
+            LevelPracticalLightData added = workspace.CreateSnapshot()
+                .environment.practicalLights[0];
+
+            coordinator.MovePracticalLightAt(added.id, new Vector3(10f, 1f, 12f));
+
+            LevelPracticalLightData moved = workspace.CreateSnapshot()
+                .environment.practicalLights[0];
+            Assert.That(moved.position.x, Is.EqualTo(10f));
+            Assert.That(moved.position.y, Is.EqualTo(4f));
+            Assert.That(moved.target.x, Is.EqualTo(10f));
+            Assert.That(moved.target.y, Is.EqualTo(1f));
+            Assert.That(moved.target.z, Is.EqualTo(13f));
+        }
+
         private static EnvironmentAuthoringCoordinator CreateCoordinator(
             LevelEditorWorkspace workspace)
         {

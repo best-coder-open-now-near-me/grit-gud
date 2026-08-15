@@ -93,7 +93,7 @@ namespace GritGud.Presentation.LevelEditing
                 displayName = $"Decal {after.decals.Count + 1}",
                 position = new Float3Data(position.x, position.y + 0.02f, position.z),
             });
-            Execute(before, after, "Add decal", "Added a decal at the camera focus.");
+            Execute(before, after, "Add decal", "Added a decal at the selected map position.");
             FocusRequested?.Invoke(LevelDressingTargetKind.Decal, id);
         }
 
@@ -136,6 +136,11 @@ namespace GritGud.Presentation.LevelEditing
             Execute(before, after, "Edit decal", $"Updated '{displayName}'.");
         }
 
+        public void MoveDecalAt(string id, Vector3 position) => Move(
+            LevelDressingTargetKind.Decal,
+            id,
+            position);
+
         public void DeleteDecal(string id) => Delete(
             LevelDressingTargetKind.Decal,
             id,
@@ -165,7 +170,7 @@ namespace GritGud.Presentation.LevelEditing
                 displayName = $"Ambient VFX {after.ambientVfx.Count + 1}",
                 position = new Float3Data(position.x, position.y, position.z),
             });
-            Execute(before, after, "Add ambient VFX", "Added ambient VFX at the camera focus.");
+            Execute(before, after, "Add ambient VFX", "Added ambient VFX at the selected map position.");
             FocusRequested?.Invoke(LevelDressingTargetKind.AmbientVfx, id);
         }
 
@@ -206,6 +211,11 @@ namespace GritGud.Presentation.LevelEditing
             Execute(before, after, "Edit ambient VFX", $"Updated '{displayName}'.");
         }
 
+        public void MoveAmbientVfxAt(string id, Vector3 position) => Move(
+            LevelDressingTargetKind.AmbientVfx,
+            id,
+            position);
+
         public void DeleteAmbientVfx(string id) => Delete(
             LevelDressingTargetKind.AmbientVfx,
             id,
@@ -235,7 +245,7 @@ namespace GritGud.Presentation.LevelEditing
                 displayName = $"Audio Zone {after.audioZones.Count + 1}",
                 center = new Float3Data(position.x, position.y, position.z),
             });
-            Execute(before, after, "Add audio zone", "Added an audio zone at the camera focus.");
+            Execute(before, after, "Add audio zone", "Added an audio zone at the selected map position.");
             FocusRequested?.Invoke(LevelDressingTargetKind.AudioZone, id);
         }
 
@@ -276,6 +286,56 @@ namespace GritGud.Presentation.LevelEditing
             replacement.volume = volume;
             replacement.fadeDistance = fadeDistance;
             Execute(before, after, "Edit audio zone", $"Updated '{displayName}'.");
+        }
+
+        public void MoveAudioZoneAt(string id, Vector3 position) => Move(
+            LevelDressingTargetKind.AudioZone,
+            id,
+            position);
+
+        private void Move(LevelDressingTargetKind kind, string id, Vector3 position)
+        {
+            LevelDressingData before = workspace.CreateSnapshot().dressing;
+            LevelDressingData after = before.DeepCopy();
+            string displayName;
+            switch (kind)
+            {
+                case LevelDressingTargetKind.AmbientVfx:
+                    LevelAmbientVfxData effect = after.ambientVfx.FirstOrDefault(value =>
+                        string.Equals(value?.id, id, StringComparison.Ordinal));
+                    if (effect == null)
+                    {
+                        Report("Choose existing ambient VFX to move.");
+                        return;
+                    }
+                    effect.position = new Float3Data(position.x, position.y, position.z);
+                    displayName = effect.displayName;
+                    break;
+                case LevelDressingTargetKind.AudioZone:
+                    LevelAudioZoneData zone = after.audioZones.FirstOrDefault(value =>
+                        string.Equals(value?.id, id, StringComparison.Ordinal));
+                    if (zone == null)
+                    {
+                        Report("Choose an existing audio zone to move.");
+                        return;
+                    }
+                    zone.center = new Float3Data(position.x, position.y, position.z);
+                    displayName = zone.displayName;
+                    break;
+                default:
+                    LevelDecalData decal = after.decals.FirstOrDefault(value =>
+                        string.Equals(value?.id, id, StringComparison.Ordinal));
+                    if (decal == null)
+                    {
+                        Report("Choose an existing decal to move.");
+                        return;
+                    }
+                    decal.position = new Float3Data(position.x, position.y + 0.02f, position.z);
+                    displayName = decal.displayName;
+                    break;
+            }
+            Execute(before, after, "Move level dressing", $"Moved '{displayName}'.");
+            FocusRequested?.Invoke(kind, id);
         }
 
         public void DeleteAudioZone(string id) => Delete(

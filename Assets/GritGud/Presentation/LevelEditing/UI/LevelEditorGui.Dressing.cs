@@ -139,6 +139,8 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawVectorFields("Size", decalFields.size);
             DrawColorFields("Color RGB", decalFields.color);
             DrawLabeledField("Opacity", ref decalFields.alpha);
+            if (GUILayout.Button("MOVE DECAL ON MAP", PanelButtonLayout()))
+                actions.QueueSpatialRelocation(LevelSpatialPlacementKind.Decal, selected.id);
             if (GUILayout.Button("APPLY DECAL", PanelApplyButtonLayout()))
                 actions.ApplyDecal(decalFields);
             DrawDeleteButton("DELETE DECAL", () => actions.DeleteDecal(selected.id));
@@ -171,6 +173,8 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawVectorFields("Position", ambientVfxFields.position);
             DrawVectorFields("Rotation", ambientVfxFields.rotation);
             DrawVectorFields("Scale", ambientVfxFields.scale);
+            if (GUILayout.Button("MOVE VFX ON MAP", PanelButtonLayout()))
+                actions.QueueSpatialRelocation(LevelSpatialPlacementKind.AmbientVfx, selected.id);
             if (GUILayout.Button("APPLY AMBIENT VFX", PanelApplyButtonLayout()))
                 actions.ApplyAmbientVfx(ambientVfxFields);
             DrawDeleteButton(
@@ -209,6 +213,8 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawVectorFields("Size", audioZoneFields.size);
             DrawLabeledField("Volume 0-1", ref audioZoneFields.volume);
             DrawLabeledField("Fade distance", ref audioZoneFields.fadeDistance);
+            if (GUILayout.Button("MOVE AUDIO ZONE ON MAP", PanelButtonLayout()))
+                actions.QueueSpatialRelocation(LevelSpatialPlacementKind.AudioZone, selected.id);
             if (GUILayout.Button("APPLY AUDIO ZONE", PanelApplyButtonLayout()))
                 actions.ApplyAudioZone(audioZoneFields);
             DrawDeleteButton(

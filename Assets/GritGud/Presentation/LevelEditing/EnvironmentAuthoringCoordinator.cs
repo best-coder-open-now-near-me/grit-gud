@@ -245,6 +245,41 @@ namespace GritGud.Presentation.LevelEditing
             Report($"Updated '{displayName}'.");
         }
 
+        public void MovePracticalLightAt(string id, Vector3 basePosition)
+        {
+            LevelEnvironmentData before = workspace.CreateSnapshot().environment;
+            LevelEnvironmentData after = before.DeepCopy();
+            LevelPracticalLightData light = after.practicalLights.FirstOrDefault(value =>
+                string.Equals(value?.id, id, StringComparison.Ordinal));
+            if (light == null)
+            {
+                Report("Choose an existing practical light to move.");
+                return;
+            }
+
+            float mastHeight = Math.Max(0f, light.position.y - light.baseHeight);
+            Float3Data previousTarget = light.target;
+            Vector3 targetOffset = new Vector3(
+                previousTarget.x - light.position.x,
+                previousTarget.y - light.baseHeight,
+                previousTarget.z - light.position.z);
+            light.position = new Float3Data(
+                basePosition.x,
+                basePosition.y + mastHeight,
+                basePosition.z);
+            light.baseHeight = basePosition.y;
+            light.target = new Float3Data(
+                basePosition.x + targetOffset.x,
+                basePosition.y + targetOffset.y,
+                basePosition.z + targetOffset.z);
+            workspace.Execute(new SetLevelEnvironmentCommand(
+                before,
+                after,
+                "Move practical light"));
+            PracticalLightFocusRequested?.Invoke(id);
+            Report($"Moved '{light.displayName}'.");
+        }
+
         public void DeletePracticalLight(string lightId)
         {
             LevelEnvironmentData before = workspace.CreateSnapshot().environment;

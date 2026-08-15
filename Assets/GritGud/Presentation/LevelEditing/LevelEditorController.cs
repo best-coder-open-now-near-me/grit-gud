@@ -430,23 +430,41 @@ namespace GritGud.Presentation.LevelEditing
                 presentationState.SynchronizeCreateMode(LevelEditorCreateMode.Select);
         }
 
-        private void PlaceSpatialRecord(LevelSpatialPlacementKind kind, Vector3 position)
+        private void PlaceSpatialRecord(
+            LevelSpatialPlacementKind kind,
+            string targetId,
+            Vector3 position)
         {
+            bool relocate = !string.IsNullOrEmpty(targetId);
             switch (kind)
             {
                 case LevelSpatialPlacementKind.PracticalLight:
-                    environmentAuthoring.AddPracticalLightAt(position);
+                    if (relocate)
+                        environmentAuthoring.MovePracticalLightAt(targetId, position);
+                    else
+                        environmentAuthoring.AddPracticalLightAt(position);
                     break;
                 case LevelSpatialPlacementKind.AmbientVfx:
-                    dressingAuthoring.AddAmbientVfxAt(position);
+                    if (relocate)
+                        dressingAuthoring.MoveAmbientVfxAt(targetId, position);
+                    else
+                        dressingAuthoring.AddAmbientVfxAt(position);
                     break;
                 case LevelSpatialPlacementKind.AudioZone:
-                    dressingAuthoring.AddAudioZoneAt(position);
+                    if (relocate)
+                        dressingAuthoring.MoveAudioZoneAt(targetId, position);
+                    else
+                        dressingAuthoring.AddAudioZoneAt(position);
                     break;
                 default:
-                    dressingAuthoring.AddDecalAt(position);
+                    if (relocate)
+                        dressingAuthoring.MoveDecalAt(targetId, position);
+                    else
+                        dressingAuthoring.AddDecalAt(position);
                     break;
             }
+            if (relocate)
+                toolManager.ActivateDefault();
         }
 
         private void Update()
@@ -1596,6 +1614,14 @@ namespace GritGud.Presentation.LevelEditing
         void ILevelEditorGuiActions.QueueSpatialPlacement(LevelSpatialPlacementKind kind)
         {
             spatialPlacementTool.Queue(kind);
+            toolManager.Activate(SpatialRecordPlacementTool.ToolId);
+        }
+
+        void ILevelEditorGuiActions.QueueSpatialRelocation(
+            LevelSpatialPlacementKind kind,
+            string targetId)
+        {
+            spatialPlacementTool.Queue(kind, targetId);
             toolManager.Activate(SpatialRecordPlacementTool.ToolId);
         }
 

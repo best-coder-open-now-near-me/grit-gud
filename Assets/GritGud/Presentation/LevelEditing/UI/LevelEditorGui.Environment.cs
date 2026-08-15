@@ -129,6 +129,10 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawLabeledField("Outer angle", ref practicalLightFields.spotAngle);
             DrawLabeledField("Inner %", ref practicalLightFields.innerSpotFraction);
             DrawLabeledField("Mast base", ref practicalLightFields.baseHeight);
+            if (GUILayout.Button("MOVE LIGHT ON MAP", PanelButtonLayout()))
+                actions.QueueSpatialRelocation(
+                    LevelSpatialPlacementKind.PracticalLight,
+                    selected.id);
             if (GUILayout.Button("APPLY PRACTICAL LIGHT", PanelApplyButtonLayout()))
                 actions.ApplyPracticalLight(practicalLightFields);
             Color deleteColor = GUI.backgroundColor;

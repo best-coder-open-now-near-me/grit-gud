@@ -58,6 +58,27 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void MovesExistingDressingWithoutChangingItsIdentity()
+        {
+            using var workspace = new LevelEditorWorkspace(
+                LevelDocumentFactory.CreateEmpty("Move dressing"));
+            LevelDressingAuthoringCoordinator coordinator = CreateCoordinator(workspace);
+            coordinator.AddDecal();
+            string id = workspace.CreateSnapshot().dressing.decals.Single().id;
+
+            coordinator.MoveDecalAt(id, new Vector3(3f, 2f, 7f));
+
+            LevelDecalData moved = workspace.CreateSnapshot().dressing.decals.Single();
+            Assert.That(moved.id, Is.EqualTo(id));
+            Assert.That(moved.position.x, Is.EqualTo(3f));
+            Assert.That(moved.position.y, Is.EqualTo(2.02f));
+            Assert.That(moved.position.z, Is.EqualTo(7f));
+            workspace.Undo();
+            Assert.That(workspace.CreateSnapshot().dressing.decals.Single().position.x,
+                Is.EqualTo(8f));
+        }
+
+        [Test]
         public void AppliesPortableDecalVfxAndAudioValues()
         {
             using var workspace = new LevelEditorWorkspace(
