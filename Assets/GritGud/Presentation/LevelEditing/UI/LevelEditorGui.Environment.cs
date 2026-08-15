@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.Linq;
 using GritGud.Domain.Levels;
+using GritGud.Presentation.LevelEditing.Tools;
 using UnityEngine;
 
 namespace GritGud.Presentation.LevelEditing.UI

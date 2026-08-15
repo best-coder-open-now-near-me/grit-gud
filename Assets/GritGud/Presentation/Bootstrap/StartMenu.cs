@@ -89,7 +89,7 @@ namespace GritGud.Presentation.Bootstrap
             DrawGlowLine(new Rect(60f, 787f, 496f, 1f), MutedSignalColor);
             GUI.Label(
                 new Rect(78f, 806f, 460f, 24f),
-                GameReleaseInfo.Format(Application.version),
+                GameReleaseInfo.Format(UnityEngine.Application.version),
                 releaseStyle);
         }
 
