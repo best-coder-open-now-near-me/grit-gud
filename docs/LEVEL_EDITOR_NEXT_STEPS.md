@@ -139,7 +139,7 @@ heatmap, surface decals, ambient-VFX placements, and spatial audio zones are
 implemented. Decals, ambient VFX, audio zones, and practical lights now share a
 queued map-placement workflow rather than being created indirectly at the camera
 focus. Portable entity transforms now retain X/Y/Z rotation, and the first
-physics-assisted **Drop & Settle** slice supports one loose prop with authored
-colliders or a visible-bounds fallback. The next increment is multi-selection
-pile settling, followed by richer collider diagnostics and destructible-cover testing.
+physics-assisted **Drop & Settle** supports single props and multi-selection
+pile settling with authored colliders or a visible-bounds fallback. The next
+increment is destructible-cover pile testing and richer viewport transform tools.
 Encounter authoring remains deferred until combat structure is stable.

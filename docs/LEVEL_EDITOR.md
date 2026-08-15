@@ -277,13 +277,18 @@ resumes the same authoring workspace.
 
 ## Physics placement
 
-Selected loose props expose **Drop & Settle** in the Selection Inspector. The
+Selected loose props expose **Drop & Settle** in the Selection Inspector. One
+prop can be settled alone, or a multi-selection can be simulated together so
+the pieces collide and form a natural pile. The complete batch commits and
+undoes as one transaction. The
 author chooses a positive drop height and either free rotation or **Keep
 upright**. The editor temporarily simulates the projected object against level
 collision, waits for a stable pose (with a five-second safety timeout), and
 commits the resulting position plus X/Y/Z rotation as one undoable transform.
 Authored colliders are preferred; a visual-bounds box is used when an object has
-no safe dynamic collider. Placement surfaces and vehicles are rejected. The
+no safe dynamic collider. The live status reports authored colliders, bounds
+fallbacks, and skipped records. Placement surfaces, vehicles, and existing
+dynamic bodies are rejected. The
 simulation is an authoring aid only: velocity and intermediate physics state do
 not enter portable JSON or Test Play.
 

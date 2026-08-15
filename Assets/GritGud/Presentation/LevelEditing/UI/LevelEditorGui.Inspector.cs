@@ -99,7 +99,10 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.Label("PHYSICS PLACEMENT");
             DrawLabeledField("Drop height", ref physicsDropHeightText);
             physicsKeepUpright = GUILayout.Toggle(physicsKeepUpright, "Keep upright");
-            GUILayout.Label("Temporarily simulates the selected prop, then saves its settled transform.");
+            GUILayout.Label(
+                selection.Targets.Count > 1
+                    ? $"Settles {selection.Targets.Count} selected records together as one undo step."
+                    : "Temporarily simulates the selected prop, then saves its settled transform.");
             if (actions.PhysicsPlacementRunning)
             {
                 if (GUILayout.Button("CANCEL SETTLE", PanelPrimaryButtonLayout()))
