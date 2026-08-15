@@ -13,6 +13,12 @@ namespace GritGud.Presentation.Bootstrap
     /// </summary>
     public sealed class StartMenu : MonoBehaviour
     {
+        private enum LevelSelectionKind
+        {
+            Committed,
+            CloudDraft,
+        }
+
         private const float ReferenceWidth = 1600f;
         private const float ReferenceHeight = 900f;
 
@@ -41,12 +47,14 @@ namespace GritGud.Presentation.Bootstrap
         private Texture2D buttonActiveTexture;
         private IReadOnlyList<CommittedLevelEntry> committedLevels =
             Array.Empty<CommittedLevelEntry>();
-        private string selectedResourceKey = string.Empty;
-        private bool cloudDraftSelected;
+        private LevelSelectionKind selectedKind;
+        private string selectedKey = string.Empty;
         private string cloudDraftStatus = string.Empty;
         private Vector2 levelScroll;
 
-        internal string SelectedResourceKey => selectedResourceKey;
+        internal string SelectedResourceKey => selectedKind == LevelSelectionKind.Committed
+            ? selectedKey
+            : string.Empty;
 
         private void OnEnable()
         {
@@ -109,35 +117,42 @@ namespace GritGud.Presentation.Bootstrap
 
             GUI.Label(
                 new Rect(94f, 278f, 350f, 32f),
-                "COMMITTED LEVELS",
+                "LEVEL LIBRARY",
                 subtitleStyle);
             DrawLevelList(new Rect(92f, 312f, 350f, 166f));
 
             CommittedLevelEntry selected = FindSelectedLevel();
-            string status = cloudDraftSelected
-                ? (string.IsNullOrWhiteSpace(cloudDraftStatus)
-                    ? "Private cloud draft — playable, not published."
-                    : cloudDraftStatus)
+            LevelDraftSummary selectedDraft = FindSelectedDraft();
+            LevelDraftLibraryCoordinator draftLibrary = GameBootstrap.Instance?.DraftLibrary;
+            bool cloudSelected = selectedKind == LevelSelectionKind.CloudDraft;
+            string status = cloudSelected
+                ? selectedDraft == null
+                    ? (string.IsNullOrWhiteSpace(cloudDraftStatus) ? "Select a cloud draft." : cloudDraftStatus)
+                    : string.IsNullOrWhiteSpace(cloudDraftStatus)
+                        ? $"{selectedDraft.Name} — revision {selectedDraft.Revision}\nPrivate draft; not published."
+                        : cloudDraftStatus
                 : selected == null
                 ? "No committed levels were found. You can still create a new level."
                 : selected.LevelId + "\n" + selected.StatusMessage;
             GUI.Label(new Rect(94f, 486f, 420f, 48f), status, statusStyle);
 
             bool previousEnabled = GUI.enabled;
-            GUI.enabled = cloudDraftSelected || selected?.CanPlay == true;
+            GUI.enabled = (cloudSelected && selectedDraft != null && draftLibrary?.IsBusy != true)
+                || (!cloudSelected && selected?.CanPlay == true);
             if (DrawMenuButton(new Rect(92f, 538f, 350f, 44f), "PLAY SELECTED"))
             {
-                if (cloudDraftSelected)
-                    GameBootstrap.Instance.PlayCloudDraft(message => cloudDraftStatus = message);
+                if (cloudSelected)
+                    GameBootstrap.Instance.PlayCloudDraft(selectedDraft.Id, message => cloudDraftStatus = message);
                 else
                     GameBootstrap.Instance.PlayCommittedLevel(selected.ResourceKey);
             }
 
-            GUI.enabled = cloudDraftSelected || selected?.CanEdit == true;
+            GUI.enabled = (cloudSelected && selectedDraft != null && draftLibrary?.IsBusy != true)
+                || (!cloudSelected && selected?.CanEdit == true);
             if (DrawMenuButton(new Rect(92f, 590f, 350f, 44f), "EDIT SELECTED"))
             {
-                if (cloudDraftSelected)
-                    GameBootstrap.Instance.OpenCloudDraftEditor(message => cloudDraftStatus = message);
+                if (cloudSelected)
+                    GameBootstrap.Instance.OpenCloudDraftEditor(selectedDraft.Id, message => cloudDraftStatus = message);
                 else
                     GameBootstrap.Instance.OpenCommittedLevelEditor(selected.ResourceKey);
             }
@@ -163,24 +178,39 @@ namespace GritGud.Presentation.Bootstrap
         {
             GUILayout.BeginArea(rectangle, GUI.skin.box);
             levelScroll = GUILayout.BeginScrollView(levelScroll);
-            if (GameBootstrap.Instance?.Supabase != null)
+            LevelDraftLibraryCoordinator draftLibrary = GameBootstrap.Instance?.DraftLibrary;
+            if (draftLibrary != null)
             {
-                Color previousBackground = GUI.backgroundColor;
-                if (cloudDraftSelected) GUI.backgroundColor = SignalColor;
-                if (GUILayout.Button(
-                    (cloudDraftSelected ? "> " : string.Empty) + "☁ ACTIVE CLOUD DRAFT",
-                    levelButtonStyle,
-                    GUILayout.Height(38f)))
+                GUILayout.Label("MY CLOUD DRAFTS", statusStyle);
+                foreach (LevelDraftSummary draft in draftLibrary.Drafts)
                 {
-                    cloudDraftSelected = true;
-                    cloudDraftStatus = string.Empty;
+                    bool selected = selectedKind == LevelSelectionKind.CloudDraft
+                        && string.Equals(selectedKey, draft.Id.Value, StringComparison.Ordinal);
+                    Color previousBackground = GUI.backgroundColor;
+                    if (selected) GUI.backgroundColor = SignalColor;
+                    if (GUILayout.Button(
+                        (selected ? "> " : string.Empty) + "☁ " + draft.Name,
+                        levelButtonStyle,
+                        GUILayout.Height(38f)))
+                    {
+                        selectedKind = LevelSelectionKind.CloudDraft;
+                        selectedKey = draft.Id.Value;
+                        cloudDraftStatus = string.Empty;
+                        draftLibrary.Select(draft.Id);
+                    }
+                    GUI.backgroundColor = previousBackground;
                 }
-                GUI.backgroundColor = previousBackground;
+                if (draftLibrary.Drafts.Count == 0)
+                    GUILayout.Label(draftLibrary.Status, statusStyle);
             }
+            else if (GameBootstrap.Instance?.Supabase != null)
+                GUILayout.Label(GameBootstrap.Instance.Supabase.Status, statusStyle);
+
+            GUILayout.Label("COMMITTED LEVELS", statusStyle);
             foreach (CommittedLevelEntry entry in committedLevels)
             {
-                bool selected = !cloudDraftSelected && string.Equals(
-                    selectedResourceKey,
+                bool selected = selectedKind == LevelSelectionKind.Committed && string.Equals(
+                    selectedKey,
                     entry.ResourceKey,
                     StringComparison.Ordinal);
                 Color previousBackground = GUI.backgroundColor;
@@ -195,8 +225,9 @@ namespace GritGud.Presentation.Bootstrap
                     levelButtonStyle,
                     GUILayout.Height(38f)))
                 {
-                    selectedResourceKey = entry.ResourceKey;
-                    cloudDraftSelected = false;
+                    selectedKind = LevelSelectionKind.Committed;
+                    selectedKey = entry.ResourceKey;
+                    cloudDraftStatus = string.Empty;
                 }
 
                 GUI.backgroundColor = previousBackground;
@@ -223,15 +254,17 @@ namespace GritGud.Presentation.Bootstrap
                 ?? committedLevels.FirstOrDefault(entry => entry.CanEdit)
                 ?? committedLevels.FirstOrDefault();
 
-            selectedResourceKey = preferred?.ResourceKey ?? string.Empty;
+            selectedKind = LevelSelectionKind.Committed;
+            selectedKey = preferred?.ResourceKey ?? string.Empty;
         }
 
         private CommittedLevelEntry FindSelectedLevel()
         {
+            if (selectedKind != LevelSelectionKind.Committed) return null;
             foreach (CommittedLevelEntry entry in committedLevels)
             {
                 if (string.Equals(
-                    selectedResourceKey,
+                    selectedKey,
                     entry.ResourceKey,
                     StringComparison.Ordinal))
                 {
@@ -240,6 +273,14 @@ namespace GritGud.Presentation.Bootstrap
             }
 
             return null;
+        }
+
+        private LevelDraftSummary FindSelectedDraft()
+        {
+            if (selectedKind != LevelSelectionKind.CloudDraft) return null;
+            LevelDraftLibraryCoordinator library = GameBootstrap.Instance?.DraftLibrary;
+            return library?.Drafts.FirstOrDefault(draft =>
+                string.Equals(draft.Id.Value, selectedKey, StringComparison.Ordinal));
         }
 
         private bool DrawMenuButton(Rect rectangle, string label)
