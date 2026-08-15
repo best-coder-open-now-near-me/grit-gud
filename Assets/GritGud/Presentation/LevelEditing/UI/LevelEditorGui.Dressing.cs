@@ -85,9 +85,26 @@ namespace GritGud.Presentation.LevelEditing.UI
                 actions.SetAudioZonePreviewEnabled(previewAudio);
             GUILayout.Label("Blue boxes show audio zones in Edit mode. They are hidden in Preview and Test Play.");
 
-            DrawDecalSection(dressing);
-            DrawAmbientVfxSection(dressing);
-            DrawAudioZoneSection(dressing);
+            GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
+            LevelDressingTargetKind previousKind = selectedDressingKind;
+            selectedDressingKind = (LevelDressingTargetKind)GUILayout.Toolbar(
+                (int)selectedDressingKind,
+                new[] { "DECALS", "VFX", "AUDIO" });
+            if (selectedDressingKind != previousKind)
+                selectedDressingId = string.Empty;
+
+            switch (selectedDressingKind)
+            {
+                case LevelDressingTargetKind.AmbientVfx:
+                    DrawAmbientVfxSection(dressing);
+                    break;
+                case LevelDressingTargetKind.AudioZone:
+                    DrawAudioZoneSection(dressing);
+                    break;
+                default:
+                    DrawDecalSection(dressing);
+                    break;
+            }
         }
 
         private void DrawDecalSection(LevelDressingData dressing)

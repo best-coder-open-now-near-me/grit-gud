@@ -14,7 +14,6 @@ namespace GritGud.Presentation.LevelEditing.UI
         private void DrawInspector(LevelEditorViewState state)
         {
             LevelEntityView selectedView = state.SelectedView;
-            IReadOnlyList<LevelValidationIssue> validationIssues = state.ValidationIssues;
             float left = Screen.width - LevelEditorGuiMetrics.InspectorWidth;
             GUILayout.BeginArea(
                 new Rect(
@@ -27,6 +26,80 @@ namespace GritGud.Presentation.LevelEditing.UI
                 GUI.skin.box);
             inspectorScroll = GUILayout.BeginScrollView(inspectorScroll);
             DrawSectionHeader("INSPECTOR");
+            DrawInspectorTabs();
+            if (presentationState.InspectorPage == LevelEditorInspectorPage.Level)
+            {
+                DrawLevelInspector(state);
+            }
+            else if (presentationState.InspectorPage
+                == LevelEditorInspectorPage.Gameplay)
+            {
+                DrawGameplayInspector(state, selectedView);
+            }
+            else
+            {
+                DrawSelectionInspector(state, selectedView);
+            }
+
+            GUILayout.EndScrollView();
+            GUILayout.EndArea();
+        }
+
+        private void DrawInspectorTabs()
+        {
+            int selected = GUILayout.Toolbar(
+                (int)presentationState.InspectorPage,
+                new[] { "SELECTION", "GAMEPLAY", "LEVEL" });
+            presentationState.ShowInspectorPage((LevelEditorInspectorPage)selected);
+            GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
+        }
+
+        private void DrawSelectionInspector(
+            LevelEditorViewState state,
+            LevelEntityView selectedView)
+        {
+            if (selectedView == null)
+            {
+                GUILayout.Label("Select a world object or interaction point to edit it.");
+                return;
+            }
+
+            GUILayout.Label(selectedView.Archetype.DisplayName);
+            GUILayout.Label($"ID: {selection.PrimaryEntityId}");
+            LevelEntity entity = FindSelectedEntity(state);
+            LevelSelectionTarget? primary = selection.Primary;
+            if (selection.Targets.Count > 1)
+                GUILayout.Label($"{selection.Targets.Count} entities selected");
+            GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
+            DrawLabeledField("X", ref xText);
+            DrawLabeledField("Y", ref yText);
+            DrawLabeledField("Z", ref zText);
+            DrawLabeledField("Yaw", ref yawText);
+            if (GUILayout.Button("APPLY", PanelPrimaryButtonLayout()))
+                actions.ApplyEntityTransform(xText, yText, zText, yawText);
+
+            GUILayout.BeginHorizontal();
+            float angleSnap = selectedView.Archetype.PlacementRules.AngleSnap;
+            if (GUILayout.Button($"↺ {angleSnap:0.#}°"))
+                selectionTool.RotateSelection(-angleSnap);
+            if (GUILayout.Button($"{angleSnap:0.#}° ↻"))
+                selectionTool.RotateSelection(angleSnap);
+            GUILayout.EndHorizontal();
+            Color previous = GUI.backgroundColor;
+            GUI.backgroundColor = LevelEditorTheme.Destructive;
+            if (GUILayout.Button("DELETE", PanelPrimaryButtonLayout()))
+                selectionTool.DeleteSelection();
+            GUI.backgroundColor = previous;
+
+            GUILayout.Space(LevelEditorGuiMetrics.SpaceInspectorSection);
+            DrawInteractionInspector(entity, primary);
+            DrawDestructibleInspector(selectedView, entity);
+        }
+
+        private void DrawGameplayInspector(
+            LevelEditorViewState state,
+            LevelEntityView selectedView)
+        {
             if (presentationState.InspectorTarget.Kind
                 == LevelEditorInspectorTargetKind.ScenarioActor)
             {
@@ -36,63 +109,43 @@ namespace GritGud.Presentation.LevelEditing.UI
                         presentationState.InspectorTarget.TargetId,
                         StringComparison.Ordinal));
                 DrawScenarioActorInspector(actor);
+                return;
             }
-            else if (selectedView == null)
+
+            if (selectedView == null)
             {
-                GUILayout.Label("Select an entity, interaction point, or scenario actor to edit it.");
+                GUILayout.Label("Select a scenario actor or linked world object to edit gameplay settings.");
+                return;
             }
-            else
+
+            LevelEntity entity = FindSelectedEntity(state);
+            LevelSelectionTarget? primary = selection.Primary;
+            if (primary != null
+                && primary.Value.Kind == LevelSelectionKind.InteractionPoint)
             {
-                GUILayout.Label(selectedView.Archetype.DisplayName);
-                GUILayout.Label($"ID: {selection.PrimaryEntityId}");
-                LevelEntity entity = state.Document.entities.FirstOrDefault(candidate =>
-                    string.Equals(
+                InteractionPointData point = entity?.interactionPoints
+                    .FirstOrDefault(candidate => string.Equals(
                         candidate?.id,
-                        selection.PrimaryEntityId,
+                        primary.Value.ElementId,
                         StringComparison.Ordinal));
-                LevelSelectionTarget? primary = selection.Primary;
-                if (selection.Targets.Count > 1)
-                {
-                    GUILayout.Label($"{selection.Targets.Count} entities selected");
-                }
-                GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
-                DrawLabeledField("X", ref xText);
-                DrawLabeledField("Y", ref yText);
-                DrawLabeledField("Z", ref zText);
-                DrawLabeledField("Yaw", ref yawText);
-                if (GUILayout.Button("APPLY", PanelPrimaryButtonLayout()))
-                {
-                    actions.ApplyEntityTransform(xText, yText, zText, yawText);
-                }
-
-                GUILayout.BeginHorizontal();
-                float angleSnap = selectedView.Archetype.PlacementRules.AngleSnap;
-                if (GUILayout.Button($"↺ {angleSnap:0.#}°"))
-                {
-                    selectionTool.RotateSelection(-angleSnap);
-                }
-
-                if (GUILayout.Button($"{angleSnap:0.#}° ↻"))
-                {
-                    selectionTool.RotateSelection(angleSnap);
-                }
-                GUILayout.EndHorizontal();
-                Color previous = GUI.backgroundColor;
-                GUI.backgroundColor = LevelEditorTheme.Destructive;
-                if (GUILayout.Button("DELETE", PanelPrimaryButtonLayout()))
-                {
-                    selectionTool.DeleteSelection();
-                }
-                GUI.backgroundColor = previous;
-
-                GUILayout.Space(LevelEditorGuiMetrics.SpaceInspectorSection);
-                DrawInteractionInspector(entity, primary, state.Document.scenario);
-                DrawDestructibleInspector(selectedView, entity);
-                DrawScenarioPropInspector(selectedView, entity, state.Document.scenario);
-                DrawScenarioVehicleInspector(selectedView, entity, state.Document.scenario);
+                if (point != null)
+                    DrawScenarioObjectiveInspector(entity, point, state.Document.scenario);
             }
+            DrawScenarioPropInspector(selectedView, entity, state.Document.scenario);
+            DrawScenarioVehicleInspector(selectedView, entity, state.Document.scenario);
+        }
 
-            GUILayout.Space(LevelEditorGuiMetrics.SpaceMajor);
+        private LevelEntity FindSelectedEntity(LevelEditorViewState state) =>
+            state.Document.entities.FirstOrDefault(candidate => string.Equals(
+                candidate?.id,
+                selection.PrimaryEntityId,
+                StringComparison.Ordinal));
+
+        private void DrawLevelInspector(LevelEditorViewState state)
+        {
+            IReadOnlyList<LevelValidationIssue> validationIssues =
+                state.ValidationIssues;
+
             if (DrawSectionExpander(
                     $"VALIDATION ({validationIssues?.Count ?? 0})",
                     ref showValidation))
@@ -165,8 +218,6 @@ namespace GritGud.Presentation.LevelEditing.UI
                 GUI.enabled = true;
             }
 
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
         }
 
 
@@ -248,8 +299,7 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         private void DrawInteractionInspector(
             LevelEntity entity,
-            LevelSelectionTarget? primary,
-            LevelScenarioData scenario)
+            LevelSelectionTarget? primary)
         {
             DrawSectionHeader("INTERACTION POINTS");
             if (entity == null)
@@ -290,7 +340,6 @@ namespace GritGud.Presentation.LevelEditing.UI
                         actions.DeleteInteractionPoint();
                     }
                     GUI.backgroundColor = previous;
-                    DrawScenarioObjectiveInspector(entity, point, scenario);
                     return;
                 }
             }

@@ -31,6 +31,39 @@ namespace GritGud.Presentation.Tests
                 Is.EqualTo(LevelEditorInspectorTargetKind.ScenarioActor));
             Assert.That(state.InspectorTarget.TargetId, Is.EqualTo("player-one"));
             Assert.That(state.InspectorTarget.OwnerId, Is.Empty);
+            Assert.That(
+                state.InspectorPage,
+                Is.EqualTo(LevelEditorInspectorPage.Gameplay));
+        }
+
+        [Test]
+        public void WorldSelectionReturnsInspectorToContextualSelectionPage()
+        {
+            var state = new LevelEditorPresentationState();
+            state.ShowInspectorPage(LevelEditorInspectorPage.Level);
+
+            state.FocusWorldSelection(new LevelSelectionTarget("crate"));
+
+            Assert.That(
+                state.InspectorPage,
+                Is.EqualTo(LevelEditorInspectorPage.Selection));
+            Assert.That(
+                state.InspectorTarget.Kind,
+                Is.EqualTo(LevelEditorInspectorTargetKind.Entity));
+        }
+
+        [Test]
+        public void InspectorPagesCanExposeLevelToolsWithoutChangingFocus()
+        {
+            var state = new LevelEditorPresentationState();
+            state.FocusWorldSelection(new LevelSelectionTarget("crate"));
+
+            state.ShowInspectorPage(LevelEditorInspectorPage.Level);
+
+            Assert.That(
+                state.InspectorPage,
+                Is.EqualTo(LevelEditorInspectorPage.Level));
+            Assert.That(state.InspectorTarget.TargetId, Is.EqualTo("crate"));
         }
 
         [Test]

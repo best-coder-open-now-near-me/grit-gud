@@ -153,8 +153,12 @@ workspaces: **Create**, **Outline**, **Scenario**, **Env**, and **Dressing**. Cr
 Select, Place, and Terrain and shows only the active mode's controls. Outline
 searches both world entities and scenario objects. Scenario owns player-start
 and actor management; selecting an actor opens its editable properties in the
-right Inspector. Use the **Shortcuts** toolbar button to show or hide the input
-reference without leaving the editor.
+right Inspector. The Inspector separates **Selection** transforms and physical
+defaults from **Gameplay** links such as objectives, props, vehicles, and actors.
+The **Level** tab owns document-wide validation, portable-file guidance, and
+recovery snapshots, so selecting a world object does not bury its contextual
+controls beneath unrelated project information. Use the **Shortcuts** toolbar
+button to show or hide the input reference without leaving the editor.
 
 **Env** edits ambient sky/horizon/ground colors, fog, the directional key, and
 fixture presentation with invariant-culture numeric fields. Practical lights
@@ -163,8 +167,9 @@ target position, edited, and deleted. Each apply is one undoable command. The
 portable environment is projected live in the editor and is the exact data used
 by Test Play; HDR color channels may be greater than `1`.
 
-**Dressing** authors surface decals, ambient VFX, and box-shaped audio zones at
-the current camera focus. Decals provide grime, oil, hazard-stripe, and arrow
+**Dressing** separates surface decals, ambient VFX, and box-shaped audio zones
+into dedicated tabs and authors the active type at the current camera focus.
+Decals provide grime, oil, hazard-stripe, and arrow
 styles with portable transform, size, color, and opacity. Ambient VFX select
 curated stable effect IDs rather than prefab paths. Audio zones select a stable
 procedural ambience, volume, bounds, and fade distance; blue boxes visualize

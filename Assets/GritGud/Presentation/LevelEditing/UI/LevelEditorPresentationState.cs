@@ -27,6 +27,13 @@ namespace GritGud.Presentation.LevelEditing.UI
         ScenarioActor,
     }
 
+    public enum LevelEditorInspectorPage
+    {
+        Selection,
+        Gameplay,
+        Level,
+    }
+
     public readonly struct LevelEditorInspectorTarget : IEquatable<LevelEditorInspectorTarget>
     {
         public LevelEditorInspectorTarget(
@@ -81,6 +88,9 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         public LevelEditorInspectorTarget InspectorTarget { get; private set; }
 
+        public LevelEditorInspectorPage InspectorPage { get; private set; } =
+            LevelEditorInspectorPage.Selection;
+
         public void ShowPage(LevelEditorWorkspacePage page)
         {
             if (Page == page)
@@ -119,6 +129,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                         LevelEditorInspectorTargetKind.Entity,
                         target.Value.EntityId);
             SetInspectorTarget(replacement);
+            ShowInspectorPage(LevelEditorInspectorPage.Selection);
         }
 
         public void FocusScenarioActor(string actorId)
@@ -128,6 +139,15 @@ namespace GritGud.Presentation.LevelEditing.UI
                 : new LevelEditorInspectorTarget(
                     LevelEditorInspectorTargetKind.ScenarioActor,
                     actorId));
+            ShowInspectorPage(LevelEditorInspectorPage.Gameplay);
+        }
+
+        public void ShowInspectorPage(LevelEditorInspectorPage page)
+        {
+            if (InspectorPage == page)
+                return;
+            InspectorPage = page;
+            Changed?.Invoke();
         }
 
         public void ClearInspectorFocus()
