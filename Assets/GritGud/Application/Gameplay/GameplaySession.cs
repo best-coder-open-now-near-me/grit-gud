@@ -10,29 +10,29 @@ namespace GritGud.Application.Gameplay
         public GameplayInitiativeResult(
             string actorId,
             int dexterity,
-            int roll,
-            int rollMaximum)
+            int reactionAdvance,
+            int participantCount)
         {
             ActorId = string.IsNullOrWhiteSpace(actorId)
                 ? throw new ArgumentException(
                     "Initiative requires an actor ID.",
                     nameof(actorId))
                 : actorId;
-            if (rollMaximum <= 0 || roll < 1 || roll > rollMaximum)
+            if (participantCount <= 0
+                || reactionAdvance < 1
+                || reactionAdvance > participantCount)
             {
-                throw new ArgumentOutOfRangeException(nameof(roll));
+                throw new ArgumentOutOfRangeException(nameof(reactionAdvance));
             }
             Dexterity = dexterity;
-            Roll = roll;
-            RollMaximum = rollMaximum;
-            Total = (long)dexterity + roll;
+            ReactionAdvance = reactionAdvance;
+            ParticipantCount = participantCount;
         }
 
         public string ActorId { get; }
         public int Dexterity { get; }
-        public int Roll { get; }
-        public int RollMaximum { get; }
-        public long Total { get; }
+        public int ReactionAdvance { get; }
+        public int ParticipantCount { get; }
     }
 
     public enum GameplaySessionMode
@@ -334,10 +334,7 @@ namespace GritGud.Application.Gameplay
             foreach (ScenarioActorDefinition actor in scenario.Actors)
             {
                 actors.Add(actor.Id, new ActorState(actor));
-                initiative.Add(ResolveInitiative(
-                    actor,
-                    participantCount,
-                    scenarioSeed));
+                initiative.Add(ResolveInitiative(actor, participantCount));
             }
             initiative.Sort(CompareInitiative);
             var order = new List<string>(initiative.Count);
@@ -1165,19 +1162,15 @@ namespace GritGud.Application.Gameplay
 
         private static GameplayInitiativeResult ResolveInitiative(
             ScenarioActorDefinition actor,
-            int participantCount,
-            uint scenarioSeed)
+            int participantCount)
         {
-            uint seed = GameplayRandomStreams.DeriveSeed(
-                scenarioSeed,
-                GameplayRandomStreams.Initiative
-                + "." + participantCount
-                + "." + actor.Id);
-            int roll = (int)(seed % (uint)participantCount) + 1;
+            int boundedDexterity = Math.Max(1, Math.Min(5, actor.Initiative));
+            int reactionAdvance = 1 + ((boundedDexterity - 1)
+                * (participantCount - 1) / 4);
             return new GameplayInitiativeResult(
                 actor.Id,
                 actor.Initiative,
-                roll,
+                reactionAdvance,
                 participantCount);
         }
 
@@ -1185,7 +1178,8 @@ namespace GritGud.Application.Gameplay
             GameplayInitiativeResult left,
             GameplayInitiativeResult right)
         {
-            int initiativeComparison = right.Total.CompareTo(left.Total);
+            int initiativeComparison = right.ReactionAdvance.CompareTo(
+                left.ReactionAdvance);
             if (initiativeComparison == 0)
             {
                 initiativeComparison = right.Dexterity.CompareTo(left.Dexterity);

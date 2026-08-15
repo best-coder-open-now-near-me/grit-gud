@@ -397,9 +397,10 @@ their data-derived tooltip.
 - Make core attributes authoritative rather than duplicating their outputs in
   scenario data. **Complete:** schema 8 requires Strength, Dexterity, Grit, and
   Charisma for every actor profile; base initiative and movement are derived
-  from Dexterity, while combat order adds a scenario-seeded `dN` roll sized by
-  the friendly-plus-hostile participant count and publishes the full formula in
-  Dialogue. Opposed displacement includes Strength, and Grit/Charisma expose
+  from Dexterity, while initial combat order maps Dexterity to a deterministic
+  reaction advance sized by the friendly-plus-hostile participant count and
+  publishes the full formula in Dialogue. Opposed displacement includes
+  Strength, and Grit/Charisma expose
   typed resistance/social modifiers without adding an HP system or placeholder
   social combat behavior.
 - Equip and replace an item without altering the character's authored identity. **Foundation complete:** equipment remains actor runtime state rather than character identity data.

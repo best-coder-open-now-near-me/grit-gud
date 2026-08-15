@@ -46,18 +46,21 @@ namespace GritGud.Application.Gameplay
             }
 
             var lines = new List<string>(session.InitiativeResults.Count);
-            foreach (GameplayInitiativeResult result in session.InitiativeResults)
+            for (int index = 0; index < session.InitiativeResults.Count; index++)
             {
+                GameplayInitiativeResult result = session.InitiativeResults[index];
                 ScenarioActorDefinition actor = session.Scenario.GetActor(
                     result.ActorId);
                 string name = actor.CharacterProfile?.DisplayName ?? actor.Id;
                 lines.Add(
                     name
                     + " — DEX " + result.Dexterity
-                    + " + d" + result.RollMaximum
-                    + " roll " + result.Roll
-                    + " = " + result.Total);
+                    + " with " + result.ParticipantCount + " combatants"
+                    + " → advance " + result.ReactionAdvance
+                    + " → position " + (index + 1));
             }
+
+            lines.Add("All later rounds repeat this order; Dexterity affects reaction only.");
 
             return new GameplayDiagnosticProjection("Initiative order", lines);
         }
