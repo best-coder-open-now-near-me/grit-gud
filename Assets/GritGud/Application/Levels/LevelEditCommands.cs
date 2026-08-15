@@ -31,6 +31,11 @@ namespace GritGud.Application.Levels
         int Depth { get; }
     }
 
+    public interface ILevelEditCommandGroup : ILevelEditCommand
+    {
+        IReadOnlyList<ILevelEditCommand> Commands { get; }
+    }
+
     public sealed class SetPlayerStartCommand : ILevelEditCommand
     {
         private readonly LevelTransformData before;
@@ -913,7 +918,7 @@ namespace GritGud.Application.Levels
         }
     }
 
-    public sealed class CompositeLevelEditCommand : ILevelEditCommand
+    public sealed class CompositeLevelEditCommand : ILevelEditCommandGroup
     {
         private readonly ILevelEditCommand[] commands;
         private readonly string[] affectedEntityIds;
@@ -940,6 +945,8 @@ namespace GritGud.Application.Levels
         public string Description { get; }
 
         public IReadOnlyCollection<string> AffectedEntityIds => affectedEntityIds;
+
+        public IReadOnlyList<ILevelEditCommand> Commands => commands;
 
         public bool RequiresFullProjection => commands.Any(command => command.RequiresFullProjection);
 

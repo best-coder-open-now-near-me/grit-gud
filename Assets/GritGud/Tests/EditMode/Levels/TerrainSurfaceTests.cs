@@ -66,6 +66,53 @@ namespace GritGud.Domain.Tests.Levels
         }
 
         [Test]
+        public void ValidationLimitsTerrainSurfaceCount()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty("Surface Limit");
+            for (int index = 0; index <= LevelTerrainValidationRule.MaximumSurfaceCount; index++)
+            {
+                TerrainSurfaceData surface = CreateDocument().terrainSurfaces[0];
+                surface.id = "surface-" + index;
+                document.terrainSurfaces.Add(surface);
+            }
+
+            var issues = LevelValidator.Validate(document);
+
+            Assert.That(
+                issues,
+                Has.Some.Matches<LevelValidationIssue>(issue =>
+                    issue.Code == "terrain.surface-limit"));
+        }
+
+        [Test]
+        public void ValidationLimitsTotalTerrainSamples()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty("Sample Limit");
+            for (int index = 0; index < 4; index++)
+            {
+                document.terrainSurfaces.Add(new TerrainSurfaceData
+                {
+                    id = "surface-" + index,
+                    sampleCountX = LevelTerrainValidationRule.MaximumSamplesPerAxis,
+                    sampleCountZ = LevelTerrainValidationRule.MaximumSamplesPerAxis,
+                    sampleSpacing = 1f,
+                    elevationIncrement = 1f,
+                    heightSamples = Enumerable.Repeat(
+                            0,
+                            LevelTerrainValidationRule.MaximumSamplesPerSurface)
+                        .ToList(),
+                });
+            }
+
+            var issues = LevelValidator.Validate(document);
+
+            Assert.That(
+                issues,
+                Has.Some.Matches<LevelValidationIssue>(issue =>
+                    issue.Code == "terrain.document-sample-limit"));
+        }
+
+        [Test]
         public void ResizeTerrainCommandIsUndoableAndRequiresFullProjection()
         {
             LevelDocument document = CreateDocument();

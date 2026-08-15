@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using GritGud.Application.Levels;
 using GritGud.Domain.Levels;
@@ -5,6 +6,7 @@ using GritGud.Presentation.Gameplay;
 using GritGud.Presentation.Levels.Runtime;
 using NUnit.Framework;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace GritGud.Presentation.Tests
 {
@@ -210,6 +212,78 @@ namespace GritGud.Presentation.Tests
                 Assert.That(received.Value.StartZ, Is.EqualTo(1));
                 Assert.That(received.Value.Width, Is.EqualTo(1));
                 Assert.That(received.Value.Depth, Is.EqualTo(1));
+            }
+            finally
+            {
+                projector.Dispose();
+                Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
+        public void ProjectorAppliesTerrainChangesInsideCompositeCommand()
+        {
+            var owner = new GameObject("Composite Terrain Projection Test");
+            var projector = new TerrainWorldProjector(owner.transform);
+            try
+            {
+                LevelDocument document = LevelDocumentFactory.CreateEmpty("Composite Test");
+                document.terrainSurfaces.Add(CreateSurface(4, 4));
+                var session = new LevelSession(document);
+                projector.Replace(session.CreateSnapshot());
+                Mesh before = owner.GetComponentInChildren<MeshFilter>().sharedMesh;
+                int invalidationCount = 0;
+                projector.NavigationInvalidated += _ => invalidationCount++;
+                session.Changed += (_, args) =>
+                    projector.Apply(session.CreateSnapshot(), args);
+
+                session.ExecuteTransaction(
+                    "Edit two terrain regions",
+                    new ILevelEditCommand[]
+                    {
+                        new SetTerrainHeightsCommand("test", 0, 0, 1, 1, new[] { 3 }),
+                        new SetTerrainHeightsCommand("test", 3, 3, 1, 1, new[] { 4 }),
+                    });
+
+                Mesh after = owner.GetComponentInChildren<MeshFilter>().sharedMesh;
+                Assert.That(after, Is.Not.SameAs(before));
+                Assert.That(after.vertices[0].y, Is.EqualTo(3f));
+                Assert.That(after.vertices[15].y, Is.EqualTo(4f));
+                Assert.That(invalidationCount, Is.EqualTo(2));
+            }
+            finally
+            {
+                projector.Dispose();
+                Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
+        public void FailedReplacementPreservesActiveProjection()
+        {
+            var owner = new GameObject("Atomic Terrain Replacement Test");
+            var projector = new TerrainWorldProjector(owner.transform);
+            try
+            {
+                LevelDocument valid = LevelDocumentFactory.CreateEmpty("Valid Terrain");
+                valid.terrainSurfaces.Add(CreateSurface(3, 3));
+                projector.Replace(valid);
+                GameObject originalRoot = owner.transform.Find("Terrain Surfaces").gameObject;
+                Mesh originalMesh = originalRoot.GetComponentInChildren<MeshFilter>().sharedMesh;
+                LevelDocument invalid = valid.DeepCopy();
+                invalid.terrainSurfaces.Add(valid.terrainSurfaces[0].DeepCopy());
+
+                Assert.Throws<InvalidOperationException>(() => projector.Replace(invalid));
+
+                Assert.That(originalRoot, Is.Not.Null);
+                Assert.That(originalRoot.activeSelf, Is.True);
+                Assert.That(
+                    originalRoot.GetComponentInChildren<MeshFilter>().sharedMesh,
+                    Is.SameAs(originalMesh));
+                Assert.That(
+                    owner.transform.Cast<Transform>()
+                        .Count(child => child.name == "Terrain Surfaces"),
+                    Is.EqualTo(1));
             }
             finally
             {

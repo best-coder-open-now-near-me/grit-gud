@@ -178,11 +178,34 @@ namespace GritGud.Domain.Levels
     {
         public const int MaximumSamplesPerAxis = 257;
         public const int MaximumSamplesPerSurface = 66049;
+        public const int MaximumSurfaceCount = 16;
+        public const int MaximumSamplesPerDocument = 262144;
         public const int MinimumQuantizedHeight = -1000000;
         public const int MaximumQuantizedHeight = 1000000;
 
         public void Evaluate(LevelValidationContext context)
         {
+            if (context.Document.terrainSurfaces.Count > MaximumSurfaceCount)
+            {
+                context.Error(
+                    "terrain.surface-limit",
+                    $"The level contains {context.Document.terrainSurfaces.Count} terrain "
+                    + $"surfaces; the limit is {MaximumSurfaceCount}.");
+            }
+
+            long totalSampleCount = context.Document.terrainSurfaces
+                .Where(surface => surface != null
+                    && surface.sampleCountX > 0
+                    && surface.sampleCountZ > 0)
+                .Sum(surface => (long)surface.sampleCountX * surface.sampleCountZ);
+            if (totalSampleCount > MaximumSamplesPerDocument)
+            {
+                context.Error(
+                    "terrain.document-sample-limit",
+                    $"The level contains {totalSampleCount} terrain samples; the total limit "
+                    + $"is {MaximumSamplesPerDocument}.");
+            }
+
             var ids = new HashSet<string>(StringComparer.Ordinal);
             foreach (TerrainSurfaceData surface in context.Document.terrainSurfaces)
             {

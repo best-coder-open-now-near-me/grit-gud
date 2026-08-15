@@ -60,13 +60,47 @@ namespace GritGud.Presentation.Levels.Runtime
                 throw new ArgumentNullException(nameof(document));
             }
 
-            DisposeRoot();
-            root = new GameObject("Terrain Surfaces");
-            root.transform.SetParent(parent, false);
-            foreach (TerrainSurfaceData surface in document.terrainSurfaces)
+            var replacementRoot = new GameObject("Terrain Surfaces");
+            replacementRoot.SetActive(false);
+            replacementRoot.transform.SetParent(parent, false);
+            var replacementSurfaces = new Dictionary<string, TerrainSurfaceView>(
+                StringComparer.Ordinal);
+            try
             {
-                surfaces.Add(surface.id, new TerrainSurfaceView(surface, root.transform));
+                foreach (TerrainSurfaceData surface in document.terrainSurfaces)
+                {
+                    if (replacementSurfaces.ContainsKey(surface.id))
+                    {
+                        throw new InvalidOperationException(
+                            $"Terrain surface ID '{surface.id}' is duplicated.");
+                    }
+
+                    replacementSurfaces.Add(
+                        surface.id,
+                        new TerrainSurfaceView(surface, replacementRoot.transform));
+                }
             }
+            catch
+            {
+                DisposeSurfaces(replacementSurfaces.Values);
+                Destroy(replacementRoot);
+                throw;
+            }
+
+            bool replacementVisible = root == null || root.activeSelf;
+            GameObject previousRoot = root;
+            TerrainSurfaceView[] previousSurfaces = surfaces.Values.ToArray();
+            previousRoot?.SetActive(false);
+            root = replacementRoot;
+            surfaces.Clear();
+            foreach (KeyValuePair<string, TerrainSurfaceView> pair in replacementSurfaces)
+            {
+                surfaces.Add(pair.Key, pair.Value);
+            }
+
+            root.SetActive(replacementVisible);
+            DisposeSurfaces(previousSurfaces);
+            Destroy(previousRoot);
         }
 
         public void SetVisible(bool visible)
@@ -86,33 +120,51 @@ namespace GritGud.Presentation.Levels.Runtime
                 return;
             }
 
-            if (!(change.Command is ITerrainLevelEditCommand terrainChange))
+            ITerrainLevelEditCommand[] terrainChanges = EnumerateTerrainChanges(
+                    change.Command)
+                .ToArray();
+            if (terrainChanges.Length == 0)
             {
                 return;
             }
 
-            TerrainSurfaceData surface = document.terrainSurfaces.FirstOrDefault(candidate =>
-                string.Equals(candidate?.id, terrainChange.SurfaceId, StringComparison.Ordinal));
-            if (surface == null || !surfaces.TryGetValue(terrainChange.SurfaceId, out TerrainSurfaceView view))
+            var projections = new List<(ITerrainLevelEditCommand Change,
+                TerrainSurfaceData Surface, TerrainSurfaceView View)>(terrainChanges.Length);
+            foreach (ITerrainLevelEditCommand terrainChange in terrainChanges)
             {
-                Replace(document);
-                NavigationInvalidated?.Invoke(TerrainNavigationInvalidation.FullRefresh);
-                return;
+                TerrainSurfaceData surface = document.terrainSurfaces.FirstOrDefault(candidate =>
+                    string.Equals(candidate?.id, terrainChange.SurfaceId, StringComparison.Ordinal));
+                if (surface == null
+                    || !surfaces.TryGetValue(
+                        terrainChange.SurfaceId,
+                        out TerrainSurfaceView view))
+                {
+                    Replace(document);
+                    NavigationInvalidated?.Invoke(TerrainNavigationInvalidation.FullRefresh);
+                    return;
+                }
+
+                projections.Add((terrainChange, surface, view));
             }
 
-            view.ApplyPatch(
-                surface,
-                terrainChange.StartX,
-                terrainChange.StartZ,
-                terrainChange.Width,
-                terrainChange.Depth);
-            NavigationInvalidated?.Invoke(new TerrainNavigationInvalidation(
-                terrainChange.SurfaceId,
-                terrainChange.StartX,
-                terrainChange.StartZ,
-                terrainChange.Width,
-                terrainChange.Depth,
-                false));
+            foreach ((ITerrainLevelEditCommand terrainChange,
+                         TerrainSurfaceData surface,
+                         TerrainSurfaceView view) in projections)
+            {
+                view.ApplyPatch(
+                    surface,
+                    terrainChange.StartX,
+                    terrainChange.StartZ,
+                    terrainChange.Width,
+                    terrainChange.Depth);
+                NavigationInvalidated?.Invoke(new TerrainNavigationInvalidation(
+                    terrainChange.SurfaceId,
+                    terrainChange.StartX,
+                    terrainChange.StartZ,
+                    terrainChange.Width,
+                    terrainChange.Depth,
+                    false));
+            }
         }
 
         public void PreviewPatch(
@@ -144,14 +196,42 @@ namespace GritGud.Presentation.Levels.Runtime
 
         private void DisposeRoot()
         {
-            foreach (TerrainSurfaceView surface in surfaces.Values)
-            {
-                surface.Dispose();
-            }
+            root?.SetActive(false);
+            DisposeSurfaces(surfaces.Values);
 
             surfaces.Clear();
             Destroy(root);
             root = null;
+        }
+
+        private static IEnumerable<ITerrainLevelEditCommand> EnumerateTerrainChanges(
+            ILevelEditCommand command)
+        {
+            if (command is ITerrainLevelEditCommand terrainChange)
+            {
+                yield return terrainChange;
+            }
+
+            if (!(command is ILevelEditCommandGroup group))
+            {
+                yield break;
+            }
+
+            foreach (ILevelEditCommand child in group.Commands)
+            {
+                foreach (ITerrainLevelEditCommand nested in EnumerateTerrainChanges(child))
+                {
+                    yield return nested;
+                }
+            }
+        }
+
+        private static void DisposeSurfaces(IEnumerable<TerrainSurfaceView> values)
+        {
+            foreach (TerrainSurfaceView surface in values)
+            {
+                surface.Dispose();
+            }
         }
 
         private static void Destroy(Object target)
@@ -182,10 +262,20 @@ namespace GritGud.Presentation.Levels.Runtime
             {
                 root = new GameObject($"Terrain - {surface.id}");
                 root.transform.SetParent(parent, false);
-                material = RuntimeMaterialFactory.CreateCelColor(
-                    new Color(0.18f, 0.24f, 0.27f),
-                    "Terrain Surface Material");
-                RebuildAll(surface);
+                material = null;
+                try
+                {
+                    material = RuntimeMaterialFactory.CreateCelColor(
+                        new Color(0.18f, 0.24f, 0.27f),
+                        "Terrain Surface Material");
+                    RebuildAll(surface);
+                }
+                catch
+                {
+                    Dispose();
+                    Destroy(root);
+                    throw;
+                }
             }
 
             public void ApplyPatch(
