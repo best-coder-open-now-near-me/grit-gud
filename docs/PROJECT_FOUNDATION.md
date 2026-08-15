@@ -326,15 +326,20 @@ recognizable throughout progression.
 Every character has exactly four core attributes rated from 1 to 5:
 
 - Strength contributes to melee and opposed displacement checks.
-- Dexterity determines initiative and movement allowance. Initiative equals
-  Dexterity; movement allowance is four plus Dexterity world units per turn.
+- Dexterity determines base initiative and movement allowance. At session start,
+  combat order is `Dexterity + dN`, where `N` is the total number of friendly
+  and hostile initiative participants; the scenario-seeded roll is retained in
+  the Application result. Movement allowance is four plus Dexterity world units
+  per turn.
 - Grit contributes to resistance checks for consequences such as concussion,
   bleeding, and other statuses. It does not create hit points or increase the
   number of ordinary gunshot wounds an actor can survive.
 - Charisma contributes to social checks when social resolution is introduced.
 
-Initiative ties are resolved by stable actor ID so identical content produces
-the same ordering on every platform. Opposed Close-Quarters Control currently
+Initiative-total ties prefer higher Dexterity and then stable actor ID, so
+identical content produces the same ordering on every platform. The complete
+Dexterity, die size, roll, and total breakdown is projected into the Dialogue
+window's Combat channel. Opposed Close-Quarters Control currently
 uses `d20 + Strength + control skill + talent modifier`.
 
 Customization comes primarily from:

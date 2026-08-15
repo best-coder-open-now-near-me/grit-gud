@@ -296,7 +296,8 @@ namespace GritGud.Presentation.Gameplay
         {
             var session = new GameplaySession(
                 scenarioAssembly.Scenario,
-                worldStart.Journal);
+                worldStart.Journal,
+                scenarioAssembly.RandomSeed);
             partyControl = new GameplayPartyControlSession(session);
             partyProgression = new GameplayPartyProgressionSession(session);
             smokeFieldSession = new GameplaySmokeFieldSession(session);
@@ -323,6 +324,8 @@ namespace GritGud.Presentation.Gameplay
                 worldStart.InitiallySelectedActorId,
                 scenarioAssembly);
             dialogueLog = new GameplayDialogueLog();
+            dialogueLog.AppendCombatDiagnostic(
+                GameplayCombatDiagnosticFormatter.FormatInitiative(session));
             dialogueDrawer.Bind(dialogueLog, ExportDialogue);
             dialogueDrawer.Show();
 

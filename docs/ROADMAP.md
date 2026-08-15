@@ -396,8 +396,10 @@ their data-derived tooltip.
 - Define one character with fixed baseline attributes, skills, and talents. **Complete:** depot yard now authors Mara Vance as a Field Operative with fixed ratings and talents.
 - Make core attributes authoritative rather than duplicating their outputs in
   scenario data. **Complete:** schema 8 requires Strength, Dexterity, Grit, and
-  Charisma for every actor profile; initiative and movement are derived from
-  Dexterity, opposed displacement includes Strength, and Grit/Charisma expose
+  Charisma for every actor profile; base initiative and movement are derived
+  from Dexterity, while combat order adds a scenario-seeded `dN` roll sized by
+  the friendly-plus-hostile participant count and publishes the full formula in
+  Dialogue. Opposed displacement includes Strength, and Grit/Charisma expose
   typed resistance/social modifiers without adding an HP system or placeholder
   social combat behavior.
 - Equip and replace an item without altering the character's authored identity. **Foundation complete:** equipment remains actor runtime state rather than character identity data.

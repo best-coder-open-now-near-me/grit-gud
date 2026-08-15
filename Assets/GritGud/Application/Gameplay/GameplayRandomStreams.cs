@@ -8,6 +8,7 @@ namespace GritGud.Application.Gameplay
         public const string DisplacementControl = "combat.displacement-control";
         public const string ThrownExplosiveUncertainty =
             "combat.thrown-explosive-uncertainty";
+        public const string Initiative = "combat.initiative";
 
         public static uint DeriveSeed(uint scenarioSeed, string streamId)
         {

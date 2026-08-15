@@ -5,6 +5,36 @@ using GritGud.Domain.Turns;
 
 namespace GritGud.Application.Gameplay
 {
+    public sealed class GameplayInitiativeResult
+    {
+        public GameplayInitiativeResult(
+            string actorId,
+            int dexterity,
+            int roll,
+            int rollMaximum)
+        {
+            ActorId = string.IsNullOrWhiteSpace(actorId)
+                ? throw new ArgumentException(
+                    "Initiative requires an actor ID.",
+                    nameof(actorId))
+                : actorId;
+            if (rollMaximum <= 0 || roll < 1 || roll > rollMaximum)
+            {
+                throw new ArgumentOutOfRangeException(nameof(roll));
+            }
+            Dexterity = dexterity;
+            Roll = roll;
+            RollMaximum = rollMaximum;
+            Total = (long)dexterity + roll;
+        }
+
+        public string ActorId { get; }
+        public int Dexterity { get; }
+        public int Roll { get; }
+        public int RollMaximum { get; }
+        public long Total { get; }
+    }
+
     public enum GameplaySessionMode
     {
         Exploration,
@@ -281,6 +311,8 @@ namespace GritGud.Application.Gameplay
         private readonly List<GameplayActionRecord> resolvedActions =
             new List<GameplayActionRecord>();
         private readonly IReadOnlyList<string> initiativeOrder;
+        private readonly IReadOnlyList<GameplayInitiativeResult>
+            initiativeResults;
         private readonly IReadOnlyList<GameplayActionRecord> readOnlyResolvedActions;
         private string activeActorId;
         private MovementRouteRecord pendingMovementRoute;
@@ -292,18 +324,25 @@ namespace GritGud.Application.Gameplay
 
         public GameplaySession(
             ScenarioDefinition scenario,
-            GameplayJournal journal = null)
+            GameplayJournal journal = null,
+            uint scenarioSeed = 0u)
         {
             Scenario = scenario ?? throw new ArgumentNullException(nameof(scenario));
             Journal = journal ?? new GameplayJournal();
-            var initiative = new List<ScenarioActorDefinition>(scenario.Actors);
-            initiative.Sort(CompareInitiative);
-            var order = new List<string>(initiative.Count);
-            foreach (ScenarioActorDefinition actor in initiative)
+            int participantCount = scenario.Actors.Count;
+            var initiative = new List<GameplayInitiativeResult>(participantCount);
+            foreach (ScenarioActorDefinition actor in scenario.Actors)
             {
                 actors.Add(actor.Id, new ActorState(actor));
-                order.Add(actor.Id);
+                initiative.Add(ResolveInitiative(
+                    actor,
+                    participantCount,
+                    scenarioSeed));
             }
+            initiative.Sort(CompareInitiative);
+            var order = new List<string>(initiative.Count);
+            foreach (GameplayInitiativeResult result in initiative)
+                order.Add(result.ActorId);
 
             foreach (ScenarioObjectiveDefinition objective in scenario.Objectives)
             {
@@ -311,6 +350,7 @@ namespace GritGud.Application.Gameplay
             }
 
             initiativeOrder = order.AsReadOnly();
+            initiativeResults = initiative.AsReadOnly();
             readOnlyResolvedActions = resolvedActions.AsReadOnly();
         }
 
@@ -332,6 +372,9 @@ namespace GritGud.Application.Gameplay
         public bool EncounterCompletionRequested { get; private set; }
 
         public IReadOnlyList<string> InitiativeOrder => initiativeOrder;
+
+        public IReadOnlyList<GameplayInitiativeResult> InitiativeResults =>
+            initiativeResults;
 
         public string ActiveActorId => activeActorId;
 
@@ -1120,14 +1163,36 @@ namespace GritGud.Application.Gameplay
             ValidateActionOutcomes(record);
         }
 
-        private static int CompareInitiative(
-            ScenarioActorDefinition left,
-            ScenarioActorDefinition right)
+        private static GameplayInitiativeResult ResolveInitiative(
+            ScenarioActorDefinition actor,
+            int participantCount,
+            uint scenarioSeed)
         {
-            int initiativeComparison = right.Initiative.CompareTo(left.Initiative);
+            uint seed = GameplayRandomStreams.DeriveSeed(
+                scenarioSeed,
+                GameplayRandomStreams.Initiative
+                + "." + participantCount
+                + "." + actor.Id);
+            int roll = (int)(seed % (uint)participantCount) + 1;
+            return new GameplayInitiativeResult(
+                actor.Id,
+                actor.Initiative,
+                roll,
+                participantCount);
+        }
+
+        private static int CompareInitiative(
+            GameplayInitiativeResult left,
+            GameplayInitiativeResult right)
+        {
+            int initiativeComparison = right.Total.CompareTo(left.Total);
+            if (initiativeComparison == 0)
+            {
+                initiativeComparison = right.Dexterity.CompareTo(left.Dexterity);
+            }
             return initiativeComparison != 0
                 ? initiativeComparison
-                : StringComparer.Ordinal.Compare(left.Id, right.Id);
+                : StringComparer.Ordinal.Compare(left.ActorId, right.ActorId);
         }
 
         private static bool PosesMatch(

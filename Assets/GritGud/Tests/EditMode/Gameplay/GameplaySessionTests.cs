@@ -23,6 +23,37 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(session.InitiativeOrder,
                 Is.EqualTo(new[] { "alpha", "bravo", "charlie" }));
             Assert.That(session.ActiveActorId, Is.EqualTo("alpha"));
+            Assert.That(session.InitiativeResults, Has.Count.EqualTo(3));
+            Assert.That(session.InitiativeResults[0].ActorId, Is.EqualTo("alpha"));
+            Assert.That(session.InitiativeResults[0].Dexterity, Is.EqualTo(10));
+            Assert.That(session.InitiativeResults[0].RollMaximum, Is.EqualTo(3));
+            Assert.That(session.InitiativeResults[0].Total,
+                Is.EqualTo((long)session.InitiativeResults[0].Dexterity
+                    + session.InitiativeResults[0].Roll));
+
+            GameplaySession repeated = CreateSession(
+                CreateActor("bravo", initiative: 10),
+                CreateActor("charlie", initiative: 5),
+                CreateActor("alpha", initiative: 10));
+            Assert.That(repeated.InitiativeOrder, Is.EqualTo(session.InitiativeOrder));
+            Assert.That(repeated.InitiativeResults[0].Roll,
+                Is.EqualTo(session.InitiativeResults[0].Roll));
+        }
+
+        [Test]
+        public void InitiativeDiagnosticExplainsDexterityRollAndCombatantCount()
+        {
+            GameplaySession session = CreateSession(
+                CreateActor("bravo", initiative: 10),
+                CreateActor("alpha", initiative: 10));
+
+            GameplayDiagnosticProjection diagnostic =
+                GameplayCombatDiagnosticFormatter.FormatInitiative(session);
+
+            Assert.That(diagnostic.Title, Is.EqualTo("Initiative order"));
+            Assert.That(diagnostic.Lines, Has.Count.EqualTo(2));
+            StringAssert.Contains("DEX 10 + d2 roll", diagnostic.Lines[0]);
+            StringAssert.Contains(" = ", diagnostic.Lines[0]);
         }
 
         [Test]
@@ -464,7 +495,7 @@ namespace GritGud.Domain.Tests.Gameplay
                 new ScenarioTimingDefinition(1.25f),
                 actors,
                 new[] { objective });
-            return new GameplaySession(scenario);
+            return new GameplaySession(scenario, scenarioSeed: 42u);
         }
 
         private static ScenarioActorDefinition CreateActor(

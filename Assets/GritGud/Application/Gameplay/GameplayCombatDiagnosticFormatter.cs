@@ -37,6 +37,31 @@ namespace GritGud.Application.Gameplay
 
     public static class GameplayCombatDiagnosticFormatter
     {
+        public static GameplayDiagnosticProjection FormatInitiative(
+            GameplaySession session)
+        {
+            if (session == null)
+            {
+                throw new ArgumentNullException(nameof(session));
+            }
+
+            var lines = new List<string>(session.InitiativeResults.Count);
+            foreach (GameplayInitiativeResult result in session.InitiativeResults)
+            {
+                ScenarioActorDefinition actor = session.Scenario.GetActor(
+                    result.ActorId);
+                string name = actor.CharacterProfile?.DisplayName ?? actor.Id;
+                lines.Add(
+                    name
+                    + " — DEX " + result.Dexterity
+                    + " + d" + result.RollMaximum
+                    + " roll " + result.Roll
+                    + " = " + result.Total);
+            }
+
+            return new GameplayDiagnosticProjection("Initiative order", lines);
+        }
+
         public static bool TryFormatAction(
             GameplayActionRecord action,
             out GameplayDiagnosticProjection projection)
