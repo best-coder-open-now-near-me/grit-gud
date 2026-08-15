@@ -154,6 +154,31 @@ namespace GritGud.Presentation.Bootstrap
             }, error => status?.Invoke(error));
         }
 
+        public void OpenCloudDraftEditor(System.Action<string> status)
+        {
+            if (supabase == null)
+            {
+                status?.Invoke("Cloud saves are not configured.");
+                return;
+            }
+
+            supabase.LoadLevelDraft("active", text =>
+            {
+                try
+                {
+                    OpenLevelTool(
+                        startInPreview: false,
+                        new UnityLevelJsonSerializer().Deserialize(text),
+                        "cloud draft",
+                        initialDocumentIsSaved: true);
+                }
+                catch (System.Exception exception)
+                {
+                    status?.Invoke(exception.Message);
+                }
+            }, error => status?.Invoke(error));
+        }
+
         public void PlayEditorTest(LevelDocument snapshot)
         {
             if (snapshot == null || gameplayStartRoutine != null || CurrentMode == ApplicationMode.Gameplay)

@@ -133,11 +133,13 @@ namespace GritGud.Presentation.Bootstrap
                     GameBootstrap.Instance.PlayCommittedLevel(selected.ResourceKey);
             }
 
-            GUI.enabled = !cloudDraftSelected && selected?.CanEdit == true;
+            GUI.enabled = cloudDraftSelected || selected?.CanEdit == true;
             if (DrawMenuButton(new Rect(92f, 590f, 350f, 44f), "EDIT SELECTED"))
             {
-                GameBootstrap.Instance.OpenCommittedLevelEditor(
-                    selected.ResourceKey);
+                if (cloudDraftSelected)
+                    GameBootstrap.Instance.OpenCloudDraftEditor(message => cloudDraftStatus = message);
+                else
+                    GameBootstrap.Instance.OpenCommittedLevelEditor(selected.ResourceKey);
             }
 
             GUI.enabled = previousEnabled;
