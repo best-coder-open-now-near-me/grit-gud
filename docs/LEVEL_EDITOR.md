@@ -170,7 +170,10 @@ target position, edited, and deleted. Each apply is one undoable command. The
 portable environment is projected live in the editor and is the exact data used
 by Test Play; HDR color channels may be greater than `1`. Sky, horizon, and ground
 RGB values drive both trilight illumination and the visible gradient backdrop;
-Test Play no longer replaces that backdrop with a fixed camera clear color.
+Test Play no longer replaces that backdrop with a fixed camera clear color. The
+environment Apply button is anchored beneath the scrolling panel so it remains
+visible while editing any atmosphere, key-light, or fixture field. Environment
+fields are intentionally applied as one undoable batch rather than on every keystroke.
 
 **Dressing** separates surface decals, ambient VFX, and box-shaped audio zones
 into dedicated tabs and authors the active type at the current camera focus.

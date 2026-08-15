@@ -84,9 +84,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawSectionHeader("FIXTURES");
             DrawColorFields("Housing", environmentFields.fixtureHousingColor);
             DrawLabeledField("Emission", ref environmentFields.lensEmissionIntensity);
-            if (GUILayout.Button("APPLY ENVIRONMENT", PanelApplyButtonLayout()))
-                actions.ApplyEnvironment(environmentFields);
-            GUILayout.Label("Changes update this editor view and Test Play from the same level data.");
+            GUILayout.Label("Use the anchored Apply button below to update this view and Test Play.");
 
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
             DrawSectionHeader(
@@ -137,6 +135,21 @@ namespace GritGud.Presentation.LevelEditing.UI
             if (GUILayout.Button("DELETE PRACTICAL LIGHT", PanelButtonLayout()))
                 actions.DeletePracticalLight(selectedPracticalLightId);
             GUI.backgroundColor = deleteColor;
+        }
+
+        private void DrawEnvironmentApplyFooter()
+        {
+            GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
+            Color previous = GUI.backgroundColor;
+            GUI.backgroundColor = LevelEditorTheme.Positive;
+            if (GUILayout.Button(
+                    "APPLY ENVIRONMENT SETTINGS",
+                    PanelPrimaryButtonLayout()))
+            {
+                actions.ApplyEnvironment(environmentFields);
+            }
+            GUI.backgroundColor = previous;
+            GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
         }
 
         private static void DrawColorFields(string label, LevelColorAuthoringText color)

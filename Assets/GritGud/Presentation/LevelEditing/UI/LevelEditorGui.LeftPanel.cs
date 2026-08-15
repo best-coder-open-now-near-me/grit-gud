@@ -54,6 +54,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             {
                 DrawEnvironment(document);
                 GUILayout.EndScrollView();
+                DrawEnvironmentApplyFooter();
                 GUILayout.EndArea();
                 return;
             }
