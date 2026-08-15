@@ -15,6 +15,7 @@ using GritGud.Presentation.Levels;
 using GritGud.Presentation.Levels.Persistence;
 using GritGud.Presentation.Levels.Runtime;
 using GritGud.Presentation.Characters;
+using GritGud.Presentation.Supabase;
 using UnityEngine;
 
 namespace GritGud.Presentation.LevelEditing
