@@ -25,7 +25,7 @@ namespace GritGud.Presentation.LevelEditing.Tools
 
         public TerrainBrushMode BrushMode { get; set; } = TerrainBrushMode.Raise;
 
-        public int PaintMaterialIndex { get; set; } = 1;
+        public TerrainMaterialKind PaintMaterial { get; set; } = TerrainMaterialKind.Slate;
 
         public void Activate(LevelEditorToolContext context)
         {
@@ -123,7 +123,7 @@ namespace GritGud.Presentation.LevelEditing.Tools
                 SetTerrainMaterialsCommand materialPatch = materialStroke.ApplyPoint(
                     point,
                     RadiusInSamples,
-                    PaintMaterialIndex);
+                    (int)PaintMaterial);
                 if (materialPatch != null)
                     context.TerrainProjector.PreviewPatch(
                         materialStroke.PreviewSurface,

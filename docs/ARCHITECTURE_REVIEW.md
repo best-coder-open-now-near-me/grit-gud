@@ -70,11 +70,11 @@ The current risk profile is acceptable but not finished:
   `LevelEditorController` (1,815), and `GameplayScenarioAssembler` (1,554)
   remain the largest production change hotspots. Split only along stable feature
   seams; do not introduce a framework or broad rewrite.
-- Serialized terrain material meaning currently depends on numeric palette
-  indices shared by validation, UI ordering, and mesh-color projection. Before
-  adding or reordering materials, introduce one stable palette contract with
-  named IDs and a migration policy. UI array order must not silently redefine
-  saved data.
+- The initial terrain-paint implementation coupled serialized numeric values to
+  UI ordering and mesh-color projection. This follow-up resolves that risk with
+  the explicitly numbered Domain-owned `TerrainMaterialKind` contract; UI
+  options and rendering now map named values, and tests freeze the serialized
+  numbers. New values must append or arrive through a schema migration.
 - `TerrainHeightLevelEditorTool` now coordinates both height sculpting and
   material painting. Its stroke lifecycles are cohesive today, but the name and
   responsibility should become a generic terrain-brush coordinator or two

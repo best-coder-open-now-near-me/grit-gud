@@ -571,6 +571,8 @@ namespace GritGud.Application.Levels
             after = materialSamples?.ToArray() ?? throw new ArgumentNullException(nameof(materialSamples));
             if (after.Length != width * depth)
                 throw new ArgumentException("The terrain patch sample count does not match its size.", nameof(materialSamples));
+            if (after.Any(value => !TerrainMaterialKinds.IsSupported(value)))
+                throw new ArgumentException("The terrain patch contains an unsupported material.", nameof(materialSamples));
         }
 
         public string Description => "Paint terrain materials";

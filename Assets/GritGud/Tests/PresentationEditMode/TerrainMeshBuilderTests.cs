@@ -99,7 +99,8 @@ namespace GritGud.Presentation.Tests
             try
             {
                 Assert.That(mesh.colors32[0].a, Is.Zero);
-                Assert.That(mesh.colors32[4], Is.EqualTo(TerrainMeshBuilder.MaterialColor(2)));
+                Assert.That(mesh.colors32[4], Is.EqualTo(TerrainMeshBuilder.MaterialColor(
+                    TerrainMaterialKind.Grass)));
                 Assert.That(mesh.colors32[4].a, Is.EqualTo(255));
             }
             finally

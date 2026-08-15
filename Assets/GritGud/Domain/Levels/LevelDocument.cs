@@ -399,6 +399,23 @@ namespace GritGud.Domain.Levels
     }
 
     [Serializable]
+    public enum TerrainMaterialKind
+    {
+        Surface = 0,
+        Slate = 1,
+        Grass = 2,
+        Sand = 3,
+        Snow = 4,
+        Concrete = 5,
+    }
+
+    public static class TerrainMaterialKinds
+    {
+        public static bool IsSupported(int value) =>
+            Enum.IsDefined(typeof(TerrainMaterialKind), value);
+    }
+
+    [Serializable]
     public sealed class TerrainSurfaceData
     {
         public string id = string.Empty;

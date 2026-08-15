@@ -88,7 +88,8 @@ namespace GritGud.Presentation.Levels.Runtime
                         && surface.materialSamples.Count == surface.sampleCountX * surface.sampleCountZ
                         ? surface.materialSamples[sampleZ * surface.sampleCountX + sampleX]
                         : 0;
-                    colors[vertexIndex] = MaterialColor(materialIndex);
+                    colors[vertexIndex] = MaterialColor(
+                        (TerrainMaterialKind)materialIndex);
                 }
             }
 
@@ -125,15 +126,15 @@ namespace GritGud.Presentation.Levels.Runtime
             return mesh;
         }
 
-        public static Color32 MaterialColor(int materialIndex)
+        public static Color32 MaterialColor(TerrainMaterialKind material)
         {
-            return materialIndex switch
+            return material switch
             {
-                1 => new Color32(58, 72, 78, 255),
-                2 => new Color32(58, 108, 48, 255),
-                3 => new Color32(166, 126, 66, 255),
-                4 => new Color32(205, 220, 225, 255),
-                5 => new Color32(108, 112, 116, 255),
+                TerrainMaterialKind.Slate => new Color32(58, 72, 78, 255),
+                TerrainMaterialKind.Grass => new Color32(58, 108, 48, 255),
+                TerrainMaterialKind.Sand => new Color32(166, 126, 66, 255),
+                TerrainMaterialKind.Snow => new Color32(205, 220, 225, 255),
+                TerrainMaterialKind.Concrete => new Color32(108, 112, 116, 255),
                 _ => new Color32(255, 255, 255, 0),
             };
         }

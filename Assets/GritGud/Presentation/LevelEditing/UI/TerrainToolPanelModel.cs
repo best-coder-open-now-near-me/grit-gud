@@ -9,6 +9,19 @@ using UnityEngine;
 
 namespace GritGud.Presentation.LevelEditing.UI
 {
+    public readonly struct TerrainMaterialPaintOption
+    {
+        public TerrainMaterialPaintOption(TerrainMaterialKind material, string label)
+        {
+            Material = material;
+            Label = label ?? throw new ArgumentNullException(nameof(label));
+        }
+
+        public TerrainMaterialKind Material { get; }
+
+        public string Label { get; }
+    }
+
     public sealed class TerrainToolPanelModel
     {
         private readonly LevelEditorToolManager toolManager;
@@ -92,11 +105,25 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         public bool IsPaintActive => IsModeActive(TerrainBrushMode.Paint);
 
-        public int PaintMaterialIndex => tool.PaintMaterialIndex;
-
-        public static IReadOnlyList<string> PaintMaterialNames { get; } = new[]
+        public int PaintMaterialIndex
         {
-            "SURFACE", "SLATE", "GRASS", "SAND", "SNOW", "CONCRETE",
+            get
+            {
+                for (int index = 0; index < PaintMaterials.Count; index++)
+                    if (PaintMaterials[index].Material == tool.PaintMaterial)
+                        return index;
+                return 0;
+            }
+        }
+
+        public static IReadOnlyList<TerrainMaterialPaintOption> PaintMaterials { get; } = new[]
+        {
+            new TerrainMaterialPaintOption(TerrainMaterialKind.Surface, "SURFACE"),
+            new TerrainMaterialPaintOption(TerrainMaterialKind.Slate, "SLATE"),
+            new TerrainMaterialPaintOption(TerrainMaterialKind.Grass, "GRASS"),
+            new TerrainMaterialPaintOption(TerrainMaterialKind.Sand, "SAND"),
+            new TerrainMaterialPaintOption(TerrainMaterialKind.Snow, "SNOW"),
+            new TerrainMaterialPaintOption(TerrainMaterialKind.Concrete, "CONCRETE"),
         };
 
         public int RadiusInSamples
@@ -138,7 +165,8 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         public void ActivatePaint(int materialIndex)
         {
-            tool.PaintMaterialIndex = Mathf.Clamp(materialIndex, 0, PaintMaterialNames.Count - 1);
+            int index = Mathf.Clamp(materialIndex, 0, PaintMaterials.Count - 1);
+            tool.PaintMaterial = PaintMaterials[index].Material;
             ActivateMode(TerrainBrushMode.Paint);
         }
 

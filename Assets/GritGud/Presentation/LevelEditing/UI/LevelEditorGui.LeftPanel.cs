@@ -231,7 +231,9 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
             DrawSectionHeader("MATERIAL PAINTING");
             GUILayout.Label("Choose a material, then drag on the map. Existing painted regions stay unchanged.");
-            string[] materialNames = TerrainToolPanelModel.PaintMaterialNames.ToArray();
+            string[] materialNames = TerrainToolPanelModel.PaintMaterials
+                .Select(option => option.Label)
+                .ToArray();
             int selectedMaterial = GUILayout.SelectionGrid(
                 terrainPanel.PaintMaterialIndex,
                 materialNames,

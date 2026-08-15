@@ -208,6 +208,32 @@ namespace GritGud.Domain.Tests.Levels
         }
 
         [Test]
+        public void TerrainMaterialKindsKeepStableSerializedValues()
+        {
+            Assert.That((int)TerrainMaterialKind.Surface, Is.Zero);
+            Assert.That((int)TerrainMaterialKind.Slate, Is.EqualTo(1));
+            Assert.That((int)TerrainMaterialKind.Grass, Is.EqualTo(2));
+            Assert.That((int)TerrainMaterialKind.Sand, Is.EqualTo(3));
+            Assert.That((int)TerrainMaterialKind.Snow, Is.EqualTo(4));
+            Assert.That((int)TerrainMaterialKind.Concrete, Is.EqualTo(5));
+            Assert.That(TerrainMaterialKinds.IsSupported(6), Is.False);
+        }
+
+        [Test]
+        public void TerrainMaterialPatchRejectsUnknownSerializedMaterial()
+        {
+            Assert.That(
+                () => new SetTerrainMaterialsCommand(
+                    "ground",
+                    0,
+                    0,
+                    1,
+                    1,
+                    new[] { 99 }),
+                Throws.ArgumentException);
+        }
+
+        [Test]
         public void ValidationRejectsInvalidTerrainAppearance()
         {
             LevelDocument document = CreateDocument();

@@ -255,7 +255,8 @@ namespace GritGud.Domain.Levels
                         $"Terrain '{surface.id}' has {surface.materialSamples.Count} material samples; "
                         + $"expected {expectedSamples}.");
                 }
-                else if (surface.materialSamples.Any(value => value < 0 || value > 5))
+                else if (surface.materialSamples.Any(value =>
+                    !TerrainMaterialKinds.IsSupported(value)))
                 {
                     context.Error(
                         "terrain.material-range",
