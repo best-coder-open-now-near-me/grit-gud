@@ -295,6 +295,9 @@ not enter portable JSON or Test Play.
 ## Current limits
 
 - Position and X/Y/Z rotation are authored; arbitrary scaling is not.
+- The Selection Inspector provides snapped pitch, yaw, and roll buttons around
+  the chosen per-entity rotation pivot. A free-drag viewport transform gizmo is
+  still future work.
 - Dragging preserves the entity's current elevation.
 - Legacy cover-volume data remains readable for file compatibility but has no
   authoring surface. Destructible metadata is authored through entity capability

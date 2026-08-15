@@ -296,7 +296,10 @@ namespace GritGud.Presentation.LevelEditing.Tools
             return $"MOVE X {delta.x:+0.###;-0.###;0}  Z {delta.z:+0.###;-0.###;0}  ·  {snap}  ·  ESC CANCEL";
         }
 
-        public void RotateSelection(float? amount = null)
+        public void RotateSelection(float? amount = null) =>
+            RotateSelection(Vector3.up, amount);
+
+        public void RotateSelection(Vector3 localAxis, float? amount = null)
         {
             IReadOnlyList<string> entityIds = SelectedEntityIds();
             if (entityIds.Count == 0)
@@ -315,23 +318,29 @@ namespace GritGud.Presentation.LevelEditing.Tools
                 }
 
                 LevelTransformData after = entity.transform;
-                float nextYaw = NormalizeYaw(
-                    after.yawDegrees + (amount ?? view.Archetype.PlacementRules.AngleSnap));
+                float rotationAmount = amount ?? view.Archetype.PlacementRules.AngleSnap;
+                Quaternion beforeRotation = Quaternion.Euler(
+                    after.pitchDegrees,
+                    after.yawDegrees,
+                    after.rollDegrees);
+                if (localAxis == Vector3.right)
+                    after.pitchDegrees = NormalizeYaw(after.pitchDegrees + rotationAmount);
+                else if (localAxis == Vector3.forward)
+                    after.rollDegrees = NormalizeYaw(after.rollDegrees + rotationAmount);
+                else
+                    after.yawDegrees = NormalizeYaw(after.yawDegrees + rotationAmount);
+                Quaternion afterRotation = Quaternion.Euler(
+                    after.pitchDegrees,
+                    after.yawDegrees,
+                    after.rollDegrees);
                 if (entity.rotationPivot != null)
                 {
                     Vector3 pivot = ToVector(entity.rotationPivot.localPosition);
-                    Vector3 beforeOffset = Quaternion.Euler(
-                        after.pitchDegrees,
-                        after.yawDegrees,
-                        after.rollDegrees) * pivot;
-                    Vector3 afterOffset = Quaternion.Euler(
-                        after.pitchDegrees,
-                        nextYaw,
-                        after.rollDegrees) * pivot;
+                    Vector3 beforeOffset = beforeRotation * pivot;
+                    Vector3 afterOffset = afterRotation * pivot;
                     Vector3 position = ToVector(after.position) + beforeOffset - afterOffset;
                     after.position = new Float3Data(position.x, position.y, position.z);
                 }
-                after.yawDegrees = nextYaw;
                 commands.Add(new SetEntityTransformCommand(entity.id, entity.transform, after));
             }
 

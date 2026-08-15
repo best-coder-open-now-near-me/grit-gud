@@ -86,13 +86,10 @@ namespace GritGud.Presentation.LevelEditing.UI
                     yawText,
                     rollText);
 
-            GUILayout.BeginHorizontal();
             float angleSnap = selectedView.Archetype.PlacementRules.AngleSnap;
-            if (GUILayout.Button($"↺ {angleSnap:0.#}°"))
-                RotateInspectorSelection(-angleSnap);
-            if (GUILayout.Button($"{angleSnap:0.#}° ↻"))
-                RotateInspectorSelection(angleSnap);
-            GUILayout.EndHorizontal();
+            DrawAxisRotationButtons("PITCH X", Vector3.right, angleSnap);
+            DrawAxisRotationButtons("YAW Y", Vector3.up, angleSnap);
+            DrawAxisRotationButtons("ROLL Z", Vector3.forward, angleSnap);
             DrawRotationPivotPicker(entity, selectedView);
 
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
@@ -172,13 +169,24 @@ namespace GritGud.Presentation.LevelEditing.UI
                 && Mathf.Approximately(value.z, candidate.z);
         }
 
-        private void RotateInspectorSelection(float amount)
+        private void DrawAxisRotationButtons(string label, Vector3 axis, float angleSnap)
+        {
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(label, GUILayout.Width(62f));
+            if (GUILayout.Button($"−{angleSnap:0.#}°"))
+                RotateInspectorSelection(axis, -angleSnap);
+            if (GUILayout.Button($"+{angleSnap:0.#}°"))
+                RotateInspectorSelection(axis, angleSnap);
+            GUILayout.EndHorizontal();
+        }
+
+        private void RotateInspectorSelection(Vector3 axis, float amount)
         {
             // A newly stamped object remains selected while the placement tool stays
             // active. Switch to selection before invoking its command so the inspector
             // controls work for both stamped and ordinarily selected objects.
             toolManager.ActivateDefault();
-            selectionTool.RotateSelection(amount);
+            selectionTool.RotateSelection(axis, amount);
         }
 
         private void DrawGameplayInspector(

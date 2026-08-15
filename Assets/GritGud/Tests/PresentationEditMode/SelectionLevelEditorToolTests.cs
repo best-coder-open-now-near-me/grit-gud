@@ -164,6 +164,14 @@ namespace GritGud.Presentation.Tests
                 Assert.That(projector.TryGetEntity("crate", out LevelEntityView view), Is.True);
                 Assert.That(view.GetRotationPivotWorld().x, Is.EqualTo(1f).Within(0.001f));
                 Assert.That(view.GetRotationPivotWorld().z, Is.EqualTo(0f).Within(0.001f));
+
+                tool.RotateSelection(Vector3.forward, 45f);
+
+                result = workspace.FindEntitySnapshot("crate").transform;
+                Assert.That(result.rollDegrees, Is.EqualTo(45f));
+                Assert.That(view.GetRotationPivotWorld().x, Is.EqualTo(1f).Within(0.001f));
+                Assert.That(view.GetRotationPivotWorld().y, Is.EqualTo(0f).Within(0.001f));
+                Assert.That(view.GetRotationPivotWorld().z, Is.EqualTo(0f).Within(0.001f));
             }
             finally
             {
