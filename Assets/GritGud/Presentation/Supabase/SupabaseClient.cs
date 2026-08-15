@@ -179,13 +179,18 @@ namespace GritGud.Presentation.Supabase
         }
 
         private static SupabaseSession CreateSession(AnonymousSignInResponse response) =>
-            new SupabaseSession(response.access_token, response.refresh_token, response.user.id);
+            new SupabaseSession(
+                response.access_token,
+                response.refresh_token,
+                response.user.id,
+                DateTimeOffset.UtcNow.AddSeconds(Math.Max(60, response.expires_in)));
 
         [Serializable]
         private sealed class AnonymousSignInResponse
         {
             public string access_token;
             public string refresh_token;
+            public int expires_in;
             public User user;
         }
 
