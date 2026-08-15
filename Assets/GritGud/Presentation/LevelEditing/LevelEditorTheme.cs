@@ -4,12 +4,26 @@ namespace GritGud.Presentation.LevelEditing
 {
     public static class LevelEditorTheme
     {
+        public static readonly Color ToolbarBackground = new Color32(17, 20, 26, 255);
+        public static readonly Color PanelBackground = new Color32(23, 28, 35, 255);
+        public static readonly Color StatusBarBackground = new Color32(14, 17, 22, 255);
+        public static readonly Color FloatingPanelBackground = new Color32(28, 34, 43, 255);
+        public static readonly Color SectionHeaderBackground = new Color32(38, 46, 57, 255);
+        public static readonly Color ButtonBackground = new Color32(70, 80, 94, 255);
+        public static readonly Color ButtonHoverBackground = new Color32(86, 99, 116, 255);
+        public static readonly Color ButtonPressedBackground = new Color32(49, 91, 116, 255);
+        public static readonly Color ButtonSelectedBackground = new Color32(42, 105, 138, 255);
+        public static readonly Color FieldBackground = new Color32(13, 17, 22, 255);
+        public static readonly Color FieldFocusedBackground = new Color32(20, 29, 38, 255);
+        public static readonly Color PrimaryText = new Color32(224, 231, 239, 255);
+        public static readonly Color MutedText = new Color32(166, 177, 190, 255);
+
         public static readonly Color Active = new Color(0.2f, 0.75f, 1f);
         public static readonly Color Placement = new Color(0.95f, 0.55f, 0.2f);
         public static readonly Color Positive = new Color(0.3f, 0.9f, 0.4f);
         public static readonly Color Warning = new Color(1f, 0.4f, 0.25f);
         public static readonly Color Destructive = new Color(0.7f, 0.25f, 0.2f);
-        public static readonly Color SectionHeaderText = new Color(0.88f, 0.93f, 1f);
+        public static readonly Color SectionHeaderText = new Color32(211, 224, 238, 255);
 
         public static readonly Color SelectionOutline = new Color(0.2f, 0.8f, 1f);
         public static readonly Color SecondarySelectionOutline = new Color(0.35f, 1f, 0.65f);

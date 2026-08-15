@@ -141,21 +141,31 @@ namespace GritGud.Presentation.LevelEditing.UI
             if (state == null)
                 throw new ArgumentNullException(nameof(state));
 
-            DrawToolbar(state, !documentActionConfirmation.HasPendingAction);
-            GUI.enabled = !documentActionConfirmation.HasPendingAction;
-            if (!state.PreviewMode)
+            GUISkin previousSkin = GUI.skin;
+            GUI.skin = styles.ResolveSkin(previousSkin);
+            try
             {
-                DrawPalette(state.Document);
-                DrawInspector(state);
+                DrawToolbar(state, !documentActionConfirmation.HasPendingAction);
+                GUI.enabled = !documentActionConfirmation.HasPendingAction;
+                if (!state.PreviewMode)
+                {
+                    DrawPalette(state.Document);
+                    DrawInspector(state);
+                }
+
+                if (showControls)
+                    DrawShortcutsOverlay();
+
+                GUI.enabled = true;
+                DrawStatusBar(state.StatusMessage);
+                if (documentActionConfirmation.HasPendingAction)
+                    DrawUnsavedChangesConfirmation();
             }
-
-            if (showControls)
-                DrawShortcutsOverlay();
-
-            GUI.enabled = true;
-            DrawStatusBar(state.StatusMessage);
-            if (documentActionConfirmation.HasPendingAction)
-                DrawUnsavedChangesConfirmation();
+            finally
+            {
+                GUI.enabled = true;
+                GUI.skin = previousSkin;
+            }
         }
 
         public bool IsPointerOverInterface(Vector2 screenPosition)
@@ -264,7 +274,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             bool previewMode = state.PreviewMode;
             GUILayout.BeginArea(
                 new Rect(0f, 0f, Screen.width, LevelEditorGuiMetrics.ToolbarHeight),
-                GUI.skin.box);
+                styles.Toolbar);
             GUILayout.BeginHorizontal();
             GUI.enabled = interactionsEnabled;
             if (GUILayout.Button("BACK", ToolbarButtonLayout(72f)))
@@ -349,6 +359,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 previewMode
                     ? "LEVEL PREVIEW — AUTHORING LOCKED"
                     : state.IsDirty ? "UNSAVED DRAFT" : "SAVED",
+                styles.MutedLabel,
                 GUILayout.Height(LevelEditorGuiMetrics.ToolbarControlHeight));
             GUILayout.EndHorizontal();
 
@@ -411,7 +422,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 Mathf.Max(8f, (Screen.height - height) * 0.5f),
                 Mathf.Min(width, Screen.width - 16f),
                 height);
-            GUILayout.BeginArea(panel, "UNSAVED CHANGES", GUI.skin.window);
+            GUILayout.BeginArea(panel, "UNSAVED CHANGES", styles.FloatingPanel);
             GUILayout.Space(LevelEditorGuiMetrics.SpaceGroup);
             GUILayout.Label(documentActionConfirmation.Prompt);
             GUILayout.Label("Save a draft or export first if you want to keep this work.");
@@ -427,7 +438,7 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         private void DrawShortcutsOverlay()
         {
-            GUILayout.BeginArea(ShortcutOverlayRect(), GUI.skin.window);
+            GUILayout.BeginArea(ShortcutOverlayRect(), styles.FloatingPanel);
             DrawSectionHeader("SHORTCUTS");
             GUILayout.Label("CAMERA");
             GUILayout.Label("WASD/arrows: pan  ·  Shift: fast");
@@ -448,7 +459,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             return new Rect(8f, LevelEditorGuiMetrics.ToolbarHeight, width, 202f);
         }
 
-        private static void DrawStatusBar(string statusMessage)
+        private void DrawStatusBar(string statusMessage)
         {
             GUILayout.BeginArea(
                 new Rect(
@@ -458,8 +469,8 @@ namespace GritGud.Presentation.LevelEditing.UI
                     - LevelEditorGuiMetrics.LeftPanelWidth
                     - LevelEditorGuiMetrics.InspectorWidth,
                     LevelEditorGuiMetrics.StatusBarHeight),
-                GUI.skin.box);
-            GUILayout.Label(statusMessage ?? string.Empty);
+                styles.StatusBar);
+            GUILayout.Label(statusMessage ?? string.Empty, styles.MutedLabel);
             GUILayout.EndArea();
         }
 

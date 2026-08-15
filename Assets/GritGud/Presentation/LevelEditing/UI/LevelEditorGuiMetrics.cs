@@ -23,7 +23,13 @@ namespace GritGud.Presentation.LevelEditing.UI
         public const float SpaceMajor = 16f;
 
         public const int SectionHeaderLeftPadding = 8;
-        public const int SectionHeaderRightPadding = 3;
-        public const int SectionHeaderVerticalPadding = 3;
+        public const int SectionHeaderRightPadding = 8;
+        public const int SectionHeaderVerticalPadding = 5;
+        public const int ToolbarHorizontalPadding = 8;
+        public const int ToolbarVerticalPadding = 8;
+        public const int PanelHorizontalPadding = 10;
+        public const int PanelVerticalPadding = 8;
+        public const int StatusBarHorizontalPadding = 10;
+        public const int StatusBarVerticalPadding = 5;
     }
 }

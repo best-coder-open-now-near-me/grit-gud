@@ -20,7 +20,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                     Screen.height
                     - LevelEditorGuiMetrics.ToolbarHeight
                     - LevelEditorGuiMetrics.StatusBarHeight),
-                GUI.skin.box);
+                styles.Panel);
             paletteScroll = GUILayout.BeginScrollView(paletteScroll);
             GUILayout.BeginHorizontal();
             Color panelToggleColor = GUI.backgroundColor;
