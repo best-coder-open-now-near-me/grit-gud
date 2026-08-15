@@ -1533,6 +1533,21 @@ namespace GritGud.Presentation.LevelEditing
 
         void ILevelEditorGuiActions.SaveDraft() => persistence.SaveDraft(workspace);
 
+        void ILevelEditorGuiActions.SaveToCloud()
+        {
+            SupabaseRuntime supabase = GameBootstrap.Instance?.Supabase;
+            if (supabase == null)
+            {
+                SetStatus("Cloud saves are not configured.");
+                return;
+            }
+
+            supabase.SaveLevelDraft(
+                "active",
+                new UnityLevelJsonSerializer().Serialize(workspace.CreateSnapshot()),
+                SetStatus);
+        }
+
         void ILevelEditorGuiActions.LoadDraft() => persistence.LoadDraft();
 
         void ILevelEditorGuiActions.LoadRecovery(int generation) =>

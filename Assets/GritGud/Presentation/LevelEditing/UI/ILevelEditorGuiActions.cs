@@ -42,6 +42,8 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         void SaveDraft();
 
+        void SaveToCloud();
+
         void LoadDraft();
 
         void LoadRecovery(int generation);

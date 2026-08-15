@@ -380,6 +380,11 @@ namespace GritGud.Presentation.LevelEditing.UI
                 actions.SaveDraft();
             }
 
+            if (GUILayout.Button("CLOUD SAVE", ToolbarButtonLayout(96f)))
+            {
+                actions.SaveToCloud();
+            }
+
             GUI.enabled = interactionsEnabled && !previewMode && actions.HasDraft;
             if (GUILayout.Button("LOAD DRAFT", ToolbarButtonLayout(96f)))
             {

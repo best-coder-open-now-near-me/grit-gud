@@ -6,6 +6,7 @@ using GritGud.Presentation.Gameplay;
 using GritGud.Domain.Levels;
 using GritGud.Presentation.Levels;
 using GritGud.Presentation.CharacterEditing;
+using GritGud.Presentation.Supabase;
 using UnityEngine;
 
 namespace GritGud.Presentation.Bootstrap
@@ -28,8 +29,11 @@ namespace GritGud.Presentation.Bootstrap
         private Coroutine gameplayStartRoutine;
         private CommittedLevelLibrary committedLevels;
         private bool editorTestActive;
+        private SupabaseRuntime supabase;
 
         public static GameBootstrap Instance { get; private set; }
+
+        public SupabaseRuntime Supabase => supabase;
 
         public ApplicationMode CurrentMode { get; private set; } = ApplicationMode.Menu;
 
@@ -52,6 +56,7 @@ namespace GritGud.Presentation.Bootstrap
 
             Instance = this;
             DontDestroyOnLoad(gameObject);
+            supabase = GetComponent<SupabaseRuntime>() ?? gameObject.AddComponent<SupabaseRuntime>();
             EnsureCommittedLevels();
             EnsureStartMenu();
         }

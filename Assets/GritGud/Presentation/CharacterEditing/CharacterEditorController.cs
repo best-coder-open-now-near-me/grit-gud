@@ -159,6 +159,9 @@ namespace GritGud.Presentation.CharacterEditing
             GUI.enabled = interactionsEnabled;
             if (GUILayout.Button("SAVE DRAFT", GUILayout.Width(102f), GUILayout.Height(34f)))
                 SaveDraft();
+            GUI.enabled = interactionsEnabled && GameBootstrap.Instance.Supabase != null;
+            if (GUILayout.Button("CLOUD SAVE", GUILayout.Width(102f), GUILayout.Height(34f)))
+                SaveToCloud();
             GUI.enabled = interactionsEnabled && PlayerPrefs.HasKey(DraftKey);
             if (GUILayout.Button("LOAD DRAFT", GUILayout.Width(102f), GUILayout.Height(34f)))
             {
@@ -183,6 +186,15 @@ namespace GritGud.Presentation.CharacterEditing
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
             GUI.enabled = true;
+        }
+
+        private void SaveToCloud()
+        {
+            CharacterDocument document = session.CreateSnapshot();
+            GameBootstrap.Instance.Supabase.SaveCharacter(
+                document,
+                serializer.Serialize(document),
+                message => status = message);
         }
 
         private void DrawIdentityAndBodies()
