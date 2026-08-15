@@ -145,7 +145,9 @@ in the camera view, including its minimum and maximum sampled elevations.
 
 Terrain appearance is saved per surface and used by both the editor and
 gameplay. Slate, Grass, Sand, Snow, and Concrete presets provide fast starting
-points. Base and steep-slope RGB, the slope blend range, smoothness, and specular
+points. Choosing a preset only stages it; **Apply Preset to Entire Surface** is
+required to commit, and the panel explicitly distinguishes this global theme
+from regional height sculpting. Base and steep-slope RGB, the slope blend range, smoothness, and specular
 response can then be entered directly; **Apply Custom Appearance** commits the
 complete change as one undo step. Appearance does not serialize Unity materials
 or asset paths.

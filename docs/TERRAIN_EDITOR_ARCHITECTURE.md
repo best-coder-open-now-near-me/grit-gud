@@ -215,6 +215,9 @@ feature family.
   blending, smoothness, specular response, and preset identity.
 - **Implemented:** appearance updates are incremental material changes with exact
   undo/redo; they do not rebuild colliders or invalidate navigation.
+- **Implemented:** the authoring UI labels appearance as surface-wide and stages
+  presets behind an explicit whole-surface Apply action so it cannot be mistaken
+  for regional texture painting.
 - **Implemented:** an on-demand Unity-free analyzer reports heightfield slope,
   connected regions, scenario support, terrain-only objective routes, and actor
   overlaps without turning advisory results into publish blockers.

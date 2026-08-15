@@ -68,6 +68,8 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         public string AppearancePresetId { get; set; } = "slate";
 
+        public string PendingAppearancePresetId { get; set; } = "slate";
+
         public LevelColorAuthoringText BaseColor { get; } = new LevelColorAuthoringText();
 
         public LevelColorAuthoringText SteepColor { get; } = new LevelColorAuthoringText();
@@ -194,6 +196,12 @@ namespace GritGud.Presentation.LevelEditing.UI
                 CultureInfo.InvariantCulture);
             TerrainAppearanceData appearance = selected.appearance ?? new TerrainAppearanceData();
             AppearancePresetId = appearance.presetId;
+            PendingAppearancePresetId = AppearancePresetIds.Any(value => string.Equals(
+                value,
+                appearance.presetId,
+                StringComparison.OrdinalIgnoreCase))
+                ? appearance.presetId
+                : string.Empty;
             SetColor(BaseColor, appearance.baseColor);
             SetColor(SteepColor, appearance.steepColor);
             SlopeBlendStartText = Format(appearance.slopeBlendStartDegrees);
@@ -216,9 +224,9 @@ namespace GritGud.Presentation.LevelEditing.UI
                 SampleSpacingText);
         }
 
-        public void ApplyAppearancePreset(string presetId)
+        public void ApplyAppearancePreset()
         {
-            authoring.ApplyAppearancePreset(selectedSurfaceId, presetId);
+            authoring.ApplyAppearancePreset(selectedSurfaceId, PendingAppearancePresetId);
         }
 
         public void ApplyAppearance()

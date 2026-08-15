@@ -183,7 +183,8 @@ namespace GritGud.Presentation.LevelEditing.UI
                 terrainPanel.FrameTerrain();
 
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
-            DrawSectionHeader("TERRAIN APPEARANCE");
+            DrawSectionHeader("SURFACE-WIDE APPEARANCE");
+            GUILayout.Label("Applies to the entire selected terrain surface. This is not a paint brush.");
             string[] appearancePresetIds = new[] { string.Empty }
                 .Concat(terrainPanel.AppearancePresetIds)
                 .ToArray();
@@ -194,16 +195,22 @@ namespace GritGud.Presentation.LevelEditing.UI
                 appearancePresetIds,
                 value => string.Equals(
                     value,
-                    terrainPanel.AppearancePresetId,
+                    terrainPanel.PendingAppearancePresetId,
                     StringComparison.OrdinalIgnoreCase));
             int selectedAppearance = GUILayout.SelectionGrid(
                 Mathf.Max(0, appearanceIndex),
                 appearancePresets,
                 2);
-            if (selectedAppearance > 0 && selectedAppearance != appearanceIndex)
+            if (selectedAppearance > 0)
             {
-                terrainPanel.ApplyAppearancePreset(appearancePresetIds[selectedAppearance]);
+                terrainPanel.PendingAppearancePresetId =
+                    appearancePresetIds[selectedAppearance];
             }
+            GUI.enabled = !string.IsNullOrWhiteSpace(
+                terrainPanel.PendingAppearancePresetId);
+            if (GUILayout.Button("APPLY PRESET TO ENTIRE SURFACE", PanelApplyButtonLayout()))
+                terrainPanel.ApplyAppearancePreset();
+            GUI.enabled = true;
             DrawColorFields("Base RGB (0-1)", terrainPanel.BaseColor);
             DrawColorFields("Steep RGB (0-1)", terrainPanel.SteepColor);
             string slopeStart = terrainPanel.SlopeBlendStartText;
@@ -222,7 +229,8 @@ namespace GritGud.Presentation.LevelEditing.UI
                 terrainPanel.ApplyAppearance();
 
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
-            DrawSectionHeader("TERRAIN HEIGHT");
+            DrawSectionHeader("HEIGHT SCULPTING");
+            GUILayout.Label("The brush below changes elevation only.");
             Color previous = GUI.backgroundColor;
             GUILayout.BeginHorizontal();
             if (terrainPanel.IsRaiseActive)
