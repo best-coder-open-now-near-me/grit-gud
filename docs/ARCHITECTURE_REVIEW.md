@@ -1,6 +1,6 @@
 # Architecture and Separation-of-Concerns Review
 
-**Reviewed:** 2026-08-11; follow-up audits 2026-08-12 and 2026-08-14
+**Reviewed:** 2026-08-11; follow-up audits 2026-08-12, 2026-08-14, and 2026-08-15
 **Scope:** the repository as a whole, with additional attention on the recent
 emergency-reaction, projectile, explosive, progression, displacement, and HUD
 work.
@@ -48,6 +48,51 @@ many feature drawers, and `GameplayController` is still a large composition
 root. New behavior should continue moving behind focused Application services,
 HUD panels, and feature binders when those seams become stable. Durable
 cross-launch progression storage also remains explicitly deferred.
+
+### 2026-08-15 editor and terrain follow-up
+
+The editor expansion preserves the intended authority boundaries. Portable
+terrain material samples, three-axis transforms, rotation pivots, interaction
+points, destructible defaults, and spatial dressing records live in the Domain
+document. Reversible mutations live in Application commands. Pointer input,
+physics-assisted settling, mesh projection, shaders, and IMGUI controls remain
+Presentation adapters. Repository inspection found no Unity or Presentation
+reference in Domain or Application source.
+
+This follow-up also turns the most important separation rule into a fast gate:
+`tools/validate-repository.py` now verifies the Domain and Application assembly
+contracts and rejects Unity or Presentation references in either neutral source
+tree. Architecture review is therefore no longer dependent only on convention.
+
+The current risk profile is acceptable but not finished:
+
+- `GameplayHud` (2,641 lines), `GameplaySession` (2,219),
+  `LevelEditorController` (1,815), and `GameplayScenarioAssembler` (1,554)
+  remain the largest production change hotspots. Split only along stable feature
+  seams; do not introduce a framework or broad rewrite.
+- Serialized terrain material meaning currently depends on numeric palette
+  indices shared by validation, UI ordering, and mesh-color projection. Before
+  adding or reordering materials, introduce one stable palette contract with
+  named IDs and a migration policy. UI array order must not silently redefine
+  saved data.
+- `TerrainHeightLevelEditorTool` now coordinates both height sculpting and
+  material painting. Its stroke lifecycles are cohesive today, but the name and
+  responsibility should become a generic terrain-brush coordinator or two
+  focused tools if erosion, foliage, masks, or other brush families are added.
+- The next cross-launch party work must preserve the same ports-and-adapters
+  boundary: Application owns a versioned party-save use case and validation;
+  Presentation supplies PlayerPrefs/browser and filesystem adapters. Gameplay
+  controllers must not directly serialize authoritative party state.
+- Planning text had drifted behind implemented interaction-point,
+  destructible, batch-transform, and three-axis work. Roadmap statements should
+  be treated as delivery records, not as substitutes for executable boundary
+  gates.
+
+No architecture blocker requires reverting the current editor slice. The
+highest-value next work remains durable party save/load and advancement UI;
+editor work can proceed independently with destructible pile verification and
+richer viewport transform tools.
+
 
 ## Non-negotiable boundaries
 

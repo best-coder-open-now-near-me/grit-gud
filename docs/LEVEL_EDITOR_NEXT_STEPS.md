@@ -28,12 +28,13 @@ input, raycasts, prefabs, storage, and UI remain presentation adapters, so a new
 feature should not need to move authoritative authoring state into a
 `MonoBehaviour`.
 
-## Recommended next vertical slice: gameplay metadata authoring
+## Recommended next vertical slice: physics verification and viewport transforms
 
-Implement interaction-point editing first. This closes the remaining authored
-gameplay-metadata gap while exercising the intended sub-element, command, and
-projection seams before encounter scripting or more complicated geometry tools
-are introduced.
+Interaction-point and destructible-default authoring are complete. The next
+editor-specific increment should verify destructible prop piles through the
+physics-assisted settle path, then add richer viewport translation and rotation
+handles without moving transform policy into Unity components. Encounter
+scripting remains later work until its portable runtime contracts stabilize.
 
 ## Usability review
 
@@ -86,6 +87,8 @@ belong in `LevelDocument` or command history.
 
 ### 2. Interaction-point editing
 
+**Status: complete.**
+
 - Add reversible add, update, and remove commands keyed by entity and point IDs.
 - Reuse sub-element selection for point handles.
 - Author the typed interaction kind, local position, and radius.
@@ -93,6 +96,8 @@ belong in `LevelDocument` or command history.
   do not introduce free-form behavior payloads.
 
 ### 3. Destructible defaults
+
+**Status: complete.**
 
 - Add an entity command for enabled state, initial state, and integrity.
 - Gate the inspector by the archetype capability profile.
@@ -118,12 +123,11 @@ Each increment is ready to merge when it:
 
 - The IMGUI adapter is intentionally temporary. Feature logic must remain
   outside it so a later UI replacement is an adapter change.
-- Current manipulation is position-and-yaw only. Pitch, roll, and scale should
-  be introduced only with typed transform semantics and corresponding
-  validation.
-- The selection model supports multiple targets, but the current selection tool
-  operates on one entity. Batch transforms should therefore be a separate
-  transaction-based slice rather than an incidental change to metadata editing.
+- Position and X/Y/Z rotation have typed portable semantics. Arbitrary scale and
+  a free-drag viewport transform gizmo remain intentionally unimplemented.
+- Multi-selection drag, duplicate, array layout, rotation, and deletion use
+  composite history. A future shared-pivot gizmo and numeric mixed-value
+  Inspector still need explicit interaction semantics.
 - Runtime navigation baking and arbitrary asset import remain outside the
   domain-specific editor's current scope.
 
