@@ -191,7 +191,7 @@ namespace GritGud.Presentation.LevelEditing
                 snapSettings,
                 presentationState,
                 this);
-            gui.SyncScenarioFields(viewDocument);
+            gui.SyncScenarioFields(viewDocument, forceLevelIdentity: true);
             outlinePresenter = new LevelEditorOutlinePresenter(transform);
             validationIssues = workspace.ValidationIssues;
 
@@ -554,6 +554,26 @@ namespace GritGud.Presentation.LevelEditing
             SetStatus("Applied numeric transform.");
         }
 
+        private void ApplyLevelDisplayName(string displayName)
+        {
+            string normalized = displayName?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                SetStatus("The level display name cannot be empty.");
+                return;
+            }
+
+            LevelDocument snapshot = workspace.CreateSnapshot();
+            if (string.Equals(snapshot.displayName, normalized, StringComparison.Ordinal))
+            {
+                SetStatus("The level already has that display name.");
+                return;
+            }
+
+            workspace.Execute(new SetLevelDisplayNameCommand(snapshot.displayName, normalized));
+            SetStatus($"Renamed the level to '{normalized}'.");
+        }
+
         private void ExecuteScenarioCommands(
             string description,
             IReadOnlyList<ILevelEditCommand> commands)
@@ -797,7 +817,7 @@ namespace GritGud.Presentation.LevelEditing
             cameraController.Frame(document.bounds);
             scenarioActorHandles.Refresh(document);
             gui.SelectScenarioActor(null);
-            gui.SyncScenarioFields(document);
+            gui.SyncScenarioFields(document, forceLevelIdentity: true);
         }
 
         private void HandleDocumentLoaded(object sender, LevelDocumentLoadedEventArgs args)
@@ -899,6 +919,9 @@ namespace GritGud.Presentation.LevelEditing
 
         void ILevelEditorGuiActions.FocusEntity(string entityId) =>
             FocusEntity(entityId);
+
+        void ILevelEditorGuiActions.ApplyLevelDisplayName(string displayName) =>
+            ApplyLevelDisplayName(displayName);
 
         void ILevelEditorGuiActions.ApplyEntityTransform(
             string x,

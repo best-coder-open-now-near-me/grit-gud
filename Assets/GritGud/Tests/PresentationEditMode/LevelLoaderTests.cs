@@ -50,6 +50,7 @@ namespace GritGud.Presentation.Tests
                 Does.Contain("depot-rifleman"));
             Assert.That(authoring.GetActor("player").PlayerTemplate, Is.True);
             Assert.That(authoring.GetActor("depot-rifleman").PlayerTemplate, Is.False);
+            Assert.That(authoring.TryGetActor("missing-template", out _), Is.False);
         }
 
         [Test]

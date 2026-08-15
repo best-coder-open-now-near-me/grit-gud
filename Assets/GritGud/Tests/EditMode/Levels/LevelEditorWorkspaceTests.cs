@@ -21,6 +21,22 @@ namespace GritGud.Domain.Tests.Levels
         }
 
         [Test]
+        public void LevelDisplayNameParticipatesInUndoAndRedo()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            document.displayName = "Before";
+            using var workspace = new LevelEditorWorkspace(document);
+
+            workspace.Execute(new SetLevelDisplayNameCommand("Before", "  Night Shift  "));
+
+            Assert.That(workspace.CreateSnapshot().displayName, Is.EqualTo("Night Shift"));
+            Assert.That(workspace.Undo(), Is.True);
+            Assert.That(workspace.CreateSnapshot().displayName, Is.EqualTo("Before"));
+            Assert.That(workspace.Redo(), Is.True);
+            Assert.That(workspace.CreateSnapshot().displayName, Is.EqualTo("Night Shift"));
+        }
+
+        [Test]
         public void WorkspacePublishesHistoryAndValidationTogether()
         {
             using var workspace = new LevelEditorWorkspace(LevelDocumentFactory.CreateEmpty());

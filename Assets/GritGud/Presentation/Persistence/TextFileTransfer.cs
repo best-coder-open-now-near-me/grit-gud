@@ -50,7 +50,7 @@ namespace GritGud.Presentation.Persistence
             Directory.CreateDirectory(directory);
             string path = Path.Combine(directory, safeFileName);
             File.WriteAllText(path, content);
-            return $"Exported report to {path}";
+            return $"Exported file to {path}";
 #endif
         }
 

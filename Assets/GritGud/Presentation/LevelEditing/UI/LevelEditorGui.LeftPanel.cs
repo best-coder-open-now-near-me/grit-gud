@@ -319,6 +319,15 @@ namespace GritGud.Presentation.LevelEditing.UI
         private void DrawScenario(LevelDocument document)
         {
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
+            DrawSectionHeader("LEVEL DETAILS");
+            GUILayout.Label("Display name");
+            levelDisplayNameText = GUILayout.TextField(levelDisplayNameText ?? string.Empty);
+            if (GUILayout.Button("APPLY NAME", PanelApplyButtonLayout()))
+                actions.ApplyLevelDisplayName(levelDisplayNameText);
+            GUILayout.Label($"Stable ID: {document.levelId}");
+            GUILayout.Label("The name controls menus and export filenames; the ID stays stable.");
+
+            GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
             DrawSectionHeader("SCENARIO COMPOSITION");
             GUILayout.Label(
                 "Actors and gameplay links here are the exact data used by Test Play.");
@@ -339,13 +348,11 @@ namespace GritGud.Presentation.LevelEditing.UI
                     GUI.backgroundColor = LevelEditorTheme.Active;
                 }
 
-                ScenarioActorTemplateDefinition template =
-                    scenarioCatalog.GetActor(actor.templateId);
                 string role = actor.playerControlled
                     ? actor.initiallySelected ? "PLAYER • SELECTED" : "PLAYER"
                     : actor.primaryTarget ? "TARGET" : "ENEMY";
                 if (GUILayout.Button(
-                        $"{template.DisplayName}\n{role}",
+                        $"{ScenarioActorDisplayName(actor)}\n{role}",
                         GUILayout.Height(LevelEditorGuiMetrics.PanelActorButtonHeight)))
                 {
                     selection.Clear();
@@ -388,6 +395,22 @@ namespace GritGud.Presentation.LevelEditing.UI
             }
 
             DrawScenarioLinkSummary(document.scenario);
+        }
+
+
+        private string ScenarioActorDisplayName(LevelScenarioActorData actor)
+        {
+            if (scenarioCatalog.TryGetActor(
+                    actor?.templateId,
+                    out ScenarioActorTemplateDefinition template))
+            {
+                return template.DisplayName;
+            }
+
+            string templateId = string.IsNullOrWhiteSpace(actor?.templateId)
+                ? "missing template"
+                : actor.templateId;
+            return $"{templateId} (unavailable)";
         }
 
 
@@ -440,8 +463,9 @@ namespace GritGud.Presentation.LevelEditing.UI
                     GUI.backgroundColor = LevelEditorTheme.Active;
                 }
 
-                ScenarioActorTemplateDefinition template = scenarioCatalog.GetActor(actor.templateId);
-                if (GUILayout.Button(template.DisplayName, PanelCompactButtonLayout()))
+                if (GUILayout.Button(
+                        ScenarioActorDisplayName(actor),
+                        PanelCompactButtonLayout()))
                 {
                     selection.Clear();
                     SyncScenarioActorFields(actor);

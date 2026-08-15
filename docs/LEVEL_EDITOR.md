@@ -5,6 +5,26 @@ Choose a committed level on the start menu, then use **Edit Selected** or
 **Play Selected**. Both routes begin from detached snapshots of the same
 portable document.
 
+## First work session
+
+For a first production authoring session:
+
+1. Open **New Level**, switch to **Scenario**, give the level a useful display
+   name, and apply it. The stable ID is generated once and should not be edited.
+2. Block out terrain and geometry, then configure actors and gameplay links.
+3. Use **Save Draft** early and after meaningful edits. The draft is local to
+   that browser profile or machine and is a recovery slot, not a portable file.
+4. Use **Test Play** before handoff. Publish validation must pass before the
+   isolated gameplay session can start.
+5. Use **Export** before leaving the machine. The resulting JSON is the portable
+   artifact to copy, commit, or move to another workstation.
+
+A new level begins as an **UNSAVED DRAFT**. Back, New, Reload Source, Load Draft,
+and Import ask for confirmation before replacing unsaved work. If a recovery
+draft references a scenario actor template that is not installed, the actor
+remains visible and editable as unavailable, while publish validation prevents
+an invalid export or test play.
+
 ## Source of truth
 
 The in-memory `LevelDocument` is authoritative while editing. Unity GameObjects
@@ -101,14 +121,8 @@ reference without leaving the editor.
 
 `Assets/GritGud/Content/Resources/DefaultLevelArchetypeCatalog.asset` is the
 Unity-facing bridge between stable portable IDs and curated prefab references.
-The first palette contains six entries:
-
-- standard floor;
-- standard wall;
-- doorway wall;
-- stairs;
-- destructible crate; and
-- destructible metal barrel.
+The default palette includes structural modules, traversal pieces, cover,
+destructible props, vehicles, and larger environment props.
 
 The catalog owns stable definitions while exposing presentation, placement,
 capability, and gameplay-default profiles separately. Levels never refer

@@ -36,6 +36,36 @@ namespace GritGud.Application.Levels
         IReadOnlyList<ILevelEditCommand> Commands { get; }
     }
 
+    public sealed class SetLevelDisplayNameCommand : ILevelEditCommand
+    {
+        private readonly string before;
+        private readonly string after;
+
+        public SetLevelDisplayNameCommand(string before, string after)
+        {
+            this.before = before ?? string.Empty;
+            this.after = string.IsNullOrWhiteSpace(after)
+                ? throw new ArgumentException("A level display name is required.", nameof(after))
+                : after.Trim();
+        }
+
+        public string Description => "Rename level";
+
+        public IReadOnlyCollection<string> AffectedEntityIds => Array.Empty<string>();
+
+        public bool RequiresFullProjection => false;
+
+        public void Apply(LevelDocument document) => Set(document, after);
+
+        public void Revert(LevelDocument document) => Set(document, before);
+
+        private static void Set(LevelDocument document, string value)
+        {
+            AddEntityCommand.RequireDocument(document);
+            document.displayName = value;
+        }
+    }
+
     public sealed class SetPlayerStartCommand : ILevelEditCommand
     {
         private readonly LevelTransformData before;

@@ -36,6 +36,8 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         void FocusEntity(string entityId);
 
+        void ApplyLevelDisplayName(string displayName);
+
         void ApplyEntityTransform(string x, string y, string z, string yaw);
 
         void ApplyPlayerStart(string x, string y, string z, string yaw);

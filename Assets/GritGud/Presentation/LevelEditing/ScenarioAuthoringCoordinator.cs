@@ -42,7 +42,15 @@ namespace GritGud.Presentation.LevelEditing
                 return;
             }
 
-            LevelTransformData before = RequireSelectedPlayer(workspace.CreateSnapshot()).transform;
+            LevelScenarioActorData player = workspace.CreateSnapshot().scenario?
+                .FindInitiallySelectedPlayer();
+            if (player == null)
+            {
+                Report("Add or select a player actor before setting the player start.");
+                return;
+            }
+
+            LevelTransformData before = player.transform;
             var after = new LevelTransformData(new Float3Data(x, y, z), NormalizeYaw(yaw));
             workspace.Execute(new SetPlayerStartCommand(before, after));
             PlayerStartChanged?.Invoke(after);
@@ -432,13 +440,6 @@ namespace GritGud.Presentation.LevelEditing
         }
 
         private void Report(string message) => StatusChanged?.Invoke(message);
-
-        private static LevelScenarioActorData RequireSelectedPlayer(LevelDocument document)
-        {
-            return document?.scenario?.FindInitiallySelectedPlayer()
-                ?? throw new InvalidOperationException(
-                    "The level scenario does not define an initially selected player actor.");
-        }
 
         private static LevelScenarioActorData FindActor(LevelDocument document, string actorId)
         {

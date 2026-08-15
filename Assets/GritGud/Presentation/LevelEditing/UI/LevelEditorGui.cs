@@ -60,6 +60,8 @@ namespace GritGud.Presentation.LevelEditing.UI
         private string scenarioYText = "0";
         private string scenarioZText = "0";
         private string scenarioYawText = "0";
+        private string levelDisplayNameText = string.Empty;
+        private string synchronizedLevelIdentity = string.Empty;
         private bool scenarioPlayerControlled;
         private bool scenarioInitiallySelected;
         private bool scenarioPrimaryTarget;
@@ -213,8 +215,21 @@ namespace GritGud.Presentation.LevelEditing.UI
             scenarioPrimaryTarget = actor.primaryTarget;
         }
 
-        public void SyncScenarioFields(LevelDocument document)
+        public void SyncScenarioFields(LevelDocument document, bool forceLevelIdentity = false)
         {
+            string levelIdentity = document == null
+                ? string.Empty
+                : $"{document.levelId}\n{document.displayName}";
+            if (forceLevelIdentity
+                || !string.Equals(
+                    synchronizedLevelIdentity,
+                    levelIdentity,
+                    StringComparison.Ordinal))
+            {
+                synchronizedLevelIdentity = levelIdentity;
+                levelDisplayNameText = document?.displayName ?? string.Empty;
+            }
+
             lastScenarioPropEntityId = string.Empty;
             lastScenarioObjectiveKey = string.Empty;
             lastScenarioVehicleEntityId = string.Empty;

@@ -11,6 +11,25 @@ namespace GritGud.Presentation.Tests
     public sealed class ScenarioAuthoringCoordinatorTests
     {
         [Test]
+        public void MissingSelectedPlayerReportsRecoveryGuidanceWithoutThrowing()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            document.scenario.actors.Clear();
+            using var workspace = new LevelEditorWorkspace(document);
+            var coordinator = new ScenarioAuthoringCoordinator(
+                workspace,
+                ScenarioAuthoringCatalog.LoadDefault(),
+                () => new LevelEditorCameraState());
+            string status = null;
+            coordinator.StatusChanged += message => status = message;
+
+            Assert.DoesNotThrow(() => coordinator.ApplyPlayerStart("0", "0", "0", "0"));
+
+            Assert.That(workspace.CanUndo, Is.False);
+            Assert.That(status, Does.Contain("Add or select a player actor"));
+        }
+
+        [Test]
         public void AddedActorUsesCameraFocusAndRequestsInspectorFocus()
         {
             using var workspace = new LevelEditorWorkspace(LevelDocumentFactory.CreateEmpty());

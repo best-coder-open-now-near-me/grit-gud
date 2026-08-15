@@ -74,13 +74,20 @@ namespace GritGud.Presentation.LevelEditing
 
         public ScenarioActorTemplateDefinition GetActor(string templateId)
         {
-            if (!actors.TryGetValue(templateId ?? string.Empty, out var actor))
+            if (!TryGetActor(templateId, out ScenarioActorTemplateDefinition actor))
             {
                 throw new KeyNotFoundException(
                     $"Scenario actor template '{templateId}' is not defined.");
             }
 
             return actor;
+        }
+
+        public bool TryGetActor(
+            string templateId,
+            out ScenarioActorTemplateDefinition actor)
+        {
+            return actors.TryGetValue(templateId ?? string.Empty, out actor);
         }
 
         public bool ContainsActor(string templateId)

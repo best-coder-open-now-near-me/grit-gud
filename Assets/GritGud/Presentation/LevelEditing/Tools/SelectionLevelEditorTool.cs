@@ -17,6 +17,7 @@ namespace GritGud.Presentation.LevelEditing.Tools
         private bool dragging;
         private Plane dragPlane;
         private Vector3 dragOffset;
+        private string dragAnchorEntityId = string.Empty;
         private readonly Dictionary<string, LevelTransformData> dragBefore =
             new Dictionary<string, LevelTransformData>();
         private readonly List<LevelEntity> clipboard = new List<LevelEntity>();
@@ -146,7 +147,7 @@ namespace GritGud.Presentation.LevelEditing.Tools
             return false;
         }
 
-        private void BeginDrag(LevelEntityView view, Ray ray)
+        internal void BeginDrag(LevelEntityView view, Ray ray)
         {
             LevelEntity entity = context.Workspace.FindEntitySnapshot(view.EntityId);
             if (entity == null)
@@ -178,29 +179,31 @@ namespace GritGud.Presentation.LevelEditing.Tools
             }
 
             dragOffset = view.transform.position - point;
+            dragAnchorEntityId = view.EntityId;
             dragging = true;
             DragFeedback = BuildDragFeedback(Vector3.zero, view.Archetype.PlacementRules.PositionSnap);
             context.SetStatus("Moving on the X/Z plane. Release to apply; Esc to cancel.");
         }
 
-        private void UpdateDrag(Ray ray)
+        internal void UpdateDrag(Ray ray)
         {
-            string entityId = context.Selection.PrimaryEntityId;
-            if (!context.Projector.TryGetEntity(entityId, out LevelEntityView primaryView)
+            if (!context.Projector.TryGetEntity(
+                    dragAnchorEntityId,
+                    out LevelEntityView anchorView)
                 || !context.SceneQuery.TryProjectToPlane(ray, dragPlane, out Vector3 point))
             {
                 return;
             }
 
-            Vector3 primaryPosition = context.SnapSettings.SnapPosition(
+            Vector3 anchorPosition = context.SnapSettings.SnapPosition(
                 point + dragOffset,
-                primaryView.Archetype.PlacementRules.PositionSnap);
-            LevelTransformData primaryBefore = dragBefore[entityId];
-            Vector3 delta = primaryPosition - new Vector3(
-                primaryBefore.position.x,
-                primaryBefore.position.y,
-                primaryBefore.position.z);
-            DragFeedback = BuildDragFeedback(delta, primaryView.Archetype.PlacementRules.PositionSnap);
+                anchorView.Archetype.PlacementRules.PositionSnap);
+            LevelTransformData anchorBefore = dragBefore[dragAnchorEntityId];
+            Vector3 delta = anchorPosition - new Vector3(
+                anchorBefore.position.x,
+                anchorBefore.position.y,
+                anchorBefore.position.z);
+            DragFeedback = BuildDragFeedback(delta, anchorView.Archetype.PlacementRules.PositionSnap);
             foreach (KeyValuePair<string, LevelTransformData> entry in dragBefore)
             {
                 if (!context.Projector.TryGetEntity(entry.Key, out LevelEntityView view))
@@ -216,13 +219,19 @@ namespace GritGud.Presentation.LevelEditing.Tools
                 view.ApplyTransform(preview);
             }
 
-            context.PreviewTransformChanged(primaryView.ReadTransform());
+            if (context.Projector.TryGetEntity(
+                    context.Selection.PrimaryEntityId,
+                    out LevelEntityView primaryView))
+            {
+                context.PreviewTransformChanged(primaryView.ReadTransform());
+            }
         }
 
-        private void CommitDrag()
+        internal void CommitDrag()
         {
             dragging = false;
             DragFeedback = string.Empty;
+            dragAnchorEntityId = string.Empty;
             var commands = new List<ILevelEditCommand>();
             foreach (KeyValuePair<string, LevelTransformData> entry in dragBefore)
             {
@@ -270,6 +279,7 @@ namespace GritGud.Presentation.LevelEditing.Tools
             }
 
             dragBefore.Clear();
+            dragAnchorEntityId = string.Empty;
         }
 
         private string BuildDragFeedback(Vector3 delta, float snapStep)
