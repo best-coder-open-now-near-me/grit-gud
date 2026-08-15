@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Threading;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -115,6 +116,36 @@ namespace GritGud.Presentation.Supabase
             succeeded(rows.rows[0].document);
         }
 
+        public IEnumerator InvokeRpc(
+            string functionName,
+            string argumentsJson,
+            SupabaseSession session,
+            CancellationToken cancellationToken,
+            Action<string> succeeded,
+            Action<SupabaseRequestFailure> failed)
+        {
+            if (string.IsNullOrWhiteSpace(functionName)) throw new ArgumentException("A function name is required.", nameof(functionName));
+            if (session == null) throw new ArgumentNullException(nameof(session));
+            using UnityWebRequest request = CreateRequest("/rest/v1/rpc/" + functionName, UnityWebRequest.kHttpVerbPOST, argumentsJson ?? "{}");
+            request.SetRequestHeader("Authorization", "Bearer " + session.AccessToken);
+            UnityWebRequestAsyncOperation operation = request.SendWebRequest();
+            while (!operation.isDone)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    request.Abort();
+                    yield break;
+                }
+                yield return null;
+            }
+
+            if (cancellationToken.IsCancellationRequested) yield break;
+            if (request.result == UnityWebRequest.Result.Success)
+                succeeded?.Invoke(request.downloadHandler?.text ?? string.Empty);
+            else
+                failed?.Invoke(CreateFailure(request));
+        }
+
         private UnityWebRequest CreateRequest(string relativePath, string method, string body)
         {
             var request = new UnityWebRequest(configuration.ProjectUrl + relativePath, method)
@@ -133,6 +164,18 @@ namespace GritGud.Presentation.Supabase
             return string.IsNullOrWhiteSpace(detail)
                 ? "Supabase request failed: " + request.error
                 : "Supabase request failed: " + detail;
+        }
+
+        private static SupabaseRequestFailure CreateFailure(UnityWebRequest request)
+        {
+            string body = request.downloadHandler?.text ?? string.Empty;
+            SupabaseErrorResponse response = null;
+            try { response = JsonUtility.FromJson<SupabaseErrorResponse>(body); }
+            catch (Exception) { }
+            return new SupabaseRequestFailure(
+                response?.code ?? string.Empty,
+                string.IsNullOrWhiteSpace(response?.message) ? (request.error ?? "Supabase request failed.") : response.message,
+                request.responseCode);
         }
 
         private static SupabaseSession CreateSession(AnonymousSignInResponse response) =>
@@ -154,5 +197,20 @@ namespace GritGud.Presentation.Supabase
 
         [Serializable] private sealed class DocumentRows { public DocumentRow[] rows; }
         [Serializable] private sealed class DocumentRow { public string document; }
+        [Serializable] private sealed class SupabaseErrorResponse { public string code; public string message; }
+    }
+
+    public sealed class SupabaseRequestFailure
+    {
+        public SupabaseRequestFailure(string code, string message, long statusCode)
+        {
+            Code = code ?? string.Empty;
+            Message = message ?? "Supabase request failed.";
+            StatusCode = statusCode;
+        }
+
+        public string Code { get; }
+        public string Message { get; }
+        public long StatusCode { get; }
     }
 }

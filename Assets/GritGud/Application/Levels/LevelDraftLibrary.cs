@@ -47,19 +47,32 @@ namespace GritGud.Application.Levels
 
     public sealed class LevelDraftSummary
     {
-        public LevelDraftSummary(LevelDraftId id, string name, long revision, DateTimeOffset updatedAt)
+        public LevelDraftSummary(
+            LevelDraftId id,
+            string name,
+            long revision,
+            DateTimeOffset updatedAt,
+            string levelId = "",
+            string displayName = "",
+            int schemaVersion = 0)
         {
             if (revision < 1) throw new ArgumentOutOfRangeException(nameof(revision));
             Id = id;
             Name = LevelDraftName.Normalize(name);
             Revision = revision;
             UpdatedAt = updatedAt;
+            LevelId = levelId ?? string.Empty;
+            DisplayName = displayName ?? string.Empty;
+            SchemaVersion = schemaVersion;
         }
 
         public LevelDraftId Id { get; }
         public string Name { get; }
         public long Revision { get; }
         public DateTimeOffset UpdatedAt { get; }
+        public string LevelId { get; }
+        public string DisplayName { get; }
+        public int SchemaVersion { get; }
     }
 
     public sealed class LevelDraftRecord

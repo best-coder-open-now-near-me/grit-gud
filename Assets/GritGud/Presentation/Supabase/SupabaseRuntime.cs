@@ -1,4 +1,5 @@
 using System;
+using GritGud.Application.Levels;
 using UnityEngine;
 
 namespace GritGud.Presentation.Supabase
@@ -12,6 +13,8 @@ namespace GritGud.Presentation.Supabase
         public SupabaseSession Session { get; private set; }
 
         public SupabaseDocumentStore Documents { get; private set; }
+
+        public LevelDraftLibraryService DraftLibrary { get; private set; }
 
         public string Status { get; private set; } = "Cloud saves are not configured.";
 
@@ -92,6 +95,8 @@ namespace GritGud.Presentation.Supabase
                 PlayerPrefs.Save();
             }
             Documents = new SupabaseDocumentStore(client);
+            DraftLibrary = new LevelDraftLibraryService(
+                new SupabaseLevelDraftRepository(this, client, () => Session));
             Status = "Cloud saves connected.";
         }
 
