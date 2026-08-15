@@ -70,6 +70,7 @@ namespace GritGud.Presentation.LevelEditing
         private bool sourceDocumentIsSaved;
         private string sourceLabel = string.Empty;
         private string statusMessage = string.Empty;
+        private bool sessionReady;
 
         public void Begin(bool startInPreview)
         {
@@ -119,7 +120,7 @@ namespace GritGud.Presentation.LevelEditing
         {
             previewMode = false;
             suspended = false;
-            enabled = true;
+            sessionReady = false;
             sourceDocument = initialDocument.DeepCopy();
             sourceDocumentIsSaved = initialDocumentIsSaved;
             sourceLabel = string.IsNullOrWhiteSpace(initialSourceLabel)
@@ -287,10 +288,14 @@ namespace GritGud.Presentation.LevelEditing
             }
 
             RefreshEnvironmentLighting(viewDocument);
+            sessionReady = true;
+            enabled = true;
         }
 
         public void EndSession()
         {
+            sessionReady = false;
+            enabled = false;
             SaveLocalPreferences();
             if (workspace != null)
             {
@@ -398,7 +403,6 @@ namespace GritGud.Presentation.LevelEditing
             sourceDocumentIsSaved = false;
             sourceLabel = string.Empty;
             statusMessage = string.Empty;
-            enabled = false;
         }
 
         private void HandleScenarioActorFocusRequested(string actorId)
@@ -518,7 +522,8 @@ namespace GritGud.Presentation.LevelEditing
 
         private void OnGUI()
         {
-            if (!suspended
+            if (sessionReady
+                && !suspended
                 && workspace != null
                 && viewDocument != null
                 && persistence != null
