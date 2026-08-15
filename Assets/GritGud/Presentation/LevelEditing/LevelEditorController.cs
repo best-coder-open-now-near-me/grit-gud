@@ -45,6 +45,8 @@ namespace GritGud.Presentation.LevelEditing
         private TerrainAuthoringCoordinator terrainAuthoring;
         private EnvironmentAuthoringCoordinator environmentAuthoring;
         private LevelEditorLayoutCoordinator layoutAuthoring;
+        private LevelEditorOrganizationModel organizationModel;
+        private LevelEditorOrganizationCoordinator organizationAuthoring;
         private GameplayEnvironmentLighting environmentLighting;
         private LevelEntityView selectedView;
         private LevelEditorOutlinePresenter outlinePresenter;
@@ -163,6 +165,9 @@ namespace GritGud.Presentation.LevelEditing
                 preferences.gridElevation);
             gridPresenter = new LevelEditorGridPresenter(transform);
             gridSettings.Changed += HandleGridSettingsChanged;
+            organizationModel = new LevelEditorOrganizationModel(catalog);
+            organizationModel.Synchronize(viewDocument);
+            organizationModel.Changed += HandleOrganizationViewChanged;
             var toolContext = new LevelEditorToolContext(
                 workspace,
                 selection,
@@ -171,7 +176,8 @@ namespace GritGud.Presentation.LevelEditing
                 sceneQuery,
                 snapSettings,
                 SetStatus,
-                SyncInspectorFields);
+                SyncInspectorFields,
+                organizationModel);
             toolManager = new LevelEditorToolManager(toolContext, SelectionLevelEditorTool.ToolId);
             placementTool = new PlacementLevelEditorTool();
             terrainTool = new TerrainHeightLevelEditorTool();
@@ -209,6 +215,12 @@ namespace GritGud.Presentation.LevelEditing
                 cameraController,
                 gridSettings);
             layoutAuthoring.StatusChanged += SetStatus;
+            organizationAuthoring = new LevelEditorOrganizationCoordinator(
+                workspace,
+                selection,
+                organizationModel);
+            organizationAuthoring.StatusChanged += SetStatus;
+            organizationAuthoring.GroupFocusRequested += HandleGroupFocusRequested;
             gui = new LevelEditorGui(
                 selection,
                 catalog,
@@ -223,6 +235,7 @@ namespace GritGud.Presentation.LevelEditing
             gui.SyncScenarioFields(viewDocument, forceLevelIdentity: true);
             gui.SyncEnvironmentFields(viewDocument, force: true);
             gui.SyncLayoutFields(viewDocument, gridSettings, force: true);
+            gui.SyncOrganizationFields(viewDocument, force: true);
             outlinePresenter = new LevelEditorOutlinePresenter(transform);
             validationIssues = workspace.ValidationIssues;
             gridPresenter.Refresh(viewDocument.bounds, gridSettings);
@@ -236,6 +249,7 @@ namespace GritGud.Presentation.LevelEditing
                 projector.Replace(workspace.CreateSnapshot());
                 terrainProjector.Replace(workspace.CreateSnapshot());
                 scenarioActorHandles.Refresh(workspace.CreateSnapshot());
+                organizationModel.ApplyProjection(projector);
                 SetStatus("Edit the main level or choose New to start from an empty level.");
             }
 
@@ -281,6 +295,13 @@ namespace GritGud.Presentation.LevelEditing
             }
             if (layoutAuthoring != null)
                 layoutAuthoring.StatusChanged -= SetStatus;
+            if (organizationAuthoring != null)
+            {
+                organizationAuthoring.StatusChanged -= SetStatus;
+                organizationAuthoring.GroupFocusRequested -= HandleGroupFocusRequested;
+            }
+            if (organizationModel != null)
+                organizationModel.Changed -= HandleOrganizationViewChanged;
             if (gridSettings != null)
                 gridSettings.Changed -= HandleGridSettingsChanged;
             environmentLighting?.Dispose();
@@ -305,6 +326,8 @@ namespace GritGud.Presentation.LevelEditing
             terrainAuthoring = null;
             environmentAuthoring = null;
             layoutAuthoring = null;
+            organizationAuthoring = null;
+            organizationModel = null;
             environmentLighting = null;
             gridPresenter = null;
             gridSettings = null;
@@ -456,6 +479,8 @@ namespace GritGud.Presentation.LevelEditing
             scenarioActorHandles.SetVisible(!previewMode);
             gridPresenter.Refresh(workspace.CreateSnapshot().bounds, gridSettings);
             gridPresenter.SetVisible(!previewMode && gridSettings.Visible);
+            if (!previewMode)
+                organizationModel.ApplyProjection(projector);
             RefreshEnvironmentLighting(workspace.CreateSnapshot());
             SetStatus("Returned from isolated test play.");
         }
@@ -566,6 +591,12 @@ namespace GritGud.Presentation.LevelEditing
 
             if (projector.TryGetEntity(entityId, out LevelEntityView view))
             {
+                if (!organizationModel.CanSelect(entityId))
+                {
+                    SetStatus(
+                        "That entity is hidden, locked, or excluded by the selection filter.");
+                    return;
+                }
                 selection.SetSingle(entityId);
                 cameraController.Frame(view.GetWorldBounds());
                 SetStatus($"Focused entity '{entityId}'.");
@@ -686,6 +717,8 @@ namespace GritGud.Presentation.LevelEditing
             scenarioActorHandles.Refresh(workspace.CreateSnapshot());
             scenarioActorHandles.SetVisible(true);
             gridPresenter.Refresh(workspace.CreateSnapshot().bounds, gridSettings);
+            organizationModel.Synchronize(workspace.CreateSnapshot());
+            organizationModel.ApplyProjection(projector);
             SetStatus("Returned to the authored level.");
         }
 
@@ -708,6 +741,8 @@ namespace GritGud.Presentation.LevelEditing
                 viewDocument = snapshot;
                 projector.Apply(snapshot, args.SessionChange);
                 terrainProjector.Apply(snapshot, args.SessionChange);
+                organizationModel.Synchronize(snapshot);
+                organizationModel.ApplyProjection(projector);
                 ReconcileSelection(snapshot);
                 RefreshSelectedView();
                 interactionPointHandles.Refresh(snapshot, selection, projector);
@@ -724,6 +759,11 @@ namespace GritGud.Presentation.LevelEditing
                 {
                     gui.SyncLayoutFields(snapshot, gridSettings, force: true);
                     gridPresenter.Refresh(snapshot.bounds, gridSettings);
+                }
+                if (args.SessionChange.RequiresFullProjection
+                    || IsOrganizationCommand(args.SessionChange.Command))
+                {
+                    gui.SyncOrganizationFields(snapshot, force: true);
                 }
             }
             catch (LevelLoadException exception)
@@ -905,6 +945,7 @@ namespace GritGud.Presentation.LevelEditing
             gui.SyncScenarioFields(document, forceLevelIdentity: true);
             gui.SyncEnvironmentFields(document, force: true);
             gui.SyncLayoutFields(document, gridSettings, force: true);
+            gui.SyncOrganizationFields(document, force: true);
         }
 
         private void RefreshEnvironmentLighting(LevelDocument document)
@@ -948,6 +989,15 @@ namespace GritGud.Presentation.LevelEditing
             return false;
         }
 
+        private static bool IsOrganizationCommand(ILevelEditCommand command)
+        {
+            if (command is ILevelOrganizationEditCommand)
+                return true;
+            if (command is ILevelEditCommandGroup group)
+                return group.Commands.Any(IsOrganizationCommand);
+            return false;
+        }
+
         private void HandleGridSettingsChanged()
         {
             if (workspace == null || gridPresenter == null || previewMode || suspended)
@@ -968,13 +1018,28 @@ namespace GritGud.Presentation.LevelEditing
                     StringComparison.Ordinal));
                 if (entity == null)
                     return false;
-                return target.Kind != LevelSelectionKind.InteractionPoint
+                return (organizationModel == null || organizationModel.CanSelect(entity.id))
+                    && (target.Kind != LevelSelectionKind.InteractionPoint
                     || entity.interactionPoints.Any(point => string.Equals(
                         point?.id,
                         target.ElementId,
-                        StringComparison.Ordinal));
+                        StringComparison.Ordinal)));
             }).ToArray();
             selection.Set(retained);
+        }
+
+        private void HandleOrganizationViewChanged()
+        {
+            if (workspace == null || organizationModel == null || previewMode || suspended)
+                return;
+            LevelDocument snapshot = workspace.CreateSnapshot();
+            organizationModel.ApplyProjection(projector);
+            ReconcileSelection(snapshot);
+        }
+
+        private void HandleGroupFocusRequested(string groupId)
+        {
+            gui?.SelectEntityGroup(groupId, workspace?.CreateSnapshot());
         }
 
         private void HandleDocumentLoaded(object sender, LevelDocumentLoadedEventArgs args)
@@ -1017,6 +1082,7 @@ namespace GritGud.Presentation.LevelEditing
                 && toolManager.ActiveTool?.Id == SelectionLevelEditorTool.ToolId;
             if (canHover
                 && sceneQuery.TryPickEntity(pointerPosition, out LevelEntityView view, out _)
+                && organizationModel.CanSelect(view.EntityId)
                 && !selection.Targets.Any(target => string.Equals(
                     target.EntityId,
                     view.EntityId,
@@ -1058,6 +1124,13 @@ namespace GritGud.Presentation.LevelEditing
         }
 
         LevelEditorCameraView ILevelEditorGuiActions.CameraView => cameraController.View;
+
+        string ILevelEditorGuiActions.IsolatedGroupId => organizationModel.IsolatedGroupId;
+
+        string ILevelEditorGuiActions.SelectionCategoryFilter =>
+            organizationModel.CategoryFilter;
+
+        string ILevelEditorGuiActions.SelectionGroupFilter => organizationModel.GroupFilter;
 
         void ILevelEditorGuiActions.Undo() => workspace.Undo();
 
@@ -1103,6 +1176,36 @@ namespace GritGud.Presentation.LevelEditing
 
         void ILevelEditorGuiActions.DuplicateArray(LevelArrayAuthoringRequest request) =>
             layoutAuthoring.DuplicateArray(request);
+
+        void ILevelEditorGuiActions.CreateEntityGroup(string displayName) =>
+            organizationAuthoring.CreateGroup(displayName);
+
+        void ILevelEditorGuiActions.RenameEntityGroup(string groupId, string displayName) =>
+            organizationAuthoring.RenameGroup(groupId, displayName);
+
+        void ILevelEditorGuiActions.SetEntityGroupLocked(string groupId, bool locked) =>
+            organizationAuthoring.SetGroupLocked(groupId, locked);
+
+        void ILevelEditorGuiActions.SetEntityGroupHidden(string groupId, bool hidden) =>
+            organizationAuthoring.SetGroupHidden(groupId, hidden);
+
+        void ILevelEditorGuiActions.AssignSelectionToGroup(string groupId) =>
+            organizationAuthoring.AssignSelection(groupId);
+
+        void ILevelEditorGuiActions.DeleteEntityGroup(string groupId) =>
+            organizationAuthoring.DeleteGroup(groupId);
+
+        void ILevelEditorGuiActions.IsolateEntityGroup(string groupId) =>
+            organizationAuthoring.IsolateGroup(groupId);
+
+        void ILevelEditorGuiActions.SetSelectionCategoryFilter(string category) =>
+            organizationAuthoring.SetCategoryFilter(category);
+
+        void ILevelEditorGuiActions.SetSelectionGroupFilter(string groupId) =>
+            organizationAuthoring.SetGroupFilter(groupId);
+
+        void ILevelEditorGuiActions.SelectMatchingEntities() =>
+            organizationAuthoring.SelectMatching();
 
         void ILevelEditorGuiActions.ApplyEnvironment(
             LevelEnvironmentAuthoringRequest request) =>

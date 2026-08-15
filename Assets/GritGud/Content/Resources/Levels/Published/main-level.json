@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "levelId": "main-depot-yard-v1",
   "displayName": "Depot Yard",
   "bounds": {
@@ -39,6 +39,7 @@
       { "id": "north-yard-work-light", "displayName": "North Yard Work Light", "position": { "x": -3.5, "y": 5.4, "z": 8.5 }, "target": { "x": 0.0, "y": 0.0, "z": 4.5 }, "color": { "r": 1.35, "g": 0.32, "b": 0.025, "a": 1.0 }, "intensity": 2.4, "range": 13.0, "spotAngle": 48.0, "innerSpotFraction": 0.55, "baseHeight": 0.0 }
     ]
   },
+  "groups": [],
   "entities": [
     { "id": "floor-r01-c01", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -10.0, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
     { "id": "floor-r01-c02", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -7.5, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },

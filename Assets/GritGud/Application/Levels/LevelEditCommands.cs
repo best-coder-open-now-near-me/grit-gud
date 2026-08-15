@@ -44,6 +44,162 @@ namespace GritGud.Application.Levels
     {
     }
 
+    public interface ILevelOrganizationEditCommand : ILevelEditCommand
+    {
+    }
+
+    public sealed class AddLevelGroupCommand : ILevelOrganizationEditCommand
+    {
+        private readonly LevelEntityGroupData group;
+
+        public AddLevelGroupCommand(LevelEntityGroupData group)
+        {
+            this.group = group?.DeepCopy() ?? throw new ArgumentNullException(nameof(group));
+        }
+
+        public string Description => "Add entity group";
+        public IReadOnlyCollection<string> AffectedEntityIds => Array.Empty<string>();
+        public bool RequiresFullProjection => false;
+
+        public void Apply(LevelDocument document)
+        {
+            AddEntityCommand.RequireDocument(document);
+            if (document.groups.Any(candidate => string.Equals(
+                    candidate?.id,
+                    group.id,
+                    StringComparison.Ordinal)))
+            {
+                throw new InvalidOperationException($"Entity group '{group.id}' already exists.");
+            }
+            document.groups.Add(group.DeepCopy());
+        }
+
+        public void Revert(LevelDocument document)
+        {
+            AddEntityCommand.RequireDocument(document);
+            document.groups.RemoveAll(candidate => string.Equals(
+                candidate?.id,
+                group.id,
+                StringComparison.Ordinal));
+        }
+    }
+
+    public sealed class SetLevelGroupCommand : ILevelOrganizationEditCommand
+    {
+        private readonly string groupId;
+        private readonly LevelEntityGroupData before;
+        private readonly LevelEntityGroupData after;
+
+        public SetLevelGroupCommand(
+            string groupId,
+            LevelEntityGroupData before,
+            LevelEntityGroupData after)
+        {
+            this.groupId = string.IsNullOrWhiteSpace(groupId)
+                ? throw new ArgumentException("A group ID is required.", nameof(groupId))
+                : groupId;
+            this.before = before?.DeepCopy() ?? throw new ArgumentNullException(nameof(before));
+            this.after = after?.DeepCopy() ?? throw new ArgumentNullException(nameof(after));
+        }
+
+        public string Description => "Edit entity group";
+        public IReadOnlyCollection<string> AffectedEntityIds => Array.Empty<string>();
+        public bool RequiresFullProjection => false;
+        public void Apply(LevelDocument document) => Set(document, after);
+        public void Revert(LevelDocument document) => Set(document, before);
+
+        private void Set(LevelDocument document, LevelEntityGroupData value)
+        {
+            AddEntityCommand.RequireDocument(document);
+            int index = document.groups.FindIndex(candidate => string.Equals(
+                candidate?.id,
+                groupId,
+                StringComparison.Ordinal));
+            if (index < 0)
+                throw new InvalidOperationException($"Entity group '{groupId}' does not exist.");
+            document.groups[index] = value.DeepCopy();
+        }
+    }
+
+    public sealed class SetEntityGroupCommand : ILevelOrganizationEditCommand
+    {
+        private readonly string entityId;
+        private readonly string before;
+        private readonly string after;
+
+        public SetEntityGroupCommand(string entityId, string before, string after)
+        {
+            this.entityId = string.IsNullOrWhiteSpace(entityId)
+                ? throw new ArgumentException("An entity ID is required.", nameof(entityId))
+                : entityId;
+            this.before = before ?? string.Empty;
+            this.after = after ?? string.Empty;
+        }
+
+        public string Description => "Assign entity group";
+        public IReadOnlyCollection<string> AffectedEntityIds => new[] { entityId };
+        public bool RequiresFullProjection => false;
+        public void Apply(LevelDocument document) => Set(document, after);
+        public void Revert(LevelDocument document) => Set(document, before);
+
+        private void Set(LevelDocument document, string groupId)
+        {
+            AddEntityCommand.RequireDocument(document);
+            LevelEntity entity = document.entities.FirstOrDefault(candidate => string.Equals(
+                candidate?.id,
+                entityId,
+                StringComparison.Ordinal));
+            if (entity == null)
+                throw new InvalidOperationException($"Entity '{entityId}' does not exist.");
+            entity.groupId = groupId;
+        }
+    }
+
+    public sealed class DeleteLevelGroupCommand : ILevelOrganizationEditCommand
+    {
+        private readonly string groupId;
+        private LevelEntityGroupData removed;
+        private int removedIndex;
+
+        public DeleteLevelGroupCommand(string groupId)
+        {
+            this.groupId = string.IsNullOrWhiteSpace(groupId)
+                ? throw new ArgumentException("A group ID is required.", nameof(groupId))
+                : groupId;
+        }
+
+        public string Description => "Delete entity group";
+        public IReadOnlyCollection<string> AffectedEntityIds => Array.Empty<string>();
+        public bool RequiresFullProjection => false;
+
+        public void Apply(LevelDocument document)
+        {
+            AddEntityCommand.RequireDocument(document);
+            if (document.entities.Any(entity => string.Equals(
+                    entity?.groupId,
+                    groupId,
+                    StringComparison.Ordinal)))
+            {
+                throw new InvalidOperationException(
+                    $"Entity group '{groupId}' must be empty before deletion.");
+            }
+            removedIndex = document.groups.FindIndex(candidate => string.Equals(
+                candidate?.id,
+                groupId,
+                StringComparison.Ordinal));
+            if (removedIndex < 0)
+                throw new InvalidOperationException($"Entity group '{groupId}' does not exist.");
+            removed = document.groups[removedIndex].DeepCopy();
+            document.groups.RemoveAt(removedIndex);
+        }
+
+        public void Revert(LevelDocument document)
+        {
+            AddEntityCommand.RequireDocument(document);
+            document.groups.Insert(Math.Min(removedIndex, document.groups.Count), removed.DeepCopy());
+        }
+    }
+
     public sealed class SetLevelBoundsCommand : ILevelBoundsEditCommand
     {
         private readonly LevelBoundsData before;

@@ -16,6 +16,12 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         LevelEditorCameraView CameraView { get; }
 
+        string IsolatedGroupId { get; }
+
+        string SelectionCategoryFilter { get; }
+
+        string SelectionGroupFilter { get; }
+
         void ReturnToMenu();
 
         void Undo();
@@ -55,6 +61,26 @@ namespace GritGud.Presentation.LevelEditing.UI
         void SetCameraView(LevelEditorCameraView view);
 
         void DuplicateArray(LevelArrayAuthoringRequest request);
+
+        void CreateEntityGroup(string displayName);
+
+        void RenameEntityGroup(string groupId, string displayName);
+
+        void SetEntityGroupLocked(string groupId, bool locked);
+
+        void SetEntityGroupHidden(string groupId, bool hidden);
+
+        void AssignSelectionToGroup(string groupId);
+
+        void DeleteEntityGroup(string groupId);
+
+        void IsolateEntityGroup(string groupId);
+
+        void SetSelectionCategoryFilter(string category);
+
+        void SetSelectionGroupFilter(string groupId);
+
+        void SelectMatchingEntities();
 
         void ApplyEnvironment(LevelEnvironmentAuthoringRequest request);
 

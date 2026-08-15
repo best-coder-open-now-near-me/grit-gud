@@ -257,10 +257,37 @@ namespace GritGud.Domain.Levels
     }
 
     [Serializable]
+    public sealed class LevelEntityGroupData
+    {
+        public string id = string.Empty;
+        public string displayName = "Group";
+        public bool locked;
+        public bool hidden;
+
+        public void Normalize()
+        {
+            id = id ?? string.Empty;
+            displayName = displayName ?? string.Empty;
+        }
+
+        public LevelEntityGroupData DeepCopy()
+        {
+            return new LevelEntityGroupData
+            {
+                id = id ?? string.Empty,
+                displayName = displayName ?? string.Empty,
+                locked = locked,
+                hidden = hidden,
+            };
+        }
+    }
+
+    [Serializable]
     public sealed class LevelEntity
     {
         public string id = string.Empty;
         public string archetypeId = string.Empty;
+        public string groupId = string.Empty;
         public LevelTransformData transform;
         public List<CoverVolumeData> coverVolumes = new List<CoverVolumeData>();
         public List<InteractionPointData> interactionPoints = new List<InteractionPointData>();
@@ -270,6 +297,7 @@ namespace GritGud.Domain.Levels
         {
             id = id ?? string.Empty;
             archetypeId = archetypeId ?? string.Empty;
+            groupId = groupId ?? string.Empty;
             coverVolumes = coverVolumes ?? new List<CoverVolumeData>();
             interactionPoints = interactionPoints ?? new List<InteractionPointData>();
         }
@@ -280,6 +308,7 @@ namespace GritGud.Domain.Levels
             {
                 id = id ?? string.Empty,
                 archetypeId = archetypeId ?? string.Empty,
+                groupId = groupId ?? string.Empty,
                 transform = transform,
                 destructible = destructible?.DeepCopy(),
             };
@@ -570,7 +599,8 @@ namespace GritGud.Domain.Levels
     [Serializable]
     public sealed class LevelDocument
     {
-        public const int CurrentSchemaVersion = 6;
+        public const int CurrentSchemaVersion = 7;
+        public const int MaximumEntityGroupCount = 64;
 
         public int schemaVersion = CurrentSchemaVersion;
         public string levelId = string.Empty;
@@ -579,6 +609,7 @@ namespace GritGud.Domain.Levels
             new Float3Data(0f, 2.5f, 0f),
             new Float3Data(50f, 10f, 50f));
         public LevelEnvironmentData environment = new LevelEnvironmentData();
+        public List<LevelEntityGroupData> groups = new List<LevelEntityGroupData>();
         public List<LevelEntity> entities = new List<LevelEntity>();
         public List<TerrainSurfaceData> terrainSurfaces = new List<TerrainSurfaceData>();
         public LevelScenarioData scenario = new LevelScenarioData();
@@ -592,6 +623,9 @@ namespace GritGud.Domain.Levels
             displayName = displayName ?? string.Empty;
             environment = environment ?? new LevelEnvironmentData();
             environment.Normalize();
+            groups = groups ?? new List<LevelEntityGroupData>();
+            foreach (LevelEntityGroupData group in groups)
+                group?.Normalize();
             entities = entities ?? new List<LevelEntity>();
             terrainSurfaces = terrainSurfaces ?? new List<TerrainSurfaceData>();
             scenario = scenario ?? new LevelScenarioData();
@@ -620,6 +654,12 @@ namespace GritGud.Domain.Levels
                 scenario = scenario?.DeepCopy() ?? new LevelScenarioData(),
                 legacyPlaytest = legacyPlaytest?.DeepCopy(),
             };
+
+            if (groups != null)
+            {
+                foreach (LevelEntityGroupData group in groups)
+                    copy.groups.Add(group?.DeepCopy());
+            }
 
             if (entities != null)
             {

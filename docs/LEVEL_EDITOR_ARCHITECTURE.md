@@ -47,6 +47,8 @@ copied back into the authoring workspace.
 | Scenario authoring coordinator | Scenario invariants, transactions, and actor/link use cases |
 | Environment authoring coordinator | Numeric parsing, lighting invariants, and undoable atmosphere/practical-light use cases |
 | Layout coordinator | Bounds validation, local grid/view settings, and transaction-based entity arrays |
+| Organization model | Group visibility, locks, isolation, and transient category/group selection policy |
+| Organization coordinator | Group lifecycle, bulk assignment, filtering, and selection use cases |
 | Controller | Composition, Unity lifecycle, preview boundary, and cross-service routing |
 
 Domain and Application assemblies have no Unity references. Unity asset paths,
@@ -128,6 +130,23 @@ lighting values.
 ambient effects. Those references remain Presentation-owned until ambient VFX
 placements become portable authored data; the catalog no longer duplicates
 atmosphere or practical-light values.
+
+## Entity organization
+
+Schema 7 stores named entity groups and each entity's optional stable group ID.
+Group names, lock state, and hidden state are authored data changed only through
+`ILevelOrganizationEditCommand` implementations. Group deletion is a composite
+transaction that first ungroups every member, so undo restores both the group
+and its membership atomically.
+
+`LevelEditorOrganizationModel` is the presentation-owned selection policy. It
+combines portable lock/hidden state with transient isolation and category/group
+filters, applies authoring visibility to projected entity views, and prevents
+scene picking or hierarchy focus from bypassing that policy. Isolation and
+filters deliberately stay out of `LevelDocument`: they describe the current
+author's view, not the playable or portable level. Preview and Test Play rebuild
+from the document snapshot without authoring visibility applied, so hidden
+groups are never mistaken for disabled gameplay content.
 
 ## Scaling rules
 

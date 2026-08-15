@@ -95,6 +95,12 @@ namespace GritGud.Presentation.LevelEditing.Tools
                     out LevelEntityView view,
                     out Ray ray))
                 {
+                    if (!context.SelectionPolicy.CanSelect(view.EntityId))
+                    {
+                        context.SetStatus(
+                            "That entity is locked or excluded by the active selection filter.");
+                        return;
+                    }
                     if (input.AdditiveSelection)
                     {
                         context.Selection.Toggle(new LevelSelectionTarget(view.EntityId));

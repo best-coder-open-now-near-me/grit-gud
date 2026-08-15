@@ -63,8 +63,10 @@ The next usability improvements, in priority order, are:
    adapter is replaced.
 4. **Preferences:** camera, orthographic projection, snap, and grid settings are
    retained locally without putting user preferences in portable level JSON.
-5. **Larger scenes:** palette search/category filters and a searchable entity
-   hierarchy are implemented. Keep hierarchy state local to the editor.
+5. **Larger scenes:** palette search, a searchable entity hierarchy, portable
+   named groups, lock/hide/isolate, category/group selection filters, and bulk
+   selection are implemented. Isolation and filter state stay local to the
+   editor.
 
 These should remain presentation and tooling changes unless they mutate authored
 level data. Camera state, hover state, open panels, and local preferences do not
@@ -122,8 +124,8 @@ Each increment is ready to merge when it:
 - The selection model supports multiple targets, but the current selection tool
   operates on one entity. Batch transforms should therefore be a separate
   transaction-based slice rather than an incidental change to metadata editing.
-- Runtime navigation baking, arbitrary asset import, and terrain sculpting are
-  outside the domain-specific editor's current scope.
+- Runtime navigation baking and arbitrary asset import remain outside the
+  domain-specific editor's current scope.
 
 After metadata authoring, duplicate/copy-paste and multi-entity transforms are
 implemented through composite command history. Validation navigation, palette
@@ -131,6 +133,6 @@ search/category filters, the entity hierarchy, local editor preferences, and
 transform feedback are also complete.
 Encounter scripting should wait until its portable runtime contracts are known.
 
-Terrain is now the next major editor capability. Its portable heightfield model,
-patch-command history, chunked projection, and phased delivery plan are defined
-in the [terrain-editor architecture plan](TERRAIN_EDITOR_ARCHITECTURE.md).
+Portable heightfield terrain, patch-command history, and chunked projection are
+implemented. The next production slices are playability diagnostics and terrain
+appearance, followed by portable dressing zones and encounter authoring.

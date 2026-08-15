@@ -87,6 +87,33 @@ namespace GritGud.Domain.Tests.Levels
         }
 
         [Test]
+        public void EntityGroupCommandsPreserveMembershipAcrossUndo()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            document.entities.Add(new LevelEntity
+            {
+                id = "crate",
+                archetypeId = "prop.crate.standard",
+            });
+            using var workspace = new LevelEditorWorkspace(document);
+            var group = new LevelEntityGroupData
+            {
+                id = "props",
+                displayName = "Props",
+            };
+
+            workspace.Execute(new AddLevelGroupCommand(group));
+            workspace.Execute(new SetEntityGroupCommand("crate", string.Empty, "props"));
+
+            Assert.That(workspace.CreateSnapshot().groups, Has.Count.EqualTo(1));
+            Assert.That(workspace.FindEntitySnapshot("crate").groupId, Is.EqualTo("props"));
+            workspace.Undo();
+            Assert.That(workspace.FindEntitySnapshot("crate").groupId, Is.Empty);
+            workspace.Undo();
+            Assert.That(workspace.CreateSnapshot().groups, Is.Empty);
+        }
+
+        [Test]
         public void WorkspacePublishesHistoryAndValidationTogether()
         {
             using var workspace = new LevelEditorWorkspace(LevelDocumentFactory.CreateEmpty());

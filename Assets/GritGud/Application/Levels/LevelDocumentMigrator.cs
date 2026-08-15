@@ -29,6 +29,7 @@ namespace GritGud.Application.Levels
                     new LevelDocumentV3ToV4Migration(),
                     new LevelDocumentV4ToV5Migration(),
                     new LevelDocumentV5ToV6Migration(),
+                    new LevelDocumentV6ToV7Migration(),
                 };
             }
 
@@ -227,6 +228,28 @@ namespace GritGud.Application.Levels
             LevelDocument migrated = source.DeepCopy();
             migrated.environment = source.environment?.DeepCopy()
                 ?? new LevelEnvironmentData();
+            migrated.schemaVersion = TargetVersion;
+            return migrated;
+        }
+    }
+
+    public sealed class LevelDocumentV6ToV7Migration : ILevelDocumentMigration
+    {
+        public int SourceVersion => 6;
+
+        public int TargetVersion => 7;
+
+        public LevelDocument Migrate(LevelDocument source)
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+            LevelDocument migrated = source.DeepCopy();
+            migrated.groups = migrated.groups ?? new List<LevelEntityGroupData>();
+            foreach (LevelEntity entity in migrated.entities)
+            {
+                if (entity != null)
+                    entity.groupId = entity.groupId ?? string.Empty;
+            }
             migrated.schemaVersion = TargetVersion;
             return migrated;
         }

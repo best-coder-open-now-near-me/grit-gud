@@ -45,9 +45,10 @@ Portable JSON contains:
 - optional initial destructible state and integrity;
 - typed, quantized heightfield terrain surfaces; and
 - portable atmosphere, fog, directional-key, fixture, and practical-light data;
-- stable practical-light IDs with cross-platform fixture limits; and
+- stable practical-light IDs with cross-platform fixture limits;
 - scenario actor instances, objectives, props, vehicles, and complete objective
-  action costs.
+  action costs; and
+- named entity groups plus their portable locked and hidden authoring state.
 
 The loader validates the whole document before exposing a replacement world.
 An invalid import therefore leaves the currently loaded level untouched.
@@ -105,6 +106,19 @@ include the original cell, preserve the relative arrangement of a
 multi-selection, allocate new stable IDs, enforce the entity limit, and commit
 up to 256 generated copies as one undo step. This is the fast path for floor modules,
 walls, repeated cover, and other blockout runs.
+
+Create → Select also includes **Organization** for larger levels. Groups are
+named, portable collections: select one or more world entities, create or choose
+a group, then assign the selection. Lock prevents scene and hierarchy selection;
+Hide removes the group from the authoring projection; Isolate temporarily shows
+only one group. Lock and Hide are saved in the level, while the active isolation
+and selection filters are local editor state and are not exported.
+
+Category and group filters limit what scene picking, hierarchy focus, and
+**Select Matching** can select. Use **All groups** and **All categories** to clear
+the filters. Hidden, locked, isolated-out, and filtered entities are removed from
+the current selection automatically. Deleting a group keeps its entities and
+makes them ungrouped; the complete operation is one undo step.
 
 The Terrain create mode exposes Raise, Lower, Smooth, and Flatten plus brush
 radius and quantized strength. The world-space footprint changes color with the
@@ -200,15 +214,15 @@ It uses exactly the authored scenario party, actor starts, objectives, physics
 props, vehicles, hostiles, atmosphere, and practical lights. Return to Editor discards gameplay state and
 resumes the same authoring workspace.
 
-## Deliberate v1 limits
+## Current limits
 
 - Position and yaw are authored; arbitrary pitch, roll, and scaling are not.
 - Dragging preserves the entity's current elevation.
 - Legacy cover-volume data remains readable for file compatibility but has no
   authoring surface. Destructible metadata is authored through entity capability
   controls.
-- No runtime navigation bake, arbitrary asset import, or encounter scripting is
-  included. Terrain's ownership and delivery boundaries are documented in the
+- No runtime navigation bake or arbitrary asset import is included. Terrain's
+  ownership and delivery boundaries are documented in the
   [terrain-editor architecture plan](TERRAIN_EDITOR_ARCHITECTURE.md).
 - The runtime UI is intentionally code-driven while the final visual language
   and broader gameplay UI remain unsettled.

@@ -441,6 +441,8 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.Label("Search all authored world and scenario objects.");
             hierarchySearch = GUILayout.TextField(hierarchySearch ?? string.Empty);
 
+            DrawOrganization(document);
+
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
             DrawSectionHeader("SCENARIO");
             LevelScenarioActorData selectedPlayer = document.scenario

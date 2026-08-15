@@ -31,6 +31,31 @@ namespace GritGud.Domain.Tests.Levels
         }
 
         [Test]
+        public void EntityGroupsRequireStableUniqueIdsAndResolvableMembership()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            document.groups.Add(new LevelEntityGroupData
+            {
+                id = "walls",
+                displayName = "Walls",
+            });
+            document.groups.Add(new LevelEntityGroupData
+            {
+                id = "walls",
+                displayName = "",
+            });
+            LevelEntity entity = CreateEntity("entity-1");
+            entity.groupId = "missing";
+            document.entities.Add(entity);
+
+            var issues = LevelValidator.Validate(document);
+
+            Assert.That(issues.Any(issue => issue.Code == "group.id"), Is.True);
+            Assert.That(issues.Any(issue => issue.Code == "group.name.missing"), Is.True);
+            Assert.That(issues.Any(issue => issue.Code == "entity.group.unknown"), Is.True);
+        }
+
+        [Test]
         public void EmptyFactoryDocumentIsValid()
         {
             LevelDocument document = LevelDocumentFactory.CreateEmpty("Test Level");

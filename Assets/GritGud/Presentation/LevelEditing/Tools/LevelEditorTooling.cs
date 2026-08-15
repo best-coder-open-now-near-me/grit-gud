@@ -7,6 +7,19 @@ using GritGud.Presentation.Levels.Runtime;
 
 namespace GritGud.Presentation.LevelEditing.Tools
 {
+    public interface ILevelEditorSelectionPolicy
+    {
+        bool CanSelect(string entityId);
+    }
+
+    internal sealed class AllowAllLevelEditorSelectionPolicy : ILevelEditorSelectionPolicy
+    {
+        public static readonly AllowAllLevelEditorSelectionPolicy Instance =
+            new AllowAllLevelEditorSelectionPolicy();
+
+        public bool CanSelect(string entityId) => true;
+    }
+
     public sealed class LevelEditorToolContext
     {
         public LevelEditorToolContext(
@@ -17,7 +30,8 @@ namespace GritGud.Presentation.LevelEditing.Tools
             LevelEditorSceneQuery sceneQuery,
             LevelSnapSettings snapSettings,
             Action<string> setStatus,
-            Action<LevelTransformData> previewTransformChanged)
+            Action<LevelTransformData> previewTransformChanged,
+            ILevelEditorSelectionPolicy selectionPolicy = null)
         {
             Workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
             Selection = selection ?? throw new ArgumentNullException(nameof(selection));
@@ -29,6 +43,8 @@ namespace GritGud.Presentation.LevelEditing.Tools
             SetStatus = setStatus ?? throw new ArgumentNullException(nameof(setStatus));
             PreviewTransformChanged = previewTransformChanged
                 ?? throw new ArgumentNullException(nameof(previewTransformChanged));
+            SelectionPolicy = selectionPolicy
+                ?? AllowAllLevelEditorSelectionPolicy.Instance;
         }
 
         public LevelEditorWorkspace Workspace { get; }
@@ -46,6 +62,8 @@ namespace GritGud.Presentation.LevelEditing.Tools
         public Action<string> SetStatus { get; }
 
         public Action<LevelTransformData> PreviewTransformChanged { get; }
+
+        public ILevelEditorSelectionPolicy SelectionPolicy { get; }
     }
 
     public interface ILevelEditorTool

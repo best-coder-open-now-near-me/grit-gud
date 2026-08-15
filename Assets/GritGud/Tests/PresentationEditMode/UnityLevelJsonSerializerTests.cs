@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using GritGud.Application.Levels;
 using GritGud.Domain.Levels;
 using GritGud.Presentation.Levels;
@@ -16,6 +17,7 @@ namespace GritGud.Presentation.Tests
             {
                 id = "crate-1",
                 archetypeId = "prop.crate.standard",
+                groupId = "props",
                 transform = new LevelTransformData(new Float3Data(2.5f, 0f, -5f), 90f),
                 destructible = new DestructibleInstanceData
                 {
@@ -46,6 +48,12 @@ namespace GritGud.Presentation.Tests
                 spotAngle = 52f,
                 innerSpotFraction = 0.6f,
             });
+            document.groups.Add(new LevelEntityGroupData
+            {
+                id = "props",
+                displayName = "Gameplay Props",
+                locked = true,
+            });
             var serializer = new UnityLevelJsonSerializer();
 
             string json = serializer.Serialize(document);
@@ -55,6 +63,9 @@ namespace GritGud.Presentation.Tests
             Assert.That(result.displayName, Is.EqualTo("Round Trip"));
             Assert.That(result.entities, Has.Count.EqualTo(1));
             Assert.That(result.entities[0].id, Is.EqualTo("crate-1"));
+            Assert.That(result.entities[0].groupId, Is.EqualTo("props"));
+            Assert.That(result.groups.Single().displayName, Is.EqualTo("Gameplay Props"));
+            Assert.That(result.groups.Single().locked, Is.True);
             Assert.That(result.entities[0].transform.position.z, Is.EqualTo(-5f));
             Assert.That(result.entities[0].destructible.initialState, Is.EqualTo("intact"));
             Assert.That(result.entities[0].destructible.enabled, Is.True);

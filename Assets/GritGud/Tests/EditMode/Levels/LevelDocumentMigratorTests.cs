@@ -116,5 +116,25 @@ namespace GritGud.Domain.Tests.Levels
             Assert.That(result.environment.atmosphere.fogEnabled, Is.True);
             Assert.That(result.environment.keyLight.intensity, Is.GreaterThan(0f));
         }
+
+        [Test]
+        public void VersionSixDocumentGainsPortableOrganizationDefaults()
+        {
+            LevelDocument source = LevelDocumentFactory.CreateEmpty("Legacy Groups");
+            source.schemaVersion = 6;
+            source.groups = null;
+            source.entities.Add(new LevelEntity
+            {
+                id = "entity",
+                archetypeId = "prop.crate.standard",
+                groupId = null,
+            });
+
+            LevelDocument result = new LevelDocumentMigrator().MigrateToCurrent(source);
+
+            Assert.That(result.schemaVersion, Is.EqualTo(LevelDocument.CurrentSchemaVersion));
+            Assert.That(result.groups, Is.Empty);
+            Assert.That(result.entities[0].groupId, Is.Empty);
+        }
     }
 }
