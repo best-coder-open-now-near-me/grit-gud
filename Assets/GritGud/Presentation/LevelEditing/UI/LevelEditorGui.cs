@@ -375,15 +375,20 @@ namespace GritGud.Presentation.LevelEditing.UI
                 "SNAP",
                 GUI.skin.button,
                 ToolbarButtonLayout(68f));
-            if (GUILayout.Button("SAVE DRAFT", ToolbarButtonLayout(96f)))
+            if (GUILayout.Button("SAVE LOCAL", ToolbarButtonLayout(96f)))
             {
                 actions.SaveDraft();
             }
 
+            GUI.enabled = interactionsEnabled && !previewMode && !actions.CloudOperationRunning;
             if (GUILayout.Button("CLOUD SAVE", ToolbarButtonLayout(96f)))
             {
                 actions.SaveToCloud();
             }
+            GUI.enabled = interactionsEnabled
+                && !previewMode
+                && actions.HasCloudDraftContext
+                && !actions.CloudOperationRunning;
             if (GUILayout.Button("CLOUD LOAD", ToolbarButtonLayout(96f)))
             {
                 documentActionConfirmation.Request(
@@ -393,7 +398,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             }
 
             GUI.enabled = interactionsEnabled && !previewMode && actions.HasDraft;
-            if (GUILayout.Button("LOAD DRAFT", ToolbarButtonLayout(96f)))
+            if (GUILayout.Button("LOAD LOCAL", ToolbarButtonLayout(96f)))
             {
                 documentActionConfirmation.Request(
                     state.IsDirty,

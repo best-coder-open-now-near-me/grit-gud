@@ -71,6 +71,8 @@ namespace GritGud.Presentation.LevelEditing
         private string sourceLabel = string.Empty;
         private string statusMessage = string.Empty;
         private bool sessionReady;
+        private bool cloudOperationRunning;
+        private int sessionGeneration;
 
         public void Begin(bool startInPreview)
         {
@@ -294,6 +296,7 @@ namespace GritGud.Presentation.LevelEditing
 
         public void EndSession()
         {
+            sessionGeneration++;
             sessionReady = false;
             enabled = false;
             SaveLocalPreferences();
@@ -403,6 +406,7 @@ namespace GritGud.Presentation.LevelEditing
             sourceDocumentIsSaved = false;
             sourceLabel = string.Empty;
             statusMessage = string.Empty;
+            cloudOperationRunning = false;
         }
 
         private void HandleScenarioActorFocusRequested(string actorId)
@@ -1500,6 +1504,11 @@ namespace GritGud.Presentation.LevelEditing
 
         bool ILevelEditorGuiActions.HasDraft => persistence?.HasDraft ?? false;
 
+        bool ILevelEditorGuiActions.HasCloudDraftContext =>
+            GameBootstrap.Instance?.ActiveCloudDraft != null;
+
+        bool ILevelEditorGuiActions.CloudOperationRunning => cloudOperationRunning;
+
         int ILevelEditorGuiActions.RecoveryGenerationCount =>
             LevelEditorPersistenceCoordinator.RecoveryGenerationCount;
 
@@ -1548,38 +1557,97 @@ namespace GritGud.Presentation.LevelEditing
 
         void ILevelEditorGuiActions.SaveDraft() => persistence.SaveDraft(workspace);
 
-        void ILevelEditorGuiActions.SaveToCloud()
+        async void ILevelEditorGuiActions.SaveToCloud()
         {
-            SupabaseRuntime supabase = GameBootstrap.Instance?.Supabase;
-            if (supabase == null)
+            GameBootstrap bootstrap = GameBootstrap.Instance;
+            LevelDraftLibraryCoordinator library = bootstrap?.DraftLibrary;
+            if (library == null || workspace == null || cloudOperationRunning)
             {
-                SetStatus("Cloud saves are not configured.");
+                SetStatus(bootstrap?.Supabase?.Status ?? "Cloud saves are not configured.");
                 return;
             }
 
-            supabase.SaveLevelDraft(
-                "active",
-                new UnityLevelJsonSerializer().Serialize(workspace.CreateSnapshot()),
-                SetStatus);
+            int generation = sessionGeneration;
+            int savedRevision = workspace.Revision;
+            LevelDocument snapshot = workspace.CreateSnapshot();
+            cloudOperationRunning = true;
+            SetStatus("Saving cloud draft…");
+            try
+            {
+                LevelDraftRecord active = bootstrap.ActiveCloudDraft;
+                if (active == null)
+                {
+                    string name = string.IsNullOrWhiteSpace(snapshot.displayName)
+                        ? "Untitled Level"
+                        : snapshot.displayName;
+                    active = await library.CreateAsync(name, snapshot);
+                    if (generation != sessionGeneration || !sessionReady) return;
+                    bootstrap.AdoptActiveCloudDraft(active);
+                    sourceDocument = snapshot.DeepCopy();
+                    sourceDocumentIsSaved = true;
+                    sourceLabel = "cloud draft: " + active.Summary.Name;
+                }
+                else
+                {
+                    LevelDraftSummary summary = await library.SaveAsync(
+                        active.Summary.Id,
+                        active.Summary.Revision,
+                        snapshot);
+                    if (generation != sessionGeneration || !sessionReady) return;
+                    bootstrap.AdoptActiveCloudDraft(new LevelDraftRecord(summary, snapshot));
+                    sourceDocument = snapshot.DeepCopy();
+                    sourceDocumentIsSaved = true;
+                }
+
+                if (workspace.Revision == savedRevision) workspace.MarkSaved();
+                SetStatus("Saved cloud draft.");
+            }
+            catch (Exception exception)
+            {
+                if (generation == sessionGeneration && sessionReady)
+                    SetStatus(exception.Message);
+            }
+            finally
+            {
+                if (generation == sessionGeneration) cloudOperationRunning = false;
+            }
         }
 
-        void ILevelEditorGuiActions.LoadFromCloud()
+        async void ILevelEditorGuiActions.LoadFromCloud()
         {
-            SupabaseRuntime supabase = GameBootstrap.Instance?.Supabase;
-            if (supabase == null) { SetStatus("Cloud saves are not configured."); return; }
-            supabase.LoadLevelDraft("active", text =>
+            GameBootstrap bootstrap = GameBootstrap.Instance;
+            LevelDraftRecord active = bootstrap?.ActiveCloudDraft;
+            LevelDraftLibraryCoordinator library = bootstrap?.DraftLibrary;
+            if (active == null || library == null || cloudOperationRunning)
             {
-                try
-                {
-                    LevelDocument document = persistence.Deserialize(text);
-                    sourceDocument = document.DeepCopy();
-                    sourceDocumentIsSaved = true;
-                    sourceLabel = "cloud draft";
-                    ReplaceWorkspaceDocument(document, isSaved: true);
-                    SetStatus("Loaded level from cloud.");
-                }
-                catch (Exception exception) { SetStatus(exception.Message); }
-            }, SetStatus);
+                SetStatus("Open a cloud draft before loading it.");
+                return;
+            }
+
+            int generation = sessionGeneration;
+            cloudOperationRunning = true;
+            SetStatus("Loading cloud draft…");
+            try
+            {
+                LevelDraftRecord loaded = await library.LoadAsync(active.Summary.Id);
+                if (generation != sessionGeneration || !sessionReady) return;
+                LevelDocument document = loaded.CreateDocumentSnapshot();
+                bootstrap.AdoptActiveCloudDraft(loaded);
+                sourceDocument = document.DeepCopy();
+                sourceDocumentIsSaved = true;
+                sourceLabel = "cloud draft: " + loaded.Summary.Name;
+                ReplaceWorkspaceDocument(document, isSaved: true);
+                SetStatus("Loaded cloud draft.");
+            }
+            catch (Exception exception)
+            {
+                if (generation == sessionGeneration && sessionReady)
+                    SetStatus(exception.Message);
+            }
+            finally
+            {
+                if (generation == sessionGeneration) cloudOperationRunning = false;
+            }
         }
 
         void ILevelEditorGuiActions.LoadDraft() => persistence.LoadDraft();

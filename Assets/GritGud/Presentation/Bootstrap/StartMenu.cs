@@ -19,6 +19,14 @@ namespace GritGud.Presentation.Bootstrap
             CloudDraft,
         }
 
+        private enum DraftDialogAction
+        {
+            None,
+            Rename,
+            Duplicate,
+            Delete,
+        }
+
         private const float ReferenceWidth = 1600f;
         private const float ReferenceHeight = 900f;
 
@@ -50,6 +58,10 @@ namespace GritGud.Presentation.Bootstrap
         private LevelSelectionKind selectedKind;
         private string selectedKey = string.Empty;
         private string cloudDraftStatus = string.Empty;
+        private DraftDialogAction draftDialogAction;
+        private string draftDialogName = string.Empty;
+        private string draftDialogStatus = string.Empty;
+        private bool draftDialogRunning;
         private Vector2 levelScroll;
 
         internal string SelectedResourceKey => selectedKind == LevelSelectionKind.Committed
@@ -77,6 +89,7 @@ namespace GritGud.Presentation.Bootstrap
 
             DrawBackdrop();
             DrawMenu();
+            DrawDraftDialog();
 
             GUI.matrix = previousMatrix;
         }
@@ -181,7 +194,13 @@ namespace GritGud.Presentation.Bootstrap
             LevelDraftLibraryCoordinator draftLibrary = GameBootstrap.Instance?.DraftLibrary;
             if (draftLibrary != null)
             {
+                GUILayout.BeginHorizontal();
                 GUILayout.Label("MY CLOUD DRAFTS", statusStyle);
+                GUI.enabled = !draftLibrary.IsBusy;
+                if (GUILayout.Button("REFRESH", levelButtonStyle, GUILayout.Width(76f), GUILayout.Height(26f)))
+                    draftLibrary.Refresh();
+                GUI.enabled = true;
+                GUILayout.EndHorizontal();
                 foreach (LevelDraftSummary draft in draftLibrary.Drafts)
                 {
                     bool selected = selectedKind == LevelSelectionKind.CloudDraft
@@ -199,6 +218,17 @@ namespace GritGud.Presentation.Bootstrap
                         draftLibrary.Select(draft.Id);
                     }
                     GUI.backgroundColor = previousBackground;
+                    if (selected)
+                    {
+                        GUILayout.BeginHorizontal();
+                        if (GUILayout.Button("RENAME", levelButtonStyle, GUILayout.Height(28f)))
+                            BeginDraftDialog(DraftDialogAction.Rename, draft);
+                        if (GUILayout.Button("COPY", levelButtonStyle, GUILayout.Height(28f)))
+                            BeginDraftDialog(DraftDialogAction.Duplicate, draft);
+                        if (GUILayout.Button("DELETE", levelButtonStyle, GUILayout.Height(28f)))
+                            BeginDraftDialog(DraftDialogAction.Delete, draft);
+                        GUILayout.EndHorizontal();
+                    }
                 }
                 if (draftLibrary.Drafts.Count == 0)
                     GUILayout.Label(draftLibrary.Status, statusStyle);
@@ -281,6 +311,95 @@ namespace GritGud.Presentation.Bootstrap
             LevelDraftLibraryCoordinator library = GameBootstrap.Instance?.DraftLibrary;
             return library?.Drafts.FirstOrDefault(draft =>
                 string.Equals(draft.Id.Value, selectedKey, StringComparison.Ordinal));
+        }
+
+        private void BeginDraftDialog(DraftDialogAction action, LevelDraftSummary draft)
+        {
+            draftDialogAction = action;
+            draftDialogName = action == DraftDialogAction.Duplicate
+                ? draft.Name + " Copy"
+                : draft.Name;
+            draftDialogStatus = string.Empty;
+            draftDialogRunning = false;
+        }
+
+        private void DrawDraftDialog()
+        {
+            if (draftDialogAction == DraftDialogAction.None) return;
+            const float width = 460f;
+            const float height = 190f;
+            Rect panel = new Rect(
+                (ReferenceWidth - width) * 0.5f,
+                (ReferenceHeight - height) * 0.5f,
+                width,
+                height);
+            GUILayout.BeginArea(panel, GUI.skin.box);
+            GUILayout.Label(draftDialogAction == DraftDialogAction.Delete
+                ? "DELETE CLOUD DRAFT"
+                : draftDialogAction == DraftDialogAction.Rename
+                    ? "RENAME CLOUD DRAFT"
+                    : "DUPLICATE CLOUD DRAFT", subtitleStyle);
+            if (draftDialogAction == DraftDialogAction.Delete)
+                GUILayout.Label("The draft will be archived and removed from this list.", statusStyle);
+            else
+            {
+                GUILayout.Label("Draft names must be unique for your account.", statusStyle);
+                draftDialogName = GUILayout.TextField(draftDialogName, GUILayout.Height(32f));
+            }
+            if (!string.IsNullOrWhiteSpace(draftDialogStatus))
+                GUILayout.Label(draftDialogStatus, statusStyle);
+            GUILayout.FlexibleSpace();
+            GUILayout.BeginHorizontal();
+            GUI.enabled = !draftDialogRunning;
+            if (GUILayout.Button(draftDialogAction == DraftDialogAction.Delete ? "DELETE" : "CONFIRM", buttonStyle, GUILayout.Height(38f)))
+                ConfirmDraftDialog();
+            if (GUILayout.Button("CANCEL", buttonStyle, GUILayout.Height(38f)))
+                draftDialogAction = DraftDialogAction.None;
+            GUI.enabled = true;
+            GUILayout.EndHorizontal();
+            GUILayout.EndArea();
+        }
+
+        private async void ConfirmDraftDialog()
+        {
+            LevelDraftSummary selected = FindSelectedDraft();
+            LevelDraftLibraryCoordinator library = GameBootstrap.Instance?.DraftLibrary;
+            if (selected == null || library == null || draftDialogRunning) return;
+            draftDialogRunning = true;
+            draftDialogStatus = "Working…";
+            try
+            {
+                if (draftDialogAction == DraftDialogAction.Rename)
+                {
+                    await library.RenameAsync(selected.Id, draftDialogName);
+                    selectedKey = selected.Id.Value;
+                    cloudDraftStatus = "Renamed cloud draft.";
+                }
+                else if (draftDialogAction == DraftDialogAction.Duplicate)
+                {
+                    LevelDraftRecord duplicate = await library.DuplicateAsync(selected.Id, draftDialogName);
+                    selectedKind = LevelSelectionKind.CloudDraft;
+                    selectedKey = duplicate.Summary.Id.Value;
+                    cloudDraftStatus = "Duplicated cloud draft.";
+                }
+                else
+                {
+                    await library.DeleteAsync(selected.Id);
+                    selectedKind = LevelSelectionKind.Committed;
+                    selectedKey = string.Empty;
+                    RefreshCommittedLevels();
+                    cloudDraftStatus = string.Empty;
+                }
+                draftDialogAction = DraftDialogAction.None;
+            }
+            catch (Exception exception)
+            {
+                draftDialogStatus = exception.Message;
+            }
+            finally
+            {
+                draftDialogRunning = false;
+            }
         }
 
         private bool DrawMenuButton(Rect rectangle, string label)

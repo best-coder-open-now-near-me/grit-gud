@@ -95,7 +95,7 @@ namespace GritGud.Presentation.LevelEditing.Persistence
             {
                 draftStore.SaveDraft(DraftSlot, serializer.Serialize(workspace.CreateSnapshot()));
                 workspace.MarkSaved();
-                Report("Saved the active browser/local draft.");
+                Report("Saved the local recovery draft.");
             }
             catch (Exception exception)
             {

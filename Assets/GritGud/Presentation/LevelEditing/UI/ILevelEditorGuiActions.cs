@@ -8,6 +8,10 @@ namespace GritGud.Presentation.LevelEditing.UI
     {
         bool HasDraft { get; }
 
+        bool HasCloudDraftContext { get; }
+
+        bool CloudOperationRunning { get; }
+
         int RecoveryGenerationCount { get; }
 
         bool HasRecovery(int generation);

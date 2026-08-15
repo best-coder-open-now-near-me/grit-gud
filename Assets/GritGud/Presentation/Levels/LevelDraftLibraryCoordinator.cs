@@ -107,7 +107,7 @@ namespace GritGud.Presentation.Levels
             ThrowIfDisposed();
             await service.DeleteAsync(id, lifetime.Token);
             if (selectedId.HasValue && selectedId.Value.Equals(id)) selectedId = null;
-            await RefreshAfterMutation(null, "Moved cloud draft to recovery storage.");
+            await RefreshAfterMutation(null, "Archived cloud draft.");
         }
 
         public void Dispose()

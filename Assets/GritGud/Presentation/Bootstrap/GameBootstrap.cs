@@ -37,6 +37,11 @@ namespace GritGud.Presentation.Bootstrap
 
         public LevelDraftRecord ActiveCloudDraft { get; private set; }
 
+        public void AdoptActiveCloudDraft(LevelDraftRecord draft)
+        {
+            ActiveCloudDraft = draft ?? throw new System.ArgumentNullException(nameof(draft));
+        }
+
         public static GameBootstrap Instance { get; private set; }
 
         public SupabaseRuntime Supabase => supabase;
