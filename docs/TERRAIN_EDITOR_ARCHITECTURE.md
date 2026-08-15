@@ -31,9 +31,10 @@ The heightfield sample lattice is an authoring and storage representation. It
 does not create grid-based movement or change the game's continuous world-space
 rules.
 
-The first slice deliberately excludes caves, overhangs, erosion simulation,
+The bounded system deliberately excludes caves, overhangs, erosion simulation,
 runtime terrain destruction, texture painting, foliage, and arbitrary imported
-heightmaps.
+heightmaps. Portable base/steep color blending and surface response are now
+implemented without introducing engine material references.
 
 ## Ownership model
 
@@ -207,6 +208,18 @@ feature family.
   in target exposure/physical cover and projectile segment collision, while
   grounded transforms are captured into authoritative gameplay poses. Focused
   tests exercise all three paths against generated terrain.
+
+### Phase 5 — appearance and authoring diagnostics
+
+- **Implemented:** schema 8 stores portable per-surface base/steep colors, slope
+  blending, smoothness, specular response, and preset identity.
+- **Implemented:** appearance updates are incremental material changes with exact
+  undo/redo; they do not rebuild colliders or invalidate navigation.
+- **Implemented:** an on-demand Unity-free analyzer reports heightfield slope,
+  connected regions, scenario support, terrain-only objective routes, and actor
+  overlaps without turning advisory results into publish blockers.
+- **Implemented:** a transient green/red slope heatmap uses projected normals,
+  stays out of portable data, and is suppressed across the preview boundary.
 
 ## First-slice acceptance criteria
 

@@ -31,6 +31,11 @@ namespace GritGud.Application.Levels
         int Depth { get; }
     }
 
+    public interface ITerrainAppearanceEditCommand : ILevelEditCommand
+    {
+        string SurfaceId { get; }
+    }
+
     public interface ILevelEditCommandGroup : ILevelEditCommand
     {
         IReadOnlyList<ILevelEditCommand> Commands { get; }
@@ -335,6 +340,41 @@ namespace GritGud.Application.Levels
             }
 
             player.transform = value;
+        }
+    }
+
+    public sealed class SetTerrainAppearanceCommand : ITerrainAppearanceEditCommand
+    {
+        private readonly TerrainAppearanceData before;
+        private readonly TerrainAppearanceData after;
+
+        public SetTerrainAppearanceCommand(
+            string surfaceId,
+            TerrainAppearanceData before,
+            TerrainAppearanceData after)
+        {
+            SurfaceId = string.IsNullOrWhiteSpace(surfaceId)
+                ? throw new ArgumentException("A terrain surface ID is required.", nameof(surfaceId))
+                : surfaceId;
+            this.before = before?.DeepCopy() ?? throw new ArgumentNullException(nameof(before));
+            this.after = after?.DeepCopy() ?? throw new ArgumentNullException(nameof(after));
+        }
+
+        public string Description => "Edit terrain appearance";
+        public IReadOnlyCollection<string> AffectedEntityIds => Array.Empty<string>();
+        public bool RequiresFullProjection => false;
+        public string SurfaceId { get; }
+        public void Apply(LevelDocument document) => Set(document, after);
+        public void Revert(LevelDocument document) => Set(document, before);
+
+        private void Set(LevelDocument document, TerrainAppearanceData appearance)
+        {
+            AddEntityCommand.RequireDocument(document);
+            TerrainSurfaceData surface = document.terrainSurfaces.FirstOrDefault(candidate =>
+                string.Equals(candidate?.id, SurfaceId, StringComparison.Ordinal));
+            if (surface == null)
+                throw new InvalidOperationException($"Terrain surface '{SurfaceId}' does not exist.");
+            surface.appearance = appearance.DeepCopy();
         }
     }
 

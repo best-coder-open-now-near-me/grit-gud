@@ -136,5 +136,21 @@ namespace GritGud.Domain.Tests.Levels
             Assert.That(result.groups, Is.Empty);
             Assert.That(result.entities[0].groupId, Is.Empty);
         }
+
+        [Test]
+        public void VersionSevenTerrainGainsPortableAppearanceDefaults()
+        {
+            LevelDocument source = LevelDocumentFactory.CreateNew("Legacy Terrain Appearance");
+            source.schemaVersion = 7;
+            source.terrainSurfaces[0].appearance = null;
+
+            LevelDocument result = new LevelDocumentMigrator().MigrateToCurrent(source);
+
+            Assert.That(result.schemaVersion, Is.EqualTo(LevelDocument.CurrentSchemaVersion));
+            Assert.That(result.terrainSurfaces[0].appearance, Is.Not.Null);
+            Assert.That(result.terrainSurfaces[0].appearance.presetId, Is.EqualTo("slate"));
+            Assert.That(result.terrainSurfaces[0].appearance.slopeBlendEndDegrees,
+                Is.GreaterThan(result.terrainSurfaces[0].appearance.slopeBlendStartDegrees));
+        }
     }
 }

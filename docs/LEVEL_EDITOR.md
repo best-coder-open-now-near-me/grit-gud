@@ -43,7 +43,7 @@ Portable JSON contains:
 - world-space position and yaw;
 - interaction points plus legacy cover-volume compatibility data;
 - optional initial destructible state and integrity;
-- typed, quantized heightfield terrain surfaces; and
+- typed, quantized heightfield terrain surfaces with portable appearance;
 - portable atmosphere, fog, directional-key, fixture, and practical-light data;
 - stable practical-light IDs with cross-platform fixture limits;
 - scenario actor instances, objectives, props, vehicles, and complete objective
@@ -132,6 +132,13 @@ restores the authored terrain without adding history.
 Use **Frame Terrain** in the terrain panel to fit every authored terrain surface
 in the camera view, including its minimum and maximum sampled elevations.
 
+Terrain appearance is saved per surface and used by both the editor and
+gameplay. Slate, Grass, Sand, Snow, and Concrete presets provide fast starting
+points. Base and steep-slope RGB, the slope blend range, smoothness, and specular
+response can then be entered directly; **Apply Custom Appearance** commits the
+complete change as one undo step. Appearance does not serialize Unity materials
+or asset paths.
+
 New levels begin with one flat `ground` surface covering their 50 × 50 meter
 authored bounds. The Terrain Surface section edits the selected surface's width,
 depth, and grid spacing; resizing keeps the surface centered, resamples existing
@@ -200,6 +207,24 @@ and add it to the menu; there is no separate manifest to maintain. The smaller
 fixture and is not shown in the player-facing library.
 The main Depot Yard now includes a flat `depot-ground` heightfield covering its
 authored bounds, so terrain tools are immediately usable when the editor opens.
+
+## Playability check
+
+Outline → **Playability Check** runs an on-demand, non-blocking review of the
+current document. It summarizes heightfield walkability using the gameplay
+actor's 50-degree slope and 0.35-meter step assumptions, connected terrain
+regions, scenario anchors without terrain beneath them, objectives disconnected
+from the player on the heightfield, below-terrain anchors, steep anchors, and
+overlapping actor starts. Entity-linked warnings can be clicked to frame the
+affected object.
+
+The report is marked **STALE** as soon as the level changes; use **Refresh Check**
+before handoff. The optional slope heatmap is transient: green is within the
+slope limit and red exceeds it. It updates from the projected terrain normals
+but is disabled in Level Preview and never enters JSON. This check deliberately
+does not claim to be a navigation bake—stairs, decks, bridges, and other
+structural routes may connect heightfield regions and should be verified in Test
+Play.
 
 ## Level Preview
 

@@ -58,5 +58,42 @@ namespace GritGud.Presentation.Tests
                     workspace.FindTerrainSurfaceSnapshot("ground")),
                 Is.EqualTo(50f));
         }
+
+        [Test]
+        public void AppearancePresetUsesIncrementalUndoableCommand()
+        {
+            using var workspace = new LevelEditorWorkspace(
+                LevelDocumentFactory.CreateNew("Terrain Appearance"));
+            var coordinator = new TerrainAuthoringCoordinator(workspace);
+
+            coordinator.ApplyAppearancePreset("ground", "grass");
+
+            Assert.That(workspace.FindTerrainSurfaceSnapshot("ground").appearance.presetId,
+                Is.EqualTo("grass"));
+            workspace.Undo();
+            Assert.That(workspace.FindTerrainSurfaceSnapshot("ground").appearance.presetId,
+                Is.EqualTo("slate"));
+        }
+
+        [Test]
+        public void InvalidCustomAppearanceDoesNotChangeWorkspace()
+        {
+            using var workspace = new LevelEditorWorkspace(
+                LevelDocumentFactory.CreateNew("Terrain Appearance"));
+            var coordinator = new TerrainAuthoringCoordinator(workspace);
+            int revision = workspace.Revision;
+            string status = string.Empty;
+            coordinator.StatusChanged += message => status = message;
+
+            coordinator.ApplyAppearance(new TerrainAppearanceAuthoringRequest
+            {
+                surfaceId = "ground",
+                baseColor = new LevelColorAuthoringText { r = "2", g = "0", b = "0" },
+                steepColor = new LevelColorAuthoringText { r = "0", g = "0", b = "0" },
+            });
+
+            Assert.That(workspace.Revision, Is.EqualTo(revision));
+            Assert.That(status, Does.Contain("0-1"));
+        }
     }
 }

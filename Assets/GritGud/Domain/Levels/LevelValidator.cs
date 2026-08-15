@@ -266,7 +266,41 @@ namespace GritGud.Domain.Levels
                         "terrain.height-range",
                         $"Terrain '{surface.id}' contains a height outside the quantized range.");
                 }
+
+                TerrainAppearanceData appearance = surface.appearance;
+                if (appearance == null
+                    || string.IsNullOrWhiteSpace(appearance.presetId)
+                    || !ValidUnitColor(appearance.baseColor)
+                    || !ValidUnitColor(appearance.steepColor)
+                    || !LevelValidationMath.IsFinite(appearance.slopeBlendStartDegrees)
+                    || !LevelValidationMath.IsFinite(appearance.slopeBlendEndDegrees)
+                    || appearance.slopeBlendStartDegrees < 0f
+                    || appearance.slopeBlendEndDegrees > 89f
+                    || appearance.slopeBlendEndDegrees
+                        <= appearance.slopeBlendStartDegrees
+                    || !UnitInterval(appearance.smoothness)
+                    || !UnitInterval(appearance.specularStrength))
+                {
+                    context.Error(
+                        "terrain.appearance",
+                        $"Terrain '{surface.id}' needs valid colors, a 0-89 degree slope blend, "
+                        + "and unit-range surface response values.");
+                }
             }
+        }
+
+        private static bool ValidUnitColor(FloatColorData color)
+        {
+            return LevelValidationMath.IsFinite(color)
+                && UnitInterval(color.r)
+                && UnitInterval(color.g)
+                && UnitInterval(color.b)
+                && UnitInterval(color.a);
+        }
+
+        private static bool UnitInterval(float value)
+        {
+            return LevelValidationMath.IsFinite(value) && value >= 0f && value <= 1f;
         }
     }
 

@@ -171,6 +171,45 @@ namespace GritGud.Presentation.LevelEditing.UI
                 terrainPanel.FrameTerrain();
 
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
+            DrawSectionHeader("TERRAIN APPEARANCE");
+            string[] appearancePresetIds = new[] { string.Empty }
+                .Concat(terrainPanel.AppearancePresetIds)
+                .ToArray();
+            string[] appearancePresets = new[] { "CUSTOM" }
+                .Concat(terrainPanel.AppearancePresetIds.Select(value => value.ToUpperInvariant()))
+                .ToArray();
+            int appearanceIndex = Array.FindIndex(
+                appearancePresetIds,
+                value => string.Equals(
+                    value,
+                    terrainPanel.AppearancePresetId,
+                    StringComparison.OrdinalIgnoreCase));
+            int selectedAppearance = GUILayout.SelectionGrid(
+                Mathf.Max(0, appearanceIndex),
+                appearancePresets,
+                2);
+            if (selectedAppearance > 0 && selectedAppearance != appearanceIndex)
+            {
+                terrainPanel.ApplyAppearancePreset(appearancePresetIds[selectedAppearance]);
+            }
+            DrawColorFields("Base RGB (0-1)", terrainPanel.BaseColor);
+            DrawColorFields("Steep RGB (0-1)", terrainPanel.SteepColor);
+            string slopeStart = terrainPanel.SlopeBlendStartText;
+            string slopeEnd = terrainPanel.SlopeBlendEndText;
+            string smoothness = terrainPanel.SmoothnessText;
+            string specular = terrainPanel.SpecularStrengthText;
+            DrawLabeledField("Slope start", ref slopeStart);
+            DrawLabeledField("Slope end", ref slopeEnd);
+            DrawLabeledField("Smoothness", ref smoothness);
+            DrawLabeledField("Specular", ref specular);
+            terrainPanel.SlopeBlendStartText = slopeStart;
+            terrainPanel.SlopeBlendEndText = slopeEnd;
+            terrainPanel.SmoothnessText = smoothness;
+            terrainPanel.SpecularStrengthText = specular;
+            if (GUILayout.Button("APPLY CUSTOM APPEARANCE", PanelApplyButtonLayout()))
+                terrainPanel.ApplyAppearance();
+
+            GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
             DrawSectionHeader("TERRAIN HEIGHT");
             Color previous = GUI.backgroundColor;
             GUILayout.BeginHorizontal();
@@ -441,6 +480,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.Label("Search all authored world and scenario objects.");
             hierarchySearch = GUILayout.TextField(hierarchySearch ?? string.Empty);
 
+            DrawPlayability();
             DrawOrganization(document);
 
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);

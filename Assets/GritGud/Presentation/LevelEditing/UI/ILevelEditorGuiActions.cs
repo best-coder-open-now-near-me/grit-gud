@@ -1,3 +1,4 @@
+using GritGud.Domain.Levels;
 using GritGud.Presentation.LevelEditing.Core;
 
 namespace GritGud.Presentation.LevelEditing.UI
@@ -21,6 +22,12 @@ namespace GritGud.Presentation.LevelEditing.UI
         string SelectionCategoryFilter { get; }
 
         string SelectionGroupFilter { get; }
+
+        LevelPlayabilityReport PlayabilityReport { get; }
+
+        bool PlayabilityReportIsStale { get; }
+
+        bool SlopeOverlayEnabled { get; }
 
         void ReturnToMenu();
 
@@ -81,6 +88,10 @@ namespace GritGud.Presentation.LevelEditing.UI
         void SetSelectionGroupFilter(string groupId);
 
         void SelectMatchingEntities();
+
+        void RunPlayabilityDiagnostics();
+
+        void SetSlopeOverlayEnabled(bool enabled);
 
         void ApplyEnvironment(LevelEnvironmentAuthoringRequest request);
 

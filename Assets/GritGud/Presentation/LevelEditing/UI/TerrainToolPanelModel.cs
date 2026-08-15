@@ -63,6 +63,23 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         public string SampleSpacingText { get; set; } = "2";
 
+        public IReadOnlyList<string> AppearancePresetIds =>
+            TerrainAuthoringCoordinator.AppearancePresetIds;
+
+        public string AppearancePresetId { get; set; } = "slate";
+
+        public LevelColorAuthoringText BaseColor { get; } = new LevelColorAuthoringText();
+
+        public LevelColorAuthoringText SteepColor { get; } = new LevelColorAuthoringText();
+
+        public string SlopeBlendStartText { get; set; } = "32";
+
+        public string SlopeBlendEndText { get; set; } = "58";
+
+        public string SmoothnessText { get; set; } = "0.1";
+
+        public string SpecularStrengthText { get; set; } = "0.03";
+
         public bool IsRaiseActive => IsModeActive(TerrainBrushMode.Raise);
 
         public bool IsLowerActive => IsModeActive(TerrainBrushMode.Lower);
@@ -148,7 +165,20 @@ namespace GritGud.Presentation.LevelEditing.UI
                 selected.sampleCountZ.ToString(CultureInfo.InvariantCulture),
                 selected.sampleSpacing.ToString("R", CultureInfo.InvariantCulture),
                 selected.origin.x.ToString("R", CultureInfo.InvariantCulture),
-                selected.origin.z.ToString("R", CultureInfo.InvariantCulture));
+                selected.origin.z.ToString("R", CultureInfo.InvariantCulture),
+                selected.appearance?.presetId,
+                ColorState(selected.appearance?.baseColor ?? default),
+                ColorState(selected.appearance?.steepColor ?? default),
+                selected.appearance?.slopeBlendStartDegrees.ToString(
+                    "R",
+                    CultureInfo.InvariantCulture),
+                selected.appearance?.slopeBlendEndDegrees.ToString(
+                    "R",
+                    CultureInfo.InvariantCulture),
+                selected.appearance?.smoothness.ToString("R", CultureInfo.InvariantCulture),
+                selected.appearance?.specularStrength.ToString(
+                    "R",
+                    CultureInfo.InvariantCulture));
             if (string.Equals(state, synchronizedSurfaceState, StringComparison.Ordinal))
                 return;
 
@@ -162,6 +192,14 @@ namespace GritGud.Presentation.LevelEditing.UI
             SampleSpacingText = selected.sampleSpacing.ToString(
                 "0.###",
                 CultureInfo.InvariantCulture);
+            TerrainAppearanceData appearance = selected.appearance ?? new TerrainAppearanceData();
+            AppearancePresetId = appearance.presetId;
+            SetColor(BaseColor, appearance.baseColor);
+            SetColor(SteepColor, appearance.steepColor);
+            SlopeBlendStartText = Format(appearance.slopeBlendStartDegrees);
+            SlopeBlendEndText = Format(appearance.slopeBlendEndDegrees);
+            SmoothnessText = Format(appearance.smoothness);
+            SpecularStrengthText = Format(appearance.specularStrength);
         }
 
         public void CreateFlatTerrain()
@@ -178,9 +216,57 @@ namespace GritGud.Presentation.LevelEditing.UI
                 SampleSpacingText);
         }
 
+        public void ApplyAppearancePreset(string presetId)
+        {
+            authoring.ApplyAppearancePreset(selectedSurfaceId, presetId);
+        }
+
+        public void ApplyAppearance()
+        {
+            authoring.ApplyAppearance(new TerrainAppearanceAuthoringRequest
+            {
+                surfaceId = selectedSurfaceId,
+                presetId = "custom",
+                baseColor = CopyColor(BaseColor),
+                steepColor = CopyColor(SteepColor),
+                slopeBlendStartDegrees = SlopeBlendStartText,
+                slopeBlendEndDegrees = SlopeBlendEndText,
+                smoothness = SmoothnessText,
+                specularStrength = SpecularStrengthText,
+            });
+        }
+
         private bool IsActive => ReferenceEquals(toolManager.ActiveTool, tool);
 
         private bool IsModeActive(TerrainBrushMode mode) =>
             IsActive && tool.BrushMode == mode;
+
+        private static string Format(float value) => value.ToString(
+            "0.###",
+            CultureInfo.InvariantCulture);
+
+        private static string ColorState(FloatColorData color) => string.Join(
+            ",",
+            color.r.ToString("R", CultureInfo.InvariantCulture),
+            color.g.ToString("R", CultureInfo.InvariantCulture),
+            color.b.ToString("R", CultureInfo.InvariantCulture),
+            color.a.ToString("R", CultureInfo.InvariantCulture));
+
+        private static void SetColor(LevelColorAuthoringText target, FloatColorData source)
+        {
+            target.r = Format(source.r);
+            target.g = Format(source.g);
+            target.b = Format(source.b);
+        }
+
+        private static LevelColorAuthoringText CopyColor(LevelColorAuthoringText source)
+        {
+            return new LevelColorAuthoringText
+            {
+                r = source.r,
+                g = source.g,
+                b = source.b,
+            };
+        }
     }
 }

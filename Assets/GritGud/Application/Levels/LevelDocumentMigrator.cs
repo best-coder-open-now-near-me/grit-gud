@@ -30,6 +30,7 @@ namespace GritGud.Application.Levels
                     new LevelDocumentV4ToV5Migration(),
                     new LevelDocumentV5ToV6Migration(),
                     new LevelDocumentV6ToV7Migration(),
+                    new LevelDocumentV7ToV8Migration(),
                 };
             }
 
@@ -249,6 +250,27 @@ namespace GritGud.Application.Levels
             {
                 if (entity != null)
                     entity.groupId = entity.groupId ?? string.Empty;
+            }
+            migrated.schemaVersion = TargetVersion;
+            return migrated;
+        }
+    }
+
+    public sealed class LevelDocumentV7ToV8Migration : ILevelDocumentMigration
+    {
+        public int SourceVersion => 7;
+
+        public int TargetVersion => 8;
+
+        public LevelDocument Migrate(LevelDocument source)
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+            LevelDocument migrated = source.DeepCopy();
+            foreach (TerrainSurfaceData surface in migrated.terrainSurfaces)
+            {
+                if (surface != null)
+                    surface.appearance = surface.appearance ?? new TerrainAppearanceData();
             }
             migrated.schemaVersion = TargetVersion;
             return migrated;

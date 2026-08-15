@@ -170,6 +170,53 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void AppearanceAndSlopeDiagnosticsUpdateMaterialWithoutRebuildingMesh()
+        {
+            var owner = new GameObject("Terrain Appearance Projection Test");
+            var projector = new TerrainWorldProjector(owner.transform);
+            try
+            {
+                TerrainSurfaceData surface = CreateSurface(3, 3);
+                LevelDocument document = LevelDocumentFactory.CreateEmpty("Appearance Test");
+                document.terrainSurfaces.Add(surface);
+                projector.Replace(document);
+                MeshFilter filter = owner.GetComponentInChildren<MeshFilter>();
+                Mesh originalMesh = filter.sharedMesh;
+                Material material = owner.GetComponentInChildren<MeshRenderer>().sharedMaterial;
+                TerrainNavigationInvalidation? navigation = null;
+                projector.NavigationInvalidated += value => navigation = value;
+                TerrainAppearanceData before = surface.appearance.DeepCopy();
+                TerrainAppearanceData after = before.DeepCopy();
+                after.baseColor = new FloatColorData(0.2f, 0.4f, 0.1f);
+                after.steepColor = new FloatColorData(0.5f, 0.3f, 0.2f);
+                after.slopeBlendStartDegrees = 25f;
+                after.slopeBlendEndDegrees = 55f;
+                surface.appearance = after.DeepCopy();
+
+                projector.Apply(
+                    document,
+                    new LevelSessionChangedEventArgs(
+                        LevelSessionChangeKind.Execute,
+                        1,
+                        new SetTerrainAppearanceCommand("test", before, after)));
+                projector.SetSlopeDiagnostics(true, 50f);
+
+                Assert.That(filter.sharedMesh, Is.SameAs(originalMesh));
+                Assert.That(navigation, Is.Null);
+                Assert.That(material.GetColor("_BaseColor").g, Is.EqualTo(0.4f).Within(0.001f));
+                Assert.That(material.GetColor("_SteepColor").r, Is.EqualTo(0.5f).Within(0.001f));
+                Assert.That(material.GetFloat("_TerrainDiagnosticsEnabled"), Is.EqualTo(1f));
+                Assert.That(material.GetFloat("_DiagnosticSlopeCos"),
+                    Is.EqualTo(Mathf.Cos(50f * Mathf.Deg2Rad)).Within(0.001f));
+            }
+            finally
+            {
+                projector.Dispose();
+                Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
         public void ProjectorInvalidatesNavigationOnlyForCommittedTerrainChanges()
         {
             var owner = new GameObject("Terrain Navigation Invalidation Test");

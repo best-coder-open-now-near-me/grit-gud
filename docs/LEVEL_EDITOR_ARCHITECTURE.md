@@ -49,6 +49,7 @@ copied back into the authoring workspace.
 | Layout coordinator | Bounds validation, local grid/view settings, and transaction-based entity arrays |
 | Organization model | Group visibility, locks, isolation, and transient category/group selection policy |
 | Organization coordinator | Group lifecycle, bulk assignment, filtering, and selection use cases |
+| Playability coordinator | On-demand report freshness and transient terrain heatmap state |
 | Controller | Composition, Unity lifecycle, preview boundary, and cross-service routing |
 
 Domain and Application assemblies have no Unity references. Unity asset paths,
@@ -147,6 +148,25 @@ filters deliberately stay out of `LevelDocument`: they describe the current
 author's view, not the playable or portable level. Preview and Test Play rebuild
 from the document snapshot without authoring visibility applied, so hidden
 groups are never mistaken for disabled gameplay content.
+
+## Terrain appearance and diagnostics
+
+Schema 8 adds `TerrainAppearanceData` to each heightfield surface. It stores
+preset identity, base/steep colors, a slope blend interval, smoothness, and
+specular response. `SetTerrainAppearanceCommand` updates that data without a
+full world rebuild; `TerrainWorldProjector` updates the existing shared surface
+material and leaves mesh/collider identity and navigation invalidation untouched.
+The cel shader's slope branch is opt-in, so non-terrain users retain their
+existing material behavior.
+
+`LevelPlayabilityAnalyzer` is a Unity-free, deterministic advisory service. It
+derives slope samples, heightfield-connected regions, scenario terrain support,
+terrain-only objective reachability, and actor-start overlap from a detached
+document. It is not part of publish validation because structural geometry can
+provide routes and support that a heightfield-only analysis cannot prove.
+`LevelEditorPlayabilityCoordinator` keeps report freshness and heatmap state in
+Presentation. The heatmap changes material properties only, is suppressed at
+the preview boundary, and never mutates the document.
 
 ## Scaling rules
 

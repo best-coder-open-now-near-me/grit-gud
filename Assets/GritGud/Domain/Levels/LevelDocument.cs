@@ -334,6 +334,37 @@ namespace GritGud.Domain.Levels
     }
 
     [Serializable]
+    public sealed class TerrainAppearanceData
+    {
+        public string presetId = "slate";
+        public FloatColorData baseColor = new FloatColorData(0.18f, 0.24f, 0.27f);
+        public FloatColorData steepColor = new FloatColorData(0.11f, 0.14f, 0.16f);
+        public float slopeBlendStartDegrees = 32f;
+        public float slopeBlendEndDegrees = 58f;
+        public float smoothness = 0.1f;
+        public float specularStrength = 0.03f;
+
+        public void Normalize()
+        {
+            presetId = presetId ?? string.Empty;
+        }
+
+        public TerrainAppearanceData DeepCopy()
+        {
+            return new TerrainAppearanceData
+            {
+                presetId = presetId ?? string.Empty,
+                baseColor = baseColor,
+                steepColor = steepColor,
+                slopeBlendStartDegrees = slopeBlendStartDegrees,
+                slopeBlendEndDegrees = slopeBlendEndDegrees,
+                smoothness = smoothness,
+                specularStrength = specularStrength,
+            };
+        }
+    }
+
+    [Serializable]
     public sealed class TerrainSurfaceData
     {
         public string id = string.Empty;
@@ -343,11 +374,14 @@ namespace GritGud.Domain.Levels
         public float sampleSpacing = 1f;
         public float minimumElevation;
         public float elevationIncrement = 0.01f;
+        public TerrainAppearanceData appearance = new TerrainAppearanceData();
         public List<int> heightSamples = new List<int>();
 
         public void Normalize()
         {
             id = id ?? string.Empty;
+            appearance = appearance ?? new TerrainAppearanceData();
+            appearance.Normalize();
             heightSamples = heightSamples ?? new List<int>();
         }
 
@@ -362,6 +396,7 @@ namespace GritGud.Domain.Levels
                 sampleSpacing = sampleSpacing,
                 minimumElevation = minimumElevation,
                 elevationIncrement = elevationIncrement,
+                appearance = appearance?.DeepCopy() ?? new TerrainAppearanceData(),
                 heightSamples = heightSamples != null
                     ? new List<int>(heightSamples)
                     : new List<int>(),
@@ -599,7 +634,7 @@ namespace GritGud.Domain.Levels
     [Serializable]
     public sealed class LevelDocument
     {
-        public const int CurrentSchemaVersion = 7;
+        public const int CurrentSchemaVersion = 8;
         public const int MaximumEntityGroupCount = 64;
 
         public int schemaVersion = CurrentSchemaVersion;

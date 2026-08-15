@@ -124,6 +124,16 @@ namespace GritGud.Presentation.Tests
                 sampleCountZ = 2,
                 sampleSpacing = 2.5f,
                 elevationIncrement = 0.1f,
+                appearance = new TerrainAppearanceData
+                {
+                    presetId = "grass",
+                    baseColor = new FloatColorData(0.2f, 0.4f, 0.1f),
+                    steepColor = new FloatColorData(0.3f, 0.2f, 0.1f),
+                    slopeBlendStartDegrees = 28f,
+                    slopeBlendEndDegrees = 54f,
+                    smoothness = 0.04f,
+                    specularStrength = 0.015f,
+                },
                 heightSamples = new List<int> { 0, 1, -2, 3 },
             });
             var serializer = new UnityLevelJsonSerializer();
@@ -134,6 +144,10 @@ namespace GritGud.Presentation.Tests
             Assert.That(result.terrainSurfaces[0].id, Is.EqualTo("ground"));
             Assert.That(result.terrainSurfaces[0].heightSamples,
                 Is.EqualTo(new[] { 0, 1, -2, 3 }));
+            Assert.That(result.terrainSurfaces[0].appearance.presetId, Is.EqualTo("grass"));
+            Assert.That(result.terrainSurfaces[0].appearance.steepColor.g, Is.EqualTo(0.2f));
+            Assert.That(result.terrainSurfaces[0].appearance.slopeBlendEndDegrees,
+                Is.EqualTo(54f));
         }
     }
 }

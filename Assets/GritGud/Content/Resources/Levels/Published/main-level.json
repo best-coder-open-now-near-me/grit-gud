@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 7,
+  "schemaVersion": 8,
   "levelId": "main-depot-yard-v1",
   "displayName": "Depot Yard",
   "bounds": {
@@ -228,6 +228,15 @@
       "sampleSpacing": 2.0,
       "minimumElevation": 0.0,
       "elevationIncrement": 0.1,
+      "appearance": {
+        "presetId": "concrete",
+        "baseColor": { "r": 0.34, "g": 0.36, "b": 0.38, "a": 1.0 },
+        "steepColor": { "r": 0.24, "g": 0.26, "b": 0.29, "a": 1.0 },
+        "slopeBlendStartDegrees": 34.0,
+        "slopeBlendEndDegrees": 62.0,
+        "smoothness": 0.08,
+        "specularStrength": 0.025
+      },
       "heightSamples": [
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,

@@ -133,6 +133,7 @@ search/category filters, the entity hierarchy, local editor preferences, and
 transform feedback are also complete.
 Encounter scripting should wait until its portable runtime contracts are known.
 
-Portable heightfield terrain, patch-command history, and chunked projection are
-implemented. The next production slices are playability diagnostics and terrain
-appearance, followed by portable dressing zones and encounter authoring.
+Portable heightfield terrain, patch-command history, chunked projection,
+per-surface appearance, on-demand playability diagnostics, and the transient
+slope heatmap are implemented. The next production slices are portable dressing
+zones and encounter authoring.

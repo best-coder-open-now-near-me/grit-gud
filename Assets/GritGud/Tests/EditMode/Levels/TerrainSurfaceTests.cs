@@ -155,6 +155,42 @@ namespace GritGud.Domain.Tests.Levels
         }
 
         [Test]
+        public void TerrainAppearanceCommandIsIncrementalAndUndoable()
+        {
+            LevelDocument document = CreateDocument();
+            TerrainAppearanceData before = document.terrainSurfaces[0].appearance.DeepCopy();
+            TerrainAppearanceData after = before.DeepCopy();
+            after.presetId = "grass";
+            after.baseColor = new FloatColorData(0.2f, 0.4f, 0.1f);
+            var command = new SetTerrainAppearanceCommand("ground", before, after);
+            var session = new LevelSession(document);
+
+            session.Execute(command);
+            Assert.That(session.CreateSnapshot().terrainSurfaces[0].appearance.presetId,
+                Is.EqualTo("grass"));
+            Assert.That(command.RequiresFullProjection, Is.False);
+            session.Undo();
+            Assert.That(session.CreateSnapshot().terrainSurfaces[0].appearance.presetId,
+                Is.EqualTo("slate"));
+            session.Redo();
+            Assert.That(session.CreateSnapshot().terrainSurfaces[0].appearance.baseColor.g,
+                Is.EqualTo(0.4f));
+        }
+
+        [Test]
+        public void ValidationRejectsInvalidTerrainAppearance()
+        {
+            LevelDocument document = CreateDocument();
+            document.terrainSurfaces[0].appearance.slopeBlendStartDegrees = 70f;
+            document.terrainSurfaces[0].appearance.slopeBlendEndDegrees = 40f;
+
+            var issues = LevelValidator.Validate(document);
+
+            Assert.That(issues, Has.Some.Matches<LevelValidationIssue>(issue =>
+                issue.Code == "terrain.appearance"));
+        }
+
+        [Test]
         public void ResizeTerrainRejectsDimensionsThatDoNotAlignToTheGrid()
         {
             TerrainSurfaceData source = CreateDocument().terrainSurfaces[0];

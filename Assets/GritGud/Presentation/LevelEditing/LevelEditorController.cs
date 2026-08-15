@@ -47,6 +47,7 @@ namespace GritGud.Presentation.LevelEditing
         private LevelEditorLayoutCoordinator layoutAuthoring;
         private LevelEditorOrganizationModel organizationModel;
         private LevelEditorOrganizationCoordinator organizationAuthoring;
+        private LevelEditorPlayabilityCoordinator playabilityAuthoring;
         private GameplayEnvironmentLighting environmentLighting;
         private LevelEntityView selectedView;
         private LevelEditorOutlinePresenter outlinePresenter;
@@ -188,6 +189,10 @@ namespace GritGud.Presentation.LevelEditing
             toolManager.ActivateDefault();
             terrainAuthoring = new TerrainAuthoringCoordinator(workspace);
             terrainAuthoring.StatusChanged += SetStatus;
+            playabilityAuthoring = new LevelEditorPlayabilityCoordinator(
+                workspace,
+                terrainProjector);
+            playabilityAuthoring.StatusChanged += SetStatus;
             var terrainPanel = new TerrainToolPanelModel(
                 toolManager,
                 terrainTool,
@@ -287,6 +292,8 @@ namespace GritGud.Presentation.LevelEditing
             }
             if (terrainAuthoring != null)
                 terrainAuthoring.StatusChanged -= SetStatus;
+            if (playabilityAuthoring != null)
+                playabilityAuthoring.StatusChanged -= SetStatus;
             if (environmentAuthoring != null)
             {
                 environmentAuthoring.StatusChanged -= SetStatus;
@@ -324,6 +331,7 @@ namespace GritGud.Presentation.LevelEditing
             placementTool = null;
             terrainTool = null;
             terrainAuthoring = null;
+            playabilityAuthoring = null;
             environmentAuthoring = null;
             layoutAuthoring = null;
             organizationAuthoring = null;
@@ -481,6 +489,7 @@ namespace GritGud.Presentation.LevelEditing
             gridPresenter.SetVisible(!previewMode && gridSettings.Visible);
             if (!previewMode)
                 organizationModel.ApplyProjection(projector);
+            playabilityAuthoring.SetAuthoringProjectionVisible(!previewMode);
             RefreshEnvironmentLighting(workspace.CreateSnapshot());
             SetStatus("Returned from isolated test play.");
         }
@@ -699,6 +708,7 @@ namespace GritGud.Presentation.LevelEditing
             toolManager.ActivateDefault();
             selection.Clear();
             previewMode = true;
+            playabilityAuthoring.SetAuthoringProjectionVisible(false);
             outlinePresenter.HideAll();
             projector.Replace(workspace.CreateSnapshot());
             terrainProjector.Replace(workspace.CreateSnapshot());
@@ -719,6 +729,7 @@ namespace GritGud.Presentation.LevelEditing
             gridPresenter.Refresh(workspace.CreateSnapshot().bounds, gridSettings);
             organizationModel.Synchronize(workspace.CreateSnapshot());
             organizationModel.ApplyProjection(projector);
+            playabilityAuthoring.SetAuthoringProjectionVisible(true);
             SetStatus("Returned to the authored level.");
         }
 
@@ -727,6 +738,7 @@ namespace GritGud.Presentation.LevelEditing
             LevelEditorWorkspaceChangedEventArgs args)
         {
             validationIssues = args.ValidationIssues;
+            playabilityAuthoring?.MarkStale();
             persistence?.ScheduleAutosave(
                 args.SessionChange.Revision,
                 Time.unscaledTimeAsDouble);
@@ -1132,6 +1144,15 @@ namespace GritGud.Presentation.LevelEditing
 
         string ILevelEditorGuiActions.SelectionGroupFilter => organizationModel.GroupFilter;
 
+        LevelPlayabilityReport ILevelEditorGuiActions.PlayabilityReport =>
+            playabilityAuthoring.Report;
+
+        bool ILevelEditorGuiActions.PlayabilityReportIsStale =>
+            playabilityAuthoring.IsStale;
+
+        bool ILevelEditorGuiActions.SlopeOverlayEnabled =>
+            playabilityAuthoring.SlopeOverlayEnabled;
+
         void ILevelEditorGuiActions.Undo() => workspace.Undo();
 
         void ILevelEditorGuiActions.Redo() => workspace.Redo();
@@ -1206,6 +1227,12 @@ namespace GritGud.Presentation.LevelEditing
 
         void ILevelEditorGuiActions.SelectMatchingEntities() =>
             organizationAuthoring.SelectMatching();
+
+        void ILevelEditorGuiActions.RunPlayabilityDiagnostics() =>
+            playabilityAuthoring.Run();
+
+        void ILevelEditorGuiActions.SetSlopeOverlayEnabled(bool enabled) =>
+            playabilityAuthoring.SetSlopeOverlay(enabled);
 
         void ILevelEditorGuiActions.ApplyEnvironment(
             LevelEnvironmentAuthoringRequest request) =>
