@@ -1,10 +1,43 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "levelId": "main-depot-yard-v1",
   "displayName": "Depot Yard",
   "bounds": {
     "center": { "x": 0.0, "y": 3.0, "z": 0.0 },
     "size": { "x": 32.0, "y": 12.0, "z": 28.0 }
+  },
+  "environment": {
+    "presetId": "depot-night",
+    "atmosphere": {
+      "ambientSky": { "r": 0.055, "g": 0.11, "b": 0.23, "a": 1.0 },
+      "ambientEquator": { "r": 0.028, "g": 0.075, "b": 0.17, "a": 1.0 },
+      "ambientGround": { "r": 0.012, "g": 0.026, "b": 0.065, "a": 1.0 },
+      "ambientIntensity": 0.76,
+      "reflectionIntensity": 0.52,
+      "subtractiveShadow": { "r": 0.01, "g": 0.02, "b": 0.052, "a": 1.0 },
+      "fogEnabled": true,
+      "fogColor": { "r": 0.018, "g": 0.052, "b": 0.125, "a": 1.0 },
+      "fogStartDistance": 16.0,
+      "fogEndDistance": 54.0
+    },
+    "keyLight": {
+      "color": { "r": 0.49, "g": 0.69, "b": 1.0, "a": 1.0 },
+      "intensity": 0.82,
+      "bounceIntensity": 0.2,
+      "shadowStrength": 0.9,
+      "shadowBias": 0.07,
+      "shadowNormalBias": 0.38,
+      "rotationEuler": { "x": 42.0, "y": -28.0, "z": 0.0 }
+    },
+    "fixtureHousingColor": { "r": 0.025, "g": 0.055, "b": 0.1, "a": 1.0 },
+    "lensEmissionIntensity": 5.5,
+    "practicalLights": [
+      { "id": "gate-security-flood", "displayName": "Gate Security Flood", "position": { "x": -1.5, "y": 6.0, "z": -7.5 }, "target": { "x": 0.5, "y": 0.0, "z": -2.5 }, "color": { "r": 0.08, "g": 0.72, "b": 1.55, "a": 1.0 }, "intensity": 5.2, "range": 18.0, "spotAngle": 56.0, "innerSpotFraction": 0.56, "baseHeight": 0.0 },
+      { "id": "workshop-sodium-flood", "displayName": "Workshop Sodium Flood", "position": { "x": 8.5, "y": 6.0, "z": -3.5 }, "target": { "x": 8.0, "y": 0.0, "z": -4.5 }, "color": { "r": 1.55, "g": 0.39, "b": 0.025, "a": 1.0 }, "intensity": 3.8, "range": 15.0, "spotAngle": 60.0, "innerSpotFraction": 0.55, "baseHeight": 0.0 },
+      { "id": "deck-security-flood", "displayName": "Deck Security Flood", "position": { "x": 10.5, "y": 8.0, "z": 7.5 }, "target": { "x": 9.5, "y": 3.0, "z": 5.0 }, "color": { "r": 0.11, "g": 0.56, "b": 1.42, "a": 1.0 }, "intensity": 4.5, "range": 17.0, "spotAngle": 52.0, "innerSpotFraction": 0.58, "baseHeight": 3.0 },
+      { "id": "warehouse-loading-flood", "displayName": "Warehouse Loading Flood", "position": { "x": -8.5, "y": 5.2, "z": 4.75 }, "target": { "x": -7.5, "y": 0.0, "z": 1.5 }, "color": { "r": 0.08, "g": 0.64, "b": 1.5, "a": 1.0 }, "intensity": 4.2, "range": 16.0, "spotAngle": 50.0, "innerSpotFraction": 0.6, "baseHeight": 0.0 },
+      { "id": "north-yard-work-light", "displayName": "North Yard Work Light", "position": { "x": -3.5, "y": 5.4, "z": 8.5 }, "target": { "x": 0.0, "y": 0.0, "z": 4.5 }, "color": { "r": 1.35, "g": 0.32, "b": 0.025, "a": 1.0 }, "intensity": 2.4, "range": 13.0, "spotAngle": 48.0, "innerSpotFraction": 0.55, "baseHeight": 0.0 }
+    ]
   },
   "entities": [
     { "id": "floor-r01-c01", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -10.0, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },

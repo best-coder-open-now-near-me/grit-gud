@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using GritGud.Domain.Levels;
 using GritGud.Presentation.Levels.Runtime;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -27,28 +28,30 @@ namespace GritGud.Presentation.Gameplay
 
         public static GameplayEnvironmentLighting Create(
             Transform parent,
-            LevelLightingProfile profile)
+            LevelEnvironmentData environment,
+            IReadOnlyList<AmbientEffectPlacementDefinition> ambientEffects = null)
         {
             if (parent == null)
             {
                 throw new ArgumentNullException(nameof(parent));
             }
-            if (profile == null)
+            if (environment == null)
             {
-                throw new ArgumentNullException(nameof(profile));
+                throw new ArgumentNullException(nameof(environment));
             }
 
+            LevelEnvironmentData data = environment.DeepCopy();
+            data.Normalize();
             var renderSettings = new RenderSettingsSnapshot(captureCurrent: true);
             Light sun = FindDirectionalLight();
             LightSnapshot? originalSun = sun != null
                 ? new LightSnapshot(sun)
                 : null;
-
             var lightingRoot = new GameObject("Gameplay Environment Lighting");
             lightingRoot.transform.SetParent(parent, false);
             var materials = new List<Material>();
             Material fixtureMaterial = RuntimeMaterialFactory.CreateCelColor(
-                profile.FixtureHousingColor,
+                ToColor(data.fixtureHousingColor),
                 "Industrial Floodlight Housing");
             materials.Add(fixtureMaterial);
             if (sun == null)
@@ -57,22 +60,26 @@ namespace GritGud.Presentation.Gameplay
                 sun.type = LightType.Directional;
             }
 
-            ConfigureAtmosphere(sun, profile);
-            foreach (PracticalLightPresentationDefinition practical in
-                profile.PracticalLights)
+            ConfigureAtmosphere(sun, data);
+            foreach (LevelPracticalLightData practical in data.practicalLights)
             {
-                CreateSpotLight(
-                    lightingRoot.transform,
-                    practical,
-                    fixtureMaterial,
-                    profile.LensEmissionIntensity,
-                    materials);
+                if (practical != null)
+                {
+                    CreateSpotLight(
+                        lightingRoot.transform,
+                        practical,
+                        fixtureMaterial,
+                        data.lensEmissionIntensity,
+                        materials);
+                }
             }
 
-            foreach (AmbientEffectPlacementDefinition ambient in
-                profile.AmbientEffects)
+            if (ambientEffects != null)
             {
-                CreateAmbientEffect(lightingRoot.transform, ambient);
+                foreach (AmbientEffectPlacementDefinition ambient in ambientEffects)
+                {
+                    CreateAmbientEffect(lightingRoot.transform, ambient);
+                }
             }
 
             return new GameplayEnvironmentLighting(
@@ -102,65 +109,76 @@ namespace GritGud.Presentation.Gameplay
 
         private static void ConfigureAtmosphere(
             Light sun,
-            LevelLightingProfile profile)
+            LevelEnvironmentData environment)
         {
-            AtmospherePresentationDefinition atmosphere = profile.Atmosphere;
-            DirectionalLightPresentationDefinition key = profile.KeyLight;
+            LevelAtmosphereData atmosphere = environment.atmosphere;
+            LevelDirectionalLightData key = environment.keyLight;
             RenderSettings.skybox = null;
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = atmosphere.AmbientSky;
-            RenderSettings.ambientEquatorColor = atmosphere.AmbientEquator;
-            RenderSettings.ambientGroundColor = atmosphere.AmbientGround;
-            RenderSettings.ambientIntensity = atmosphere.AmbientIntensity;
-            RenderSettings.reflectionIntensity = atmosphere.ReflectionIntensity;
-            RenderSettings.subtractiveShadowColor = atmosphere.SubtractiveShadow;
-            RenderSettings.fog = true;
+            RenderSettings.ambientSkyColor = ToColor(atmosphere.ambientSky);
+            RenderSettings.ambientEquatorColor = ToColor(atmosphere.ambientEquator);
+            RenderSettings.ambientGroundColor = ToColor(atmosphere.ambientGround);
+            RenderSettings.ambientIntensity = atmosphere.ambientIntensity;
+            RenderSettings.reflectionIntensity = atmosphere.reflectionIntensity;
+            RenderSettings.subtractiveShadowColor = ToColor(atmosphere.subtractiveShadow);
+            RenderSettings.fog = atmosphere.fogEnabled;
             RenderSettings.fogMode = FogMode.Linear;
-            RenderSettings.fogColor = atmosphere.FogColor;
-            RenderSettings.fogStartDistance = atmosphere.FogStartDistance;
-            RenderSettings.fogEndDistance = atmosphere.FogEndDistance;
+            RenderSettings.fogColor = ToColor(atmosphere.fogColor);
+            RenderSettings.fogStartDistance = atmosphere.fogStartDistance;
+            RenderSettings.fogEndDistance = atmosphere.fogEndDistance;
 
             sun.gameObject.SetActive(true);
             sun.enabled = true;
             sun.type = LightType.Directional;
-            sun.color = key.Color;
-            sun.intensity = key.Intensity;
-            sun.bounceIntensity = key.BounceIntensity;
+            sun.color = ToColor(key.color);
+            sun.intensity = key.intensity;
+            sun.bounceIntensity = key.bounceIntensity;
             sun.shadows = LightShadows.Soft;
-            sun.shadowStrength = key.ShadowStrength;
-            sun.shadowBias = key.ShadowBias;
-            sun.shadowNormalBias = key.ShadowNormalBias;
-            sun.transform.rotation = key.Rotation;
+            sun.shadowStrength = key.shadowStrength;
+            sun.shadowBias = key.shadowBias;
+            sun.shadowNormalBias = key.shadowNormalBias;
+            sun.transform.rotation = Quaternion.Euler(ToVector3(key.rotationEuler));
             RenderSettings.sun = sun;
         }
 
         private static void CreateSpotLight(
             Transform parent,
-            PracticalLightPresentationDefinition definition,
+            LevelPracticalLightData definition,
             Material fixtureMaterial,
             float lensEmissionIntensity,
             List<Material> materials)
         {
-            Light light = CreateLight(parent, definition.Name);
+            string name = string.IsNullOrWhiteSpace(definition.displayName)
+                ? "Practical Light"
+                : definition.displayName;
+            Vector3 position = ToVector3(definition.position);
+            Vector3 target = ToVector3(definition.target);
+            Vector3 direction = target - position;
+            if (direction.sqrMagnitude < 0.0001f)
+            {
+                direction = Vector3.down;
+            }
+
+            Light light = CreateLight(parent, name);
             light.transform.SetPositionAndRotation(
-                definition.Position,
-                Quaternion.LookRotation(definition.Target - definition.Position));
+                position,
+                Quaternion.LookRotation(direction));
             light.type = LightType.Spot;
-            light.color = definition.Color;
-            light.intensity = definition.Intensity;
-            light.range = definition.Range;
-            light.spotAngle = definition.SpotAngle;
-            light.innerSpotAngle = definition.InnerSpotAngle;
+            light.color = ToColor(definition.color);
+            light.intensity = definition.intensity;
+            light.range = definition.range;
+            light.spotAngle = definition.spotAngle;
+            light.innerSpotAngle = definition.spotAngle * definition.innerSpotFraction;
             light.bounceIntensity = 0f;
-            // Several practical spotlights are visible at once. Let the sun
-            // own scene shadows; requesting a shadow map per practical light
-            // overflows URP's atlas and emits a full warning stack every frame.
             light.shadows = LightShadows.None;
             light.renderMode = LightRenderMode.ForcePixel;
             CreateFixture(
                 parent,
                 light.transform,
-                definition,
+                name,
+                position,
+                definition.baseHeight,
+                ToColor(definition.color),
                 fixtureMaterial,
                 lensEmissionIntensity,
                 materials);
@@ -169,51 +187,56 @@ namespace GritGud.Presentation.Gameplay
         private static void CreateFixture(
             Transform parent,
             Transform lightTransform,
-            PracticalLightPresentationDefinition definition,
+            string name,
+            Vector3 position,
+            float baseHeight,
+            Color color,
             Material fixtureMaterial,
             float lensEmissionIntensity,
             List<Material> materials)
         {
-            Vector3 position = definition.Position;
-            float mastHeight = Mathf.Max(0.5f, position.y - definition.BaseHeight);
+            float mastHeight = Mathf.Max(0.5f, position.y - baseHeight);
             GameObject mast = CreatePrimitive(
                 PrimitiveType.Cylinder,
-                definition.Name + " Mast",
+                name + " Mast",
                 parent,
                 fixtureMaterial);
             mast.transform.position = new Vector3(
                 position.x,
-                definition.BaseHeight + (mastHeight * 0.5f),
+                baseHeight + (mastHeight * 0.5f),
                 position.z);
-            mast.transform.localScale = new Vector3(
-                definition.MastRadius,
-                mastHeight * 0.5f,
-                definition.MastRadius);
+            mast.transform.localScale = new Vector3(0.09f, mastHeight * 0.5f, 0.09f);
 
             GameObject housing = CreatePrimitive(
                 PrimitiveType.Cube,
-                definition.Name + " Housing",
+                name + " Housing",
                 lightTransform,
                 fixtureMaterial);
             housing.transform.localPosition = new Vector3(0f, 0f, -0.16f);
-            housing.transform.localScale = definition.HousingSize;
+            housing.transform.localScale = new Vector3(0.72f, 0.34f, 0.5f);
 
             Material lensMaterial = CreateEmissionMaterial(
-                definition.Name,
-                definition.Color,
+                name,
+                color,
                 lensEmissionIntensity);
             materials.Add(lensMaterial);
             GameObject lens = CreatePrimitive(
                 PrimitiveType.Cube,
-                definition.Name + " Lens",
+                name + " Lens",
                 lightTransform,
                 lensMaterial);
             lens.transform.localPosition = new Vector3(0f, 0f, 0.105f);
-            lens.transform.localScale = definition.LensSize;
+            lens.transform.localScale = new Vector3(0.56f, 0.22f, 0.035f);
             Renderer lensRenderer = lens.GetComponent<Renderer>();
             lensRenderer.shadowCastingMode = ShadowCastingMode.Off;
             lensRenderer.receiveShadows = false;
         }
+
+        private static Color ToColor(FloatColorData value) =>
+            new Color(value.r, value.g, value.b, value.a);
+
+        private static Vector3 ToVector3(Float3Data value) =>
+            new Vector3(value.x, value.y, value.z);
 
         private static GameObject CreatePrimitive(
             PrimitiveType primitiveType,

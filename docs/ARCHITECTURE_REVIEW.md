@@ -495,8 +495,10 @@ scene controllers.
 
 - `GameplayVisualTheme` owns post-processing, cel-band response, actor surface
   response, outline widths, contact grounding, and tactical-transition cadence.
-- `LevelLightingCatalog` selects atmosphere, key light, practical fixtures,
-  fixture geometry, and ambient prefab placements by stable level ID.
+- `LevelDocument.environment` owns portable atmosphere, key-light, and practical
+  fixture values used by both editing and play. `LevelLightingCatalog` now owns
+  only Unity prefab references for ambient effects pending their portable
+  placement schema.
 - `SurfacePresentationCatalog` owns concrete, wood, metal, and actor material
   response together with their impact prefab, scale, lifetime, and decal
   treatment. Level archetypes select a stable surface ID.

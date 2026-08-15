@@ -9,6 +9,28 @@ namespace GritGud.Domain.Tests.Levels
     public sealed class LevelValidatorTests
     {
         [Test]
+        public void InvalidPortableLightingIsRejected()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            document.environment.atmosphere.fogStartDistance = 20f;
+            document.environment.atmosphere.fogEndDistance = 10f;
+            document.environment.practicalLights.Add(new LevelPracticalLightData
+            {
+                id = "bad-light",
+                displayName = "Bad light",
+                range = 0f,
+                spotAngle = 200f,
+            });
+
+            var issues = LevelValidator.Validate(document);
+
+            Assert.That(issues.Any(issue => issue.Code == "environment.atmosphere.invalid"),
+                Is.True);
+            Assert.That(issues.Any(issue => issue.Code == "environment.light.invalid"),
+                Is.True);
+        }
+
+        [Test]
         public void EmptyFactoryDocumentIsValid()
         {
             LevelDocument document = LevelDocumentFactory.CreateEmpty("Test Level");

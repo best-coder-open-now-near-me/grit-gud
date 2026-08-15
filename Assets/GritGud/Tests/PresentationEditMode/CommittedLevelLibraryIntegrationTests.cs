@@ -1,4 +1,5 @@
 using GritGud.Application.Levels;
+using GritGud.Domain.Levels;
 using GritGud.Presentation.Gameplay;
 using GritGud.Presentation.Levels;
 using NUnit.Framework;
@@ -42,6 +43,8 @@ namespace GritGud.Presentation.Tests
             Assert.That(entry.DisplayName, Is.EqualTo("Depot Yard"));
 
             var first = library.OpenForEditing(entry.ResourceKey);
+            Assert.That(first.schemaVersion, Is.EqualTo(LevelDocument.CurrentSchemaVersion));
+            Assert.That(first.environment.practicalLights, Has.Count.EqualTo(5));
             first.displayName = "Changed";
 
             Assert.That(

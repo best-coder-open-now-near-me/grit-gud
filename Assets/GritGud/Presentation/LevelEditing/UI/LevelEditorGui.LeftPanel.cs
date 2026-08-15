@@ -27,6 +27,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawLeftPanelTab("CREATE", LevelEditorWorkspacePage.Create, panelToggleColor);
             DrawLeftPanelTab("OUTLINE", LevelEditorWorkspacePage.Outline, panelToggleColor);
             DrawLeftPanelTab("SCENARIO", LevelEditorWorkspacePage.Scenario, panelToggleColor);
+            DrawLeftPanelTab("ENV", LevelEditorWorkspacePage.Environment, panelToggleColor);
             GUI.backgroundColor = panelToggleColor;
             GUILayout.EndHorizontal();
 
@@ -41,6 +42,14 @@ namespace GritGud.Presentation.LevelEditing.UI
             if (presentationState.Page == LevelEditorWorkspacePage.Scenario)
             {
                 DrawScenario(document);
+                GUILayout.EndScrollView();
+                GUILayout.EndArea();
+                return;
+            }
+
+            if (presentationState.Page == LevelEditorWorkspacePage.Environment)
+            {
+                DrawEnvironment(document);
                 GUILayout.EndScrollView();
                 GUILayout.EndArea();
                 return;

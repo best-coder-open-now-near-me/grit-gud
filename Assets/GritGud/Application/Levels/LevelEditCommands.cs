@@ -36,6 +36,44 @@ namespace GritGud.Application.Levels
         IReadOnlyList<ILevelEditCommand> Commands { get; }
     }
 
+    public interface ILevelEnvironmentEditCommand : ILevelEditCommand
+    {
+    }
+
+    public sealed class SetLevelEnvironmentCommand : ILevelEnvironmentEditCommand
+    {
+        private readonly LevelEnvironmentData before;
+        private readonly LevelEnvironmentData after;
+
+        public SetLevelEnvironmentCommand(
+            LevelEnvironmentData before,
+            LevelEnvironmentData after,
+            string description = "Edit level environment")
+        {
+            this.before = before?.DeepCopy() ?? throw new ArgumentNullException(nameof(before));
+            this.after = after?.DeepCopy() ?? throw new ArgumentNullException(nameof(after));
+            Description = string.IsNullOrWhiteSpace(description)
+                ? "Edit level environment"
+                : description.Trim();
+        }
+
+        public string Description { get; }
+
+        public IReadOnlyCollection<string> AffectedEntityIds => Array.Empty<string>();
+
+        public bool RequiresFullProjection => false;
+
+        public void Apply(LevelDocument document) => Set(document, after);
+
+        public void Revert(LevelDocument document) => Set(document, before);
+
+        private static void Set(LevelDocument document, LevelEnvironmentData environment)
+        {
+            AddEntityCommand.RequireDocument(document);
+            document.environment = environment.DeepCopy();
+        }
+    }
+
     public sealed class SetLevelDisplayNameCommand : ILevelEditCommand
     {
         private readonly string before;

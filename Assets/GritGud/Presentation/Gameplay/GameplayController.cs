@@ -225,9 +225,17 @@ namespace GritGud.Presentation.Gameplay
             LevelLightingProfile lightingProfile = content.IsSandbox
                 ? lightingCatalog.GetAny()
                 : lightingCatalog.GetOrAny(content.Level.levelId);
+            IReadOnlyList<AmbientEffectPlacementDefinition> ambientEffects =
+                string.Equals(
+                    lightingProfile.LevelId,
+                    content.Level.levelId,
+                    StringComparison.Ordinal)
+                    ? lightingProfile.AmbientEffects
+                    : Array.Empty<AmbientEffectPlacementDefinition>();
             environmentLighting = GameplayEnvironmentLighting.Create(
                 levelWorld.Root.transform,
-                lightingProfile);
+                content.Level.environment,
+                ambientEffects);
             environmentStyle = GameplayEnvironmentStyle.Create(
                 levelWorld.Root.transform,
                 visualTheme,

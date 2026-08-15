@@ -11,7 +11,8 @@ For a first production authoring session:
 
 1. Open **New Level**, switch to **Scenario**, give the level a useful display
    name, and apply it. The stable ID is generated once and should not be edited.
-2. Block out terrain and geometry, then configure actors and gameplay links.
+2. Block out terrain and geometry, set the atmosphere and practical fixtures in
+   **Env**, then configure actors and gameplay links.
 3. Use **Save Draft** early and after meaningful edits. The draft is local to
    that browser profile or machine and is a recovery slot, not a portable file.
 4. Use **Test Play** before handoff. Publish validation must pass before the
@@ -43,6 +44,8 @@ Portable JSON contains:
 - interaction points plus legacy cover-volume compatibility data;
 - optional initial destructible state and integrity;
 - typed, quantized heightfield terrain surfaces; and
+- portable atmosphere, fog, directional-key, fixture, and practical-light data;
+- stable practical-light IDs with cross-platform fixture limits; and
 - scenario actor instances, objectives, props, vehicles, and complete objective
   action costs.
 
@@ -109,13 +112,20 @@ depth must be whole multiples of the grid spacing. Imported legacy levels with
 no terrain expose **Add Flat Terrain** in the same panel.
 
 The toolbar is split into navigation/history and persistence rows so controls do
-not run together on ordinary window sizes. The left panel has three stable
-workspaces: **Create**, **Outline**, and **Scenario**. Create then switches among
+not run together on ordinary window sizes. The left panel has four stable
+workspaces: **Create**, **Outline**, **Scenario**, and **Env**. Create then switches among
 Select, Place, and Terrain and shows only the active mode's controls. Outline
 searches both world entities and scenario objects. Scenario owns player-start
 and actor management; selecting an actor opens its editable properties in the
 right Inspector. Use the **Shortcuts** toolbar button to show or hide the input
 reference without leaving the editor.
+
+**Env** edits ambient sky/horizon/ground colors, fog, the directional key, and
+fixture presentation with invariant-culture numeric fields. Practical lights
+can be added at the current camera focus, selected from the list, aimed with a
+target position, edited, and deleted. Each apply is one undoable command. The
+portable environment is projected live in the editor and is the exact data used
+by Test Play; HDR color channels may be greater than `1`.
 
 ## Archetype catalog
 
@@ -173,7 +183,7 @@ into saved levels.
 
 **Test Play** launches the normal gameplay runtime from an isolated snapshot.
 It uses exactly the authored scenario party, actor starts, objectives, physics
-props, vehicles, and hostiles. Return to Editor discards gameplay state and
+props, vehicles, hostiles, atmosphere, and practical lights. Return to Editor discards gameplay state and
 resumes the same authoring workspace.
 
 ## Deliberate v1 limits

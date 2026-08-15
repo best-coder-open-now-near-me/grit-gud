@@ -34,6 +34,18 @@ namespace GritGud.Presentation.Tests
                     },
                 },
             });
+            document.environment.practicalLights.Add(new LevelPracticalLightData
+            {
+                id = "loading-flood",
+                displayName = "Loading Flood",
+                position = new Float3Data(2f, 6f, -3f),
+                target = new Float3Data(2f, 0f, 1f),
+                color = new FloatColorData(1.2f, 0.4f, 0.1f),
+                intensity = 4.5f,
+                range = 17f,
+                spotAngle = 52f,
+                innerSpotFraction = 0.6f,
+            });
             var serializer = new UnityLevelJsonSerializer();
 
             string json = serializer.Serialize(document);
@@ -48,6 +60,10 @@ namespace GritGud.Presentation.Tests
             Assert.That(result.entities[0].destructible.enabled, Is.True);
             Assert.That(result.entities[0].interactionPoints[0].type, Is.EqualTo("doorway"));
             Assert.That(result.entities[0].interactionPoints[0].radius, Is.EqualTo(1.25f));
+            Assert.That(result.environment.practicalLights, Has.Count.EqualTo(1));
+            Assert.That(result.environment.practicalLights[0].displayName,
+                Is.EqualTo("Loading Flood"));
+            Assert.That(result.environment.practicalLights[0].color.r, Is.EqualTo(1.2f));
             Assert.That(
                 result.scenario.FindInitiallySelectedPlayer().transform.position.y,
                 Is.EqualTo(7.5f));

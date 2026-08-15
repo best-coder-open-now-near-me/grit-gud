@@ -37,6 +37,36 @@ namespace GritGud.Domain.Tests.Levels
         }
 
         [Test]
+        public void EnvironmentEditParticipatesInUndoAndRedo()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            using var workspace = new LevelEditorWorkspace(document);
+            LevelEnvironmentData before = document.environment.DeepCopy();
+            LevelEnvironmentData after = before.DeepCopy();
+            after.atmosphere.fogEndDistance = 80f;
+            after.practicalLights.Add(new LevelPracticalLightData
+            {
+                id = "light-1",
+                displayName = "Gate light",
+                position = new Float3Data(0f, 6f, -4f),
+                target = new Float3Data(0f, 0f, 0f),
+            });
+
+            workspace.Execute(new SetLevelEnvironmentCommand(before, after));
+
+            Assert.That(workspace.CreateSnapshot().environment.atmosphere.fogEndDistance,
+                Is.EqualTo(80f));
+            Assert.That(workspace.CreateSnapshot().environment.practicalLights,
+                Has.Count.EqualTo(1));
+            Assert.That(workspace.Undo(), Is.True);
+            Assert.That(workspace.CreateSnapshot().environment.atmosphere.fogEndDistance,
+                Is.EqualTo(before.atmosphere.fogEndDistance));
+            Assert.That(workspace.Redo(), Is.True);
+            Assert.That(workspace.CreateSnapshot().environment.practicalLights[0].id,
+                Is.EqualTo("light-1"));
+        }
+
+        [Test]
         public void WorkspacePublishesHistoryAndValidationTogether()
         {
             using var workspace = new LevelEditorWorkspace(LevelDocumentFactory.CreateEmpty());

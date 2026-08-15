@@ -44,6 +44,14 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         void ApplyLevelDisplayName(string displayName);
 
+        void ApplyEnvironment(LevelEnvironmentAuthoringRequest request);
+
+        void AddPracticalLight();
+
+        void ApplyPracticalLight(LevelPracticalLightAuthoringRequest request);
+
+        void DeletePracticalLight(string lightId);
+
         void ApplyEntityTransform(string x, string y, string z, string yaw);
 
         void ApplyPlayerStart(string x, string y, string z, string yaw);

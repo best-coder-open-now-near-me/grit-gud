@@ -19,6 +19,23 @@ namespace GritGud.Domain.Levels
     }
 
     [Serializable]
+    public struct FloatColorData
+    {
+        public FloatColorData(float r, float g, float b, float a = 1f)
+        {
+            this.r = r;
+            this.g = g;
+            this.b = b;
+            this.a = a;
+        }
+
+        public float r;
+        public float g;
+        public float b;
+        public float a;
+    }
+
+    [Serializable]
     public struct LevelTransformData
     {
         public LevelTransformData(Float3Data position, float yawDegrees)
@@ -42,6 +59,145 @@ namespace GritGud.Domain.Levels
 
         public Float3Data center;
         public Float3Data size;
+    }
+
+    [Serializable]
+    public sealed class LevelAtmosphereData
+    {
+        public FloatColorData ambientSky = new FloatColorData(0.055f, 0.11f, 0.23f);
+        public FloatColorData ambientEquator = new FloatColorData(0.028f, 0.075f, 0.17f);
+        public FloatColorData ambientGround = new FloatColorData(0.012f, 0.026f, 0.065f);
+        public float ambientIntensity = 0.76f;
+        public float reflectionIntensity = 0.52f;
+        public FloatColorData subtractiveShadow = new FloatColorData(0.01f, 0.02f, 0.052f);
+        public bool fogEnabled = true;
+        public FloatColorData fogColor = new FloatColorData(0.018f, 0.052f, 0.125f);
+        public float fogStartDistance = 16f;
+        public float fogEndDistance = 54f;
+
+        public LevelAtmosphereData DeepCopy()
+        {
+            return new LevelAtmosphereData
+            {
+                ambientSky = ambientSky,
+                ambientEquator = ambientEquator,
+                ambientGround = ambientGround,
+                ambientIntensity = ambientIntensity,
+                reflectionIntensity = reflectionIntensity,
+                subtractiveShadow = subtractiveShadow,
+                fogEnabled = fogEnabled,
+                fogColor = fogColor,
+                fogStartDistance = fogStartDistance,
+                fogEndDistance = fogEndDistance,
+            };
+        }
+    }
+
+    [Serializable]
+    public sealed class LevelDirectionalLightData
+    {
+        public FloatColorData color = new FloatColorData(0.49f, 0.69f, 1f);
+        public float intensity = 0.82f;
+        public float bounceIntensity = 0.2f;
+        public float shadowStrength = 0.9f;
+        public float shadowBias = 0.07f;
+        public float shadowNormalBias = 0.38f;
+        public Float3Data rotationEuler = new Float3Data(42f, -28f, 0f);
+
+        public LevelDirectionalLightData DeepCopy()
+        {
+            return new LevelDirectionalLightData
+            {
+                color = color,
+                intensity = intensity,
+                bounceIntensity = bounceIntensity,
+                shadowStrength = shadowStrength,
+                shadowBias = shadowBias,
+                shadowNormalBias = shadowNormalBias,
+                rotationEuler = rotationEuler,
+            };
+        }
+    }
+
+    [Serializable]
+    public sealed class LevelPracticalLightData
+    {
+        public string id = string.Empty;
+        public string displayName = "Practical Light";
+        public Float3Data position;
+        public Float3Data target;
+        public FloatColorData color = new FloatColorData(1f, 0.8f, 0.55f);
+        public float intensity = 3f;
+        public float range = 14f;
+        public float spotAngle = 55f;
+        public float innerSpotFraction = 0.58f;
+        public float baseHeight;
+
+        public void Normalize()
+        {
+            id = id ?? string.Empty;
+            displayName = displayName ?? string.Empty;
+        }
+
+        public LevelPracticalLightData DeepCopy()
+        {
+            return new LevelPracticalLightData
+            {
+                id = id ?? string.Empty,
+                displayName = displayName ?? string.Empty,
+                position = position,
+                target = target,
+                color = color,
+                intensity = intensity,
+                range = range,
+                spotAngle = spotAngle,
+                innerSpotFraction = innerSpotFraction,
+                baseHeight = baseHeight,
+            };
+        }
+    }
+
+    [Serializable]
+    public sealed class LevelEnvironmentData
+    {
+        public const int MaximumPracticalLights = 8;
+
+        public string presetId = "depot-night";
+        public LevelAtmosphereData atmosphere = new LevelAtmosphereData();
+        public LevelDirectionalLightData keyLight = new LevelDirectionalLightData();
+        public FloatColorData fixtureHousingColor =
+            new FloatColorData(0.025f, 0.055f, 0.1f);
+        public float lensEmissionIntensity = 5.5f;
+        public List<LevelPracticalLightData> practicalLights =
+            new List<LevelPracticalLightData>();
+
+        public void Normalize()
+        {
+            presetId = presetId ?? string.Empty;
+            atmosphere = atmosphere ?? new LevelAtmosphereData();
+            keyLight = keyLight ?? new LevelDirectionalLightData();
+            practicalLights = practicalLights ?? new List<LevelPracticalLightData>();
+            foreach (LevelPracticalLightData light in practicalLights)
+                light?.Normalize();
+        }
+
+        public LevelEnvironmentData DeepCopy()
+        {
+            var copy = new LevelEnvironmentData
+            {
+                presetId = presetId ?? string.Empty,
+                atmosphere = atmosphere?.DeepCopy() ?? new LevelAtmosphereData(),
+                keyLight = keyLight?.DeepCopy() ?? new LevelDirectionalLightData(),
+                fixtureHousingColor = fixtureHousingColor,
+                lensEmissionIntensity = lensEmissionIntensity,
+            };
+            if (practicalLights != null)
+            {
+                foreach (LevelPracticalLightData light in practicalLights)
+                    copy.practicalLights.Add(light?.DeepCopy());
+            }
+            return copy;
+        }
     }
 
     [Serializable]
@@ -414,7 +570,7 @@ namespace GritGud.Domain.Levels
     [Serializable]
     public sealed class LevelDocument
     {
-        public const int CurrentSchemaVersion = 5;
+        public const int CurrentSchemaVersion = 6;
 
         public int schemaVersion = CurrentSchemaVersion;
         public string levelId = string.Empty;
@@ -422,6 +578,7 @@ namespace GritGud.Domain.Levels
         public LevelBoundsData bounds = new LevelBoundsData(
             new Float3Data(0f, 2.5f, 0f),
             new Float3Data(50f, 10f, 50f));
+        public LevelEnvironmentData environment = new LevelEnvironmentData();
         public List<LevelEntity> entities = new List<LevelEntity>();
         public List<TerrainSurfaceData> terrainSurfaces = new List<TerrainSurfaceData>();
         public LevelScenarioData scenario = new LevelScenarioData();
@@ -433,6 +590,8 @@ namespace GritGud.Domain.Levels
         {
             levelId = levelId ?? string.Empty;
             displayName = displayName ?? string.Empty;
+            environment = environment ?? new LevelEnvironmentData();
+            environment.Normalize();
             entities = entities ?? new List<LevelEntity>();
             terrainSurfaces = terrainSurfaces ?? new List<TerrainSurfaceData>();
             scenario = scenario ?? new LevelScenarioData();
@@ -457,6 +616,7 @@ namespace GritGud.Domain.Levels
                 levelId = levelId ?? string.Empty,
                 displayName = displayName ?? string.Empty,
                 bounds = bounds,
+                environment = environment?.DeepCopy() ?? new LevelEnvironmentData(),
                 scenario = scenario?.DeepCopy() ?? new LevelScenarioData(),
                 legacyPlaytest = legacyPlaytest?.DeepCopy(),
             };

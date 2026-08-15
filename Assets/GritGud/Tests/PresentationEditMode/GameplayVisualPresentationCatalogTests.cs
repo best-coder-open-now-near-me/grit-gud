@@ -23,17 +23,13 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
-        public void DepotLightingProfileOwnsFixturesAndAmbientEffects()
+        public void DepotLightingProfileOwnsUnityAmbientEffectReferencesOnly()
         {
             LevelLightingProfile profile = LevelLightingCatalog
                 .LoadDefault()
                 .Get("main-depot-yard-v1");
 
-            Assert.That(profile.PracticalLights.Count, Is.EqualTo(5));
             Assert.That(profile.AmbientEffects.Count, Is.EqualTo(3));
-            Assert.That(
-                profile.PracticalLights.Count(light => light.Color.r > light.Color.b),
-                Is.EqualTo(2));
             Assert.That(
                 profile.AmbientEffects.All(effect => effect.Prefab != null),
                 Is.True);

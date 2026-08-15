@@ -94,11 +94,27 @@ namespace GritGud.Domain.Tests.Levels
 
             LevelDocument result = new LevelDocumentMigrator().MigrateToCurrent(source);
 
-            Assert.That(result.schemaVersion, Is.EqualTo(5));
+            Assert.That(result.schemaVersion, Is.EqualTo(LevelDocument.CurrentSchemaVersion));
             Assert.That(
                 result.scenario.objectives[0].movementOpportunityCost,
                 Is.Zero);
             Assert.That(result.scenario.objectives[0].mobility, Is.EqualTo("set"));
+        }
+
+        [Test]
+        public void VersionFiveDocumentGainsPortableEnvironmentDefaults()
+        {
+            LevelDocument source = LevelDocumentFactory.CreateEmpty("Legacy Lighting");
+            source.schemaVersion = 5;
+            source.environment = null;
+
+            LevelDocument result = new LevelDocumentMigrator().MigrateToCurrent(source);
+
+            Assert.That(result.schemaVersion, Is.EqualTo(LevelDocument.CurrentSchemaVersion));
+            Assert.That(result.environment, Is.Not.Null);
+            Assert.That(result.environment.presetId, Is.EqualTo("depot-night"));
+            Assert.That(result.environment.atmosphere.fogEnabled, Is.True);
+            Assert.That(result.environment.keyLight.intensity, Is.GreaterThan(0f));
         }
     }
 }

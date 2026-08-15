@@ -41,6 +41,8 @@ namespace GritGud.Presentation.LevelEditing
         private LevelDocument viewDocument;
         private ScenarioAuthoringCoordinator scenarioAuthoring;
         private TerrainAuthoringCoordinator terrainAuthoring;
+        private EnvironmentAuthoringCoordinator environmentAuthoring;
+        private GameplayEnvironmentLighting environmentLighting;
         private LevelEntityView selectedView;
         private LevelEditorOutlinePresenter outlinePresenter;
         private IReadOnlyList<LevelValidationIssue> validationIssues =
@@ -182,6 +184,12 @@ namespace GritGud.Presentation.LevelEditing
             scenarioAuthoring.ActorFocusRequested += HandleScenarioActorFocusRequested;
             scenarioAuthoring.ActorChanged += HandleScenarioActorChanged;
             scenarioAuthoring.PlayerStartChanged += HandlePlayerStartChanged;
+            environmentAuthoring = new EnvironmentAuthoringCoordinator(
+                workspace,
+                cameraController.CaptureState);
+            environmentAuthoring.StatusChanged += SetStatus;
+            environmentAuthoring.PracticalLightFocusRequested +=
+                HandlePracticalLightFocusRequested;
             gui = new LevelEditorGui(
                 selection,
                 catalog,
@@ -194,6 +202,7 @@ namespace GritGud.Presentation.LevelEditing
                 presentationState,
                 this);
             gui.SyncScenarioFields(viewDocument, forceLevelIdentity: true);
+            gui.SyncEnvironmentFields(viewDocument, force: true);
             outlinePresenter = new LevelEditorOutlinePresenter(transform);
             validationIssues = workspace.ValidationIssues;
 
@@ -208,6 +217,8 @@ namespace GritGud.Presentation.LevelEditing
                 scenarioActorHandles.Refresh(workspace.CreateSnapshot());
                 SetStatus("Edit the main level or choose New to start from an empty level.");
             }
+
+            RefreshEnvironmentLighting(viewDocument);
         }
 
         public void EndSession()
@@ -241,6 +252,13 @@ namespace GritGud.Presentation.LevelEditing
             }
             if (terrainAuthoring != null)
                 terrainAuthoring.StatusChanged -= SetStatus;
+            if (environmentAuthoring != null)
+            {
+                environmentAuthoring.StatusChanged -= SetStatus;
+                environmentAuthoring.PracticalLightFocusRequested -=
+                    HandlePracticalLightFocusRequested;
+            }
+            environmentLighting?.Dispose();
             toolManager?.Dispose();
             projector?.Dispose();
             terrainProjector?.Dispose();
@@ -259,6 +277,8 @@ namespace GritGud.Presentation.LevelEditing
             placementTool = null;
             terrainTool = null;
             terrainAuthoring = null;
+            environmentAuthoring = null;
+            environmentLighting = null;
             catalog = null;
             scenarioCatalog = null;
             inputRouter = null;
@@ -386,6 +406,8 @@ namespace GritGud.Presentation.LevelEditing
             terrainProjector.SetVisible(false);
             scenarioActorHandles.SetVisible(false);
             outlinePresenter.HideAll();
+            environmentLighting?.Dispose();
+            environmentLighting = null;
         }
 
         public void ResumeFromTestPlay()
@@ -399,6 +421,7 @@ namespace GritGud.Presentation.LevelEditing
             projector.SetVisible(true);
             terrainProjector.SetVisible(true);
             scenarioActorHandles.SetVisible(!previewMode);
+            RefreshEnvironmentLighting(workspace.CreateSnapshot());
             SetStatus("Returned from isolated test play.");
         }
 
@@ -652,6 +675,12 @@ namespace GritGud.Presentation.LevelEditing
                 interactionPointHandles.Refresh(snapshot, selection, projector);
                 scenarioActorHandles.Refresh(snapshot);
                 gui.SyncScenarioFields(snapshot);
+                if (args.SessionChange.RequiresFullProjection
+                    || IsEnvironmentCommand(args.SessionChange.Command))
+                {
+                    gui.SyncEnvironmentFields(snapshot, force: true);
+                    RefreshEnvironmentLighting(snapshot);
+                }
             }
             catch (LevelLoadException exception)
             {
@@ -830,6 +859,39 @@ namespace GritGud.Presentation.LevelEditing
             scenarioActorHandles.Refresh(document);
             gui.SelectScenarioActor(null);
             gui.SyncScenarioFields(document, forceLevelIdentity: true);
+            gui.SyncEnvironmentFields(document, force: true);
+        }
+
+        private void RefreshEnvironmentLighting(LevelDocument document)
+        {
+            if (document?.environment == null || suspended)
+                return;
+
+            environmentLighting?.Dispose();
+            LevelLightingProfile profile = LevelLightingCatalog.LoadDefault()
+                .GetOrAny(document.levelId);
+            IReadOnlyList<AmbientEffectPlacementDefinition> ambientEffects =
+                string.Equals(profile.LevelId, document.levelId, StringComparison.Ordinal)
+                    ? profile.AmbientEffects
+                    : Array.Empty<AmbientEffectPlacementDefinition>();
+            environmentLighting = GameplayEnvironmentLighting.Create(
+                transform,
+                document.environment,
+                ambientEffects);
+        }
+
+        private void HandlePracticalLightFocusRequested(string lightId)
+        {
+            gui?.SelectPracticalLight(lightId, workspace?.CreateSnapshot());
+        }
+
+        private static bool IsEnvironmentCommand(ILevelEditCommand command)
+        {
+            if (command is ILevelEnvironmentEditCommand)
+                return true;
+            if (command is ILevelEditCommandGroup group)
+                return group.Commands.Any(IsEnvironmentCommand);
+            return false;
         }
 
         private void HandleDocumentLoaded(object sender, LevelDocumentLoadedEventArgs args)
@@ -944,6 +1006,20 @@ namespace GritGud.Presentation.LevelEditing
 
         void ILevelEditorGuiActions.ApplyLevelDisplayName(string displayName) =>
             ApplyLevelDisplayName(displayName);
+
+        void ILevelEditorGuiActions.ApplyEnvironment(
+            LevelEnvironmentAuthoringRequest request) =>
+            environmentAuthoring.ApplyEnvironment(request);
+
+        void ILevelEditorGuiActions.AddPracticalLight() =>
+            environmentAuthoring.AddPracticalLight();
+
+        void ILevelEditorGuiActions.ApplyPracticalLight(
+            LevelPracticalLightAuthoringRequest request) =>
+            environmentAuthoring.ApplyPracticalLight(request);
+
+        void ILevelEditorGuiActions.DeletePracticalLight(string lightId) =>
+            environmentAuthoring.DeletePracticalLight(lightId);
 
         void ILevelEditorGuiActions.ApplyEntityTransform(
             string x,

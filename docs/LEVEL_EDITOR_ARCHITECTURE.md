@@ -18,7 +18,9 @@ The normal mutation flow is:
    transaction to `LevelEditorWorkspace`.
 3. The workspace updates history and registered validation rules, then publishes
    a `LevelSessionChangedEventArgs` containing the affected stable entity IDs.
-4. `LevelWorldProjector` updates only those entity views. Replacement documents
+4. `LevelWorldProjector` updates only those entity views. Environment commands
+   refresh the shared `GameplayEnvironmentLighting` projection from the same
+   document snapshot used by Test Play. Replacement documents
    and commands marked for full projection use the staging loader instead.
 5. The controller caches one detached `LevelEditorViewState` per workspace
    revision. All IMGUI panels render that same snapshot instead of cloning the
@@ -43,6 +45,7 @@ copied back into the authoring workspace.
 | UI action contract | Typed boundary for user intents, persistence, and history operations |
 | UI shell and panels | IMGUI rendering, transient text fields, and local disclosure state |
 | Scenario authoring coordinator | Scenario invariants, transactions, and actor/link use cases |
+| Environment authoring coordinator | Numeric parsing, lighting invariants, and undoable atmosphere/practical-light use cases |
 | Controller | Composition, Unity lifecycle, preview boundary, and cross-service routing |
 
 Domain and Application assemblies have no Unity references. Unity asset paths,
@@ -110,6 +113,20 @@ Each definition exposes four distinct concerns:
 
 New palette filters and tools should depend on capabilities or placement rules,
 not on prefab names or third-party asset paths.
+
+## Environment and lighting
+
+Schema 6 stores atmosphere, fog, the directional key, fixture presentation, and
+practical spotlights in `LevelDocument.environment`. `SetLevelEnvironmentCommand`
+is the single reversible boundary for these settings. Both the editor and
+gameplay call `GameplayEnvironmentLighting` with this portable data, so Level
+Preview, Test Play, exported JSON, and committed play cannot select different
+lighting values.
+
+`LevelLightingCatalog` is deliberately limited to Unity prefab references for
+ambient effects. Those references remain Presentation-owned until ambient VFX
+placements become portable authored data; the catalog no longer duplicates
+atmosphere or practical-light values.
 
 ## Scaling rules
 

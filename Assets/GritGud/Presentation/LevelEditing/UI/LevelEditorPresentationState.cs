@@ -8,6 +8,7 @@ namespace GritGud.Presentation.LevelEditing.UI
         Create,
         Outline,
         Scenario,
+        Environment,
     }
 
     public enum LevelEditorCreateMode
