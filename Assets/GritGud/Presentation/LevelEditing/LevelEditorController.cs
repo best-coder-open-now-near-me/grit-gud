@@ -518,9 +518,13 @@ namespace GritGud.Presentation.LevelEditing
 
         private void OnGUI()
         {
-            if (!suspended && workspace != null && viewDocument != null)
+            if (!suspended
+                && workspace != null
+                && viewDocument != null
+                && persistence != null
+                && gui != null)
             {
-                gui?.Draw(new LevelEditorViewState(
+                gui.Draw(new LevelEditorViewState(
                     viewDocument,
                     workspace.Revision,
                     workspace.CanUndo,
@@ -1489,20 +1493,25 @@ namespace GritGud.Presentation.LevelEditing
 
         void ILevelEditorGuiActions.ReturnToMenu() => GameBootstrap.Instance.ReturnToMenu();
 
-        bool ILevelEditorGuiActions.HasDraft => persistence.HasDraft;
+        bool ILevelEditorGuiActions.HasDraft => persistence?.HasDraft ?? false;
 
         int ILevelEditorGuiActions.RecoveryGenerationCount =>
             LevelEditorPersistenceCoordinator.RecoveryGenerationCount;
 
         bool ILevelEditorGuiActions.HasRecovery(int generation) =>
-            persistence.HasRecovery(generation);
+            persistence?.HasRecovery(generation) ?? false;
 
-        bool ILevelEditorGuiActions.UsesBrowserFileDialog => persistence.UsesBrowserFileDialog;
+        bool ILevelEditorGuiActions.UsesBrowserFileDialog =>
+            persistence?.UsesBrowserFileDialog ?? false;
 
         string ILevelEditorGuiActions.DesktopImportPath
         {
-            get => persistence.DesktopImportPath;
-            set => persistence.DesktopImportPath = value;
+            get => persistence?.DesktopImportPath ?? string.Empty;
+            set
+            {
+                if (persistence != null)
+                    persistence.DesktopImportPath = value;
+            }
         }
 
         LevelEditorCameraView ILevelEditorGuiActions.CameraView => cameraController.View;
