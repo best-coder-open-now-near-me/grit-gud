@@ -4,9 +4,10 @@ Grit Gud is a code-first, turn-based CRPG built around continuous, gridless
 positioning. The project is designed so that most gameplay and level work can
 be done through source control and tested in a browser-hosted WebGL build.
 
-The current repository contains the agreed project foundation, a minimal Unity
-application shell, and the first portable level-construction/editor slice. It
-does not contain tactical character gameplay yet.
+The current repository contains the project foundation, a portable runtime
+level editor, and a playable tactical vertical slice with party control,
+turn-based actions, attacks, projectiles, displacement, consumables, wounds,
+hostile turns, and replay-oriented diagnostics.
 
 > [!CAUTION]
 > **Asset boundary — read before adding or committing Unity files.**

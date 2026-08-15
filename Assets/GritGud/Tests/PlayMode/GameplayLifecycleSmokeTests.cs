@@ -1,4 +1,5 @@
 using System.Collections;
+using GritGud.Application.Levels;
 using GritGud.Presentation.Bootstrap;
 using GritGud.Presentation.Gameplay;
 using NUnit.Framework;
@@ -16,20 +17,7 @@ namespace GritGud.PlayMode.Tests
         [UnityTest]
         public IEnumerator DefaultGameplaySurvivesSustainedFrameUpdates()
         {
-            bootstrap = GameBootstrap.Instance;
-            if (bootstrap == null)
-            {
-                ownedApplication = new GameObject(
-                    "Gameplay Lifecycle Smoke Test");
-                bootstrap = ownedApplication.AddComponent<GameBootstrap>();
-            }
-
-            if (Camera.main == null)
-            {
-                ownedCamera = new GameObject("Main Camera");
-                ownedCamera.tag = "MainCamera";
-                ownedCamera.AddComponent<Camera>();
-            }
+            EnsureBootstrap();
 
             bootstrap.ReturnToMenu();
             bootstrap.PlayMainLevel();
@@ -58,6 +46,42 @@ namespace GritGud.PlayMode.Tests
             Assert.That(gameplay.IsRunning, Is.False);
         }
 
+        [UnityTest]
+        public IEnumerator EveryPlayableCommittedLevelBootsAndTearsDown()
+        {
+            EnsureBootstrap();
+            bootstrap.ReturnToMenu();
+            int playableLevelCount = 0;
+
+            foreach (CommittedLevelEntry entry in bootstrap.CommittedLevels)
+            {
+                if (!entry.CanPlay)
+                {
+                    continue;
+                }
+
+                playableLevelCount++;
+                bootstrap.PlayCommittedLevel(entry.ResourceKey);
+                yield return WaitForMode(ApplicationMode.Gameplay);
+
+                GameplayController gameplay =
+                    bootstrap.GetComponent<GameplayController>();
+                Assert.That(gameplay, Is.Not.Null, entry.ResourceKey);
+                Assert.That(gameplay.IsRunning, Is.True, entry.ResourceKey);
+                Assert.That(gameplay.Session, Is.Not.Null, entry.ResourceKey);
+
+                bootstrap.ReturnToMenu();
+                yield return null;
+                Assert.That(
+                    bootstrap.CurrentMode,
+                    Is.EqualTo(ApplicationMode.Menu),
+                    entry.ResourceKey);
+                Assert.That(gameplay.IsRunning, Is.False, entry.ResourceKey);
+            }
+
+            Assert.That(playableLevelCount, Is.GreaterThan(0));
+        }
+
         [UnityTearDown]
         public IEnumerator TearDown()
         {
@@ -76,6 +100,37 @@ namespace GritGud.PlayMode.Tests
             bootstrap = null;
             ownedCamera = null;
             ownedApplication = null;
+        }
+
+        private void EnsureBootstrap()
+        {
+            bootstrap = GameBootstrap.Instance;
+            if (bootstrap == null)
+            {
+                ownedApplication = new GameObject(
+                    "Gameplay Lifecycle Smoke Test");
+                bootstrap = ownedApplication.AddComponent<GameBootstrap>();
+            }
+
+            if (Camera.main == null)
+            {
+                ownedCamera = new GameObject("Main Camera");
+                ownedCamera.tag = "MainCamera";
+                ownedCamera.AddComponent<Camera>();
+            }
+        }
+
+        private IEnumerator WaitForMode(ApplicationMode expectedMode)
+        {
+            const int maximumFrames = 30;
+            for (int frame = 0;
+                frame < maximumFrames && bootstrap.CurrentMode != expectedMode;
+                frame++)
+            {
+                yield return null;
+            }
+
+            Assert.That(bootstrap.CurrentMode, Is.EqualTo(expectedMode));
         }
     }
 }

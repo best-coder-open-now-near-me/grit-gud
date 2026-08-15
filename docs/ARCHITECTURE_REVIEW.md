@@ -1,6 +1,6 @@
 # Architecture and Separation-of-Concerns Review
 
-**Reviewed:** 2026-08-11; follow-up audit 2026-08-12
+**Reviewed:** 2026-08-11; follow-up audits 2026-08-12 and 2026-08-14
 **Scope:** the repository as a whole, with additional attention on the recent
 emergency-reaction, projectile, explosive, progression, displacement, and HUD
 work.
@@ -21,6 +21,33 @@ features accumulate**. A few composition and presentation classes are becoming
 secondary rules engines, while the central gameplay session and content
 assembler are becoming change hotspots. Close-quarters displacement is the
 right feature family to correct those trends before adding the drone.
+
+### 2026-08-14 follow-up
+
+The latest pass corrected the highest-risk correctness and lifecycle findings
+without attempting a destabilizing rewrite:
+
+- committed-level readiness now uses the same archetype, actor-template, and
+  presentation catalogs as runtime loading; Authoring, Publish, and Runtime
+  validation profiles have distinct enforcement semantics;
+- document copies and read queries no longer normalize or mutate their source;
+- nested terrain command groups project every patch, enforce per-document
+  limits, and replace the visible terrain root only after construction succeeds;
+- gameplay startup is failure-safe, teardown has one authoritative path, and
+  HUD choice state plus generated textures have explicit session ownership;
+- action observers are published only after the shared action, focused session,
+  consequences, smoke fields, and journals finish committing; one failing
+  observer does not prevent later observers from running; and
+- attack, displacement, and thrown-explosive randomness derives stable named
+  streams from the scenario seed instead of starting correlated generators from
+  the same value.
+
+The remaining hotspots are deliberate incremental work. `GameplaySession`
+still centralizes actor state and outcome dispatch, `GameplayHud` still owns too
+many feature drawers, and `GameplayController` is still a large composition
+root. New behavior should continue moving behind focused Application services,
+HUD panels, and feature binders when those seams become stable. Durable
+cross-launch progression storage also remains explicitly deferred.
 
 ## Non-negotiable boundaries
 
@@ -205,6 +232,14 @@ combat effect while social resolution is absent.
 
 **Priority: high, incremental**
 
+**Status: partially resolved 2026-08-14.** Blast, displacement, equipment,
+projectile, thrown-explosive, party, and progression behavior already has
+focused sessions. Gameplay startup is now split into explicit bootstrap, world,
+session, binding, and interface stages with one teardown path. HUD choice state
+and generated texture ownership have moved into small lifecycle objects. The
+central session outcome switch and the remaining HUD feature drawers should be
+extracted only along proven behavior seams.
+
 `GameplaySession` is the authoritative aggregate and should remain the owner of
 actor state and journal ordering, but outcome-specific validation and
 application should move behind focused internal collaborators. Start with
@@ -282,6 +317,13 @@ specific formatter or an explicit generic-policy declaration.
 ### A9 — Put fast validation before full platform builds
 
 **Priority: immediate delivery hygiene**
+
+**Status: resolved.** The branch-preview workflow validates tracked source and
+JSON, runs the complete EditMode and PlayMode suites, verifies that tests leave
+the workspace clean, and only then builds WebGL. Because license and private
+asset credentials are intentionally unavailable to forks, trusted
+contributions must be pushed to a repository branch before merge so this gate
+can run.
 
 The WebGL build is valuable but too slow to be the first signal. CI should run
 conflict-marker and JSON checks, Unity script compilation, and EditMode tests
@@ -433,11 +475,11 @@ unrelated content.
 
 **Priority: continuous**
 
-**Status: current gate resolved 2026-08-12.** The listed regressions have
-focused tests. The local gate passes 388 EditMode tests plus a PlayMode
-lifecycle smoke that boots default gameplay, sustains 180 frame updates, and
-tears the session down. CI now runs both suites before the WebGL build. This
-remains a continuous requirement for future gameplay slices.
+**Status: current gate resolved 2026-08-14.** The listed regressions have
+focused tests. The local gate passes 536 EditMode tests. PlayMode sustains the
+default gameplay session for 180 frames and separately boots and tears down
+every playable committed level. CI runs both suites before the WebGL build.
+This remains a continuous requirement for future gameplay slices.
 
 The repository has broad Domain/Application and Presentation EditMode coverage,
 a sustained-frame default-content PlayMode lifecycle smoke, and CI gates before

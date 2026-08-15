@@ -88,6 +88,14 @@ matching Windows and Web build-support modules:
 Generated folders such as `Library`, `Temp`, `Logs`, and `UserSettings` are not
 versioned.
 
+Run `tools/validate-repository.py` with Python 3 before invoking Unity. It scans
+tracked source for unresolved conflict markers and parses every tracked JSON
+document. Then run the complete EditMode and PlayMode suites in batch mode; use
+`-testResults <path>` and `-logFile <path>` beneath the ignored `Temp` directory
+so failures remain inspectable. PlayMode coverage includes both a sustained
+default-session smoke and startup/teardown for every committed level whose
+library entry is playable.
+
 Runtime-generated terrain, outlines, and brush previews use the committed
 `GritGud/RuntimeColor` shader. It is explicitly listed in Graphics Settings so
 player shader stripping cannot make `Shader.Find` return null. Runtime material
