@@ -168,5 +168,25 @@ namespace GritGud.Domain.Tests.Levels
             Assert.That(result.dressing.ambientVfx, Is.Empty);
             Assert.That(result.dressing.audioZones, Is.Empty);
         }
+
+        [Test]
+        public void VersionNineYawTransformMigratesToThreeAxisRotation()
+        {
+            LevelDocument source = LevelDocumentFactory.CreateEmpty("Legacy rotation");
+            source.schemaVersion = 9;
+            source.entities.Add(new LevelEntity
+            {
+                id = "crate",
+                archetypeId = "crate",
+                transform = new LevelTransformData(new Float3Data(1f, 2f, 3f), 45f),
+            });
+
+            LevelDocument result = new LevelDocumentMigrator().MigrateToCurrent(source);
+
+            Assert.That(result.schemaVersion, Is.EqualTo(LevelDocument.CurrentSchemaVersion));
+            Assert.That(result.entities[0].transform.pitchDegrees, Is.Zero);
+            Assert.That(result.entities[0].transform.yawDegrees, Is.EqualTo(45f));
+            Assert.That(result.entities[0].transform.rollDegrees, Is.Zero);
+        }
     }
 }

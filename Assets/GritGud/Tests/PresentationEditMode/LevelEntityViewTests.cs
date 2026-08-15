@@ -1,4 +1,5 @@
 using GritGud.Presentation.Levels.Runtime;
+using GritGud.Domain.Levels;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -6,6 +7,32 @@ namespace GritGud.Presentation.Tests
 {
     public sealed class LevelEntityViewTests
     {
+        [Test]
+        public void EntityViewRoundTripsThreeAxisRotation()
+        {
+            var owner = new GameObject("Three Axis Transform Test");
+            LevelEntityView view = owner.AddComponent<LevelEntityView>();
+            try
+            {
+                view.ApplyTransform(new LevelTransformData(
+                    new Float3Data(1f, 2f, 3f),
+                    20f,
+                    -35f,
+                    12f));
+
+                LevelTransformData result = view.ReadTransform();
+
+                Assert.That(result.position.x, Is.EqualTo(1f));
+                Assert.That(result.pitchDegrees, Is.EqualTo(20f).Within(0.001f));
+                Assert.That(result.yawDegrees, Is.EqualTo(-35f).Within(0.001f));
+                Assert.That(result.rollDegrees, Is.EqualTo(12f).Within(0.001f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(owner);
+            }
+        }
+
         [Test]
         public void BoundsPivotMapsTopViewCoordinatesToBottomFace()
         {

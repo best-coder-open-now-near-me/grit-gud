@@ -37,7 +37,11 @@ namespace GritGud.Presentation.LevelEditing.UI
         private string xText = "0";
         private string yText = "0";
         private string zText = "0";
+        private string pitchText = "0";
         private string yawText = "0";
+        private string rollText = "0";
+        private string physicsDropHeightText = "2";
+        private bool physicsKeepUpright;
         private string playerStartXText = "0";
         private string playerStartYText = "0";
         private string playerStartZText = "0";
@@ -180,7 +184,9 @@ namespace GritGud.Presentation.LevelEditing.UI
             xText = value.position.x.ToString("0.###", CultureInfo.InvariantCulture);
             yText = value.position.y.ToString("0.###", CultureInfo.InvariantCulture);
             zText = value.position.z.ToString("0.###", CultureInfo.InvariantCulture);
+            pitchText = value.pitchDegrees.ToString("0.###", CultureInfo.InvariantCulture);
             yawText = value.yawDegrees.ToString("0.###", CultureInfo.InvariantCulture);
+            rollText = value.rollDegrees.ToString("0.###", CultureInfo.InvariantCulture);
         }
 
         public void SyncPlayerStartFields(LevelTransformData value)

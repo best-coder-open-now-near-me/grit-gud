@@ -146,7 +146,9 @@ namespace GritGud.Domain.Levels
                 if (point == null)
                     continue;
                 if (!LevelValidationMath.IsFinite(entity.transform.position)
+                    || !LevelValidationMath.IsFinite(entity.transform.pitchDegrees)
                     || !LevelValidationMath.IsFinite(entity.transform.yawDegrees)
+                    || !LevelValidationMath.IsFinite(entity.transform.rollDegrees)
                     || !LevelValidationMath.IsFinite(point.localPosition))
                 {
                     continue;

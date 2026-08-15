@@ -42,10 +42,26 @@ namespace GritGud.Domain.Levels
         {
             this.position = position;
             this.yawDegrees = yawDegrees;
+            pitchDegrees = 0f;
+            rollDegrees = 0f;
+        }
+
+        public LevelTransformData(
+            Float3Data position,
+            float pitchDegrees,
+            float yawDegrees,
+            float rollDegrees)
+        {
+            this.position = position;
+            this.pitchDegrees = pitchDegrees;
+            this.yawDegrees = yawDegrees;
+            this.rollDegrees = rollDegrees;
         }
 
         public Float3Data position;
+        public float pitchDegrees;
         public float yawDegrees;
+        public float rollDegrees;
     }
 
     [Serializable]
@@ -652,7 +668,7 @@ namespace GritGud.Domain.Levels
     [Serializable]
     public sealed class LevelDocument
     {
-        public const int CurrentSchemaVersion = 9;
+        public const int CurrentSchemaVersion = 10;
         public const int MaximumEntityGroupCount = 64;
 
         public int schemaVersion = CurrentSchemaVersion;

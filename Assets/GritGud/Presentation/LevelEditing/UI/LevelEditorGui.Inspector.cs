@@ -74,9 +74,17 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawLabeledField("X", ref xText);
             DrawLabeledField("Y", ref yText);
             DrawLabeledField("Z", ref zText);
-            DrawLabeledField("Yaw", ref yawText);
+            DrawLabeledField("Pitch X", ref pitchText);
+            DrawLabeledField("Yaw Y", ref yawText);
+            DrawLabeledField("Roll Z", ref rollText);
             if (GUILayout.Button("APPLY", PanelPrimaryButtonLayout()))
-                actions.ApplyEntityTransform(xText, yText, zText, yawText);
+                actions.ApplyEntityTransform(
+                    xText,
+                    yText,
+                    zText,
+                    pitchText,
+                    yawText,
+                    rollText);
 
             GUILayout.BeginHorizontal();
             float angleSnap = selectedView.Archetype.PlacementRules.AngleSnap;
@@ -86,6 +94,22 @@ namespace GritGud.Presentation.LevelEditing.UI
                 RotateInspectorSelection(angleSnap);
             GUILayout.EndHorizontal();
             DrawRotationPivotPicker(entity, selectedView);
+
+            GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
+            GUILayout.Label("PHYSICS PLACEMENT");
+            DrawLabeledField("Drop height", ref physicsDropHeightText);
+            physicsKeepUpright = GUILayout.Toggle(physicsKeepUpright, "Keep upright");
+            GUILayout.Label("Temporarily simulates the selected prop, then saves its settled transform.");
+            if (actions.PhysicsPlacementRunning)
+            {
+                if (GUILayout.Button("CANCEL SETTLE", PanelPrimaryButtonLayout()))
+                    actions.CancelPhysicsPlacement();
+            }
+            else if (GUILayout.Button("DROP & SETTLE", PanelPrimaryButtonLayout()))
+            {
+                actions.DropAndSettleSelection(physicsDropHeightText, physicsKeepUpright);
+            }
+
             Color previous = GUI.backgroundColor;
             GUI.backgroundColor = LevelEditorTheme.Destructive;
             if (GUILayout.Button("DELETE", PanelPrimaryButtonLayout()))

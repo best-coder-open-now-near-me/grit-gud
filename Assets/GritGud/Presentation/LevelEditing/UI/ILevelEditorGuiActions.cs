@@ -32,6 +32,8 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         bool AudioZonePreviewEnabled { get; }
 
+        bool PhysicsPlacementRunning { get; }
+
         void ReturnToMenu();
 
         void Undo();
@@ -126,7 +128,17 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         void SetAudioZonePreviewEnabled(bool enabled);
 
-        void ApplyEntityTransform(string x, string y, string z, string yaw);
+        void ApplyEntityTransform(
+            string x,
+            string y,
+            string z,
+            string pitch,
+            string yaw,
+            string roll);
+
+        void DropAndSettleSelection(string dropHeight, bool keepUpright);
+
+        void CancelPhysicsPlacement();
 
         void SetEntityRotationPivot(float normalizedX, float normalizedZ);
 

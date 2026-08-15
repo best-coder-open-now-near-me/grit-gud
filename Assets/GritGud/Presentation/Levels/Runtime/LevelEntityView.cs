@@ -44,7 +44,10 @@ namespace GritGud.Presentation.Levels.Runtime
                 value.position.x,
                 value.position.y,
                 value.position.z);
-            transform.localRotation = Quaternion.Euler(0f, value.yawDegrees, 0f);
+            transform.localRotation = Quaternion.Euler(
+                value.pitchDegrees,
+                value.yawDegrees,
+                value.rollDegrees);
         }
 
         public LevelTransformData ReadTransform()
@@ -52,7 +55,9 @@ namespace GritGud.Presentation.Levels.Runtime
             Vector3 position = transform.localPosition;
             return new LevelTransformData(
                 new Float3Data(position.x, position.y, position.z),
-                NormalizeYaw(transform.localEulerAngles.y));
+                NormalizeAngle(transform.localEulerAngles.x),
+                NormalizeAngle(transform.localEulerAngles.y),
+                NormalizeAngle(transform.localEulerAngles.z));
         }
 
         public Bounds GetWorldBounds()
@@ -135,7 +140,7 @@ namespace GritGud.Presentation.Levels.Runtime
             return combined;
         }
 
-        private static float NormalizeYaw(float yaw)
+        private static float NormalizeAngle(float yaw)
         {
             return Mathf.Repeat(yaw + 180f, 360f) - 180f;
         }

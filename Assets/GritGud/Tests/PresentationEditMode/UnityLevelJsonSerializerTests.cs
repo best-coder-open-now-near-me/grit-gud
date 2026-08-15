@@ -18,7 +18,11 @@ namespace GritGud.Presentation.Tests
                 id = "crate-1",
                 archetypeId = "prop.crate.standard",
                 groupId = "props",
-                transform = new LevelTransformData(new Float3Data(2.5f, 0f, -5f), 90f),
+                transform = new LevelTransformData(
+                    new Float3Data(2.5f, 0f, -5f),
+                    12f,
+                    90f,
+                    -8f),
                 rotationPivot = new LevelRotationPivotData
                 {
                     localPosition = new Float3Data(0.5f, 0f, -0.5f),
@@ -90,6 +94,9 @@ namespace GritGud.Presentation.Tests
             Assert.That(result.groups.Single().displayName, Is.EqualTo("Gameplay Props"));
             Assert.That(result.groups.Single().locked, Is.True);
             Assert.That(result.entities[0].transform.position.z, Is.EqualTo(-5f));
+            Assert.That(result.entities[0].transform.pitchDegrees, Is.EqualTo(12f));
+            Assert.That(result.entities[0].transform.yawDegrees, Is.EqualTo(90f));
+            Assert.That(result.entities[0].transform.rollDegrees, Is.EqualTo(-8f));
             Assert.That(result.entities[0].rotationPivot.mode, Is.EqualTo("bounds"));
             Assert.That(result.entities[0].rotationPivot.localPosition.x, Is.EqualTo(0.5f));
             Assert.That(result.entities[0].destructible.initialState, Is.EqualTo("intact"));

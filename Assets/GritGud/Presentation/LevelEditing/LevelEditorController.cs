@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -60,6 +61,8 @@ namespace GritGud.Presentation.LevelEditing
         private bool previewMode;
         private bool suspended;
         private bool audioZonePreviewEnabled;
+        private bool physicsPlacementRunning;
+        private bool cancelPhysicsPlacement;
         private LevelDocument sourceDocument;
         private bool sourceDocumentIsSaved;
         private string sourceLabel = string.Empty;
@@ -580,7 +583,10 @@ namespace GritGud.Presentation.LevelEditing
 
             if (input.CancelPressed)
             {
-                toolManager.CancelActive();
+                if (physicsPlacementRunning)
+                    cancelPhysicsPlacement = true;
+                else
+                    toolManager.CancelActive();
             }
 
             if (input.FrameSelectionPressed)
@@ -692,7 +698,9 @@ namespace GritGud.Presentation.LevelEditing
             string xText,
             string yText,
             string zText,
-            string yawText)
+            string pitchText,
+            string yawText,
+            string rollText)
         {
             LevelEntity entity = workspace.FindEntitySnapshot(selection.PrimaryEntityId);
             if (entity == null)
@@ -703,7 +711,9 @@ namespace GritGud.Presentation.LevelEditing
             if (!TryParse(xText, out float x)
                 || !TryParse(yText, out float y)
                 || !TryParse(zText, out float z)
-                || !TryParse(yawText, out float yaw))
+                || !TryParse(pitchText, out float pitch)
+                || !TryParse(yawText, out float yaw)
+                || !TryParse(rollText, out float roll))
             {
                 SetStatus("Transform values must be finite numbers.");
                 return;
@@ -711,7 +721,9 @@ namespace GritGud.Presentation.LevelEditing
 
             var after = new LevelTransformData(
                 new Float3Data(x, y, z),
-                NormalizeYaw(yaw));
+                NormalizeYaw(pitch),
+                NormalizeYaw(yaw),
+                NormalizeYaw(roll));
             workspace.Execute(new SetEntityTransformCommand(entity.id, entity.transform, after));
             SetStatus("Applied numeric transform.");
         }
@@ -757,6 +769,121 @@ namespace GritGud.Presentation.LevelEditing
             SetStatus(commands.Count == 1
                 ? "Set rotation pivot."
                 : "Set rotation pivots for selected entities.");
+        }
+
+        private void DropAndSettleSelection(string dropHeightText, bool keepUpright)
+        {
+            if (physicsPlacementRunning)
+            {
+                SetStatus("A physics placement is already settling.");
+                return;
+            }
+            if (!TryParse(dropHeightText, out float dropHeight)
+                || dropHeight <= 0f
+                || dropHeight > 25f)
+            {
+                SetStatus("Drop height must be greater than 0 and no more than 25 meters.");
+                return;
+            }
+
+            LevelEntity entity = workspace.FindEntitySnapshot(selection.PrimaryEntityId);
+            if (entity == null
+                || !projector.TryGetEntity(entity.id, out LevelEntityView view))
+            {
+                SetStatus("Select one world prop to drop.");
+                return;
+            }
+            LevelArchetypeCapabilities blocked = LevelArchetypeCapabilities.PlacementSurface
+                | LevelArchetypeCapabilities.Vehicle;
+            if ((view.Archetype.Capabilities & blocked) != 0)
+            {
+                SetStatus("Structural placement surfaces and vehicles cannot be dropped.");
+                return;
+            }
+
+            toolManager.ActivateDefault();
+            StartCoroutine(SettleEntity(entity, view, dropHeight, keepUpright));
+        }
+
+        private IEnumerator SettleEntity(
+            LevelEntity entity,
+            LevelEntityView view,
+            float dropHeight,
+            bool keepUpright)
+        {
+            physicsPlacementRunning = true;
+            cancelPhysicsPlacement = false;
+            LevelTransformData before = entity.transform;
+            Collider[] colliders = view.GetComponentsInChildren<Collider>(true);
+            bool needsFallback = !colliders.Any(collider => collider.enabled && !collider.isTrigger)
+                || colliders.Any(collider => collider.enabled
+                    && collider is MeshCollider mesh
+                    && !mesh.convex);
+            var disabled = new List<Collider>();
+            BoxCollider fallback = null;
+            if (needsFallback)
+            {
+                foreach (Collider collider in colliders)
+                {
+                    if (!collider.enabled)
+                        continue;
+                    collider.enabled = false;
+                    disabled.Add(collider);
+                }
+                Bounds bounds = LevelEntityView.CalculateVisualLocalBounds(
+                    view.Archetype.Presentation.Prefab,
+                    view.Archetype.Presentation.LocalBounds);
+                fallback = view.gameObject.AddComponent<BoxCollider>();
+                fallback.center = bounds.center;
+                fallback.size = bounds.size;
+            }
+
+            Rigidbody body = view.gameObject.AddComponent<Rigidbody>();
+            body.mass = 1f;
+            body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
+            body.constraints = keepUpright
+                ? RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ
+                : RigidbodyConstraints.None;
+            view.transform.position += Vector3.up * dropHeight;
+            body.position = view.transform.position;
+            body.rotation = view.transform.rotation;
+            SetStatus(needsFallback
+                ? "Settling with a visual-bounds collider approximation."
+                : "Settling with authored colliders.");
+
+            int stableSteps = 0;
+            float elapsed = 0f;
+            while (!cancelPhysicsPlacement && elapsed < 5f && stableSteps < 12)
+            {
+                yield return new WaitForFixedUpdate();
+                elapsed += Time.fixedDeltaTime;
+                bool stable = body.linearVelocity.sqrMagnitude < 0.0025f
+                    && body.angularVelocity.sqrMagnitude < 0.0025f;
+                stableSteps = stable ? stableSteps + 1 : 0;
+            }
+
+            LevelTransformData after = view.ReadTransform();
+            Destroy(body);
+            if (fallback != null)
+                Destroy(fallback);
+            foreach (Collider collider in disabled)
+                collider.enabled = true;
+            physicsPlacementRunning = false;
+
+            if (cancelPhysicsPlacement)
+            {
+                cancelPhysicsPlacement = false;
+                view.ApplyTransform(before);
+                SyncInspectorFields(before);
+                SetStatus("Canceled physics placement and restored the previous transform.");
+                yield break;
+            }
+
+            workspace.Execute(new SetEntityTransformCommand(entity.id, before, after));
+            SyncInspectorFields(after);
+            SetStatus(stableSteps >= 12
+                ? "Dropped and settled the selected prop. Undo restores its previous transform."
+                : "Physics placement reached its timeout and saved the final pose.");
         }
 
         private void ResetEntityRotationPivot()
@@ -1312,6 +1439,8 @@ namespace GritGud.Presentation.LevelEditing
         bool ILevelEditorGuiActions.AudioZonePreviewEnabled =>
             audioZonePreviewEnabled;
 
+        bool ILevelEditorGuiActions.PhysicsPlacementRunning => physicsPlacementRunning;
+
         void ILevelEditorGuiActions.Undo() => workspace.Undo();
 
         void ILevelEditorGuiActions.Redo() => workspace.Redo();
@@ -1454,7 +1583,16 @@ namespace GritGud.Presentation.LevelEditing
             string x,
             string y,
             string z,
-            string yaw) => ApplyInspectorTransform(x, y, z, yaw);
+            string pitch,
+            string yaw,
+            string roll) => ApplyInspectorTransform(x, y, z, pitch, yaw, roll);
+
+        void ILevelEditorGuiActions.DropAndSettleSelection(
+            string dropHeight,
+            bool keepUpright) => DropAndSettleSelection(dropHeight, keepUpright);
+
+        void ILevelEditorGuiActions.CancelPhysicsPlacement() =>
+            cancelPhysicsPlacement = true;
 
         void ILevelEditorGuiActions.SetEntityRotationPivot(float normalizedX, float normalizedZ) =>
             SetEntityRotationPivot(normalizedX, normalizedZ);

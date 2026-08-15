@@ -275,9 +275,21 @@ props, vehicles, hostiles, atmosphere, practical lights, decals, ambient VFX,
 and audio zones. Return to Editor discards gameplay state and
 resumes the same authoring workspace.
 
+## Physics placement
+
+Selected loose props expose **Drop & Settle** in the Selection Inspector. The
+author chooses a positive drop height and either free rotation or **Keep
+upright**. The editor temporarily simulates the projected object against level
+collision, waits for a stable pose (with a five-second safety timeout), and
+commits the resulting position plus X/Y/Z rotation as one undoable transform.
+Authored colliders are preferred; a visual-bounds box is used when an object has
+no safe dynamic collider. Placement surfaces and vehicles are rejected. The
+simulation is an authoring aid only: velocity and intermediate physics state do
+not enter portable JSON or Test Play.
+
 ## Current limits
 
-- Position and yaw are authored; arbitrary pitch, roll, and scaling are not.
+- Position and X/Y/Z rotation are authored; arbitrary scaling is not.
 - Dragging preserves the entity's current elevation.
 - Legacy cover-volume data remains readable for file compatibility but has no
   authoring surface. Destructible metadata is authored through entity capability

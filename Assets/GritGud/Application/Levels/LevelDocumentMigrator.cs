@@ -32,6 +32,7 @@ namespace GritGud.Application.Levels
                     new LevelDocumentV6ToV7Migration(),
                     new LevelDocumentV7ToV8Migration(),
                     new LevelDocumentV8ToV9Migration(),
+                    new LevelDocumentV9ToV10Migration(),
                 };
             }
 
@@ -290,6 +291,24 @@ namespace GritGud.Application.Levels
                 throw new ArgumentNullException(nameof(source));
             LevelDocument migrated = source.DeepCopy();
             migrated.dressing = migrated.dressing ?? new LevelDressingData();
+            migrated.schemaVersion = TargetVersion;
+            return migrated;
+        }
+    }
+
+    public sealed class LevelDocumentV9ToV10Migration : ILevelDocumentMigration
+    {
+        public int SourceVersion => 9;
+
+        public int TargetVersion => 10;
+
+        public LevelDocument Migrate(LevelDocument source)
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+            LevelDocument migrated = source.DeepCopy();
+            // Missing pitch and roll fields deserialize as zero, preserving the
+            // previous yaw-only transform exactly.
             migrated.schemaVersion = TargetVersion;
             return migrated;
         }

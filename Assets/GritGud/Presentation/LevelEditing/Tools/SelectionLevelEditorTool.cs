@@ -320,8 +320,14 @@ namespace GritGud.Presentation.LevelEditing.Tools
                 if (entity.rotationPivot != null)
                 {
                     Vector3 pivot = ToVector(entity.rotationPivot.localPosition);
-                    Vector3 beforeOffset = Quaternion.Euler(0f, after.yawDegrees, 0f) * pivot;
-                    Vector3 afterOffset = Quaternion.Euler(0f, nextYaw, 0f) * pivot;
+                    Vector3 beforeOffset = Quaternion.Euler(
+                        after.pitchDegrees,
+                        after.yawDegrees,
+                        after.rollDegrees) * pivot;
+                    Vector3 afterOffset = Quaternion.Euler(
+                        after.pitchDegrees,
+                        nextYaw,
+                        after.rollDegrees) * pivot;
                     Vector3 position = ToVector(after.position) + beforeOffset - afterOffset;
                     after.position = new Float3Data(position.x, position.y, position.z);
                 }
@@ -465,7 +471,9 @@ namespace GritGud.Presentation.LevelEditing.Tools
             return Mathf.Approximately(left.position.x, right.position.x)
                 && Mathf.Approximately(left.position.y, right.position.y)
                 && Mathf.Approximately(left.position.z, right.position.z)
-                && Mathf.Approximately(left.yawDegrees, right.yawDegrees);
+                && Mathf.Approximately(left.pitchDegrees, right.pitchDegrees)
+                && Mathf.Approximately(left.yawDegrees, right.yawDegrees)
+                && Mathf.Approximately(left.rollDegrees, right.rollDegrees);
         }
     }
 }

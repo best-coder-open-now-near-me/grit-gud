@@ -1091,7 +1091,9 @@ namespace GritGud.Domain.Levels
                 }
 
                 if (!LevelValidationMath.IsFinite(entity.transform.position)
-                    || !LevelValidationMath.IsFinite(entity.transform.yawDegrees))
+                    || !LevelValidationMath.IsFinite(entity.transform.pitchDegrees)
+                    || !LevelValidationMath.IsFinite(entity.transform.yawDegrees)
+                    || !LevelValidationMath.IsFinite(entity.transform.rollDegrees))
                 {
                     context.Error(
                         "entity.transform.not-finite",
