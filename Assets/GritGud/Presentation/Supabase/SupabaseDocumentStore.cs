@@ -54,6 +54,12 @@ namespace GritGud.Presentation.Supabase
                 failed);
         }
 
+        public IEnumerator LoadLevelDraft(string slot, SupabaseSession session, Action<string> succeeded, Action<string> failed) =>
+            client.LoadDocument("load_level_draft", "{\"requested_slot\":" + QuoteJsonString(slot) + "}", session, succeeded, failed);
+
+        public IEnumerator LoadCharacter(string characterId, SupabaseSession session, Action<string> succeeded, Action<string> failed) =>
+            client.LoadDocument("load_character_document", "{\"requested_character_id\":" + QuoteJsonString(characterId) + "}", session, succeeded, failed);
+
         private static string RequireJson(string document)
         {
             if (string.IsNullOrWhiteSpace(document))

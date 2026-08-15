@@ -104,6 +104,17 @@ namespace GritGud.Presentation.Supabase
                 failed(DescribeFailure(request));
         }
 
+        public IEnumerator LoadDocument(string functionName, string argumentsJson, SupabaseSession session, Action<string> succeeded, Action<string> failed)
+        {
+            using UnityWebRequest request = CreateRequest("/rest/v1/rpc/" + functionName, UnityWebRequest.kHttpVerbPOST, argumentsJson);
+            request.SetRequestHeader("Authorization", "Bearer " + session.AccessToken);
+            yield return request.SendWebRequest();
+            if (request.result != UnityWebRequest.Result.Success) { failed(DescribeFailure(request)); yield break; }
+            DocumentRows rows = JsonUtility.FromJson<DocumentRows>("{\"rows\":" + request.downloadHandler.text + "}");
+            if (rows?.rows == null || rows.rows.Length == 0 || string.IsNullOrWhiteSpace(rows.rows[0].document)) { failed("No cloud document was found."); yield break; }
+            succeeded(rows.rows[0].document);
+        }
+
         private UnityWebRequest CreateRequest(string relativePath, string method, string body)
         {
             var request = new UnityWebRequest(configuration.ProjectUrl + relativePath, method)
@@ -140,5 +151,8 @@ namespace GritGud.Presentation.Supabase
         {
             public string id;
         }
+
+        [Serializable] private sealed class DocumentRows { public DocumentRow[] rows; }
+        [Serializable] private sealed class DocumentRow { public string document; }
     }
 }

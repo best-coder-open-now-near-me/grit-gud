@@ -384,6 +384,13 @@ namespace GritGud.Presentation.LevelEditing.UI
             {
                 actions.SaveToCloud();
             }
+            if (GUILayout.Button("CLOUD LOAD", ToolbarButtonLayout(96f)))
+            {
+                documentActionConfirmation.Request(
+                    state.IsDirty,
+                    "Load the cloud draft and discard the current unsaved changes?",
+                    actions.LoadFromCloud);
+            }
 
             GUI.enabled = interactionsEnabled && !previewMode && actions.HasDraft;
             if (GUILayout.Button("LOAD DRAFT", ToolbarButtonLayout(96f)))

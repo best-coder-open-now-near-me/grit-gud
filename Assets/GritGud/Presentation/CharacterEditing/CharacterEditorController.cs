@@ -162,6 +162,8 @@ namespace GritGud.Presentation.CharacterEditing
             GUI.enabled = interactionsEnabled && GameBootstrap.Instance.Supabase != null;
             if (GUILayout.Button("CLOUD SAVE", GUILayout.Width(102f), GUILayout.Height(34f)))
                 SaveToCloud();
+            if (GUILayout.Button("CLOUD LOAD", GUILayout.Width(102f), GUILayout.Height(34f)))
+                RequestDestructiveAction("Load the cloud character and discard unsaved changes?", LoadFromCloud);
             GUI.enabled = interactionsEnabled && PlayerPrefs.HasKey(DraftKey);
             if (GUILayout.Button("LOAD DRAFT", GUILayout.Width(102f), GUILayout.Height(34f)))
             {
@@ -195,6 +197,21 @@ namespace GritGud.Presentation.CharacterEditing
                 document,
                 serializer.Serialize(document),
                 message => status = message);
+        }
+
+        private void LoadFromCloud()
+        {
+            string characterId = session.CreateSnapshot().characterId;
+            GameBootstrap.Instance.Supabase.LoadCharacter(characterId, text =>
+            {
+                try
+                {
+                    CharacterDocument document = serializer.Deserialize(text);
+                    RequireValid(document);
+                    Replace(document, true, "Loaded the character from cloud.");
+                }
+                catch (Exception exception) { status = exception.Message; }
+            }, error => status = error);
         }
 
         private void DrawIdentityAndBodies()

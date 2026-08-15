@@ -71,6 +71,18 @@ namespace GritGud.Presentation.Supabase
                 error => completed?.Invoke(error)));
         }
 
+        public void LoadLevelDraft(string slot, Action<string> succeeded, Action<string> failed)
+        {
+            if (!IsReady) { failed?.Invoke(Status); return; }
+            StartCoroutine(Documents.LoadLevelDraft(slot, Session, succeeded, failed));
+        }
+
+        public void LoadCharacter(string characterId, Action<string> succeeded, Action<string> failed)
+        {
+            if (!IsReady) { failed?.Invoke(Status); return; }
+            StartCoroutine(Documents.LoadCharacter(characterId, Session, succeeded, failed));
+        }
+
         private void HandleSignedIn(SupabaseSession session)
         {
             Session = session;

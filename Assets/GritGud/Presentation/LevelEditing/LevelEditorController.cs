@@ -1548,6 +1548,25 @@ namespace GritGud.Presentation.LevelEditing
                 SetStatus);
         }
 
+        void ILevelEditorGuiActions.LoadFromCloud()
+        {
+            SupabaseRuntime supabase = GameBootstrap.Instance?.Supabase;
+            if (supabase == null) { SetStatus("Cloud saves are not configured."); return; }
+            supabase.LoadLevelDraft("active", text =>
+            {
+                try
+                {
+                    LevelDocument document = persistence.Deserialize(text);
+                    sourceDocument = document.DeepCopy();
+                    sourceDocumentIsSaved = true;
+                    sourceLabel = "cloud draft";
+                    ReplaceWorkspaceDocument(document, isSaved: true);
+                    SetStatus("Loaded level from cloud.");
+                }
+                catch (Exception exception) { SetStatus(exception.Message); }
+            }, SetStatus);
+        }
+
         void ILevelEditorGuiActions.LoadDraft() => persistence.LoadDraft();
 
         void ILevelEditorGuiActions.LoadRecovery(int generation) =>
