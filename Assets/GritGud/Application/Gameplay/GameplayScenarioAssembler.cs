@@ -69,6 +69,7 @@ namespace GritGud.Application.Gameplay
                     new ScenarioActorRuntimeDefinition(
                         actor.displayName,
                         actor.presentationId,
+                        actor.characterId,
                         actor.targetable,
                         actor.mass,
                         gameplayDefinition,

@@ -11,10 +11,12 @@ namespace GritGud.Domain.Levels
         public LevelValidationContent(
             IEnumerable<string> knownArchetypeIds = null,
             IEnumerable<KeyValuePair<string, string>> actorPresentationsByTemplateId = null,
-            IEnumerable<string> knownActorPresentationIds = null)
+            IEnumerable<string> knownActorPresentationIds = null,
+            IEnumerable<string> knownCharacterIds = null)
         {
             KnownArchetypeIds = CopyIds(knownArchetypeIds);
             KnownActorPresentationIds = CopyIds(knownActorPresentationIds);
+            KnownCharacterIds = CopyIds(knownCharacterIds);
             HasActorTemplateCatalog = actorPresentationsByTemplateId != null;
             this.actorPresentationsByTemplateId = actorPresentationsByTemplateId?
                 .Where(pair => !string.IsNullOrWhiteSpace(pair.Key))
@@ -29,9 +31,13 @@ namespace GritGud.Domain.Levels
 
         public ISet<string> KnownActorPresentationIds { get; }
 
+        public ISet<string> KnownCharacterIds { get; }
+
         public bool HasActorTemplateCatalog { get; }
 
         public bool HasActorPresentationCatalog => KnownActorPresentationIds != null;
+
+        public bool HasCharacterCatalog => KnownCharacterIds != null;
 
         public bool TryGetActorPresentationId(
             string templateId,

@@ -34,6 +34,7 @@ namespace GritGud.Application.Levels
                     new LevelDocumentV8ToV9Migration(),
                     new LevelDocumentV9ToV10Migration(),
                     new LevelDocumentV10ToV11Migration(),
+                    new LevelDocumentV11ToV12Migration(),
                 };
             }
 
@@ -333,6 +334,27 @@ namespace GritGud.Application.Levels
                 surface.materialSamples = new List<int>(count);
                 for (int index = 0; index < count; index++)
                     surface.materialSamples.Add(0);
+            }
+            migrated.schemaVersion = TargetVersion;
+            return migrated;
+        }
+    }
+
+    public sealed class LevelDocumentV11ToV12Migration : ILevelDocumentMigration
+    {
+        public int SourceVersion => 11;
+        public int TargetVersion => 12;
+
+        public LevelDocument Migrate(LevelDocument source)
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+            LevelDocument migrated = source.DeepCopy();
+            foreach (LevelScenarioActorData actor in migrated.scenario?.actors
+                ?? new List<LevelScenarioActorData>())
+            {
+                if (actor != null)
+                    actor.characterId = actor.characterId ?? string.Empty;
             }
             migrated.schemaVersion = TargetVersion;
             return migrated;

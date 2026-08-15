@@ -206,5 +206,19 @@ namespace GritGud.Domain.Tests.Levels
                 Has.Count.EqualTo(result.terrainSurfaces[0].heightSamples.Count));
             Assert.That(result.terrainSurfaces[0].materialSamples, Is.All.Zero);
         }
+
+        [Test]
+        public void VersionElevenActorsGainOptionalCharacterReferences()
+        {
+            LevelDocument source = LevelDocumentFactory.CreateEmpty("Legacy characters");
+            source.schemaVersion = 11;
+            source.scenario.actors[0].characterId = null;
+
+            LevelDocument result = new LevelDocumentMigrator().MigrateToCurrent(source);
+
+            Assert.That(result.schemaVersion, Is.EqualTo(LevelDocument.CurrentSchemaVersion));
+            Assert.That(result.scenario.actors[0].characterId, Is.Empty);
+            Assert.That(result.scenario.actors[0].id, Is.EqualTo("player"));
+        }
     }
 }

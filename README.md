@@ -56,6 +56,8 @@ Start with [the project foundation](docs/PROJECT_FOUNDATION.md), then see
 [development setup](docs/DEVELOPMENT.md). Third-party source material is listed
 separately in the [asset inventory](docs/ASSETS.md). The runtime construction
 workflow and controls are documented in the [basic level editor guide](docs/LEVEL_EDITOR.md).
+Reusable visual character authoring is documented in the
+[character editor guide](docs/CHARACTER_EDITOR.md).
 Editor extension points and ownership rules are documented separately in the
 [level-editor architecture guide](docs/LEVEL_EDITOR_ARCHITECTURE.md). The active
 editor readiness decision and sequenced expansion work are in the

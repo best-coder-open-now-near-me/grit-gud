@@ -241,6 +241,34 @@ namespace GritGud.Domain.Tests.Levels
         }
 
         [Test]
+        public void UnknownCharacterWarnsDuringAuthoringAndBlocksPublish()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            document.scenario.actors[0].characterId = "character.missing";
+            var content = new LevelValidationContent(
+                knownCharacterIds: new[] { "character.available" });
+
+            var authoringIssues = LevelValidator.Validate(
+                document,
+                content,
+                LevelValidationProfile.Authoring);
+            var publishIssues = LevelValidator.Validate(
+                document,
+                content,
+                LevelValidationProfile.Publish);
+
+            Assert.That(
+                authoringIssues.Single(issue =>
+                    issue.Code == "scenario.actor.character.unknown").Severity,
+                Is.EqualTo(LevelValidationSeverity.Warning));
+            Assert.That(LevelValidator.HasErrors(authoringIssues), Is.False);
+            Assert.That(
+                publishIssues.Single(issue =>
+                    issue.Code == "scenario.actor.character.unknown").Severity,
+                Is.EqualTo(LevelValidationSeverity.Error));
+        }
+
+        [Test]
         public void UnavailableActorPresentationBlocksPublish()
         {
             LevelDocument document = LevelDocumentFactory.CreateEmpty();

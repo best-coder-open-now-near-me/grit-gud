@@ -158,6 +158,8 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         void AddScenarioActor(string templateId);
 
+        void ApplyScenarioActorCharacter(string actorId, string characterId);
+
         void ApplyScenarioActor(
             string actorId,
             string x,

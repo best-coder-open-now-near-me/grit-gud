@@ -5,6 +5,7 @@ using GritGud.Presentation.LevelEditing;
 using GritGud.Presentation.Gameplay;
 using GritGud.Domain.Levels;
 using GritGud.Presentation.Levels;
+using GritGud.Presentation.CharacterEditing;
 using UnityEngine;
 
 namespace GritGud.Presentation.Bootstrap
@@ -14,6 +15,7 @@ namespace GritGud.Presentation.Bootstrap
         Menu,
         Gameplay,
         LevelEditor,
+        CharacterEditor,
     }
 
     [DefaultExecutionOrder(-1000)]
@@ -21,6 +23,7 @@ namespace GritGud.Presentation.Bootstrap
     {
         private StartMenu startMenu;
         private LevelEditorController levelEditor;
+        private CharacterEditorController characterEditor;
         private GameplayController gameplay;
         private Coroutine gameplayStartRoutine;
         private CommittedLevelLibrary committedLevels;
@@ -82,6 +85,28 @@ namespace GritGud.Presentation.Bootstrap
                 initialDocumentIsSaved: false);
         }
 
+        public void OpenCharacterEditor()
+        {
+            EnsureStartMenu();
+            CancelPendingGameplayStart();
+            gameplay?.EndSession();
+            levelEditor?.EndSession();
+            startMenu.enabled = false;
+            if (characterEditor == null)
+                characterEditor = gameObject.AddComponent<CharacterEditorController>();
+            try
+            {
+                characterEditor.Begin();
+                CurrentMode = ApplicationMode.CharacterEditor;
+            }
+            catch
+            {
+                characterEditor.EndSession();
+                startMenu.enabled = true;
+                throw;
+            }
+        }
+
         public void PlayMainLevel()
         {
             PlayCommittedLevel(
@@ -115,6 +140,7 @@ namespace GritGud.Presentation.Bootstrap
             EnsureStartMenu();
             editorTestActive = false;
             levelEditor?.EndSession();
+            characterEditor?.EndSession();
             if (gameplay == null)
             {
                 gameplay = gameObject.AddComponent<GameplayController>();
@@ -187,6 +213,7 @@ namespace GritGud.Presentation.Bootstrap
             editorTestActive = false;
             levelEditor?.EndSession();
             gameplay?.EndSession();
+            characterEditor?.EndSession();
             startMenu.enabled = true;
             CurrentMode = ApplicationMode.Menu;
         }
@@ -227,6 +254,7 @@ namespace GritGud.Presentation.Bootstrap
             EnsureStartMenu();
             CancelPendingGameplayStart();
             gameplay?.EndSession();
+            characterEditor?.EndSession();
             startMenu.enabled = false;
             if (levelEditor == null)
             {

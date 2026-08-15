@@ -249,7 +249,9 @@ namespace GritGud.Presentation.Gameplay
             {
                 GameObject actorRoot = GameplayActorFactory.CreateActor(
                     actorDefinition,
-                    content.ActorPresentations);
+                    content.ActorPresentations,
+                    content.CharacterAppearances,
+                    content.Characters);
                 Vector3 authoredPosition = actorRoot.transform.position;
                 GameplayGroundPlacement.PlaceOnGround(
                     actorRoot.transform,

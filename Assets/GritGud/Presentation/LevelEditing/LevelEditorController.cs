@@ -14,6 +14,7 @@ using GritGud.Presentation.LevelEditing.UI;
 using GritGud.Presentation.Levels;
 using GritGud.Presentation.Levels.Persistence;
 using GritGud.Presentation.Levels.Runtime;
+using GritGud.Presentation.Characters;
 using UnityEngine;
 
 namespace GritGud.Presentation.LevelEditing
@@ -23,6 +24,7 @@ namespace GritGud.Presentation.LevelEditing
         private LevelArchetypeCatalog catalog;
         private ScenarioAuthoringCatalog scenarioCatalog;
         private LevelDressingCatalog dressingCatalog;
+        private UnityCharacterLibrary characterLibrary;
         private LevelEditorPersistenceCoordinator persistence;
         private LevelEditorWorkspace workspace;
         private LevelSelectionModel selection;
@@ -126,6 +128,7 @@ namespace GritGud.Presentation.LevelEditing
             catalog = defaultContent.Archetypes;
             scenarioCatalog = ScenarioAuthoringCatalog.Create(defaultContent.Scenario);
             dressingCatalog = LevelDressingCatalog.LoadDefault();
+            characterLibrary = defaultContent.Characters;
             LevelTextTransfer textTransfer = GetComponent<LevelTextTransfer>();
             if (textTransfer == null)
             {
@@ -248,6 +251,7 @@ namespace GritGud.Presentation.LevelEditing
                 catalog,
                 scenarioCatalog,
                 dressingCatalog,
+                characterLibrary,
                 toolManager,
                 placementTool,
                 terrainPanel,
@@ -1714,6 +1718,11 @@ namespace GritGud.Presentation.LevelEditing
 
         void ILevelEditorGuiActions.AddScenarioActor(string templateId) =>
             scenarioAuthoring.AddActor(templateId);
+
+        void ILevelEditorGuiActions.ApplyScenarioActorCharacter(
+            string actorId,
+            string characterId) =>
+            scenarioAuthoring.ApplyActorCharacter(actorId, characterId);
 
         void ILevelEditorGuiActions.ApplyScenarioActor(
             string actorId,

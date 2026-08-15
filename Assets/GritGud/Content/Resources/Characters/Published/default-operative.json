@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "characterId": "character.default-operative",
+  "displayName": "Default Operative",
+  "appearance": {
+    "bodyId": "body.military-male-01",
+    "accessories": [
+      {
+        "slotId": "armor",
+        "accessoryId": "accessory.male-armor-01"
+      },
+      {
+        "slotId": "headwear",
+        "accessoryId": "accessory.hat-tacticle-01"
+      }
+    ]
+  }
+}

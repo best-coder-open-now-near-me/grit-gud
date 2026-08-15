@@ -119,25 +119,30 @@ namespace GritGud.Presentation.Bootstrap
 
             bool previousEnabled = GUI.enabled;
             GUI.enabled = selected?.CanPlay == true;
-            if (DrawMenuButton(new Rect(92f, 542f, 350f, 48f), "PLAY SELECTED"))
+            if (DrawMenuButton(new Rect(92f, 538f, 350f, 44f), "PLAY SELECTED"))
             {
                 GameBootstrap.Instance.PlayCommittedLevel(selected.ResourceKey);
             }
 
             GUI.enabled = selected?.CanEdit == true;
-            if (DrawMenuButton(new Rect(92f, 602f, 350f, 48f), "EDIT SELECTED"))
+            if (DrawMenuButton(new Rect(92f, 590f, 350f, 44f), "EDIT SELECTED"))
             {
                 GameBootstrap.Instance.OpenCommittedLevelEditor(
                     selected.ResourceKey);
             }
 
             GUI.enabled = previousEnabled;
-            if (DrawMenuButton(new Rect(92f, 662f, 350f, 48f), "NEW LEVEL"))
+            if (DrawMenuButton(new Rect(92f, 642f, 350f, 44f), "NEW LEVEL"))
             {
                 GameBootstrap.Instance.OpenNewLevelEditor();
             }
 
-            if (DrawMenuButton(new Rect(92f, 722f, 350f, 48f), "QUIT"))
+            if (DrawMenuButton(new Rect(92f, 694f, 350f, 44f), "CHARACTER EDITOR"))
+            {
+                GameBootstrap.Instance.OpenCharacterEditor();
+            }
+
+            if (DrawMenuButton(new Rect(92f, 746f, 350f, 44f), "QUIT"))
             {
                 Quit();
             }

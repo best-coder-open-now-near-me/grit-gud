@@ -8,6 +8,7 @@ using GritGud.Presentation.LevelEditing.Core;
 using GritGud.Presentation.LevelEditing.Persistence;
 using GritGud.Presentation.LevelEditing.Tools;
 using GritGud.Presentation.Levels.Runtime;
+using GritGud.Presentation.Characters;
 using UnityEngine;
 
 namespace GritGud.Presentation.LevelEditing.UI
@@ -23,6 +24,7 @@ namespace GritGud.Presentation.LevelEditing.UI
         private readonly LevelArchetypeCatalog catalog;
         private readonly ScenarioAuthoringCatalog scenarioCatalog;
         private readonly LevelDressingCatalog dressingCatalog;
+        private readonly UnityCharacterLibrary characterLibrary;
         private readonly LevelEditorToolManager toolManager;
         private readonly PlacementLevelEditorTool placementTool;
         private readonly TerrainToolPanelModel terrainPanel;
@@ -112,6 +114,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             LevelArchetypeCatalog catalog,
             ScenarioAuthoringCatalog scenarioCatalog,
             LevelDressingCatalog dressingCatalog,
+            UnityCharacterLibrary characterLibrary,
             LevelEditorToolManager toolManager,
             PlacementLevelEditorTool placementTool,
             TerrainToolPanelModel terrainPanel,
@@ -126,6 +129,8 @@ namespace GritGud.Presentation.LevelEditing.UI
                 ?? throw new ArgumentNullException(nameof(scenarioCatalog));
             this.dressingCatalog = dressingCatalog
                 ?? throw new ArgumentNullException(nameof(dressingCatalog));
+            this.characterLibrary = characterLibrary
+                ?? throw new ArgumentNullException(nameof(characterLibrary));
             this.toolManager = toolManager ?? throw new ArgumentNullException(nameof(toolManager));
             this.placementTool = placementTool ?? throw new ArgumentNullException(nameof(placementTool));
             this.terrainPanel = terrainPanel ?? throw new ArgumentNullException(nameof(terrainPanel));

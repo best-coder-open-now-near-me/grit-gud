@@ -189,6 +189,7 @@ namespace GritGud.Domain.Gameplay
         public string id = string.Empty;
         public string displayName = string.Empty;
         public string presentationId = string.Empty;
+        public string characterId = string.Empty;
         public bool targetable = true;
         public Float3Data position;
         public float facingDegrees;

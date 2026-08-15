@@ -7,6 +7,7 @@ using GritGud.Domain.Levels;
 using GritGud.Presentation.Levels;
 using GritGud.Presentation.Levels.Runtime;
 using UnityEngine;
+using GritGud.Presentation.Characters;
 
 namespace GritGud.Presentation.Gameplay
 {
@@ -28,6 +29,8 @@ namespace GritGud.Presentation.Gameplay
             LevelDocument level,
             LevelArchetypeCatalog archetypes,
             ActorPresentationCatalog actorPresentations,
+            CharacterAppearanceCatalog characterAppearances,
+            UnityCharacterLibrary characters,
             GameplayScenarioAssembly assembly,
             bool isSandbox = false)
         {
@@ -36,6 +39,8 @@ namespace GritGud.Presentation.Gameplay
             Level = level;
             Archetypes = archetypes;
             ActorPresentations = actorPresentations;
+            CharacterAppearances = characterAppearances;
+            Characters = characters;
             Assembly = assembly;
             ValidationContent = new LevelValidationContent(
                 archetypes.CreateKnownIdSet(),
@@ -44,7 +49,8 @@ namespace GritGud.Presentation.Gameplay
                     .Select(actor => new KeyValuePair<string, string>(
                         actor.id,
                         actor.presentationId)),
-                actorPresentations.CreateKnownIdSet());
+                actorPresentations.CreateKnownIdSet(),
+                characters.CreateKnownIdSet());
             IsSandbox = isSandbox;
         }
 
@@ -57,6 +63,10 @@ namespace GritGud.Presentation.Gameplay
         public LevelArchetypeCatalog Archetypes { get; }
 
         public ActorPresentationCatalog ActorPresentations { get; }
+
+        public CharacterAppearanceCatalog CharacterAppearances { get; }
+
+        public UnityCharacterLibrary Characters { get; }
 
         public GameplayScenarioAssembly Assembly { get; }
 
@@ -178,6 +188,7 @@ namespace GritGud.Presentation.Gameplay
 
                 ScenarioActorContentData actor = Clone(template);
                 actor.id = instance.id;
+                actor.characterId = instance.characterId;
                 actor.position = instance.transform.position;
                 actor.facingDegrees = instance.transform.yawDegrees;
                 scenario.actors.Add(actor);
@@ -282,6 +293,10 @@ namespace GritGud.Presentation.Gameplay
                 new GameplayScenarioAssembler().Assemble(scenario, level);
             ActorPresentationCatalog actorPresentations =
                 ActorPresentationCatalog.LoadDefault();
+            CharacterAppearanceCatalog characterAppearances =
+                CharacterAppearanceCatalog.LoadDefault();
+            UnityCharacterLibrary characters = UnityCharacterLibrary.LoadDefault(
+                characterAppearances);
             foreach (ScenarioActorRuntimeDefinition actor in assembly.Actors)
             {
                 _ = actorPresentations.Get(actor.PresentationId);
@@ -293,6 +308,8 @@ namespace GritGud.Presentation.Gameplay
                 level,
                 archetypes,
                 actorPresentations,
+                characterAppearances,
+                characters,
                 assembly,
                 isSandbox);
         }

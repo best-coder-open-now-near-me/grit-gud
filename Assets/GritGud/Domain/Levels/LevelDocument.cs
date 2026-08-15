@@ -486,6 +486,7 @@ namespace GritGud.Domain.Levels
     {
         public string id = string.Empty;
         public string templateId = string.Empty;
+        public string characterId = string.Empty;
         public LevelTransformData transform;
         public bool playerControlled;
         public bool initiallySelected;
@@ -495,6 +496,7 @@ namespace GritGud.Domain.Levels
         {
             id = id ?? string.Empty;
             templateId = templateId ?? string.Empty;
+            characterId = characterId ?? string.Empty;
         }
 
         public LevelScenarioActorData DeepCopy()
@@ -503,6 +505,7 @@ namespace GritGud.Domain.Levels
             {
                 id = id ?? string.Empty,
                 templateId = templateId ?? string.Empty,
+                characterId = characterId ?? string.Empty,
                 transform = transform,
                 playerControlled = playerControlled,
                 initiallySelected = initiallySelected,
@@ -700,7 +703,7 @@ namespace GritGud.Domain.Levels
     [Serializable]
     public sealed class LevelDocument
     {
-        public const int CurrentSchemaVersion = 11;
+        public const int CurrentSchemaVersion = 12;
         public const int MaximumEntityGroupCount = 64;
 
         public int schemaVersion = CurrentSchemaVersion;

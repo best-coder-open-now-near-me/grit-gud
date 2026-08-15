@@ -205,6 +205,21 @@ namespace GritGud.Presentation.LevelEditing
             Report($"Deleted scenario actor '{actorId}'.");
         }
 
+        public void ApplyActorCharacter(string actorId, string characterId)
+        {
+            LevelDocument snapshot = workspace.CreateSnapshot();
+            LevelScenarioActorData before = FindActor(snapshot, actorId);
+            if (before == null)
+                return;
+            LevelScenarioActorData after = before.DeepCopy();
+            after.characterId = characterId?.Trim() ?? string.Empty;
+            workspace.Execute(new SetScenarioActorCommand(actorId, before, after));
+            ActorChanged?.Invoke(after);
+            Report(string.IsNullOrEmpty(after.characterId)
+                ? $"Restored template appearance for '{actorId}'."
+                : $"Assigned character '{after.characterId}' to '{actorId}'.");
+        }
+
         public void PlaceActorAtView(string actorId)
         {
             LevelDocument snapshot = workspace.CreateSnapshot();

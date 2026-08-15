@@ -5,6 +5,7 @@ using System.Linq;
 using GritGud.Application.Levels;
 using GritGud.Domain.Levels;
 using GritGud.Presentation.Levels.Runtime;
+using GritGud.Presentation.Characters;
 using UnityEngine;
 
 namespace GritGud.Presentation.LevelEditing.UI
@@ -325,6 +326,23 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawSectionHeader("SCENARIO ACTOR");
             GUILayout.Label($"ID: {actor.id}");
             GUILayout.Label($"Template: {actor.templateId}");
+            DrawSectionHeader("CHARACTER APPEARANCE");
+            string characterName = string.IsNullOrWhiteSpace(actor.characterId)
+                ? "Template default"
+                : characterLibrary.Find(actor.characterId)?.DisplayName
+                    ?? actor.characterId + " (unavailable)";
+            GUILayout.Label(characterName);
+            if (GUILayout.Button("TEMPLATE DEFAULT", PanelCompactButtonLayout()))
+                actions.ApplyScenarioActorCharacter(actor.id, string.Empty);
+            foreach (PublishedCharacterEntry character in characterLibrary.Entries)
+            {
+                Color characterColor = GUI.backgroundColor;
+                if (string.Equals(actor.characterId, character.CharacterId, StringComparison.Ordinal))
+                    GUI.backgroundColor = LevelEditorTheme.Active;
+                if (GUILayout.Button(character.DisplayName, PanelCompactButtonLayout()))
+                    actions.ApplyScenarioActorCharacter(actor.id, character.CharacterId);
+                GUI.backgroundColor = characterColor;
+            }
             DrawLabeledField("X", ref scenarioXText);
             DrawLabeledField("Y", ref scenarioYText);
             DrawLabeledField("Z", ref scenarioZText);

@@ -541,6 +541,18 @@ namespace GritGud.Domain.Levels
                     ValidateActorTemplate(context, actor);
                 }
 
+                if (!string.IsNullOrWhiteSpace(actor.characterId)
+                    && context.Content?.HasCharacterCatalog == true
+                    && !context.Content.KnownCharacterIds.Contains(actor.characterId))
+                {
+                    ReportRuntimeContentIssue(
+                        context,
+                        "scenario.actor.character.unknown",
+                        $"Scenario actor '{actor.id}' references unavailable character "
+                        + $"'{actor.characterId}'.",
+                        actor.id);
+                }
+
                 if (!LevelValidationMath.IsFinite(actor.transform.position)
                     || !LevelValidationMath.IsFinite(actor.transform.yawDegrees))
                 {
