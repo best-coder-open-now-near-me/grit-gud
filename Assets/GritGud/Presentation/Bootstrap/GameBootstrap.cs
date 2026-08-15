@@ -130,6 +130,30 @@ namespace GritGud.Presentation.Bootstrap
             gameplayStartRoutine = StartCoroutine(BeginGameplayOnNextFrame(level));
         }
 
+        public void PlayCloudDraft(System.Action<string> status)
+        {
+            if (gameplayStartRoutine != null || CurrentMode == ApplicationMode.Gameplay)
+                return;
+            if (supabase == null)
+            {
+                status?.Invoke("Cloud saves are not configured.");
+                return;
+            }
+
+            supabase.LoadLevelDraft("active", text =>
+            {
+                try
+                {
+                    LevelDocument level = new UnityLevelJsonSerializer().Deserialize(text);
+                    gameplayStartRoutine = StartCoroutine(BeginGameplayOnNextFrame(level));
+                }
+                catch (System.Exception exception)
+                {
+                    status?.Invoke(exception.Message);
+                }
+            }, error => status?.Invoke(error));
+        }
+
         public void PlayEditorTest(LevelDocument snapshot)
         {
             if (snapshot == null || gameplayStartRoutine != null || CurrentMode == ApplicationMode.Gameplay)
