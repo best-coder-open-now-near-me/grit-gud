@@ -168,7 +168,9 @@ fixture presentation with invariant-culture numeric fields. Practical lights
 can be added at the current camera focus, selected from the list, aimed with a
 target position, edited, and deleted. Each apply is one undoable command. The
 portable environment is projected live in the editor and is the exact data used
-by Test Play; HDR color channels may be greater than `1`.
+by Test Play; HDR color channels may be greater than `1`. Sky, horizon, and ground
+RGB values drive both trilight illumination and the visible gradient backdrop;
+Test Play no longer replaces that backdrop with a fixed camera clear color.
 
 **Dressing** separates surface decals, ambient VFX, and box-shaped audio zones
 into dedicated tabs and authors the active type at the current camera focus.

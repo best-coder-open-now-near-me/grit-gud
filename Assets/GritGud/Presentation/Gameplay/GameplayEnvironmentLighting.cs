@@ -49,6 +49,8 @@ namespace GritGud.Presentation.Gameplay
             var lightingRoot = new GameObject("Gameplay Environment Lighting");
             lightingRoot.transform.SetParent(parent, false);
             var materials = new List<Material>();
+            Material skyboxMaterial = CreateSkyboxMaterial(data.atmosphere);
+            materials.Add(skyboxMaterial);
             Material fixtureMaterial = RuntimeMaterialFactory.CreateCelColor(
                 ToColor(data.fixtureHousingColor),
                 "Industrial Floodlight Housing");
@@ -59,7 +61,7 @@ namespace GritGud.Presentation.Gameplay
                 sun.type = LightType.Directional;
             }
 
-            ConfigureAtmosphere(sun, data);
+            ConfigureAtmosphere(sun, data, skyboxMaterial);
             foreach (LevelPracticalLightData practical in data.practicalLights)
             {
                 if (practical != null)
@@ -100,11 +102,12 @@ namespace GritGud.Presentation.Gameplay
 
         private static void ConfigureAtmosphere(
             Light sun,
-            LevelEnvironmentData environment)
+            LevelEnvironmentData environment,
+            Material skyboxMaterial)
         {
             LevelAtmosphereData atmosphere = environment.atmosphere;
             LevelDirectionalLightData key = environment.keyLight;
-            RenderSettings.skybox = null;
+            RenderSettings.skybox = skyboxMaterial;
             RenderSettings.ambientMode = AmbientMode.Trilight;
             RenderSettings.ambientSkyColor = ToColor(atmosphere.ambientSky);
             RenderSettings.ambientEquatorColor = ToColor(atmosphere.ambientEquator);
@@ -130,6 +133,26 @@ namespace GritGud.Presentation.Gameplay
             sun.shadowNormalBias = key.shadowNormalBias;
             sun.transform.rotation = Quaternion.Euler(ToVector3(key.rotationEuler));
             RenderSettings.sun = sun;
+        }
+
+        private static Material CreateSkyboxMaterial(LevelAtmosphereData atmosphere)
+        {
+            Shader shader = Shader.Find("GritGud/Portable Gradient Skybox");
+            if (shader == null)
+            {
+                throw new InvalidOperationException(
+                    "The portable environment skybox shader is unavailable.");
+            }
+
+            var material = new Material(shader)
+            {
+                name = "Portable Environment Skybox",
+                hideFlags = HideFlags.HideAndDontSave,
+            };
+            material.SetColor("_SkyColor", ToColor(atmosphere.ambientSky));
+            material.SetColor("_HorizonColor", ToColor(atmosphere.ambientEquator));
+            material.SetColor("_GroundColor", ToColor(atmosphere.ambientGround));
+            return material;
         }
 
         private static void CreateSpotLight(

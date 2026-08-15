@@ -17,6 +17,9 @@ namespace GritGud.Presentation.Tests
             {
                 var environment = new LevelEnvironmentData();
                 environment.atmosphere.fogEnabled = false;
+                environment.atmosphere.ambientSky = new FloatColorData(0.8f, 0.1f, 0.2f);
+                environment.atmosphere.ambientEquator = new FloatColorData(0.2f, 0.7f, 0.3f);
+                environment.atmosphere.ambientGround = new FloatColorData(0.1f, 0.2f, 0.9f);
                 environment.atmosphere.ambientIntensity = 1.15f;
                 environment.keyLight.intensity = 1.35f;
                 environment.practicalLights.Add(new LevelPracticalLightData
@@ -40,6 +43,16 @@ namespace GritGud.Presentation.Tests
                 Assert.That(practical.intensity, Is.EqualTo(4f));
                 Assert.That(practical.range, Is.EqualTo(17f));
                 Assert.That(RenderSettings.ambientIntensity, Is.EqualTo(1.15f));
+                Assert.That(RenderSettings.ambientSkyColor.r, Is.EqualTo(0.8f));
+                Assert.That(RenderSettings.ambientEquatorColor.g, Is.EqualTo(0.7f));
+                Assert.That(RenderSettings.ambientGroundColor.b, Is.EqualTo(0.9f));
+                Assert.That(RenderSettings.skybox, Is.Not.Null);
+                Assert.That(
+                    RenderSettings.skybox.shader.name,
+                    Is.EqualTo("GritGud/Portable Gradient Skybox"));
+                Assert.That(RenderSettings.skybox.GetColor("_SkyColor").r, Is.EqualTo(0.8f));
+                Assert.That(RenderSettings.skybox.GetColor("_HorizonColor").g, Is.EqualTo(0.7f));
+                Assert.That(RenderSettings.skybox.GetColor("_GroundColor").b, Is.EqualTo(0.9f));
                 Assert.That(RenderSettings.fog, Is.False);
                 Assert.That(RenderSettings.sun.intensity, Is.EqualTo(1.35f));
             }

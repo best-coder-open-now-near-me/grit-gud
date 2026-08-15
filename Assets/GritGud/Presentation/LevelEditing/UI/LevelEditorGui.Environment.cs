@@ -226,14 +226,48 @@ namespace GritGud.Presentation.LevelEditing.UI
         private static string BuildEnvironmentIdentity(LevelEnvironmentData value)
         {
             return value.presetId + "\n"
+                + ColorIdentity(value.atmosphere.ambientSky) + "\n"
+                + ColorIdentity(value.atmosphere.ambientEquator) + "\n"
+                + ColorIdentity(value.atmosphere.ambientGround) + "\n"
                 + value.atmosphere.ambientIntensity.ToString("R", CultureInfo.InvariantCulture)
+                + "\n" + value.atmosphere.reflectionIntensity.ToString("R", CultureInfo.InvariantCulture)
+                + "\n" + ColorIdentity(value.atmosphere.subtractiveShadow)
+                + "\n" + value.atmosphere.fogEnabled
+                + "\n" + ColorIdentity(value.atmosphere.fogColor)
+                + "\n" + value.atmosphere.fogStartDistance.ToString("R", CultureInfo.InvariantCulture)
+                + "\n" + value.atmosphere.fogEndDistance.ToString("R", CultureInfo.InvariantCulture)
+                + "\n" + ColorIdentity(value.keyLight.color)
                 + "\n" + value.keyLight.intensity.ToString("R", CultureInfo.InvariantCulture)
+                + "\n" + value.keyLight.bounceIntensity.ToString("R", CultureInfo.InvariantCulture)
+                + "\n" + value.keyLight.shadowStrength.ToString("R", CultureInfo.InvariantCulture)
+                + "\n" + value.keyLight.shadowBias.ToString("R", CultureInfo.InvariantCulture)
+                + "\n" + value.keyLight.shadowNormalBias.ToString("R", CultureInfo.InvariantCulture)
+                + "\n" + VectorIdentity(value.keyLight.rotationEuler)
+                + "\n" + ColorIdentity(value.fixtureHousingColor)
+                + "\n" + value.lensEmissionIntensity.ToString("R", CultureInfo.InvariantCulture)
                 + "\n" + value.practicalLights.Count
                 + "\n" + string.Join("|", value.practicalLights
                     .Where(light => light != null)
                     .Select(light => light.id + ":" + light.displayName + ":"
-                        + light.position.x.ToString("R", CultureInfo.InvariantCulture) + ":"
-                        + light.intensity.ToString("R", CultureInfo.InvariantCulture)));
+                        + VectorIdentity(light.position) + ":"
+                        + VectorIdentity(light.target) + ":"
+                        + ColorIdentity(light.color) + ":"
+                        + light.intensity.ToString("R", CultureInfo.InvariantCulture) + ":"
+                        + light.range.ToString("R", CultureInfo.InvariantCulture) + ":"
+                        + light.spotAngle.ToString("R", CultureInfo.InvariantCulture) + ":"
+                        + light.innerSpotFraction.ToString("R", CultureInfo.InvariantCulture) + ":"
+                        + light.baseHeight.ToString("R", CultureInfo.InvariantCulture)));
         }
+
+        private static string ColorIdentity(FloatColorData value) =>
+            value.r.ToString("R", CultureInfo.InvariantCulture) + ":"
+            + value.g.ToString("R", CultureInfo.InvariantCulture) + ":"
+            + value.b.ToString("R", CultureInfo.InvariantCulture) + ":"
+            + value.a.ToString("R", CultureInfo.InvariantCulture);
+
+        private static string VectorIdentity(Float3Data value) =>
+            value.x.ToString("R", CultureInfo.InvariantCulture) + ":"
+            + value.y.ToString("R", CultureInfo.InvariantCulture) + ":"
+            + value.z.ToString("R", CultureInfo.InvariantCulture);
     }
 }
