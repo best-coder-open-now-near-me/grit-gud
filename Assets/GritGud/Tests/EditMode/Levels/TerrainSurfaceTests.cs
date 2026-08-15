@@ -50,6 +50,22 @@ namespace GritGud.Domain.Tests.Levels
         }
 
         [Test]
+        public void ResizeTerrainDoesNotNormalizeItsSource()
+        {
+            TerrainSurfaceData source = CreateDocument().terrainSurfaces[0];
+            source.id = null;
+
+            TerrainSurfaceData resized = TerrainSurfaceAuthoring.Resize(
+                source,
+                4f,
+                2f,
+                1f);
+
+            Assert.That(source.id, Is.Null);
+            Assert.That(resized.id, Is.Empty);
+        }
+
+        [Test]
         public void ResizeTerrainCommandIsUndoableAndRequiresFullProjection()
         {
             LevelDocument document = CreateDocument();

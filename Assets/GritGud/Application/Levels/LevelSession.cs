@@ -161,7 +161,11 @@ namespace GritGud.Application.Levels
                 return null;
             }
 
-            document.Normalize();
+            if (document.entities == null)
+            {
+                return null;
+            }
+
             foreach (LevelEntity entity in document.entities)
             {
                 if (string.Equals(entity?.id, entityId, StringComparison.Ordinal))
@@ -180,7 +184,11 @@ namespace GritGud.Application.Levels
                 return null;
             }
 
-            document.Normalize();
+            if (document.terrainSurfaces == null)
+            {
+                return null;
+            }
+
             foreach (TerrainSurfaceData surface in document.terrainSurfaces)
             {
                 if (string.Equals(surface?.id, surfaceId, StringComparison.Ordinal))

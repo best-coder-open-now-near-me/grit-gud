@@ -49,25 +49,25 @@ namespace GritGud.Application.Levels
                 throw new ArgumentNullException(nameof(source));
             }
 
-            source.Normalize();
-            ValidateSource(source);
+            TerrainSurfaceData working = source.DeepCopy();
+            ValidateSource(working);
             int sampleCountX = CalculateSampleCount(width, sampleSpacing, "width");
             int sampleCountZ = CalculateSampleCount(depth, sampleSpacing, "depth");
             ValidateSampleCapacity(sampleCountX, sampleCountZ);
 
-            float sourceWidth = (source.sampleCountX - 1) * source.sampleSpacing;
-            float sourceDepth = (source.sampleCountZ - 1) * source.sampleSpacing;
-            float centerX = source.origin.x + sourceWidth * 0.5f;
-            float centerZ = source.origin.z + sourceDepth * 0.5f;
-            TerrainSurfaceData resized = source.DeepCopy();
+            float sourceWidth = (working.sampleCountX - 1) * working.sampleSpacing;
+            float sourceDepth = (working.sampleCountZ - 1) * working.sampleSpacing;
+            float centerX = working.origin.x + sourceWidth * 0.5f;
+            float centerZ = working.origin.z + sourceDepth * 0.5f;
+            TerrainSurfaceData resized = working.DeepCopy();
             resized.origin = new Float3Data(
                 centerX - width * 0.5f,
-                source.origin.y,
+                working.origin.y,
                 centerZ - depth * 0.5f);
             resized.sampleCountX = sampleCountX;
             resized.sampleCountZ = sampleCountZ;
             resized.sampleSpacing = sampleSpacing;
-            resized.heightSamples = Resample(source, sampleCountX, sampleCountZ);
+            resized.heightSamples = Resample(working, sampleCountX, sampleCountZ);
             return resized;
         }
 

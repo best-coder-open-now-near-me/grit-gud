@@ -120,23 +120,28 @@ namespace GritGud.Domain.Levels
 
         public LevelEntity DeepCopy()
         {
-            Normalize();
             var copy = new LevelEntity
             {
-                id = id,
-                archetypeId = archetypeId,
+                id = id ?? string.Empty,
+                archetypeId = archetypeId ?? string.Empty,
                 transform = transform,
                 destructible = destructible?.DeepCopy(),
             };
 
-            foreach (CoverVolumeData volume in coverVolumes)
+            if (coverVolumes != null)
             {
-                copy.coverVolumes.Add(volume?.DeepCopy());
+                foreach (CoverVolumeData volume in coverVolumes)
+                {
+                    copy.coverVolumes.Add(volume?.DeepCopy());
+                }
             }
 
-            foreach (InteractionPointData point in interactionPoints)
+            if (interactionPoints != null)
             {
-                copy.interactionPoints.Add(point?.DeepCopy());
+                foreach (InteractionPointData point in interactionPoints)
+                {
+                    copy.interactionPoints.Add(point?.DeepCopy());
+                }
             }
 
             return copy;
@@ -163,17 +168,18 @@ namespace GritGud.Domain.Levels
 
         public TerrainSurfaceData DeepCopy()
         {
-            Normalize();
             return new TerrainSurfaceData
             {
-                id = id,
+                id = id ?? string.Empty,
                 origin = origin,
                 sampleCountX = sampleCountX,
                 sampleCountZ = sampleCountZ,
                 sampleSpacing = sampleSpacing,
                 minimumElevation = minimumElevation,
                 elevationIncrement = elevationIncrement,
-                heightSamples = new List<int>(heightSamples),
+                heightSamples = heightSamples != null
+                    ? new List<int>(heightSamples)
+                    : new List<int>(),
             };
         }
     }
@@ -207,11 +213,10 @@ namespace GritGud.Domain.Levels
 
         public LevelScenarioActorData DeepCopy()
         {
-            Normalize();
             return new LevelScenarioActorData
             {
-                id = id,
-                templateId = templateId,
+                id = id ?? string.Empty,
+                templateId = templateId ?? string.Empty,
                 transform = transform,
                 playerControlled = playerControlled,
                 initiallySelected = initiallySelected,
@@ -248,19 +253,18 @@ namespace GritGud.Domain.Levels
 
         public LevelScenarioObjectiveData DeepCopy()
         {
-            Normalize();
             return new LevelScenarioObjectiveData
             {
-                id = id,
-                entityId = entityId,
-                interactionPointId = interactionPointId,
-                actionId = actionId,
-                displayName = displayName,
-                activeHudText = activeHudText,
-                completedHudText = completedHudText,
+                id = id ?? string.Empty,
+                entityId = entityId ?? string.Empty,
+                interactionPointId = interactionPointId ?? string.Empty,
+                actionId = actionId ?? string.Empty,
+                displayName = displayName ?? string.Empty,
+                activeHudText = activeHudText ?? string.Empty,
+                completedHudText = completedHudText ?? string.Empty,
                 actionPointCost = actionPointCost,
                 movementOpportunityCost = movementOpportunityCost,
-                mobility = mobility,
+                mobility = mobility ?? string.Empty,
             };
         }
     }
@@ -281,12 +285,11 @@ namespace GritGud.Domain.Levels
 
         public LevelScenarioPropData DeepCopy()
         {
-            Normalize();
             return new LevelScenarioPropData
             {
-                entityId = entityId,
+                entityId = entityId ?? string.Empty,
                 mass = mass,
-                sizeClass = sizeClass,
+                sizeClass = sizeClass ?? string.Empty,
                 startsEncounterOnAttack = startsEncounterOnAttack,
             };
         }
@@ -315,10 +318,9 @@ namespace GritGud.Domain.Levels
 
         public LevelScenarioVehicleData DeepCopy()
         {
-            Normalize();
             return new LevelScenarioVehicleData
             {
-                entityId = entityId,
+                entityId = entityId ?? string.Empty,
                 maximumSpeed = maximumSpeed,
                 accelerationPerTurn = accelerationPerTurn,
                 brakingPerTurn = brakingPerTurn,
@@ -327,7 +329,7 @@ namespace GritGud.Domain.Levels
                 baseTurningRadius = baseTurningRadius,
                 speedTurningRadiusFactor = speedTurningRadiusFactor,
                 startingSpeed = startingSpeed,
-                startingOccupantActorId = startingOccupantActorId,
+                startingOccupantActorId = startingOccupantActorId ?? string.Empty,
                 startsEncounterOnAttack = startsEncounterOnAttack,
             };
         }
@@ -364,26 +366,41 @@ namespace GritGud.Domain.Levels
 
         public LevelScenarioData DeepCopy()
         {
-            Normalize();
             var copy = new LevelScenarioData
             {
                 randomSeed = randomSeed,
                 minimumVoluntaryTurnSeconds = minimumVoluntaryTurnSeconds,
             };
-            foreach (LevelScenarioActorData actor in actors)
-                copy.actors.Add(actor?.DeepCopy());
-            foreach (LevelScenarioObjectiveData objective in objectives)
-                copy.objectives.Add(objective?.DeepCopy());
-            foreach (LevelScenarioPropData prop in props)
-                copy.props.Add(prop?.DeepCopy());
-            foreach (LevelScenarioVehicleData vehicle in vehicles)
-                copy.vehicles.Add(vehicle?.DeepCopy());
+            if (actors != null)
+            {
+                foreach (LevelScenarioActorData actor in actors)
+                    copy.actors.Add(actor?.DeepCopy());
+            }
+            if (objectives != null)
+            {
+                foreach (LevelScenarioObjectiveData objective in objectives)
+                    copy.objectives.Add(objective?.DeepCopy());
+            }
+            if (props != null)
+            {
+                foreach (LevelScenarioPropData prop in props)
+                    copy.props.Add(prop?.DeepCopy());
+            }
+            if (vehicles != null)
+            {
+                foreach (LevelScenarioVehicleData vehicle in vehicles)
+                    copy.vehicles.Add(vehicle?.DeepCopy());
+            }
             return copy;
         }
 
         public LevelScenarioActorData FindInitiallySelectedPlayer()
         {
-            Normalize();
+            if (actors == null)
+            {
+                return null;
+            }
+
             foreach (LevelScenarioActorData actor in actors)
             {
                 if (actor != null && actor.playerControlled && actor.initiallySelected)
@@ -434,25 +451,30 @@ namespace GritGud.Domain.Levels
 
         public LevelDocument DeepCopy()
         {
-            Normalize();
             var copy = new LevelDocument
             {
                 schemaVersion = schemaVersion,
-                levelId = levelId,
-                displayName = displayName,
+                levelId = levelId ?? string.Empty,
+                displayName = displayName ?? string.Empty,
                 bounds = bounds,
-                scenario = scenario?.DeepCopy(),
+                scenario = scenario?.DeepCopy() ?? new LevelScenarioData(),
                 legacyPlaytest = legacyPlaytest?.DeepCopy(),
             };
 
-            foreach (LevelEntity entity in entities)
+            if (entities != null)
             {
-                copy.entities.Add(entity?.DeepCopy());
+                foreach (LevelEntity entity in entities)
+                {
+                    copy.entities.Add(entity?.DeepCopy());
+                }
             }
 
-            foreach (TerrainSurfaceData surface in terrainSurfaces)
+            if (terrainSurfaces != null)
             {
-                copy.terrainSurfaces.Add(surface?.DeepCopy());
+                foreach (TerrainSurfaceData surface in terrainSurfaces)
+                {
+                    copy.terrainSurfaces.Add(surface?.DeepCopy());
+                }
             }
 
             return copy;
