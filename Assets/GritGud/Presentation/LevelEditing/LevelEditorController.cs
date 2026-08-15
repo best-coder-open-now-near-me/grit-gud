@@ -48,6 +48,7 @@ namespace GritGud.Presentation.LevelEditing
         private bool previewMode;
         private bool suspended;
         private LevelDocument sourceDocument;
+        private bool sourceDocumentIsSaved;
         private string sourceLabel = string.Empty;
         private string statusMessage = string.Empty;
 
@@ -101,6 +102,7 @@ namespace GritGud.Presentation.LevelEditing
             suspended = false;
             enabled = true;
             sourceDocument = initialDocument.DeepCopy();
+            sourceDocumentIsSaved = initialDocumentIsSaved;
             sourceLabel = string.IsNullOrWhiteSpace(initialSourceLabel)
                 ? initialDocument.displayName
                 : initialSourceLabel.Trim();
@@ -275,6 +277,7 @@ namespace GritGud.Presentation.LevelEditing
             viewDocument = null;
             validationIssues = Array.Empty<LevelValidationIssue>();
             sourceDocument = null;
+            sourceDocumentIsSaved = false;
             sourceLabel = string.Empty;
             statusMessage = string.Empty;
             enabled = false;
@@ -314,6 +317,11 @@ namespace GritGud.Presentation.LevelEditing
 
         private void Update()
         {
+            if (!suspended && workspace != null && persistence != null)
+            {
+                persistence.TickAutosave(workspace, Time.unscaledTimeAsDouble);
+            }
+
             if (suspended || workspace == null || cameraController == null)
             {
                 return;
@@ -626,6 +634,9 @@ namespace GritGud.Presentation.LevelEditing
             LevelEditorWorkspaceChangedEventArgs args)
         {
             validationIssues = args.ValidationIssues;
+            persistence?.ScheduleAutosave(
+                args.SessionChange.Revision,
+                Time.unscaledTimeAsDouble);
             if (previewMode)
             {
                 return;
@@ -797,6 +808,7 @@ namespace GritGud.Presentation.LevelEditing
         private void CreateNewLevel()
         {
             sourceDocument = LevelDocumentFactory.CreateNew();
+            sourceDocumentIsSaved = false;
             sourceLabel = "new level";
             ReplaceWorkspaceDocument(sourceDocument.DeepCopy(), isSaved: false);
             SetStatus("Created a new level with flat terrain covering its bounds.");
@@ -804,7 +816,7 @@ namespace GritGud.Presentation.LevelEditing
 
         private void ReloadSourceLevel()
         {
-            ReplaceWorkspaceDocument(sourceDocument.DeepCopy());
+            ReplaceWorkspaceDocument(sourceDocument.DeepCopy(), sourceDocumentIsSaved);
             SetStatus($"Reloaded {sourceLabel}.");
         }
 
@@ -823,8 +835,9 @@ namespace GritGud.Presentation.LevelEditing
         private void HandleDocumentLoaded(object sender, LevelDocumentLoadedEventArgs args)
         {
             sourceDocument = args.Document.DeepCopy();
+            sourceDocumentIsSaved = args.IsSaved;
             sourceLabel = args.SourceLabel;
-            ReplaceWorkspaceDocument(sourceDocument.DeepCopy());
+            ReplaceWorkspaceDocument(sourceDocument.DeepCopy(), args.IsSaved);
             SetStatus($"Loaded level from {args.SourceLabel}.");
         }
 
@@ -885,6 +898,12 @@ namespace GritGud.Presentation.LevelEditing
 
         bool ILevelEditorGuiActions.HasDraft => persistence.HasDraft;
 
+        int ILevelEditorGuiActions.RecoveryGenerationCount =>
+            LevelEditorPersistenceCoordinator.RecoveryGenerationCount;
+
+        bool ILevelEditorGuiActions.HasRecovery(int generation) =>
+            persistence.HasRecovery(generation);
+
         bool ILevelEditorGuiActions.UsesBrowserFileDialog => persistence.UsesBrowserFileDialog;
 
         string ILevelEditorGuiActions.DesktopImportPath
@@ -900,6 +919,9 @@ namespace GritGud.Presentation.LevelEditing
         void ILevelEditorGuiActions.SaveDraft() => persistence.SaveDraft(workspace);
 
         void ILevelEditorGuiActions.LoadDraft() => persistence.LoadDraft();
+
+        void ILevelEditorGuiActions.LoadRecovery(int generation) =>
+            persistence.LoadRecovery(generation);
 
         void ILevelEditorGuiActions.Export() => persistence.Export(workspace);
 

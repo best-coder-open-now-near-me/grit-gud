@@ -136,6 +136,13 @@ WebGL this uses Unity's browser-backed `PlayerPrefs` storage. Drafts have a
 750,000-character safety limit and should be treated as recoverable local
 working state, not as the version-controlled source of truth.
 
+While a document is dirty, the editor also writes a rolling recovery snapshot
+after 15 seconds without another edit. The three newest snapshots are available
+under **Portable Files → Recovery Autosaves**. Loading one intentionally keeps
+the document marked unsaved so it cannot be mistaken for a deliberate save.
+Recovery history is local to the browser profile or machine and never replaces
+the manually saved active draft.
+
 **Export** writes portable JSON:
 
 - WebGL starts a browser download through the committed `.jslib` bridge.

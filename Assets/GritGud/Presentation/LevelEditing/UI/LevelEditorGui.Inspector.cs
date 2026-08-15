@@ -138,6 +138,31 @@ namespace GritGud.Presentation.LevelEditing.UI
                     GUILayout.Label(
                         "Exports are written beneath the application's persistent-data folder.");
                 }
+
+                GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
+                DrawSectionHeader("RECOVERY AUTOSAVES");
+                GUILayout.Label(
+                    "Unsaved work is retained in three rolling local snapshots after 15 seconds of inactivity.");
+                for (int generation = 0;
+                    generation < actions.RecoveryGenerationCount;
+                    generation++)
+                {
+                    int capturedGeneration = generation;
+                    GUI.enabled = actions.HasRecovery(capturedGeneration);
+                    string age = capturedGeneration == 0
+                        ? "NEWEST"
+                        : $"OLDER {capturedGeneration}";
+                    if (GUILayout.Button(
+                            $"LOAD RECOVERY {capturedGeneration + 1} — {age}",
+                            PanelButtonLayout()))
+                    {
+                        documentActionConfirmation.Request(
+                            state.IsDirty,
+                            "Load this recovery snapshot and discard the current unsaved changes?",
+                            () => actions.LoadRecovery(capturedGeneration));
+                    }
+                }
+                GUI.enabled = true;
             }
 
             GUILayout.EndScrollView();

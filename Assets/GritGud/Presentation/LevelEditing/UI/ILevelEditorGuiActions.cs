@@ -4,6 +4,10 @@ namespace GritGud.Presentation.LevelEditing.UI
     {
         bool HasDraft { get; }
 
+        int RecoveryGenerationCount { get; }
+
+        bool HasRecovery(int generation);
+
         bool UsesBrowserFileDialog { get; }
 
         string DesktopImportPath { get; set; }
@@ -17,6 +21,8 @@ namespace GritGud.Presentation.LevelEditing.UI
         void SaveDraft();
 
         void LoadDraft();
+
+        void LoadRecovery(int generation);
 
         void Export();
 

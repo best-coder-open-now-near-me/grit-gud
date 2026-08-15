@@ -9,25 +9,37 @@ namespace GritGud.Presentation.LevelEditing.Persistence
 {
     public sealed class LevelDocumentLoadedEventArgs : EventArgs
     {
-        public LevelDocumentLoadedEventArgs(LevelDocument document, string sourceLabel)
+        public LevelDocumentLoadedEventArgs(
+            LevelDocument document,
+            string sourceLabel,
+            bool isSaved = true)
         {
             Document = document ?? throw new ArgumentNullException(nameof(document));
             SourceLabel = sourceLabel ?? throw new ArgumentNullException(nameof(sourceLabel));
+            IsSaved = isSaved;
         }
 
         public LevelDocument Document { get; }
 
         public string SourceLabel { get; }
+
+        public bool IsSaved { get; }
     }
 
     public sealed class LevelEditorPersistenceCoordinator : IDisposable
     {
+        public const int RecoveryGenerationCount = 3;
+        public const double AutosaveDelaySeconds = 15d;
         private const string DraftSlot = "active";
+        private const string RecoverySlotPrefix = "recovery.";
 
         private readonly UnityLevelJsonSerializer serializer;
         private readonly ILevelDraftStore draftStore;
         private readonly LevelTextTransfer textTransfer;
         private readonly LevelValidationContent validationContent;
+        private int pendingAutosaveRevision = -1;
+        private int lastAutosavedRevision = -1;
+        private double autosaveDueAt = double.PositiveInfinity;
         private bool disposed;
 
         public LevelEditorPersistenceCoordinator(
@@ -50,6 +62,12 @@ namespace GritGud.Presentation.LevelEditing.Persistence
         public event Action<string> StatusChanged;
 
         public bool HasDraft => draftStore.HasDraft(DraftSlot);
+
+        public bool HasRecovery(int generation)
+        {
+            ThrowIfDisposed();
+            return draftStore.HasDraft(RecoverySlot(generation));
+        }
 
         public bool UsesBrowserFileDialog => textTransfer.UsesBrowserFileDialog;
 
@@ -94,6 +112,70 @@ namespace GritGud.Presentation.LevelEditing.Persistence
                     draftStore.LoadDraft(DraftSlot),
                     "draft",
                     requireAuthoringValidity: false);
+            }
+            catch (Exception exception)
+            {
+                Report(exception.Message);
+            }
+        }
+
+        public void ScheduleAutosave(int revision, double currentTime)
+        {
+            ThrowIfDisposed();
+            if (revision < 0
+                || double.IsNaN(currentTime)
+                || double.IsInfinity(currentTime))
+            {
+                throw new ArgumentOutOfRangeException(nameof(revision));
+            }
+
+            pendingAutosaveRevision = revision;
+            autosaveDueAt = currentTime + AutosaveDelaySeconds;
+        }
+
+        public bool TickAutosave(LevelEditorWorkspace workspace, double currentTime)
+        {
+            ThrowIfDisposed();
+            if (workspace == null)
+                throw new ArgumentNullException(nameof(workspace));
+            if (double.IsNaN(currentTime) || double.IsInfinity(currentTime))
+                throw new ArgumentOutOfRangeException(nameof(currentTime));
+            if (!workspace.IsDirty
+                || pendingAutosaveRevision < 0
+                || pendingAutosaveRevision == lastAutosavedRevision
+                || currentTime < autosaveDueAt)
+            {
+                return false;
+            }
+
+            try
+            {
+                string serialized = serializer.Serialize(workspace.CreateSnapshot());
+                RotateRecoveryHistory();
+                draftStore.SaveDraft(RecoverySlot(0), serialized);
+                lastAutosavedRevision = pendingAutosaveRevision;
+                autosaveDueAt = double.PositiveInfinity;
+                Report("Autosaved a recoverable level snapshot.");
+                return true;
+            }
+            catch (Exception exception)
+            {
+                autosaveDueAt = currentTime + AutosaveDelaySeconds;
+                Report($"Autosave failed: {exception.Message}");
+                return false;
+            }
+        }
+
+        public void LoadRecovery(int generation)
+        {
+            ThrowIfDisposed();
+            try
+            {
+                AdoptSerializedDocument(
+                    draftStore.LoadDraft(RecoverySlot(generation)),
+                    $"recovery {generation + 1}",
+                    requireAuthoringValidity: false,
+                    isSaved: false);
             }
             catch (Exception exception)
             {
@@ -190,7 +272,8 @@ namespace GritGud.Presentation.LevelEditing.Persistence
         private void AdoptSerializedDocument(
             string text,
             string sourceLabel,
-            bool requireAuthoringValidity)
+            bool requireAuthoringValidity,
+            bool isSaved = true)
         {
             LevelDocument imported = serializer.Deserialize(text);
             if (requireAuthoringValidity)
@@ -211,7 +294,32 @@ namespace GritGud.Presentation.LevelEditing.Persistence
 
             DocumentLoaded?.Invoke(
                 this,
-                new LevelDocumentLoadedEventArgs(imported, sourceLabel));
+                new LevelDocumentLoadedEventArgs(imported, sourceLabel, isSaved));
+        }
+
+        private void RotateRecoveryHistory()
+        {
+            for (int generation = RecoveryGenerationCount - 1; generation > 0; generation--)
+            {
+                string source = RecoverySlot(generation - 1);
+                string destination = RecoverySlot(generation);
+                if (draftStore.HasDraft(source))
+                    draftStore.SaveDraft(destination, draftStore.LoadDraft(source));
+                else if (draftStore.HasDraft(destination))
+                    draftStore.DeleteDraft(destination);
+            }
+        }
+
+        private static string RecoverySlot(int generation)
+        {
+            if (generation < 0 || generation >= RecoveryGenerationCount)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(generation),
+                    $"Recovery generations range from 0 to {RecoveryGenerationCount - 1}.");
+            }
+
+            return RecoverySlotPrefix + generation;
         }
 
         private void Report(string message)
