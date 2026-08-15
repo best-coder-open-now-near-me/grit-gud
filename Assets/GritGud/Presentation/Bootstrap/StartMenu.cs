@@ -179,7 +179,7 @@ namespace GritGud.Presentation.Bootstrap
             }
             foreach (CommittedLevelEntry entry in committedLevels)
             {
-                bool selected = string.Equals(
+                bool selected = !cloudDraftSelected && string.Equals(
                     selectedResourceKey,
                     entry.ResourceKey,
                     StringComparison.Ordinal);
