@@ -59,7 +59,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             switch (presentationState.CreateMode)
             {
                 case LevelEditorCreateMode.Select:
-                    DrawSelectCreatePanel();
+                    DrawSelectCreatePanel(document);
                     break;
                 case LevelEditorCreateMode.Terrain:
                     DrawTerrainCreatePanel(document);
@@ -113,7 +113,7 @@ namespace GritGud.Presentation.LevelEditing.UI
         }
 
 
-        private void DrawSelectCreatePanel()
+        private void DrawSelectCreatePanel(LevelDocument document)
         {
             DrawSectionHeader("SELECT AND ARRANGE");
             GUILayout.Label("Click an object to select it. Ctrl-click adds or removes it.");
@@ -125,6 +125,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             if (GUILayout.Button("DUPLICATE SELECTION", PanelButtonLayout()))
                 selectionTool.DuplicateSelection();
             GUI.enabled = true;
+            DrawLevelLayoutPanel(document);
         }
 
 

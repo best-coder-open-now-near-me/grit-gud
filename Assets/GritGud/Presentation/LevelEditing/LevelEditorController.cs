@@ -31,6 +31,8 @@ namespace GritGud.Presentation.LevelEditing
         private LevelEditorInputRouter inputRouter;
         private LevelEditorCameraController cameraController;
         private LevelSnapSettings snapSettings;
+        private LevelEditorGridSettings gridSettings;
+        private LevelEditorGridPresenter gridPresenter;
         private ILevelEditorPreferencesStore preferencesStore;
         private LevelEditorSceneQuery sceneQuery;
         private LevelEditorToolManager toolManager;
@@ -42,6 +44,7 @@ namespace GritGud.Presentation.LevelEditing
         private ScenarioAuthoringCoordinator scenarioAuthoring;
         private TerrainAuthoringCoordinator terrainAuthoring;
         private EnvironmentAuthoringCoordinator environmentAuthoring;
+        private LevelEditorLayoutCoordinator layoutAuthoring;
         private GameplayEnvironmentLighting environmentLighting;
         private LevelEntityView selectedView;
         private LevelEditorOutlinePresenter outlinePresenter;
@@ -150,6 +153,16 @@ namespace GritGud.Presentation.LevelEditing
             cameraController.RestoreState(preferences.camera);
             sceneQuery = new LevelEditorSceneQuery(sceneCamera);
             snapSettings = new LevelSnapSettings { Enabled = preferences.snapEnabled };
+            gridSettings = new LevelEditorGridSettings();
+            float restoredGridSpacing = preferences.gridSpacing > 0f
+                ? preferences.gridSpacing
+                : 2.5f;
+            gridSettings.Configure(
+                preferences.gridVisible,
+                restoredGridSpacing,
+                preferences.gridElevation);
+            gridPresenter = new LevelEditorGridPresenter(transform);
+            gridSettings.Changed += HandleGridSettingsChanged;
             var toolContext = new LevelEditorToolContext(
                 workspace,
                 selection,
@@ -190,6 +203,12 @@ namespace GritGud.Presentation.LevelEditing
             environmentAuthoring.StatusChanged += SetStatus;
             environmentAuthoring.PracticalLightFocusRequested +=
                 HandlePracticalLightFocusRequested;
+            layoutAuthoring = new LevelEditorLayoutCoordinator(
+                workspace,
+                selection,
+                cameraController,
+                gridSettings);
+            layoutAuthoring.StatusChanged += SetStatus;
             gui = new LevelEditorGui(
                 selection,
                 catalog,
@@ -203,8 +222,10 @@ namespace GritGud.Presentation.LevelEditing
                 this);
             gui.SyncScenarioFields(viewDocument, forceLevelIdentity: true);
             gui.SyncEnvironmentFields(viewDocument, force: true);
+            gui.SyncLayoutFields(viewDocument, gridSettings, force: true);
             outlinePresenter = new LevelEditorOutlinePresenter(transform);
             validationIssues = workspace.ValidationIssues;
+            gridPresenter.Refresh(viewDocument.bounds, gridSettings);
 
             if (startInPreview)
             {
@@ -258,12 +279,17 @@ namespace GritGud.Presentation.LevelEditing
                 environmentAuthoring.PracticalLightFocusRequested -=
                     HandlePracticalLightFocusRequested;
             }
+            if (layoutAuthoring != null)
+                layoutAuthoring.StatusChanged -= SetStatus;
+            if (gridSettings != null)
+                gridSettings.Changed -= HandleGridSettingsChanged;
             environmentLighting?.Dispose();
             toolManager?.Dispose();
             projector?.Dispose();
             terrainProjector?.Dispose();
             interactionPointHandles?.Dispose();
             scenarioActorHandles?.Dispose();
+            gridPresenter?.Dispose();
             outlinePresenter?.Dispose();
             workspace?.Dispose();
             toolManager = null;
@@ -278,7 +304,10 @@ namespace GritGud.Presentation.LevelEditing
             terrainTool = null;
             terrainAuthoring = null;
             environmentAuthoring = null;
+            layoutAuthoring = null;
             environmentLighting = null;
+            gridPresenter = null;
+            gridSettings = null;
             catalog = null;
             scenarioCatalog = null;
             inputRouter = null;
@@ -372,6 +401,9 @@ namespace GritGud.Presentation.LevelEditing
             preferencesStore.Save(new LevelEditorLocalPreferences
             {
                 snapEnabled = snapSettings.Enabled,
+                gridVisible = gridSettings?.Visible ?? true,
+                gridSpacing = gridSettings?.Spacing ?? 2.5f,
+                gridElevation = gridSettings?.Elevation ?? 0f,
                 camera = cameraController.CaptureState(),
             });
         }
@@ -405,6 +437,7 @@ namespace GritGud.Presentation.LevelEditing
             projector.SetVisible(false);
             terrainProjector.SetVisible(false);
             scenarioActorHandles.SetVisible(false);
+            gridPresenter.SetVisible(false);
             outlinePresenter.HideAll();
             environmentLighting?.Dispose();
             environmentLighting = null;
@@ -421,6 +454,8 @@ namespace GritGud.Presentation.LevelEditing
             projector.SetVisible(true);
             terrainProjector.SetVisible(true);
             scenarioActorHandles.SetVisible(!previewMode);
+            gridPresenter.Refresh(workspace.CreateSnapshot().bounds, gridSettings);
+            gridPresenter.SetVisible(!previewMode && gridSettings.Visible);
             RefreshEnvironmentLighting(workspace.CreateSnapshot());
             SetStatus("Returned from isolated test play.");
         }
@@ -638,6 +673,7 @@ namespace GritGud.Presentation.LevelEditing
             terrainProjector.Replace(workspace.CreateSnapshot());
             interactionPointHandles.Refresh(workspace.CreateSnapshot(), selection, projector);
             scenarioActorHandles.SetVisible(false);
+            gridPresenter.SetVisible(false);
             SetStatus("Level Preview uses an isolated snapshot; authored data is locked.");
         }
 
@@ -649,6 +685,7 @@ namespace GritGud.Presentation.LevelEditing
             interactionPointHandles.Refresh(workspace.CreateSnapshot(), selection, projector);
             scenarioActorHandles.Refresh(workspace.CreateSnapshot());
             scenarioActorHandles.SetVisible(true);
+            gridPresenter.Refresh(workspace.CreateSnapshot().bounds, gridSettings);
             SetStatus("Returned to the authored level.");
         }
 
@@ -671,6 +708,7 @@ namespace GritGud.Presentation.LevelEditing
                 viewDocument = snapshot;
                 projector.Apply(snapshot, args.SessionChange);
                 terrainProjector.Apply(snapshot, args.SessionChange);
+                ReconcileSelection(snapshot);
                 RefreshSelectedView();
                 interactionPointHandles.Refresh(snapshot, selection, projector);
                 scenarioActorHandles.Refresh(snapshot);
@@ -680,6 +718,12 @@ namespace GritGud.Presentation.LevelEditing
                 {
                     gui.SyncEnvironmentFields(snapshot, force: true);
                     RefreshEnvironmentLighting(snapshot);
+                }
+                if (args.SessionChange.RequiresFullProjection
+                    || IsBoundsCommand(args.SessionChange.Command))
+                {
+                    gui.SyncLayoutFields(snapshot, gridSettings, force: true);
+                    gridPresenter.Refresh(snapshot.bounds, gridSettings);
                 }
             }
             catch (LevelLoadException exception)
@@ -860,6 +904,7 @@ namespace GritGud.Presentation.LevelEditing
             gui.SelectScenarioActor(null);
             gui.SyncScenarioFields(document, forceLevelIdentity: true);
             gui.SyncEnvironmentFields(document, force: true);
+            gui.SyncLayoutFields(document, gridSettings, force: true);
         }
 
         private void RefreshEnvironmentLighting(LevelDocument document)
@@ -892,6 +937,44 @@ namespace GritGud.Presentation.LevelEditing
             if (command is ILevelEditCommandGroup group)
                 return group.Commands.Any(IsEnvironmentCommand);
             return false;
+        }
+
+        private static bool IsBoundsCommand(ILevelEditCommand command)
+        {
+            if (command is ILevelBoundsEditCommand)
+                return true;
+            if (command is ILevelEditCommandGroup group)
+                return group.Commands.Any(IsBoundsCommand);
+            return false;
+        }
+
+        private void HandleGridSettingsChanged()
+        {
+            if (workspace == null || gridPresenter == null || previewMode || suspended)
+                return;
+            gridPresenter.Refresh(workspace.CreateSnapshot().bounds, gridSettings);
+            gui?.SyncLayoutFields(workspace.CreateSnapshot(), gridSettings, force: true);
+        }
+
+        private void ReconcileSelection(LevelDocument document)
+        {
+            if (selection == null || document == null || selection.Targets.Count == 0)
+                return;
+            LevelSelectionTarget[] retained = selection.Targets.Where(target =>
+            {
+                LevelEntity entity = document.entities.FirstOrDefault(candidate => string.Equals(
+                    candidate?.id,
+                    target.EntityId,
+                    StringComparison.Ordinal));
+                if (entity == null)
+                    return false;
+                return target.Kind != LevelSelectionKind.InteractionPoint
+                    || entity.interactionPoints.Any(point => string.Equals(
+                        point?.id,
+                        target.ElementId,
+                        StringComparison.Ordinal));
+            }).ToArray();
+            selection.Set(retained);
         }
 
         private void HandleDocumentLoaded(object sender, LevelDocumentLoadedEventArgs args)
@@ -974,6 +1057,8 @@ namespace GritGud.Presentation.LevelEditing
             set => persistence.DesktopImportPath = value;
         }
 
+        LevelEditorCameraView ILevelEditorGuiActions.CameraView => cameraController.View;
+
         void ILevelEditorGuiActions.Undo() => workspace.Undo();
 
         void ILevelEditorGuiActions.Redo() => workspace.Redo();
@@ -1006,6 +1091,18 @@ namespace GritGud.Presentation.LevelEditing
 
         void ILevelEditorGuiActions.ApplyLevelDisplayName(string displayName) =>
             ApplyLevelDisplayName(displayName);
+
+        void ILevelEditorGuiActions.ApplyLevelBounds(LevelBoundsAuthoringRequest request) =>
+            layoutAuthoring.ApplyBounds(request);
+
+        void ILevelEditorGuiActions.ConfigureGrid(LevelGridAuthoringRequest request) =>
+            layoutAuthoring.ConfigureGrid(request);
+
+        void ILevelEditorGuiActions.SetCameraView(LevelEditorCameraView view) =>
+            layoutAuthoring.SetCameraView(view);
+
+        void ILevelEditorGuiActions.DuplicateArray(LevelArrayAuthoringRequest request) =>
+            layoutAuthoring.DuplicateArray(request);
 
         void ILevelEditorGuiActions.ApplyEnvironment(
             LevelEnvironmentAuthoringRequest request) =>

@@ -40,6 +40,38 @@ namespace GritGud.Application.Levels
     {
     }
 
+    public interface ILevelBoundsEditCommand : ILevelEditCommand
+    {
+    }
+
+    public sealed class SetLevelBoundsCommand : ILevelBoundsEditCommand
+    {
+        private readonly LevelBoundsData before;
+        private readonly LevelBoundsData after;
+
+        public SetLevelBoundsCommand(LevelBoundsData before, LevelBoundsData after)
+        {
+            this.before = before;
+            this.after = after;
+        }
+
+        public string Description => "Edit level bounds";
+
+        public IReadOnlyCollection<string> AffectedEntityIds => Array.Empty<string>();
+
+        public bool RequiresFullProjection => false;
+
+        public void Apply(LevelDocument document) => Set(document, after);
+
+        public void Revert(LevelDocument document) => Set(document, before);
+
+        private static void Set(LevelDocument document, LevelBoundsData value)
+        {
+            AddEntityCommand.RequireDocument(document);
+            document.bounds = value;
+        }
+    }
+
     public sealed class SetLevelEnvironmentCommand : ILevelEnvironmentEditCommand
     {
         private readonly LevelEnvironmentData before;

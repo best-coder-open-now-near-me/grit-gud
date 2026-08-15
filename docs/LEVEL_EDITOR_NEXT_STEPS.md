@@ -52,16 +52,17 @@ and deletion operate on the full selection as one composite history entry.
 
 The next usability improvements, in priority order, are:
 
-1. **Batch transforms:** add an explicit multi-entity move gesture with a shared
-   pivot and one composite command; numeric fields remain primary-only until
-   mixed-value UI is designed.
+1. **Batch transforms:** multi-entity drag already preserves relative offsets,
+   and the entity-array tool now creates repeated X/Z layouts as one composite
+   command. A future numeric mixed-value Inspector can add explicit shared-pivot
+   transforms when its UI semantics are designed.
 2. **Transform feedback:** active drags show X/Z deltas and snap state; Esc
    restores the pre-drag state without creating history.
 3. **Discoverability:** the compact controls reference and explicit tool buttons
    are implemented; add platform-appropriate tooltips when the temporary IMGUI
    adapter is replaced.
-4. **Preferences:** camera and snap settings are retained locally without
-   putting user preferences in portable level JSON.
+4. **Preferences:** camera, orthographic projection, snap, and grid settings are
+   retained locally without putting user preferences in portable level JSON.
 5. **Larger scenes:** palette search/category filters and a searchable entity
    hierarchy are implemented. Keep hierarchy state local to the editor.
 

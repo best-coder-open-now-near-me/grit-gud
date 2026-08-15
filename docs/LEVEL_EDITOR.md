@@ -64,6 +64,7 @@ An invalid import therefore leaves the currently loaded level untouched.
 | `Shift` while using movement keys | Pan the camera three times faster |
 | `F` | Frame the selected entity |
 | `Home` | Frame the authored level bounds |
+| Create → Select → Perspective/Top/Front/Right | Switch camera projection; orbiting an orthographic view returns to perspective |
 | Create → Place entry, then left click | Place the selected archetype |
 | Create → Place ↺ / ↻ buttons | Rotate the active placement stamp left / right |
 | Left click | Select an entity |
@@ -91,6 +92,19 @@ uses a blue outline, and additional selected entities use green outlines.
 Rotation and deletion apply to the complete selection as one undoable
 transaction. Entity-specific validation messages are buttons that select and
 frame the affected entity.
+
+Create → Select also owns the spatial-layout controls. **Level Bounds** edits
+the portable center and size through undo/redo. **Layout Grid** draws a local,
+non-exported line grid clipped to those bounds at a configurable spacing and
+elevation; its visibility and settings persist with camera preferences. Top,
+Front, and Right use true orthographic projection, while Perspective restores
+the prior orbit angle.
+
+**Entity Array** duplicates the current entity selection along X and Z. Counts
+include the original cell, preserve the relative arrangement of a
+multi-selection, allocate new stable IDs, enforce the entity limit, and commit
+up to 256 generated copies as one undo step. This is the fast path for floor modules,
+walls, repeated cover, and other blockout runs.
 
 The Terrain create mode exposes Raise, Lower, Smooth, and Flatten plus brush
 radius and quantized strength. The world-space footprint changes color with the

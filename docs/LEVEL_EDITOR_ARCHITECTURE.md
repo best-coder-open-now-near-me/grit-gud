@@ -46,6 +46,7 @@ copied back into the authoring workspace.
 | UI shell and panels | IMGUI rendering, transient text fields, and local disclosure state |
 | Scenario authoring coordinator | Scenario invariants, transactions, and actor/link use cases |
 | Environment authoring coordinator | Numeric parsing, lighting invariants, and undoable atmosphere/practical-light use cases |
+| Layout coordinator | Bounds validation, local grid/view settings, and transaction-based entity arrays |
 | Controller | Composition, Unity lifecycle, preview boundary, and cross-service routing |
 
 Domain and Application assemblies have no Unity references. Unity asset paths,

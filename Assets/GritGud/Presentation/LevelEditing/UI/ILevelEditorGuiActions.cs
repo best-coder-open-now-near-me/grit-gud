@@ -1,3 +1,5 @@
+using GritGud.Presentation.LevelEditing.Core;
+
 namespace GritGud.Presentation.LevelEditing.UI
 {
     public interface ILevelEditorGuiActions
@@ -11,6 +13,8 @@ namespace GritGud.Presentation.LevelEditing.UI
         bool UsesBrowserFileDialog { get; }
 
         string DesktopImportPath { get; set; }
+
+        LevelEditorCameraView CameraView { get; }
 
         void ReturnToMenu();
 
@@ -43,6 +47,14 @@ namespace GritGud.Presentation.LevelEditing.UI
         void FocusEntity(string entityId);
 
         void ApplyLevelDisplayName(string displayName);
+
+        void ApplyLevelBounds(LevelBoundsAuthoringRequest request);
+
+        void ConfigureGrid(LevelGridAuthoringRequest request);
+
+        void SetCameraView(LevelEditorCameraView view);
+
+        void DuplicateArray(LevelArrayAuthoringRequest request);
 
         void ApplyEnvironment(LevelEnvironmentAuthoringRequest request);
 

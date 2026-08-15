@@ -67,6 +67,26 @@ namespace GritGud.Domain.Tests.Levels
         }
 
         [Test]
+        public void LevelBoundsParticipateInUndoAndRedo()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            using var workspace = new LevelEditorWorkspace(document);
+            LevelBoundsData before = document.bounds;
+            var after = new LevelBoundsData(
+                new Float3Data(5f, 4f, -3f),
+                new Float3Data(80f, 20f, 60f));
+
+            workspace.Execute(new SetLevelBoundsCommand(before, after));
+
+            Assert.That(workspace.CreateSnapshot().bounds.center.x, Is.EqualTo(5f));
+            Assert.That(workspace.CreateSnapshot().bounds.size.z, Is.EqualTo(60f));
+            workspace.Undo();
+            Assert.That(workspace.CreateSnapshot().bounds.size.x, Is.EqualTo(before.size.x));
+            workspace.Redo();
+            Assert.That(workspace.CreateSnapshot().bounds.center.z, Is.EqualTo(-3f));
+        }
+
+        [Test]
         public void WorkspacePublishesHistoryAndValidationTogether()
         {
             using var workspace = new LevelEditorWorkspace(LevelDocumentFactory.CreateEmpty());
