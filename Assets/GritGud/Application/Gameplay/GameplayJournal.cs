@@ -293,53 +293,6 @@ namespace GritGud.Application.Gameplay
             ? null
             : entries[entries.Count - 1];
 
-        public IReadOnlyList<GameplayJournalEntry> GetTurnReviewWindow(
-            string actorId)
-        {
-            if (string.IsNullOrWhiteSpace(actorId))
-            {
-                throw new ArgumentException(
-                    "A turn-review window requires an actor identifier.",
-                    nameof(actorId));
-            }
-
-            int lastCompletedTurnIndex = -1;
-            for (int index = entries.Count - 1; index >= 0; index--)
-            {
-                if (entries[index] is TurnEndedJournalEntry turnEnded
-                    && string.Equals(
-                        turnEnded.Turn.EndingActorId,
-                        actorId,
-                        StringComparison.Ordinal))
-                {
-                    lastCompletedTurnIndex = index;
-                    break;
-                }
-            }
-
-            if (lastCompletedTurnIndex < 0)
-            {
-                return Array.Empty<GameplayJournalEntry>();
-            }
-
-            int startIndex = 0;
-            for (int index = lastCompletedTurnIndex - 1; index >= 0; index--)
-            {
-                if (entries[index] is TurnEndedJournalEntry turnEnded
-                    && string.Equals(
-                        turnEnded.Turn.NextActorId,
-                        actorId,
-                        StringComparison.Ordinal))
-                {
-                    startIndex = index + 1;
-                    break;
-                }
-            }
-
-            return entries.GetRange(startIndex, entries.Count - startIndex)
-                .AsReadOnly();
-        }
-
         internal void RecordTurnModeChanged(
             GameplaySessionMode previousMode,
             GameplaySessionMode resultingMode,
