@@ -485,7 +485,8 @@
           "viewAngleDegrees": 120.0,
           "preferredEngagementRange": 14.0,
           "movementSearchRadius": 6.0,
-          "maximumAttacksPerTurn": 1
+          "maximumAttacksPerTurn": 1,
+          "minimumAttackHitChancePercent": 35
         }
       },
       "characterProfile": {

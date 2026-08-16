@@ -4,6 +4,25 @@ using GritGud.Domain.Gameplay;
 
 namespace GritGud.Application.Gameplay
 {
+    public sealed class EnemyTargetSelection
+    {
+        public EnemyTargetSelection(
+            string targetId,
+            TargetExposureSnapshot exposure,
+            int hitChancePercent)
+        {
+            TargetId = targetId ?? throw new ArgumentNullException(nameof(targetId));
+            Exposure = exposure ?? throw new ArgumentNullException(nameof(exposure));
+            HitChancePercent = hitChancePercent;
+        }
+
+        public string TargetId { get; }
+
+        public TargetExposureSnapshot Exposure { get; }
+
+        public int HitChancePercent { get; }
+    }
+
     public sealed class GameplayEnemyDecisionSession
     {
         private readonly GameplaySession gameplay;
@@ -111,6 +130,49 @@ namespace GritGud.Application.Gameplay
             return nearest;
         }
 
+        public EnemyTargetSelection SelectBestTarget(
+            string actorId,
+            IReadOnlyList<string> candidateTargetIds,
+            Func<string, TargetExposureSnapshot> captureExposure)
+        {
+            RequireEnemy(actorId);
+            if (candidateTargetIds == null)
+                throw new ArgumentNullException(nameof(candidateTargetIds));
+            if (captureExposure == null)
+                throw new ArgumentNullException(nameof(captureExposure));
+            GameplayActorSnapshot observer = gameplay.GetActor(actorId);
+            AttackDefinition attack = gameplay.GetEquippedAttack(actorId);
+            EnemyTargetSelection best = null;
+            int bestWounds = -1;
+            float bestDistance = float.PositiveInfinity;
+            foreach (string targetId in candidateTargetIds)
+            {
+                GameplayActorSnapshot target = gameplay.GetActor(targetId);
+                if (gameplay.IsActorIncapacitated(targetId)
+                    || !gameplay.IsHostile(actorId, targetId))
+                    continue;
+                TargetExposureSnapshot exposure = captureExposure(targetId);
+                ValidateTarget(actorId, targetId, exposure);
+                float distance = observer.Pose.Position.DistanceTo(
+                    target.Pose.Position);
+                int hitChance = exposure.VisibleSampleCount == 0
+                    ? 0
+                    : CalculateHitChance(attack, exposure, distance);
+                int wounds = target.Wounds.WoundCount;
+                if (best == null
+                    || hitChance > best.HitChancePercent
+                    || (hitChance == best.HitChancePercent && wounds > bestWounds)
+                    || (hitChance == best.HitChancePercent && wounds == bestWounds
+                        && distance < bestDistance))
+                {
+                    best = new EnemyTargetSelection(targetId, exposure, hitChance);
+                    bestWounds = wounds;
+                    bestDistance = distance;
+                }
+            }
+            return best;
+        }
+
         public EnemyTacticalDecisionRecord EvaluateTurn(
             string actorId,
             string targetId,
@@ -151,24 +213,23 @@ namespace GritGud.Application.Gameplay
                     >= attack.TurnCost.MovementOpportunity;
             bool targetInReach = attack?.Contact == null
                 || distance <= attack.Contact.MaximumReach + 0.0001f;
+            int currentHitChance = currentExposure.VisibleSampleCount == 0
+                ? 0
+                : CalculateHitChance(attack, currentExposure, distance);
             if (currentExposure.VisibleSampleCount > 0
                 && attackAffordable
                 && targetInReach
+                && currentHitChance >= behavior.MinimumAttackHitChancePercent
                 && attacksCommittedThisTurn
                     < behavior.MaximumAttacksPerTurn)
             {
-                int hitChance = AttackHitChanceRules
-                    .CalculateFinalHitChancePercent(
-                        currentExposure,
-                        attack.AccuracyDecay,
-                        distance);
                 return Create(
                     EnemyTacticalDecisionKind.Attack,
                     actorId,
                     targetId,
                     currentExposure,
                     movementRoute: null,
-                    $"target exposed at {distance:0.0} m; hit chance {hitChance}%");
+                    $"target exposed at {distance:0.0} m; hit chance {currentHitChance}%");
             }
 
             if (attacksCommittedThisTurn
@@ -181,7 +242,8 @@ namespace GritGud.Application.Gameplay
             EnemyMovementOption movement = SelectMovement(
                 behavior,
                 attack,
-                movementOptions);
+                movementOptions,
+                targetInReach ? currentHitChance : -1);
             if (movement != null)
             {
                 return Create(
@@ -193,10 +255,45 @@ namespace GritGud.Application.Gameplay
                     $"route improves attack position to {movement.ResultingTargetDistance:0.0} m");
             }
 
+            if (currentExposure.VisibleSampleCount > 0
+                && attackAffordable
+                && targetInReach)
+            {
+                return Create(
+                    EnemyTacticalDecisionKind.Attack,
+                    actorId,
+                    targetId,
+                    currentExposure,
+                    movementRoute: null,
+                    $"no better firing position; taking {currentHitChance}% shot");
+            }
+
             string rationale = attackAffordable
                     ? "no traversable firing position found"
                     : "attack unavailable or unaffordable";
             return CreateEndTurn(actorId, targetId, rationale);
+        }
+
+        public bool RequiresMovementSearch(
+            string actorId,
+            string targetId,
+            TargetExposureSnapshot currentExposure)
+        {
+            EnemyBehaviorDefinition behavior = RequireEnemy(actorId);
+            ValidateTarget(actorId, targetId, currentExposure);
+            GameplayActorSnapshot actor = gameplay.GetActor(actorId);
+            float distance = actor.Pose.Position.DistanceTo(
+                gameplay.GetActor(targetId).Pose.Position);
+            AttackDefinition attack = gameplay.GetEquippedAttack(actorId);
+            if (attack == null || actor.TurnBudget.MovementOpportunity <= 0f)
+                return false;
+            if (attack.Contact != null
+                && distance > attack.Contact.MaximumReach + 0.0001f)
+                return true;
+            if (currentExposure.VisibleSampleCount == 0)
+                return true;
+            return CalculateHitChance(attack, currentExposure, distance)
+                < behavior.MinimumAttackHitChancePercent;
         }
 
         public void Commit(EnemyTacticalDecisionRecord decision)
@@ -274,7 +371,8 @@ namespace GritGud.Application.Gameplay
         private static EnemyMovementOption SelectMovement(
             EnemyBehaviorDefinition behavior,
             AttackDefinition attack,
-            IReadOnlyList<EnemyMovementOption> options)
+            IReadOnlyList<EnemyMovementOption> options,
+            int minimumHitChanceExclusive)
         {
             EnemyMovementOption best = null;
             int bestHitChance = -1;
@@ -298,6 +396,8 @@ namespace GritGud.Application.Gameplay
                             option.ResultingExposure,
                             attack.AccuracyDecay,
                             option.ResultingTargetDistance);
+                if (hitChance <= minimumHitChanceExclusive)
+                    continue;
                 float rangeError = Math.Abs(
                     option.ResultingTargetDistance
                     - (attack?.Contact?.MaximumReach
@@ -324,6 +424,16 @@ namespace GritGud.Application.Gameplay
 
             return best;
         }
+
+        private static int CalculateHitChance(
+            AttackDefinition attack,
+            TargetExposureSnapshot exposure,
+            float distance) => attack?.AccuracyDecay == null
+                ? TargetExposureRules.CalculateHitChancePercent(exposure)
+                : AttackHitChanceRules.CalculateFinalHitChancePercent(
+                    exposure,
+                    attack.AccuracyDecay,
+                    distance);
 
         private static float CalculateViewAngle(
             GameplayActorPose observer,

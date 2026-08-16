@@ -308,6 +308,14 @@ Enemy attacks use the same seeded attack session, target-region exposure,
 weapon catalog, muzzle effects, animation presenter, AP budget, and combat
 diagnostics as player attacks.
 
+**Tactical-confidence follow-up complete:** active-turn target selection now
+compares every capable party member and prefers the highest-chance shot rather
+than blindly choosing the nearest actor. Rifleman behavior authors a minimum
+acceptable hit chance; low-confidence exposure requests bounded route evidence,
+moves only for a strictly better firing position, and falls back to the legal
+shot when no candidate improves it. The detailed ownership contract and next AI
+slices are recorded in [ENEMY_AI.md](ENEMY_AI.md).
+
 ## 6. Projectile and explosion slice
 
 - Advance one slow projectile through turn time with segment collision queries.

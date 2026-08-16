@@ -172,6 +172,7 @@ namespace GritGud.Domain.Gameplay
         public float preferredEngagementRange;
         public float movementSearchRadius;
         public int maximumAttacksPerTurn;
+        public int minimumAttackHitChancePercent = 25;
     }
 
     [Serializable]
