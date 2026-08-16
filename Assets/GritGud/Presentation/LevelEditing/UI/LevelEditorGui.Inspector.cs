@@ -72,54 +72,88 @@ namespace GritGud.Presentation.LevelEditing.UI
             if (selection.Targets.Count > 1)
                 GUILayout.Label($"{selection.Targets.Count} entities selected");
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
-            DrawLabeledField("X", ref xText);
-            DrawLabeledField("Y", ref yText);
-            DrawLabeledField("Z", ref zText);
-            DrawLabeledField("Pitch X", ref pitchText);
-            DrawLabeledField("Yaw Y", ref yawText);
-            DrawLabeledField("Roll Z", ref rollText);
-            if (GUILayout.Button("APPLY", PanelPrimaryButtonLayout()))
-                actions.ApplyEntityTransform(
-                    xText,
-                    yText,
-                    zText,
-                    pitchText,
-                    yawText,
-                    rollText);
 
-            float angleSnap = selectedView.Archetype.PlacementRules.AngleSnap;
-            DrawAxisRotationButtons("PITCH X", Vector3.right, angleSnap);
-            DrawAxisRotationButtons("YAW Y", Vector3.up, angleSnap);
-            DrawAxisRotationButtons("ROLL Z", Vector3.forward, angleSnap);
-            DrawRotationPivotPicker(entity, selectedView);
+            if (DrawSectionExpander("TRANSFORM", ref showTransformSection))
+            {
+                DrawLabeledField("X", ref xText);
+                DrawLabeledField("Y", ref yText);
+                DrawLabeledField("Z", ref zText);
+                DrawLabeledField("Pitch X", ref pitchText);
+                DrawLabeledField("Yaw Y", ref yawText);
+                DrawLabeledField("Roll Z", ref rollText);
+                if (GUILayout.Button("APPLY TRANSFORM", PanelPrimaryButtonLayout()))
+                    actions.ApplyEntityTransform(
+                        xText,
+                        yText,
+                        zText,
+                        pitchText,
+                        yawText,
+                        rollText);
+            }
 
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
-            GUILayout.Label("PHYSICS PLACEMENT");
-            DrawLabeledField("Drop height", ref physicsDropHeightText);
-            physicsKeepUpright = GUILayout.Toggle(physicsKeepUpright, "Keep upright");
-            GUILayout.Label(
-                selection.Targets.Count > 1
-                    ? $"Settles {selection.Targets.Count} selected records together as one undo step."
-                    : "Temporarily simulates the selected prop, then saves its settled transform.");
-            if (actions.PhysicsPlacementRunning)
+            if (DrawSectionExpander("ROTATION & PIVOT", ref showRotationSection))
             {
-                if (GUILayout.Button("CANCEL SETTLE", PanelPrimaryButtonLayout()))
-                    actions.CancelPhysicsPlacement();
-            }
-            else if (GUILayout.Button("DROP & SETTLE", PanelPrimaryButtonLayout()))
-            {
-                actions.DropAndSettleSelection(physicsDropHeightText, physicsKeepUpright);
+                float angleSnap = selectedView.Archetype.PlacementRules.AngleSnap;
+                DrawAxisRotationButtons("PITCH X", Vector3.right, angleSnap);
+                DrawAxisRotationButtons("YAW Y", Vector3.up, angleSnap);
+                DrawAxisRotationButtons("ROLL Z", Vector3.forward, angleSnap);
+                DrawRotationPivotPicker(entity, selectedView);
             }
 
+            GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
+            if (DrawSectionExpander("ENTITY ARRAY", ref showEntityArraySection))
+                DrawEntityArrayPanel();
+
+            if (SupportsPhysicsPlacement(selectedView))
+            {
+                GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
+                if (DrawSectionExpander("PHYSICS PLACEMENT", ref showPhysicsSection))
+                {
+                    DrawLabeledField("Drop height", ref physicsDropHeightText);
+                    physicsKeepUpright = GUILayout.Toggle(physicsKeepUpright, "Keep upright");
+                    GUILayout.Label(
+                        selection.Targets.Count > 1
+                            ? $"Settles supported records from the {selection.Targets.Count}-object selection together."
+                            : "Simulates this loose prop, then saves its settled transform.");
+                    if (actions.PhysicsPlacementRunning)
+                    {
+                        if (GUILayout.Button("CANCEL SETTLE", PanelPrimaryButtonLayout()))
+                            actions.CancelPhysicsPlacement();
+                    }
+                    else if (GUILayout.Button("DROP & SETTLE", PanelPrimaryButtonLayout()))
+                    {
+                        actions.DropAndSettleSelection(physicsDropHeightText, physicsKeepUpright);
+                    }
+                }
+            }
+
+            GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
+            if (DrawSectionExpander("INTERACTION POINTS", ref showInteractionSection))
+                DrawInteractionInspector(entity, primary);
+
+            if ((selectedView.Archetype.Capabilities & LevelArchetypeCapabilities.Destructible) != 0)
+            {
+                GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
+                if (DrawSectionExpander("DESTRUCTIBLE DEFAULTS", ref showDestructibleSection))
+                    DrawDestructibleInspector(selectedView, entity);
+            }
+
+            GUILayout.Space(LevelEditorGuiMetrics.SpaceMajor);
             Color previous = GUI.backgroundColor;
             GUI.backgroundColor = LevelEditorTheme.Destructive;
-            if (GUILayout.Button("DELETE", PanelPrimaryButtonLayout()))
+            if (GUILayout.Button("DELETE SELECTION", PanelButtonLayout()))
                 selectionTool.DeleteSelection();
             GUI.backgroundColor = previous;
+        }
 
-            GUILayout.Space(LevelEditorGuiMetrics.SpaceInspectorSection);
-            DrawInteractionInspector(entity, primary);
-            DrawDestructibleInspector(selectedView, entity);
+        private static bool SupportsPhysicsPlacement(LevelEntityView selectedView)
+        {
+            if (selectedView == null || selectedView.GetComponent<Rigidbody>() != null)
+                return false;
+            LevelArchetypeCapabilities blocked = LevelArchetypeCapabilities.PlacementSurface
+                | LevelArchetypeCapabilities.Vehicle;
+            return (selectedView.Archetype.Capabilities & blocked) == 0;
         }
 
         private void DrawRotationPivotPicker(LevelEntity entity, LevelEntityView selectedView)
@@ -271,6 +305,14 @@ namespace GritGud.Presentation.LevelEditing.UI
             }
 
             GUILayout.Space(LevelEditorGuiMetrics.SpaceMajor);
+            if (DrawSectionExpander("LEVEL LAYOUT", ref showLevelLayoutSection))
+                DrawLevelLayoutPanel(state.Document);
+
+            GUILayout.Space(LevelEditorGuiMetrics.SpaceMajor);
+            if (DrawSectionExpander("PLAYABILITY", ref showPlayabilitySection))
+                DrawPlayability();
+
+            GUILayout.Space(LevelEditorGuiMetrics.SpaceMajor);
             if (DrawSectionExpander("PORTABLE FILES", ref showPortableFiles))
             {
                 if (actions.UsesBrowserFileDialog)
@@ -412,7 +454,6 @@ namespace GritGud.Presentation.LevelEditing.UI
             LevelEntity entity,
             LevelSelectionTarget? primary)
         {
-            DrawSectionHeader("INTERACTION POINTS");
             if (entity == null)
             {
                 return;
@@ -470,8 +511,6 @@ namespace GritGud.Presentation.LevelEditing.UI
                 return;
             }
 
-            GUILayout.Space(LevelEditorGuiMetrics.SpaceInspectorSection);
-            DrawSectionHeader("DESTRUCTIBLE DEFAULTS");
             DestructibleInstanceData data = entity?.destructible;
             if (!string.Equals(lastDestructibleEntityId, entity?.id, StringComparison.Ordinal))
             {

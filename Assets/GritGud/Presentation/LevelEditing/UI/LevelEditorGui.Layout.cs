@@ -72,9 +72,11 @@ namespace GritGud.Presentation.LevelEditing.UI
             if (GUILayout.Button("APPLY GRID", PanelApplyButtonLayout()))
                 actions.ConfigureGrid(gridFields);
             GUILayout.Label("The grid is a local editor preference clipped to the authored bounds.");
+        }
 
+        private void DrawEntityArrayPanel()
+        {
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
-            DrawSectionHeader("ENTITY ARRAY");
             GUILayout.Label("Counts include the selected source cell at X1 / Z1.");
             DrawLabeledField("Count X", ref arrayFields.countX);
             DrawLabeledField("Count Z", ref arrayFields.countZ);

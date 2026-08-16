@@ -40,7 +40,10 @@ namespace GritGud.Presentation.LevelEditing.UI
                 shellWasCompact = compact;
                 lastResponsiveInspectorTarget = target;
                 showLeftPanel = true;
-                showInspectorPanel = !compact;
+                showInspectorPanel = target.Kind != LevelEditorInspectorTargetKind.None
+                    || presentationState.InspectorPage == LevelEditorInspectorPage.Level;
+                if (compact && showInspectorPanel)
+                    showLeftPanel = false;
                 return;
             }
 
@@ -55,21 +58,24 @@ namespace GritGud.Presentation.LevelEditing.UI
                 else
                 {
                     showLeftPanel = true;
-                    showInspectorPanel = true;
+                    showInspectorPanel = target.Kind != LevelEditorInspectorTargetKind.None
+                        || presentationState.InspectorPage == LevelEditorInspectorPage.Level;
                 }
             }
 
-            if (compact && !target.Equals(lastResponsiveInspectorTarget))
+            if (!target.Equals(lastResponsiveInspectorTarget))
             {
                 if (target.Kind != LevelEditorInspectorTargetKind.None)
                 {
                     showInspectorPanel = true;
-                    showLeftPanel = false;
+                    if (compact)
+                        showLeftPanel = false;
                 }
                 else if (presentationState.InspectorPage != LevelEditorInspectorPage.Level)
                 {
                     showInspectorPanel = false;
-                    showLeftPanel = true;
+                    if (compact)
+                        showLeftPanel = true;
                 }
             }
 
@@ -301,6 +307,12 @@ namespace GritGud.Presentation.LevelEditing.UI
                         !drawingPreviewMode,
                         () => SetInspectorVisible(!showInspectorPanel),
                         selected: showInspectorPanel),
+                    new LevelEditorMenuItem(
+                        "Level settings",
+                        !drawingPreviewMode,
+                        ShowLevelSettings,
+                        selected: showInspectorPanel
+                            && presentationState.InspectorPage == LevelEditorInspectorPage.Level),
                     LevelEditorMenuItem.Separator,
                     new LevelEditorMenuItem(
                         "Show layout grid",
@@ -350,6 +362,12 @@ namespace GritGud.Presentation.LevelEditing.UI
         {
             gridFields.visible = !gridFields.visible;
             actions.ConfigureGrid(gridFields);
+        }
+
+        private void ShowLevelSettings()
+        {
+            presentationState.ShowInspectorPage(LevelEditorInspectorPage.Level);
+            SetInspectorVisible(true);
         }
 
         private void DrawViewportToolbar(LevelEditorViewState state)

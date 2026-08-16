@@ -25,13 +25,36 @@ namespace GritGud.Presentation.LevelEditing.UI
             paletteScroll = GUILayout.BeginScrollView(paletteScroll);
             GUILayout.BeginHorizontal();
             Color panelToggleColor = GUI.backgroundColor;
-            DrawLeftPanelTab("CREATE", LevelEditorWorkspacePage.Create, panelToggleColor);
-            DrawLeftPanelTab("OUTLINE", LevelEditorWorkspacePage.Outline, panelToggleColor);
-            DrawLeftPanelTab("SCENARIO", LevelEditorWorkspacePage.Scenario, panelToggleColor);
+            DrawWorkspaceTab(
+                "OBJECTS",
+                presentationState.Page == LevelEditorWorkspacePage.Create
+                    && presentationState.CreateMode != LevelEditorCreateMode.Terrain
+                    || presentationState.Page == LevelEditorWorkspacePage.Outline,
+                ShowObjectsWorkspace,
+                panelToggleColor);
+            DrawWorkspaceTab(
+                "TERRAIN",
+                presentationState.Page == LevelEditorWorkspacePage.Create
+                    && presentationState.CreateMode == LevelEditorCreateMode.Terrain,
+                ShowTerrainWorkspace,
+                panelToggleColor);
+            DrawWorkspaceTab(
+                "SCENARIO",
+                presentationState.Page == LevelEditorWorkspacePage.Scenario,
+                () => ShowWorkspace(LevelEditorWorkspacePage.Scenario),
+                panelToggleColor);
             GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
-            DrawLeftPanelTab("ENV", LevelEditorWorkspacePage.Environment, panelToggleColor);
-            DrawLeftPanelTab("DRESSING", LevelEditorWorkspacePage.Dressing, panelToggleColor);
+            DrawWorkspaceTab(
+                "ENVIRONMENT",
+                presentationState.Page == LevelEditorWorkspacePage.Environment,
+                () => ShowWorkspace(LevelEditorWorkspacePage.Environment),
+                panelToggleColor);
+            DrawWorkspaceTab(
+                "DRESSING",
+                presentationState.Page == LevelEditorWorkspacePage.Dressing,
+                () => ShowWorkspace(LevelEditorWorkspacePage.Dressing),
+                panelToggleColor);
             GUI.backgroundColor = panelToggleColor;
             GUILayout.EndHorizontal();
 
@@ -68,18 +91,17 @@ namespace GritGud.Presentation.LevelEditing.UI
                 return;
             }
 
-            DrawCreateModeTabs();
-            switch (presentationState.CreateMode)
+            if (presentationState.CreateMode == LevelEditorCreateMode.Terrain)
             {
-                case LevelEditorCreateMode.Select:
-                    DrawSelectCreatePanel(document);
-                    break;
-                case LevelEditorCreateMode.Terrain:
-                    DrawTerrainCreatePanel(document);
-                    break;
-                default:
+                DrawTerrainCreatePanel(document);
+            }
+            else
+            {
+                DrawObjectModeTabs();
+                if (presentationState.CreateMode == LevelEditorCreateMode.Place)
                     DrawPlacementCreatePanel();
-                    break;
+                else
+                    DrawHierarchy(document);
             }
 
             GUILayout.EndScrollView();
@@ -87,14 +109,13 @@ namespace GritGud.Presentation.LevelEditing.UI
         }
 
 
-        private void DrawCreateModeTabs()
+        private void DrawObjectModeTabs()
         {
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
-            DrawSectionHeader("CREATE MODE");
+            DrawSectionHeader("OBJECT TOOL");
             GUILayout.BeginHorizontal();
             DrawCreateModeTab("SELECT", LevelEditorCreateMode.Select);
             DrawCreateModeTab("PLACE", LevelEditorCreateMode.Place);
-            DrawCreateModeTab("TERRAIN", LevelEditorCreateMode.Terrain);
             GUILayout.EndHorizontal();
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
         }
@@ -126,19 +147,19 @@ namespace GritGud.Presentation.LevelEditing.UI
         }
 
 
-        private void DrawSelectCreatePanel(LevelDocument document)
+        private void ShowObjectsWorkspace()
         {
-            DrawSectionHeader("SELECT AND ARRANGE");
-            GUILayout.Label("Click an object to select it. Ctrl-click adds or removes it.");
-            GUILayout.Label("Drag selected objects in the world; use the Inspector for exact values.");
-            GUI.enabled = selection.Primary != null;
-            if (GUILayout.Button("FRAME SELECTION", PanelButtonLayout()))
-                actions.FrameSelection();
-            GUI.enabled = selection.Targets.Count > 0;
-            if (GUILayout.Button("DUPLICATE SELECTION", PanelButtonLayout()))
-                selectionTool.DuplicateSelection();
-            GUI.enabled = true;
-            DrawLevelLayoutPanel(document);
+            presentationState.ShowCreateMode(LevelEditorCreateMode.Select);
+            toolManager.Activate(SelectionLevelEditorTool.ToolId);
+            SetLeftPanelVisible(true);
+        }
+
+
+        private void ShowTerrainWorkspace()
+        {
+            presentationState.ShowCreateMode(LevelEditorCreateMode.Terrain);
+            terrainPanel.Activate();
+            SetLeftPanelVisible(true);
         }
 
 
@@ -394,15 +415,16 @@ namespace GritGud.Presentation.LevelEditing.UI
         }
 
 
-        private void DrawLeftPanelTab(
+        private void DrawWorkspaceTab(
             string label,
-            LevelEditorWorkspacePage page,
+            bool selected,
+            System.Action show,
             Color previous)
         {
-            if (presentationState.Page == page)
+            if (selected)
                 GUI.backgroundColor = LevelEditorTheme.Active;
             if (GUILayout.Button(label, PanelButtonLayout()))
-                ShowWorkspace(page);
+                show();
             GUI.backgroundColor = previous;
         }
 
@@ -518,11 +540,10 @@ namespace GritGud.Presentation.LevelEditing.UI
         private void DrawHierarchy(LevelDocument document)
         {
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
-            DrawSectionHeader("OUTLINE");
-            GUILayout.Label("Search all authored world and scenario objects.");
+            DrawSectionHeader("OBJECT HIERARCHY");
+            GUILayout.Label("Search world objects and scenario links.");
             hierarchySearch = GUILayout.TextField(hierarchySearch ?? string.Empty);
 
-            DrawPlayability();
             DrawOrganization(document);
 
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);

@@ -9,8 +9,6 @@ namespace GritGud.Presentation.LevelEditing.UI
     {
         private void DrawPlayability()
         {
-            GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
-            DrawSectionHeader("PLAYABILITY CHECK");
             LevelPlayabilityReport report = actions.PlayabilityReport;
             string runLabel = report == null ? "RUN CHECK" : "REFRESH CHECK";
             if (GUILayout.Button(runLabel, PanelPrimaryButtonLayout()))

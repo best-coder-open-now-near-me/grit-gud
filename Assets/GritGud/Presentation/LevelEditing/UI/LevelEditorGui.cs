@@ -101,6 +101,14 @@ namespace GritGud.Presentation.LevelEditing.UI
         private bool showActorTemplates;
         private bool showValidation = true;
         private bool showPortableFiles;
+        private bool showTransformSection = true;
+        private bool showRotationSection;
+        private bool showPhysicsSection;
+        private bool showInteractionSection;
+        private bool showDestructibleSection;
+        private bool showEntityArraySection;
+        private bool showLevelLayoutSection;
+        private bool showPlayabilitySection;
         private bool showLeftPanel = true;
         private bool showInspectorPanel = true;
         private bool shellLayoutInitialized;

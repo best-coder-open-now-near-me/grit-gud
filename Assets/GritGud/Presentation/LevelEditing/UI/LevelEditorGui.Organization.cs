@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using GritGud.Domain.Levels;
+using GritGud.Presentation.LevelEditing.Tools;
 using UnityEngine;
 
 namespace GritGud.Presentation.LevelEditing.UI
@@ -33,7 +34,9 @@ namespace GritGud.Presentation.LevelEditing.UI
         {
             selectedGroupId = groupId ?? string.Empty;
             SyncOrganizationFields(document, force: true);
-            presentationState.ShowPage(LevelEditorWorkspacePage.Outline);
+            presentationState.ShowCreateMode(LevelEditorCreateMode.Select);
+            toolManager.Activate(SelectionLevelEditorTool.ToolId);
+            SetLeftPanelVisible(true);
         }
 
         private void DrawOrganization(LevelDocument document)
