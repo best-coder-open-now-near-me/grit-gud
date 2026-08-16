@@ -210,19 +210,21 @@ initiative participant:
    projectile, explosive, or displacement actions. Player and enemy content
    now owns a costed, capability-checked **Push Off** action that atomically
    moves the exact pinning prop, releases the actor, and projects get-up. The
-   published depot includes a dedicated starting pin fixture, level authoring
+   published depot includes a dedicated pinning fixture, level authoring
    exposes toppling/pinning limits, and automated domain, Unity-contact,
    migration, replay, published-content, AI-turn, and PlayMode restoration
-   coverage is green. Prop-aware lying, struggle, bounded ragdoll, Push Off,
-   and authored get-up animation remain the secondary polish item above; those
+   coverage is green. **Directional placement follow-up complete 2026-08-16:**
+   player Push Off automatically locks the exact pinning prop, then accepts a
+   chosen heading and previews its farthest valid final pose with the same
+   oriented footprint used by commit validation. Swept prop collision, final
+   cover geometry, and the actor's full standing clearance are validated before
+   the chosen prop/release/cost record commits; blocked headings shorten along
+   that ray and fully blocked get-up space reports a dedicated failure. Enemy
+   use deterministically selects among the same validated headings. Replay
+   consumes the resulting exact displacement record without rerunning the
+   choice. Prop-aware lying, struggle, bounded ragdoll, Push Off motion, and
+   authored get-up animation remain secondary presentation polish; those
    visuals consume the committed state rather than deciding it.
-   **First-class follow-up:** replace Push Off's current automatic away/contact-
-   normal direction with a player-selected, previewed heading. Validate the
-   swept toppled-prop footprint and the actor's get-up clearance, preview the
-   exact final prop pose and resulting collider-backed cover, and atomically
-   freeze the chosen direction, prop pose, released actor pose, and costs for
-   replay. Enemy use should choose deterministically among the same validated
-   candidates. Finish this rules/UI boundary before polishing its animation.
 4. **Add authored jump, vault, and mantle traversal.** **Primary slice complete
    2026-08-16:** ordinary movement remains grounded and automatic while schema 15
    traversal links authorize specific jump, vault, or mantle crossings with
@@ -280,15 +282,19 @@ isolated crate, a mixed crate/barrel contact chain, and a three-crate authored
 pile with round-tripped X/Y/Z rotation. Seven stable props in that group are
 registered as displacement subjects, and both player characters' Push and
 Throw actions allow `Topple`. A PlayMode lifecycle test pushes the near-spawn
-barrel, verifies the authoritative and scene pose, projects an earlier replay
+pinning crate, verifies the authoritative and scene pose, projects an earlier replay
 state, then restores the exact live toppled pose. Blast damage from the launcher
 and frag grenade still exercises the same props. Rifles now damage them as
 well: wood takes four integrity per hit and metal takes two. Crates and barrels
 switch to their baked Voronoi chunks on first damage, remove deterministic
 impact-local pieces, and restore their exact live chunk mask after replay. Both
-player characters also
-carry the Combat Knife in hotbar slot 5, so reach rejection, committed wounds,
-diagnostics, and the current procedural strike can be tested now.
+player characters can now choose Push Off direction after a pin: the exact
+pinning prop is locked automatically, a wireframe previews its final
+collider-backed cover, a ring shows required get-up space, and invalid headings
+remain uncommitted. Enemy Push Off chooses deterministically through the same
+validator. Both player characters also carry the Combat Knife in hotbar slot 5,
+so reach rejection, committed wounds, diagnostics, and the current procedural
+strike can be tested now.
 
 The 2026-08-12 review follow-up is complete: silhouette exposure is cached,
 displacement and blast rules use canonical Application paths, scenario content

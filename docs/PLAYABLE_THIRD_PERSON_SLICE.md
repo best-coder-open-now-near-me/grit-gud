@@ -283,6 +283,34 @@ Slope boundaries are covered with real Unity colliders in automated tests:
 rejected. They are intentionally not extra pitched modules in the published
 yard.
 
+## Directional Push Off verification
+
+The south-yard `crate-pin-demo` starts directly between Mara and Oren so the
+full pin-and-escape flow can be exercised without editing the level.
+
+1. With Mara selected, activate hotbar slot `4` (`Displace`), choose `Push`,
+   point at `crate-pin-demo`, and confirm. The intent-derived push sends the
+   crate toward Oren; its toppled footprint must establish the authoritative
+   pin.
+2. Press `Tab` to select Oren, activate slot `4`, and choose `Push Off`. The
+   exact pinning crate must lock immediately—there is no second prop-selection
+   click—and the prompt must change to directional aiming.
+3. Move the pointer around Oren. The line/ring and oriented crate wireframe are
+   green for a legal heading and red when the swept path, final prop footprint,
+   or standing get-up volume is blocked. The wireframe is the exact final
+   collider-backed cover pose, not an animation estimate.
+4. Confirm a green heading. Oren must become unpinned, the crate must remain at
+   the previewed pose as usable collision/cover, and the action must spend its
+   authored cost exactly once. Canceling or clicking while red must spend
+   nothing and leave the pin intact.
+5. Open replay and scrub across the Push Off. Replay must reproduce the exact
+   chosen prop and actor state; exiting replay must restore the live pose,
+   equipment, wounds, and animation presentation.
+
+Enemies do not aim a cursor. A pinned enemy evaluates the same fixed heading
+set and deterministically commits the farthest legal candidate, with stable
+tie ordering.
+
 ## Current next action
 
 Phase 3 acceptance remains complete after WebGL traversal, turn-cycle,
@@ -313,6 +341,9 @@ allowance and re-query the world once after every responder has acted.
 Authored automatic traversal is now complete through schema, planning,
 clearance, playback, replay, animation, published connected/disconnected
 fixtures, and EditMode/PlayMode lifecycle coverage. The next production slice
-is close-quarters presentation: authored knife action timing, reactions,
-equipment transitions, IK, interruption, replay, and restoration, followed by
-the bounded incapacitation-to-ragdoll presentation experiment.
+is close-quarters presentation. Directional Push Off now freezes a player-
+chosen cover placement and validates the actor's get-up space; its remaining
+lying, struggle, push, get-up, and bounded ragdoll work is presentation polish.
+Next comes authored knife action timing, reactions, equipment transitions, IK,
+interruption, replay, and restoration, followed by the bounded
+incapacitation-to-ragdoll presentation experiment.

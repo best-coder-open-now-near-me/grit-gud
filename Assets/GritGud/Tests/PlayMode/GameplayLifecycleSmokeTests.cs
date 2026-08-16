@@ -107,6 +107,7 @@ namespace GritGud.PlayMode.Tests
             bootstrap.ReturnToMenu();
             bootstrap.PlayMainLevel();
             yield return WaitForMode(ApplicationMode.Gameplay);
+            yield return new WaitForFixedUpdate();
 
             GameplayController gameplay =
                 bootstrap.GetComponent<GameplayController>();
@@ -114,15 +115,27 @@ namespace GritGud.PlayMode.Tests
                 bootstrap.GetComponent<GameplayDisplacementController>();
             GameplayDestructibleController destructibles =
                 bootstrap.GetComponent<GameplayDestructibleController>();
-            const string propId = "barrel-yard-01";
+            const string propId = "crate-pin-demo";
             DestructiblePropSnapshot before =
                 destructibles.Session.GetProp(propId);
             Transform prop = gameplay.WorldRegistry
                 .GetLevelEntity(propId).transform;
-            Vector3 liveDestination = new Vector3(0f, 0f, -8.75f);
+            string actingActorId =
+                gameplay.PartyControl.Snapshot.SelectedActorId;
+            DisplacementDestinationEvaluation destination =
+                displacement.Session.EvaluateIntentDestination(
+                    actingActorId,
+                    "close-quarters.push",
+                    propId);
+            Assert.That(destination.IsEligible, Is.True,
+                destination.Failure.ToString());
+            Vector3 liveDestination = new Vector3(
+                destination.Destination.X,
+                destination.Destination.Y,
+                destination.Destination.Z);
 
             bool resolved = displacement.TryDisplaceSubject(
-                gameplay.PartyControl.Snapshot.SelectedActorId,
+                actingActorId,
                 "close-quarters.push",
                 propId,
                 liveDestination,
@@ -131,8 +144,8 @@ namespace GritGud.PlayMode.Tests
             yield return null;
 
             Assert.That(resolved, Is.True, failure.ToString());
-            Assert.That(record.AppliedResults,
-                Is.EqualTo(DisplacementResultPolicies.Topple));
+            Assert.That(record.AppliedResults.HasFlag(
+                DisplacementResultPolicies.Topple), Is.True);
             Assert.That(record.ResultingPropState.Posture,
                 Is.EqualTo(DestructiblePropPosture.Toppled));
             Assert.That(destructibles.Session.GetProp(propId).Posture,
@@ -159,6 +172,95 @@ namespace GritGud.PlayMode.Tests
             Assert.That(prop.position, Is.EqualTo(expectedPosition));
             Assert.That(Quaternion.Angle(prop.rotation, expectedRotation),
                 Is.LessThan(0.01f));
+
+            bootstrap.ReturnToMenu();
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator PublishedPinFixtureEntersDirectionalPushOffAndCommitsChoice()
+        {
+            EnsureBootstrap();
+            bootstrap.ReturnToMenu();
+            bootstrap.PlayMainLevel();
+            yield return WaitForMode(ApplicationMode.Gameplay);
+            yield return new WaitForFixedUpdate();
+
+            GameplayController gameplay =
+                bootstrap.GetComponent<GameplayController>();
+            GameplayDisplacementController displacement =
+                bootstrap.GetComponent<GameplayDisplacementController>();
+            const string actorId = "oren-vale";
+            const string propId = "crate-pin-demo";
+            Transform actor = gameplay.WorldRegistry.GetActor(actorId).Transform;
+            Transform prop = gameplay.WorldRegistry.GetLevelEntity(propId)
+                .transform;
+            GameplayPosition actorPosition = gameplay.Session.GetActor(
+                actorId).Pose.Position;
+            var pinDestination = new Vector3(
+                actorPosition.X + 0.5f,
+                actorPosition.Y,
+                actorPosition.Z + 0.3f);
+
+            Assert.That(displacement.TryDisplaceSubject(
+                "player",
+                "close-quarters.push",
+                propId,
+                pinDestination,
+                out DisplacementRecord pinRecord,
+                out DisplacementResolutionFailure pinFailure),
+                Is.True,
+                pinFailure.ToString());
+            yield return null;
+            Assert.That(pinRecord.PinTransition, Is.Not.Null);
+            Assert.That(pinRecord.PinTransition.EstablishesPin, Is.True);
+            Assert.That(pinRecord.PinTransition.ActorId, Is.EqualTo(actorId));
+            Assert.That(gameplay.Session.GetActor(actorId).IsPinned, Is.True);
+
+            displacement.SetActor(actorId);
+            Assert.That(displacement.TryToggleTargeting(
+                "close-quarters.push-off"), Is.True);
+            Assert.That(displacement.IsChoosingPushOffDirection, Is.True);
+            Assert.That(displacement.LockedSubjectId, Is.EqualTo(propId));
+            Assert.That(displacement.CurrentWarningHint.Text,
+                Does.Contain("AIM PUSH-OFF DIRECTION"));
+            Assert.That(displacement.CancelTargeting(), Is.True);
+
+            GameplayPosition propOrigin = new GameplayPosition(
+                prop.position.x,
+                prop.position.y,
+                prop.position.z);
+            DisplacementDestinationEvaluation choice =
+                displacement.Session.EvaluateDirectionalPushOffDestination(
+                    actorId,
+                    "close-quarters.push-off",
+                    propId,
+                    new GameplayPosition(
+                        propOrigin.X - 10f,
+                        propOrigin.Y,
+                        propOrigin.Z));
+            Assert.That(choice.IsEligible, Is.True, choice.Failure.ToString());
+            Assert.That(choice.Destination.X, Is.LessThan(propOrigin.X));
+            Assert.That(displacement.TryDisplaceSubject(
+                actorId,
+                "close-quarters.push-off",
+                propId,
+                new Vector3(
+                    choice.Destination.X,
+                    choice.Destination.Y,
+                    choice.Destination.Z),
+                out DisplacementRecord releaseRecord,
+                out DisplacementResolutionFailure releaseFailure),
+                Is.True,
+                releaseFailure.ToString());
+            yield return null;
+
+            Assert.That(releaseRecord.PinTransition.ReleasesPin, Is.True);
+            Assert.That(gameplay.Session.GetActor(actorId).IsPinned, Is.False);
+            Assert.That(prop.position.x,
+                Is.EqualTo(choice.Destination.X).Within(0.001f));
+            Assert.That(prop.position.z,
+                Is.EqualTo(choice.Destination.Z).Within(0.001f));
 
             bootstrap.ReturnToMenu();
             yield return null;

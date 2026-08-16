@@ -74,25 +74,19 @@ namespace GritGud.Presentation.Gameplay
             float destinationBottom;
             if (resultingPropState != null)
             {
-                Bounds localBounds = ResolveLocalBounds(subjectRoot);
-                Quaternion resultingRotation = Quaternion.Euler(
-                    resultingPropState.Pose.PitchDegrees,
-                    resultingPropState.Pose.YawDegrees,
-                    resultingPropState.Pose.RollDegrees);
-                Vector3 scale = Abs(subjectRoot.lossyScale);
-                Vector3 halfExtents = Vector3.Scale(
-                    localBounds.extents,
-                    scale);
-                Vector3 center = to
-                    + (resultingRotation
-                        * Vector3.Scale(localBounds.center, scale));
-                destinationBottom = center.y
-                    - ProjectedVerticalExtent(halfExtents, resultingRotation);
-                destinationCenter = center;
+                UnityDisplacementOrientedBounds bounds =
+                    UnityDisplacementGeometry.ResolveOrientedBounds(
+                        subjectRoot,
+                        resultingPropState.Pose);
+                destinationBottom = bounds.Center.y
+                    - UnityDisplacementGeometry.ProjectedVerticalExtent(
+                        bounds.HalfExtents,
+                        bounds.Rotation);
+                destinationCenter = bounds.Center;
                 destinationOverlaps = Physics.OverlapBox(
-                    center,
-                    Shrink(halfExtents),
-                    resultingRotation,
+                    bounds.Center,
+                    UnityDisplacementGeometry.Shrink(bounds.HalfExtents),
+                    bounds.Rotation,
                     Physics.DefaultRaycastLayers,
                     QueryTriggerInteraction.Ignore);
             }
@@ -113,6 +107,16 @@ namespace GritGud.Presentation.Gameplay
                 Transform overlapTransform = overlap != null
                     ? overlap.transform
                     : null;
+                if (BelongsTo(overlapTransform, actorRoot))
+                {
+                    if (request.ActionKind == DisplacementActionKind.PushOff)
+                    {
+                        return DisplacementPathValidation.Blocked(
+                            DisplacementPathValidation
+                                .GetUpSpaceBlockedFailureCode);
+                    }
+                    continue;
+                }
                 if (!BelongsTo(overlapTransform, subjectRoot)
                     && !BelongsTo(overlapTransform, actorRoot))
                 {
@@ -144,6 +148,13 @@ namespace GritGud.Presentation.Gameplay
                     return DisplacementPathValidation.Blocked(
                         "displacement.destination-blocked");
                 }
+            }
+
+            if (request.ActionKind == DisplacementActionKind.PushOff
+                && !HasGetUpClearance(actorRoot, subjectRoot))
+            {
+                return DisplacementPathValidation.Blocked(
+                    DisplacementPathValidation.GetUpSpaceBlockedFailureCode);
             }
 
             return contacts.Count == 0
@@ -220,9 +231,156 @@ namespace GritGud.Presentation.Gameplay
             return Mathf.Clamp(radius, MinimumRadius, MaximumRadius);
         }
 
+        private static bool HasGetUpClearance(
+            Transform actorRoot,
+            Transform movingSubjectRoot)
+        {
+            CharacterController controller =
+                actorRoot.GetComponent<CharacterController>();
+            if (controller == null)
+                return true;
+
+            Vector3 scale = actorRoot.lossyScale;
+            float radiusScale = Mathf.Max(
+                Mathf.Abs(scale.x),
+                Mathf.Abs(scale.z));
+            float heightScale = Mathf.Abs(scale.y);
+            float radius = controller.radius * radiusScale;
+            float height = Mathf.Max(
+                controller.height * heightScale,
+                radius * 2f);
+            float collisionRadius = Mathf.Max(
+                radius * 0.75f,
+                radius - (controller.skinWidth * 0.5f));
+            Vector3 center = actorRoot.position
+                + (actorRoot.rotation
+                    * Vector3.Scale(controller.center, scale));
+            float halfCylinder = Mathf.Max(
+                0f,
+                (height * 0.5f) - radius);
+            Vector3 top = center + (Vector3.up * halfCylinder);
+            Vector3 bottom = center - (Vector3.up * halfCylinder);
+            float standingBottom = bottom.y - collisionRadius;
+            Collider[] overlaps = Physics.OverlapCapsule(
+                top,
+                bottom,
+                collisionRadius,
+                Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Ignore);
+            foreach (Collider overlap in overlaps)
+            {
+                Transform overlapTransform = overlap != null
+                    ? overlap.transform
+                    : null;
+                if (BelongsTo(overlapTransform, actorRoot)
+                    || BelongsTo(overlapTransform, movingSubjectRoot))
+                {
+                    continue;
+                }
+
+                if (overlap != null
+                    && overlap.bounds.max.y
+                        <= standingBottom + GroundClearance)
+                    continue;
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool BelongsTo(Transform candidate, Transform root) =>
+            candidate != null
+            && root != null
+            && (candidate == root || candidate.IsChildOf(root));
+
+        private static Vector3 ToVector3(GameplayPosition position) =>
+            new Vector3(position.X, position.Y, position.Z);
+
+        private static GameplayPosition ToGameplayPosition(Vector3 value) =>
+            new GameplayPosition(value.x, value.y, value.z);
+    }
+
+    internal readonly struct UnityDisplacementOrientedBounds
+    {
+        public UnityDisplacementOrientedBounds(
+            Vector3 center,
+            Vector3 halfExtents,
+            Quaternion rotation)
+        {
+            Center = center;
+            HalfExtents = halfExtents;
+            Rotation = rotation;
+        }
+
+        public Vector3 Center { get; }
+        public Vector3 HalfExtents { get; }
+        public Quaternion Rotation { get; }
+    }
+
+    internal static class UnityDisplacementGeometry
+    {
+        private const float MinimumRadius = 0.15f;
+        private const float GroundClearance = 0.04f;
+
+        public static UnityDisplacementOrientedBounds ResolveOrientedBounds(
+            Transform subjectRoot,
+            GameplayPropPose pose)
+        {
+            if (subjectRoot == null)
+                throw new ArgumentNullException(nameof(subjectRoot));
+            Quaternion rotation = Quaternion.Euler(
+                pose.PitchDegrees,
+                pose.YawDegrees,
+                pose.RollDegrees);
+            return ResolveOrientedBounds(
+                subjectRoot,
+                new Vector3(
+                    pose.Position.X,
+                    pose.Position.Y,
+                    pose.Position.Z),
+                rotation);
+        }
+
+        public static UnityDisplacementOrientedBounds ResolveOrientedBounds(
+            Transform subjectRoot,
+            Vector3 rootPosition,
+            Quaternion rotation)
+        {
+            if (subjectRoot == null)
+                throw new ArgumentNullException(nameof(subjectRoot));
+            Vector3 scale = Abs(subjectRoot.lossyScale);
+            Bounds localBounds = ResolveLocalBounds(subjectRoot);
+            Vector3 halfExtents = Vector3.Scale(localBounds.extents, scale);
+            Vector3 center = rootPosition
+                + (rotation * Vector3.Scale(localBounds.center, scale));
+            return new UnityDisplacementOrientedBounds(
+                center,
+                halfExtents,
+                rotation);
+        }
+
+        public static float ProjectedVerticalExtent(
+            Vector3 halfExtents,
+            Quaternion rotation)
+        {
+            Vector3 right = rotation * Vector3.right;
+            Vector3 up = rotation * Vector3.up;
+            Vector3 forward = rotation * Vector3.forward;
+            return Mathf.Abs(right.y) * halfExtents.x
+                + Mathf.Abs(up.y) * halfExtents.y
+                + Mathf.Abs(forward.y) * halfExtents.z;
+        }
+
+        public static Vector3 Shrink(Vector3 halfExtents) =>
+            new Vector3(
+                Mathf.Max(0.01f, halfExtents.x - GroundClearance),
+                Mathf.Max(0.01f, halfExtents.y - GroundClearance),
+                Mathf.Max(0.01f, halfExtents.z - GroundClearance));
+
         private static Bounds ResolveLocalBounds(Transform subjectRoot)
         {
-            Collider[] colliders = subjectRoot.GetComponentsInChildren<Collider>();
+            Collider[] colliders =
+                subjectRoot.GetComponentsInChildren<Collider>();
             bool initialized = false;
             Bounds localBounds = default(Bounds);
             foreach (Collider subjectCollider in colliders)
@@ -246,7 +404,9 @@ namespace GritGud.Presentation.Gameplay
                                     z == 0 ? min.z : max.z));
                             if (!initialized)
                             {
-                                localBounds = new Bounds(localPoint, Vector3.zero);
+                                localBounds = new Bounds(
+                                    localPoint,
+                                    Vector3.zero);
                                 initialized = true;
                             }
                             else
@@ -260,19 +420,9 @@ namespace GritGud.Presentation.Gameplay
 
             return initialized
                 ? localBounds
-                : new Bounds(Vector3.up * MinimumRadius, Vector3.one * MinimumRadius * 2f);
-        }
-
-        private static float ProjectedVerticalExtent(
-            Vector3 halfExtents,
-            Quaternion rotation)
-        {
-            Vector3 right = rotation * Vector3.right;
-            Vector3 up = rotation * Vector3.up;
-            Vector3 forward = rotation * Vector3.forward;
-            return Mathf.Abs(right.y) * halfExtents.x
-                + Mathf.Abs(up.y) * halfExtents.y
-                + Mathf.Abs(forward.y) * halfExtents.z;
+                : new Bounds(
+                    Vector3.up * MinimumRadius,
+                    Vector3.one * MinimumRadius * 2f);
         }
 
         private static Vector3 Abs(Vector3 value) =>
@@ -280,22 +430,5 @@ namespace GritGud.Presentation.Gameplay
                 Mathf.Abs(value.x),
                 Mathf.Abs(value.y),
                 Mathf.Abs(value.z));
-
-        private static Vector3 Shrink(Vector3 halfExtents) =>
-            new Vector3(
-                Mathf.Max(0.01f, halfExtents.x - GroundClearance),
-                Mathf.Max(0.01f, halfExtents.y - GroundClearance),
-                Mathf.Max(0.01f, halfExtents.z - GroundClearance));
-
-        private static bool BelongsTo(Transform candidate, Transform root) =>
-            candidate != null
-            && root != null
-            && (candidate == root || candidate.IsChildOf(root));
-
-        private static Vector3 ToVector3(GameplayPosition position) =>
-            new Vector3(position.X, position.Y, position.Z);
-
-        private static GameplayPosition ToGameplayPosition(Vector3 value) =>
-            new GameplayPosition(value.x, value.y, value.z);
     }
 }

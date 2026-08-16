@@ -26,10 +26,14 @@ namespace GritGud.Application.Gameplay
         ActorNotPinned,
         NotPinningActor,
         SubjectPinned,
+        GetUpSpaceBlocked,
     }
 
     public readonly struct DisplacementPathValidation
     {
+        public const string GetUpSpaceBlockedFailureCode =
+            "displacement.get-up-space-blocked";
+
         private DisplacementPathValidation(
             bool accepted,
             string failureCode,
@@ -127,6 +131,17 @@ namespace GritGud.Application.Gameplay
     {
         private const int IntentDestinationSearchIterations = 10;
         private const float MinimumIntentDisplacement = 0.05f;
+        private static readonly float[] PushOffCandidateOffsetsDegrees =
+        {
+            0f,
+            45f,
+            -45f,
+            90f,
+            -90f,
+            135f,
+            -135f,
+            180f,
+        };
         private readonly GameplaySession gameplay;
         private readonly DestructiblePropSession destructibles;
         private readonly Dictionary<string, DisplacementSubjectDefinition>
@@ -735,6 +750,126 @@ namespace GritGud.Application.Gameplay
 
             directionX /= directionMagnitude;
             directionZ /= directionMagnitude;
+            if (availability.Action.Intent == DisplacementActionKind.PushOff)
+            {
+                DisplacementDestinationEvaluation first = null;
+                DisplacementDestinationEvaluation best = null;
+                foreach (float offsetDegrees in PushOffCandidateOffsetsDegrees)
+                {
+                    double radians = offsetDegrees * (Math.PI / 180d);
+                    float cosine = (float)Math.Cos(radians);
+                    float sine = (float)Math.Sin(radians);
+                    float candidateX = (directionX * cosine)
+                        - (directionZ * sine);
+                    float candidateZ = (directionX * sine)
+                        + (directionZ * cosine);
+                    DisplacementDestinationEvaluation candidate =
+                        EvaluateIntentDestinationInDirection(
+                            actorId,
+                            actionId,
+                            subjectId,
+                            target.Subject,
+                            origin,
+                            candidateX,
+                            candidateZ);
+                    first = first ?? candidate;
+                    if (candidate.IsEligible
+                        && (best == null
+                            || candidate.Distance > best.Distance))
+                    {
+                        best = candidate;
+                    }
+                }
+                return best ?? first;
+            }
+
+            return EvaluateIntentDestinationInDirection(
+                actorId,
+                actionId,
+                subjectId,
+                target.Subject,
+                origin,
+                directionX,
+                directionZ);
+        }
+
+        public DisplacementDestinationEvaluation
+            EvaluateDirectionalPushOffDestination(
+                string actorId,
+                string actionId,
+                string subjectId,
+                GameplayPosition directionTarget)
+        {
+            RequireId(actorId, nameof(actorId));
+            RequireId(actionId, nameof(actionId));
+            RequireId(subjectId, nameof(subjectId));
+
+            DisplacementActionAvailability availability =
+                EvaluateActionAvailability(actorId, actionId);
+            DisplacementTargetEvaluation target = EvaluateTarget(
+                actorId,
+                actionId,
+                subjectId);
+            if (!availability.IsAvailable || !target.IsEligible
+                || !TryGetSubjectPosition(
+                    target.Subject,
+                    out GameplayPosition origin))
+            {
+                GameplayPosition unavailableDestination = target.Subject != null
+                    && TryGetSubjectPosition(
+                        target.Subject,
+                        out GameplayPosition unavailableOrigin)
+                            ? unavailableOrigin
+                            : default(GameplayPosition);
+                return EvaluateDestination(
+                    actorId,
+                    actionId,
+                    subjectId,
+                    unavailableDestination);
+            }
+            if (availability.Action.Intent != DisplacementActionKind.PushOff)
+            {
+                throw new InvalidOperationException(
+                    "Directional intent is reserved for Push Off actions.");
+            }
+
+            float directionX = directionTarget.X - origin.X;
+            float directionZ = directionTarget.Z - origin.Z;
+            float magnitude = (float)Math.Sqrt(
+                (directionX * directionX) + (directionZ * directionZ));
+            if (magnitude <= 0f)
+            {
+                return EvaluateDestination(
+                    actorId,
+                    actionId,
+                    subjectId,
+                    origin);
+            }
+
+            return EvaluateIntentDestinationInDirection(
+                actorId,
+                actionId,
+                subjectId,
+                target.Subject,
+                origin,
+                directionX / magnitude,
+                directionZ / magnitude);
+        }
+
+        private DisplacementDestinationEvaluation
+            EvaluateIntentDestinationInDirection(
+                string actorId,
+                string actionId,
+                string subjectId,
+                DisplacementSubjectDefinition subject,
+                GameplayPosition origin,
+                float directionX,
+                float directionZ)
+        {
+            DisplacementActionDefinition action = EvaluateActionAvailability(
+                actorId,
+                actionId).Action;
+            float maximumDistance = action.GetMaximumDistance(subject);
             DisplacementDestinationEvaluation maximum =
                 EvaluateDestinationAtDistance(
                     actorId,
@@ -743,16 +878,15 @@ namespace GritGud.Application.Gameplay
                     origin,
                     directionX,
                     directionZ,
-                    availability.Action.MaximumDistance);
+                    maximumDistance);
             if (maximum.IsEligible
-                || maximum.Failure !=
-                    DisplacementResolutionFailure.DestinationBlocked)
+                || !IsSpatialDestinationFailure(maximum.Failure))
             {
                 return maximum;
             }
 
             float acceptedDistance = 0f;
-            float blockedDistance = availability.Action.MaximumDistance;
+            float blockedDistance = maximumDistance;
             DisplacementDestinationEvaluation accepted = null;
             for (int iteration = 0;
                 iteration < IntentDestinationSearchIterations;
@@ -774,8 +908,7 @@ namespace GritGud.Application.Gameplay
                     accepted = candidate;
                     acceptedDistance = candidateDistance;
                 }
-                else if (candidate.Failure ==
-                    DisplacementResolutionFailure.DestinationBlocked)
+                else if (IsSpatialDestinationFailure(candidate.Failure))
                 {
                     blockedDistance = candidateDistance;
                 }
@@ -790,6 +923,11 @@ namespace GritGud.Application.Gameplay
                     ? accepted
                     : maximum;
         }
+
+        private static bool IsSpatialDestinationFailure(
+            DisplacementResolutionFailure failure) =>
+            failure == DisplacementResolutionFailure.DestinationBlocked
+            || failure == DisplacementResolutionFailure.GetUpSpaceBlocked;
 
         private DisplacementDestinationEvaluation
             EvaluateDestinationAtDistance(
@@ -1564,7 +1702,13 @@ namespace GritGud.Application.Gameplay
                 resultingPropState);
             if (!path.Accepted)
             {
-                failure = DisplacementResolutionFailure.DestinationBlocked;
+                failure = string.Equals(
+                        path.FailureCode,
+                        DisplacementPathValidation
+                            .GetUpSpaceBlockedFailureCode,
+                        StringComparison.Ordinal)
+                    ? DisplacementResolutionFailure.GetUpSpaceBlocked
+                    : DisplacementResolutionFailure.DestinationBlocked;
                 return false;
             }
 

@@ -248,6 +248,160 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void PlayerChosenPushOffDirectionFreezesFarthestValidDestination()
+        {
+            GameplayDisplacementSession session = CreateSession(
+                new PinThenReleasePaths(),
+                new FixedRolls(),
+                out GameplaySession gameplay,
+                out _,
+                playerPush: PinningPush,
+                propToppling: new PropTopplingDefinition(0f, 90f, 0.5f),
+                propPinning: new PropPinningDefinition(90f),
+                targetActions: new[] { PushOff });
+            Assert.That(session.TryDisplaceAction(
+                "player",
+                PinningPush.Id,
+                "crate",
+                new GameplayPosition(0f, 0f, 2f),
+                out _,
+                out _,
+                out _), Is.True);
+
+            DisplacementDestinationEvaluation preview =
+                session.EvaluateDirectionalPushOffDestination(
+                    "target",
+                    PushOff.Id,
+                    "crate",
+                    new GameplayPosition(10f, 0.5f, 2f));
+
+            Assert.That(preview.IsEligible, Is.True);
+            Assert.That(preview.Origin,
+                Is.EqualTo(new GameplayPosition(0f, 0.5f, 2f)));
+            Assert.That(preview.Destination,
+                Is.EqualTo(new GameplayPosition(3f, 0.5f, 2f)));
+            Assert.That(session.Records.Count, Is.EqualTo(1));
+            Assert.That(session.TryDisplaceAction(
+                "target",
+                PushOff.Id,
+                "crate",
+                preview.Destination,
+                out _,
+                out DisplacementRecord record,
+                out _), Is.True);
+            Assert.That(record.Request.Destination,
+                Is.EqualTo(preview.Destination));
+            Assert.That(record.PinTransition.ReleasesPin, Is.True);
+            Assert.That(gameplay.GetActor("target").IsPinned, Is.False);
+        }
+
+        [Test]
+        public void DirectionalPushOffShortensAlongTheChosenHeading()
+        {
+            GameplayDisplacementSession session = CreateSession(
+                new PinThenBlockPushOffBeyondDistance(1.25f),
+                new FixedRolls(),
+                out _,
+                out _,
+                playerPush: PinningPush,
+                propToppling: new PropTopplingDefinition(0f, 90f, 0.5f),
+                propPinning: new PropPinningDefinition(90f),
+                targetActions: new[] { PushOff });
+            Assert.That(session.TryDisplaceAction(
+                "player",
+                PinningPush.Id,
+                "crate",
+                new GameplayPosition(0f, 0f, 2f),
+                out _,
+                out _,
+                out _), Is.True);
+
+            DisplacementDestinationEvaluation preview =
+                session.EvaluateDirectionalPushOffDestination(
+                    "target",
+                    PushOff.Id,
+                    "crate",
+                    new GameplayPosition(10f, 0.5f, 2f));
+
+            Assert.That(preview.IsEligible, Is.True);
+            Assert.That(preview.Distance, Is.EqualTo(1.25f).Within(0.01f));
+            Assert.That(preview.Destination.X,
+                Is.EqualTo(1.25f).Within(0.01f));
+            Assert.That(preview.Destination.Z, Is.EqualTo(2f));
+        }
+
+        [Test]
+        public void EnemyPushOffDeterministicallySelectsAnAlternateLegalHeading()
+        {
+            GameplayDisplacementSession session = CreateSession(
+                new PinThenRequirePositivePushOffX(),
+                new FixedRolls(),
+                out _,
+                out _,
+                playerPush: PinningPush,
+                propToppling: new PropTopplingDefinition(0f, 90f, 0.5f),
+                propPinning: new PropPinningDefinition(90f),
+                targetActions: new[] { PushOff });
+            Assert.That(session.TryDisplaceAction(
+                "player",
+                PinningPush.Id,
+                "crate",
+                new GameplayPosition(0f, 0f, 2f),
+                out _,
+                out _,
+                out _), Is.True);
+
+            DisplacementDestinationEvaluation first =
+                session.EvaluateIntentDestination(
+                    "target",
+                    PushOff.Id,
+                    "crate");
+            DisplacementDestinationEvaluation second =
+                session.EvaluateIntentDestination(
+                    "target",
+                    PushOff.Id,
+                    "crate");
+
+            Assert.That(first.IsEligible, Is.True);
+            Assert.That(first.Destination.X, Is.GreaterThan(0.5f));
+            Assert.That(second.Destination, Is.EqualTo(first.Destination));
+        }
+
+        [Test]
+        public void DirectionalPushOffReportsBlockedGetUpSpace()
+        {
+            GameplayDisplacementSession session = CreateSession(
+                new PinThenBlockGetUp(),
+                new FixedRolls(),
+                out _,
+                out _,
+                playerPush: PinningPush,
+                propToppling: new PropTopplingDefinition(0f, 90f, 0.5f),
+                propPinning: new PropPinningDefinition(90f),
+                targetActions: new[] { PushOff });
+            Assert.That(session.TryDisplaceAction(
+                "player",
+                PinningPush.Id,
+                "crate",
+                new GameplayPosition(0f, 0f, 2f),
+                out _,
+                out _,
+                out _), Is.True);
+
+            DisplacementDestinationEvaluation preview =
+                session.EvaluateDirectionalPushOffDestination(
+                    "target",
+                    PushOff.Id,
+                    "crate",
+                    new GameplayPosition(10f, 0.5f, 2f));
+
+            Assert.That(preview.IsEligible, Is.False);
+            Assert.That(preview.Failure,
+                Is.EqualTo(
+                    DisplacementResolutionFailure.GetUpSpaceBlocked));
+        }
+
+        [Test]
         public void PinnedEnemyCommitsPushOffDecisionBeforeResumingItsTurn()
         {
             GameplayDisplacementSession session = CreateSession(
@@ -1557,6 +1711,68 @@ namespace GritGud.Domain.Tests.Gameplay
                             0.1f),
                     });
         }
+
+        private sealed class PinThenBlockPushOffBeyondDistance :
+            IDisplacementPathValidator
+        {
+            private readonly float maximumDistance;
+
+            public PinThenBlockPushOffBeyondDistance(float acceptedDistance)
+            {
+                maximumDistance = acceptedDistance;
+            }
+
+            public DisplacementPathValidation Validate(
+                DisplacementRequest request,
+                GameplayPosition origin,
+                PropDisplacementState resultingPropState)
+            {
+                if (request.ActionKind != DisplacementActionKind.PushOff)
+                    return PinContact();
+                return origin.DistanceTo(request.Destination) <= maximumDistance
+                    ? DisplacementPathValidation.Allowed()
+                    : DisplacementPathValidation.Blocked("test.blocked");
+            }
+        }
+
+        private sealed class PinThenRequirePositivePushOffX :
+            IDisplacementPathValidator
+        {
+            public DisplacementPathValidation Validate(
+                DisplacementRequest request,
+                GameplayPosition origin,
+                PropDisplacementState resultingPropState)
+            {
+                if (request.ActionKind != DisplacementActionKind.PushOff)
+                    return PinContact();
+                return request.Destination.X > 0.5f
+                    ? DisplacementPathValidation.Allowed()
+                    : DisplacementPathValidation.Blocked("test.blocked");
+            }
+        }
+
+        private sealed class PinThenBlockGetUp : IDisplacementPathValidator
+        {
+            public DisplacementPathValidation Validate(
+                DisplacementRequest request,
+                GameplayPosition origin,
+                PropDisplacementState resultingPropState) =>
+                request.ActionKind == DisplacementActionKind.PushOff
+                    ? DisplacementPathValidation.Blocked(
+                        DisplacementPathValidation
+                            .GetUpSpaceBlockedFailureCode)
+                    : PinContact();
+        }
+
+        private static DisplacementPathValidation PinContact() =>
+            DisplacementPathValidation.Allowed(new[]
+            {
+                new DisplacementContactEvidence(
+                    "target",
+                    new GameplayPosition(0.5f, 0.5f, 1.75f),
+                    new GameplayPosition(0f, 1f, 0f),
+                    0.1f),
+            });
 
         private sealed class BlockPaths : IDisplacementPathValidator
         {

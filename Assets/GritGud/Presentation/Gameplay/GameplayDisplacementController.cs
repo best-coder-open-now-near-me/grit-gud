@@ -54,16 +54,21 @@ namespace GritGud.Presentation.Gameplay
             : new GameplayWarningHintModel(
                 "gameplay.displacement",
                 targetingPhase == TargetingPhase.Subject
-                    ? UsesIntentDestination()
+                    ? UsesAutomaticIntentDestination()
                         ? "AIM AT A VALID SUBJECT - CLICK TO CONFIRM - SELECT "
                             + GetSelectedActionDisplayName().ToUpperInvariant()
                             + " AGAIN OR ESC TO CANCEL"
                         : "AIM AT A VALID SUBJECT - CLICK TO SELECT - SELECT "
                             + GetSelectedActionDisplayName().ToUpperInvariant()
                             + " AGAIN OR ESC TO CANCEL"
-                    : "AIM AT A DESTINATION - CLICK TO CONFIRM - SELECT "
-                        + GetSelectedActionDisplayName().ToUpperInvariant()
-                        + " AGAIN OR ESC TO CANCEL",
+                    : IsPushOffAction()
+                        ? "AIM PUSH-OFF DIRECTION - GREEN PROP OUTLINE MARKS "
+                            + "VALID GET-UP COVER - CLICK TO CONFIRM - SELECT "
+                            + GetSelectedActionDisplayName().ToUpperInvariant()
+                            + " AGAIN OR ESC TO CANCEL"
+                        : "AIM AT A DESTINATION - CLICK TO CONFIRM - SELECT "
+                            + GetSelectedActionDisplayName().ToUpperInvariant()
+                            + " AGAIN OR ESC TO CANCEL",
                 80);
 
         public bool IsPointerTargetValid =>
@@ -78,7 +83,7 @@ namespace GritGud.Presentation.Gameplay
                     ? string.Empty
                     : FormatDestinationFailure(destinationEvaluation)
             : IsPointerTargetValid
-                ? UsesIntentDestination()
+                ? UsesAutomaticIntentDestination()
                     && destinationEvaluation?.IsEligible != true
                         ? FormatDestinationFailure(destinationEvaluation)
                         : string.Empty
@@ -89,6 +94,15 @@ namespace GritGud.Presentation.Gameplay
                 ? Array.Empty<DisplacementActionDefinition>()
                 : scenario.GetActorDefinition(
                     controlledActorId).DisplacementActions;
+
+        internal bool IsChoosingPushOffDirection => IsTargeting
+            && targetingPhase == TargetingPhase.Destination
+            && IsPushOffAction();
+
+        internal string LockedSubjectId => lockedSubjectId;
+
+        internal DisplacementDestinationEvaluation CurrentDestinationEvaluation =>
+            destinationEvaluation;
 
         public void BeginTargeting(string actionId)
         {
@@ -107,9 +121,13 @@ namespace GritGud.Presentation.Gameplay
             lockedSubjectId = null;
             ClearDestinationPreview();
             ClearPointerCandidate();
+            if (TryBeginPushOffDirectionTargeting())
+            {
+                return;
+            }
             StatusMessage = "AIMING "
                 + GetSelectedActionDisplayName().ToUpperInvariant()
-                + (UsesIntentDestination()
+                + (UsesAutomaticIntentDestination()
                     ? " - CONFIRM A SUBJECT"
                     : " - SELECT A SUBJECT");
         }
@@ -302,7 +320,7 @@ namespace GritGud.Presentation.Gameplay
                 lockedSubjectId = pointerCandidateId;
                 float maximumDistance = pointerEvaluation.Action
                     .GetMaximumDistance(pointerEvaluation.Subject);
-                if (UsesIntentDestination())
+                if (UsesAutomaticIntentDestination())
                 {
                     if (destinationEvaluation?.IsEligible != true)
                     {
@@ -384,7 +402,7 @@ namespace GritGud.Presentation.Gameplay
                     out DisplacementResolutionFailure failure))
             {
                 StatusMessage = FormatDestinationFailure(failure);
-                if (UsesIntentDestination())
+                if (UsesAutomaticIntentDestination())
                 {
                     RefreshIntentDestination(lockedSubjectId, force: true);
                 }
@@ -538,7 +556,7 @@ namespace GritGud.Presentation.Gameplay
                             selectedActionId,
                             subject.Key);
                         if (pointerEvaluation.IsEligible
-                            && UsesIntentDestination())
+                            && UsesAutomaticIntentDestination())
                         {
                             RefreshIntentDestination(subject.Key);
                         }
@@ -631,19 +649,41 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            destination = new Vector3(
-                aimPoint.x,
-                subjectRoot.position.y,
-                aimPoint.z);
-            destinationEvaluation = Session.EvaluateDestination(
-                controlledActorId,
-                selectedActionId,
-                lockedSubjectId,
-                ToGameplayPosition(destination));
-            preview?.Show(
-                ToVector3(destinationEvaluation.Origin),
-                destination,
-                destinationEvaluation.IsEligible);
+            if (IsPushOffAction())
+            {
+                destinationEvaluation =
+                    Session.EvaluateDirectionalPushOffDestination(
+                        controlledActorId,
+                        selectedActionId,
+                        lockedSubjectId,
+                        new GameplayPosition(
+                            aimPoint.x,
+                            subjectRoot.position.y,
+                            aimPoint.z));
+                destination = ToVector3(destinationEvaluation.Destination);
+                preview?.ShowPushOff(
+                    ToVector3(destinationEvaluation.Origin),
+                    destination,
+                    destinationEvaluation.IsEligible,
+                    subjectRoot,
+                    actorTransform);
+            }
+            else
+            {
+                destination = new Vector3(
+                    aimPoint.x,
+                    subjectRoot.position.y,
+                    aimPoint.z);
+                destinationEvaluation = Session.EvaluateDestination(
+                    controlledActorId,
+                    selectedActionId,
+                    lockedSubjectId,
+                    ToGameplayPosition(destination));
+                preview?.Show(
+                    ToVector3(destinationEvaluation.Origin),
+                    destination,
+                    destinationEvaluation.IsEligible);
+            }
         }
 
         private bool HasCharacterLineOfSight(
@@ -705,7 +745,7 @@ namespace GritGud.Presentation.Gameplay
             intentPreviewSubjectPosition = default(Vector3);
         }
 
-        private bool UsesIntentDestination()
+        private bool UsesAutomaticIntentDestination()
         {
             if (scenario == null || selectedActionId == null)
             {
@@ -715,8 +755,49 @@ namespace GritGud.Presentation.Gameplay
             DisplacementActionKind intent = RequireDisplacementAction(
                 controlledActorId,
                 selectedActionId).Intent;
-            return intent == DisplacementActionKind.Push
-                || intent == DisplacementActionKind.PushOff;
+            return intent == DisplacementActionKind.Push;
+        }
+
+        private bool IsPushOffAction()
+        {
+            if (scenario == null || selectedActionId == null)
+                return false;
+            return RequireDisplacementAction(
+                    controlledActorId,
+                    selectedActionId).Intent
+                == DisplacementActionKind.PushOff;
+        }
+
+        private bool TryBeginPushOffDirectionTargeting()
+        {
+            if (!IsPushOffAction()
+                || Session == null
+                || gameplaySession == null)
+            {
+                return false;
+            }
+
+            ActorPinState pin = gameplaySession.GetActor(
+                controlledActorId).PinState;
+            if (pin == null)
+                return false;
+            DisplacementTargetEvaluation target = Session.EvaluateTarget(
+                controlledActorId,
+                selectedActionId,
+                pin.PropId);
+            if (!target.IsEligible)
+            {
+                StatusMessage = FormatTargetFailure(target);
+                return false;
+            }
+
+            lockedSubjectId = pin.PropId;
+            targetingPhase = TargetingPhase.Destination;
+            ClearPointerCandidate();
+            AcquireDestination();
+            StatusMessage = "AIM PUSH-OFF DIRECTION - PREVIEW FINAL COVER - "
+                + "CLICK TO CONFIRM";
+            return true;
         }
 
         internal static string FormatTargetFailure(
@@ -807,6 +888,8 @@ namespace GritGud.Presentation.Gameplay
                     return "INVALID DESTINATION - TOO FAR";
                 case DisplacementResolutionFailure.DestinationBlocked:
                     return "INVALID DESTINATION - PATH BLOCKED";
+                case DisplacementResolutionFailure.GetUpSpaceBlocked:
+                    return "INVALID DESTINATION - GET-UP SPACE BLOCKED";
                 case DisplacementResolutionFailure.TurnModeRequired:
                     return "ACTION UNAVAILABLE - TURN MODE REENTRY LOCKED";
                 case DisplacementResolutionFailure.InsufficientTurnBudget:
