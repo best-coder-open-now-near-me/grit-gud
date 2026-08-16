@@ -139,6 +139,14 @@ world-state playhead used by projection. This keeps identical journals visually
 timed alike regardless of frame rate and exposes the active recorded event for
 the action-animation and one-shot-effect layers.
 
+Persistent replay state is projected forward from the starting canonical
+checkpoint by applying only recorded events whose event boundary has been
+crossed. Actor budgets, wounds, equipment and inventory, projectile launches and
+advances, smoke deployments, vehicle momentum, and destructible damage therefore
+appear at their event boundary. Seeking backwards rebuilds the sample from the
+same checkpoint, automatically removing every later consequence without inverse
+mutation or contact with the live session.
+
 Action animation, visible wound variants, replay-specific equipped-model swaps,
 and transient action audio/particle sampling remain subsequent presentation
 slices. The canonical sample already carries

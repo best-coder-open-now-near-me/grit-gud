@@ -116,7 +116,10 @@ namespace GritGud.Presentation.Gameplay
             if (window == null)
                 return;
             TurnReplayWorldStateSample sample =
-                TurnReplayWorldStateSampler.Sample(window, playhead);
+                TurnReplayWorldStateSampler.SampleAtTime(
+                    window,
+                    hud.EventTimeline,
+                    hud.TimeSeconds);
             foreach (KeyValuePair<string, GameplayActorSnapshot> entry in
                 sample.Actors)
             {

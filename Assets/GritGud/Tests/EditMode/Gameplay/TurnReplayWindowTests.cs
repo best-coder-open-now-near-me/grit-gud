@@ -323,6 +323,67 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void TimedSamplerAppliesAndReversesConsequencesAtEventBoundary()
+        {
+            GameplaySession session = CreateSession();
+            using (var timeline = new GameplayCombatStateTimeline(
+                session,
+                () => GameplayCombatStateCapture.Capture(session)))
+            {
+                Assert.That(session.BeginEncounter(), Is.True);
+                string anchorActorId = session.ActiveActorId;
+                session.SpendMovement(anchorActorId, 2f);
+                do
+                {
+                    Assert.That(session.TryEndTurn(
+                        session.ActiveActorId,
+                        out _), Is.True);
+                }
+                while (!string.Equals(
+                    session.ActiveActorId,
+                    anchorActorId,
+                    System.StringComparison.Ordinal));
+                Assert.That(TurnReplayWindowProjector.TryProject(
+                    session.Journal,
+                    anchorActorId,
+                    out TurnReplayWindow replay), Is.True);
+                Assert.That(TurnReplayStateWindowProjector.TryProject(
+                    replay,
+                    timeline,
+                    out TurnReplayStateWindow states), Is.True);
+                var events = new TurnReplayEventTimeline(replay);
+                TurnReplayTimedEvent movement = events.Events.Single(value =>
+                    value.Entry is MovementBudgetSpentJournalEntry spent
+                    && spent.ActorId == anchorActorId);
+
+                TurnReplayWorldStateSample before =
+                    TurnReplayWorldStateSampler.SampleAtTime(
+                        states,
+                        events,
+                        movement.StartSeconds);
+                TurnReplayWorldStateSample after =
+                    TurnReplayWorldStateSampler.SampleAtTime(
+                        states,
+                        events,
+                        movement.EndSeconds);
+                TurnReplayWorldStateSample rewound =
+                    TurnReplayWorldStateSampler.SampleAtTime(
+                        states,
+                        events,
+                        movement.StartSeconds);
+
+                Assert.That(before.Actors[anchorActorId]
+                    .TurnBudget.MovementOpportunity, Is.EqualTo(8f));
+                Assert.That(after.Actors[anchorActorId]
+                    .TurnBudget.MovementOpportunity, Is.EqualTo(6f));
+                Assert.That(rewound.Actors[anchorActorId]
+                    .TurnBudget.MovementOpportunity, Is.EqualTo(8f));
+                Assert.That(session.GetActor(anchorActorId)
+                    .TurnBudget.MovementOpportunity, Is.EqualTo(8f));
+            }
+        }
+
+        [Test]
         public void WorldStateSamplerInterpolatesRecordedProjectileFlight()
         {
             GameplaySession session = CreateProjectileSession();

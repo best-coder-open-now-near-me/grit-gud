@@ -36,6 +36,10 @@ namespace GritGud.Presentation.Gameplay
             ? 0f
             : eventTimeline.ToSegmentPlayhead(playhead);
 
+        internal float TimeSeconds => playhead;
+
+        internal TurnReplayEventTimeline EventTimeline => eventTimeline;
+
         internal event Action<bool> OpenChanged;
 
         internal event Action<float> PlayheadChanged;

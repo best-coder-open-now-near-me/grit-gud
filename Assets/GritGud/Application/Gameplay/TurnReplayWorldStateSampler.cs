@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using GritGud.Domain.Gameplay;
+using GritGud.Domain.Turns;
 
 namespace GritGud.Application.Gameplay
 {
@@ -87,7 +88,150 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentException(
                     "The event timeline must describe the sampled replay window.",
                     nameof(timeline));
-            return Sample(window, timeline.ToSegmentPlayhead(timeSeconds));
+            float time = Math.Max(
+                0f,
+                Math.Min(timeline.TotalDurationSeconds, timeSeconds));
+            TurnReplayWorldStateSample boundary = Sample(
+                window,
+                timeline.ToSegmentPlayhead(time));
+            var actors = IndexActors(window.Start.State.Session.Actors);
+            var destructibles = IndexDestructibles(window.Start.State.Destructibles);
+            var vehicles = IndexVehicles(window.Start.State.Vehicles);
+            var projectiles = IndexProjectiles(window.Start.State.Projectiles);
+            var smokeFields = IndexSmoke(window.Start.State.SmokeFields);
+
+            foreach (TurnReplayTimedEvent timedEvent in timeline.Events)
+            {
+                if (timedEvent.EndSeconds > time) break;
+                ApplyEntry(
+                    timedEvent.Entry,
+                    window,
+                    actors,
+                    destructibles,
+                    vehicles,
+                    projectiles,
+                    smokeFields);
+            }
+
+            foreach (KeyValuePair<string, GameplayActorSnapshot> entry in
+                new List<KeyValuePair<string, GameplayActorSnapshot>>(actors))
+            {
+                if (boundary.Actors.TryGetValue(
+                    entry.Key,
+                    out GameplayActorSnapshot sampled))
+                    actors[entry.Key] = CopyActor(entry.Value, sampled.Pose);
+            }
+            return new TurnReplayWorldStateSample(
+                actors,
+                SortedValues(destructibles),
+                SortedValues(vehicles),
+                SortedValues(projectiles),
+                SortedSmoke(smokeFields));
+        }
+
+        private static void ApplyEntry(
+            GameplayJournalEntry entry,
+            TurnReplayStateWindow window,
+            IDictionary<string, GameplayActorSnapshot> actors,
+            IDictionary<string, DestructiblePropSnapshot> destructibles,
+            IDictionary<string, VehicleMomentumState> vehicles,
+            IDictionary<string, ProjectileFlightSnapshot> projectiles,
+            IDictionary<string, SmokeFieldSnapshot> smokeFields)
+        {
+            if (entry is TurnEndedJournalEntry ended
+                && ended.Turn.Kind == GameplayTurnKind.Normal)
+            {
+                for (int index = 0; index < window.Replay.Segments.Count; index++)
+                {
+                    TurnReplaySegment segment = window.Replay.Segments[index];
+                    if (segment.Entries[segment.Entries.Count - 1].Sequence
+                        != entry.Sequence)
+                        continue;
+                    GameplayCombatStateSnapshot endpoint =
+                        window.SegmentEnds[index].State;
+                    ReplaceValues(actors, IndexActors(endpoint.Session.Actors));
+                    ReplaceValues(
+                        destructibles,
+                        IndexDestructibles(endpoint.Destructibles));
+                    ReplaceValues(vehicles, IndexVehicles(endpoint.Vehicles));
+                    ReplaceValues(
+                        projectiles,
+                        IndexProjectiles(endpoint.Projectiles));
+                    ReplaceValues(smokeFields, IndexSmoke(endpoint.SmokeFields));
+                    return;
+                }
+            }
+            if (entry is MovementBudgetSpentJournalEntry movement)
+            {
+                ReplaceActorBudget(actors, movement.ActorId, movement.ResultingBudget);
+                return;
+            }
+            if (entry is ActionResolvedJournalEntry resolved)
+            {
+                ApplyAction(resolved.Action, window, actors, projectiles, smokeFields);
+                return;
+            }
+            if (entry is DestructibleDamagedJournalEntry damage)
+            {
+                destructibles[damage.Damage.PropId] = damage.Damage.Resulting;
+                return;
+            }
+            if (entry is VehicleMomentumResolvedJournalEntry momentum)
+            {
+                vehicles[momentum.Momentum.Resulting.VehicleId] =
+                    momentum.Momentum.Resulting;
+                return;
+            }
+            if (entry is ProjectileAdvancedJournalEntry advance)
+                projectiles[advance.Advance.ProjectileId] = advance.Advance.Resulting;
+        }
+
+        private static void ApplyAction(
+            GameplayActionRecord action,
+            TurnReplayStateWindow window,
+            IDictionary<string, GameplayActorSnapshot> actors,
+            IDictionary<string, ProjectileFlightSnapshot> projectiles,
+            IDictionary<string, SmokeFieldSnapshot> smokeFields)
+        {
+            ReplaceActorBudget(actors, action.Request.ActorId, action.ResultingBudget);
+            foreach (GameplayActionOutcome outcome in action.Outcomes)
+            {
+                if (outcome is AttackResolvedActionOutcome attack)
+                {
+                    ReplaceActorWounds(
+                        actors,
+                        attack.Attack.TargetId,
+                        attack.Attack.TargetWoundsAfter);
+                }
+                else if (outcome is EquipmentChangedActionOutcome equipment)
+                {
+                    ReplaceActorEquipment(
+                        actors,
+                        window,
+                        equipment.Change.ActorId,
+                        equipment.Change.ResultingEquippedItemId);
+                }
+                else if (outcome is InventoryQuantityChangedActionOutcome quantity)
+                {
+                    ReplaceInventoryQuantity(actors, quantity.Change);
+                }
+                else if (outcome is ProjectileLaunchedActionOutcome launched)
+                {
+                    ProjectileLaunchRecord launch = launched.Launch;
+                    projectiles[launch.ProjectileId] = new ProjectileFlightSnapshot(
+                        launch,
+                        launch.Origin,
+                        0f,
+                        0f,
+                        ProjectileFlightStatus.InFlight);
+                }
+                else if (outcome is ThrownExplosiveActionOutcome thrown
+                    && thrown.Record.SmokeField != null)
+                {
+                    SmokeFieldRecord field = thrown.Record.SmokeField;
+                    smokeFields[field.Id] = new SmokeFieldSnapshot(field, 1f);
+                }
+            }
         }
 
         private static IReadOnlyList<ProjectileFlightSnapshot> SampleProjectiles(
@@ -142,6 +286,156 @@ namespace GritGud.Application.Gameplay
             return result.AsReadOnly();
         }
 
+        private static Dictionary<string, GameplayActorSnapshot> IndexActors(
+            IReadOnlyList<GameplayActorSnapshot> values)
+        {
+            var result = new Dictionary<string, GameplayActorSnapshot>(
+                StringComparer.Ordinal);
+            foreach (GameplayActorSnapshot value in values)
+                result.Add(value.ActorId, value);
+            return result;
+        }
+
+        private static Dictionary<string, DestructiblePropSnapshot>
+            IndexDestructibles(IReadOnlyList<DestructiblePropSnapshot> values)
+        {
+            var result = new Dictionary<string, DestructiblePropSnapshot>(
+                StringComparer.Ordinal);
+            foreach (DestructiblePropSnapshot value in values)
+                result.Add(value.PropId, value);
+            return result;
+        }
+
+        private static Dictionary<string, VehicleMomentumState> IndexVehicles(
+            IReadOnlyList<VehicleMomentumState> values)
+        {
+            var result = new Dictionary<string, VehicleMomentumState>(
+                StringComparer.Ordinal);
+            foreach (VehicleMomentumState value in values)
+                result.Add(value.VehicleId, value);
+            return result;
+        }
+
+        private static Dictionary<string, ProjectileFlightSnapshot>
+            IndexProjectiles(IReadOnlyList<ProjectileFlightSnapshot> values)
+        {
+            var result = new Dictionary<string, ProjectileFlightSnapshot>(
+                StringComparer.Ordinal);
+            foreach (ProjectileFlightSnapshot value in values)
+                result.Add(value.ProjectileId, value);
+            return result;
+        }
+
+        private static Dictionary<string, SmokeFieldSnapshot> IndexSmoke(
+            IReadOnlyList<SmokeFieldSnapshot> values)
+        {
+            var result = new Dictionary<string, SmokeFieldSnapshot>(
+                StringComparer.Ordinal);
+            foreach (SmokeFieldSnapshot value in values)
+                result.Add(value.Field.Id, value);
+            return result;
+        }
+
+        private static void ReplaceActorBudget(
+            IDictionary<string, GameplayActorSnapshot> actors,
+            string actorId,
+            TurnBudget budget)
+        {
+            GameplayActorSnapshot actor = actors[actorId];
+            actors[actorId] = CopyActor(actor, actor.Pose, turnBudget: budget);
+        }
+
+        private static void ReplaceActorWounds(
+            IDictionary<string, GameplayActorSnapshot> actors,
+            string actorId,
+            ActorWoundSnapshot wounds)
+        {
+            GameplayActorSnapshot actor = actors[actorId];
+            actors[actorId] = CopyActor(actor, actor.Pose, wounds: wounds);
+        }
+
+        private static void ReplaceActorEquipment(
+            IDictionary<string, GameplayActorSnapshot> actors,
+            TurnReplayStateWindow window,
+            string actorId,
+            string equippedItemId)
+        {
+            GameplayActorSnapshot actor = actors[actorId];
+            EquipmentEffectSet effects = EquipmentEffectSet.None;
+            if (!string.IsNullOrWhiteSpace(equippedItemId))
+            {
+                GameplayActorSnapshot endpoint = window.End.State.Session
+                    .GetActor(actorId);
+                if (string.Equals(
+                    endpoint.EquippedItemId,
+                    equippedItemId,
+                    StringComparison.Ordinal))
+                    effects = endpoint.EquipmentEffects;
+            }
+            actors[actorId] = CopyActor(
+                actor,
+                actor.Pose,
+                equippedItemId: equippedItemId,
+                equipmentEffects: effects,
+                replaceEquipment: true);
+        }
+
+        private static void ReplaceInventoryQuantity(
+            IDictionary<string, GameplayActorSnapshot> actors,
+            InventoryQuantityChangeRecord change)
+        {
+            GameplayActorSnapshot actor = actors[change.ActorId];
+            var quantities = new List<InventoryQuantitySnapshot>();
+            bool replaced = false;
+            foreach (InventoryQuantitySnapshot quantity in
+                actor.Inventory.Quantities)
+            {
+                if (string.Equals(
+                    quantity.ItemId,
+                    change.ItemId,
+                    StringComparison.Ordinal))
+                {
+                    quantities.Add(new InventoryQuantitySnapshot(
+                        change.ItemId,
+                        change.ResultingQuantity));
+                    replaced = true;
+                }
+                else
+                    quantities.Add(quantity);
+            }
+            if (!replaced)
+                quantities.Add(new InventoryQuantitySnapshot(
+                    change.ItemId,
+                    change.ResultingQuantity));
+            actors[change.ActorId] = CopyActor(
+                actor,
+                actor.Pose,
+                inventory: new ActorInventorySnapshot(change.ActorId, quantities));
+        }
+
+        private static IReadOnlyList<T> SortedValues<T>(
+            IDictionary<string, T> values)
+        {
+            var keys = new List<string>(values.Keys);
+            keys.Sort(StringComparer.Ordinal);
+            var result = new List<T>(keys.Count);
+            foreach (string key in keys) result.Add(values[key]);
+            return result.AsReadOnly();
+        }
+
+        private static void ReplaceValues<T>(
+            IDictionary<string, T> destination,
+            IDictionary<string, T> source)
+        {
+            destination.Clear();
+            foreach (KeyValuePair<string, T> entry in source)
+                destination.Add(entry.Key, entry.Value);
+        }
+
+        private static IReadOnlyList<SmokeFieldSnapshot> SortedSmoke(
+            IDictionary<string, SmokeFieldSnapshot> values) =>
+            SortedValues(values);
+
         private static IReadOnlyList<VehicleMomentumState> SampleVehicles(
             IReadOnlyList<VehicleMomentumState> before,
             IReadOnlyList<VehicleMomentumState> after,
@@ -172,15 +466,23 @@ namespace GritGud.Application.Gameplay
 
         private static GameplayActorSnapshot CopyActor(
             GameplayActorSnapshot actor,
-            GameplayActorPose pose) => new GameplayActorSnapshot(
+            GameplayActorPose pose,
+            TurnBudget? turnBudget = null,
+            ActorWoundSnapshot? wounds = null,
+            string equippedItemId = null,
+            EquipmentEffectSet? equipmentEffects = null,
+            ActorInventorySnapshot inventory = null,
+            bool replaceEquipment = false) => new GameplayActorSnapshot(
                 actor.ActorId,
                 pose,
-                actor.TurnBudget,
-                actor.Wounds,
-                actor.EquippedItemId,
-                actor.EquipmentEffects,
+                turnBudget ?? actor.TurnBudget,
+                wounds ?? actor.Wounds,
+                replaceEquipment ? equippedItemId : actor.EquippedItemId,
+                replaceEquipment
+                    ? equipmentEffects ?? EquipmentEffectSet.None
+                    : actor.EquipmentEffects,
                 actor.MaximumWounds,
-                actor.Inventory,
+                inventory ?? actor.Inventory,
                 actor.TurnActionPointAllowance,
                 actor.TurnMovementAllowance);
 

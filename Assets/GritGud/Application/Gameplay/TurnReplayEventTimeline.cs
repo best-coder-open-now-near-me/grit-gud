@@ -117,8 +117,8 @@ namespace GritGud.Application.Gameplay
             if (entry is StanceChangedJournalEntry) return 0.3f;
             if (entry is EmergencyReactionChangedJournalEntry) return 0.2f;
             if (entry is TurnEndedJournalEntry) return 0.15f;
+            if (entry is MovementBudgetSpentJournalEntry) return 0.1f;
             if (entry is MovementRouteCompletedJournalEntry
-                || entry is MovementBudgetSpentJournalEntry
                 || entry is EnemyDecisionCommittedJournalEntry) return 0f;
             return 0.1f;
         }
