@@ -8,6 +8,7 @@ using GritGud.Presentation.Levels;
 using GritGud.Presentation.Levels.Runtime;
 using UnityEngine;
 using GritGud.Presentation.Characters;
+using GritGud.Domain.Characters;
 
 namespace GritGud.Presentation.Gameplay
 {
@@ -289,14 +290,15 @@ namespace GritGud.Presentation.Gameplay
             bool isSandbox = false)
         {
             LevelArchetypeCatalog archetypes = LevelArchetypeCatalog.LoadDefault();
-            GameplayScenarioAssembly assembly =
-                new GameplayScenarioAssembler().Assemble(scenario, level);
             ActorPresentationCatalog actorPresentations =
                 ActorPresentationCatalog.LoadDefault();
             CharacterAppearanceCatalog characterAppearances =
                 CharacterAppearanceCatalog.LoadDefault();
             UnityCharacterLibrary characters = UnityCharacterLibrary.LoadDefault(
                 characterAppearances);
+            ApplyCharacterAuthoring(scenario, characters);
+            GameplayScenarioAssembly assembly =
+                new GameplayScenarioAssembler().Assemble(scenario, level);
             foreach (ScenarioActorRuntimeDefinition actor in assembly.Actors)
             {
                 _ = actorPresentations.Get(actor.PresentationId);
@@ -312,6 +314,92 @@ namespace GritGud.Presentation.Gameplay
                 characters,
                 assembly,
                 isSandbox);
+        }
+
+        private static void ApplyCharacterAuthoring(
+            ScenarioContentDocument scenario,
+            UnityCharacterLibrary characters)
+        {
+            foreach (ScenarioActorContentData actor in scenario.actors)
+            {
+                if (actor == null || string.IsNullOrWhiteSpace(actor.characterId))
+                    continue;
+                CharacterDocument character = characters.Find(actor.characterId)?.CreateSnapshot()
+                    ?? throw new InvalidOperationException(
+                        $"Character '{actor.characterId}' is unavailable.");
+                actor.displayName = character.displayName;
+                actor.characterProfile = CreateCharacterProfile(character);
+                ApplyStartingLoadout(actor, character.startingLoadout);
+            }
+        }
+
+        private static ScenarioCharacterProfileData CreateCharacterProfile(
+            CharacterDocument character)
+        {
+            var result = new ScenarioCharacterProfileData
+            {
+                identityId = character.characterId,
+                displayName = character.displayName,
+                archetype = character.build.archetype,
+                startingProgressionPoints = character.build.startingProgressionPoints,
+            };
+            foreach (CharacterRatingData attribute in character.build.attributes)
+            {
+                result.attributes.Add(new ScenarioCharacterRatingData
+                {
+                    id = attribute.id,
+                    rating = attribute.rating,
+                });
+            }
+            foreach (CharacterRatingData skill in character.build.skills)
+            {
+                result.skills.Add(new ScenarioCharacterRatingData
+                {
+                    id = skill.id,
+                    rating = skill.rating,
+                });
+            }
+            result.talentIds.AddRange(character.build.talentIds);
+            foreach (CharacterAdvancementData option in character.build.advancementOptions)
+            {
+                result.advancementOptions.Add(new ScenarioAdvancementOptionData
+                {
+                    id = option.id,
+                    skillId = option.skillId,
+                    pointCost = option.pointCost,
+                    maximumBonus = option.maximumBonus,
+                });
+            }
+            return result;
+        }
+
+        private static void ApplyStartingLoadout(
+            ScenarioActorContentData actor,
+            CharacterLoadoutData loadout)
+        {
+            if (loadout == null || loadout.items.Count == 0)
+                return;
+            Dictionary<string, ScenarioInventoryItemData> catalog = actor.inventory
+                .Where(item => item != null && !string.IsNullOrWhiteSpace(item.id))
+                .ToDictionary(item => item.id, StringComparer.Ordinal);
+            var selected = new List<ScenarioInventoryItemData>();
+            foreach (CharacterLoadoutItemData authored in loadout.items)
+            {
+                if (!catalog.TryGetValue(authored.itemId, out ScenarioInventoryItemData definition))
+                {
+                    throw new InvalidOperationException(
+                        $"Character '{actor.characterId}' starting item '{authored.itemId}' "
+                        + $"is unavailable to actor template '{actor.id}'.");
+                }
+                ScenarioInventoryItemData item = JsonUtility.FromJson<ScenarioInventoryItemData>(
+                    JsonUtility.ToJson(definition));
+                item.quantity = authored.quantity;
+                item.hotbarSlot = authored.hotbarSlot;
+                selected.Add(item);
+            }
+            actor.inventory = selected;
+            actor.initiallyEquippedItemId = loadout.initiallyEquippedItemId;
+            actor.attackCapability = null;
         }
 
         private static TextAsset LoadRequiredText(string resource, string label)

@@ -30,7 +30,13 @@ namespace GritGud.Presentation.Characters
                 if (document == null)
                     throw new CharacterSerializationException(
                         "The imported text did not contain a character document.");
-                if (document.schemaVersion != CharacterDocument.CurrentSchemaVersion)
+                if (document.schemaVersion == 1)
+                {
+                    document.schemaVersion = CharacterDocument.CurrentSchemaVersion;
+                    document.build = new CharacterBuildData();
+                    document.startingLoadout = new CharacterLoadoutData();
+                }
+                else if (document.schemaVersion != CharacterDocument.CurrentSchemaVersion)
                     throw new CharacterSerializationException(
                         $"Character schema {document.schemaVersion} is not supported.");
                 document.Normalize();

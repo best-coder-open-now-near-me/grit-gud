@@ -1,24 +1,30 @@
 # Character editor
 
 The character editor is a standalone runtime authoring surface for reusable
-visual character identities. Open it from **Character Editor** on the main menu.
-It deliberately does not edit combat statistics, inventory, or equipped items;
-those remain owned by gameplay actor templates and scenario content.
+character identities. Open it from **Character Editor** on the main menu. A
+character owns a recognizable baseline build and starting loadout alongside its
+appearance; live progression, wounds, consumed quantities, and current equipment
+state remain separate campaign/runtime state.
 
 ## Workflow
 
 1. Choose an existing published character or press **New**.
-2. Set the display name and choose a body.
+2. Set the display name and choose a body under **Appearance**.
 3. Cycle the visual slots on the right, or use **Randomize** for a complete
    deterministic recipe assembled from compatible options.
 4. Drag the preview with either mouse button to orbit, use the mouse wheel to
    zoom, and press **F** to reset and frame the character. **View > Auto Rotate**
    remains available for checking clipping and silhouettes.
-5. Use **Save Draft** for local work and **Export** for a portable JSON document.
-6. Place reviewed exports in
+5. Author the four core attributes, starting skills and talents, and constrained
+   progression points under **Attributes** and **Skills**.
+6. Add canonical equipment references, quantities, hotbar slots, and the
+   initially equipped item under **Loadout**.
+7. Resolve every issue under **Review**, then use **Save Draft** for local work
+   or **Export** for a portable JSON document.
+8. Place reviewed exports in
    `Assets/GritGud/Content/Resources/Characters/Published` so they become
    reusable published characters on the next asset refresh.
-7. In the level editor, select a scenario actor and choose the published
+9. In the level editor, select a scenario actor and choose the published
    character under **Character Appearance**. Choosing **Template Default** keeps
    the actor template's original visual.
 
@@ -56,6 +62,8 @@ accessory prefab after the overlay is installed.
 
 - Drafts use local `PlayerPrefs` storage and are intended for work in progress.
 - Imports and exports use schema-versioned JSON with a size limit.
+- Schema 2 adds the baseline build and starting loadout. Appearance-only schema
+  1 documents migrate to a balanced default build and empty loadout on import.
 - Published documents are discovered from the Resources folder and rejected for
   duplicate IDs, unavailable bodies/accessories, wrong slots, or incompatible
   body-specific parts.
@@ -64,8 +72,10 @@ accessory prefab after the overlay is installed.
 - Authoring validation warns about missing published characters; publish
   validation treats them as errors.
 
-The document intentionally leaves room for later stats and equipment sections
-without coupling those systems to the appearance projector.
+When a level actor references a published character, gameplay overlays the
+character's display name, profile, and selected starting loadout onto the actor
+template. Equipment entries remain references to canonical template definitions,
+so portable character documents do not duplicate combat or consumable rules.
 
 ## Editor controls and organization
 
@@ -91,9 +101,11 @@ Manual orbit also stops auto rotation rather than making the two controls fight.
 ## Feature review and remaining gaps
 
 The editor now covers identity selection, body and accessory authoring,
-compatible randomization, preview orbit/zoom/framing, undo/redo, local drafts,
-cloud persistence, JSON interchange, published-character loading, validation,
-and dirty-change confirmation. The next UX investments should be:
+compatible randomization, preview orbit/zoom/framing, baseline attributes,
+derived-stat previews, starting skills and talents, starting equipment/hotbar
+authoring, a publish-readiness review, undo/redo, local drafts, cloud persistence,
+JSON interchange, published-character loading, validation, gameplay overlay, and
+dirty-change confirmation. The next UX investments should be:
 
 1. **Searchable visual option browsing.** Replace previous/clear/next rows with
    thumbnail grids, slot-level search, and clear empty/locked/incompatible
@@ -103,12 +115,15 @@ and dirty-change confirmation. The next UX investments should be:
    equivalent to the existing browser-aware export path.
 3. **Responsive panels.** The fixed side widths are appropriate on desktop but
    should collapse into drawers or tabs at narrow browser widths.
-4. **Comparison and inspection tools.** Before/after comparison, hide-all by
+4. **Catalog depth and rule metadata.** Move the initial skill, talent, and item
+   choices into authored catalogs with descriptions, prerequisites, conflicts,
+   archetype packages, and constrained advancement-option editing.
+5. **Comparison and inspection tools.** Before/after comparison, hide-all by
    slot, lighting/background presets, and head/torso/full-body framing would
    make clipping and silhouette review faster.
-5. **Library management.** Published entries need search, duplicate-as-new,
+6. **Library management.** Published entries need search, duplicate-as-new,
    explicit delete/archive behavior for drafts, and clearer separation between
    local, cloud, and shipped characters.
-6. **Accessibility and discoverability.** Add scalable text/UI density,
+7. **Accessibility and discoverability.** Add scalable text/UI density,
    keyboard traversal, screen-reader-compatible labels when the runtime UI
    stack supports them, and remappable shortcuts.

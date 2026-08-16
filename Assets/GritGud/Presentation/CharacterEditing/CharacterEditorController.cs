@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using GritGud.Application.Characters;
 using GritGud.Domain.Characters;
+using GritGud.Domain.Gameplay;
 using GritGud.Presentation.Bootstrap;
 using GritGud.Presentation.Characters;
 using GritGud.Presentation.LevelEditing;
@@ -34,6 +35,38 @@ namespace GritGud.Presentation.CharacterEditing
             (CharacterAppearanceSlotIds.Patch, "PATCH"),
         };
 
+        private static readonly (string Id, string Label, string Help)[] Attributes =
+        {
+            (CoreAttributeIds.Strength, "STRENGTH", "Melee and opposed displacement"),
+            (CoreAttributeIds.Dexterity, "DEXTERITY", "Initiative and movement allowance"),
+            (CoreAttributeIds.Grit, "GRIT", "Resistance to tactical consequences"),
+            (CoreAttributeIds.Charisma, "CHARISMA", "Social resolution"),
+        };
+
+        private static readonly (string Id, string Label)[] Skills =
+        {
+            ("skill.firearms", "FIREARMS"),
+            ("skill.demolitions", "DEMOLITIONS"),
+            ("skill.fieldcraft", "FIELDCRAFT"),
+            (CharacterSkillIds.CloseQuarters, "CLOSE-QUARTERS CONTROL"),
+        };
+
+        private static readonly (string Id, string Label)[] Talents =
+        {
+            ("talent.steady-hands", "STEADY HANDS"),
+            ("talent.combat-awareness", "COMBAT AWARENESS"),
+            ("talent.leverage", "LEVERAGE"),
+        };
+
+        private static readonly (string Id, string Label)[] LoadoutItems =
+        {
+            ("weapon.rifle", "RIFLE"),
+            ("weapon.rocket-launcher", "LAUNCHER"),
+            ("weapon.combat-knife", "COMBAT KNIFE"),
+            ("item.frag-grenade", "FRAG GRENADE"),
+            ("item.smoke-grenade", "SMOKE GRENADE"),
+        };
+
         private readonly LevelEditorGuiStyles styles = new LevelEditorGuiStyles();
         private CharacterAppearanceCatalog catalog;
         private UnityCharacterLibrary library;
@@ -57,6 +90,7 @@ namespace GritGud.Presentation.CharacterEditing
         private bool autoRotate;
         private bool hasFramedPreview;
         private ToolbarMenu activeMenu;
+        private CharacterWorkspace workspace;
         private Action pendingDestructiveAction;
         private string pendingDestructivePrompt = string.Empty;
 
@@ -66,6 +100,15 @@ namespace GritGud.Presentation.CharacterEditing
             File,
             Edit,
             View,
+        }
+
+        private enum CharacterWorkspace
+        {
+            Appearance,
+            Attributes,
+            Skills,
+            Loadout,
+            Review,
         }
 
         public void Begin(CharacterDocument initial = null)
@@ -276,8 +319,34 @@ namespace GritGud.Presentation.CharacterEditing
             GUILayout.BeginArea(
                 new Rect(0f, ToolbarHeight, LeftWidth, Screen.height - ToolbarHeight - StatusHeight),
                 styles.Panel);
-            GUILayout.Label("CHARACTER", styles.SectionHeader);
+            DrawWorkspaceNavigation();
             CharacterDocument document = session.CreateSnapshot();
+            if (workspace == CharacterWorkspace.Attributes)
+            {
+                DrawAttributes(document);
+                GUILayout.EndArea();
+                return;
+            }
+            if (workspace == CharacterWorkspace.Skills)
+            {
+                DrawTalents(document);
+                GUILayout.EndArea();
+                return;
+            }
+            if (workspace == CharacterWorkspace.Loadout)
+            {
+                DrawLoadoutLibrary(document);
+                GUILayout.EndArea();
+                return;
+            }
+            if (workspace == CharacterWorkspace.Review)
+            {
+                DrawReviewSummary(document);
+                GUILayout.EndArea();
+                return;
+            }
+
+            GUILayout.Label("CHARACTER", styles.SectionHeader);
             GUILayout.Label("ID", styles.MutedLabel);
             GUILayout.Label(document.characterId);
             GUILayout.Label("DISPLAY NAME", styles.MutedLabel);
@@ -331,12 +400,37 @@ namespace GritGud.Presentation.CharacterEditing
             GUILayout.BeginArea(
                 new Rect(left, ToolbarHeight, RightWidth, Screen.height - ToolbarHeight - StatusHeight),
                 styles.Panel);
+            CharacterDocument document = session.CreateSnapshot();
+            if (workspace == CharacterWorkspace.Attributes)
+            {
+                DrawDerivedStatistics(document);
+                GUILayout.EndArea();
+                return;
+            }
+            if (workspace == CharacterWorkspace.Skills)
+            {
+                DrawSkills(document);
+                GUILayout.EndArea();
+                return;
+            }
+            if (workspace == CharacterWorkspace.Loadout)
+            {
+                DrawStartingLoadout(document);
+                GUILayout.EndArea();
+                return;
+            }
+            if (workspace == CharacterWorkspace.Review)
+            {
+                DrawValidationReview(document);
+                GUILayout.EndArea();
+                return;
+            }
+
             GUILayout.Label("APPEARANCE", styles.SectionHeader);
             GUILayout.Label(
                 "Visual choices only. Gameplay stats and equipment are unchanged.",
                 styles.MutedLabel);
             accessoryScroll = GUILayout.BeginScrollView(accessoryScroll);
-            CharacterDocument document = session.CreateSnapshot();
             foreach ((string slotId, string label) in Slots)
             {
                 GUILayout.Space(8f);
@@ -363,6 +457,245 @@ namespace GritGud.Presentation.CharacterEditing
                 Import();
             GUILayout.EndScrollView();
             GUILayout.EndArea();
+        }
+
+        private void DrawWorkspaceNavigation()
+        {
+            GUILayout.Label("CHARACTER CREATOR", styles.SectionHeader);
+            string[] labels = { "APPEARANCE", "ATTRIBUTES", "SKILLS", "LOADOUT", "REVIEW" };
+            int selected = GUILayout.Toolbar((int)workspace, labels, GUILayout.Height(30f));
+            workspace = (CharacterWorkspace)selected;
+            GUILayout.Space(10f);
+        }
+
+        private void DrawAttributes(CharacterDocument document)
+        {
+            GUILayout.Label("IDENTITY & ATTRIBUTES", styles.SectionHeader);
+            GUILayout.Label("ARCHETYPE", styles.MutedLabel);
+            string archetype = GUILayout.TextField(document.build.archetype);
+            if (!string.Equals(archetype, document.build.archetype, StringComparison.Ordinal))
+            {
+                document.build.archetype = archetype;
+                session.Apply("Change character archetype", document);
+            }
+            GUILayout.Space(8f);
+            foreach ((string id, string label, string help) in Attributes)
+            {
+                GUILayout.Label(label, styles.SectionHeader);
+                GUILayout.Label(help, styles.MutedLabel);
+                DrawRatingStepper(document, document.build.attributes, id, 1, 5);
+            }
+        }
+
+        private void DrawDerivedStatistics(CharacterDocument document)
+        {
+            GUILayout.Label("DERIVED STATISTICS", styles.SectionHeader);
+            GUILayout.Label("Calculated from authoritative attributes.", styles.MutedLabel);
+            int strength = document.build.GetRating(document.build.attributes, CoreAttributeIds.Strength);
+            int dexterity = document.build.GetRating(document.build.attributes, CoreAttributeIds.Dexterity);
+            int grit = document.build.GetRating(document.build.attributes, CoreAttributeIds.Grit);
+            int charisma = document.build.GetRating(document.build.attributes, CoreAttributeIds.Charisma);
+            DrawReadOnlyStat("MOVEMENT ALLOWANCE", $"{4 + dexterity} units");
+            DrawReadOnlyStat("REACTION", $"Dexterity {dexterity} determines initiative advance");
+            DrawReadOnlyStat("PHYSICAL CONTROL", $"Strength {strength} + Close-Quarters skill");
+            DrawReadOnlyStat("RESISTANCE", $"Grit modifier {grit}");
+            DrawReadOnlyStat("SOCIAL", $"Charisma modifier {charisma}");
+            GUILayout.Space(12f);
+            GUILayout.Label("Core ratings are constrained to 1–5. Derived values cannot be edited directly.", styles.MutedLabel);
+        }
+
+        private void DrawTalents(CharacterDocument document)
+        {
+            GUILayout.Label("TALENTS", styles.SectionHeader);
+            GUILayout.Label("Authored capabilities that preserve the character's role.", styles.MutedLabel);
+            foreach ((string id, string label) in Talents)
+            {
+                bool selected = document.build.talentIds.Contains(id);
+                bool next = GUILayout.Toggle(selected, label, GUI.skin.button, GUILayout.Height(32f));
+                if (next == selected)
+                    continue;
+                if (next)
+                    document.build.talentIds.Add(id);
+                else
+                    document.build.talentIds.Remove(id);
+                session.Apply("Change character talent", document);
+            }
+            GUILayout.Space(12f);
+            GUILayout.Label("STARTING PROGRESSION POINTS", styles.SectionHeader);
+            DrawIntegerStepper(
+                document.build.startingProgressionPoints,
+                0,
+                20,
+                value =>
+                {
+                    document.build.startingProgressionPoints = value;
+                    session.Apply("Change starting progression", document);
+                });
+        }
+
+        private void DrawSkills(CharacterDocument document)
+        {
+            GUILayout.Label("STARTING SKILLS", styles.SectionHeader);
+            GUILayout.Label("Ratings define the character's recognizable baseline role.", styles.MutedLabel);
+            foreach ((string id, string label) in Skills)
+            {
+                GUILayout.Label(label, styles.SectionHeader);
+                DrawRatingStepper(document, document.build.skills, id, 0, 5);
+            }
+            GUILayout.Space(12f);
+            GUILayout.Label("ADVANCEMENT", styles.SectionHeader);
+            GUILayout.Label("Constrained advancement options are preserved in the document. Detailed option authoring is the next catalog pass.", styles.MutedLabel);
+        }
+
+        private void DrawLoadoutLibrary(CharacterDocument document)
+        {
+            GUILayout.Label("EQUIPMENT CATALOG", styles.SectionHeader);
+            GUILayout.Label("Add reusable item references to the starting loadout.", styles.MutedLabel);
+            foreach ((string id, string label) in LoadoutItems)
+            {
+                bool owned = document.startingLoadout.items.Any(
+                    item => item != null && string.Equals(item.itemId, id, StringComparison.Ordinal));
+                GUI.enabled = !owned;
+                if (GUILayout.Button(owned ? label + "  ·  ADDED" : "+ " + label, GUILayout.Height(32f)))
+                {
+                    document.startingLoadout.items.Add(new CharacterLoadoutItemData
+                    {
+                        itemId = id,
+                        quantity = 1,
+                    });
+                    session.Apply("Add starting equipment", document);
+                }
+                GUI.enabled = true;
+            }
+            GUILayout.Space(12f);
+            GUILayout.Label("Loadout entries reference canonical item IDs; combat rules remain owned by the equipment catalog and scenario assembly.", styles.MutedLabel);
+        }
+
+        private void DrawStartingLoadout(CharacterDocument document)
+        {
+            GUILayout.Label("STARTING LOADOUT", styles.SectionHeader);
+            GUILayout.Label("Starting choices only—live quantities, wounds, and equipment state are saved separately.", styles.MutedLabel);
+            accessoryScroll = GUILayout.BeginScrollView(accessoryScroll);
+            foreach (CharacterLoadoutItemData item in document.startingLoadout.items.ToArray())
+            {
+                if (item == null)
+                    continue;
+                string label = LoadoutItems.FirstOrDefault(value => value.Id == item.itemId).Label
+                    ?? item.itemId;
+                GUILayout.Space(8f);
+                GUILayout.Label(label, styles.SectionHeader);
+                GUILayout.BeginHorizontal();
+                GUILayout.Label($"QTY {item.quantity}  ·  SLOT {(item.hotbarSlot == 0 ? "—" : item.hotbarSlot.ToString())}");
+                if (GUILayout.Button("QTY +", GUILayout.Width(58f)))
+                {
+                    item.quantity++;
+                    session.Apply("Change starting quantity", document);
+                }
+                if (GUILayout.Button("SLOT +", GUILayout.Width(64f)))
+                {
+                    item.hotbarSlot = (item.hotbarSlot + 1) % (GameplayHotbarRules.SlotCount + 1);
+                    session.Apply("Change starting hotbar slot", document);
+                }
+                GUILayout.EndHorizontal();
+                GUILayout.BeginHorizontal();
+                bool equipped = string.Equals(
+                    document.startingLoadout.initiallyEquippedItemId,
+                    item.itemId,
+                    StringComparison.Ordinal);
+                if (GUILayout.Button(equipped ? "EQUIPPED" : "EQUIP", GUILayout.Height(28f)))
+                {
+                    document.startingLoadout.initiallyEquippedItemId = equipped
+                        ? string.Empty
+                        : item.itemId;
+                    session.Apply("Change initially equipped item", document);
+                }
+                if (GUILayout.Button("REMOVE", GUILayout.Height(28f)))
+                {
+                    document.startingLoadout.items.Remove(item);
+                    if (equipped)
+                        document.startingLoadout.initiallyEquippedItemId = string.Empty;
+                    session.Apply("Remove starting equipment", document);
+                }
+                GUILayout.EndHorizontal();
+            }
+            GUILayout.EndScrollView();
+        }
+
+        private void DrawReviewSummary(CharacterDocument document)
+        {
+            GUILayout.Label("BUILD REVIEW", styles.SectionHeader);
+            DrawReadOnlyStat("NAME", document.displayName);
+            DrawReadOnlyStat("ARCHETYPE", document.build.archetype);
+            DrawReadOnlyStat("ATTRIBUTES", string.Join("  ·  ", Attributes.Select(value =>
+                value.Label + " " + document.build.GetRating(document.build.attributes, value.Id))));
+            DrawReadOnlyStat("SKILLS", document.build.skills.Count.ToString());
+            DrawReadOnlyStat("TALENTS", document.build.talentIds.Count.ToString());
+            DrawReadOnlyStat("STARTING ITEMS", document.startingLoadout.items.Count.ToString());
+            DrawReadOnlyStat("EQUIPPED", string.IsNullOrWhiteSpace(document.startingLoadout.initiallyEquippedItemId)
+                ? "None"
+                : document.startingLoadout.initiallyEquippedItemId);
+        }
+
+        private void DrawValidationReview(CharacterDocument document)
+        {
+            GUILayout.Label("PUBLISH READINESS", styles.SectionHeader);
+            IReadOnlyList<string> issues = CharacterValidator.Validate(
+                document,
+                catalog.CreateValidationContent());
+            if (issues.Count == 0)
+            {
+                Color previous = GUI.color;
+                GUI.color = LevelEditorTheme.Active;
+                GUILayout.Label("READY TO PUBLISH", styles.SectionHeader);
+                GUI.color = previous;
+                GUILayout.Label("Appearance, build, and starting loadout are valid.", styles.MutedLabel);
+            }
+            else
+            {
+                GUILayout.Label($"{issues.Count} ISSUE{(issues.Count == 1 ? string.Empty : "S")}", styles.SectionHeader);
+                foreach (string issue in issues)
+                    GUILayout.Label("• " + issue);
+            }
+            GUILayout.Space(12f);
+            if (GUILayout.Button("EXPORT VALID CHARACTER", GUILayout.Height(36f)))
+                Export();
+        }
+
+        private void DrawRatingStepper(
+            CharacterDocument document,
+            List<CharacterRatingData> ratings,
+            string id,
+            int minimum,
+            int maximum)
+        {
+            int current = document.build.GetRating(ratings, id);
+            DrawIntegerStepper(current, minimum, maximum, value =>
+            {
+                document.build.SetRating(ratings, id, value);
+                session.Apply("Change character rating", document);
+            });
+        }
+
+        private static void DrawIntegerStepper(int current, int minimum, int maximum, Action<int> apply)
+        {
+            GUILayout.BeginHorizontal();
+            GUI.enabled = current > minimum;
+            if (GUILayout.Button("−", GUILayout.Width(42f), GUILayout.Height(30f)))
+                apply(current - 1);
+            GUI.enabled = true;
+            GUILayout.Label(current.ToString(), GUILayout.Width(34f));
+            GUI.enabled = current < maximum;
+            if (GUILayout.Button("+", GUILayout.Width(42f), GUILayout.Height(30f)))
+                apply(current + 1);
+            GUI.enabled = true;
+            GUILayout.EndHorizontal();
+        }
+
+        private void DrawReadOnlyStat(string label, string value)
+        {
+            GUILayout.Space(8f);
+            GUILayout.Label(label, styles.MutedLabel);
+            GUILayout.Label(value ?? string.Empty);
         }
 
         private void DrawStatus()

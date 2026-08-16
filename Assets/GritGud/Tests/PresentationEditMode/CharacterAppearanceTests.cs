@@ -84,6 +84,50 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void SerializerMigratesAppearanceOnlySchemaOneDocuments()
+        {
+            const string legacy = "{\"schemaVersion\":1,\"characterId\":\"character.legacy\","
+                + "\"displayName\":\"Legacy\",\"appearance\":{"
+                + "\"bodyId\":\"body.military-male-01\",\"accessories\":[]}}";
+            var serializer = new UnityCharacterJsonSerializer();
+
+            CharacterDocument restored = serializer.Deserialize(legacy);
+
+            Assert.That(restored.schemaVersion, Is.EqualTo(CharacterDocument.CurrentSchemaVersion));
+            Assert.That(restored.build, Is.Not.Null);
+            Assert.That(restored.build.attributes, Has.Count.EqualTo(4));
+            Assert.That(restored.startingLoadout, Is.Not.Null);
+        }
+
+        [Test]
+        public void SerializerRoundTripsBuildAndStartingLoadout()
+        {
+            var source = new CharacterDocument
+            {
+                characterId = "character.build-roundtrip",
+                displayName = "Build Round Trip",
+            };
+            source.build.archetype = "scout";
+            source.build.talentIds.Add("talent.combat-awareness");
+            source.startingLoadout.initiallyEquippedItemId = "weapon.rifle";
+            source.startingLoadout.items.Add(new CharacterLoadoutItemData
+            {
+                itemId = "weapon.rifle",
+                quantity = 1,
+                hotbarSlot = 2,
+            });
+            var serializer = new UnityCharacterJsonSerializer();
+
+            CharacterDocument restored = serializer.Deserialize(serializer.Serialize(source));
+
+            Assert.That(restored.build.archetype, Is.EqualTo("scout"));
+            Assert.That(restored.build.talentIds, Contains.Item("talent.combat-awareness"));
+            Assert.That(restored.startingLoadout.initiallyEquippedItemId,
+                Is.EqualTo("weapon.rifle"));
+            Assert.That(restored.startingLoadout.items.Single().hotbarSlot, Is.EqualTo(2));
+        }
+
+        [Test]
         public void ProjectorSelectsBodyAndParentsAccessoriesToHumanoidSocket()
         {
             CharacterAppearanceCatalog catalog = CharacterAppearanceCatalog.LoadDefault();
