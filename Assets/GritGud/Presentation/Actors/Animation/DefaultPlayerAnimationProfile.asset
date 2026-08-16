@@ -93,3 +93,8 @@ MonoBehaviour:
     layerName: Actor Actions
     stateName: Throw
     transitionSeconds: 0.08
+  - action: 4
+    triggerParameterName: 
+    layerName: Actor Traversal
+    stateName: Jump
+    transitionSeconds: 0.08

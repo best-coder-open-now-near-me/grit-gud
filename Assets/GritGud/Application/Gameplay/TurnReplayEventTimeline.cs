@@ -102,7 +102,9 @@ namespace GritGud.Application.Gameplay
         {
             if (entry == null) throw new ArgumentNullException(nameof(entry));
             if (entry is MovementRouteCommittedJournalEntry movement)
-                return Math.Max(0.3f, movement.Route.TotalCost / 5f);
+                return Math.Max(
+                    0.3f,
+                    movement.Route.TotalPlaybackDurationSeconds);
             if (entry is DisplacementResolvedJournalEntry displacement)
                 return Math.Max(0.3f,
                     displacement.Displacement.PreviousPosition.DistanceTo(

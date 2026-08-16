@@ -168,7 +168,7 @@ namespace GritGud.Editor
         private static void ConfigureActionBindings(
             SerializedProperty bindings)
         {
-            bindings.arraySize = 2;
+            bindings.arraySize = 3;
             SerializedProperty interaction =
                 bindings.GetArrayElementAtIndex(0);
             interaction.FindPropertyRelative("action").enumValueIndex =
@@ -192,6 +192,18 @@ namespace GritGud.Editor
             throwing.FindPropertyRelative("stateName").stringValue =
                 ActorAnimationParameters.ThrowStateName;
             throwing.FindPropertyRelative("transitionSeconds").floatValue =
+                ActionTransitionSeconds;
+
+            SerializedProperty jump = bindings.GetArrayElementAtIndex(2);
+            jump.FindPropertyRelative("action").enumValueIndex =
+                (int)ActorAnimationAction.Jump;
+            jump.FindPropertyRelative("triggerParameterName").stringValue =
+                string.Empty;
+            jump.FindPropertyRelative("layerName").stringValue =
+                ActorAnimationParameters.TraversalLayerName;
+            jump.FindPropertyRelative("stateName").stringValue =
+                ActorAnimationParameters.JumpStateName;
+            jump.FindPropertyRelative("transitionSeconds").floatValue =
                 ActionTransitionSeconds;
         }
     }

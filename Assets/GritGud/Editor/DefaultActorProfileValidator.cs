@@ -99,7 +99,7 @@ namespace GritGud.Editor
                 recoilHoldSeconds: 0f,
                 recoilReturnSeconds: 0.18f);
 
-            if (profile.ActionBindings.Count != 2 ||
+            if (profile.ActionBindings.Count != 3 ||
                 !profile.TryGetActionBinding(
                     ActorAnimationAction.Interact,
                     out ActorAnimationActionBinding interaction) ||
@@ -118,11 +118,22 @@ namespace GritGud.Editor
                 !throwing.UsesState ||
                 Mathf.Abs(
                     throwing.TransitionSeconds -
+                    ActionTransitionSeconds) > 0.001f ||
+                !profile.TryGetActionBinding(
+                    ActorAnimationAction.Jump,
+                    out ActorAnimationActionBinding jump) ||
+                jump.UsesTrigger ||
+                jump.LayerName !=
+                    ActorAnimationParameters.TraversalLayerName ||
+                jump.StateName != ActorAnimationParameters.JumpStateName ||
+                !jump.UsesState ||
+                Mathf.Abs(
+                    jump.TransitionSeconds -
                     ActionTransitionSeconds) > 0.001f)
             {
                 throw new InvalidOperationException(
                     "The default animation profile requires its authored "
-                    + "interaction and throw action bindings.");
+                    + "interaction, throw, and jump action bindings.");
             }
         }
 

@@ -47,6 +47,7 @@ namespace GritGud.Editor
             ValidateWeaponLayer(controller);
             ValidateRecoilLayer(controller);
             ValidateActionLayer(controller);
+            ValidateTraversalLayer(controller);
         }
 
         internal static bool HasRequiredTurnLayer(
@@ -114,6 +115,25 @@ namespace GritGud.Editor
                 FindState(
                     actionLayer.stateMachine,
                     ActorAnimationParameters.ThrowStateName) != null;
+        }
+
+        internal static bool HasRequiredTraversalLayer(
+            AnimatorController controller)
+        {
+            AnimatorControllerLayer layer = FindLayer(
+                controller,
+                ActorAnimationParameters.TraversalLayerName);
+            return layer != null &&
+                layer.avatarMask == null &&
+                layer.blendingMode == AnimatorLayerBlendingMode.Override &&
+                !layer.iKPass &&
+                Mathf.Abs(layer.defaultWeight) <= 0.001f &&
+                HasActionLayerReleaseBehaviour(FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.NoTraversalStateName)) &&
+                FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.JumpStateName) != null;
         }
 
         private static void ValidateParameters(AnimatorController controller)
@@ -462,6 +482,39 @@ namespace GritGud.Editor
                 throw new InvalidOperationException(
                     "Actor actions require an upper-body override layer, "
                     + "an authored throw motion and a self-releasing return.");
+            }
+        }
+
+        private static void ValidateTraversalLayer(
+            AnimatorController controller)
+        {
+            AnimatorControllerLayer layer = FindLayer(
+                controller,
+                ActorAnimationParameters.TraversalLayerName);
+            AnimatorState idle = layer != null
+                ? FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.NoTraversalStateName)
+                : null;
+            AnimatorState jump = layer != null
+                ? FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.JumpStateName)
+                : null;
+            if (layer == null || layer.avatarMask != null ||
+                layer.blendingMode != AnimatorLayerBlendingMode.Override ||
+                layer.iKPass ||
+                Mathf.Abs(layer.defaultWeight) > 0.001f ||
+                idle == null || jump == null ||
+                layer.stateMachine.defaultState != idle ||
+                idle.motion != null ||
+                !HasActionLayerReleaseBehaviour(idle) ||
+                jump.motion != LoadAnimationClip(JumpPath) ||
+                !HasActionReturnTransition(jump, idle))
+            {
+                throw new InvalidOperationException(
+                    "Actor traversal requires a full-body override layer, "
+                    + "an authored jump motion and a self-releasing return.");
             }
         }
 

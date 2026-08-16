@@ -262,5 +262,21 @@ namespace GritGud.Domain.Tests.Levels
                 Is.EqualTo(100f));
         }
 
+        [Test]
+        public void VersionFourteenLevelsGainEmptyTraversalLinks()
+        {
+            LevelDocument source = LevelDocumentFactory.CreateEmpty(
+                "Legacy traversal");
+            source.schemaVersion = 14;
+            source.traversalLinks = null;
+
+            LevelDocument result = new LevelDocumentMigrator()
+                .MigrateToCurrent(source);
+
+            Assert.That(result.schemaVersion,
+                Is.EqualTo(LevelDocument.CurrentSchemaVersion));
+            Assert.That(result.traversalLinks, Is.Not.Null.And.Empty);
+        }
+
     }
 }

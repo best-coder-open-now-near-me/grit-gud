@@ -216,22 +216,34 @@ initiative participant:
    coverage is green. Prop-aware lying, struggle, bounded ragdoll, Push Off,
    and authored get-up animation remain the secondary polish item above; those
    visuals consume the committed state rather than deciding it.
-4. **Add authored jump, vault, and mantle traversal.** Keep ordinary grounded
-   movement on surfaces that satisfy the authored slope and step limits; cross
-   taller objects only through explicit traversal links with stable takeoff,
-   landing, direction, clearance, movement/AP cost, and action identity. Validate
-   the entire capsule sweep and landing footprint before commitment, then freeze
-   the chosen link and trajectory for replay instead of rediscovering geometry
-   during playback. Add a published traversal fixture with below/at/above-limit
-   ramps plus connected and deliberately disconnected tall obstacles. Cover
-   slope classification, graph connectivity, one-way links, obstruction, stale
-   commits, cancellation, enemy path selection, exact live restoration, and
-   PlayMode traversal lifecycle behavior before binding jump/vault/mantle clips.
+   **First-class follow-up:** replace Push Off's current automatic away/contact-
+   normal direction with a player-selected, previewed heading. Validate the
+   swept toppled-prop footprint and the actor's get-up clearance, preview the
+   exact final prop pose and resulting collider-backed cover, and atomically
+   freeze the chosen direction, prop pose, released actor pose, and costs for
+   replay. Enemy use should choose deterministically among the same validated
+   candidates. Finish this rules/UI boundary before polishing its animation.
+4. **Add authored jump, vault, and mantle traversal.** **Primary slice complete
+   2026-08-16:** ordinary movement remains grounded and automatic while schema 15
+   traversal links authorize specific jump, vault, or mantle crossings with
+   stable takeoff, landing, direction, clearance, movement/AP cost, action
+   identity, arc, and playback duration. Planning selects a valid link from the
+   player's normal movement input, validates the whole capsule arc and landing,
+   and freezes the resulting segment and budget for commit, playback, and replay.
+   The player, ghost, replay projector, and enemy tactical candidates consume the
+   same resolver. The published Depot Yard includes connected and deliberately
+   disconnected tall-crate fixtures; real-collider coverage verifies below-limit
+   45-degree, at-limit 50-degree, and rejected 55-degree slopes as well as
+   one-way direction, obstruction, stale commits, cancellation, deterministic
+   arc sampling, replay semantics, and exact live restoration. The new full-body
+   traversal layer uses the authored `rifle jump` clip. Vault and mantle retain
+   distinct first-class action identities but temporarily share that binding
+   until their dedicated clips and published fixtures are authored.
 5. **Finish close-quarters presentation.** Replace the knife's procedural-only
    strike with the gameplay-owned authored action state, bind hit reactions,
    and tune equipment transitions, contact timing, IK, interruption, replay,
    and restoration. Then bind the already-imported reload, grenade, reaction,
-   turn, and traversal clips to the gameplay states that own them.
+   and turn clips to the gameplay states that own them.
    Incapacitation may transition from the authored `Shoulder Hit And Fall` or
    `Fall Over` clip into a bounded presentation-only ragdoll. Record a compact
    bone-pose trace for seekable replay instead of rerunning PhysX during

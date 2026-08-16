@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 14,
+    "schemaVersion": 15,
   "levelId": "main-depot-yard-v1",
   "displayName": "Depot Yard",
   "bounds": {
@@ -61,6 +61,12 @@
     {
       "id": "toppling-verification",
       "displayName": "Toppling Verification",
+      "locked": false,
+      "hidden": false
+    },
+    {
+      "id": "traversal-verification",
+      "displayName": "Traversal Verification",
       "locked": false,
       "hidden": false
     }
@@ -219,6 +225,9 @@
     { "id": "deck-wall-north-02", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 10.0, "y": 3.0, "z": 10.0 }, "yawDegrees": 180.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
     { "id": "deck-wall-north-03", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 12.5, "y": 3.0, "z": 10.0 }, "yawDegrees": 180.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
 
+    { "id": "traversal-connected-crate", "archetypeId": "prop.crate.standard", "groupId": "traversal-verification", "transform": { "position": { "x": 3.75, "y": 0.0, "z": -8.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "traversal-disconnected-crate", "archetypeId": "prop.crate.standard", "groupId": "traversal-verification", "transform": { "position": { "x": 7.0, "y": 0.0, "z": -8.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+
     { "id": "yard-runner", "archetypeId": "vehicle.buggy.standard", "transform": { "position": { "x": -1.5, "y": 0.0, "z": -3.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
 
     { "id": "crate-pin-demo", "archetypeId": "prop.crate.standard", "groupId": "toppling-verification", "transform": { "position": { "x": 0.125, "y": 2.0, "z": -8.75 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
@@ -280,6 +289,22 @@
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
       ]
+    }
+  ],
+  "traversalLinks": [
+    {
+      "id": "jump.connected-crate",
+      "actionId": "traversal.jump",
+      "kind": "jump",
+      "takeoff": { "x": 2.75, "y": 0.02, "z": -8.0 },
+      "landing": { "x": 4.75, "y": 0.02, "z": -8.0 },
+      "bidirectional": true,
+      "activationRadius": 0.45,
+      "movementCost": 2.25,
+      "actionPointCost": 0,
+      "arcHeight": 1.25,
+      "playbackDurationSeconds": 0.75,
+      "clearancePadding": 0.04
     }
   ],
   "scenario": {

@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
+using GritGud.Domain.Levels;
 using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
@@ -22,10 +24,15 @@ namespace GritGud.Presentation.Gameplay
         private MovementRoutePlaybackPresenter playbackPresenter;
         private float pendingPlanDistance;
         private long plannerTurnSequence = -1L;
+        private IReadOnlyList<LevelTraversalLinkData> traversalLinks =
+            Array.Empty<LevelTraversalLinkData>();
 
         public GameplaySession Session { get; private set; }
 
         public float PlannedCost => planner?.TotalCost ?? 0f;
+
+        public int PlannedActionPointCost =>
+            planner?.TotalActionPointCost ?? 0;
 
         public int PlanPointCount => planner?.Points.Count ?? 0;
 
@@ -44,7 +51,8 @@ namespace GritGud.Presentation.Gameplay
             ExplorationMovementInput cameraRelativeInput,
             IGameplayInputSource gameplayInput,
             ThirdPersonMotor actorMotor,
-            string authoritativeActorId)
+            string authoritativeActorId,
+            IEnumerable<LevelTraversalLinkData> authoredTraversalLinks = null)
         {
             if (session == null)
             {
@@ -59,6 +67,14 @@ namespace GritGud.Presentation.Gameplay
             Unbind();
             Session = session;
             inputSource = gameplayInput;
+            var links = new List<LevelTraversalLinkData>();
+            foreach (LevelTraversalLinkData link in authoredTraversalLinks
+                ?? Array.Empty<LevelTraversalLinkData>())
+            {
+                if (link != null)
+                    links.Add(link.DeepCopy());
+            }
+            traversalLinks = links.AsReadOnly();
             SetActor(
                 cameraRelativeInput,
                 actorMotor,
@@ -105,7 +121,9 @@ namespace GritGud.Presentation.Gameplay
             actorId = authoritativeActorId;
             ghostPresenter = new MovementRouteGhostPresenter(actorTransform);
             playbackPresenter = new MovementRoutePlaybackPresenter(actorMotor);
-            SegmentValidator = new UnityMovementRouteSegmentValidator(controller);
+            SegmentValidator = new UnityMovementRouteSegmentValidator(
+                controller,
+                traversalLinks);
             pendingPlanDistance = 0f;
             plannerTurnSequence = -1L;
             LastPlanFailure = RoutePlanFailure.None;
@@ -130,6 +148,7 @@ namespace GritGud.Presentation.Gameplay
             actorTransform = null;
             actorId = null;
             Session = null;
+            traversalLinks = Array.Empty<LevelTraversalLinkData>();
             pendingPlanDistance = 0f;
             plannerTurnSequence = -1L;
             LastPlanFailure = RoutePlanFailure.None;
@@ -276,7 +295,13 @@ namespace GritGud.Presentation.Gameplay
 
                 pendingPlanDistance -= RouteSampleDistance;
                 LastPlanFailure = RoutePlanFailure.None;
-                StatusMessage = string.Empty;
+                MovementRouteSegmentRecord appended =
+                    planner.Segments[planner.Segments.Count - 1];
+                StatusMessage = appended.IsTraversal
+                    ? $"{appended.Kind.ToString().ToUpperInvariant()}"
+                        + $" - {appended.MovementCost:0.##} MOVE"
+                        + $" - {appended.ActionPointCost} AP"
+                    : string.Empty;
             }
         }
 

@@ -93,6 +93,67 @@ namespace GritGud.Domain.Tests.Levels
         }
 
         [Test]
+        public void AuthoredTraversalLinkWithStableCostsAndTrajectoryIsValid()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            document.traversalLinks.Add(new LevelTraversalLinkData
+            {
+                id = "jump.demo",
+                actionId = "traversal.jump",
+                kind = LevelTraversalLinkData.JumpKind,
+                takeoff = new Float3Data(0f, 0f, 0f),
+                landing = new Float3Data(0f, 0f, 2f),
+                movementCost = 2.5f,
+                actionPointCost = 1,
+                arcHeight = 1.25f,
+                playbackDurationSeconds = 0.8f,
+            });
+
+            IReadOnlyList<LevelValidationIssue> issues =
+                LevelValidator.Validate(document);
+
+            Assert.That(LevelValidator.HasErrors(issues), Is.False);
+        }
+
+        [Test]
+        public void InvalidTraversalLinksReportIdentityEndpointAndCostErrors()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            document.traversalLinks.Add(new LevelTraversalLinkData
+            {
+                id = "duplicate",
+                actionId = string.Empty,
+                kind = "teleport",
+                takeoff = new Float3Data(0f, 0f, 0f),
+                landing = new Float3Data(0f, 0f, 0f),
+                movementCost = 0f,
+                actionPointCost = -1,
+            });
+            document.traversalLinks.Add(new LevelTraversalLinkData
+            {
+                id = "duplicate",
+                actionId = "traversal.jump",
+                kind = LevelTraversalLinkData.JumpKind,
+                takeoff = new Float3Data(0f, 0f, 0f),
+                landing = new Float3Data(0f, 0f, 2f),
+            });
+
+            IReadOnlyList<LevelValidationIssue> issues =
+                LevelValidator.Validate(document);
+
+            Assert.That(issues.Any(item => item.Code == "traversal.link.id"),
+                Is.True);
+            Assert.That(issues.Any(item => item.Code == "traversal.link.action"),
+                Is.True);
+            Assert.That(issues.Any(item => item.Code == "traversal.link.kind"),
+                Is.True);
+            Assert.That(issues.Any(item =>
+                item.Code == "traversal.link.endpoints"), Is.True);
+            Assert.That(issues.Any(item =>
+                item.Code == "traversal.link.cost-or-trajectory"), Is.True);
+        }
+
+        [Test]
         public void DuplicateEntityIdsIdentifyTheEntity()
         {
             LevelDocument document = LevelDocumentFactory.CreateEmpty();

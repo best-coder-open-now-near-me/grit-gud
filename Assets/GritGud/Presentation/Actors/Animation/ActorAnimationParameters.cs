@@ -17,6 +17,7 @@ namespace GritGud.Presentation.Actors.Animation
         public const string WeaponLayerName = "Weapon Upper Body";
         public const string RecoilLayerName = "Weapon Recoil";
         public const string ActionLayerName = "Actor Actions";
+        public const string TraversalLayerName = "Actor Traversal";
         public const string EmptyHandsStateName = "Empty Hands";
         public const string RifleAimStateName = "Rifle Aim";
         public const string LauncherAimStateName = "Launcher Aim";
@@ -25,6 +26,8 @@ namespace GritGud.Presentation.Actors.Animation
         public const string LauncherRecoilStateName = "Launcher Recoil";
         public const string NoActionStateName = "No Action";
         public const string ThrowStateName = "Throw";
+        public const string NoTraversalStateName = "No Traversal";
+        public const string JumpStateName = "Jump";
 
         public static readonly int MoveX = Animator.StringToHash(MoveXName);
         public static readonly int MoveY = Animator.StringToHash(MoveYName);
@@ -52,5 +55,7 @@ namespace GritGud.Presentation.Actors.Animation
             Animator.StringToHash(NoActionStateName);
         public static readonly int ThrowState =
             Animator.StringToHash(ThrowStateName);
+        public static readonly int JumpState =
+            Animator.StringToHash(JumpStateName);
     }
 }

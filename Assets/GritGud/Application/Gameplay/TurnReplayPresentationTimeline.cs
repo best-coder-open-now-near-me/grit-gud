@@ -137,6 +137,9 @@ namespace GritGud.Application.Gameplay
         Reaction = 4,
         Pinned = 5,
         GetUp = 6,
+        Jump = 7,
+        Vault = 8,
+        Mantle = 9,
     }
 
     public sealed class TurnReplayActorActionState
@@ -274,9 +277,61 @@ namespace GritGud.Application.Gameplay
                         progress);
                 }
             }
+            else if (entry is MovementRouteCommittedJournalEntry movement)
+            {
+                ProjectTraversal(movement, progress, states);
+            }
             return states.Count == 0
                 ? Array.Empty<TurnReplayActorActionState>()
                 : states.AsReadOnly();
+        }
+
+        private static void ProjectTraversal(
+            MovementRouteCommittedJournalEntry movement,
+            float progress,
+            ICollection<TurnReplayActorActionState> states)
+        {
+            MovementRouteRecord route = movement.Route;
+            float targetSeconds = route.TotalPlaybackDurationSeconds
+                * progress;
+            float elapsed = 0f;
+            foreach (MovementRouteSegmentRecord segment in route.Segments)
+            {
+                float duration = segment.PlaybackDurationSeconds;
+                if (elapsed + duration <= targetSeconds
+                    && !ReferenceEquals(segment, route.Segments[
+                        route.Segments.Count - 1]))
+                {
+                    elapsed += duration;
+                    continue;
+                }
+                if (!segment.IsTraversal)
+                    return;
+                float segmentProgress = duration <= 0f
+                    ? 1f
+                    : (targetSeconds - elapsed) / duration;
+                Add(
+                    states,
+                    route.ActorId,
+                    MapTraversalKind(segment.Kind),
+                    movement.Sequence,
+                    segmentProgress);
+                return;
+            }
+        }
+
+        private static TurnReplayActorActionKind MapTraversalKind(
+            MovementRouteSegmentKind kind)
+        {
+            switch (kind)
+            {
+                case MovementRouteSegmentKind.Vault:
+                    return TurnReplayActorActionKind.Vault;
+                case MovementRouteSegmentKind.Mantle:
+                    return TurnReplayActorActionKind.Mantle;
+                default:
+                    return TurnReplayActorActionKind.Jump;
+            }
         }
 
         private static void ProjectAction(

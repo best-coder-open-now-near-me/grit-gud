@@ -44,6 +44,8 @@ namespace GritGud.Editor
         internal const string ShooterAnimationRoot = "Assets/Basic Shooter Pack";
         internal const string RifleFirePath =
             ShooterAnimationRoot + "/firing rifle.fbx";
+        internal const string JumpPath =
+            ShooterAnimationRoot + "/rifle jump.fbx";
         internal const string TurnLeftPath =
             ShooterAnimationRoot + "/turn left.fbx";
         internal const string TurnRightPath =

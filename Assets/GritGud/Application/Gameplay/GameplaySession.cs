@@ -1118,8 +1118,21 @@ namespace GritGud.Application.Gameplay
                     "The movement route no longer begins at the actor's authoritative pose.");
             }
 
-            TurnBudget updatedBudget =
-                actor.TurnBudget.SpendMovement(route.TotalCost);
+            if (route.HasFrozenBudget
+                && (actor.TurnBudget.ActionPoints
+                        != route.PreviousBudget.ActionPoints
+                    || actor.TurnBudget.MovementOpportunity
+                        != route.PreviousBudget.MovementOpportunity))
+            {
+                throw new InvalidOperationException(
+                    "The movement route was planned against a stale turn budget.");
+            }
+
+            TurnBudget updatedBudget = actor.TurnBudget.SpendAction(
+                new ActionCost(
+                    route.TotalActionPointCost,
+                    route.TotalCost,
+                    ActionMobility.Mobile));
             actor.TurnBudget = updatedBudget;
             pendingMovementRoute = route;
             Operation = GameplaySessionOperation.ResolvingMovement;

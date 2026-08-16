@@ -403,7 +403,8 @@ namespace GritGud.Presentation.Gameplay
                 worldStart.MovementInput,
                 inputController,
                 player,
-                initiallySelectedActorId);
+                initiallySelectedActorId,
+                content.Level.traversalLinks);
             hud.BindTurnMovement(turnMovementController);
             ActorAnimationCoordinator animationCoordinator =
                 player.GetComponent<ActorAnimationCoordinator>();
@@ -500,7 +501,8 @@ namespace GritGud.Presentation.Gameplay
                 partyControl,
                 dialogueLog,
                 sessionPresenter.TryBeginEncounter,
-                obscuranceQuery: smokeFieldSession);
+                obscuranceQuery: smokeFieldSession,
+                traversalLinks: content.Level.traversalLinks);
             targetAcquisitionPresenter.SetWeaponAimOriginProvider(
                 () => partyPresentation?.SelectedWeapon?.Muzzle != null
                     ? partyPresentation.SelectedWeapon.Muzzle.position

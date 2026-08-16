@@ -56,6 +56,29 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void MainLevelPublishesConnectedAndDisconnectedTraversalObstacles()
+        {
+            LevelDocument document = LoadMainLevelDocument();
+            LevelTraversalLinkData link = document.traversalLinks.Single(
+                candidate => candidate.id == "jump.connected-crate");
+
+            Assert.That(link.actionId, Is.EqualTo("traversal.jump"));
+            Assert.That(link.kind, Is.EqualTo(LevelTraversalLinkData.JumpKind));
+            Assert.That(link.bidirectional, Is.True);
+            Assert.That(link.takeoff.x, Is.EqualTo(2.75f));
+            Assert.That(link.landing.x, Is.EqualTo(4.75f));
+            Assert.That(link.arcHeight, Is.EqualTo(1.25f));
+            Assert.That(document.entities.Single(entity =>
+                entity.id == "traversal-connected-crate").groupId,
+                Is.EqualTo("traversal-verification"));
+            Assert.That(document.entities.Single(entity =>
+                entity.id == "traversal-disconnected-crate").groupId,
+                Is.EqualTo("traversal-verification"));
+            Assert.That(document.traversalLinks.Any(candidate =>
+                candidate.id.Contains("disconnected")), Is.False);
+        }
+
+        [Test]
         public void CharacterControllerCanClimbSouthRunOntoRaisedDeck()
         {
             CharacterController controller = CreateTraversalActor(

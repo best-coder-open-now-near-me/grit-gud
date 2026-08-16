@@ -108,6 +108,25 @@ namespace GritGud.PlayMode.Tests
                         ActorLocomotionAnimationPresenter>().enabled,
                         Is.False);
 
+                    replay.Present(
+                        new GameplayActorSnapshot(
+                            "player",
+                            new GameplayActorPose(
+                                new GameplayPosition(4.5f, 1.25f, 3f),
+                                90f,
+                                ActorStance.Standing),
+                            new TurnBudget(2, 4f)),
+                        new TurnReplayActorActionState(
+                            "player",
+                            TurnReplayActorActionKind.Jump,
+                            journalSequence: 2,
+                            normalizedProgress: 0.5f));
+
+                    Assert.That(animation.ReplayAction,
+                        Is.EqualTo(ActorAnimationAction.Jump));
+                    Assert.That(view.ReplayActions.CurrentState.Kind,
+                        Is.EqualTo(TurnReplayActorActionKind.Jump));
+
                     ActorPinState replayPin = CreatePinState(
                         "player",
                         "replay-crate",
@@ -135,7 +154,7 @@ namespace GritGud.PlayMode.Tests
                         new TurnReplayActorActionState(
                             "player",
                             TurnReplayActorActionKind.Pinned,
-                            journalSequence: 2,
+                            journalSequence: 3,
                             normalizedProgress: 0.75f));
 
                     Assert.That(view.ReplayActions.CurrentPinState,
@@ -163,7 +182,7 @@ namespace GritGud.PlayMode.Tests
                         new TurnReplayActorActionState(
                             "player",
                             TurnReplayActorActionKind.GetUp,
-                            journalSequence: 3,
+                            journalSequence: 4,
                             normalizedProgress: 0.25f));
 
                     Assert.That(view.ReplayActions.CurrentPinState, Is.Null);
@@ -195,6 +214,70 @@ namespace GritGud.PlayMode.Tests
                 world?.Dispose();
                 if (registry == null)
                     Object.Destroy(actor);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator TraversalPlaybackUsesAuthoredJumpAndRestoresMotorState()
+        {
+            GameObject prefab = Resources.Load<GameObject>(
+                "Actors/DefaultPlayerActor");
+            GameObject actor = Object.Instantiate(prefab);
+            try
+            {
+                yield return null;
+                ThirdPersonMotor motor = actor.GetComponent<ThirdPersonMotor>();
+                CharacterController controller =
+                    actor.GetComponent<CharacterController>();
+                ActorLocomotionAnimationPresenter locomotion = actor.GetComponent<
+                    ActorLocomotionAnimationPresenter>();
+                ActorAnimationCoordinator animation = actor.GetComponent<
+                    ActorAnimationCoordinator>();
+                bool motorEnabled = motor.enabled;
+                bool controllerEnabled = controller.enabled;
+                bool locomotionEnabled = locomotion.enabled;
+                var route = new MovementRouteRecord(
+                    "player",
+                    new GameplayActorPose(
+                        new GameplayPosition(0f, 0f, 0f),
+                        0f),
+                    new TurnBudget(4, 8f),
+                    new[]
+                    {
+                        new MovementRouteSegmentRecord(
+                            new GameplayPosition(0f, 0f, 0f),
+                            new GameplayPosition(0f, 0f, 2f),
+                            MovementRouteSegmentKind.Jump,
+                            "jump.playmode",
+                            "traversal.jump",
+                            2f,
+                            0,
+                            1.25f,
+                            0.8f),
+                    });
+                var playback = new MovementRoutePlaybackPresenter(motor);
+
+                playback.Begin(route);
+
+                Assert.That(motor.enabled, Is.False);
+                Assert.That(controller.enabled, Is.False);
+                Assert.That(locomotion.enabled, Is.False);
+                Assert.That(playback.Tick(0.4f), Is.False);
+                Assert.That(actor.transform.position.y,
+                    Is.EqualTo(1.25f).Within(0.001f));
+                Assert.That(animation.LastRequestedAction,
+                    Is.EqualTo(ActorAnimationAction.Jump));
+                Assert.That(playback.Tick(0.4f), Is.True);
+
+                Assert.That(actor.transform.position,
+                    Is.EqualTo(new Vector3(0f, 0f, 2f)));
+                Assert.That(motor.enabled, Is.EqualTo(motorEnabled));
+                Assert.That(controller.enabled, Is.EqualTo(controllerEnabled));
+                Assert.That(locomotion.enabled, Is.EqualTo(locomotionEnabled));
+            }
+            finally
+            {
+                Object.Destroy(actor);
             }
         }
 

@@ -90,8 +90,12 @@ For the first playable slice:
    movement clips because those are the complete crouch family in the installed
    source package; all crouched movement projects onto that cycle until authored
    strafe and reverse clips exist.
-4. Defer jump unless traversal requires it. The Depot Yard stairs should work
-   through grounded locomotion and step/slope handling.
+4. Keep stairs and valid slopes on grounded locomotion. When normal route input
+   reaches an authored traversal link, automatically plan its frozen jump,
+   vault, or mantle segment; do not expose a separate general-purpose Jump
+   button. The current full-body traversal layer binds the authored
+   `rifle jump` clip, while vault and mantle share it until dedicated clips are
+   selected.
 5. Keep the inert target visually simple until player movement and turn flow are
    stable.
 
@@ -255,6 +259,30 @@ core gameplay or animation-driver code.
 | Repository and build bloat | Curate raw packages, avoid vendor demo dependencies, and audit referenced build assets. |
 | WebGL input traps the player | Gameplay never requests cursor lock; `Esc` may release host/browser capture without triggering application navigation. |
 
+## Traversal verification
+
+The published Depot Yard places two tall crates in a row east of the player at
+the south side of the yard. The nearer crate has the bidirectional authored
+`jump.connected-crate` link; the farther crate is deliberately disconnected.
+
+1. Press `T` to enter turn mode, then use the ordinary movement keys to extend
+   the ghost route east through the nearer crate. No Jump button is involved.
+2. Confirm that the route snaps to the takeoff, draws a raised arc, and reports
+   `JUMP - 2.25 MOVE - 0 AP`; press `Enter` to commit it.
+3. Confirm that the actor plays the authored jump action and lands on the exact
+   committed endpoint. Plan back across it to verify the bidirectional link.
+4. Try to continue through the farther crate. Planning must stop because no
+   traversal link authorizes that crossing.
+5. Open replay and scrub across the committed movement. Forward playback must
+   reproduce the same arc and Jump state; backward seeking and arbitrary
+   scrubbing must not emit transient effects, and exiting replay must restore
+   the exact live pose and animation/equipment state.
+
+Slope boundaries are covered with real Unity colliders in automated tests:
+45 degrees and the authored 50-degree limit are accepted, while 55 degrees is
+rejected. They are intentionally not extra pitched modules in the published
+yard.
+
 ## Current next action
 
 Phase 3 acceptance remains complete after WebGL traversal, turn-cycle,
@@ -282,3 +310,9 @@ uses a short acceleration ramp to play each committed movement record. Ordinary
 firearms remain immediate; emergency-response eligibility is explicitly authored
 only on high-threat ordnance. Eligible impacts derive one shared reaction AP
 allowance and re-query the world once after every responder has acted.
+Authored automatic traversal is now complete through schema, planning,
+clearance, playback, replay, animation, published connected/disconnected
+fixtures, and EditMode/PlayMode lifecycle coverage. The next production slice
+is close-quarters presentation: authored knife action timing, reactions,
+equipment transitions, IK, interruption, replay, and restoration, followed by
+the bounded incapacitation-to-ragdoll presentation experiment.

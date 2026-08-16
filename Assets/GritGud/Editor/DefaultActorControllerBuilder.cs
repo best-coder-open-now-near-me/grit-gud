@@ -23,6 +23,7 @@ namespace GritGud.Editor
             AnimationClip launcherAim,
             AnimationClip launcherFire,
             AnimationClip throwClip,
+            AnimationClip jumpClip,
             AvatarMask upperBodyMask)
         {
             AssetDatabase.DeleteAsset(ControllerPath);
@@ -86,6 +87,7 @@ namespace GritGud.Editor
                 launcherFire,
                 upperBodyMask);
             AddActionLayer(controller, throwClip, upperBodyMask);
+            AddTraversalLayer(controller, jumpClip);
             EditorUtility.SetDirty(locomotion);
             EditorUtility.SetDirty(crouchedLocomotion);
             EditorUtility.SetDirty(controller);
@@ -340,6 +342,43 @@ namespace GritGud.Editor
                 AnimatorConditionMode.Equals,
                 poseValue,
                 ActorAnimationParameters.WeaponPoseName);
+        }
+
+        private static void AddTraversalLayer(
+            AnimatorController controller,
+            AnimationClip jumpClip)
+        {
+            controller.AddLayer(ActorAnimationParameters.TraversalLayerName);
+            AnimatorControllerLayer[] layers = controller.layers;
+            int layerIndex = layers.Length - 1;
+            AnimatorControllerLayer layer = layers[layerIndex];
+            layer.avatarMask = null;
+            layer.blendingMode = AnimatorLayerBlendingMode.Override;
+            layer.defaultWeight = 0f;
+            layer.iKPass = false;
+            layers[layerIndex] = layer;
+            controller.layers = layers;
+
+            AnimatorStateMachine machine = layer.stateMachine;
+            machine.name = ActorAnimationParameters.TraversalLayerName;
+            AnimatorState idle = machine.AddState(
+                ActorAnimationParameters.NoTraversalStateName,
+                new Vector3(50f, 120f));
+            idle.writeDefaultValues = false;
+            idle.AddStateMachineBehaviour<ActorActionLayerReleaseBehaviour>();
+            AnimatorState jump = machine.AddState(
+                ActorAnimationParameters.JumpStateName,
+                new Vector3(300f, 120f));
+            jump.motion = jumpClip;
+            jump.writeDefaultValues = false;
+
+            AnimatorStateTransition exit = jump.AddTransition(idle);
+            exit.hasExitTime = true;
+            exit.exitTime = ActionExitNormalizedTime;
+            exit.hasFixedDuration = true;
+            exit.duration = ActionReturnTransitionSeconds;
+            machine.defaultState = idle;
+            EditorUtility.SetDirty(machine);
         }
 
         private static void AddRecoilReturnTransition(

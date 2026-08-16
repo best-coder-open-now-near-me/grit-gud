@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
+using GritGud.Domain.Levels;
 using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
@@ -77,7 +78,8 @@ namespace GritGud.Presentation.Gameplay
             GameplayDialogueLog dialogueLog,
             Func<bool> onEncounterStartRequested,
             EnemyPresentationCatalog enemyPresentationCatalog = null,
-            ISightObscuranceQuery obscuranceQuery = null)
+            ISightObscuranceQuery obscuranceQuery = null,
+            IEnumerable<LevelTraversalLinkData> traversalLinks = null)
         {
             Unbind();
             session = gameplaySession ?? throw new ArgumentNullException(
@@ -127,7 +129,8 @@ namespace GritGud.Presentation.Gameplay
                     registry,
                     definition,
                     view,
-                    obscuranceQuery);
+                    obscuranceQuery,
+                    traversalLinks);
                 enemies.Add(
                     definition.Id,
                     new EnemyRuntime(

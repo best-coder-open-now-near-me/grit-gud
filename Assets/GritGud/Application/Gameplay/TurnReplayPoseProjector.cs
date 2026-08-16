@@ -176,27 +176,28 @@ namespace GritGud.Application.Gameplay
             MovementRouteRecord route,
             float progress)
         {
-            float targetDistance = route.TotalCost * progress;
-            float traversed = 0f;
-            for (int index = 1; index < route.Points.Count; index++)
+            float targetSeconds = route.TotalPlaybackDurationSeconds
+                * progress;
+            float traversedSeconds = 0f;
+            foreach (MovementRouteSegmentRecord segment in route.Segments)
             {
-                GameplayPosition from = route.Points[index - 1];
-                GameplayPosition to = route.Points[index];
-                float length = from.DistanceTo(to);
-                if (traversed + length < targetDistance)
+                float duration = segment.PlaybackDurationSeconds;
+                if (traversedSeconds + duration <= targetSeconds
+                    && !ReferenceEquals(segment, route.Segments[
+                        route.Segments.Count - 1]))
                 {
-                    traversed += length;
+                    traversedSeconds += duration;
                     continue;
                 }
-                float segmentProgress = length <= 0f
+                float segmentProgress = duration <= 0f
                     ? 1f
-                    : (targetDistance - traversed) / length;
+                    : (targetSeconds - traversedSeconds) / duration;
                 float facing = CalculateFacing(
-                    from,
-                    to,
+                    segment.From,
+                    segment.To,
                     route.OriginPose.FacingDegrees);
                 return new GameplayActorPose(
-                    Lerp(from, to, segmentProgress),
+                    segment.Sample(segmentProgress),
                     facing,
                     route.OriginPose.Stance);
             }

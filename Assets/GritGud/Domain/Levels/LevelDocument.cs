@@ -745,10 +745,56 @@ namespace GritGud.Domain.Levels
     }
 
     [Serializable]
+    public sealed class LevelTraversalLinkData
+    {
+        public const string JumpKind = "jump";
+        public const string VaultKind = "vault";
+        public const string MantleKind = "mantle";
+
+        public string id = string.Empty;
+        public string actionId = string.Empty;
+        public string kind = JumpKind;
+        public Float3Data takeoff;
+        public Float3Data landing;
+        public bool bidirectional;
+        public float activationRadius = 0.45f;
+        public float movementCost = 1f;
+        public int actionPointCost;
+        public float arcHeight = 1f;
+        public float playbackDurationSeconds = 0.65f;
+        public float clearancePadding = 0.04f;
+
+        public void Normalize()
+        {
+            id = id?.Trim() ?? string.Empty;
+            actionId = actionId?.Trim() ?? string.Empty;
+            kind = kind?.Trim().ToLowerInvariant() ?? string.Empty;
+        }
+
+        public LevelTraversalLinkData DeepCopy() =>
+            new LevelTraversalLinkData
+            {
+                id = id ?? string.Empty,
+                actionId = actionId ?? string.Empty,
+                kind = kind ?? string.Empty,
+                takeoff = takeoff,
+                landing = landing,
+                bidirectional = bidirectional,
+                activationRadius = activationRadius,
+                movementCost = movementCost,
+                actionPointCost = actionPointCost,
+                arcHeight = arcHeight,
+                playbackDurationSeconds = playbackDurationSeconds,
+                clearancePadding = clearancePadding,
+            };
+    }
+
+    [Serializable]
     public sealed class LevelDocument
     {
-        public const int CurrentSchemaVersion = 14;
+        public const int CurrentSchemaVersion = 15;
         public const int MaximumEntityGroupCount = 64;
+        public const int MaximumTraversalLinkCount = 256;
 
         public int schemaVersion = CurrentSchemaVersion;
         public string levelId = string.Empty;
@@ -761,6 +807,8 @@ namespace GritGud.Domain.Levels
         public List<LevelEntityGroupData> groups = new List<LevelEntityGroupData>();
         public List<LevelEntity> entities = new List<LevelEntity>();
         public List<TerrainSurfaceData> terrainSurfaces = new List<TerrainSurfaceData>();
+        public List<LevelTraversalLinkData> traversalLinks =
+            new List<LevelTraversalLinkData>();
         public LevelScenarioData scenario = new LevelScenarioData();
 
         [NonSerialized]
@@ -779,6 +827,7 @@ namespace GritGud.Domain.Levels
                 group?.Normalize();
             entities = entities ?? new List<LevelEntity>();
             terrainSurfaces = terrainSurfaces ?? new List<TerrainSurfaceData>();
+            traversalLinks = traversalLinks ?? new List<LevelTraversalLinkData>();
             scenario = scenario ?? new LevelScenarioData();
             scenario.Normalize();
 
@@ -790,6 +839,11 @@ namespace GritGud.Domain.Levels
             foreach (TerrainSurfaceData surface in terrainSurfaces)
             {
                 surface?.Normalize();
+            }
+
+            foreach (LevelTraversalLinkData link in traversalLinks)
+            {
+                link?.Normalize();
             }
         }
 
@@ -826,6 +880,14 @@ namespace GritGud.Domain.Levels
                 foreach (TerrainSurfaceData surface in terrainSurfaces)
                 {
                     copy.terrainSurfaces.Add(surface?.DeepCopy());
+                }
+            }
+
+            if (traversalLinks != null)
+            {
+                foreach (LevelTraversalLinkData link in traversalLinks)
+                {
+                    copy.traversalLinks.Add(link?.DeepCopy());
                 }
             }
 

@@ -61,6 +61,10 @@ namespace GritGud.Editor
                 RifleFirePath,
                 "Rifle Fire",
                 mustLoop: false);
+            AnimationClip jumpClip = LoadRequiredClip(
+                JumpPath,
+                "Jump",
+                mustLoop: false);
             AnimationClip launcherAim = LoadRequiredClip(
                 LauncherAimPath,
                 "Launcher Aim",
@@ -97,6 +101,7 @@ namespace GritGud.Editor
                 launcherAim,
                 launcherFire,
                 throwClip,
+                jumpClip,
                 upperBodyMask);
             ActorAnimationProfile profile =
                 DefaultActorProfileBuilder.Build(controller);
@@ -168,6 +173,7 @@ namespace GritGud.Editor
                 LoadAnimationClip(TurnLeftPath) != null &&
                 LoadAnimationClip(TurnRightPath) != null &&
                 LoadAnimationClip(RifleFirePath) != null &&
+                LoadAnimationClip(JumpPath) != null &&
                 LoadAnimationClip(LauncherAimPath) != null &&
                 LoadAnimationClip(LauncherFirePath) != null &&
                 LoadAnimationClip(ThrowPath) != null;
@@ -231,6 +237,10 @@ namespace GritGud.Editor
                 RifleFirePath,
                 loop: false,
                 additive: true);
+            ConfigureHumanoidClip(
+                JumpPath,
+                loop: false,
+                additive: false);
             ConfigureHumanoidClip(
                 LauncherFirePath,
                 loop: false,

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Presentation.Actors.Animation;
@@ -16,7 +17,7 @@ namespace GritGud.Presentation.Gameplay
         private static readonly int FillColor = Shader.PropertyToID("_FillColor");
         private static readonly UnityEngine.Color GhostColor =
             GameplayVisualPalette.RouteGhost;
-        private const float PreviewSpeed = 2f;
+        private const float PreviewTimeScale = 1.25f;
         private const float EndpointHoldDuration = 1f;
 
         private GameObject ghost;
@@ -26,8 +27,9 @@ namespace GritGud.Presentation.Gameplay
         private GameObject routeLineObject;
         private LineRenderer routeLine;
         private Material routeMaterial;
-        private float previewDistance;
+        private float previewSeconds;
         private float endpointHoldRemaining;
+        private int presentedTraversalSegment = -1;
 
         public MovementRouteGhostPresenter(Transform sourceActor)
         {
@@ -50,24 +52,36 @@ namespace GritGud.Presentation.Gameplay
             }
 
             routeLineObject.SetActive(true);
-            routeLine.positionCount = planner.Points.Count;
-            for (int index = 0; index < planner.Points.Count; index++)
+            var linePositions = new List<Vector3>();
+            foreach (MovementRouteSegmentRecord segment in planner.Segments)
             {
+                if (linePositions.Count == 0)
+                    linePositions.Add(MovementRouteSampling.ToVector3(
+                        segment.From));
+                int subdivisions = segment.IsTraversal ? 12 : 1;
+                for (int step = 1; step <= subdivisions; step++)
+                {
+                    linePositions.Add(MovementRouteSampling.ToVector3(
+                        segment.Sample((float)step / subdivisions)));
+                }
+            }
+            routeLine.positionCount = linePositions.Count;
+            for (int index = 0; index < linePositions.Count; index++)
                 routeLine.SetPosition(
                     index,
-                    MovementRouteSampling.ToVector3(planner.Points[index])
-                        + (Vector3.up * 0.06f));
-            }
+                    linePositions[index] + (Vector3.up * 0.06f));
 
             ghost.SetActive(true);
             bool holdingAtEndpoint = AdvancePreview(
-                planner.TotalCost,
+                planner.TotalPlaybackDurationSeconds,
                 Mathf.Max(0f, deltaTime));
             if (!MovementRouteSampling.TrySample(
-                    planner.Points,
-                    previewDistance,
+                    planner.Segments,
+                    previewSeconds,
                     out Vector3 position,
-                    out Vector3 direction))
+                    out Vector3 direction,
+                    out int segmentIndex,
+                    out _))
             {
                 return;
             }
@@ -89,16 +103,24 @@ namespace GritGud.Presentation.Gameplay
                         sourceStancePresenter.Stance);
                 }
 
+                if (planner.Segments[segmentIndex].IsTraversal
+                    && presentedTraversalSegment != segmentIndex)
+                {
+                    animationCoordinator.TryRequestAction(
+                        ActorAnimationAction.Jump);
+                    presentedTraversalSegment = segmentIndex;
+                }
+
                 ActorLocomotionAnimationState locomotion =
                     ActorLocomotionAnimationProjector.Project(
-                    holdingAtEndpoint
-                        ? Vector3.zero
-                        : planarDirection.normalized * PreviewSpeed,
-                    rotation,
-                    true,
-                    0f,
-                    animationCoordinator.Profile.LocomotionReferenceSpeed,
-                    animationCoordinator.Profile.TurnReferenceDegreesPerSecond);
+                        holdingAtEndpoint
+                            ? Vector3.zero
+                            : planarDirection.normalized * 2f,
+                        rotation,
+                        !planner.Segments[segmentIndex].IsTraversal,
+                        0f,
+                        animationCoordinator.Profile.LocomotionReferenceSpeed,
+                        animationCoordinator.Profile.TurnReferenceDegreesPerSecond);
                 animationCoordinator.PresentFrame(
                     new ActorAnimationFrame(
                         locomotion,
@@ -119,43 +141,45 @@ namespace GritGud.Presentation.Gameplay
                 routeLineObject.SetActive(false);
             }
 
-            previewDistance = 0f;
+            previewSeconds = 0f;
             endpointHoldRemaining = 0f;
+            presentedTraversalSegment = -1;
         }
 
-        private bool AdvancePreview(float routeLength, float deltaTime)
+        private bool AdvancePreview(float routeDuration, float deltaTime)
         {
-            if (routeLength <= 0f)
+            if (routeDuration <= 0f)
             {
-                previewDistance = 0f;
+                previewSeconds = 0f;
                 endpointHoldRemaining = 0f;
                 return false;
             }
 
             if (endpointHoldRemaining > 0f
-                && previewDistance < routeLength - 0.001f)
+                && previewSeconds < routeDuration - 0.001f)
             {
                 endpointHoldRemaining = 0f;
             }
 
             if (endpointHoldRemaining > 0f)
             {
-                previewDistance = routeLength;
+                previewSeconds = routeDuration;
                 endpointHoldRemaining -= deltaTime;
                 if (endpointHoldRemaining > 0f)
                 {
                     return true;
                 }
 
-                previewDistance = 0f;
+                previewSeconds = 0f;
                 endpointHoldRemaining = 0f;
+                presentedTraversalSegment = -1;
                 return false;
             }
 
-            previewDistance = Mathf.Min(
-                routeLength,
-                previewDistance + (PreviewSpeed * deltaTime));
-            if (previewDistance >= routeLength)
+            previewSeconds = Mathf.Min(
+                routeDuration,
+                previewSeconds + (PreviewTimeScale * deltaTime));
+            if (previewSeconds >= routeDuration)
             {
                 endpointHoldRemaining = EndpointHoldDuration;
                 return true;

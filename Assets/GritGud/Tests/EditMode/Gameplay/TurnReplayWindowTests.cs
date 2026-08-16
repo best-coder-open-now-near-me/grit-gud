@@ -388,6 +388,66 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void ReplayProjectsFrozenTraversalArcAndSemanticAction()
+        {
+            var origin = new GameplayActorPose(
+                new GameplayPosition(0f, 0f, 0f),
+                0f);
+            var route = new MovementRouteRecord(
+                "mara",
+                origin,
+                new TurnBudget(4, 8f),
+                new[]
+                {
+                    new MovementRouteSegmentRecord(
+                        origin.Position,
+                        new GameplayPosition(0f, 0f, 2f),
+                        MovementRouteSegmentKind.Jump,
+                        "jump.replay",
+                        "traversal.jump",
+                        2f,
+                        1,
+                        1.25f,
+                        0.8f),
+                });
+            var committed = new MovementRouteCommittedJournalEntry(1, route);
+            var window = new TurnReplayWindow(
+                "mara",
+                new[]
+                {
+                    new TurnReplaySegment(
+                        1,
+                        "mara",
+                        new GameplayJournalEntry[] { committed }),
+                });
+            var finalPoses = new Dictionary<string, GameplayActorPose>
+            {
+                ["mara"] = new GameplayActorPose(
+                    route.Destination,
+                    route.FinalFacingDegrees),
+            };
+
+            GameplayActorPose middle = TurnReplayPoseProjector.Project(
+                window,
+                finalPoses,
+                0.5f)["mara"];
+            var timeline = new TurnReplayEventTimeline(window);
+            TurnReplayActorActionState action =
+                TurnReplayActorActionProjector.Project(
+                    timeline,
+                    timeline.Events[0].StartSeconds
+                        + (timeline.Events[0].DurationSeconds * 0.5f))
+                .Single();
+
+            Assert.That(middle.Position.Y, Is.EqualTo(1.25f).Within(0.001f));
+            Assert.That(middle.Position.Z, Is.EqualTo(1f).Within(0.001f));
+            Assert.That(action.ActorId, Is.EqualTo("mara"));
+            Assert.That(action.Kind, Is.EqualTo(TurnReplayActorActionKind.Jump));
+            Assert.That(action.NormalizedProgress,
+                Is.EqualTo(0.5f).Within(0.001f));
+        }
+
+        [Test]
         public void StateTimelineProjectsCanonicalSegmentBoundariesAndEndpoint()
         {
             GameplaySession session = CreateSession();

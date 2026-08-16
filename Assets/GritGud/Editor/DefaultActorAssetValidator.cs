@@ -24,6 +24,8 @@ namespace GritGud.Editor
                     controller) &&
                 DefaultActorControllerValidator.HasRequiredActionLayer(
                     controller) &&
+                DefaultActorControllerValidator.HasRequiredTraversalLayer(
+                    controller) &&
                 AssetDatabase.LoadAssetAtPath<AvatarMask>(
                     LowerBodyMaskPath) != null &&
                 AssetDatabase.LoadAssetAtPath<ActorAnimationProfile>(
