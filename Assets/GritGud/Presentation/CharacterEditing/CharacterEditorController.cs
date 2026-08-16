@@ -15,7 +15,7 @@ namespace GritGud.Presentation.CharacterEditing
 {
     public sealed class CharacterEditorController : MonoBehaviour
     {
-        private const float ToolbarHeight = 72f;
+        private const float ToolbarHeight = 52f;
         private const float StatusHeight = 32f;
         private const float LeftWidth = 310f;
         private const float RightWidth = 410f;
@@ -42,8 +42,10 @@ namespace GritGud.Presentation.CharacterEditing
         private GameObject stage;
         private GameObject preview;
         private Camera sceneCamera;
+        private CharacterPreviewCameraController previewCamera;
         private Vector3 savedCameraPosition;
         private Quaternion savedCameraRotation;
+        private Rect savedCameraRect;
         private CameraClearFlags savedClearFlags;
         private Color savedBackground;
         private Vector2 bodyScroll;
@@ -53,8 +55,18 @@ namespace GritGud.Presentation.CharacterEditing
         private string status = "Ready.";
         private float previewYaw = 180f;
         private bool autoRotate;
+        private bool hasFramedPreview;
+        private ToolbarMenu activeMenu;
         private Action pendingDestructiveAction;
         private string pendingDestructivePrompt = string.Empty;
+
+        private enum ToolbarMenu
+        {
+            None,
+            File,
+            Edit,
+            View,
+        }
 
         public void Begin(CharacterDocument initial = null)
         {
@@ -86,6 +98,8 @@ namespace GritGud.Presentation.CharacterEditing
             DestroyObject(stage);
             stage = null;
             preview = null;
+            previewCamera = null;
+            hasFramedPreview = false;
             if (sceneCamera != null)
             {
                 sceneCamera.transform.SetPositionAndRotation(
@@ -93,6 +107,7 @@ namespace GritGud.Presentation.CharacterEditing
                     savedCameraRotation);
                 sceneCamera.clearFlags = savedClearFlags;
                 sceneCamera.backgroundColor = savedBackground;
+                sceneCamera.rect = savedCameraRect;
             }
             sceneCamera = null;
             enabled = false;
@@ -114,12 +129,16 @@ namespace GritGud.Presentation.CharacterEditing
             GUI.skin = styles.ResolveSkin(previousSkin);
             try
             {
+                UpdateCameraViewport();
+                HandleInput(Event.current);
                 DrawToolbar();
                 GUI.enabled = pendingDestructiveAction == null;
                 DrawIdentityAndBodies();
                 DrawAccessories();
                 GUI.enabled = true;
+                DrawViewportHelp();
                 DrawStatus();
+                DrawActiveMenu();
                 if (pendingDestructiveAction != null)
                     DrawDestructiveConfirmation();
             }
@@ -136,59 +155,97 @@ namespace GritGud.Presentation.CharacterEditing
             GUILayout.BeginHorizontal();
             bool interactionsEnabled = pendingDestructiveAction == null;
             GUI.enabled = interactionsEnabled;
-            if (GUILayout.Button("BACK", GUILayout.Width(74f), GUILayout.Height(34f)))
+            if (GUILayout.Button(new GUIContent("< MENU", "Return to the main menu"), ToolbarButton(76f)))
             {
                 RequestDestructiveAction(
                     "Return to the main menu and discard unsaved character changes?",
                     GameBootstrap.Instance.ReturnToMenu);
             }
-            if (GUILayout.Button("NEW", GUILayout.Width(66f), GUILayout.Height(34f)))
-            {
-                RequestDestructiveAction(
-                    "Create a new character and discard unsaved character changes?",
-                    () => Replace(CreateNewDocument(), false, "Created a new character."));
-            }
-            if (GUILayout.Button("RANDOMIZE", GUILayout.Width(108f), GUILayout.Height(34f)))
-                Randomize();
-            GUI.enabled = interactionsEnabled && session.CanUndo;
-            if (GUILayout.Button("UNDO", GUILayout.Width(70f), GUILayout.Height(34f)))
-                session.Undo();
-            GUI.enabled = interactionsEnabled && session.CanRedo;
-            if (GUILayout.Button("REDO", GUILayout.Width(70f), GUILayout.Height(34f)))
-                session.Redo();
             GUI.enabled = interactionsEnabled;
-            if (GUILayout.Button("SAVE DRAFT", GUILayout.Width(102f), GUILayout.Height(34f)))
-                SaveDraft();
-            GUI.enabled = interactionsEnabled && GameBootstrap.Instance.Supabase != null;
-            if (GUILayout.Button("CLOUD SAVE", GUILayout.Width(102f), GUILayout.Height(34f)))
-                SaveToCloud();
-            if (GUILayout.Button("CLOUD LOAD", GUILayout.Width(102f), GUILayout.Height(34f)))
-                RequestDestructiveAction("Load the cloud character and discard unsaved changes?", LoadFromCloud);
-            GUI.enabled = interactionsEnabled && PlayerPrefs.HasKey(DraftKey);
-            if (GUILayout.Button("LOAD DRAFT", GUILayout.Width(102f), GUILayout.Height(34f)))
-            {
-                RequestDestructiveAction(
-                    "Load the character draft and discard unsaved character changes?",
-                    LoadDraft);
-            }
-            GUI.enabled = interactionsEnabled;
-            if (GUILayout.Button("EXPORT", GUILayout.Width(78f), GUILayout.Height(34f)))
-                Export();
+            DrawMenuButton("FILE", ToolbarMenu.File, 56f);
+            DrawMenuButton("EDIT", ToolbarMenu.Edit, 56f);
+            DrawMenuButton("VIEW", ToolbarMenu.View, 60f);
             GUILayout.FlexibleSpace();
-            autoRotate = GUILayout.Toggle(
-                autoRotate,
-                "AUTO ROTATE",
-                GUI.skin.button,
-                GUILayout.Width(112f),
-                GUILayout.Height(34f));
             GUILayout.Label(
-                session.IsDirty ? "UNSAVED CHARACTER" : "SAVED",
-                styles.MutedLabel,
-                GUILayout.Height(34f));
+                $"{session.CreateSnapshot().displayName}  ·  {(session.IsDirty ? "Unsaved" : "Saved")}",
+                styles.ToolbarTitle,
+                GUILayout.Height(32f));
+            GUI.enabled = interactionsEnabled;
+            if (GUILayout.Button(new GUIContent("RANDOMIZE", "Generate a compatible appearance"), ToolbarButton(100f)))
+                Randomize();
+            Color previous = GUI.backgroundColor;
+            GUI.backgroundColor = LevelEditorTheme.PrimaryAction;
+            if (GUILayout.Button(new GUIContent("SAVE", "Save local draft (Ctrl+S)"), ToolbarButton(68f)))
+                SaveDraft();
+            GUI.backgroundColor = previous;
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
             GUI.enabled = true;
         }
+
+        private static GUILayoutOption[] ToolbarButton(float width) => new[]
+        {
+            GUILayout.Width(width),
+            GUILayout.Height(32f),
+        };
+
+        private void DrawMenuButton(string label, ToolbarMenu menu, float width)
+        {
+            if (GUILayout.Button(label + " ▾", ToolbarButton(width)))
+                activeMenu = activeMenu == menu ? ToolbarMenu.None : menu;
+        }
+
+        private void DrawActiveMenu()
+        {
+            if (activeMenu == ToolbarMenu.None || pendingDestructiveAction != null)
+                return;
+            float x = activeMenu == ToolbarMenu.File ? 84f : activeMenu == ToolbarMenu.Edit ? 140f : 196f;
+            float height = activeMenu == ToolbarMenu.File ? 286f : 148f;
+            GUILayout.BeginArea(new Rect(x, ToolbarHeight + 4f, 224f, height), styles.FloatingPanel);
+            if (activeMenu == ToolbarMenu.File)
+            {
+                MenuAction("NEW CHARACTER", true, NewCharacter);
+                MenuAction("LOAD DRAFT", PlayerPrefs.HasKey(DraftKey), () => RequestDestructiveAction(
+                    "Load the character draft and discard unsaved character changes?", LoadDraft));
+                MenuAction("SAVE DRAFT", true, SaveDraft);
+                GUILayout.Space(6f);
+                bool cloudAvailable = GameBootstrap.Instance.Supabase != null;
+                MenuAction("LOAD FROM CLOUD", cloudAvailable, () => RequestDestructiveAction(
+                    "Load the cloud character and discard unsaved changes?", LoadFromCloud));
+                MenuAction("SAVE TO CLOUD", cloudAvailable, SaveToCloud);
+                GUILayout.Space(6f);
+                MenuAction("IMPORT JSON", true, Import);
+                MenuAction("EXPORT JSON", true, Export);
+            }
+            else if (activeMenu == ToolbarMenu.Edit)
+            {
+                MenuAction("UNDO        Ctrl+Z", session.CanUndo, session.Undo);
+                MenuAction("REDO        Ctrl+Y", session.CanRedo, session.Redo);
+                MenuAction("RANDOMIZE", true, Randomize);
+            }
+            else
+            {
+                MenuAction(autoRotate ? "✓ AUTO ROTATE" : "AUTO ROTATE", true, () => autoRotate = !autoRotate);
+                MenuAction("RESET VIEW        F", true, ResetPreviewView);
+                MenuAction("FRAME CHARACTER", true, FramePreview);
+            }
+            GUILayout.EndArea();
+        }
+
+        private void MenuAction(string label, bool enabled, Action action)
+        {
+            GUI.enabled = enabled;
+            if (GUILayout.Button(label, GUILayout.Height(32f)))
+            {
+                activeMenu = ToolbarMenu.None;
+                action();
+            }
+            GUI.enabled = true;
+        }
+
+        private void NewCharacter() => RequestDestructiveAction(
+            "Create a new character and discard unsaved character changes?",
+            () => Replace(CreateNewDocument(), false, "Created a new character."));
 
         private void SaveToCloud()
         {
@@ -316,6 +373,106 @@ namespace GritGud.Presentation.CharacterEditing
                 styles.StatusBar);
             GUILayout.Label(status ?? string.Empty, styles.MutedLabel);
             GUILayout.EndArea();
+        }
+
+        private void DrawViewportHelp()
+        {
+            Rect viewport = PreviewViewport;
+            if (viewport.width < 220f || viewport.height < 80f)
+                return;
+            GUILayout.BeginArea(
+                new Rect(viewport.x + 10f, viewport.y + 10f, 280f, 48f),
+                styles.FloatingPanel);
+            GUILayout.Label("DRAG TO ORBIT  ·  WHEEL TO ZOOM", styles.MutedLabel);
+            GUILayout.Label("F resets and frames the view", styles.MutedLabel);
+            GUILayout.EndArea();
+        }
+
+        private Rect PreviewViewport => new Rect(
+            LeftWidth,
+            ToolbarHeight,
+            Mathf.Max(0f, Screen.width - LeftWidth - RightWidth),
+            Mathf.Max(0f, Screen.height - ToolbarHeight - StatusHeight));
+
+        private void UpdateCameraViewport()
+        {
+            if (sceneCamera == null || Screen.width <= 0 || Screen.height <= 0)
+                return;
+            sceneCamera.rect = new Rect(
+                LeftWidth / Screen.width,
+                StatusHeight / Screen.height,
+                Mathf.Max(0.01f, (Screen.width - LeftWidth - RightWidth) / Screen.width),
+                Mathf.Max(0.01f, (Screen.height - ToolbarHeight - StatusHeight) / Screen.height));
+        }
+
+        private void HandleInput(Event current)
+        {
+            if (current == null || pendingDestructiveAction != null)
+                return;
+
+            if (current.type == EventType.KeyDown)
+            {
+                if (current.keyCode == KeyCode.Escape && activeMenu != ToolbarMenu.None)
+                {
+                    activeMenu = ToolbarMenu.None;
+                    current.Use();
+                }
+                else if (current.keyCode == KeyCode.F)
+                {
+                    ResetPreviewView();
+                    current.Use();
+                }
+                else if ((current.control || current.command) && current.keyCode == KeyCode.S)
+                {
+                    SaveDraft();
+                    current.Use();
+                }
+                else if ((current.control || current.command) && current.keyCode == KeyCode.Z)
+                {
+                    if (session.CanUndo)
+                        session.Undo();
+                    current.Use();
+                }
+                else if ((current.control || current.command) && current.keyCode == KeyCode.Y)
+                {
+                    if (session.CanRedo)
+                        session.Redo();
+                    current.Use();
+                }
+                return;
+            }
+
+            if (!PreviewViewport.Contains(current.mousePosition) || previewCamera == null)
+                return;
+            if (current.type == EventType.MouseDrag && (current.button == 0 || current.button == 1))
+            {
+                autoRotate = false;
+                previewCamera.Orbit(current.delta);
+                current.Use();
+            }
+            else if (current.type == EventType.ScrollWheel)
+            {
+                previewCamera.Zoom(-current.delta.y);
+                current.Use();
+            }
+        }
+
+        private void ResetPreviewView()
+        {
+            autoRotate = false;
+            previewYaw = 180f;
+            if (preview != null)
+                preview.transform.localRotation = Quaternion.Euler(0f, previewYaw, 0f);
+            previewCamera?.ResetView();
+            status = "Reset the character view.";
+        }
+
+        private void FramePreview()
+        {
+            if (preview == null || previewCamera == null)
+                return;
+            previewCamera.Frame(preview.GetComponentsInChildren<Renderer>(true));
+            status = "Framed the character.";
         }
 
         private void DrawDestructiveConfirmation()
@@ -513,13 +670,13 @@ namespace GritGud.Presentation.CharacterEditing
                 ?? throw new InvalidOperationException("The character editor needs a Main Camera.");
             savedCameraPosition = sceneCamera.transform.position;
             savedCameraRotation = sceneCamera.transform.rotation;
+            savedCameraRect = sceneCamera.rect;
             savedClearFlags = sceneCamera.clearFlags;
             savedBackground = sceneCamera.backgroundColor;
             sceneCamera.clearFlags = CameraClearFlags.SolidColor;
             sceneCamera.backgroundColor = new Color(0.025f, 0.03f, 0.04f, 1f);
-            sceneCamera.transform.position = new Vector3(0f, 1.25f, 3.2f);
-            sceneCamera.transform.rotation = Quaternion.LookRotation(
-                new Vector3(0f, 1.05f, 0f) - sceneCamera.transform.position);
+            previewCamera = new CharacterPreviewCameraController(sceneCamera);
+            UpdateCameraViewport();
 
             stage = new GameObject("Character Editor Stage");
             var lightObject = new GameObject("Character Editor Key Light");
@@ -545,6 +702,11 @@ namespace GritGud.Presentation.CharacterEditing
                 preview,
                 session.CreateSnapshot().appearance,
                 catalog);
+            if (!hasFramedPreview)
+            {
+                previewCamera.Frame(preview.GetComponentsInChildren<Renderer>(true));
+                hasFramedPreview = true;
+            }
         }
 
         private static CharacterDocument CreateNewDocument() => new CharacterDocument

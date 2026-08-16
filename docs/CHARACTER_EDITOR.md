@@ -11,7 +11,9 @@ those remain owned by gameplay actor templates and scenario content.
 2. Set the display name and choose a body.
 3. Cycle the visual slots on the right, or use **Randomize** for a complete
    deterministic recipe assembled from compatible options.
-4. Rotate the preview automatically when checking clipping and silhouettes.
+4. Drag the preview with either mouse button to orbit, use the mouse wheel to
+   zoom, and press **F** to reset and frame the character. **View > Auto Rotate**
+   remains available for checking clipping and silhouettes.
 5. Use **Save Draft** for local work and **Export** for a portable JSON document.
 6. Place reviewed exports in
    `Assets/GritGud/Content/Resources/Characters/Published` so they become
@@ -64,3 +66,49 @@ accessory prefab after the overlay is installed.
 
 The document intentionally leaves room for later stats and equipment sections
 without coupling those systems to the appearance projector.
+
+## Editor controls and organization
+
+The compact top bar follows the same document-first organization as the level
+editor. **File** owns new/load/save, cloud, import, and export actions; **Edit**
+owns undo, redo, and randomize; and **View** owns preview-camera actions. The
+current document name and saved state stay centered while the most common
+actions, **Randomize** and **Save**, remain one click away.
+
+| Input | Action |
+| --- | --- |
+| Left- or right-mouse drag over the preview | Orbit around the character |
+| Mouse wheel over the preview | Zoom in or out |
+| `F` | Reset and frame the character |
+| `Ctrl/Cmd+S` | Save the local draft |
+| `Ctrl/Cmd+Z` / `Ctrl/Cmd+Y` | Undo / redo |
+| `Esc` | Close an open toolbar menu |
+
+Camera input is limited to the center preview viewport, so scrolling an option
+panel or interacting with toolbar menus cannot accidentally move the camera.
+Manual orbit also stops auto rotation rather than making the two controls fight.
+
+## Feature review and remaining gaps
+
+The editor now covers identity selection, body and accessory authoring,
+compatible randomization, preview orbit/zoom/framing, undo/redo, local drafts,
+cloud persistence, JSON interchange, published-character loading, validation,
+and dirty-change confirmation. The next UX investments should be:
+
+1. **Searchable visual option browsing.** Replace previous/clear/next rows with
+   thumbnail grids, slot-level search, and clear empty/locked/incompatible
+   states. This is the largest remaining usability gap with 87 accessories.
+2. **Browser-native import.** The current path-based JSON import works in the
+   desktop player and editor, but WebGL should use a file-picker/upload bridge
+   equivalent to the existing browser-aware export path.
+3. **Responsive panels.** The fixed side widths are appropriate on desktop but
+   should collapse into drawers or tabs at narrow browser widths.
+4. **Comparison and inspection tools.** Before/after comparison, hide-all by
+   slot, lighting/background presets, and head/torso/full-body framing would
+   make clipping and silhouette review faster.
+5. **Library management.** Published entries need search, duplicate-as-new,
+   explicit delete/archive behavior for drafts, and clearer separation between
+   local, cloud, and shipped characters.
+6. **Accessibility and discoverability.** Add scalable text/UI density,
+   keyboard traversal, screen-reader-compatible labels when the runtime UI
+   stack supports them, and remappable shortcuts.
