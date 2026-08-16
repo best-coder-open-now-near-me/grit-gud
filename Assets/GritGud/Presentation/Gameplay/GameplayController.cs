@@ -419,7 +419,8 @@ namespace GritGud.Presentation.Gameplay
                 dialogueLog,
                 initiallySelectedActorId,
                 attackRandomSeed,
-                sessionPresenter.TryBeginEncounterFromAction);
+                sessionPresenter.TryBeginEncounterFromAction,
+                destructibleController.Session);
             surfaceImpactPresenter.Bind(
                 attackController,
                 worldRegistry,

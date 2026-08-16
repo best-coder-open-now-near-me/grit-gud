@@ -91,6 +91,22 @@ namespace GritGud.Domain.Gameplay
     }
 
     [Serializable]
+    public sealed class ScenarioSurfaceDamageModifierData
+    {
+        public string surfaceId = string.Empty;
+        public float multiplier = 1f;
+    }
+
+    [Serializable]
+    public sealed class ScenarioDirectFireDamageData
+    {
+        public string damageTypeId = string.Empty;
+        public float baseIntegrityDamage;
+        public List<ScenarioSurfaceDamageModifierData> surfaceModifiers =
+            new List<ScenarioSurfaceDamageModifierData>();
+    }
+
+    [Serializable]
     public sealed class ScenarioAttackCapabilityData
     {
         public bool enabled;
@@ -101,6 +117,7 @@ namespace GritGud.Domain.Gameplay
         public ScenarioAccuracyDecayData accuracyDecay;
         public ScenarioProjectileCapabilityData projectile;
         public ScenarioContactAttackData contact;
+        public ScenarioDirectFireDamageData directFireDamage;
     }
 
     [Serializable]
@@ -313,7 +330,7 @@ namespace GritGud.Domain.Gameplay
     [Serializable]
     public sealed class ScenarioContentDocument
     {
-        public const int CurrentSchemaVersion = 13;
+        public const int CurrentSchemaVersion = 14;
 
         public int schemaVersion = CurrentSchemaVersion;
         public string scenarioId = string.Empty;

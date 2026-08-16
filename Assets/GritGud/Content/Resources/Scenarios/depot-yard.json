@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 13,
+  "schemaVersion": 14,
   "scenarioId": "depot-yard",
   "displayName": "Depot Yard",
   "levelId": "main-depot-yard-v1",
@@ -135,6 +135,15 @@
             "accuracyDecay": {
               "halfLifeDistance": 60.0,
               "minimumAccuracyPercent": 5.0
+            },
+            "directFireDamage": {
+              "damageTypeId": "damage.ballistic.rifle",
+              "baseIntegrityDamage": 2.0,
+              "surfaceModifiers": [
+                { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+              ]
             }
           }
         },
@@ -393,6 +402,15 @@
             "accuracyDecay": {
               "halfLifeDistance": 60.0,
               "minimumAccuracyPercent": 5.0
+            },
+            "directFireDamage": {
+              "damageTypeId": "damage.ballistic.rifle",
+              "baseIntegrityDamage": 2.0,
+              "surfaceModifiers": [
+                { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+              ]
             }
           }
         },
@@ -534,6 +552,15 @@
             "accuracyDecay": {
               "halfLifeDistance": 45.0,
               "minimumAccuracyPercent": 5.0
+            },
+            "directFireDamage": {
+              "damageTypeId": "damage.ballistic.rifle",
+              "baseIntegrityDamage": 2.0,
+              "surfaceModifiers": [
+                { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+              ]
             }
           }
         }

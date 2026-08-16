@@ -294,7 +294,8 @@ namespace GritGud.Domain.Gameplay
             float woundMovementPenalty,
             ProjectileFlightDefinition projectile = null,
             AccuracyDecayDefinition accuracyDecay = null,
-            ContactAttackDefinition contact = null)
+            ContactAttackDefinition contact = null,
+            DirectFireDamageDefinition directFireDamage = null)
         {
             if (string.IsNullOrWhiteSpace(actionId))
             {
@@ -325,6 +326,14 @@ namespace GritGud.Domain.Gameplay
                     nameof(contact));
             }
 
+            if (directFireDamage != null
+                && (projectile != null || contact != null))
+            {
+                throw new ArgumentException(
+                    "Only ranged immediate attacks can author direct-fire prop damage.",
+                    nameof(directFireDamage));
+            }
+
             if (contact != null && accuracyDecay != null)
             {
                 throw new ArgumentException(
@@ -345,6 +354,7 @@ namespace GritGud.Domain.Gameplay
             WoundMovementPenalty = woundMovementPenalty;
             Projectile = projectile;
             Contact = contact;
+            DirectFireDamage = directFireDamage;
             AccuracyDecay = contact == null
                 ? accuracyDecay
                 : AccuracyDecayDefinition.None;
@@ -363,6 +373,8 @@ namespace GritGud.Domain.Gameplay
         public AccuracyDecayDefinition AccuracyDecay { get; }
 
         public ContactAttackDefinition Contact { get; }
+
+        public DirectFireDamageDefinition DirectFireDamage { get; }
 
         public bool CanTargetWorldPoint => Projectile == null && Contact == null;
     }

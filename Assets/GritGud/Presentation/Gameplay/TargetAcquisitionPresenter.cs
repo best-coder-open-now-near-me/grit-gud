@@ -11,16 +11,44 @@ namespace GritGud.Presentation.Gameplay
     internal readonly struct GameplayWeaponAim
     {
         public GameplayWeaponAim(Vector3 position, string targetId)
+            : this(
+                position,
+                targetId,
+                -Vector3.forward,
+                SurfacePresentationCatalog.DefaultSurfaceId,
+                worldStateRevision: 0L)
+        {
+        }
+
+        public GameplayWeaponAim(
+            Vector3 position,
+            string targetId,
+            Vector3 normal,
+            string surfaceId,
+            long worldStateRevision)
         {
             Position = position;
             TargetId = string.IsNullOrWhiteSpace(targetId)
                 ? GameplayTargetIds.WorldAimPoint
                 : targetId;
+            Normal = normal.sqrMagnitude > 0.0001f
+                ? normal.normalized
+                : Vector3.up;
+            SurfaceId = string.IsNullOrWhiteSpace(surfaceId)
+                ? SurfacePresentationCatalog.DefaultSurfaceId
+                : surfaceId;
+            WorldStateRevision = Math.Max(0L, worldStateRevision);
         }
 
         public Vector3 Position { get; }
 
         public string TargetId { get; }
+
+        public Vector3 Normal { get; }
+
+        public string SurfaceId { get; }
+
+        public long WorldStateRevision { get; }
     }
 
     [DisallowMultipleComponent]
@@ -331,8 +359,78 @@ namespace GritGud.Presentation.Gameplay
                 return false;
             }
 
-            aim = new GameplayWeaponAim(aimPoint, targetId);
+            Vector3 origin = ResolveWeaponAimOrigin();
+            ResolveWeaponImpactEvidence(
+                origin,
+                ref aimPoint,
+                ref targetId,
+                out Vector3 normal,
+                out string surfaceId);
+            aim = new GameplayWeaponAim(
+                aimPoint,
+                targetId,
+                normal,
+                surfaceId,
+                session.Journal.LastEntry?.Sequence ?? 0L);
             return true;
+        }
+
+        private void ResolveWeaponImpactEvidence(
+            Vector3 origin,
+            ref Vector3 aimPoint,
+            ref string targetId,
+            out Vector3 normal,
+            out string surfaceId)
+        {
+            Vector3 offset = aimPoint - origin;
+            normal = offset.sqrMagnitude > 0.0001f
+                ? -offset.normalized
+                : Vector3.up;
+            surfaceId = SurfacePresentationCatalog.DefaultSurfaceId;
+            if (offset.sqrMagnitude <= 0.0001f)
+            {
+                return;
+            }
+
+            int hitCount = Physics.RaycastNonAlloc(
+                origin,
+                offset.normalized,
+                aimHitBuffer,
+                offset.magnitude + 0.15f,
+                Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Ignore);
+            RaycastHit nearest = default;
+            float nearestDistance = float.PositiveInfinity;
+            for (int index = 0; index < hitCount; index++)
+            {
+                RaycastHit candidate = aimHitBuffer[index];
+                if (candidate.collider == null
+                    || candidate.distance >= nearestDistance
+                    || BelongsToObserver(candidate.collider.transform))
+                {
+                    continue;
+                }
+
+                nearest = candidate;
+                nearestDistance = candidate.distance;
+            }
+
+            if (float.IsPositiveInfinity(nearestDistance))
+            {
+                return;
+            }
+
+            aimPoint = nearest.point;
+            normal = nearest.normal.sqrMagnitude > 0.0001f
+                ? nearest.normal.normalized
+                : normal;
+            targetId = ResolveAimTargetId(nearest.collider.transform);
+            if (registry.TryGetLevelEntityContaining(
+                    nearest.collider.transform,
+                    out LevelEntityView entity))
+            {
+                surfaceId = entity.Archetype.SurfacePresentationId;
+            }
         }
 
         internal bool TryGetPointerSurfacePoint(

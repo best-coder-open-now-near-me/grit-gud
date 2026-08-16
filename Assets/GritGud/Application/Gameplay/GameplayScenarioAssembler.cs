@@ -775,6 +775,8 @@ namespace GritGud.Application.Gameplay
 
             ScenarioProjectileCapabilityData projectile = attack.projectile;
             ScenarioContactAttackData contact = attack.contact;
+            ScenarioDirectFireDamageData directFireDamage =
+                attack.directFireDamage;
             bool contactEnabled = contact != null && contact.enabled;
             Require(
                 !contactEnabled || projectile == null || !projectile.enabled,
@@ -787,6 +789,9 @@ namespace GritGud.Application.Gameplay
                 $"Actor '{actorId}' contact attack cannot author ranged accuracy decay.");
             if (contactEnabled)
             {
+                Require(
+                    directFireDamage == null,
+                    $"Actor '{actorId}' contact attack cannot author direct-fire prop damage.");
                 RequireFinitePositive(
                     contact.maximumReach,
                     $"Actor '{actorId}' contact attack maximum reach");
@@ -809,8 +814,13 @@ namespace GritGud.Application.Gameplay
                         && attack.accuracyDecay.minimumAccuracyPercent > 0f
                         && attack.accuracyDecay.minimumAccuracyPercent <= 100f,
                     $"Actor '{actorId}' attack minimum accuracy must be greater than zero and no more than 100 percent.");
+                ValidateDirectFireDamage(actorId, directFireDamage);
                 return;
             }
+
+            Require(
+                directFireDamage == null,
+                $"Actor '{actorId}' projectile attack cannot author immediate direct-fire prop damage.");
 
             RequireText(projectile.id, $"Actor '{actorId}' projectile ID");
             RequireFinitePositive(
@@ -838,6 +848,41 @@ namespace GritGud.Application.Gameplay
                     == (projectile.blastWoundMovementPenalty == 0f
                         && projectile.blastIntegrityDamage == 0f),
                 $"Actor '{actorId}' projectile blast radius and consequences must be authored together.");
+        }
+
+        private static void ValidateDirectFireDamage(
+            string actorId,
+            ScenarioDirectFireDamageData damage)
+        {
+            if (damage == null)
+            {
+                return;
+            }
+
+            RequireText(
+                damage.damageTypeId,
+                $"Actor '{actorId}' direct-fire damage type");
+            RequireFinitePositive(
+                damage.baseIntegrityDamage,
+                $"Actor '{actorId}' direct-fire base integrity damage");
+            var surfaceIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (ScenarioSurfaceDamageModifierData modifier in
+                damage.surfaceModifiers
+                    ?? new List<ScenarioSurfaceDamageModifierData>())
+            {
+                Require(
+                    modifier != null,
+                    $"Actor '{actorId}' direct-fire surface modifiers cannot contain null entries.");
+                RequireText(
+                    modifier.surfaceId,
+                    $"Actor '{actorId}' direct-fire surface ID");
+                Require(
+                    surfaceIds.Add(modifier.surfaceId),
+                    $"Actor '{actorId}' direct-fire surface '{modifier.surfaceId}' is duplicated.");
+                RequireFiniteNonNegative(
+                    modifier.multiplier,
+                    $"Actor '{actorId}' direct-fire surface multiplier");
+            }
         }
 
         private static AttackDefinition CreateAttackDefinition(
@@ -878,6 +923,8 @@ namespace GritGud.Application.Gameplay
                 || !attack.contact.enabled
                 ? null
                 : new ContactAttackDefinition(attack.contact.maximumReach);
+            DirectFireDamageDefinition directFireDamageDefinition =
+                CreateDirectFireDamageDefinition(attack.directFireDamage);
             return new AttackDefinition(
                 attack.actionId,
                 attack.displayName,
@@ -888,7 +935,32 @@ namespace GritGud.Application.Gameplay
                 attack.woundMovementPenalty,
                 projectileDefinition,
                 accuracyDecayDefinition,
-                contactDefinition);
+                contactDefinition,
+                directFireDamageDefinition);
+        }
+
+        private static DirectFireDamageDefinition
+            CreateDirectFireDamageDefinition(ScenarioDirectFireDamageData data)
+        {
+            if (data == null)
+            {
+                return null;
+            }
+
+            var modifiers = new List<SurfaceIntegrityDamageModifier>();
+            foreach (ScenarioSurfaceDamageModifierData modifier in
+                data.surfaceModifiers
+                    ?? new List<ScenarioSurfaceDamageModifierData>())
+            {
+                modifiers.Add(new SurfaceIntegrityDamageModifier(
+                    modifier.surfaceId,
+                    modifier.multiplier));
+            }
+
+            return new DirectFireDamageDefinition(
+                data.damageTypeId,
+                data.baseIntegrityDamage,
+                modifiers);
         }
 
         private static InventoryItemKind ParseInventoryItemKind(string value)

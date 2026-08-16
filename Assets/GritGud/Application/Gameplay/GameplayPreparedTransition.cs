@@ -134,6 +134,11 @@ namespace GritGud.Application.Gameplay
             foreach (GameplayActorSnapshot actor in previous.Session.Actors)
                 actors.Add(ProjectActor(previous, actor, action));
 
+            DestructibleDamageRecord directFireDamage =
+                action.Outcomes[0] is WeaponDischargedActionOutcome discharged
+                    ? discharged.Discharge.Damage
+                    : null;
+
             GameplaySessionStateSnapshot session = previous.Session;
             var resultingSession = new GameplaySessionStateSnapshot(
                 session.ScenarioId,
@@ -152,7 +157,8 @@ namespace GritGud.Application.Gameplay
                 session.EmergencyResumeActorId,
                 action.Sequence,
                 session.LastTurnSequence,
-                checked(session.JournalSequence + 1L));
+                checked(session.JournalSequence
+                    + (directFireDamage == null ? 1L : 2L)));
             var projectiles = new List<ProjectileFlightSnapshot>(
                 previous.Projectiles);
             if (action.Outcomes[0] is ProjectileLaunchedActionOutcome launched)
@@ -171,9 +177,27 @@ namespace GritGud.Application.Gameplay
                     elapsedTurnTime: 0f,
                     ProjectileFlightStatus.InFlight));
             }
+            var destructibles = new List<DestructiblePropSnapshot>(
+                previous.Destructibles);
+            if (directFireDamage != null)
+            {
+                int index = FindDestructible(
+                    destructibles,
+                    directFireDamage.PropId);
+                if (!DestructibleSnapshotsMatch(
+                        destructibles[index],
+                        directFireDamage.Previous))
+                {
+                    throw new InvalidOperationException(
+                        "Direct-fire damage no longer starts from the projected prop state.");
+                }
+
+                destructibles[index] = directFireDamage.Resulting;
+            }
+
             return new GameplayCombatStateSnapshot(
                 resultingSession,
-                previous.Destructibles,
+                destructibles,
                 previous.Vehicles,
                 projectiles,
                 previous.SmokeFields);
@@ -255,5 +279,37 @@ namespace GritGud.Application.Gameplay
             left.ActionPoints == right.ActionPoints
             && Math.Abs(
                 left.MovementOpportunity - right.MovementOpportunity) <= 0.0001f;
+
+        private static int FindDestructible(
+            IList<DestructiblePropSnapshot> destructibles,
+            string propId)
+        {
+            for (int index = 0; index < destructibles.Count; index++)
+            {
+                if (string.Equals(
+                        destructibles[index].PropId,
+                        propId,
+                        StringComparison.Ordinal))
+                {
+                    return index;
+                }
+            }
+
+            throw new InvalidOperationException(
+                $"Direct-fire prop '{propId}' is absent from the combat state.");
+        }
+
+        private static bool DestructibleSnapshotsMatch(
+            DestructiblePropSnapshot left,
+            DestructiblePropSnapshot right) =>
+            string.Equals(left.PropId, right.PropId, StringComparison.Ordinal)
+            && left.State == right.State
+            && left.Posture == right.Posture
+            && Math.Abs(left.MaximumIntegrity - right.MaximumIntegrity) <= 0.0001f
+            && Math.Abs(left.RemainingIntegrity - right.RemainingIntegrity) <= 0.0001f
+            && left.Pose.Position.DistanceTo(right.Pose.Position) <= 0.0001f
+            && Math.Abs(left.Pose.PitchDegrees - right.Pose.PitchDegrees) <= 0.0001f
+            && Math.Abs(left.Pose.YawDegrees - right.Pose.YawDegrees) <= 0.0001f
+            && Math.Abs(left.Pose.RollDegrees - right.Pose.RollDegrees) <= 0.0001f;
     }
 }

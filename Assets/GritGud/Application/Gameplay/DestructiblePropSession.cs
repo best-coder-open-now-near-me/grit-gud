@@ -139,6 +139,20 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(notifications));
             }
 
+            if (!TryPrepareDamage(propId, requestedDamage, out record))
+            {
+                return false;
+            }
+
+            CommitDamage(record, notifications);
+            return true;
+        }
+
+        public bool TryPrepareDamage(
+            string propId,
+            float requestedDamage,
+            out DestructibleDamageRecord record)
+        {
             if (float.IsNaN(requestedDamage)
                 || float.IsInfinity(requestedDamage)
                 || requestedDamage <= 0f)
@@ -174,7 +188,6 @@ namespace GritGud.Application.Gameplay
                 appliedDamage,
                 previous,
                 resulting);
-            CommitDamage(record, notifications);
             return true;
         }
 
@@ -194,6 +207,16 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(notifications));
             }
 
+            ValidateDamage(record);
+
+            props[record.PropId] = record.Resulting;
+            damageRecords.Add(record);
+            Journal.RecordDestructibleDamaged(record);
+            notifications.Add(Damaged, record);
+        }
+
+        internal void ValidateDamage(DestructibleDamageRecord record)
+        {
             if (record == null)
             {
                 throw new ArgumentNullException(nameof(record));
@@ -229,11 +252,6 @@ namespace GritGud.Application.Gameplay
                 throw new InvalidOperationException(
                     "The damage record's resulting prop state is inconsistent.");
             }
-
-            props[record.PropId] = record.Resulting;
-            damageRecords.Add(record);
-            Journal.RecordDestructibleDamaged(record);
-            notifications.Add(Damaged, record);
         }
 
         public void CommitDisplacement(DisplacementRecord record)

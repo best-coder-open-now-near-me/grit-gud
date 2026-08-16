@@ -106,7 +106,7 @@ namespace GritGud.Application.Gameplay
             }
 
             WeaponDischargeRecord discharge = FindDischarge(action);
-            return new[]
+            var lines = new List<string>
             {
                 $"DISCHARGE #{discharge.Sequence} - ACTION #{action.Sequence}",
                 $"ACTOR - {discharge.AttackerId} -> {discharge.TargetId}",
@@ -123,8 +123,21 @@ namespace GritGud.Application.Gameplay
                     + $" {Format(discharge.AimPoint.Y)},"
                     + $" {Format(discharge.AimPoint.Z)}",
                 $"DISTANCE - {Format(discharge.Distance)} m",
-                "OUTCOME - WORLD DISCHARGE - NO TARGET HIT ROLL",
             };
+            if (discharge.Impact != null)
+            {
+                lines.Add($"IMPACT - {discharge.Impact.SurfaceId}"
+                    + $" - REV {discharge.Impact.WorldStateRevision}");
+            }
+            if (discharge.Damage != null)
+            {
+                lines.Add($"PROP DAMAGE - {Format(discharge.Damage.AppliedDamage)}"
+                    + $" - {Format(discharge.Damage.Previous.RemainingIntegrity)}"
+                    + $" -> {Format(discharge.Damage.Resulting.RemainingIntegrity)}"
+                    + $" - {discharge.Damage.Resulting.State.ToString().ToUpperInvariant()}");
+            }
+            lines.Add("OUTCOME - WORLD DISCHARGE - NO TARGET HIT ROLL");
+            return lines.ToArray();
         }
 
         private static AttackResolutionRecord FindAttack(

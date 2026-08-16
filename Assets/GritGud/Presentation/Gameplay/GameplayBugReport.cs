@@ -621,7 +621,23 @@ namespace GritGud.Presentation.Gameplay
                             .Append(" | aim=")
                             .Append(FormatPosition(discharge.AimPoint))
                             .Append(" | distance=")
-                            .AppendLine(FormatFloat(discharge.Distance));
+                            .Append(FormatFloat(discharge.Distance));
+                        if (discharge.Impact != null)
+                        {
+                            report.Append(" | impact-surface=")
+                                .Append(discharge.Impact.SurfaceId)
+                                .Append(" | impact-revision=")
+                                .Append(discharge.Impact.WorldStateRevision.ToString(
+                                    CultureInfo.InvariantCulture));
+                        }
+                        if (discharge.Damage != null)
+                        {
+                            report.Append(" | prop-damage=")
+                                .Append(FormatFloat(discharge.Damage.AppliedDamage))
+                                .Append(" | prop-state=")
+                                .Append(discharge.Damage.Resulting.State);
+                        }
+                        report.AppendLine();
                         break;
                     case ProjectileLaunchedActionOutcome launchedProjectile:
                         ProjectileLaunchRecord launch = launchedProjectile.Launch;
