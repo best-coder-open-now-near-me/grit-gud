@@ -26,6 +26,20 @@ namespace GritGud.PlayMode.Tests
                 bootstrap.GetComponent<GameplayController>();
             Assert.That(gameplay, Is.Not.Null);
             Assert.That(gameplay.IsRunning, Is.True);
+            GameplayAdvancementHud advancement =
+                bootstrap.GetComponent<GameplayAdvancementHud>();
+            GameplayInputController input =
+                bootstrap.GetComponent<GameplayInputController>();
+            Assert.That(advancement, Is.Not.Null);
+            Assert.That(input, Is.Not.Null);
+            Assert.That(advancement.IsOpen, Is.False);
+            advancement.Open(gameplay.PartyControl.Snapshot.SelectedActorId);
+            yield return null;
+            Assert.That(advancement.IsOpen, Is.True);
+            Assert.That(input.CameraOnly, Is.True);
+            advancement.Close();
+            Assert.That(advancement.IsOpen, Is.False);
+            Assert.That(input.CameraOnly, Is.False);
 
             const int sustainedFrameCount = 180;
             for (int frame = 0; frame < sustainedFrameCount; frame++)

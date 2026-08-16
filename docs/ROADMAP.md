@@ -106,6 +106,10 @@ Work resumes in this order:
    with distinct identity, attributes, progression, inventory, equipment, and
    runtime state. A dedicated roster surface supports click or Tab selection
    during exploration and communicates initiative-owned control during combat.
+   **Runtime progression persistence is complete:** the versioned local party
+   save restores validated identity-bound progression, equipment, and regional
+   wounds, and the advancement drawer commits authored options during
+   exploration. The deployable drone is now the next character-system slice.
 9. Complete a restrained visual-presentation pass without moving gameplay rules
    into effects. **Complete:** the depot now uses level-authored lighting,
    atmosphere, practical pools, depth fog, portable decals, placed dust/haze,
@@ -120,9 +124,7 @@ Work resumes in this order:
    menu remains palette-authored until human-authored key art is available.
    A future lighting-polish pass can spend the available low-poly render budget
    on authored practical shadows, emissive/bloom hierarchy, selective shafts,
-   and smoke-light interaction without introducing spell-like effects. **The
-   next character-system checkpoint is durable party save/load and the
-   player-facing advancement surface.**
+   and smoke-light interaction without introducing spell-like effects.
 10. Replace frame-relative weapon-hand correction with authored prop rigs.
     **Complete:** rifle, launcher, and knife presentation now instantiate
     project-owned rig prefabs containing the model, muzzle, support-hand, and
@@ -131,8 +133,7 @@ Work resumes in this order:
     shooter idle, walk, run, strafe, and firing motions, while the generator and
     validation suite own the controller and socket contracts. Other imported
    shooter motions remain available for their eventual reload, grenade,
-   reaction, jump, and turn behaviors. **The next character-system checkpoint
-   is durable party save/load and the player-facing advancement surface.**
+   reaction, jump, and turn behaviors.
 11. Replace singleton player ownership before authoring companions. **Complete
    through the player-facing vertical slice:** schema 12 owns the ordered player
    party and stable character identities; exploration selection and turn-mode
@@ -147,8 +148,16 @@ Work resumes in this order:
    supports click and Tab switching in exploration; combat follows Dexterity-
    derived friendly initiative and disables manual selection. Automated boot,
    selection, retargeting, and alternating-friendly-turn coverage is green.
-   **Next: add durable cross-launch party storage and the player-facing
-   advancement surface, then revisit the deployable drone.**
+   **The durable-party follow-up is complete:** schema 1 saves are keyed by
+   stable character identity, require an exact authored roster, validate
+   equipment, advancement caps, and the complete point budget, and restore
+   equipment, regional wounds, and progression before gameplay systems bind.
+   PlayerPrefs supplies the browser/desktop adapter while Application owns the
+   versioned save contract and validation. Authoritative equipment, wound, and
+   advancement changes flush immediately. The roster opens a confirmation-based
+   advancement drawer that exposes effective ratings, costs, caps, remaining
+   points, and structured unavailability; spending is restricted to exploration.
+   **Next: revisit the deployable drone.**
 
 The 2026-08-12 review follow-up is complete: silhouette exposure is cached,
 displacement and blast rules use canonical Application paths, scenario content
@@ -428,8 +437,8 @@ their data-derived tooltip.
   typed resistance/social modifiers without adding an HP system or placeholder
   social combat behavior.
 - Equip and replace an item without altering the character's authored identity. **Foundation complete:** equipment remains actor runtime state rather than character identity data.
-- Spend a progression point through a constrained advancement option. **Application checkpoint complete:** authored options target an existing skill, enforce their point cost, and cap their bonus; player-facing progression UI remains later work.
-- Persist progression, equipment, wounds, and fixed identity separately. **Foundation complete:** the character persistence snapshot keeps these as distinct fields.
+- Spend a progression point through a constrained advancement option. **Complete:** authored options target an existing skill, enforce point cost and cap, and appear in an exploration-only confirmation drawer with the baseline, current bonus, effective rating, and remaining points.
+- Persist progression, equipment, wounds, and fixed identity separately. **Complete:** a versioned Application-owned party save validates the exact identity roster and authored point/equipment constraints, while a PlayerPrefs adapter persists progression, equipped item, and regional wounds across launches without rewriting authored identity.
 - Complete the close-quarters action family before companion deployment:
   - Replace `pushCost` and other verb-specific actor shortcuts with an authored
     displacement-action collection containing stable ID, intent, cost, accepted

@@ -7,6 +7,7 @@ using GritGud.Presentation.Actors.Animation;
 using GritGud.Presentation.Bootstrap;
 using GritGud.Presentation.Levels;
 using GritGud.Presentation.Levels.Runtime;
+using GritGud.Presentation.Persistence;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -29,6 +30,7 @@ namespace GritGud.Presentation.Gameplay
         private GameplayInputController inputController;
         private GameplayHud hud;
         private GameplayPartyHud partyHud;
+        private GameplayAdvancementHud advancementHud;
         private GameplayTurnReplayHud turnReplayHud;
         private GameplayTurnReplayWorldPresenter turnReplayWorldPresenter;
         private GameplayCombatStateTimeline turnReplayStateTimeline;
@@ -47,6 +49,7 @@ namespace GritGud.Presentation.Gameplay
         private GameplayConsumableController consumableController;
         private GameplayPartyControlSession partyControl;
         private GameplayPartyProgressionSession partyProgression;
+        private GameplayPartyPersistenceSession partyPersistence;
         private GameplayPartyPresentationSession partyPresentation;
         private GameplayWeaponTargetingController weaponTargetingController;
         private GameplayTargetingCursorPresenter targetingCursorPresenter;
@@ -73,6 +76,8 @@ namespace GritGud.Presentation.Gameplay
 
         internal GameplayPartyHud PartyHud => partyHud;
 
+        internal GameplayAdvancementHud AdvancementHud => advancementHud;
+
         internal GameplayScenarioAssembly ScenarioAssembly => scenarioAssembly;
 
         internal GameplayWorldRegistry WorldRegistry => worldRegistry;
@@ -87,6 +92,7 @@ namespace GritGud.Presentation.Gameplay
             inputController = GetOrAddComponent<GameplayInputController>();
             hud = GetOrAddComponent<GameplayHud>();
             partyHud = GetOrAddComponent<GameplayPartyHud>();
+            advancementHud = GetOrAddComponent<GameplayAdvancementHud>();
             turnReplayHud = GetOrAddComponent<GameplayTurnReplayHud>();
             turnReplayWorldPresenter ??= new GameplayTurnReplayWorldPresenter();
             dialogueDrawer = GetOrAddComponent<GameplayDialogueDrawer>();
@@ -133,6 +139,11 @@ namespace GritGud.Presentation.Gameplay
             inputController?.End();
             hud?.Hide();
             partyHud?.Unbind();
+            if (advancementHud != null)
+            {
+                advancementHud.OpenChanged -= HandleAdvancementOpenChanged;
+                advancementHud.Unbind();
+            }
             turnReplayHud?.Unbind();
             turnReplayWorldPresenter?.Dispose();
             turnReplayStateTimeline?.Dispose();
@@ -305,12 +316,20 @@ namespace GritGud.Presentation.Gameplay
 
         private GameplaySession BuildSession(GameplayWorldStart worldStart)
         {
+            partyPersistence = new GameplayPartyPersistenceSession(
+                new PlayerPrefsGameplayPartySaveStore());
+            GameplayPartySave restoredParty = partyPersistence.Load(
+                scenarioAssembly.Scenario);
             var session = new GameplaySession(
                 scenarioAssembly.Scenario,
                 worldStart.Journal,
-                scenarioAssembly.RandomSeed);
+                scenarioAssembly.RandomSeed,
+                restoredParty);
             partyControl = new GameplayPartyControlSession(session);
-            partyProgression = new GameplayPartyProgressionSession(session);
+            partyProgression = new GameplayPartyProgressionSession(
+                session,
+                restoredParty);
+            partyPersistence.Bind(session, partyProgression);
             smokeFieldSession = new GameplaySmokeFieldSession(session);
             smokeFieldController.Bind(smokeFieldSession);
             tacticalTransitionPresenter.Bind(session, visualTheme);
@@ -542,12 +561,18 @@ namespace GritGud.Presentation.Gameplay
                 destructibleController,
                 vehicleController,
                 smokeFieldController);
+            advancementHud.Bind(
+                partyProgression,
+                partyControl,
+                partyPersistence);
+            advancementHud.OpenChanged += HandleAdvancementOpenChanged;
             partyHud.Bind(
                 session,
                 partyControl,
                 inputController,
                 () => turnReplayHud.IsAvailable,
-                turnReplayHud.Toggle);
+                turnReplayHud.Toggle,
+                advancementHud.Open);
             hud.BindInputSource(inputController);
             hud.BindTurnModeToggle(toggleTurnMode);
             hud.BindBugReportExport(ExportBugReport);
@@ -599,6 +624,8 @@ namespace GritGud.Presentation.Gameplay
             partyPresentation = null;
             partyControl?.Dispose();
             partyControl = null;
+            partyPersistence?.Dispose();
+            partyPersistence = null;
             partyProgression = null;
             consumableController?.CancelPending();
             consumableController = null;
@@ -699,6 +726,13 @@ namespace GritGud.Presentation.Gameplay
 
         private void HandleGameplayControl(GameplayControl control)
         {
+            if (advancementHud?.IsOpen == true)
+            {
+                if (control == GameplayControl.CancelPendingAction)
+                    advancementHud.Close();
+                return;
+            }
+
             if (hud != null && hud.IsBugReportNoteOpen)
             {
                 if (control == GameplayControl.CancelPendingAction)
@@ -841,9 +875,29 @@ namespace GritGud.Presentation.Gameplay
         private bool IsPointerOverGameplayInterface(Vector2 pointer) =>
             (hud?.ContainsInteractiveScreenPoint(pointer) ?? false)
             || (partyHud?.ContainsInteractiveScreenPoint(pointer) ?? false)
+            || (advancementHud?.ContainsInteractiveScreenPoint(pointer) ?? false)
             || (turnReplayHud?.ContainsInteractiveScreenPoint(pointer) ?? false)
             || (dialogueDrawer?.ContainsInteractiveScreenPoint(pointer)
                 ?? false);
+
+        private void OnApplicationPause(bool paused)
+        {
+            if (paused)
+                partyPersistence?.Flush();
+        }
+
+        private void OnApplicationQuit()
+        {
+            partyPersistence?.Flush();
+        }
+
+        private void HandleAdvancementOpenChanged(bool isOpen)
+        {
+            if (isOpen)
+                CancelPendingHotbarActions();
+            inputController?.SetCameraOnly(
+                isOpen || turnReplayHud?.IsOpen == true);
+        }
 
         private void TryUseEquippedItemPower(string itemId)
         {

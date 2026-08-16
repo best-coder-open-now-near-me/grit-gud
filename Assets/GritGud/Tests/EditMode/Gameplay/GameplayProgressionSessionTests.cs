@@ -220,6 +220,21 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(saved.Progression.Bonuses["skill.demolitions"],
                 Is.EqualTo(1));
 
+            var equipment = new GameplayEquipmentSession(gameplay);
+            Assert.That(equipment.TryResolve(
+                "mara",
+                "weapon.rifle",
+                equip: false,
+                out _,
+                out EquipmentChangeFailure equipmentFailure), Is.True);
+            Assert.That(equipmentFailure,
+                Is.EqualTo(EquipmentChangeFailure.None));
+            Assert.That(store.SaveCount, Is.EqualTo(2));
+            Assert.That(store.Saved.TryGetCharacter(
+                mara.IdentityId,
+                out saved), Is.True);
+            Assert.That(saved.EquippedItemId, Is.Null);
+
             Assert.That(gameplay.EnterTurnMode(), Is.True);
             CharacterAdvancementAvailability availability =
                 persistence.EvaluateAdvancement(

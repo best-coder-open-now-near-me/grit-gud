@@ -48,10 +48,15 @@ namespace GritGud.Presentation.Tests
 
                 Assert.That(root.GetComponent<GameplayInputController>(), Is.Not.Null);
                 Assert.That(root.GetComponent<GameplayHud>(), Is.Not.Null);
+                Assert.That(root.GetComponent<GameplayAdvancementHud>(),
+                    Is.Not.Null);
                 Assert.That(root.GetComponent<GameplaySmokeFieldController>(), Is.Not.Null);
                 Assert.DoesNotThrow(controller.EndSession);
                 Assert.DoesNotThrow(controller.EndSession);
                 Assert.That(root.GetComponent<GameplayHud>().IsVisible, Is.False);
+                Assert.That(
+                    root.GetComponent<GameplayAdvancementHud>().IsOpen,
+                    Is.False);
             }
             finally
             {

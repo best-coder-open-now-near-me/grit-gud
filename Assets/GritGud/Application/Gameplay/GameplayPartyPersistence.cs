@@ -156,6 +156,17 @@ namespace GritGud.Application.Gameplay
                     "Saved progression belongs to a different character identity.");
             }
 
+            var advancementSkills = new HashSet<string>(StringComparer.Ordinal);
+            foreach (CharacterAdvancementOption option in
+                profile.AdvancementOptions)
+            {
+                if (!advancementSkills.Add(option.SkillId))
+                {
+                    throw new InvalidOperationException(
+                        $"Skill '{option.SkillId}' has ambiguous advancement options.");
+                }
+            }
+
             int spentPoints = 0;
             foreach (KeyValuePair<string, int> bonus in progression.Bonuses)
             {

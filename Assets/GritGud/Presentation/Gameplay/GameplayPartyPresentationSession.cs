@@ -29,6 +29,7 @@ namespace GritGud.Presentation.Gameplay
 
         private readonly Dictionary<string, ActorPresentation> actors =
             new Dictionary<string, ActorPresentation>(StringComparer.Ordinal);
+        private readonly GameplaySession session;
         private readonly TargetAcquisitionPresenter targetAcquisition;
         private bool disposed;
 
@@ -41,8 +42,8 @@ namespace GritGud.Presentation.Gameplay
             TargetAcquisitionPresenter acquisition,
             WeaponPresentationCatalog weaponCatalog = null)
         {
-            if (session == null)
-                throw new ArgumentNullException(nameof(session));
+            this.session = session
+                ?? throw new ArgumentNullException(nameof(session));
             if (party == null)
                 throw new ArgumentNullException(nameof(party));
             if (registry == null)
@@ -97,6 +98,8 @@ namespace GritGud.Presentation.Gameplay
                                 view,
                                 animationCoordinator,
                                 weapon));
+                        view.Wounds.PresentAuthoritative(
+                            session.GetActor(actorId).Wounds);
                     }
                     catch
                     {
@@ -105,10 +108,13 @@ namespace GritGud.Presentation.Gameplay
                     }
                 }
 
+                session.ActorCapabilityChanged += HandleActorCapabilityChanged;
                 SetSelectedActor(party.InitiallySelectedActorId);
             }
             catch
             {
+                this.session.ActorCapabilityChanged -=
+                    HandleActorCapabilityChanged;
                 CleanupActors();
                 throw;
             }
@@ -159,6 +165,7 @@ namespace GritGud.Presentation.Gameplay
             if (disposed)
                 return;
 
+            session.ActorCapabilityChanged -= HandleActorCapabilityChanged;
             CleanupActors();
             SelectedActorId = null;
             disposed = true;
@@ -173,6 +180,17 @@ namespace GritGud.Presentation.Gameplay
             }
 
             actors.Clear();
+        }
+
+        private void HandleActorCapabilityChanged(string actorId)
+        {
+            if (actors.TryGetValue(
+                    actorId ?? string.Empty,
+                    out ActorPresentation actor))
+            {
+                actor.View.Wounds.PresentAuthoritative(
+                    session.GetActor(actorId).Wounds);
+            }
         }
 
         private ActorPresentation RequireSelected()

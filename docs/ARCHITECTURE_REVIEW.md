@@ -88,10 +88,10 @@ The current risk profile is acceptable but not finished:
   be treated as delivery records, not as substitutes for executable boundary
   gates.
 
-No architecture blocker requires reverting the current editor slice. The
-highest-value next work remains durable party save/load and advancement UI;
-editor work can proceed independently with destructible pile verification and
-richer viewport transform tools.
+No architecture blocker requires reverting the current editor slice. Durable
+party save/load and the advancement UI are now complete; the next character
+slice can return to the deployable drone. Editor work can proceed independently
+with destructible pile verification and richer viewport transform tools.
 
 
 ## Non-negotiable boundaries
@@ -359,13 +359,19 @@ action while keeping preview and cancellation side-effect free.
 
 **Priority: medium**
 
-**Status: runtime ownership resolved 2026-08-12; durable save/load remains.**
+**Status: resolved 2026-08-16.**
 `GameplayPartyProgressionSession` now composes one identity-bound progression
 aggregate for every authored player-party member and captures progression,
 equipment, and wounds without allowing one actor to be persisted through
 another character's identity. Bug reports project those per-character snapshots
-alongside selected and command authority. A durable cross-launch store and the
-player-facing advancement UI remain separate delivery work.
+alongside selected and command authority. `GameplayPartySave` is a versioned,
+exact-roster Application contract that rejects unknown equipment, ambiguous or
+over-cap bonuses, and point-budget fabrication. `GameplaySession` rebinds saved
+wounds to the current scenario actor while preserving the stable character
+identity. The PlayerPrefs adapter supplies local browser/desktop durability;
+equipment, wound, and confirmed advancement changes flush immediately. A
+separate advancement drawer consumes Application availability and requires
+confirmation without owning costs, caps, or turn-mode policy.
 
 ### A7 — Eliminate duplicate scenario assembly
 
@@ -653,9 +659,9 @@ turn. The full EditMode gate passes 429 tests.
 6. Add opposed combatant displacement.
 7. Add authored knife attacks.
 8. Generalize blast effects and consumable quantities. **Complete.**
-9. Integrate progression persistence. **Runtime party ownership complete;
-   durable cross-launch storage remains.**
-10. Resume the drone slice only after close-quarters exit criteria pass.
+9. Integrate progression persistence. **Complete:** versioned identity-bound
+   storage and the confirmation-based advancement surface are live.
+10. Resume the drone slice only after close-quarters exit criteria pass. **Next.**
 
 ## Review gates for every gameplay slice
 
