@@ -64,6 +64,59 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(journal.LastEntry.Sequence, Is.EqualTo(4));
         }
 
+        [Test]
+        public void TurnReviewWindowIncludesActorsLastTurnAndEverythingSince()
+        {
+            var journal = new GameplayJournal();
+            GameplaySession gameplay = CreateEncounterGameplay(journal);
+            Assert.That(gameplay.BeginEncounter(), Is.True);
+
+            gameplay.SpendMovement("player", 1f);
+            Assert.That(gameplay.TryEndTurn("player", out _), Is.True);
+            Assert.That(gameplay.TryEndTurn("enemy", out _), Is.True);
+
+            long secondPlayerTurnStart = journal.LastEntry.Sequence + 1;
+            gameplay.SpendMovement("player", 2f);
+            Assert.That(gameplay.TryEndTurn("player", out _), Is.True);
+            gameplay.SpendMovement("enemy", 3f);
+
+            var review = gameplay.Journal.GetTurnReviewWindow("player");
+
+            Assert.That(review, Is.Not.Empty);
+            Assert.That(review[0].Sequence, Is.EqualTo(secondPlayerTurnStart));
+            Assert.That(
+                review[0],
+                Is.TypeOf<MovementBudgetSpentJournalEntry>());
+            Assert.That(
+                ((MovementBudgetSpentJournalEntry)review[0]).ActorId,
+                Is.EqualTo("player"));
+            Assert.That(
+                review,
+                Has.Some.Matches<GameplayJournalEntry>(entry =>
+                    entry is TurnEndedJournalEntry ended
+                    && ended.Turn.EndingActorId == "player"));
+            Assert.That(
+                review[review.Count - 1],
+                Is.TypeOf<MovementBudgetSpentJournalEntry>());
+            Assert.That(
+                ((MovementBudgetSpentJournalEntry)review[review.Count - 1])
+                    .ActorId,
+                Is.EqualTo("enemy"));
+        }
+
+        [Test]
+        public void TurnReviewWindowIsUnavailableUntilActorCompletesATurn()
+        {
+            var journal = new GameplayJournal();
+            GameplaySession gameplay = CreateEncounterGameplay(journal);
+            Assert.That(gameplay.BeginEncounter(), Is.True);
+            gameplay.SpendMovement("player", 1f);
+
+            Assert.That(
+                gameplay.Journal.GetTurnReviewWindow("player"),
+                Is.Empty);
+        }
+
         private static GameplaySession CreateGameplay(GameplayJournal journal)
         {
             var actor = new ScenarioActorDefinition(
@@ -85,6 +138,27 @@ namespace GritGud.Domain.Tests.Gameplay
                     new ScenarioTimingDefinition(1.25f),
                     new[] { actor },
                     new[] { objective }),
+                journal);
+        }
+
+        private static GameplaySession CreateEncounterGameplay(
+            GameplayJournal journal)
+        {
+            var player = new ScenarioActorDefinition(
+                "player",
+                10,
+                new GameplayActorPose(new GameplayPosition(0f, 0f, 0f), 0f),
+                new TurnBudget(4, 8f));
+            var enemy = new ScenarioActorDefinition(
+                "enemy",
+                0,
+                new GameplayActorPose(new GameplayPosition(4f, 0f, 0f), 180f),
+                new TurnBudget(4, 8f));
+            return new GameplaySession(
+                new ScenarioDefinition(
+                    "turn-review-test",
+                    new ScenarioTimingDefinition(1.25f),
+                    new[] { player, enemy }),
                 journal);
         }
     }
