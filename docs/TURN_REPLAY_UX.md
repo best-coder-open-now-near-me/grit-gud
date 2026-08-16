@@ -15,7 +15,8 @@ initiative, or gameplay state.
 
 The playback bar contains:
 
-- play/pause, which plays the entire retained range;
+- play/pause, which by default plays the turns that followed the active
+  character's previous turn;
 - previous-turn and next-turn controls;
 - playback speed and close controls; and
 - a scrubber divided into one segment for each character turn that occurred
@@ -32,6 +33,12 @@ Selecting a segment seeks to the beginning of that character's turn. Previous
 and next move between turn segments, while play advances continuously across
 all segments. The scrubber permits seeking within a turn as well as across the
 complete retained range.
+
+The active character's previous-turn segment hangs off the left edge of the
+initial playback range. It remains visible and seekable as context, but opening
+replay does not automatically play it. The player can reach it with the
+previous-turn control or by scrubbing left into that segment. After seeking
+into it, ordinary playback continues from that point through the later turns.
 
 ## Retained range
 
@@ -58,6 +65,14 @@ restores recorded visual state and samples seekable movement and projectile
 paths; transient audio, particles, and other cosmetic effects may snap or
 restart when forward playback resumes.
 
+Playback keeps the perspective of the player-controlled character who opened
+the replay. Every retained character turn is watched from that one perspective;
+turn segments do not switch the camera to their acting characters. The player
+cannot change perspective, select another companion's viewpoint, orbit, zoom,
+or use a free camera during replay. This deliberately keeps the feature to a
+quick review of what the current character could see rather than a tactical
+inspection tool.
+
 The timeline is presentation time, not wall-clock decision time. Idle thinking
 time is omitted, and deterministic visual durations are assigned to recorded
 actions. Segment widths should follow those durations with a minimum clickable
@@ -67,8 +82,8 @@ width rather than giving every turn equal space.
 
 - Replay opens only while a player-controlled character owns the active turn.
 - Opening replay pauses live input.
-- Camera orbit and zoom remain available; automatic follow changes at turn
-  boundaries only while follow mode is enabled.
+- The camera remains locked to the active player character's perspective for
+  the entire replay.
 - Exiting replay restores the live HUD and camera exactly as they were.
 - No generated prose, replay library, full-match persistence, or free-standing
   recap drawer is required.

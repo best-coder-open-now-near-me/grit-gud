@@ -6,7 +6,9 @@ kept deliberately small until the cross-platform loop is working.
 The player-facing turn-replay interaction is specified separately in
 [TURN_REPLAY_UX.md](TURN_REPLAY_UX.md). It uses a bounded, turn-segmented timeline
 from the active player character's previous turn to their current turn and does
-not imply permanent full-match replay storage.
+not imply permanent full-match replay storage. Playback stays in that
+character's perspective, and their previous-turn segment is optional context
+rather than part of the default playback range.
 
 ## Current restart checkpoint — 2026-08-11
 
