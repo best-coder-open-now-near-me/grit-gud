@@ -4,8 +4,9 @@ Each phase ends in something that can be reviewed independently. Mechanics are
 kept deliberately small until the cross-platform loop is working.
 
 The player-facing turn-replay interaction is specified separately in
-[TURN_REPLAY_UX.md](TURN_REPLAY_UX.md). It uses an all-participant, turn-segmented
-timeline and does not imply permanent full-match replay storage.
+[TURN_REPLAY_UX.md](TURN_REPLAY_UX.md). It uses a bounded, turn-segmented timeline
+from the active player character's previous turn to their current turn and does
+not imply permanent full-match replay storage.
 
 ## Current restart checkpoint — 2026-08-11
 

@@ -1,9 +1,10 @@
 # Turn Replay UX
 
 Turn replay is a short, in-world playback surface rather than a textual event
-log or a saved full-match recording. Its retained history begins with the
-currently active player character's last completed turn and continues through
-every completed turn since then.
+log or a saved full-match recording. It is a bounded rolling window: history
+begins with the currently active player character's last completed turn and
+ends when that character's current turn begins. Nothing before that previous
+turn is retained for the player-facing replay.
 
 ## Combined initiative and replay controls
 
@@ -17,15 +18,15 @@ The playback bar contains:
 - play/pause, which plays the entire retained range;
 - previous-turn and next-turn controls;
 - playback speed and close controls; and
-- a scrubber divided into one segment for **every character turn** in the
-  retained range.
+- a scrubber divided into one segment for each character turn that occurred
+  inside this short retained window.
 
-Segments are not limited to companions. Player-controlled characters, allies,
-enemies, and any other initiative participant each receive their own segment.
-The segment uses that turn instance's portrait, name, and allegiance treatment,
-so repeated turns by the same character remain distinct points on the timeline.
-Emergency reactions appear as markers within the turn that triggered them
-rather than as ordinary initiative turns.
+The window includes the active character's previous turn followed by whichever
+player-controlled characters, allies, or enemies actually took a turn before
+control returned to that character. It is not a history of every turn in the
+encounter. Each included turn uses its actor's portrait, name, and allegiance
+treatment. Emergency reactions appear as markers within the turn that triggered
+them rather than as ordinary initiative turns.
 
 Selecting a segment seeks to the beginning of that character's turn. Previous
 and next move between turn segments, while play advances continuously across
@@ -39,6 +40,10 @@ The range is anchored to the active player character:
 1. that character's last completed turn;
 2. every character turn completed afterward, in actual execution order; and
 3. the boundary at which the character's current turn began.
+
+For example, if Mara's prior turn was followed by Raider, Vale, and Guard before
+Mara became active again, the replay contains exactly those four completed turn
+segments. Earlier Mara, Raider, Vale, or Guard turns are outside the window.
 
 The current partial turn is not part of the initial replay scope. This freezes
 the available timeline when control returns to the player and avoids mixing
