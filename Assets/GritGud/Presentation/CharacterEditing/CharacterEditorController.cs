@@ -262,8 +262,8 @@ namespace GritGud.Presentation.CharacterEditing
             }
             else if (activeMenu == ToolbarMenu.Edit)
             {
-                MenuAction("UNDO        Ctrl+Z", session.CanUndo, session.Undo);
-                MenuAction("REDO        Ctrl+Y", session.CanRedo, session.Redo);
+                MenuAction("UNDO        Ctrl+Z", session.CanUndo, () => session.Undo());
+                MenuAction("REDO        Ctrl+Y", session.CanRedo, () => session.Redo());
                 MenuAction("RANDOMIZE", true, Randomize);
             }
             else
