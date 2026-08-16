@@ -87,3 +87,17 @@ width rather than giving every turn equal space.
 - Exiting replay restores the live HUD and camera exactly as they were.
 - No generated prose, replay library, full-match persistence, or free-standing
   recap drawer is required.
+
+## Implementation checkpoint
+
+The first vertical slice now records ordinary and emergency turn kinds
+explicitly, projects an immutable replay window for the active player
+character, and exposes that window through the right-side active-character
+control and an interactive top timeline. The timeline starts at the boundary
+after the character's optional previous-turn segment and supports play/pause,
+previous/next turn, speed, and scrubbing.
+
+This checkpoint validates turn grouping and the agreed HUD interaction. World
+snapshot restoration and seekable actor, action, projectile, and effect
+presentation remain the next slice; until those are connected, the playhead is
+a timeline preview and does not yet drive reconstructed world animation.

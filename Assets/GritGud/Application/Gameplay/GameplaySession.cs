@@ -61,6 +61,12 @@ namespace GritGud.Application.Gameplay
         EmergencyReaction,
     }
 
+    public enum GameplayTurnKind
+    {
+        Normal,
+        EmergencyReaction,
+    }
+
     public enum TurnModeEntryFailure
     {
         None,
@@ -241,7 +247,9 @@ namespace GritGud.Application.Gameplay
         public TurnEndRecord(
             long sequence,
             string endingActorId,
-            string nextActorId)
+            string nextActorId,
+            GameplayTurnKind kind = GameplayTurnKind.Normal,
+            string interruptedActorId = null)
         {
             if (sequence <= 0)
             {
@@ -250,7 +258,18 @@ namespace GritGud.Application.Gameplay
 
             EndingActorId = RequireActorId(endingActorId, nameof(endingActorId));
             NextActorId = RequireActorId(nextActorId, nameof(nextActorId));
+            if (!Enum.IsDefined(typeof(GameplayTurnKind), kind))
+                throw new ArgumentOutOfRangeException(nameof(kind));
+            if (kind == GameplayTurnKind.EmergencyReaction
+                && string.IsNullOrWhiteSpace(interruptedActorId))
+            {
+                throw new ArgumentException(
+                    "Emergency turns require the interrupted actor identifier.",
+                    nameof(interruptedActorId));
+            }
             Sequence = sequence;
+            Kind = kind;
+            InterruptedActorId = interruptedActorId ?? string.Empty;
         }
 
         public long Sequence { get; }
@@ -258,6 +277,10 @@ namespace GritGud.Application.Gameplay
         public string EndingActorId { get; }
 
         public string NextActorId { get; }
+
+        public GameplayTurnKind Kind { get; }
+
+        public string InterruptedActorId { get; }
 
         private static string RequireActorId(string value, string parameterName)
         {
@@ -790,7 +813,9 @@ namespace GritGud.Application.Gameplay
             }
             RecordTurnEnd(
                 endingActorId,
-                responsePassCompleted ? emergencyResumeActorId : activeActorId);
+                responsePassCompleted ? emergencyResumeActorId : activeActorId,
+                GameplayTurnKind.EmergencyReaction,
+                emergencyResumeActorId);
             failure = TurnEndFailure.None;
             return true;
         }
@@ -1898,12 +1923,18 @@ namespace GritGud.Application.Gameplay
             VoluntaryTurnCycleCompleted?.Invoke(completedCycle);
         }
 
-        private void RecordTurnEnd(string endingActorId, string nextActorId)
+        private void RecordTurnEnd(
+            string endingActorId,
+            string nextActorId,
+            GameplayTurnKind kind = GameplayTurnKind.Normal,
+            string interruptedActorId = null)
         {
             var record = new TurnEndRecord(
                 LastEndedTurn == null ? 1 : LastEndedTurn.Sequence + 1,
                 endingActorId,
-                nextActorId);
+                nextActorId,
+                kind,
+                interruptedActorId);
             LastEndedTurn = record;
             Journal.RecordTurnEnded(record);
             TurnEnded?.Invoke(record);
