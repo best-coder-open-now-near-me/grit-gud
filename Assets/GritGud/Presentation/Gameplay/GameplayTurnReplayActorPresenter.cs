@@ -1,6 +1,7 @@
 using System;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
+using GritGud.Presentation.Actors;
 using GritGud.Presentation.Actors.Animation;
 using UnityEngine;
 
@@ -14,6 +15,7 @@ namespace GritGud.Presentation.Gameplay
         private readonly ActorLocomotionAnimationPresenter locomotion;
         private readonly WeaponAimPresenter aim;
         private readonly WeaponAimRig aimRig;
+        private readonly ActorRagdollPresenter ragdoll;
         private bool locomotionEnabled;
         private bool aimEnabled;
         private bool aimRigEnabled;
@@ -36,6 +38,7 @@ namespace GritGud.Presentation.Gameplay
             aimRig = animation.TargetAnimator != null
                 ? animation.TargetAnimator.GetComponent<WeaponAimRig>()
                 : null;
+            ragdoll = view.Root.GetComponent<ActorRagdollPresenter>();
         }
 
         internal bool IsPresenting => presenting;
@@ -57,6 +60,7 @@ namespace GritGud.Presentation.Gameplay
             presenting = true;
             try
             {
+                ragdoll?.BeginReplayPresentation();
                 animation.BeginReplayPresentation();
                 weapon?.BeginReplayPresentation();
                 view.Wounds.BeginReplayPresentation();
@@ -77,7 +81,9 @@ namespace GritGud.Presentation.Gameplay
 
         internal void Present(
             GameplayActorSnapshot snapshot,
-            TurnReplayActorActionState action)
+            TurnReplayActorActionState action,
+            TurnReplayEventTimeline timeline = null,
+            float timeSeconds = 0f)
         {
             if (!presenting)
             {
@@ -117,6 +123,8 @@ namespace GritGud.Presentation.Gameplay
                 pose.Stance,
                 animationAction,
                 animationProgress);
+            if (timeline != null)
+                ragdoll?.PresentReplay(timeline, timeSeconds);
         }
 
         internal void PresentTransient(
@@ -166,6 +174,9 @@ namespace GritGud.Presentation.Gameplay
                 },
                 ref failure);
             TryRestore(animation.EndReplayPresentation, ref failure);
+            TryRestore(
+                () => ragdoll?.EndReplayPresentation(),
+                ref failure);
             TryRestore(
                 () =>
                 {

@@ -261,9 +261,16 @@ initiative participant:
    its owned idle; reaction priority suppresses weapon IK; replay remaps contact
    progress, holds incapacitated actors down, emits no contact transient during
    seeks, and restores the exact live animator/equipment/wound state. The next
-   presentation experiment transitions the authored `Shoulder Hit And Fall` or
-   `Fall Over` endpoint into a bounded presentation-only ragdoll and records a
-   compact bone-pose trace for seekable replay instead of rerunning PhysX.
+   bounded presentation experiment is now complete for incapacitating direct
+   and contact attacks: at normalized time `0.72`, the authored fall hands its
+   evaluated pose to a generated 12-body/11-joint rig. Recorded attack direction
+   and region produce a clamped impulse; the rig only contacts static level
+   geometry, settles/freezes within `2.25` seconds, and never moves the
+   authoritative actor root. A journal-keyed, versioned 20 Hz trace stores
+   millimetre root-relative positions and quantized rotations for seekable
+   replay instead of rerunning PhysX, while replay exit restores exact live
+   bodies, velocities, and transforms. Projectile and thrown-blast reactions
+   remain a later evidence hookup to this same presentation seam.
    Reload, grenade, and additional turn clips remain distinct later action-
    presentation bindings rather than part of the knife slice.
 6. **Add incendiary consumables.** Author Molotov cocktails as first-class

@@ -4,6 +4,7 @@ using System.Linq;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Turns;
+using GritGud.Presentation.Actors;
 using GritGud.Presentation.Actors.Animation;
 using GritGud.Presentation.Gameplay;
 using GritGud.Presentation.Levels.Runtime;
@@ -653,6 +654,108 @@ namespace GritGud.Presentation.Tests
                 presenter.TickContactStrike(0.5f);
                 Assert.That(presenter.ContactStrikeActive, Is.False);
                 Assert.That(presenter.TransientVisualCount, Is.Zero);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                registry?.Dispose();
+                world?.Dispose();
+                Object.DestroyImmediate(playerObject);
+                Object.DestroyImmediate(targetObject);
+                Object.DestroyImmediate(knifePrefab);
+                Object.DestroyImmediate(catalog);
+            }
+        }
+
+        [Test]
+        public void IncapacitatingContactAttackArmsRagdollWithJournalEvidence()
+        {
+            var host = new GameObject("Contact Ragdoll Host");
+            GameObject actorPrefab = Resources.Load<GameObject>(
+                "Actors/DefaultPlayerActor");
+            GameObject playerObject = Object.Instantiate(actorPrefab);
+            GameObject targetObject = Object.Instantiate(actorPrefab);
+            var knifePrefab = new GameObject("Contact Ragdoll Knife");
+            LevelWorld world = null;
+            GameplayWorldRegistry registry = null;
+            WeaponPresentationCatalog catalog = null;
+            try
+            {
+                ConfigureTestRig(knifePrefab, supportHand: false);
+                targetObject.transform.position = new Vector3(0f, 0f, 1.5f);
+                world = new LevelWorld(
+                    new GameObject("Contact Ragdoll World"),
+                    new Dictionary<string, LevelEntityView>(),
+                    null);
+                registry = new GameplayWorldRegistry(world);
+                registry.RegisterActor(
+                    "player", "test", targetable: false, playerObject);
+                registry.RegisterActor(
+                    "target", "test", targetable: true, targetObject);
+                GameplaySession session = CreateContactSession(
+                    targetMaximumWounds: 1);
+                session.EnterTurnMode();
+                GameplayAttackController attacks =
+                    host.AddComponent<GameplayAttackController>();
+                attacks.Bind(
+                    session,
+                    host.AddComponent<TargetAcquisitionPresenter>(),
+                    new GameplayDialogueLog(),
+                    "player",
+                    scenarioSeed: 3u);
+                catalog = WeaponPresentationCatalog.CreateRuntime(
+                    new WeaponPresentationDefinition(
+                        "knife",
+                        knifePrefab,
+                        ActorAnimationPoseIds.Melee,
+                        null,
+                        drawsInstantTracer: false,
+                        effectSeconds: 0.1f,
+                        lineWidth: 0.02f,
+                        attackPresentationKind:
+                            WeaponAttackPresentationKind.ContactStrike,
+                        contactDurationSeconds: 0.4f,
+                        contactImpactTime: 0.4f));
+                GameplayCombatReactionPresenter reactions =
+                    host.AddComponent<GameplayCombatReactionPresenter>();
+                reactions.Bind(session, registry, attacks, catalog);
+                ActorAnimationCoordinator animation = targetObject
+                    .GetComponent<ActorAnimationCoordinator>();
+                ActorRagdollPresenter ragdoll = targetObject.GetComponent<
+                    ActorRagdollPresenter>();
+                animation.TargetAnimator.cullingMode =
+                    AnimatorCullingMode.AlwaysAnimate;
+                animation.TargetAnimator.Update(0f);
+
+                Assert.That(attacks.TryAttack(CreateContactExposure()), Is.True);
+                reactions.Tick(0.17f);
+
+                Assert.That(session.IsActorIncapacitated("target"), Is.True);
+                Assert.That(
+                    animation.LastRequestedAction,
+                    Is.EqualTo(ActorAnimationAction.IncapacitateShoulder));
+                Assert.That(ragdoll.HasPendingActivation, Is.True);
+                long journalSequence = session.Journal.Entries
+                    .OfType<ActionResolvedJournalEntry>()
+                    .Single().Sequence;
+                bool activated = false;
+                for (int index = 0; index < 120 && !activated; index++)
+                {
+                    animation.TargetAnimator.Update(0.05f);
+                    activated = ragdoll.TryActivateAtAuthoredHandoff();
+                }
+
+                Assert.That(activated, Is.True);
+                Assert.That(
+                    ragdoll.TryGetTrace(journalSequence, out var trace),
+                    Is.True);
+                Assert.That(
+                    trace.HandoffEventNormalizedTime,
+                    Is.EqualTo(Mathf.Lerp(
+                        0.4f,
+                        1f,
+                        ragdoll.Profile.HandoffNormalizedTime))
+                        .Within(0.001f));
             }
             finally
             {
@@ -1424,7 +1527,8 @@ namespace GritGud.Presentation.Tests
                 Array.Empty<ScenarioObjectiveDefinition>()));
         }
 
-        private static GameplaySession CreateContactSession()
+        private static GameplaySession CreateContactSession(
+            int targetMaximumWounds = int.MaxValue)
         {
             var knife = new InventoryItemDefinition(
                 "knife",
@@ -1454,7 +1558,11 @@ namespace GritGud.Presentation.Tests
                 new GameplayActorPose(
                     new GameplayPosition(0f, 0f, 1.5f),
                     0f),
-                new TurnBudget(0, 8f));
+                new TurnBudget(0, 8f),
+                combat: new ActorCombatDefinition(
+                    "neutral",
+                    Array.Empty<string>(),
+                    targetMaximumWounds));
             return new GameplaySession(new ScenarioDefinition(
                 "contact-presentation-test",
                 new ScenarioTimingDefinition(1f),

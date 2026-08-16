@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
+using GritGud.Presentation.Actors;
 using GritGud.Presentation.Actors.Animation;
 using UnityEngine;
 
@@ -18,12 +19,16 @@ namespace GritGud.Presentation.Gameplay
         private sealed class PendingReaction
         {
             public PendingReaction(
+                GameplayActionRecord action,
                 AttackResolutionRecord resolution,
                 float remainingSeconds)
             {
+                Action = action;
                 Resolution = resolution;
                 RemainingSeconds = remainingSeconds;
             }
+
+            public GameplayActionRecord Action { get; }
 
             public AttackResolutionRecord Resolution { get; }
 
@@ -88,11 +93,11 @@ namespace GritGud.Presentation.Gameplay
                 animation?.DeferIncapacitationPresentation();
             if (delay <= 0f)
             {
-                if (TryPresent(resolution))
+                if (TryPresent(action, resolution))
                     return;
             }
 
-            pending.Add(new PendingReaction(resolution, delay));
+            pending.Add(new PendingReaction(action, resolution, delay));
         }
 
         private float ResolveDelaySeconds(AttackResolutionRecord resolution)
@@ -122,12 +127,14 @@ namespace GritGud.Presentation.Gameplay
                 reaction.RemainingSeconds -= elapsed;
                 if (reaction.RemainingSeconds > 0f)
                     continue;
-                if (TryPresent(reaction.Resolution))
+                if (TryPresent(reaction.Action, reaction.Resolution))
                     pending.RemoveAt(index);
             }
         }
 
-        private bool TryPresent(AttackResolutionRecord resolution)
+        private bool TryPresent(
+            GameplayActionRecord action,
+            AttackResolutionRecord resolution)
         {
             if (!registry.TryGetActor(
                     resolution.TargetId,
@@ -140,10 +147,50 @@ namespace GritGud.Presentation.Gameplay
                 ActorAnimationCoordinator>();
             if (animation != null && animation.IsPresentingReplay)
                 return false;
-            animation?.PresentWoundReaction(
+            bool incapacitated = session.IsActorIncapacitated(
+                resolution.TargetId);
+            bool presented = animation != null &&
+                animation.PresentWoundReaction(
                 resolution.HitRegion.Value,
-                session.IsActorIncapacitated(resolution.TargetId));
+                incapacitated);
+            if (presented && incapacitated)
+            {
+                Vector3 impulseDirection = target.Transform.forward;
+                if (registry.TryGetActor(
+                        resolution.AttackerId,
+                        out GameplayActorView attacker))
+                {
+                    Vector3 displacement = target.Transform.position -
+                        attacker.Transform.position;
+                    if (displacement.sqrMagnitude > 0.0001f)
+                        impulseDirection = displacement.normalized;
+                }
+                target.Root.GetComponent<ActorRagdollPresenter>()
+                    ?.ArmIncapacitation(
+                        ResolveJournalSequence(action),
+                        resolution.HitRegion,
+                        impulseDirection,
+                        resolution.IsContactAttack
+                            ? GameplayCloseQuartersPresentationTiming
+                                .ContactImpactNormalizedTime
+                            : 0f);
+            }
             return true;
+        }
+
+        private long ResolveJournalSequence(GameplayActionRecord action)
+        {
+            IReadOnlyList<GameplayJournalEntry> entries =
+                session.Journal.Entries;
+            for (int index = entries.Count - 1; index >= 0; index--)
+            {
+                if (entries[index] is ActionResolvedJournalEntry resolved &&
+                    ReferenceEquals(resolved.Action, action))
+                {
+                    return resolved.Sequence;
+                }
+            }
+            return 0L;
         }
 
         private static bool TryGetAttackResolution(

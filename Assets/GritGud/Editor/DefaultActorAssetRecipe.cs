@@ -31,6 +31,8 @@ namespace GritGud.Editor
             "Assets/GritGud/Presentation/Actors/Animation/DefaultPlayerAnimationProfile.asset";
         internal const string MotionProfilePath =
             "Assets/GritGud/Presentation/Actors/DefaultActorMotionProfile.asset";
+        internal const string RagdollProfilePath =
+            "Assets/GritGud/Presentation/Actors/DefaultActorRagdollProfile.asset";
         internal const string PrefabPath =
             "Assets/GritGud/Content/Resources/Actors/DefaultPlayerActor.prefab";
         internal const string SourceVisualPath =
@@ -113,6 +115,21 @@ namespace GritGud.Editor
                 .GameplayCloseQuartersPresentationTiming
                 .ContactStrikeSeconds;
         internal const float HitReactionExitNormalizedTime = 0.3f;
+        internal const string RagdollTraceSchemaId = "default-humanoid-v1";
+        internal const int RagdollTraceSchemaVersion = 1;
+        internal const float RagdollTotalMass = 72f;
+        internal const float RagdollHandoffNormalizedTime = 0.72f;
+        internal const float RagdollSampleIntervalSeconds = 0.05f;
+        internal const float RagdollMinimumActiveSeconds = 0.45f;
+        internal const float RagdollSettleHoldSeconds = 0.35f;
+        internal const float RagdollMaximumActiveSeconds = 2.25f;
+        internal const float RagdollSettleLinearSpeed = 0.12f;
+        internal const float RagdollSettleAngularSpeed = 0.3f;
+        internal const float RagdollMaximumImpulseSpeed = 2.4f;
+        internal const float RagdollUpwardImpulseFraction = 0.22f;
+        internal const int RagdollMaximumStoredTraces = 4;
+        internal const float RagdollLinearDamping = 0.08f;
+        internal const float RagdollAngularDamping = 0.12f;
 
         internal static readonly DefaultActorClipDefinition[] ClipDefinitions =
         {

@@ -342,6 +342,25 @@ Enemies do not aim a cursor. A pinned enemy evaluates the same fixed heading
 set and deterministically commits the farthest legal candidate, with stable
 tie ordering.
 
+## Bounded ragdoll verification
+
+The existing Depot Yard knife setup is sufficient; no extra fixture is needed.
+
+1. Enter turn mode with `T`, equip slot `5`, and incapacitate a hostile with
+   the Combat Knife. The regional authored fall must play first.
+2. At roughly 72% of Shoulder Hit And Fall or Fall Over, the current pose must
+   loosen into a short joint-limited ragdoll. It may bounce or fold against the
+   static yard geometry, but the actor root, wound state, initiative, and HUD
+   position must not move with the skeleton.
+3. The body must settle or be forcibly bounded within 2.25 seconds, then remain
+   frozen. It must not keep buzzing, push a topple prop, or snap back to the
+   standing controller.
+4. Open replay and scrub repeatedly across the late portion of the
+   incapacitating action. The authored fall must precede the recorded ragdoll
+   motion; paused/backward seeking must be stable rather than running physics.
+   Exiting replay must restore the exact live frozen body—or resume the exact
+   live in-flight fall if replay was opened before settle.
+
 ## Current next action
 
 Phase 3 acceptance remains complete after WebGL traversal, turn-cycle,
@@ -377,5 +396,8 @@ reactions, persistent regional fall variants, IK suppression, equipment
 interruption, seekable replay, and exact live restoration. Directional Push Off
 freezes a player-chosen cover placement and validates the actor's get-up space;
 its lying, struggle, push, and authored get-up work remains presentation polish.
-The next production slice is the bounded incapacitation-to-ragdoll experiment,
-followed by the prop-aware pinned-character presentation pass.
+The bounded attack-incapacitation-to-ragdoll experiment is complete through
+authored handoff, static-world collision, settle/freeze, quantized pose traces,
+seekable replay, and exact live restoration. The next production slice is the
+prop-aware pinned-character presentation pass. Projectile and thrown-blast
+reaction evidence remains a later hookup to the same ragdoll seam.

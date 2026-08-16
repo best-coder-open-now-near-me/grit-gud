@@ -19,6 +19,8 @@ namespace GritGud.Editor
             DefaultActorAssetRecipe.ProfilePath;
         public const string MotionProfilePath =
             DefaultActorAssetRecipe.MotionProfilePath;
+        public const string RagdollProfilePath =
+            DefaultActorAssetRecipe.RagdollProfilePath;
         public const string PrefabPath =
             DefaultActorAssetRecipe.PrefabPath;
 
@@ -127,10 +129,13 @@ namespace GritGud.Editor
                 DefaultActorProfileBuilder.Build(controller);
             ActorMotionProfile motionProfile =
                 DefaultActorMotionProfileBuilder.Build();
+            ActorRagdollProfile ragdollProfile =
+                DefaultActorRagdollProfileBuilder.Build();
             DefaultActorPrefabBuilder.Build(
                 sourceVisual,
                 profile,
-                motionProfile);
+                motionProfile,
+                ragdollProfile);
 
             AssetDatabase.SaveAssets();
             NormalizeTextAsset(ControllerPath);
