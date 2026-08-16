@@ -572,6 +572,20 @@ namespace GritGud.Presentation.LevelEditing.UI
                     CultureInfo.InvariantCulture);
                 scenarioPropSize = configured?.sizeClass ?? "medium";
                 scenarioPropStartsEncounter = configured?.startsEncounterOnAttack ?? false;
+                scenarioPropTopplingEnabled = configured?.toppling?.enabled
+                    ?? false;
+                scenarioPropTopplePitchText =
+                    (configured?.toppling?.pitchOffsetDegrees ?? 0f).ToString(
+                        "0.###",
+                        CultureInfo.InvariantCulture);
+                scenarioPropToppleRollText =
+                    (configured?.toppling?.rollOffsetDegrees ?? 90f).ToString(
+                        "0.###",
+                        CultureInfo.InvariantCulture);
+                scenarioPropToppleElevationText =
+                    (configured?.toppling?.elevationOffset ?? 0.5f).ToString(
+                        "0.###",
+                        CultureInfo.InvariantCulture);
             }
 
             GUILayout.Space(LevelEditorGuiMetrics.SpaceInspectorSection);
@@ -594,6 +608,16 @@ namespace GritGud.Presentation.LevelEditing.UI
             scenarioPropStartsEncounter = GUILayout.Toggle(
                 scenarioPropStartsEncounter,
                 "Attack starts encounter");
+            scenarioPropTopplingEnabled = GUILayout.Toggle(
+                scenarioPropTopplingEnabled,
+                "Eligible to topple");
+            bool propFieldsEnabled = GUI.enabled;
+            GUI.enabled = propFieldsEnabled && scenarioPropTopplingEnabled;
+            DrawLabeledField("Topple pitch", ref scenarioPropTopplePitchText);
+            DrawLabeledField("Topple roll", ref scenarioPropToppleRollText);
+            DrawLabeledField(
+                "Topple elevation",
+                ref scenarioPropToppleElevationText);
             GUI.enabled = true;
             if (GUILayout.Button("APPLY PROP", PanelButtonLayout()))
             {
@@ -602,7 +626,11 @@ namespace GritGud.Presentation.LevelEditing.UI
                     scenarioPropEnabled,
                     scenarioPropMassText,
                     scenarioPropSize,
-                    scenarioPropStartsEncounter);
+                    scenarioPropStartsEncounter,
+                    scenarioPropTopplingEnabled,
+                    scenarioPropTopplePitchText,
+                    scenarioPropToppleRollText,
+                    scenarioPropToppleElevationText);
             }
         }
 

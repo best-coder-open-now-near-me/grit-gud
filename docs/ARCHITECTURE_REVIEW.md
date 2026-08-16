@@ -667,9 +667,10 @@ turn. The full EditMode gate passes 429 tests.
 9. Integrate progression persistence. **Complete:** versioned identity-bound
    storage and the confirmation-based advancement surface are live.
 10. Complete live toppling resolution, authored prop eligibility, and the
-    published destructible-pile verification fixture. **Next.**
+    published destructible-pile verification fixture. **Implemented
+    2026-08-16; full Unity runner and hands-on fixture acceptance remain.**
 11. Finish knife, reaction, equipment, reload, grenade, and turn presentation
-    through gameplay-owned semantic animation states.
+    through gameplay-owned semantic animation states. **Next.**
 12. Migrate remaining action families to canonical prepare/commit transitions
     and establish deterministic trajectory, repro, minimization, fuzzing, and
     seed-baseline infrastructure.

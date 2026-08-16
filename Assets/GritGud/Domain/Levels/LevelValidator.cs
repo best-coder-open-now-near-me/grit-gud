@@ -725,6 +725,41 @@ namespace GritGud.Domain.Levels
                         + $"'{prop.sizeClass}'.",
                         prop.entityId);
                 }
+
+
+                LevelScenarioPropTopplingData toppling = prop.toppling;
+                if (toppling != null)
+                {
+                    if (!LevelValidationMath.IsFinite(
+                            toppling.pitchOffsetDegrees)
+                        || !LevelValidationMath.IsFinite(
+                            toppling.rollOffsetDegrees))
+                    {
+                        context.Error(
+                            "scenario.prop.toppling.rotation",
+                            $"Scenario prop '{prop.entityId}' needs finite toppling rotation offsets.",
+                            prop.entityId);
+                    }
+                    else if (toppling.enabled
+                        && toppling.pitchOffsetDegrees == 0f
+                        && toppling.rollOffsetDegrees == 0f)
+                    {
+                        context.Error(
+                            "scenario.prop.toppling.rotation.zero",
+                            $"Scenario prop '{prop.entityId}' needs a non-zero toppling pitch or roll offset.",
+                            prop.entityId);
+                    }
+
+                    if (!LevelValidationMath.IsFinite(
+                            toppling.elevationOffset)
+                        || toppling.elevationOffset < 0f)
+                    {
+                        context.Error(
+                            "scenario.prop.toppling.elevation",
+                            $"Scenario prop '{prop.entityId}' needs a finite non-negative toppling elevation offset.",
+                            prop.entityId);
+                    }
+                }
             }
 
             var linkedVehicles = new HashSet<string>(StringComparer.Ordinal);

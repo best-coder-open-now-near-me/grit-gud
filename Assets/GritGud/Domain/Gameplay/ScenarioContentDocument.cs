@@ -260,11 +260,22 @@ namespace GritGud.Domain.Gameplay
     }
 
     [Serializable]
+    public sealed class ScenarioPropTopplingData
+    {
+        public bool enabled;
+        public float pitchOffsetDegrees;
+        public float rollOffsetDegrees = 90f;
+        public float elevationOffset;
+    }
+
+    [Serializable]
     public sealed class ScenarioPropContentData
     {
         public string entityId = string.Empty;
         public float mass;
         public string sizeClass = "medium";
+        public ScenarioPropTopplingData toppling =
+            new ScenarioPropTopplingData();
         public ScenarioAttackResponseData attackResponse;
     }
 
@@ -302,7 +313,7 @@ namespace GritGud.Domain.Gameplay
     [Serializable]
     public sealed class ScenarioContentDocument
     {
-        public const int CurrentSchemaVersion = 12;
+        public const int CurrentSchemaVersion = 13;
 
         public int schemaVersion = CurrentSchemaVersion;
         public string scenarioId = string.Empty;

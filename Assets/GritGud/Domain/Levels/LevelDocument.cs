@@ -559,17 +559,38 @@ namespace GritGud.Domain.Levels
     }
 
     [Serializable]
+    public sealed class LevelScenarioPropTopplingData
+    {
+        public bool enabled;
+        public float pitchOffsetDegrees;
+        public float rollOffsetDegrees = 90f;
+        public float elevationOffset;
+
+        public LevelScenarioPropTopplingData DeepCopy() =>
+            new LevelScenarioPropTopplingData
+            {
+                enabled = enabled,
+                pitchOffsetDegrees = pitchOffsetDegrees,
+                rollOffsetDegrees = rollOffsetDegrees,
+                elevationOffset = elevationOffset,
+            };
+    }
+
+    [Serializable]
     public sealed class LevelScenarioPropData
     {
         public string entityId = string.Empty;
         public float mass = 25f;
         public string sizeClass = "medium";
         public bool startsEncounterOnAttack;
+        public LevelScenarioPropTopplingData toppling =
+            new LevelScenarioPropTopplingData();
 
         public void Normalize()
         {
             entityId = entityId ?? string.Empty;
             sizeClass = sizeClass ?? string.Empty;
+            toppling = toppling ?? new LevelScenarioPropTopplingData();
         }
 
         public LevelScenarioPropData DeepCopy()
@@ -580,6 +601,8 @@ namespace GritGud.Domain.Levels
                 mass = mass,
                 sizeClass = sizeClass ?? string.Empty,
                 startsEncounterOnAttack = startsEncounterOnAttack,
+                toppling = toppling?.DeepCopy()
+                    ?? new LevelScenarioPropTopplingData(),
             };
         }
     }
@@ -703,7 +726,7 @@ namespace GritGud.Domain.Levels
     [Serializable]
     public sealed class LevelDocument
     {
-        public const int CurrentSchemaVersion = 12;
+        public const int CurrentSchemaVersion = 13;
         public const int MaximumEntityGroupCount = 64;
 
         public int schemaVersion = CurrentSchemaVersion;

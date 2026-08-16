@@ -76,13 +76,13 @@ Work resumes in this order:
    subject to a nearby destination. The intervening core-attribute checkpoint
    is complete: schema 8 makes Strength, Dexterity, Grit, and Charisma mandatory
    1-5 ratings; Dexterity derives initiative and movement, while Strength is
-   included in opposed displacement. **Prop toppling support is partial:** the
-   authoritative snapshot, displacement record, commit validation, replay, and
-   presentation paths can preserve an already-resolved pose, posture, and
-   `Topple` result policy. Live Push and Throw resolution does not yet produce
-   that result, prop eligibility is not authored, and the published depot's
-   displacement actions currently allow no result policies. Toppling is
-   therefore not an end-to-end playable feature yet. **Reach-limited knife
+   included in opposed displacement. **Prop toppling is implemented end to
+   end:** schema 13 authors per-prop rotation/elevation profiles, live Push and
+   Throw deterministically resolve eligible upright props into frozen toppled
+   pose/posture evidence, and the final rotated collider volume is validated
+   before the atomic commit. Replay and presentation consume that recorded
+   state without rerunning physics. The published depot enables `Topple` and
+   carries a named verification group. **Reach-limited knife
    attack rules are complete:** schema 9 adds an
    explicit contact-delivery contract to ordinary inventory attacks; the
    Combat Knife uses authored reach and AP, actor-only targeting, atomic
@@ -174,7 +174,8 @@ Work resumes in this order:
 The next work closes and proves existing systems before adding another
 initiative participant:
 
-1. **Complete destructible toppling end to end.** Author prop eligibility and a
+1. **Complete destructible toppling end to end.** **Implementation complete
+   2026-08-16; full Unity runner and hands-on fixture acceptance remain.** Author prop eligibility and a
    deterministic result-policy resolver that freezes the resulting pose,
    posture, and environmental evidence in the committed displacement. Add a
    dedicated published depot fixture with an isolated prop, mixed crate/barrel
@@ -209,15 +210,16 @@ initiative participant:
 
 ### Current playable verification baseline
 
-The published depot already contains destructible crates and barrels, but it is
-not yet a toppling or settled-pile fixture. Blast damage from the launcher and
-frag grenade can damage and destroy those props, and the resulting collision,
-visibility, diagnostics, replay projection, and restoration can be exercised.
-Only `crate-exposure-demo` is currently registered as a prop displacement
-subject. Push and Throw can move it, but it will remain upright because both
-published actions author an empty `allowedResults` list. Both player characters
-already carry the Combat Knife in hotbar slot 5, so reach rejection, committed
-wounds, diagnostics, and the current procedural strike can be tested now.
+The published depot now contains a `Toppling Verification` group covering an
+isolated crate, a mixed crate/barrel contact chain, and a three-crate authored
+pile with round-tripped X/Y/Z rotation. Seven stable props in that group are
+registered as displacement subjects, and both player characters' Push and
+Throw actions allow `Topple`. A PlayMode lifecycle test pushes the near-spawn
+barrel, verifies the authoritative and scene pose, projects an earlier replay
+state, then restores the exact live toppled pose. Blast damage from the launcher
+and frag grenade still exercises the same props. Both player characters also
+carry the Combat Knife in hotbar slot 5, so reach rejection, committed wounds,
+diagnostics, and the current procedural strike can be tested now.
 
 The 2026-08-12 review follow-up is complete: silhouette exposure is cached,
 displacement and blast rules use canonical Application paths, scenario content

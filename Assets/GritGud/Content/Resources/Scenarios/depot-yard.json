@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 12,
+  "schemaVersion": 13,
   "scenarioId": "depot-yard",
   "displayName": "Depot Yard",
   "levelId": "main-depot-yard-v1",
@@ -53,7 +53,7 @@
             "handRequirement": "none",
             "autoStowPolicy": "never",
             "contestPolicy": "close-quarters-control",
-            "allowedResults": []
+            "allowedResults": ["topple"]
           },
           {
             "id": "close-quarters.throw",
@@ -77,7 +77,7 @@
             "handRequirement": "both-hands-free",
             "autoStowPolicy": "allowed",
             "contestPolicy": "close-quarters-control",
-            "allowedResults": []
+            "allowedResults": ["topple"]
           }
         ]
       },
@@ -311,7 +311,7 @@
             "handRequirement": "none",
             "autoStowPolicy": "never",
             "contestPolicy": "close-quarters-control",
-            "allowedResults": []
+            "allowedResults": ["topple"]
           },
           {
             "id": "close-quarters.throw",
@@ -335,7 +335,7 @@
             "handRequirement": "both-hands-free",
             "autoStowPolicy": "allowed",
             "contestPolicy": "close-quarters-control",
-            "allowedResults": []
+            "allowedResults": ["topple"]
           }
         ]
       },
@@ -560,7 +560,79 @@
     {
       "entityId": "crate-exposure-demo",
       "mass": 35.0,
-      "sizeClass": "medium"
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 0.0,
+        "rollOffsetDegrees": 90.0,
+        "elevationOffset": 0.5
+      }
+    },
+    {
+      "entityId": "barrel-yard-01",
+      "mass": 28.0,
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 90.0,
+        "rollOffsetDegrees": 0.0,
+        "elevationOffset": 0.55
+      }
+    },
+    {
+      "entityId": "barrel-yard-02",
+      "mass": 28.0,
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 90.0,
+        "rollOffsetDegrees": 0.0,
+        "elevationOffset": 0.55
+      }
+    },
+    {
+      "entityId": "crate-yard-01",
+      "mass": 35.0,
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 0.0,
+        "rollOffsetDegrees": 90.0,
+        "elevationOffset": 0.5
+      }
+    },
+    {
+      "entityId": "crate-warehouse-01",
+      "mass": 35.0,
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 0.0,
+        "rollOffsetDegrees": 90.0,
+        "elevationOffset": 0.5
+      }
+    },
+    {
+      "entityId": "crate-warehouse-02",
+      "mass": 35.0,
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 0.0,
+        "rollOffsetDegrees": 90.0,
+        "elevationOffset": 0.5
+      }
+    },
+    {
+      "entityId": "crate-warehouse-03",
+      "mass": 35.0,
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 0.0,
+        "rollOffsetDegrees": 90.0,
+        "elevationOffset": 0.5
+      }
     }
   ],
   "vehicles": [

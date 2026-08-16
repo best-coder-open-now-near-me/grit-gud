@@ -11,13 +11,63 @@ namespace GritGud.Domain.Gameplay
         Huge,
     }
 
+    public sealed class PropTopplingDefinition
+    {
+        public PropTopplingDefinition(
+            float pitchOffsetDegrees,
+            float rollOffsetDegrees,
+            float elevationOffset)
+        {
+            if (!IsFinite(pitchOffsetDegrees))
+                throw new ArgumentOutOfRangeException(nameof(pitchOffsetDegrees));
+            if (!IsFinite(rollOffsetDegrees))
+                throw new ArgumentOutOfRangeException(nameof(rollOffsetDegrees));
+            if (pitchOffsetDegrees == 0f && rollOffsetDegrees == 0f)
+            {
+                throw new ArgumentException(
+                    "Toppling requires a non-zero pitch or roll offset.");
+            }
+
+            if (!IsFinite(elevationOffset) || elevationOffset < 0f)
+                throw new ArgumentOutOfRangeException(nameof(elevationOffset));
+
+            PitchOffsetDegrees = pitchOffsetDegrees;
+            RollOffsetDegrees = rollOffsetDegrees;
+            ElevationOffset = elevationOffset;
+        }
+
+        public float PitchOffsetDegrees { get; }
+
+        public float RollOffsetDegrees { get; }
+
+        public float ElevationOffset { get; }
+
+        public PropDisplacementState Resolve(
+            GameplayPropPose previousPose,
+            GameplayPosition destination) =>
+            new PropDisplacementState(
+                new GameplayPropPose(
+                    new GameplayPosition(
+                        destination.X,
+                        destination.Y + ElevationOffset,
+                        destination.Z),
+                    previousPose.PitchDegrees + PitchOffsetDegrees,
+                    previousPose.YawDegrees,
+                    previousPose.RollDegrees + RollOffsetDegrees),
+                DestructiblePropPosture.Toppled);
+
+        private static bool IsFinite(float value) =>
+            !float.IsNaN(value) && !float.IsInfinity(value);
+    }
+
     public sealed class DisplacementSubjectDefinition
     {
         public DisplacementSubjectDefinition(
             string id,
             DisplacementSubjectKind kind,
             float mass,
-            DisplacementSizeClass size = DisplacementSizeClass.Medium)
+            DisplacementSizeClass size = DisplacementSizeClass.Medium,
+            PropTopplingDefinition toppling = null)
         {
             if (string.IsNullOrWhiteSpace(id))
             {
@@ -43,10 +93,18 @@ namespace GritGud.Domain.Gameplay
                 throw new ArgumentOutOfRangeException(nameof(size));
             }
 
+            if (toppling != null && kind != DisplacementSubjectKind.Prop)
+            {
+                throw new ArgumentException(
+                    "Only prop displacement subjects can define toppling.",
+                    nameof(toppling));
+            }
+
             Id = id;
             Kind = kind;
             Mass = mass;
             Size = size;
+            Toppling = toppling;
         }
 
         public string Id { get; }
@@ -56,5 +114,7 @@ namespace GritGud.Domain.Gameplay
         public float Mass { get; }
 
         public DisplacementSizeClass Size { get; }
+
+        public PropTopplingDefinition Toppling { get; }
     }
 }

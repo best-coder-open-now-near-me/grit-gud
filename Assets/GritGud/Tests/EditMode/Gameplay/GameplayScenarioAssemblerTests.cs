@@ -117,6 +117,9 @@ namespace GritGud.Domain.Tests
             Assert.That(propSubject.Kind,
                 Is.EqualTo(DisplacementSubjectKind.Prop));
             Assert.That(propSubject.Mass, Is.EqualTo(35f));
+            Assert.That(propSubject.Toppling, Is.Not.Null);
+            Assert.That(propSubject.Toppling.RollOffsetDegrees, Is.EqualTo(90f));
+            Assert.That(propSubject.Toppling.ElevationOffset, Is.EqualTo(0.45f));
             Assert.That(
                 result.TryGetVehicle(
                     "vehicle.one",
@@ -941,6 +944,12 @@ namespace GritGud.Domain.Tests
                     {
                         entityId = "prop.one",
                         mass = 35f,
+                        toppling = new ScenarioPropTopplingData
+                        {
+                            enabled = true,
+                            rollOffsetDegrees = 90f,
+                            elevationOffset = 0.45f,
+                        },
                     },
                 },
                 vehicles =

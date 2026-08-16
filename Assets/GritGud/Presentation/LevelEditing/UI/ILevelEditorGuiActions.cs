@@ -187,7 +187,11 @@ namespace GritGud.Presentation.LevelEditing.UI
             bool enabled,
             string mass,
             string sizeClass,
-            bool startsEncounter);
+            bool startsEncounter,
+            bool topplingEnabled,
+            string topplingPitch,
+            string topplingRoll,
+            string topplingElevation);
 
         void ApplyScenarioObjective(
             string entityId,

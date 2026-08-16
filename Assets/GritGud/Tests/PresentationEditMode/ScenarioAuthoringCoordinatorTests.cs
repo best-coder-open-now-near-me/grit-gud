@@ -86,6 +86,64 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void PropTopplingProfileIsAuthoredInOneUndoableChange()
+        {
+            using var workspace = new LevelEditorWorkspace(
+                LevelDocumentFactory.CreateEmpty());
+            var coordinator = new ScenarioAuthoringCoordinator(
+                workspace,
+                ScenarioAuthoringCatalog.LoadDefault(),
+                () => new LevelEditorCameraState());
+
+            coordinator.ApplyProp(
+                "crate",
+                true,
+                "35",
+                "medium",
+                false,
+                true,
+                "0",
+                "90",
+                "0.5");
+
+            LevelScenarioPropData prop = workspace.CreateSnapshot()
+                .scenario.props.Single();
+            Assert.That(prop.entityId, Is.EqualTo("crate"));
+            Assert.That(prop.toppling.enabled, Is.True);
+            Assert.That(prop.toppling.rollOffsetDegrees, Is.EqualTo(90f));
+            Assert.That(prop.toppling.elevationOffset, Is.EqualTo(0.5f));
+            Assert.That(workspace.CanUndo, Is.True);
+        }
+
+        [Test]
+        public void InvalidTopplingProfileDoesNotEnterHistory()
+        {
+            using var workspace = new LevelEditorWorkspace(
+                LevelDocumentFactory.CreateEmpty());
+            var coordinator = new ScenarioAuthoringCoordinator(
+                workspace,
+                ScenarioAuthoringCatalog.LoadDefault(),
+                () => new LevelEditorCameraState());
+            int revision = workspace.Revision;
+            string status = null;
+            coordinator.StatusChanged += message => status = message;
+
+            coordinator.ApplyProp(
+                "crate",
+                true,
+                "35",
+                "medium",
+                false,
+                true,
+                "0",
+                "0",
+                "0.5");
+
+            Assert.That(workspace.Revision, Is.EqualTo(revision));
+            Assert.That(status, Does.Contain("non-zero"));
+        }
+
+        [Test]
         public void DeletingActorClearsVehicleOccupantInSameUndoStep()
         {
             LevelDocument document = LevelDocumentFactory.CreateEmpty();

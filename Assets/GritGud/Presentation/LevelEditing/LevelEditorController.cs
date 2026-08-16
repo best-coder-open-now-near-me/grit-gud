@@ -1870,12 +1870,20 @@ namespace GritGud.Presentation.LevelEditing
             bool enabled,
             string mass,
             string sizeClass,
-            bool startsEncounter) => scenarioAuthoring.ApplyProp(
+            bool startsEncounter,
+            bool topplingEnabled,
+            string topplingPitch,
+            string topplingRoll,
+            string topplingElevation) => scenarioAuthoring.ApplyProp(
                 entityId,
                 enabled,
                 mass,
                 sizeClass,
-                startsEncounter);
+                startsEncounter,
+                topplingEnabled,
+                topplingPitch,
+                topplingRoll,
+                topplingElevation);
 
         void ILevelEditorGuiActions.ApplyScenarioObjective(
             string entityId,

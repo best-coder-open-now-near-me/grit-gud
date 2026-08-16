@@ -246,7 +246,11 @@ namespace GritGud.Presentation.LevelEditing
             bool enabled,
             string massText,
             string sizeClass,
-            bool startsEncounter)
+            bool startsEncounter,
+            bool topplingEnabled,
+            string topplingPitchText,
+            string topplingRollText,
+            string topplingElevationText)
         {
             LevelDocument snapshot = workspace.CreateSnapshot();
             LevelScenarioData after = snapshot.scenario.DeepCopy();
@@ -263,12 +267,38 @@ namespace GritGud.Presentation.LevelEditing
                     Report("Choose a supported scenario prop size.");
                     return;
                 }
+                if (!TryParse(topplingPitchText, out float topplingPitch)
+                    || !TryParse(topplingRollText, out float topplingRoll)
+                    || !TryParse(
+                        topplingElevationText,
+                        out float topplingElevation)
+                    || topplingElevation < 0f)
+                {
+                    Report(
+                        "Toppling offsets must be finite and elevation cannot be negative.");
+                    return;
+                }
+                if (topplingEnabled
+                    && topplingPitch == 0f
+                    && topplingRoll == 0f)
+                {
+                    Report(
+                        "Toppling needs a non-zero pitch or roll offset.");
+                    return;
+                }
                 after.props.Add(new LevelScenarioPropData
                 {
                     entityId = entityId,
                     mass = mass,
                     sizeClass = sizeClass,
                     startsEncounterOnAttack = startsEncounter,
+                    toppling = new LevelScenarioPropTopplingData
+                    {
+                        enabled = topplingEnabled,
+                        pitchOffsetDegrees = topplingPitch,
+                        rollOffsetDegrees = topplingRoll,
+                        elevationOffset = topplingElevation,
+                    },
                 });
             }
             workspace.Execute(new SetScenarioConfigurationCommand(

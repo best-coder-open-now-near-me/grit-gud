@@ -56,7 +56,8 @@ namespace GritGud.Application.Gameplay
     {
         DisplacementPathValidation Validate(
             DisplacementRequest request,
-            GameplayPosition origin);
+            GameplayPosition origin,
+            PropDisplacementState resultingPropState);
     }
 
     public interface ID20RollSource
@@ -479,10 +480,34 @@ namespace GritGud.Application.Gameplay
                 target.Subject.Size,
                 destination,
                 availability.Action.Intent);
+            PropDisplacementState resultingPropState = null;
+            if (target.Subject.Kind == DisplacementSubjectKind.Prop
+                && destructibles.TryGetProp(
+                    subjectId,
+                    out DestructiblePropSnapshot prop))
+            {
+                resultingPropState = ResolvePropState(
+                    target.Subject,
+                    availability.Action,
+                    prop,
+                    destination,
+                    out _);
+                request = new DisplacementRequest(
+                    actorId,
+                    actionId,
+                    subjectId,
+                    target.Subject.Kind,
+                    target.Subject.Mass,
+                    target.Subject.Size,
+                    resultingPropState.Pose.Position,
+                    availability.Action.Intent);
+            }
             ValidateRequest(
                 request,
                 origin,
+                destination,
                 availability.Action,
+                resultingPropState,
                 out DisplacementResolutionFailure failure);
             return CreateDestinationEvaluation(
                 actorId,
@@ -708,7 +733,7 @@ namespace GritGud.Application.Gameplay
                 ? TryResolveProp(
                     actorId,
                     subjectId,
-                    target.Subject.Mass,
+                    target.Subject,
                     destination,
                     definition,
                     out record,
@@ -930,7 +955,7 @@ namespace GritGud.Application.Gameplay
         private bool TryResolveProp(
             string actorId,
             string propId,
-            float propMass,
+            DisplacementSubjectDefinition subject,
             GameplayPosition destination,
             DisplacementActionDefinition definition,
             out DisplacementRecord record,
@@ -938,19 +963,27 @@ namespace GritGud.Application.Gameplay
         {
             gameplay.GetActor(actorId);
             DestructiblePropSnapshot prop = destructibles.GetProp(propId);
+            PropDisplacementState resultingState = ResolvePropState(
+                subject,
+                definition,
+                prop,
+                destination,
+                out DisplacementResultPolicies appliedResults);
             var request = new DisplacementRequest(
                 actorId,
                 definition.Id,
                 propId,
                 DisplacementSubjectKind.Prop,
-                propMass,
-                GetSubjectSize(propId),
-                destination,
+                subject.Mass,
+                subject.Size,
+                resultingState.Pose.Position,
                 definition.Intent);
             if (!ValidateRequest(
                     request,
                     prop.Position,
+                    destination,
                     definition,
+                    resultingState,
                     out failure))
             {
                 record = null;
@@ -961,11 +994,33 @@ namespace GritGud.Application.Gameplay
                 records.Count + 1L,
                 request,
                 new PropDisplacementState(prop.Pose, prop.Posture),
-                new PropDisplacementState(
-                    prop.Pose.WithPosition(destination),
-                    prop.Posture));
+                resultingState,
+                appliedResults);
             failure = DisplacementResolutionFailure.None;
             return true;
+        }
+
+        private static PropDisplacementState ResolvePropState(
+            DisplacementSubjectDefinition subject,
+            DisplacementActionDefinition action,
+            DestructiblePropSnapshot prop,
+            GameplayPosition destination,
+            out DisplacementResultPolicies appliedResults)
+        {
+            bool shouldTopple = prop.Posture == DestructiblePropPosture.Upright
+                && subject.Toppling != null
+                && action.AllowedResults.HasFlag(
+                    DisplacementResultPolicies.Topple);
+            if (shouldTopple)
+            {
+                appliedResults = DisplacementResultPolicies.Topple;
+                return subject.Toppling.Resolve(prop.Pose, destination);
+            }
+
+            appliedResults = DisplacementResultPolicies.None;
+            return new PropDisplacementState(
+                prop.Pose.WithPosition(destination),
+                prop.Posture);
         }
 
         private bool TryResolveCombatant(
@@ -1026,7 +1081,9 @@ namespace GritGud.Application.Gameplay
             if (!ValidateRequest(
                     request,
                     target.Pose.Position,
+                    destination,
                     definition,
+                    resultingPropState: null,
                     out failure))
             {
                 record = null;
@@ -1109,7 +1166,9 @@ namespace GritGud.Application.Gameplay
         private bool ValidateRequest(
             DisplacementRequest request,
             GameplayPosition origin,
+            GameplayPosition intendedDestination,
             DisplacementActionDefinition definition,
+            PropDisplacementState resultingPropState,
             out DisplacementResolutionFailure failure)
         {
             if (definition == null
@@ -1149,7 +1208,7 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
-            float distance = origin.DistanceTo(request.Destination);
+            float distance = origin.DistanceTo(intendedDestination);
             if (distance <= 0f)
             {
                 failure = DisplacementResolutionFailure.DestinationUnchanged;
@@ -1165,7 +1224,10 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
-            if (!pathValidator.Validate(request, origin).Accepted)
+            if (!pathValidator.Validate(
+                    request,
+                    origin,
+                    resultingPropState).Accepted)
             {
                 failure = DisplacementResolutionFailure.DestinationBlocked;
                 return false;

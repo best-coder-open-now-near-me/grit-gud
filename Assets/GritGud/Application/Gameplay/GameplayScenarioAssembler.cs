@@ -160,7 +160,8 @@ namespace GritGud.Application.Gameplay
                         prop.entityId,
                         DisplacementSubjectKind.Prop,
                         prop.mass,
-                        ParseDisplacementSize(prop.sizeClass)));
+                        ParseDisplacementSize(prop.sizeClass),
+                        CreatePropToppling(prop.toppling)));
             }
 
             return subjects;
@@ -1005,6 +1006,7 @@ namespace GritGud.Application.Gameplay
                     $"Prop '{prop.entityId}' is missing from level '{level.levelId}'.");
                 RequireFinitePositive(prop.mass, $"Prop '{prop.entityId}' mass");
                 ParseDisplacementSize(prop.sizeClass);
+                ValidatePropToppling(prop.entityId, prop.toppling);
                 Require(
                     index.TryAdd(prop.entityId, prop),
                     $"Prop '{prop.entityId}' is defined more than once.");
@@ -1012,6 +1014,42 @@ namespace GritGud.Application.Gameplay
 
             return index;
         }
+
+        private static void ValidatePropToppling(
+            string propId,
+            ScenarioPropTopplingData toppling)
+        {
+            if (toppling == null)
+                return;
+
+            Require(
+                !float.IsNaN(toppling.pitchOffsetDegrees)
+                    && !float.IsInfinity(toppling.pitchOffsetDegrees),
+                $"Prop '{propId}' toppling pitch offset must be finite.");
+            Require(
+                !float.IsNaN(toppling.rollOffsetDegrees)
+                    && !float.IsInfinity(toppling.rollOffsetDegrees),
+                $"Prop '{propId}' toppling roll offset must be finite.");
+            RequireFiniteNonNegative(
+                toppling.elevationOffset,
+                $"Prop '{propId}' toppling elevation offset");
+            if (toppling.enabled)
+            {
+                Require(
+                    toppling.pitchOffsetDegrees != 0f
+                        || toppling.rollOffsetDegrees != 0f,
+                    $"Prop '{propId}' enabled toppling requires a non-zero pitch or roll offset.");
+            }
+        }
+
+        private static PropTopplingDefinition CreatePropToppling(
+            ScenarioPropTopplingData toppling) =>
+            toppling != null && toppling.enabled
+                ? new PropTopplingDefinition(
+                    toppling.pitchOffsetDegrees,
+                    toppling.rollOffsetDegrees,
+                    toppling.elevationOffset)
+                : null;
 
         private static IReadOnlyList<AttackResponseDefinition>
             CreateAttackResponses(

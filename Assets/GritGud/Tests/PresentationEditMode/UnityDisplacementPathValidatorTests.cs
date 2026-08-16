@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Presentation.Gameplay;
 using NUnit.Framework;
@@ -32,7 +33,8 @@ namespace GritGud.Presentation.Tests
 
             var result = validator.Validate(
                 request,
-                new GameplayPosition(0f, 0f, 0f));
+                new GameplayPosition(0f, 0f, 0f),
+                resultingPropState: null);
 
             Assert.That(result.Accepted, Is.True);
         }
@@ -52,12 +54,42 @@ namespace GritGud.Presentation.Tests
 
             var result = validator.Validate(
                 request,
-                new GameplayPosition(0f, 0f, 0f));
+                new GameplayPosition(0f, 0f, 0f),
+                resultingPropState: null);
 
             Assert.That(result.Accepted, Is.False);
             Assert.That(
                 result.FailureCode,
                 Is.EqualTo("displacement.path-blocked"));
+        }
+
+        [Test]
+        public void ObstacleInsideToppledFootprintBlocksDestination()
+        {
+            GameObject actor = CreateObject("Actor", new Vector3(-1f, 0f, 0f));
+            GameObject subject = CreatePrimitive(
+                "Subject",
+                Vector3.zero,
+                new Vector3(0.4f, 2f, 0.4f));
+            CreatePrimitive(
+                "Obstacle",
+                new Vector3(2.8f, 0f, 0f),
+                new Vector3(0.2f, 0.5f, 0.5f));
+            Physics.SyncTransforms();
+            var validator = CreateValidator(actor, subject);
+            var destination = new GameplayPosition(2f, 0f, 0f);
+            var resultingState = new PropDisplacementState(
+                new GameplayPropPose(destination, 0f, 0f, 90f),
+                DestructiblePropPosture.Toppled);
+
+            DisplacementPathValidation result = validator.Validate(
+                CreateRequest(destination),
+                new GameplayPosition(0f, 0f, 0f),
+                resultingState);
+
+            Assert.That(result.Accepted, Is.False);
+            Assert.That(result.FailureCode,
+                Is.EqualTo("displacement.destination-blocked"));
         }
 
         private static DisplacementRequest CreateRequest(

@@ -245,6 +245,17 @@ namespace GritGud.Presentation.Gameplay
                     entityId = prop.entityId,
                     mass = prop.mass,
                     sizeClass = prop.sizeClass,
+                    toppling = new ScenarioPropTopplingData
+                    {
+                        enabled = prop.toppling != null
+                            && prop.toppling.enabled,
+                        pitchOffsetDegrees = prop.toppling?.pitchOffsetDegrees
+                            ?? 0f,
+                        rollOffsetDegrees = prop.toppling?.rollOffsetDegrees
+                            ?? 90f,
+                        elevationOffset = prop.toppling?.elevationOffset
+                            ?? 0f,
+                    },
                     attackResponse = new ScenarioAttackResponseData
                     {
                         startsEncounter = prop.startsEncounterOnAttack,

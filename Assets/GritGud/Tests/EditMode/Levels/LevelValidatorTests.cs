@@ -175,6 +175,33 @@ namespace GritGud.Domain.Tests.Levels
         }
 
         [Test]
+        public void EnabledPropTopplingRequiresRotationAndValidElevation()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            LevelEntity entity = CreateEntity("toppling-prop");
+            document.entities.Add(entity);
+            document.scenario.props.Add(new LevelScenarioPropData
+            {
+                entityId = entity.id,
+                mass = 25f,
+                toppling = new LevelScenarioPropTopplingData
+                {
+                    enabled = true,
+                    pitchOffsetDegrees = 0f,
+                    rollOffsetDegrees = 0f,
+                    elevationOffset = -0.1f,
+                },
+            });
+
+            var issues = LevelValidator.Validate(document);
+
+            Assert.That(issues.Any(item =>
+                item.Code == "scenario.prop.toppling.rotation.zero"), Is.True);
+            Assert.That(issues.Any(item =>
+                item.Code == "scenario.prop.toppling.elevation"), Is.True);
+        }
+
+        [Test]
         public void UnknownDestructibleStateIsRejected()
         {
             LevelDocument document = LevelDocumentFactory.CreateEmpty();

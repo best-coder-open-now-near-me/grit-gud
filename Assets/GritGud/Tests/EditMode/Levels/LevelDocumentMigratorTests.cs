@@ -220,5 +220,23 @@ namespace GritGud.Domain.Tests.Levels
             Assert.That(result.scenario.actors[0].characterId, Is.Empty);
             Assert.That(result.scenario.actors[0].id, Is.EqualTo("player"));
         }
+
+        [Test]
+        public void VersionTwelvePropsGainDisabledTopplingDefaults()
+        {
+            LevelDocument source = LevelDocumentFactory.CreateEmpty("Legacy props");
+            source.schemaVersion = 12;
+            source.scenario.props.Add(new LevelScenarioPropData
+            {
+                entityId = "prop.one",
+                toppling = null,
+            });
+
+            LevelDocument result = new LevelDocumentMigrator().MigrateToCurrent(source);
+
+            Assert.That(result.schemaVersion, Is.EqualTo(LevelDocument.CurrentSchemaVersion));
+            Assert.That(result.scenario.props[0].toppling, Is.Not.Null);
+            Assert.That(result.scenario.props[0].toppling.enabled, Is.False);
+        }
     }
 }

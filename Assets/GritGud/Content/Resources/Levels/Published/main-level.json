@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 9,
+  "schemaVersion": 13,
   "levelId": "main-depot-yard-v1",
   "displayName": "Depot Yard",
   "bounds": {
@@ -57,7 +57,14 @@
       { "id": "audio-workshop-vent", "displayName": "Workshop Ventilation", "soundId": "ventilation", "center": { "x": 8.0, "y": 2.0, "z": -4.5 }, "size": { "x": 7.0, "y": 5.0, "z": 7.0 }, "volume": 0.16, "fadeDistance": 4.0 }
     ]
   },
-  "groups": [],
+  "groups": [
+    {
+      "id": "toppling-verification",
+      "displayName": "Toppling Verification",
+      "locked": false,
+      "hidden": false
+    }
+  ],
   "entities": [
     { "id": "floor-r01-c01", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -10.0, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
     { "id": "floor-r01-c02", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -7.5, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
@@ -214,14 +221,14 @@
 
     { "id": "yard-runner", "archetypeId": "vehicle.buggy.standard", "transform": { "position": { "x": -1.5, "y": 0.0, "z": -3.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
 
-    { "id": "crate-warehouse-01", "archetypeId": "prop.crate.standard", "transform": { "position": { "x": -9.0, "y": 0.0, "z": -7.5 }, "yawDegrees": 15.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
-    { "id": "crate-warehouse-02", "archetypeId": "prop.crate.standard", "transform": { "position": { "x": -7.5, "y": 0.0, "z": -7.25 }, "yawDegrees": -15.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
-    { "id": "crate-warehouse-03", "archetypeId": "prop.crate.standard", "transform": { "position": { "x": -9.25, "y": 0.0, "z": -5.75 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
+    { "id": "crate-warehouse-01", "archetypeId": "prop.crate.standard", "groupId": "toppling-verification", "transform": { "position": { "x": -9.0, "y": 0.0, "z": -7.5 }, "yawDegrees": 15.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
+    { "id": "crate-warehouse-02", "archetypeId": "prop.crate.standard", "groupId": "toppling-verification", "transform": { "position": { "x": -7.75, "y": 0.0, "z": -7.4 }, "yawDegrees": -12.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
+    { "id": "crate-warehouse-03", "archetypeId": "prop.crate.standard", "groupId": "toppling-verification", "transform": { "position": { "x": -8.35, "y": 0.95, "z": -7.45 }, "pitchDegrees": 1.5, "yawDegrees": 6.0, "rollDegrees": -2.5 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
     { "id": "crate-warehouse-04", "archetypeId": "prop.crate.standard", "transform": { "position": { "x": -6.0, "y": 0.0, "z": -4.25 }, "yawDegrees": 30.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
     { "id": "crate-warehouse-05", "archetypeId": "prop.crate.standard", "transform": { "position": { "x": -4.5, "y": 0.0, "z": 2.0 }, "yawDegrees": 90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
-    { "id": "crate-yard-01", "archetypeId": "prop.crate.standard", "transform": { "position": { "x": -0.5, "y": 0.0, "z": -5.75 }, "yawDegrees": 15.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
+    { "id": "crate-yard-01", "archetypeId": "prop.crate.standard", "groupId": "toppling-verification", "transform": { "position": { "x": -0.5, "y": 0.0, "z": -5.75 }, "yawDegrees": 15.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
     { "id": "crate-yard-02", "archetypeId": "prop.crate.standard", "transform": { "position": { "x": 1.0, "y": 0.0, "z": -4.5 }, "yawDegrees": -30.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
-    { "id": "crate-exposure-demo", "archetypeId": "prop.crate.standard", "transform": { "position": { "x": 3.15, "y": 0.0, "z": -4.4 }, "yawDegrees": 15.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
+    { "id": "crate-exposure-demo", "archetypeId": "prop.crate.standard", "groupId": "toppling-verification", "transform": { "position": { "x": 3.15, "y": 0.0, "z": -4.4 }, "yawDegrees": 15.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
     { "id": "crate-yard-03", "archetypeId": "prop.crate.standard", "transform": { "position": { "x": 2.75, "y": 0.0, "z": 2.0 }, "yawDegrees": 45.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
     { "id": "crate-yard-04", "archetypeId": "prop.crate.standard", "transform": { "position": { "x": 0.5, "y": 0.0, "z": 5.75 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
     { "id": "crate-workshop-01", "archetypeId": "prop.crate.standard", "transform": { "position": { "x": 8.75, "y": 0.0, "z": -7.5 }, "yawDegrees": 75.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
@@ -230,8 +237,8 @@
 
     { "id": "barrel-warehouse-01", "archetypeId": "prop.barrel.metal", "transform": { "position": { "x": -10.0, "y": 0.0, "z": 1.5 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.0, "y": 0.55, "z": 0.0 }, "size": { "x": 0.9, "y": 1.1, "z": 0.9 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 8.0 } },
     { "id": "barrel-warehouse-02", "archetypeId": "prop.barrel.metal", "transform": { "position": { "x": -8.75, "y": 0.0, "z": 1.75 }, "yawDegrees": 15.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.0, "y": 0.55, "z": 0.0 }, "size": { "x": 0.9, "y": 1.1, "z": 0.9 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 8.0 } },
-    { "id": "barrel-yard-01", "archetypeId": "prop.barrel.metal", "transform": { "position": { "x": 0.0, "y": 0.0, "z": -7.75 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.0, "y": 0.55, "z": 0.0 }, "size": { "x": 0.9, "y": 1.1, "z": 0.9 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 8.0 } },
-    { "id": "barrel-yard-02", "archetypeId": "prop.barrel.metal", "transform": { "position": { "x": 1.25, "y": 0.0, "z": -7.5 }, "yawDegrees": 30.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.0, "y": 0.55, "z": 0.0 }, "size": { "x": 0.9, "y": 1.1, "z": 0.9 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 8.0 } },
+    { "id": "barrel-yard-01", "archetypeId": "prop.barrel.metal", "groupId": "toppling-verification", "transform": { "position": { "x": 0.0, "y": 0.0, "z": -7.75 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.0, "y": 0.55, "z": 0.0 }, "size": { "x": 0.9, "y": 1.1, "z": 0.9 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 8.0 } },
+    { "id": "barrel-yard-02", "archetypeId": "prop.barrel.metal", "groupId": "toppling-verification", "transform": { "position": { "x": -0.25, "y": 0.0, "z": -6.75 }, "yawDegrees": 30.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.0, "y": 0.55, "z": 0.0 }, "size": { "x": 0.9, "y": 1.1, "z": 0.9 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 8.0 } },
     { "id": "barrel-yard-03", "archetypeId": "prop.barrel.metal", "transform": { "position": { "x": -0.75, "y": 0.0, "z": 2.75 }, "yawDegrees": -15.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.0, "y": 0.55, "z": 0.0 }, "size": { "x": 0.9, "y": 1.1, "z": 0.9 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 8.0 } },
     { "id": "barrel-workshop-01", "archetypeId": "prop.barrel.metal", "transform": { "position": { "x": 7.25, "y": 0.0, "z": -3.5 }, "yawDegrees": 15.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.0, "y": 0.55, "z": 0.0 }, "size": { "x": 0.9, "y": 1.1, "z": 0.9 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 8.0 } },
     { "id": "barrel-workshop-02", "archetypeId": "prop.barrel.metal", "transform": { "position": { "x": 8.5, "y": 0.0, "z": -3.25 }, "yawDegrees": -15.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.0, "y": 0.55, "z": 0.0 }, "size": { "x": 0.9, "y": 1.1, "z": 0.9 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 8.0 } },
@@ -331,7 +338,85 @@
         "entityId": "crate-exposure-demo",
         "mass": 35.0,
         "sizeClass": "medium",
-        "startsEncounterOnAttack": false
+        "startsEncounterOnAttack": false,
+        "toppling": {
+          "enabled": true,
+          "pitchOffsetDegrees": 0.0,
+          "rollOffsetDegrees": 90.0,
+          "elevationOffset": 0.5
+        }
+      },
+      {
+        "entityId": "barrel-yard-01",
+        "mass": 28.0,
+        "sizeClass": "medium",
+        "startsEncounterOnAttack": false,
+        "toppling": {
+          "enabled": true,
+          "pitchOffsetDegrees": 90.0,
+          "rollOffsetDegrees": 0.0,
+          "elevationOffset": 0.55
+        }
+      },
+      {
+        "entityId": "barrel-yard-02",
+        "mass": 28.0,
+        "sizeClass": "medium",
+        "startsEncounterOnAttack": false,
+        "toppling": {
+          "enabled": true,
+          "pitchOffsetDegrees": 90.0,
+          "rollOffsetDegrees": 0.0,
+          "elevationOffset": 0.55
+        }
+      },
+      {
+        "entityId": "crate-yard-01",
+        "mass": 35.0,
+        "sizeClass": "medium",
+        "startsEncounterOnAttack": false,
+        "toppling": {
+          "enabled": true,
+          "pitchOffsetDegrees": 0.0,
+          "rollOffsetDegrees": 90.0,
+          "elevationOffset": 0.5
+        }
+      },
+      {
+        "entityId": "crate-warehouse-01",
+        "mass": 35.0,
+        "sizeClass": "medium",
+        "startsEncounterOnAttack": false,
+        "toppling": {
+          "enabled": true,
+          "pitchOffsetDegrees": 0.0,
+          "rollOffsetDegrees": 90.0,
+          "elevationOffset": 0.5
+        }
+      },
+      {
+        "entityId": "crate-warehouse-02",
+        "mass": 35.0,
+        "sizeClass": "medium",
+        "startsEncounterOnAttack": false,
+        "toppling": {
+          "enabled": true,
+          "pitchOffsetDegrees": 0.0,
+          "rollOffsetDegrees": 90.0,
+          "elevationOffset": 0.5
+        }
+      },
+      {
+        "entityId": "crate-warehouse-03",
+        "mass": 35.0,
+        "sizeClass": "medium",
+        "startsEncounterOnAttack": false,
+        "toppling": {
+          "enabled": true,
+          "pitchOffsetDegrees": 0.0,
+          "rollOffsetDegrees": 90.0,
+          "elevationOffset": 0.5
+        }
       }
     ],
     "vehicles": [

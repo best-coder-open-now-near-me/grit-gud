@@ -23,7 +23,8 @@ namespace GritGud.Presentation.Gameplay
 
         public DisplacementPathValidation Validate(
             DisplacementRequest request,
-            GameplayPosition origin)
+            GameplayPosition origin,
+            PropDisplacementState resultingPropState)
         {
             Transform subjectRoot = RequireRoot(request.SubjectId);
             Transform actorRoot = RequireRoot(request.ActorId);
@@ -59,11 +60,40 @@ namespace GritGud.Presentation.Gameplay
                 }
             }
 
-            Collider[] destinationOverlaps = Physics.OverlapSphere(
-                to + castOffset,
-                radius,
-                Physics.DefaultRaycastLayers,
-                QueryTriggerInteraction.Ignore);
+            Collider[] destinationOverlaps;
+            float destinationBottom;
+            if (resultingPropState != null)
+            {
+                Bounds localBounds = ResolveLocalBounds(subjectRoot);
+                Quaternion resultingRotation = Quaternion.Euler(
+                    resultingPropState.Pose.PitchDegrees,
+                    resultingPropState.Pose.YawDegrees,
+                    resultingPropState.Pose.RollDegrees);
+                Vector3 scale = Abs(subjectRoot.lossyScale);
+                Vector3 halfExtents = Vector3.Scale(
+                    localBounds.extents,
+                    scale);
+                Vector3 center = to
+                    + (resultingRotation
+                        * Vector3.Scale(localBounds.center, scale));
+                destinationBottom = center.y
+                    - ProjectedVerticalExtent(halfExtents, resultingRotation);
+                destinationOverlaps = Physics.OverlapBox(
+                    center,
+                    Shrink(halfExtents),
+                    resultingRotation,
+                    Physics.DefaultRaycastLayers,
+                    QueryTriggerInteraction.Ignore);
+            }
+            else
+            {
+                destinationBottom = to.y;
+                destinationOverlaps = Physics.OverlapSphere(
+                    to + castOffset,
+                    radius,
+                    Physics.DefaultRaycastLayers,
+                    QueryTriggerInteraction.Ignore);
+            }
             foreach (Collider overlap in destinationOverlaps)
             {
                 Transform overlapTransform = overlap != null
@@ -72,6 +102,13 @@ namespace GritGud.Presentation.Gameplay
                 if (!BelongsTo(overlapTransform, subjectRoot)
                     && !BelongsTo(overlapTransform, actorRoot))
                 {
+                    if (resultingPropState != null
+                        && overlap.bounds.max.y
+                            <= destinationBottom + GroundClearance)
+                    {
+                        continue;
+                    }
+
                     return DisplacementPathValidation.Blocked(
                         "displacement.destination-blocked");
                 }
@@ -111,6 +148,73 @@ namespace GritGud.Presentation.Gameplay
 
             return Mathf.Clamp(radius, MinimumRadius, MaximumRadius);
         }
+
+        private static Bounds ResolveLocalBounds(Transform subjectRoot)
+        {
+            Collider[] colliders = subjectRoot.GetComponentsInChildren<Collider>();
+            bool initialized = false;
+            Bounds localBounds = default(Bounds);
+            foreach (Collider subjectCollider in colliders)
+            {
+                if (subjectCollider == null || !subjectCollider.enabled)
+                    continue;
+
+                Bounds worldBounds = subjectCollider.bounds;
+                Vector3 min = worldBounds.min;
+                Vector3 max = worldBounds.max;
+                for (int x = 0; x < 2; x++)
+                {
+                    for (int y = 0; y < 2; y++)
+                    {
+                        for (int z = 0; z < 2; z++)
+                        {
+                            Vector3 localPoint = subjectRoot.InverseTransformPoint(
+                                new Vector3(
+                                    x == 0 ? min.x : max.x,
+                                    y == 0 ? min.y : max.y,
+                                    z == 0 ? min.z : max.z));
+                            if (!initialized)
+                            {
+                                localBounds = new Bounds(localPoint, Vector3.zero);
+                                initialized = true;
+                            }
+                            else
+                            {
+                                localBounds.Encapsulate(localPoint);
+                            }
+                        }
+                    }
+                }
+            }
+
+            return initialized
+                ? localBounds
+                : new Bounds(Vector3.up * MinimumRadius, Vector3.one * MinimumRadius * 2f);
+        }
+
+        private static float ProjectedVerticalExtent(
+            Vector3 halfExtents,
+            Quaternion rotation)
+        {
+            Vector3 right = rotation * Vector3.right;
+            Vector3 up = rotation * Vector3.up;
+            Vector3 forward = rotation * Vector3.forward;
+            return Mathf.Abs(right.y) * halfExtents.x
+                + Mathf.Abs(up.y) * halfExtents.y
+                + Mathf.Abs(forward.y) * halfExtents.z;
+        }
+
+        private static Vector3 Abs(Vector3 value) =>
+            new Vector3(
+                Mathf.Abs(value.x),
+                Mathf.Abs(value.y),
+                Mathf.Abs(value.z));
+
+        private static Vector3 Shrink(Vector3 halfExtents) =>
+            new Vector3(
+                Mathf.Max(0.01f, halfExtents.x - GroundClearance),
+                Mathf.Max(0.01f, halfExtents.y - GroundClearance),
+                Mathf.Max(0.01f, halfExtents.z - GroundClearance));
 
         private static bool BelongsTo(Transform candidate, Transform root) =>
             candidate != null

@@ -21,6 +21,13 @@ namespace GritGud.Domain.Tests.Gameplay
                 "Push",
                 DisplacementActionKind.Push,
                 DisplacementSubjectKinds.Prop);
+        private static readonly DisplacementActionDefinition TopplingPush =
+            CreateDisplacementAction(
+                "close-quarters.toppling-push",
+                "Toppling Push",
+                DisplacementActionKind.Push,
+                DisplacementSubjectKinds.Prop,
+                allowedResults: DisplacementResultPolicies.Topple);
         private static readonly DisplacementActionDefinition CombatantThrow =
             CreateDisplacementAction(
                 "close-quarters.throw-combatant",
@@ -97,6 +104,109 @@ namespace GritGud.Domain.Tests.Gameplay
                 record.ResultingPropState.Posture,
                 Is.EqualTo(DestructiblePropPosture.Upright));
             Assert.That(session.Journal.Entries.Count, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void EligiblePropAndActionCommitDeterministicToppledState()
+        {
+            var paths = new CapturePaths();
+            GameplayDisplacementSession session = CreateSession(
+                paths,
+                new FixedRolls(),
+                out _,
+                out DestructiblePropSession destructibles,
+                playerPush: TopplingPush,
+                propToppling: new PropTopplingDefinition(0f, 90f, 0.5f));
+
+            bool resolved = session.TryDisplaceAction(
+                "player",
+                TopplingPush.Id,
+                "crate",
+                new GameplayPosition(0f, 0f, 2f),
+                out _,
+                out DisplacementRecord record,
+                out DisplacementResolutionFailure failure);
+
+            Assert.That(resolved, Is.True);
+            Assert.That(failure, Is.EqualTo(DisplacementResolutionFailure.None));
+            Assert.That(record.AppliedResults,
+                Is.EqualTo(DisplacementResultPolicies.Topple));
+            Assert.That(record.ResultingPropState.Posture,
+                Is.EqualTo(DestructiblePropPosture.Toppled));
+            Assert.That(record.ResultingPropState.Pose.Position.Y,
+                Is.EqualTo(0.5f));
+            Assert.That(record.ResultingPropState.Pose.RollDegrees,
+                Is.EqualTo(90f));
+            Assert.That(paths.ResultingPropState,
+                Is.SameAs(record.ResultingPropState));
+            Assert.That(destructibles.GetProp("crate").Posture,
+                Is.EqualTo(DestructiblePropPosture.Toppled));
+        }
+
+        [Test]
+        public void PreviewValidatesTheSameToppledPoseThatCommitWouldFreeze()
+        {
+            var paths = new CapturePaths(block: true);
+            GameplayDisplacementSession session = CreateSession(
+                paths,
+                new FixedRolls(),
+                out _,
+                out _,
+                playerPush: TopplingPush,
+                propToppling: new PropTopplingDefinition(90f, 0f, 0.4f));
+
+            DisplacementDestinationEvaluation result =
+                session.EvaluateDestination(
+                    "player",
+                    TopplingPush.Id,
+                    "crate",
+                    new GameplayPosition(0f, 0f, 2f));
+
+            Assert.That(result.Failure,
+                Is.EqualTo(DisplacementResolutionFailure.DestinationBlocked));
+            Assert.That(result.Destination.Y, Is.Zero);
+            Assert.That(paths.ResultingPropState.Posture,
+                Is.EqualTo(DestructiblePropPosture.Toppled));
+            Assert.That(paths.ResultingPropState.Pose.PitchDegrees,
+                Is.EqualTo(90f));
+            Assert.That(session.Records, Is.Empty);
+        }
+
+        [Test]
+        public void AlreadyToppledPropMovesWithoutApplyingToppleTwice()
+        {
+            GameplayDisplacementSession session = CreateSession(
+                new AllowPaths(),
+                new FixedRolls(),
+                out _,
+                out _,
+                playerPush: TopplingPush,
+                propToppling: new PropTopplingDefinition(0f, 90f, 0.5f));
+            Assert.That(session.TryDisplaceAction(
+                "player",
+                TopplingPush.Id,
+                "crate",
+                new GameplayPosition(0f, 0f, 2f),
+                out _,
+                out _,
+                out _), Is.True);
+
+            bool moved = session.TryDisplaceAction(
+                "player",
+                TopplingPush.Id,
+                "crate",
+                new GameplayPosition(0.5f, 0.5f, 2f),
+                out _,
+                out DisplacementRecord second,
+                out _);
+
+            Assert.That(moved, Is.True);
+            Assert.That(second.AppliedResults,
+                Is.EqualTo(DisplacementResultPolicies.None));
+            Assert.That(second.ResultingPropState.Posture,
+                Is.EqualTo(DestructiblePropPosture.Toppled));
+            Assert.That(second.ResultingPropState.Pose.RollDegrees,
+                Is.EqualTo(90f));
         }
 
         [Test]
@@ -1036,7 +1146,8 @@ namespace GritGud.Domain.Tests.Gameplay
             DisplacementActionDefinition playerPush = null,
             float playerFacingDegrees = 0f,
             InventoryItemDefinition equippedItem = null,
-            bool responsiveTarget = false)
+            bool responsiveTarget = false,
+            PropTopplingDefinition propToppling = null)
         {
             var journal = new GameplayJournal();
             gameplay = new GameplaySession(new ScenarioDefinition(
@@ -1075,7 +1186,7 @@ namespace GritGud.Domain.Tests.Gameplay
             return new GameplayDisplacementSession(
                 gameplay,
                 destructibles,
-                CreateSubjects(),
+                CreateSubjects(propToppling),
                 validator,
                 rolls,
                 CreateControlProfiles());
@@ -1125,7 +1236,7 @@ namespace GritGud.Domain.Tests.Gameplay
             new[] { PropPush, PropThrow, CombatantThrow };
 
         private static IReadOnlyList<DisplacementSubjectDefinition>
-            CreateSubjects() =>
+            CreateSubjects(PropTopplingDefinition propToppling = null) =>
             new[]
             {
                 new DisplacementSubjectDefinition(
@@ -1139,7 +1250,8 @@ namespace GritGud.Domain.Tests.Gameplay
                 new DisplacementSubjectDefinition(
                     "crate",
                     DisplacementSubjectKind.Prop,
-                    35f),
+                    35f,
+                    toppling: propToppling),
             };
 
         private static IReadOnlyDictionary<string, CloseQuartersControlProfile>
@@ -1189,7 +1301,9 @@ namespace GritGud.Domain.Tests.Gameplay
                 DisplacementAutoStowPolicy.Never,
             DisplacementSizeClass maximumSubjectSize =
                 DisplacementSizeClass.Huge,
-            DisplacementDistanceDecayDefinition distanceDecay = null) =>
+            DisplacementDistanceDecayDefinition distanceDecay = null,
+            DisplacementResultPolicies allowedResults =
+                DisplacementResultPolicies.None) =>
             new DisplacementActionDefinition(
                 id,
                 displayName,
@@ -1205,7 +1319,7 @@ namespace GritGud.Domain.Tests.Gameplay
                 handRequirement,
                 autoStowPolicy,
                 contestPolicy,
-                DisplacementResultPolicies.None,
+                allowedResults,
                 maximumSubjectSize,
                 distanceDecay);
 
@@ -1213,7 +1327,8 @@ namespace GritGud.Domain.Tests.Gameplay
         {
             public DisplacementPathValidation Validate(
                 DisplacementRequest request,
-                GameplayPosition origin) =>
+                GameplayPosition origin,
+                PropDisplacementState resultingPropState) =>
                 DisplacementPathValidation.Allowed();
         }
 
@@ -1221,8 +1336,32 @@ namespace GritGud.Domain.Tests.Gameplay
         {
             public DisplacementPathValidation Validate(
                 DisplacementRequest request,
-                GameplayPosition origin) =>
+                GameplayPosition origin,
+                PropDisplacementState resultingPropState) =>
                 DisplacementPathValidation.Blocked("test.blocked");
+        }
+
+        private sealed class CapturePaths : IDisplacementPathValidator
+        {
+            private readonly bool block;
+
+            public CapturePaths(bool block = false)
+            {
+                this.block = block;
+            }
+
+            public PropDisplacementState ResultingPropState { get; private set; }
+
+            public DisplacementPathValidation Validate(
+                DisplacementRequest request,
+                GameplayPosition origin,
+                PropDisplacementState resultingPropState)
+            {
+                ResultingPropState = resultingPropState;
+                return block
+                    ? DisplacementPathValidation.Blocked("test.blocked")
+                    : DisplacementPathValidation.Allowed();
+            }
         }
 
         private sealed class BlockBeyondDistance : IDisplacementPathValidator
@@ -1236,7 +1375,8 @@ namespace GritGud.Domain.Tests.Gameplay
 
             public DisplacementPathValidation Validate(
                 DisplacementRequest request,
-                GameplayPosition origin) =>
+                GameplayPosition origin,
+                PropDisplacementState resultingPropState) =>
                 origin.DistanceTo(request.Destination) <= maximumDistance
                     ? DisplacementPathValidation.Allowed()
                     : DisplacementPathValidation.Blocked("test.blocked");
@@ -1246,7 +1386,8 @@ namespace GritGud.Domain.Tests.Gameplay
         {
             public DisplacementPathValidation Validate(
                 DisplacementRequest request,
-                GameplayPosition origin)
+                GameplayPosition origin,
+                PropDisplacementState resultingPropState)
             {
                 throw new AssertionException(
                     "Reach rejection must happen before the world query.");
@@ -1265,7 +1406,8 @@ namespace GritGud.Domain.Tests.Gameplay
 
             public DisplacementPathValidation Validate(
                 DisplacementRequest request,
-                GameplayPosition origin)
+                GameplayPosition origin,
+                PropDisplacementState resultingPropState)
             {
                 var movedPosition = new GameplayPosition(
                     origin.X,
