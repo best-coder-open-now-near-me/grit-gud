@@ -465,6 +465,83 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void ReplayEquipmentProjectionRestoresLiveHeldModel()
+        {
+            var host = new GameObject("Replay Weapon Presenter Host");
+            var actor = new GameObject("Replay Weapon Presenter Actor");
+            var riflePrefab = new GameObject("Replay Rifle");
+            var launcherPrefab = new GameObject("Replay Launcher");
+            var gripObject = new GameObject("Replay Weapon Grip");
+            LevelWorld world = null;
+            GameplayWorldRegistry registry = null;
+            WeaponPresentationCatalog catalog = null;
+            try
+            {
+                ConfigureTestRig(riflePrefab, supportHand: true);
+                ConfigureTestRig(launcherPrefab, supportHand: true);
+                actor.AddComponent<CharacterController>();
+                actor.AddComponent<ActorStancePresenter>();
+                gripObject.transform.SetParent(actor.transform, false);
+                world = new LevelWorld(
+                    new GameObject("Replay Weapon World"),
+                    new Dictionary<string, LevelEntityView>(),
+                    null);
+                registry = new GameplayWorldRegistry(world);
+                registry.RegisterActor(
+                    "player",
+                    "test",
+                    targetable: false,
+                    actor);
+                GameplaySession session = CreateSession();
+                catalog = WeaponPresentationCatalog.CreateRuntime(
+                    CreateDefinition(
+                        "rifle",
+                        riflePrefab,
+                        ActorAnimationPoseIds.Rifle),
+                    CreateDefinition(
+                        "launcher",
+                        launcherPrefab,
+                        ActorAnimationPoseIds.Launcher));
+                GameplayWeaponPresenter presenter =
+                    host.AddComponent<GameplayWeaponPresenter>();
+                presenter.Bind(
+                    session,
+                    registry,
+                    host.AddComponent<GameplayAttackController>(),
+                    host.AddComponent<GameplayProjectileController>(),
+                    CreateUnboundAnimationCoordinator(actor),
+                    "player",
+                    catalog,
+                    gripObject.transform);
+
+                presenter.BeginReplayPresentation();
+                presenter.PresentReplayEquipment("launcher");
+                Assert.That(presenter.CurrentItemId, Is.EqualTo("launcher"));
+                Assert.That(presenter.HeldWeapon.name,
+                    Is.EqualTo("Replay Launcher - Held"));
+
+                presenter.PresentReplayEquipment(null);
+                Assert.That(presenter.HeldWeapon, Is.Null);
+
+                presenter.EndReplayPresentation();
+                Assert.That(presenter.CurrentItemId, Is.EqualTo("rifle"));
+                Assert.That(presenter.HeldWeapon.name,
+                    Is.EqualTo("Replay Rifle - Held"));
+                Assert.That(session.GetActor("player").EquippedItemId,
+                    Is.EqualTo("rifle"));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                registry?.Dispose();
+                world?.Dispose();
+                Object.DestroyImmediate(riflePrefab);
+                Object.DestroyImmediate(launcherPrefab);
+                Object.DestroyImmediate(catalog);
+            }
+        }
+
+        [Test]
         public void CommittedContactAttackTriggersStrikeWithoutFirearmEffects()
         {
             var host = new GameObject("Contact Weapon Presenter Host");

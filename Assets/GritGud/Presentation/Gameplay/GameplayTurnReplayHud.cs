@@ -40,6 +40,8 @@ namespace GritGud.Presentation.Gameplay
 
         internal TurnReplayEventTimeline EventTimeline => eventTimeline;
 
+        internal bool IsPlaying => isPlaying;
+
         internal event Action<bool> OpenChanged;
 
         internal event Action<float> PlayheadChanged;
@@ -114,9 +116,9 @@ namespace GritGud.Presentation.Gameplay
             playhead = Mathf.Min(
                 eventTimeline.TotalDurationSeconds,
                 playhead + (Time.unscaledDeltaTime * speed));
+            PlayheadChanged?.Invoke(Playhead);
             if (playhead >= eventTimeline.TotalDurationSeconds)
                 isPlaying = false;
-            PlayheadChanged?.Invoke(Playhead);
         }
 
         private void OnGUI()

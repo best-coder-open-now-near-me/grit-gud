@@ -60,6 +60,112 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void CrossingDetectorEmitsOnlyContinuousForwardBoundaries()
+        {
+            var window = new TurnReplayWindow(
+                "mara",
+                new[]
+                {
+                    new TurnReplaySegment(
+                        1,
+                        "mara",
+                        new GameplayJournalEntry[]
+                        {
+                            new TurnEndedJournalEntry(
+                                1,
+                                new TurnEndRecord(1, "mara", "raider")),
+                        }),
+                });
+            var timeline = new TurnReplayEventTimeline(window);
+            var detector = new TurnReplayEventCrossingDetector(timeline);
+
+            IReadOnlyList<TurnReplayEventCrossing> first = detector.Advance(
+                timeline.TotalDurationSeconds);
+
+            Assert.That(first, Has.Count.EqualTo(2));
+            Assert.That(first[0].Boundary, Is.EqualTo(
+                TurnReplayEventBoundary.Start));
+            Assert.That(first[1].Boundary, Is.EqualTo(
+                TurnReplayEventBoundary.End));
+
+            detector.Seek(0f);
+            Assert.That(detector.PreviousSeconds, Is.Zero);
+            detector.Seek(timeline.TotalDurationSeconds);
+            Assert.That(
+                detector.Advance(timeline.TotalDurationSeconds),
+                Is.Empty,
+                "Direct forward seeks must not emit one-shot effects.");
+
+            detector.Seek(timeline.TotalDurationSeconds);
+            Assert.That(detector.Advance(0f), Is.Empty);
+            Assert.That(
+                detector.Advance(timeline.TotalDurationSeconds),
+                Has.Count.EqualTo(2),
+                "Playback may emit boundaries again after a backward seek.");
+        }
+
+        [Test]
+        public void ActorActionProjectionSeeksEquipmentStateWithoutEffects()
+        {
+            var previous = new TurnBudget(4, 8f);
+            var resulting = new TurnBudget(3, 8f);
+            var action = new GameplayActionRecord(
+                1,
+                new GameplayActionRequest(
+                    "mara",
+                    EquipmentActionIds.Equip,
+                    "weapon.rifle"),
+                new ActionCost(1, 0f),
+                previous,
+                resulting,
+                new GameplayActionOutcome[]
+                {
+                    new EquipmentChangedActionOutcome(
+                        new EquipmentChangeRecord(
+                            "mara",
+                            "weapon.rifle",
+                            EquipmentChangeKind.Equip,
+                            previousEquippedItemId: null,
+                            resultingEquippedItemId: "weapon.rifle")),
+                });
+            var window = new TurnReplayWindow(
+                "mara",
+                new[]
+                {
+                    new TurnReplaySegment(
+                        1,
+                        "mara",
+                        new GameplayJournalEntry[]
+                        {
+                            new ActionResolvedJournalEntry(1, action),
+                            new TurnEndedJournalEntry(
+                                2,
+                                new TurnEndRecord(1, "mara", "raider")),
+                        }),
+                });
+            var timeline = new TurnReplayEventTimeline(window);
+            TurnReplayTimedEvent actionEvent = timeline.Events[0];
+
+            IReadOnlyList<TurnReplayActorActionState> states =
+                TurnReplayActorActionProjector.Project(
+                    timeline,
+                    actionEvent.StartSeconds
+                        + (actionEvent.DurationSeconds * 0.5f));
+
+            Assert.That(states, Has.Count.EqualTo(1));
+            Assert.That(states[0].ActorId, Is.EqualTo("mara"));
+            Assert.That(states[0].Kind, Is.EqualTo(
+                TurnReplayActorActionKind.Equipment));
+            Assert.That(states[0].NormalizedProgress, Is.EqualTo(0.5f)
+                .Within(0.001f));
+            Assert.That(
+                TurnReplayActorActionProjector.Project(
+                    timeline,
+                    actionEvent.EndSeconds),
+                Is.Empty);
+        }
+
+        [Test]
         public void WindowBeginsWithActiveActorsPriorTurnAndNestsReactions()
         {
             GameplaySession session = CreateSession();

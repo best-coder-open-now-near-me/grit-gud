@@ -207,6 +207,15 @@ duration is paused while replay is open; presentation-only smoke fields follow
 the sampled canonical set and are replaced by the untouched authoritative set on
 exit.
 
+Actor replay presentation now follows that isolation rule as well. Deterministic
+event time projects seekable attack, equipment, throw, displacement, and
+reaction states; sampled wounds and equipped items drive presentation adapters
+without changing the live actor or inventory. Audio and particle adapters receive
+only continuous-forward event-boundary crossings, while direct or backward seeks
+clear active one-shots. Replay exit restores the captured Animator, held model,
+wound variants, transforms, stance, and presentation-component lifecycle rather
+than asking authoritative gameplay to rebuild presentation state.
+
 ## Alpha-exit use
 
 The adversarial gauntlet is intended to cap alpha, but it cannot prove the

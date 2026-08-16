@@ -147,10 +147,21 @@ appear at their event boundary. Seeking backwards rebuilds the sample from the
 same checkpoint, automatically removing every later consequence without inverse
 mutation or contact with the live session.
 
-Action animation, visible wound variants, replay-specific equipped-model swaps,
-and transient action audio/particle sampling remain subsequent presentation
-slices. The canonical sample already carries
-their gameplay state so those slices do not need another replay state model.
-Replay is available only before the player commits an action in the new live
-turn, ensuring the reconstruction remains anchored to the exact recorded
-turn-boundary state.
+Actor action presentation now consumes the active deterministic event for
+attacks, equipment operations, throws, displacements, and reactions. Available
+profile states are sampled directly at the replay playhead, while an actor-local
+semantic hook preserves the complete action kind for presentation packs that do
+not yet have an authored shared-controller clip. Sampled equipment replaces only
+the replay-held model, and content-driven regional wound bindings apply only the
+sampled wound variants.
+
+One-shot presentation is isolated from seeking. A dedicated cursor emits event
+start and end crossings only while playback moves continuously forward. Weapon
+muzzle particles and actor-local audio/particle bindings consume those
+crossings; direct seeks, backward movement, and arbitrary scrubbing only move
+the cursor and clear active one-shots. Closing replay restores captured actor
+transforms, stance, Animator parameters, layer states and weights, Animator
+settings, held equipment, wound-variant activity, and live presentation
+component enablement. Replay remains available only before the player commits
+an action in the new live turn, ensuring the reconstruction stays anchored to
+the exact recorded turn-boundary state.

@@ -8,8 +8,9 @@ namespace GritGud.Presentation.Gameplay
 {
     internal sealed class GameplayTurnReplayWorldPresenter : IDisposable
     {
-        private readonly Dictionary<string, OriginalActorState> originals =
-            new Dictionary<string, OriginalActorState>(StringComparer.Ordinal);
+        private readonly Dictionary<string, GameplayTurnReplayActorPresenter>
+            actors = new Dictionary<string, GameplayTurnReplayActorPresenter>(
+                StringComparer.Ordinal);
         private GameplaySession gameplay;
         private GameplayWorldRegistry world;
         private GameplayInputController input;
@@ -18,6 +19,7 @@ namespace GritGud.Presentation.Gameplay
         private GameplayDestructibleController destructibles;
         private GameplayVehicleController vehicles;
         private GameplaySmokeFieldController smoke;
+        private TurnReplayEventCrossingDetector crossings;
         private bool presenting;
 
         public void Bind(
@@ -74,28 +76,27 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            originals.Clear();
+            actors.Clear();
             TurnReplayStateWindow stateWindow = hud.StateWindow;
             if (stateWindow == null)
                 return;
-            foreach (GameplayActorView actor in world.Actors)
-            {
-                originals.Add(
-                    actor.ActorId,
-                    new OriginalActorState(
-                        actor.Transform.position,
-                        actor.Transform.rotation,
-                        actor.Stance.Stance));
-                actor.Motor?.StopPlanarMovement();
-            }
             presenting = true;
             try
             {
+                foreach (GameplayActorView actor in world.Actors)
+                {
+                    var presenter = new GameplayTurnReplayActorPresenter(actor);
+                    actors.Add(actor.ActorId, presenter);
+                    presenter.Begin();
+                }
                 projectiles.BeginReplayPresentation();
                 vehicles.BeginReplayPresentation();
                 smoke.BeginReplayPresentation();
                 input.SetCameraOnly(true);
-                Present(hud.Playhead);
+                crossings = new TurnReplayEventCrossingDetector(
+                    hud.EventTimeline,
+                    hud.TimeSeconds);
+                Present();
             }
             catch
             {
@@ -104,13 +105,26 @@ namespace GritGud.Presentation.Gameplay
             }
         }
 
-        private void HandlePlayheadChanged(float playhead)
+        private void HandlePlayheadChanged(float _)
         {
-            if (presenting)
-                Present(playhead);
+            if (!presenting)
+                return;
+            IReadOnlyList<TurnReplayEventCrossing> crossed;
+            if (hud.IsPlaying)
+            {
+                crossed = crossings.Advance(hud.TimeSeconds);
+            }
+            else
+            {
+                crossings.Seek(hud.TimeSeconds);
+                crossed = Array.Empty<TurnReplayEventCrossing>();
+                ClearTransients();
+            }
+            PresentCrossings(crossed);
+            Present();
         }
 
-        private void Present(float playhead)
+        private void Present()
         {
             TurnReplayStateWindow window = hud.StateWindow;
             if (window == null)
@@ -120,67 +134,123 @@ namespace GritGud.Presentation.Gameplay
                     window,
                     hud.EventTimeline,
                     hud.TimeSeconds);
-            foreach (KeyValuePair<string, GameplayActorSnapshot> entry in
-                sample.Actors)
-            {
-                if (!world.TryGetActor(entry.Key, out GameplayActorView actor))
-                    continue;
-                GameplayActorPose pose = entry.Value.Pose;
-                actor.Transform.SetPositionAndRotation(
-                    new Vector3(
-                        pose.Position.X,
-                        pose.Position.Y,
-                        pose.Position.Z),
-                    Quaternion.Euler(0f, pose.FacingDegrees, 0f));
-                if (actor.Stance.Stance != pose.Stance)
-                    actor.Stance.ApplyResolved(pose.Stance);
-            }
+            PresentActors(sample, hud.TimeSeconds);
             destructibles.PresentReplay(sample.Destructibles);
             projectiles.PresentReplay(sample.Projectiles);
             vehicles.PresentReplay(sample.Vehicles);
             smoke.PresentReplay(sample.SmokeFields);
         }
 
+        private void PresentActorsAt(float timeSeconds)
+        {
+            TurnReplayStateWindow window = hud.StateWindow;
+            if (window == null)
+                return;
+            PresentActors(
+                TurnReplayWorldStateSampler.SampleAtTime(
+                    window,
+                    hud.EventTimeline,
+                    timeSeconds),
+                timeSeconds);
+        }
+
+        private void PresentActors(
+            TurnReplayWorldStateSample sample,
+            float timeSeconds)
+        {
+            var actionStates = new Dictionary<
+                string,
+                TurnReplayActorActionState>(StringComparer.Ordinal);
+            foreach (TurnReplayActorActionState state in
+                TurnReplayActorActionProjector.Project(
+                    hud.EventTimeline,
+                    timeSeconds))
+            {
+                actionStates[state.ActorId] = state;
+            }
+            foreach (KeyValuePair<string, GameplayActorSnapshot> entry in
+                sample.Actors)
+            {
+                if (!actors.TryGetValue(
+                        entry.Key,
+                        out GameplayTurnReplayActorPresenter actor))
+                    continue;
+                actionStates.TryGetValue(
+                    entry.Key,
+                    out TurnReplayActorActionState action);
+                actor.Present(entry.Value, action);
+            }
+        }
+
+        private void PresentCrossings(
+            IReadOnlyList<TurnReplayEventCrossing> values)
+        {
+            foreach (TurnReplayEventCrossing crossing in values)
+            {
+                PresentActorsAt(crossing.TimeSeconds);
+                float progress = crossing.Boundary
+                    == TurnReplayEventBoundary.Start ? 0f : 1f;
+                foreach (TurnReplayActorActionState action in
+                    TurnReplayActorActionProjector.Project(
+                        crossing.TimedEvent,
+                        progress))
+                {
+                    if (!actors.TryGetValue(
+                            action.ActorId,
+                            out GameplayTurnReplayActorPresenter actor))
+                        continue;
+                    actor.PresentTransient(
+                        new GameplayTurnReplayTransientCue(
+                            action.ActorId,
+                            action.Kind,
+                            crossing));
+                }
+            }
+        }
+
+        private void ClearTransients()
+        {
+            foreach (GameplayTurnReplayActorPresenter actor in actors.Values)
+                actor.ClearTransients();
+        }
+
         private void Restore()
         {
             if (!presenting)
                 return;
-            foreach (KeyValuePair<string, OriginalActorState> entry in originals)
-            {
-                if (!world.TryGetActor(entry.Key, out GameplayActorView actor))
-                    continue;
-                actor.Transform.SetPositionAndRotation(
-                    entry.Value.Position,
-                    entry.Value.Rotation);
-                if (actor.Stance.Stance != entry.Value.Stance)
-                    actor.Stance.ApplyResolved(entry.Value.Stance);
-            }
-            projectiles?.EndReplayPresentation();
-            destructibles?.RestoreAuthoritativePresentation();
-            vehicles?.EndReplayPresentation();
-            smoke?.EndReplayPresentation();
-            input?.SetCameraOnly(false);
-            originals.Clear();
+            Exception failure = null;
+            foreach (GameplayTurnReplayActorPresenter actor in actors.Values)
+                TryRestore(actor.Dispose, ref failure);
+            TryRestore(
+                () => projectiles?.EndReplayPresentation(),
+                ref failure);
+            TryRestore(
+                () => destructibles?.RestoreAuthoritativePresentation(),
+                ref failure);
+            TryRestore(
+                () => vehicles?.EndReplayPresentation(),
+                ref failure);
+            TryRestore(
+                () => smoke?.EndReplayPresentation(),
+                ref failure);
+            TryRestore(() => input?.SetCameraOnly(false), ref failure);
+            actors.Clear();
+            crossings = null;
             presenting = false;
+            if (failure != null)
+                throw failure;
         }
 
-        private readonly struct OriginalActorState
+        private static void TryRestore(Action restore, ref Exception failure)
         {
-            public OriginalActorState(
-                Vector3 position,
-                Quaternion rotation,
-                ActorStance stance)
+            try
             {
-                Position = position;
-                Rotation = rotation;
-                Stance = stance;
+                restore();
             }
-
-            public Vector3 Position { get; }
-
-            public Quaternion Rotation { get; }
-
-            public ActorStance Stance { get; }
+            catch (Exception exception)
+            {
+                failure ??= exception;
+            }
         }
     }
 }

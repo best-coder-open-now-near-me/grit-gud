@@ -129,15 +129,17 @@ namespace GritGud.Presentation.Gameplay
             mount?.SetContactSwing(0f, Vector3.up, 0f);
         }
 
+        internal void ClearTransientVisuals()
+        {
+            foreach (TransientVisual visual in transientVisuals)
+                DestroyTransientVisual(visual);
+            transientVisuals.Clear();
+        }
+
         internal void Clear()
         {
             ClearWeaponAction();
-            foreach (TransientVisual visual in transientVisuals)
-            {
-                DestroyTransientVisual(visual);
-            }
-
-            transientVisuals.Clear();
+            ClearTransientVisuals();
             mount = null;
         }
 
