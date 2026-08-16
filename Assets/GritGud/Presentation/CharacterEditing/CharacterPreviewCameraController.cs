@@ -89,7 +89,7 @@ namespace GritGud.Presentation.CharacterEditing
 
         private void ApplyTransform()
         {
-            Quaternion orbit = Quaternion.Euler(pitch, yaw, 0f);
+            Quaternion orbit = Quaternion.Euler(-pitch, yaw, 0f);
             Vector3 position = pivot + (orbit * new Vector3(0f, 0f, distance));
             camera.transform.SetPositionAndRotation(
                 position,
