@@ -115,7 +115,7 @@ namespace GritGud.Domain.Tests.Gameplay
                     "mara",
                     EquipmentActionIds.Equip,
                     "weapon.rifle"),
-                new ActionCost(1, 0f),
+                new ActionCost(1, 0f, ActionMobility.Set),
                 previous,
                 resulting,
                 new GameplayActionOutcome[]
