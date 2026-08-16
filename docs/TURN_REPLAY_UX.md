@@ -95,7 +95,9 @@ explicitly, projects an immutable replay window for the active player
 character, and exposes that window through the right-side active-character
 control and an interactive top timeline. The timeline starts at the boundary
 after the character's optional previous-turn segment and supports play/pause,
-previous/next turn, speed, and scrubbing.
+previous/next turn, speed, and scrubbing. Small markers expose meaningful
+movement, stance, action, displacement, projectile, and destruction events
+inside each turn without generating a textual recap.
 
 The playhead now seeks recorded actor movement, displacement, facing, and
 stance in the world. Opening replay preserves the live presentation state,
@@ -107,3 +109,6 @@ Action animation, wounds and equipment visuals, projectiles, destructibles,
 vehicles, smoke, and other persistent effect snapshots remain subsequent
 presentation slices. Until those are connected, the timeline is an actor-pose
 replay rather than a complete reconstruction of every recorded consequence.
+Replay is available only before the player commits an action in the new live
+turn, ensuring the reconstruction remains anchored to the exact recorded
+turn-boundary state.

@@ -167,6 +167,7 @@ namespace GritGud.Presentation.Gameplay
                     playhead = index;
                     isPlaying = false;
                 }
+                DrawEventMarkers(segment, segmentRect);
             }
 
             float railX = timeline.x + (timeline.width
@@ -230,13 +231,47 @@ namespace GritGud.Presentation.Gameplay
                 || !TurnReplayWindowProjector.TryProject(
                     gameplay.Journal,
                     actorId,
-                    out window))
+                    out window)
+                || !window.IsAtJournalTip(gameplay.Journal))
             {
                 window = null;
                 isOpen = false;
                 isPlaying = false;
             }
         }
+
+        private static void DrawEventMarkers(
+            TurnReplaySegment segment,
+            Rect segmentRectangle)
+        {
+            int markerCount = 0;
+            foreach (GameplayJournalEntry entry in segment.Entries)
+                if (IsVisibleEvent(entry))
+                    markerCount++;
+            if (markerCount == 0)
+                return;
+            int markerIndex = 0;
+            foreach (GameplayJournalEntry entry in segment.Entries)
+            {
+                if (!IsVisibleEvent(entry))
+                    continue;
+                float x = segmentRectangle.x
+                    + (segmentRectangle.width
+                        * ((markerIndex + 1f) / (markerCount + 1f)));
+                GUI.DrawTexture(
+                    new Rect(x - 1f, segmentRectangle.yMax - 5f, 2f, 4f),
+                    Texture2D.whiteTexture);
+                markerIndex++;
+            }
+        }
+
+        private static bool IsVisibleEvent(GameplayJournalEntry entry) =>
+            entry is MovementRouteCommittedJournalEntry
+            || entry is StanceChangedJournalEntry
+            || entry is ActionResolvedJournalEntry
+            || entry is DisplacementResolvedJournalEntry
+            || entry is ProjectileAdvancedJournalEntry
+            || entry is DestructibleDamagedJournalEntry;
 
         private static Rect CalculateBarRectangle(
             float canvasWidth,

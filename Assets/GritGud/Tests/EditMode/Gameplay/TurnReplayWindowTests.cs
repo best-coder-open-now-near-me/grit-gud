@@ -88,6 +88,8 @@ namespace GritGud.Domain.Tests.Gameplay
                 out TurnReplayWindow window), Is.True);
             int segmentCount = window.Segments.Count;
             int entryCount = window.Segments.Sum(segment => segment.Entries.Count);
+            long endSequence = window.EndJournalSequence;
+            Assert.That(window.IsAtJournalTip(session.Journal), Is.True);
 
             Assert.That(session.TryEndTurn(anchorActorId, out _), Is.True);
 
@@ -95,6 +97,11 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(
                 window.Segments.Sum(segment => segment.Entries.Count),
                 Is.EqualTo(entryCount));
+            Assert.That(window.EndJournalSequence, Is.EqualTo(endSequence));
+            Assert.That(
+                window.EndJournalSequence,
+                Is.LessThan(session.Journal.LastEntry.Sequence));
+            Assert.That(window.IsAtJournalTip(session.Journal), Is.False);
         }
 
         [Test]

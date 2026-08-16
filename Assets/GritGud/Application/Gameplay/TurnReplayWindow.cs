@@ -68,6 +68,18 @@ namespace GritGud.Application.Gameplay
 
         public IReadOnlyList<TurnReplaySegment> Segments { get; }
 
+        public long EndJournalSequence =>
+            Segments[Segments.Count - 1].Entries[
+                Segments[Segments.Count - 1].Entries.Count - 1].Sequence;
+
+        public bool IsAtJournalTip(GameplayJournal journal)
+        {
+            if (journal == null)
+                throw new ArgumentNullException(nameof(journal));
+            return journal.LastEntry != null
+                && journal.LastEntry.Sequence == EndJournalSequence;
+        }
+
         // Segment zero is the active character's optional previous-turn context.
         public int DefaultPlayheadBoundary => 1;
     }
