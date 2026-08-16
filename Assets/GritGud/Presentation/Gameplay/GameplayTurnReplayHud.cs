@@ -11,13 +11,13 @@ namespace GritGud.Presentation.Gameplay
         private const float Margin = 14f;
         private const float BarHeight = 82f;
         private const float MaximumBarWidth = 980f;
-        private const float PlaybackSegmentsPerSecond = 0.65f;
 
         private GameplaySession gameplay;
         private GameplayPartyControlSession partyControl;
         private GameplayCombatStateTimeline stateTimeline;
         private TurnReplayWindow window;
         private TurnReplayStateWindow stateWindow;
+        private TurnReplayEventTimeline eventTimeline;
         private bool isOpen;
         private bool isPlaying;
         private float playhead;
@@ -32,7 +32,9 @@ namespace GritGud.Presentation.Gameplay
 
         internal TurnReplayStateWindow StateWindow => stateWindow;
 
-        internal float Playhead => playhead;
+        internal float Playhead => eventTimeline == null
+            ? 0f
+            : eventTimeline.ToSegmentPlayhead(playhead);
 
         internal event Action<bool> OpenChanged;
 
@@ -67,6 +69,7 @@ namespace GritGud.Presentation.Gameplay
             stateTimeline = null;
             window = null;
             stateWindow = null;
+            eventTimeline = null;
             isOpen = false;
             isPlaying = false;
             playhead = 0f;
@@ -81,10 +84,10 @@ namespace GritGud.Presentation.Gameplay
             isOpen = !isOpen;
             isPlaying = false;
             if (isOpen)
-                playhead = window.DefaultPlayheadBoundary;
+                playhead = eventTimeline.DefaultTimeSeconds;
             OpenChanged?.Invoke(isOpen);
             if (isOpen)
-                PlayheadChanged?.Invoke(playhead);
+                PlayheadChanged?.Invoke(Playhead);
         }
 
         internal bool ContainsInteractiveScreenPoint(Vector2 screenPoint)
@@ -105,13 +108,11 @@ namespace GritGud.Presentation.Gameplay
             if (!isOpen || !isPlaying || window == null)
                 return;
             playhead = Mathf.Min(
-                window.Segments.Count,
-                playhead + (Time.unscaledDeltaTime
-                    * PlaybackSegmentsPerSecond
-                    * speed));
-            if (playhead >= window.Segments.Count)
+                eventTimeline.TotalDurationSeconds,
+                playhead + (Time.unscaledDeltaTime * speed));
+            if (playhead >= eventTimeline.TotalDurationSeconds)
                 isPlaying = false;
-            PlayheadChanged?.Invoke(playhead);
+            PlayheadChanged?.Invoke(Playhead);
         }
 
         private void OnGUI()
@@ -149,22 +150,19 @@ namespace GritGud.Presentation.Gameplay
                 bar.y + 28f,
                 bar.width - 20f,
                 24f);
-            float segmentWidth = timeline.width / window.Segments.Count;
-            int selectedSegment = Mathf.Clamp(
-                Mathf.FloorToInt(Mathf.Min(
-                    playhead,
-                    window.Segments.Count - 0.0001f)),
-                0,
-                window.Segments.Count - 1);
+            int selectedSegment = eventTimeline.GetSegmentIndex(playhead);
             for (int index = 0; index < window.Segments.Count; index++)
             {
                 TurnReplaySegment segment = window.Segments[index];
                 string displayName = gameplay.Scenario.GetActor(segment.ActorId)
                     .CharacterProfile?.DisplayName ?? segment.ActorId;
                 Rect segmentRect = new Rect(
-                    timeline.x + (segmentWidth * index),
+                    timeline.x + (timeline.width
+                        * eventTimeline.SegmentStarts[index]
+                        / eventTimeline.TotalDurationSeconds),
                     timeline.y,
-                    segmentWidth,
+                    timeline.width * eventTimeline.SegmentDurations[index]
+                        / eventTimeline.TotalDurationSeconds,
                     timeline.height);
                 if (GUI.Button(
                     segmentRect,
@@ -173,14 +171,14 @@ namespace GritGud.Presentation.Gameplay
                         ? activeSegmentStyle
                         : segmentStyle))
                 {
-                    playhead = index;
+                    playhead = eventTimeline.SegmentStarts[index];
                     isPlaying = false;
                 }
-                DrawEventMarkers(segment, segmentRect);
+                DrawEventMarkers(index, segmentRect);
             }
 
             float railX = timeline.x + (timeline.width
-                * Mathf.Clamp01(playhead / window.Segments.Count));
+                * Mathf.Clamp01(playhead / eventTimeline.TotalDurationSeconds));
             GUI.DrawTexture(
                 new Rect(railX - 1f, timeline.y, 2f, timeline.height),
                 Texture2D.whiteTexture);
@@ -190,24 +188,23 @@ namespace GritGud.Presentation.Gameplay
                 new Rect(bar.x + 10f, controlsY, 30f, 20f),
                 "|<"))
             {
-                playhead = Mathf.Max(0f, Mathf.Ceil(playhead) - 1f);
+                int previous = Mathf.Max(0, selectedSegment - 1);
+                playhead = eventTimeline.SegmentStarts[previous];
                 isPlaying = false;
             }
             if (GUI.Button(
                 new Rect(bar.x + 44f, controlsY, 52f, 20f),
                 isPlaying ? "PAUSE" : "PLAY"))
             {
-                if (playhead >= window.Segments.Count)
-                    playhead = window.DefaultPlayheadBoundary;
+                if (playhead >= eventTimeline.TotalDurationSeconds)
+                    playhead = eventTimeline.DefaultTimeSeconds;
                 isPlaying = !isPlaying;
             }
             if (GUI.Button(
                 new Rect(bar.x + 100f, controlsY, 30f, 20f),
                 ">|"))
             {
-                playhead = Mathf.Min(
-                    window.Segments.Count,
-                    Mathf.Floor(playhead) + 1f);
+                playhead = eventTimeline.GetSegmentEndSeconds(selectedSegment);
                 isPlaying = false;
             }
             if (GUI.Button(
@@ -226,9 +223,9 @@ namespace GritGud.Presentation.Gameplay
                 scrubber,
                 playhead,
                 0f,
-                window.Segments.Count);
+                eventTimeline.TotalDurationSeconds);
             if (!Mathf.Approximately(previousPlayhead, playhead))
-                PlayheadChanged?.Invoke(playhead);
+                PlayheadChanged?.Invoke(Playhead);
         }
 
         private void RefreshWindow()
@@ -252,33 +249,34 @@ namespace GritGud.Presentation.Gameplay
             {
                 window = null;
                 stateWindow = null;
+                eventTimeline = null;
                 isOpen = false;
                 isPlaying = false;
             }
+            else
+            {
+                eventTimeline = new TurnReplayEventTimeline(window);
+            }
         }
 
-        private static void DrawEventMarkers(
-            TurnReplaySegment segment,
+        private void DrawEventMarkers(
+            int segmentIndex,
             Rect segmentRectangle)
         {
-            int markerCount = 0;
-            foreach (GameplayJournalEntry entry in segment.Entries)
-                if (IsVisibleEvent(entry))
-                    markerCount++;
-            if (markerCount == 0)
-                return;
-            int markerIndex = 0;
-            foreach (GameplayJournalEntry entry in segment.Entries)
+            float segmentStart = eventTimeline.SegmentStarts[segmentIndex];
+            float segmentDuration = eventTimeline.SegmentDurations[segmentIndex];
+            foreach (TurnReplayTimedEvent timedEvent in eventTimeline.Events)
             {
-                if (!IsVisibleEvent(entry))
+                if (timedEvent.SegmentIndex != segmentIndex
+                    || !IsVisibleEvent(timedEvent.Entry))
                     continue;
                 float x = segmentRectangle.x
                     + (segmentRectangle.width
-                        * ((markerIndex + 1f) / (markerCount + 1f)));
+                        * ((timedEvent.StartSeconds - segmentStart)
+                            / segmentDuration));
                 GUI.DrawTexture(
                     new Rect(x - 1f, segmentRectangle.yMax - 5f, 2f, 4f),
                     Texture2D.whiteTexture);
-                markerIndex++;
             }
         }
 

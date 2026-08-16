@@ -129,6 +129,16 @@ field time, swaps presentation-only fields as the playhead crosses canonical
 boundaries, preserves the normal camera-interior treatment, and rebuilds the
 authoritative live fields on exit.
 
+Replay playback now runs on a deterministic event clock derived solely from
+frozen journal evidence. Route duration scales with recorded travel cost,
+projectile duration scales with requested turn time, and actions, stance changes,
+destruction, reactions, and turn boundaries have stable presentation durations.
+Segment widths and event markers follow that clock, playback speed scales seconds
+rather than segment count, and direct seeking maps back to the same normalized
+world-state playhead used by projection. This keeps identical journals visually
+timed alike regardless of frame rate and exposes the active recorded event for
+the action-animation and one-shot-effect layers.
+
 Action animation, visible wound variants, replay-specific equipped-model swaps,
 and transient action audio/particle sampling remain subsequent presentation
 slices. The canonical sample already carries

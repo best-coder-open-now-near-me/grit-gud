@@ -10,6 +10,56 @@ namespace GritGud.Domain.Tests.Gameplay
     public sealed class TurnReplayWindowTests
     {
         [Test]
+        public void EventTimelineUsesRecordedDurationsAndRoundTripsBoundaries()
+        {
+            var route = new MovementRouteRecord(
+                "mara",
+                new GameplayActorPose(new GameplayPosition(0f, 0f, 0f), 0f),
+                new[] { new GameplayPosition(10f, 0f, 0f) });
+            var window = new TurnReplayWindow(
+                "mara",
+                new[]
+                {
+                    new TurnReplaySegment(
+                        1,
+                        "mara",
+                        new GameplayJournalEntry[]
+                        {
+                            new MovementRouteCommittedJournalEntry(1, route),
+                            new MovementRouteCompletedJournalEntry(2, route),
+                            new TurnEndedJournalEntry(
+                                3,
+                                new TurnEndRecord(1, "mara", "raider")),
+                        }),
+                    new TurnReplaySegment(
+                        2,
+                        "raider",
+                        new GameplayJournalEntry[]
+                        {
+                            new TurnEndedJournalEntry(
+                                4,
+                                new TurnEndRecord(2, "raider", "mara")),
+                        }),
+                });
+
+            var timeline = new TurnReplayEventTimeline(window);
+
+            Assert.That(timeline.SegmentDurations[0], Is.GreaterThan(
+                timeline.SegmentDurations[1]));
+            Assert.That(timeline.DefaultTimeSeconds,
+                Is.EqualTo(timeline.GetSegmentEndSeconds(0)));
+            Assert.That(timeline.ToSegmentPlayhead(0f), Is.EqualTo(0f));
+            Assert.That(
+                timeline.ToSegmentPlayhead(timeline.GetSegmentEndSeconds(0)),
+                Is.EqualTo(1f).Within(0.0001f));
+            Assert.That(
+                timeline.ToSegmentPlayhead(timeline.TotalDurationSeconds),
+                Is.EqualTo(2f));
+            Assert.That(timeline.GetActiveEvent(0.1f).Entry,
+                Is.TypeOf<MovementRouteCommittedJournalEntry>());
+        }
+
+        [Test]
         public void WindowBeginsWithActiveActorsPriorTurnAndNestsReactions()
         {
             GameplaySession session = CreateSession();

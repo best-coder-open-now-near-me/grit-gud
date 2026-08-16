@@ -77,6 +77,19 @@ namespace GritGud.Application.Gameplay
                 persistent.SmokeFields);
         }
 
+        public static TurnReplayWorldStateSample SampleAtTime(
+            TurnReplayStateWindow window,
+            TurnReplayEventTimeline timeline,
+            float timeSeconds)
+        {
+            if (timeline == null) throw new ArgumentNullException(nameof(timeline));
+            if (!ReferenceEquals(window?.Replay, timeline.Replay))
+                throw new ArgumentException(
+                    "The event timeline must describe the sampled replay window.",
+                    nameof(timeline));
+            return Sample(window, timeline.ToSegmentPlayhead(timeSeconds));
+        }
+
         private static IReadOnlyList<ProjectileFlightSnapshot> SampleProjectiles(
             IReadOnlyList<ProjectileFlightSnapshot> before,
             IReadOnlyList<ProjectileFlightSnapshot> after,
