@@ -201,7 +201,13 @@ Throw. A knife is an equipped attack: it uses authored reach and AP cost,
 seeded attack resolution,
 ordinary wound consequences, and replay diagnostics. Eligible props may also
 enter an explicit toppled state whose collider, cover, and navigation effects
-are authoritative. These close-quarters interactions precede deployable
+are authoritative. A toppled prop may also pin a character as a first-class
+gameplay result when its committed contact geometry and authored mass rules
+qualify. The pinned state identifies the responsible prop, restricts movement
+and incompatible actions, and is cleared only by a committed escape result.
+The character's Push Off action must atomically record the released prop pose,
+cleared actor state, cost, and get-up transition; animation cannot decide any
+of those outcomes. These close-quarters interactions precede deployable
 companions on the implementation roadmap.
 
 Displacement targeting is action-first rather than pointer-gated. The player

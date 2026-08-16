@@ -135,15 +135,11 @@ Work resumes in this order:
    A future lighting-polish pass can spend the available low-poly render budget
    on authored practical shadows, emissive/bloom hierarchy, selective shafts,
    and smoke-light interaction without introducing spell-like effects.
-   A future character/prop interaction polish pass may make a toppled crate or
-   barrel look as though it has briefly pinned a character when the committed
-   contact geometry supports that read. The character can struggle, push the
-   prop "off," and play an authored get-up before returning to their exact live
-   state. This is presentation layered over the authoritative toppled pose; it
-   must not invent immobilization, move the prop, or rerun physics during
-   replay. If pinning later becomes a real gameplay condition, it needs an
-   explicit status, escape action, committed prop/actor result, and replay
-   evidence rather than animation-driven rules.
+   Once authoritative toppled-prop pinning exists, a secondary character/prop
+   polish pass should sell it with prop-aware pinned poses, struggle loops, a
+   Push Off motion, and an authored get-up. Presentation consumes the committed
+   pin/escape states and exact prop pose; it must not decide immobilization,
+   move the prop independently, or rerun physics during replay.
 10. Replace frame-relative weapon-hand correction with authored prop rigs.
     **Complete:** rifle, launcher, and knife presentation now instantiate
     project-owned rig prefabs containing the model, muzzle, support-hand, and
@@ -192,7 +188,19 @@ initiative participant:
    exposure/cover, replay scrubbing, and exact live restoration. Add
    Application tests for resolution and PlayMode lifecycle coverage for the
    published fixture.
-2. **Finish close-quarters presentation.** Replace the knife's procedural-only
+2. **Add first-class toppled-prop pinning and escape.** Resolve `Pin` only when
+   the final committed toppled footprint contacts an eligible character and
+   authored prop mass/contact rules accept it. Freeze the responsible prop,
+   affected actor, contact evidence, actor state, and exact poses in the action
+   result. A pinned character cannot move or use incompatible actions. Give
+   them an authored **Push Off** action with explicit cost, hand/capability and
+   maximum-mass rules; success atomically records the released prop pose,
+   clears the pinned state, and enters get-up. Project availability for players
+   and enemies, preserve both states through replay and persistence boundaries,
+   and cover toppling-into-actor, obstruction, stale commits, escape, AI turns,
+   scrubbing, and exact live restoration. Presentation polish is secondary to
+   this state/action slice.
+3. **Finish close-quarters presentation.** Replace the knife's procedural-only
    strike with the gameplay-owned authored action state, bind hit reactions,
    and tune equipment transitions, contact timing, IK, interruption, replay,
    and restoration. Then bind the already-imported reload, grenade, reaction,
@@ -201,19 +209,19 @@ initiative participant:
    `Fall Over` clip into a bounded presentation-only ragdoll. Record a compact
    bone-pose trace for seekable replay instead of rerunning PhysX during
    playback.
-3. **Extend the shared verification foundation.** Migrate the remaining action
+4. **Extend the shared verification foundation.** Migrate the remaining action
    families to canonical prepare/commit transitions, then add deterministic
    action trajectories, reproducible failure capsules, minimization, API
    fuzzing, disposable simulation, and scripted/random seed baselines.
-4. **Harden authored content, enemy choices, editor workflows, and delivery.**
+5. **Harden authored content, enemy choices, editor workflows, and delivery.**
    Exercise broader enemy action selection, destructible-pile authoring,
    viewport transforms, Windows/WebGL artifacts, and browser-playable preview
    handoff against the same authoritative contracts.
-5. **Add the deployable drone as the final substantial gameplay expansion.**
+6. **Add the deployable drone as the final substantial gameplay expansion.**
    Deployment, ownership, command range, initiative insertion, destruction,
    and removal must use the proven party, transition, replay, and simulation
    seams.
-6. **Run the alpha adversarial capstone.** Complete the scripted, random,
+7. **Run the alpha adversarial capstone.** Complete the scripted, random,
    novelty, optimized, mirrored, held-out, and archived search corpus only after
    the intended gameplay systems, including the drone, are present.
 

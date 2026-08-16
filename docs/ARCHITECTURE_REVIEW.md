@@ -669,12 +669,15 @@ turn. The full EditMode gate passes 429 tests.
 10. Complete live toppling resolution, authored prop eligibility, and the
     published destructible-pile verification fixture. **Implemented
     2026-08-16; full Unity runner and hands-on fixture acceptance remain.**
-11. Finish knife, reaction, equipment, reload, grenade, and turn presentation
-    through gameplay-owned semantic animation states. **Next.**
-12. Migrate remaining action families to canonical prepare/commit transitions
+11. Add first-class toppled-prop pinning, an authoritative pinned actor state,
+    and an atomic Push Off/escape action with exact replay restoration. **Next.**
+12. Finish knife, reaction, equipment, reload, grenade, pinned struggle,
+    push-off, get-up, and turn presentation through gameplay-owned semantic
+    animation states.
+13. Migrate remaining action families to canonical prepare/commit transitions
     and establish deterministic trajectory, repro, minimization, fuzzing, and
     seed-baseline infrastructure.
-13. Resume the drone only after those existing-system exit criteria pass, then
+14. Resume the drone only after those existing-system exit criteria pass, then
     run the full alpha adversarial capstone with the drone included.
 
 ## Review gates for every gameplay slice
