@@ -86,6 +86,55 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void PreparedAttackIsNonMutatingAndMatchesAuthoritativeCommit()
+        {
+            GameplaySession session = CreateSession();
+            session.EnterTurnMode();
+            var attacks = new GameplayAttackSession(session, 3u);
+
+            Assert.That(attacks.TryPrepareResolve(
+                "player",
+                CreateExposure(torsoVisible: 5, legsVisible: 5),
+                out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                out AttackResolutionFailure failure), Is.True);
+
+            Assert.That(failure, Is.EqualTo(AttackResolutionFailure.None));
+            Assert.That(session.ResolvedActions, Is.Empty);
+            Assert.That(session.GetActor("player").TurnBudget.ActionPoints,
+                Is.EqualTo(4));
+            Assert.That(prepared.Previous.CanonicalHash,
+                Is.Not.EqualTo(prepared.Predicted.CanonicalHash));
+
+            GameplayTransitionCommitResult committed =
+                attacks.CommitPrepared(prepared);
+
+            Assert.That(committed.MatchesPrediction, Is.True);
+            Assert.That(session.GetActor("player").TurnBudget.ActionPoints,
+                Is.EqualTo(3));
+            Assert.That(attacks.Records, Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public void PreparedAttackRejectsChangedTurnBeforeCommit()
+        {
+            GameplaySession session = CreateSession();
+            session.EnterTurnMode();
+            var attacks = new GameplayAttackSession(session, 3u);
+            Assert.That(attacks.TryPrepareResolve(
+                "player",
+                CreateExposure(torsoVisible: 5, legsVisible: 5),
+                out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                out _), Is.True);
+            Assert.That(session.TryEndTurn("player", out _), Is.True);
+
+            Assert.Throws<InvalidOperationException>(
+                () => attacks.CommitPrepared(prepared));
+
+            Assert.That(session.ResolvedActions, Is.Empty);
+            Assert.That(attacks.Records, Is.Empty);
+        }
+
+        [Test]
         public void ObserverFailureCannotInterruptAuthoritativeAttackCommit()
         {
             GameplaySession session = CreateSession();
@@ -210,6 +259,29 @@ namespace GritGud.Domain.Tests.Gameplay
                 AttackDiagnosticFormatter.FormatDischarge(action));
             Assert.That(diagnostic,
                 Does.Contain("OUTCOME - WORLD DISCHARGE - NO TARGET HIT ROLL"));
+        }
+
+        [Test]
+        public void PreparedWorldDischargePredictsBudgetAndFacing()
+        {
+            GameplaySession session = CreateSession();
+            session.EnterTurnMode();
+            var attacks = new GameplayAttackSession(session, 3u);
+
+            Assert.That(attacks.TryPrepareDischarge(
+                "player",
+                GameplayTargetIds.WorldAimPoint,
+                new GameplayPosition(5f, 0f, 0f),
+                out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                out AttackResolutionFailure failure), Is.True);
+
+            Assert.That(failure, Is.EqualTo(AttackResolutionFailure.None));
+            GameplayActorSnapshot predicted =
+                prepared.Predicted.Session.GetActor("player");
+            Assert.That(predicted.TurnBudget.ActionPoints, Is.EqualTo(3));
+            Assert.That(predicted.Pose.FacingDegrees,
+                Is.EqualTo(90f).Within(0.001f));
+            Assert.That(attacks.CommitPrepared(prepared).MatchesPrediction, Is.True);
         }
 
         [Test]

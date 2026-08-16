@@ -90,6 +90,24 @@ namespace GritGud.Application.Gameplay
             out AttackResolutionFailure failure)
         {
             action = null;
+            if (!TryPrepareResolve(
+                    actorId,
+                    exposure,
+                    out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                    out failure))
+                return false;
+            action = prepared.Record;
+            CommitPrepared(prepared);
+            return true;
+        }
+
+        public bool TryPrepareResolve(
+            string actorId,
+            TargetExposureSnapshot exposure,
+            out GameplayPreparedTransition<GameplayActionRecord> prepared,
+            out AttackResolutionFailure failure)
+        {
+            prepared = null;
             if (!TryPrepare(
                     actorId,
                     exposure,
@@ -102,6 +120,8 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
+            GameplayCombatStateSnapshot previous =
+                GameplayCombatStateCapture.Capture(gameplay);
             long attackSequence = records.Count + 1L;
             uint resolutionSeed = AttackResolutionRules.DeriveResolutionSeed(
                 scenarioSeed,
@@ -119,7 +139,7 @@ namespace GritGud.Application.Gameplay
             long actionSequence = gameplay.LastResolvedAction == null
                 ? 1L
                 : gameplay.LastResolvedAction.Sequence + 1L;
-            action = new GameplayActionRecord(
+            var action = new GameplayActionRecord(
                 actionSequence,
                 new GameplayActionRequest(
                     actorId,
@@ -129,7 +149,10 @@ namespace GritGud.Application.Gameplay
                 actor.TurnBudget,
                 resultingBudget,
                 new[] { new AttackResolvedActionOutcome(resolution) });
-            Commit(action);
+            prepared = new GameplayPreparedTransition<GameplayActionRecord>(
+                action,
+                previous,
+                GameplayWeaponActionStateProjector.Project(previous, action));
             failure = AttackResolutionFailure.None;
             return true;
         }
@@ -158,6 +181,26 @@ namespace GritGud.Application.Gameplay
                     actorId,
                     targetId,
                     aimPoint,
+                    out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                    out failure))
+                return false;
+            action = prepared.Record;
+            CommitPrepared(prepared);
+            return true;
+        }
+
+        public bool TryPrepareDischarge(
+            string actorId,
+            string targetId,
+            GameplayPosition aimPoint,
+            out GameplayPreparedTransition<GameplayActionRecord> prepared,
+            out AttackResolutionFailure failure)
+        {
+            prepared = null;
+            if (!TryPrepareDischarge(
+                    actorId,
+                    targetId,
+                    aimPoint,
                     out AttackDefinition attack,
                     out GameplayActorSnapshot actor,
                     out ActionCost cost,
@@ -166,6 +209,8 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
+            GameplayCombatStateSnapshot previous =
+                GameplayCombatStateCapture.Capture(gameplay);
             var discharge = new WeaponDischargeRecord(
                 discharges.Count + 1L,
                 actorId,
@@ -177,7 +222,7 @@ namespace GritGud.Application.Gameplay
             long actionSequence = gameplay.LastResolvedAction == null
                 ? 1L
                 : gameplay.LastResolvedAction.Sequence + 1L;
-            action = new GameplayActionRecord(
+            var action = new GameplayActionRecord(
                 actionSequence,
                 new GameplayActionRequest(
                     actorId,
@@ -187,10 +232,20 @@ namespace GritGud.Application.Gameplay
                 actor.TurnBudget,
                 resultingBudget,
                 new[] { new WeaponDischargedActionOutcome(discharge) });
-            Commit(action);
+            prepared = new GameplayPreparedTransition<GameplayActionRecord>(
+                action,
+                previous,
+                GameplayWeaponActionStateProjector.Project(previous, action));
             failure = AttackResolutionFailure.None;
             return true;
         }
+
+        public GameplayTransitionCommitResult CommitPrepared(
+            GameplayPreparedTransition<GameplayActionRecord> prepared) =>
+            GameplayTransitionCoordinator.Commit(
+                prepared,
+                () => GameplayCombatStateCapture.Capture(gameplay),
+                Commit);
 
         public void Commit(GameplayActionRecord action)
         {

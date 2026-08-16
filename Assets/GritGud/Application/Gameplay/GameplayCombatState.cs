@@ -373,6 +373,8 @@ namespace GritGud.Application.Gameplay
             Append(text, root + ".stance", (int)actor.Pose.Stance);
             Append(text, root + ".ap", actor.TurnBudget.ActionPoints);
             Append(text, root + ".move", actor.TurnBudget.MovementOpportunity);
+            Append(text, root + ".allowance.ap", actor.TurnActionPointAllowance);
+            Append(text, root + ".allowance.move", actor.TurnMovementAllowance);
             Append(text, root + ".equipped", actor.EquippedItemId ?? string.Empty);
             Append(text, root + ".equipment.movementMultiplier",
                 actor.EquipmentEffects.MovementSpeedMultiplier);

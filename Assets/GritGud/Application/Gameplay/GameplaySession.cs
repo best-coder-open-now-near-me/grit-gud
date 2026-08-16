@@ -127,7 +127,9 @@ namespace GritGud.Application.Gameplay
             string equippedItemId,
             EquipmentEffectSet equipmentEffects,
             int maximumWounds = int.MaxValue,
-            ActorInventorySnapshot inventory = null)
+            ActorInventorySnapshot inventory = null,
+            int turnActionPointAllowance = -1,
+            float turnMovementAllowance = -1f)
         {
             if (!string.Equals(actorId, wounds.ActorId, StringComparison.Ordinal))
             {
@@ -159,6 +161,19 @@ namespace GritGud.Application.Gameplay
             EquipmentEffects = equipmentEffects;
             MaximumWounds = maximumWounds;
             Inventory = resolvedInventory;
+            TurnActionPointAllowance = turnActionPointAllowance < 0
+                ? turnBudget.ActionPoints
+                : turnActionPointAllowance;
+            TurnMovementAllowance = turnMovementAllowance < 0f
+                ? turnBudget.MovementOpportunity + wounds.MovementPenalty
+                : turnMovementAllowance;
+            if (float.IsNaN(TurnMovementAllowance)
+                || float.IsInfinity(TurnMovementAllowance)
+                || TurnActionPointAllowance < turnBudget.ActionPoints
+                || TurnMovementAllowance + 0.0001f
+                    < turnBudget.MovementOpportunity + wounds.MovementPenalty)
+                throw new ArgumentException(
+                    "Actor allowances cannot be below the represented state.");
         }
 
         public string ActorId { get; }
@@ -176,6 +191,10 @@ namespace GritGud.Application.Gameplay
         public int MaximumWounds { get; }
 
         public ActorInventorySnapshot Inventory { get; }
+
+        public int TurnActionPointAllowance { get; }
+
+        public float TurnMovementAllowance { get; }
 
         public bool IsIncapacitated => Wounds.WoundCount >= MaximumWounds;
 
@@ -2214,7 +2233,9 @@ namespace GritGud.Application.Gameplay
                     EquippedItemId,
                     EquipmentEffects,
                     MaximumWounds,
-                    new ActorInventorySnapshot(ActorId, quantities));
+                    new ActorInventorySnapshot(ActorId, quantities),
+                    turnBudgetAllowance.ActionPoints,
+                    turnBudgetAllowance.MovementOpportunity);
             }
 
             private float WoundedMovementAllowance => Math.Max(

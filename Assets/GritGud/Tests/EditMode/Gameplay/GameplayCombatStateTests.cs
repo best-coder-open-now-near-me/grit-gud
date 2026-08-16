@@ -144,7 +144,14 @@ namespace GritGud.Domain.Tests.Gameplay
                 new GameplayActorPose(
                     new GameplayPosition(positionX, 0f, 0f),
                     0f),
-                new TurnBudget(actionPoints, 8f));
+                new TurnBudget(actionPoints, 8f),
+                new ActorWoundSnapshot(actorId, 0, 0f),
+                equippedItemId: null,
+                equipmentEffects: EquipmentEffectSet.None,
+                maximumWounds: int.MaxValue,
+                inventory: null,
+                turnActionPointAllowance: 4,
+                turnMovementAllowance: 8f);
         }
     }
 }

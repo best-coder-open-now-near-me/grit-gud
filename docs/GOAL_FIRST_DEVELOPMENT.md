@@ -157,6 +157,15 @@ freshness and reports post-commit prediction divergence using those same fields.
 This is the common seam that individual action owners will adopt; it is not a
 claim that every action family or every replay visual has already been migrated.
 
+The first adopted action family is direct weapon resolution and world-point
+weapon discharge. Both now expose a non-mutating prepared transition containing
+the immutable before state, deterministic action record, and predicted resulting
+state. Their existing immediate APIs are retained as prepare-then-commit
+conveniences, and prepared records reject intervening turn or state changes
+before authoritative mutation. The actor snapshot carries authored AP and
+movement allowances so wound-induced movement clamping can be predicted from the
+snapshot without consulting Unity or a second rules implementation.
+
 ## Alpha-exit use
 
 The adversarial gauntlet is intended to cap alpha, but it cannot prove the

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using GritGud.Domain.Gameplay;
+using GritGud.Domain.Turns;
 
 namespace GritGud.Application.Gameplay
 {
@@ -100,5 +102,138 @@ namespace GritGud.Application.Gameplay
         public IReadOnlyList<GameplayInvariantViolation> InvariantViolations { get; }
         public bool IsVerified => Differences.Count == 0
             && InvariantViolations.Count == 0;
+    }
+
+    public static class GameplayWeaponActionStateProjector
+    {
+        public static GameplayCombatStateSnapshot Project(
+            GameplayCombatStateSnapshot previous,
+            GameplayActionRecord action)
+        {
+            if (previous == null) throw new ArgumentNullException(nameof(previous));
+            if (action == null) throw new ArgumentNullException(nameof(action));
+            if (action.Sequence != previous.Session.LastActionSequence + 1L)
+                throw new InvalidOperationException(
+                    "Weapon projection requires the next action sequence.");
+
+            GameplayActorSnapshot acting = previous.Session.GetActor(
+                action.Request.ActorId);
+            if (!BudgetsMatch(acting.TurnBudget, action.PreviousBudget))
+                throw new InvalidOperationException(
+                    "Weapon projection no longer begins at the recorded budget.");
+            TurnBudget expectedBudget = action.PreviousBudget.SpendAction(action.Cost);
+            if (!BudgetsMatch(expectedBudget, action.ResultingBudget))
+                throw new InvalidOperationException(
+                    "Weapon projection has an invalid resulting budget.");
+            if (action.Outcomes.Count != 1)
+                throw new ArgumentException(
+                    "Weapon projection requires exactly one outcome.", nameof(action));
+
+            var actors = new List<GameplayActorSnapshot>(
+                previous.Session.Actors.Count);
+            foreach (GameplayActorSnapshot actor in previous.Session.Actors)
+                actors.Add(ProjectActor(previous, actor, action));
+
+            GameplaySessionStateSnapshot session = previous.Session;
+            var resultingSession = new GameplaySessionStateSnapshot(
+                session.ScenarioId,
+                session.Mode,
+                session.Operation,
+                session.TurnContext,
+                session.EncounterActive,
+                session.EncounterCompletionRequested,
+                session.ActiveActorId,
+                session.TurnPhase,
+                actors,
+                session.InitiativeOrder,
+                session.Objectives,
+                session.EmergencyResponders,
+                session.EmergencyResponderIndex,
+                session.EmergencyResumeActorId,
+                action.Sequence,
+                session.LastTurnSequence,
+                checked(session.JournalSequence + 1L));
+            return new GameplayCombatStateSnapshot(
+                resultingSession,
+                previous.Destructibles,
+                previous.Vehicles,
+                previous.Projectiles,
+                previous.SmokeFields);
+        }
+
+        private static GameplayActorSnapshot ProjectActor(
+            GameplayCombatStateSnapshot previous,
+            GameplayActorSnapshot actor,
+            GameplayActionRecord action)
+        {
+            GameplayActorPose pose = actor.Pose;
+            TurnBudget budget = actor.TurnBudget;
+            ActorWoundSnapshot wounds = actor.Wounds;
+            GameplayActionOutcome outcome = action.Outcomes[0];
+            if (string.Equals(
+                    actor.ActorId,
+                    action.Request.ActorId,
+                    StringComparison.Ordinal))
+            {
+                budget = action.ResultingBudget;
+                GameplayPosition facingTarget;
+                if (outcome is AttackResolvedActionOutcome attack)
+                    facingTarget = previous.Session.GetActor(
+                        attack.TargetId).Pose.Position;
+                else if (outcome is WeaponDischargedActionOutcome discharge)
+                    facingTarget = discharge.Discharge.AimPoint;
+                else
+                    throw new ArgumentException(
+                        "Weapon projection received a non-weapon outcome.",
+                        nameof(action));
+                pose = FaceToward(pose, facingTarget);
+            }
+
+            if (outcome is AttackResolvedActionOutcome resolved
+                && string.Equals(
+                    actor.ActorId,
+                    resolved.TargetId,
+                    StringComparison.Ordinal))
+            {
+                wounds = resolved.Attack.TargetWoundsAfter;
+                float woundedAllowance = Math.Max(
+                    0f,
+                    actor.TurnMovementAllowance - wounds.MovementPenalty);
+                budget = new TurnBudget(
+                    budget.ActionPoints,
+                    Math.Min(budget.MovementOpportunity, woundedAllowance));
+            }
+
+            return new GameplayActorSnapshot(
+                actor.ActorId,
+                pose,
+                budget,
+                wounds,
+                actor.EquippedItemId,
+                actor.EquipmentEffects,
+                actor.MaximumWounds,
+                actor.Inventory,
+                actor.TurnActionPointAllowance,
+                actor.TurnMovementAllowance);
+        }
+
+        private static GameplayActorPose FaceToward(
+            GameplayActorPose pose,
+            GameplayPosition target)
+        {
+            double deltaX = (double)target.X - pose.Position.X;
+            double deltaZ = (double)target.Z - pose.Position.Z;
+            if (Math.Abs(deltaX) <= 0.0001d
+                && Math.Abs(deltaZ) <= 0.0001d)
+                return pose;
+            float facing = (float)(
+                Math.Atan2(deltaX, deltaZ) * (180d / Math.PI));
+            return new GameplayActorPose(pose.Position, facing, pose.Stance);
+        }
+
+        private static bool BudgetsMatch(TurnBudget left, TurnBudget right) =>
+            left.ActionPoints == right.ActionPoints
+            && Math.Abs(
+                left.MovementOpportunity - right.MovementOpportunity) <= 0.0001f;
     }
 }
