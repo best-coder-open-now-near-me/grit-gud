@@ -323,7 +323,7 @@ namespace GritGud.Application.Gameplay
             string projectileId,
             float turnTime)
         {
-            GameplayCombatStateSnapshot previous = CaptureCombatState();
+            GameplayCombatStateSnapshot previousState = CaptureCombatState();
             ProjectileAdvancePrediction prediction = PredictAdvance(
                 projectileId,
                 turnTime);
@@ -386,9 +386,9 @@ namespace GritGud.Application.Gameplay
                 collisionFraction);
             return new GameplayPreparedTransition<ProjectileAdvanceRecord>(
                 record,
-                previous,
+                previousState,
                 GameplayProjectileAdvanceStateProjector.Project(
-                    previous,
+                    previousState,
                     record,
                     consequences.Destructibles.Journal == gameplay.Journal));
         }
