@@ -576,6 +576,8 @@ namespace GritGud.Presentation.Gameplay
                     return "Only the active actor can launch.";
                 case ProjectileLaunchFailure.ActorIncapacitated:
                     return "An incapacitated actor cannot launch.";
+                case ProjectileLaunchFailure.ActorPinned:
+                    return "Push off the pinning prop before launching.";
                 case ProjectileLaunchFailure.OperationInProgress:
                     return "Wait for the current movement to resolve.";
                 case ProjectileLaunchFailure.WeaponUnavailable:

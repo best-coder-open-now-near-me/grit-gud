@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 14,
+  "schemaVersion": 15,
   "scenarioId": "depot-yard",
   "displayName": "Depot Yard",
   "levelId": "main-depot-yard-v1",
@@ -53,7 +53,7 @@
             "handRequirement": "none",
             "autoStowPolicy": "never",
             "contestPolicy": "close-quarters-control",
-            "allowedResults": ["topple"]
+            "allowedResults": ["topple", "pin"]
           },
           {
             "id": "close-quarters.throw",
@@ -77,7 +77,26 @@
             "handRequirement": "both-hands-free",
             "autoStowPolicy": "allowed",
             "contestPolicy": "close-quarters-control",
-            "allowedResults": ["topple"]
+            "allowedResults": ["topple", "pin"]
+          },
+          {
+            "id": "close-quarters.push-off",
+            "displayName": "Push Off",
+            "intent": "push-off",
+            "cost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "acceptedSubjectKinds": ["prop"],
+            "reach": 2.0,
+            "maximumDistance": 1.25,
+            "maximumSubjectMass": 40.0,
+            "maximumSubjectSize": "medium",
+            "handRequirement": "both-hands-free",
+            "autoStowPolicy": "allowed",
+            "contestPolicy": "none",
+            "allowedResults": ["release"]
           }
         ]
       },
@@ -320,7 +339,7 @@
             "handRequirement": "none",
             "autoStowPolicy": "never",
             "contestPolicy": "close-quarters-control",
-            "allowedResults": ["topple"]
+            "allowedResults": ["topple", "pin"]
           },
           {
             "id": "close-quarters.throw",
@@ -344,7 +363,26 @@
             "handRequirement": "both-hands-free",
             "autoStowPolicy": "allowed",
             "contestPolicy": "close-quarters-control",
-            "allowedResults": ["topple"]
+            "allowedResults": ["topple", "pin"]
+          },
+          {
+            "id": "close-quarters.push-off",
+            "displayName": "Push Off",
+            "intent": "push-off",
+            "cost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "acceptedSubjectKinds": ["prop"],
+            "reach": 2.0,
+            "maximumDistance": 1.25,
+            "maximumSubjectMass": 40.0,
+            "maximumSubjectSize": "medium",
+            "handRequirement": "both-hands-free",
+            "autoStowPolicy": "allowed",
+            "contestPolicy": "none",
+            "allowedResults": ["release"]
           }
         ]
       },
@@ -506,6 +544,32 @@
           "maximumAttacksPerTurn": 1,
           "minimumAttackHitChancePercent": 35
         }
+      },
+      "displacementAbility": {
+        "id": "ability.escape-pin",
+        "displayName": "Escape Pin",
+        "hotbarSlot": 4,
+        "actions": [
+          {
+            "id": "close-quarters.push-off",
+            "displayName": "Push Off",
+            "intent": "push-off",
+            "cost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "acceptedSubjectKinds": ["prop"],
+            "reach": 2.0,
+            "maximumDistance": 1.25,
+            "maximumSubjectMass": 40.0,
+            "maximumSubjectSize": "medium",
+            "handRequirement": "both-hands-free",
+            "autoStowPolicy": "allowed",
+            "contestPolicy": "none",
+            "allowedResults": ["release"]
+          }
+        ]
       },
       "characterProfile": {
         "identityId": "character.depot-rifleman",

@@ -21,6 +21,7 @@ namespace GritGud.Presentation.Gameplay
         private Vector3 originalPosition;
         private Quaternion originalRotation;
         private ActorStance originalStance;
+        private ActorPinState originalPinState;
 
         public GameplayTurnReplayActorPresenter(GameplayActorView actorView)
         {
@@ -52,6 +53,7 @@ namespace GritGud.Presentation.Gameplay
             originalPosition = view.Transform.position;
             originalRotation = view.Transform.rotation;
             originalStance = view.Stance.Stance;
+            originalPinState = view.ReplayActions.CurrentPinState;
             presenting = true;
             try
             {
@@ -105,6 +107,7 @@ namespace GritGud.Presentation.Gameplay
             weapon?.PresentReplayEquipment(snapshot.EquippedItemId);
             weapon?.PresentReplayAction(action);
             view.ReplayActions.Present(action);
+            view.ReplayActions.PresentPinState(snapshot.PinState);
             animation.PresentReplayAction(
                 pose.Stance,
                 MapAnimationAction(action?.Kind),
@@ -140,6 +143,9 @@ namespace GritGud.Presentation.Gameplay
             Exception failure = null;
             TryRestore(ClearTransients, ref failure);
             TryRestore(view.ReplayActions.Clear, ref failure);
+            TryRestore(
+                () => view.ReplayActions.PresentPinState(originalPinState),
+                ref failure);
             TryRestore(view.Wounds.EndReplayPresentation, ref failure);
             TryRestore(() => weapon?.EndReplayPresentation(), ref failure);
             TryRestore(
@@ -196,7 +202,10 @@ namespace GritGud.Presentation.Gameplay
                 case TurnReplayActorActionKind.Throw:
                     return ActorAnimationAction.Throw;
                 case TurnReplayActorActionKind.Reaction:
+                case TurnReplayActorActionKind.Pinned:
                     return ActorAnimationAction.HitReaction;
+                case TurnReplayActorActionKind.GetUp:
+                    return ActorAnimationAction.Interact;
                 default:
                     return null;
             }

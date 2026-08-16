@@ -35,6 +35,7 @@ namespace GritGud.Presentation.Gameplay
             Unbind();
             Session = session;
             Session.EquipmentChanged += HandleEquipmentChanged;
+            Session.ActorCapabilityChanged += HandleActorCapabilityChanged;
             SetActor(
                 movementInput,
                 authoritativeActorTransform,
@@ -226,6 +227,7 @@ namespace GritGud.Presentation.Gameplay
             if (Session != null)
             {
                 Session.EquipmentChanged -= HandleEquipmentChanged;
+                Session.ActorCapabilityChanged -= HandleActorCapabilityChanged;
             }
 
             if (explorationInput != null)
@@ -258,12 +260,25 @@ namespace GritGud.Presentation.Gameplay
 
             explorationInput.SetInputEnabled(
                 Session.Mode == GameplaySessionMode.Exploration
-                && !Session.IsActorIncapacitated(actorId));
+                && !Session.IsActorIncapacitated(actorId)
+                && !Session.GetActor(actorId).IsPinned);
         }
 
         private void HandleEquipmentChanged(EquipmentChangeRecord _)
         {
             ApplyEquipmentEffects();
+        }
+
+        private void HandleActorCapabilityChanged(string changedActorId)
+        {
+            if (string.Equals(
+                    changedActorId,
+                    actorId,
+                    StringComparison.Ordinal))
+            {
+                motor?.StopPlanarMovement();
+                ApplyMode();
+            }
         }
 
         private void ApplyEquipmentEffects()
@@ -280,7 +295,8 @@ namespace GritGud.Presentation.Gameplay
         private void SynchronizeExplorationPose()
         {
             if (Session?.Mode != GameplaySessionMode.Exploration ||
-                actorTransform == null || actorId == null)
+                actorTransform == null || actorId == null
+                || Session.GetActor(actorId).IsPinned)
             {
                 return;
             }

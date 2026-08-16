@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
+using GritGud.Presentation.Actors.Animation;
 using GritGud.Presentation.Levels.Runtime;
 using UnityEngine;
 
@@ -331,6 +332,43 @@ namespace GritGud.Presentation.Gameplay
             }
 
             return TryCommitLockedDisplacement();
+        }
+
+        internal bool TryExecuteIntent(
+            string actorId,
+            string actionId,
+            string subjectId,
+            out GameplayActionRecord action,
+            out DisplacementRecord record,
+            out DisplacementResolutionFailure failure)
+        {
+            DisplacementDestinationEvaluation destination =
+                Session.EvaluateIntentDestination(
+                    actorId,
+                    actionId,
+                    subjectId);
+            if (!destination.IsEligible)
+            {
+                action = null;
+                record = null;
+                failure = destination.Failure;
+                return false;
+            }
+
+            if (!Session.TryDisplaceAction(
+                    actorId,
+                    actionId,
+                    subjectId,
+                    destination.Destination,
+                    out action,
+                    out record,
+                    out failure))
+            {
+                return false;
+            }
+
+            Present(record);
+            return true;
         }
 
         private bool TryCommitLockedDisplacement()
@@ -677,7 +715,8 @@ namespace GritGud.Presentation.Gameplay
             DisplacementActionKind intent = RequireDisplacementAction(
                 controlledActorId,
                 selectedActionId).Intent;
-            return intent == DisplacementActionKind.Push;
+            return intent == DisplacementActionKind.Push
+                || intent == DisplacementActionKind.PushOff;
         }
 
         internal static string FormatTargetFailure(
@@ -731,6 +770,10 @@ namespace GritGud.Presentation.Gameplay
                         + " / "
                         + reach.ToString("0.#")
                         + " M)";
+                case DisplacementTargetFailure.NotPinningActor:
+                    return "INVALID TARGET - NOT THE PINNING PROP";
+                case DisplacementTargetFailure.SubjectPinned:
+                    return "INVALID TARGET - SUBJECT IS PINNED OR PINNING AN ACTOR";
                 case DisplacementTargetFailure.None:
                     if (string.IsNullOrWhiteSpace(actionDisplayName))
                     {
@@ -786,6 +829,14 @@ namespace GritGud.Presentation.Gameplay
                     return "ACTION UNAVAILABLE - REQUIRED HANDS ARE OCCUPIED";
                 case DisplacementResolutionFailure.SubjectUnavailable:
                     return "INVALID SUBJECT - UNAVAILABLE";
+                case DisplacementResolutionFailure.ActorPinned:
+                    return "ACTION UNAVAILABLE - PUSH OFF THE PINNING PROP";
+                case DisplacementResolutionFailure.ActorNotPinned:
+                    return "ACTION UNAVAILABLE - ACTOR IS NOT PINNED";
+                case DisplacementResolutionFailure.NotPinningActor:
+                    return "INVALID SUBJECT - NOT THE PINNING PROP";
+                case DisplacementResolutionFailure.SubjectPinned:
+                    return "INVALID SUBJECT - PIN STATE PREVENTS DISPLACEMENT";
                 case DisplacementResolutionFailure.None:
                     return "VALID DESTINATION - CLICK TO CONFIRM";
                 default:
@@ -861,6 +912,20 @@ namespace GritGud.Presentation.Gameplay
             }
 
             Physics.SyncTransforms();
+            if (record.PinTransition != null
+                && registry.TryGetActor(
+                    record.PinTransition.ActorId,
+                    out GameplayActorView pinnedActor))
+            {
+                pinnedActor.ReplayActions.PresentPinState(
+                    record.PinTransition.ResultingState);
+                ActorAnimationCoordinator animation =
+                    pinnedActor.Root.GetComponent<ActorAnimationCoordinator>();
+                animation?.TryRequestAction(
+                    record.PinTransition.EstablishesPin
+                        ? ActorAnimationAction.HitReaction
+                        : ActorAnimationAction.Interact);
+            }
         }
 
         private void SynchronizeAuthoritativeFacing()

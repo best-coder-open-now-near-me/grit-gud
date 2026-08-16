@@ -92,6 +92,42 @@ namespace GritGud.Presentation.Tests
                 Is.EqualTo("displacement.destination-blocked"));
         }
 
+        [Test]
+        public void RegisteredActorInsideToppledFootprintReturnsContactEvidence()
+        {
+            GameObject actor = CreateObject("Actor", new Vector3(-1f, 0f, 0f));
+            GameObject subject = CreatePrimitive(
+                "Subject",
+                Vector3.zero,
+                new Vector3(0.4f, 2f, 0.4f));
+            GameObject contactedActor = CreatePrimitive(
+                "ContactedActor",
+                new Vector3(2.65f, 0.55f, 0f),
+                new Vector3(0.5f, 1.1f, 0.5f));
+            Physics.SyncTransforms();
+            var validator = new UnityDisplacementPathValidator(
+                new Dictionary<string, Transform>
+                {
+                    ["actor"] = actor.transform,
+                    ["subject"] = subject.transform,
+                    ["contacted"] = contactedActor.transform,
+                });
+            var destination = new GameplayPosition(2f, 0f, 0f);
+            var resultingState = new PropDisplacementState(
+                new GameplayPropPose(destination, 0f, 0f, 90f),
+                DestructiblePropPosture.Toppled);
+
+            DisplacementPathValidation result = validator.Validate(
+                CreateRequest(destination),
+                new GameplayPosition(0f, 0f, 0f),
+                resultingState);
+
+            Assert.That(result.Accepted, Is.True);
+            Assert.That(result.Contacts.Count, Is.EqualTo(1));
+            Assert.That(result.Contacts[0].EntityId, Is.EqualTo("contacted"));
+            Assert.That(result.Contacts[0].OverlapDepth, Is.GreaterThan(0f));
+        }
+
         private static DisplacementRequest CreateRequest(
             GameplayPosition destination) =>
             new DisplacementRequest(

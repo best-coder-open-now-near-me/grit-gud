@@ -173,6 +173,7 @@ namespace GritGud.Presentation.Gameplay
 
             if (Session.Mode != GameplaySessionMode.TurnBased ||
                 Session.Operation != GameplaySessionOperation.None ||
+                Session.GetActor(actorId).IsPinned ||
                 !string.Equals(
                     Session.ActiveActorId,
                     actorId,

@@ -250,7 +250,10 @@ namespace GritGud.Presentation.LevelEditing
             bool topplingEnabled,
             string topplingPitchText,
             string topplingRollText,
-            string topplingElevationText)
+            string topplingElevationText,
+            bool pinningEnabled = false,
+            string maximumPinnedActorMassText = "100",
+            string minimumPinContactDepthText = "0")
         {
             LevelDocument snapshot = workspace.CreateSnapshot();
             LevelScenarioData after = snapshot.scenario.DeepCopy();
@@ -286,6 +289,25 @@ namespace GritGud.Presentation.LevelEditing
                         "Toppling needs a non-zero pitch or roll offset.");
                     return;
                 }
+                if (!TryParse(
+                        maximumPinnedActorMassText,
+                        out float maximumPinnedActorMass)
+                    || !TryParse(
+                        minimumPinContactDepthText,
+                        out float minimumPinContactDepth)
+                    || maximumPinnedActorMass < 0f
+                    || minimumPinContactDepth < 0f
+                    || (pinningEnabled && maximumPinnedActorMass <= 0f))
+                {
+                    Report(
+                        "Pinning needs a positive maximum actor mass and a non-negative contact depth.");
+                    return;
+                }
+                if (pinningEnabled && !topplingEnabled)
+                {
+                    Report("Pinning requires toppling to be enabled.");
+                    return;
+                }
                 after.props.Add(new LevelScenarioPropData
                 {
                     entityId = entityId,
@@ -298,6 +320,12 @@ namespace GritGud.Presentation.LevelEditing
                         pitchOffsetDegrees = topplingPitch,
                         rollOffsetDegrees = topplingRoll,
                         elevationOffset = topplingElevation,
+                    },
+                    pinning = new LevelScenarioPropPinningData
+                    {
+                        enabled = pinningEnabled,
+                        maximumActorMass = maximumPinnedActorMass,
+                        minimumContactDepth = minimumPinContactDepth,
                     },
                 });
             }

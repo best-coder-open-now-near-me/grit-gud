@@ -256,6 +256,15 @@ namespace GritGud.Presentation.Gameplay
                         elevationOffset = prop.toppling?.elevationOffset
                             ?? 0f,
                     },
+                    pinning = new ScenarioPropPinningData
+                    {
+                        enabled = prop.pinning != null
+                            && prop.pinning.enabled,
+                        maximumActorMass = prop.pinning?.maximumActorMass
+                            ?? 0f,
+                        minimumContactDepth = prop.pinning?.minimumContactDepth
+                            ?? 0f,
+                    },
                     attackResponse = new ScenarioAttackResponseData
                     {
                         startsEncounter = prop.startsEncounterOnAttack,

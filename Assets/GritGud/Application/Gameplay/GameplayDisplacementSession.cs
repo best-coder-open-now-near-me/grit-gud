@@ -22,22 +22,59 @@ namespace GritGud.Application.Gameplay
         SubjectUnavailable,
         SubjectKindNotAccepted,
         SubjectOutOfReach,
+        ActorPinned,
+        ActorNotPinned,
+        NotPinningActor,
+        SubjectPinned,
     }
 
     public readonly struct DisplacementPathValidation
     {
-        private DisplacementPathValidation(bool accepted, string failureCode)
+        private DisplacementPathValidation(
+            bool accepted,
+            string failureCode,
+            IReadOnlyList<DisplacementContactEvidence> contacts)
         {
             Accepted = accepted;
             FailureCode = failureCode ?? string.Empty;
+            Contacts = contacts ?? Array.Empty<DisplacementContactEvidence>();
         }
 
         public bool Accepted { get; }
 
         public string FailureCode { get; }
 
+        public IReadOnlyList<DisplacementContactEvidence> Contacts { get; }
+
         public static DisplacementPathValidation Allowed() =>
-            new DisplacementPathValidation(true, string.Empty);
+            new DisplacementPathValidation(
+                true,
+                string.Empty,
+                Array.Empty<DisplacementContactEvidence>());
+
+        public static DisplacementPathValidation Allowed(
+            IEnumerable<DisplacementContactEvidence> contacts)
+        {
+            var copy = new List<DisplacementContactEvidence>();
+            foreach (DisplacementContactEvidence contact in
+                contacts ?? Array.Empty<DisplacementContactEvidence>())
+            {
+                if (contact == null)
+                {
+                    throw new ArgumentException(
+                        "Displacement contacts cannot contain null entries.",
+                        nameof(contacts));
+                }
+                copy.Add(contact);
+            }
+            copy.Sort((left, right) => StringComparer.Ordinal.Compare(
+                left.EntityId,
+                right.EntityId));
+            return new DisplacementPathValidation(
+                true,
+                string.Empty,
+                copy.AsReadOnly());
+        }
 
         public static DisplacementPathValidation Blocked(string failureCode)
         {
@@ -48,7 +85,10 @@ namespace GritGud.Application.Gameplay
                     nameof(failureCode));
             }
 
-            return new DisplacementPathValidation(false, failureCode);
+            return new DisplacementPathValidation(
+                false,
+                failureCode,
+                Array.Empty<DisplacementContactEvidence>());
         }
     }
 
@@ -219,6 +259,27 @@ namespace GritGud.Application.Gameplay
                     DisplacementActionAvailabilityFailure.ActionUnavailable);
             }
 
+            if (actor.IsPinned
+                && action.Intent != DisplacementActionKind.PushOff)
+            {
+                return CreateActionAvailability(
+                    actorId,
+                    actionId,
+                    DisplacementActionAvailabilityFailure.ActorPinned,
+                    action,
+                    ResolveActionCost(action, startsEncounter));
+            }
+            if (!actor.IsPinned
+                && action.Intent == DisplacementActionKind.PushOff)
+            {
+                return CreateActionAvailability(
+                    actorId,
+                    actionId,
+                    DisplacementActionAvailabilityFailure.ActorNotPinned,
+                    action,
+                    ResolveActionCost(action, startsEncounter));
+            }
+
             InventoryItemDefinition equipped = gameplay.GetEquippedItem(actorId);
             ActionCost cost = ResolveActionCost(
                 action,
@@ -343,6 +404,50 @@ namespace GritGud.Application.Gameplay
                     actionId,
                     candidateId,
                     DisplacementTargetFailure.SelfTarget,
+                    subject,
+                    distance,
+                    action);
+            }
+
+            if (action.Intent == DisplacementActionKind.PushOff
+                && (!actor.IsPinned
+                    || !string.Equals(
+                        actor.PinState.PropId,
+                        candidateId,
+                        StringComparison.Ordinal)))
+            {
+                return CreateTargetEvaluation(
+                    actorId,
+                    actionId,
+                    candidateId,
+                    DisplacementTargetFailure.NotPinningActor,
+                    subject,
+                    distance,
+                    action);
+            }
+
+            if (subject.Kind == DisplacementSubjectKind.Combatant
+                && gameplay.GetActor(candidateId).IsPinned)
+            {
+                return CreateTargetEvaluation(
+                    actorId,
+                    actionId,
+                    candidateId,
+                    DisplacementTargetFailure.SubjectPinned,
+                    subject,
+                    distance,
+                    action);
+            }
+
+            if (subject.Kind == DisplacementSubjectKind.Prop
+                && action.Intent != DisplacementActionKind.PushOff
+                && IsPinningProp(candidateId))
+            {
+                return CreateTargetEvaluation(
+                    actorId,
+                    actionId,
+                    candidateId,
+                    DisplacementTargetFailure.SubjectPinned,
                     subject,
                     distance,
                     action);
@@ -481,17 +586,21 @@ namespace GritGud.Application.Gameplay
                 destination,
                 availability.Action.Intent);
             PropDisplacementState resultingPropState = null;
+            DestructiblePropSnapshot? prop = null;
+            DisplacementResultPolicies appliedResults =
+                DisplacementResultPolicies.None;
             if (target.Subject.Kind == DisplacementSubjectKind.Prop
                 && destructibles.TryGetProp(
                     subjectId,
-                    out DestructiblePropSnapshot prop))
+                    out DestructiblePropSnapshot resolvedProp))
             {
+                prop = resolvedProp;
                 resultingPropState = ResolvePropState(
                     target.Subject,
                     availability.Action,
-                    prop,
+                    resolvedProp,
                     destination,
-                    out _);
+                    out appliedResults);
                 request = new DisplacementRequest(
                     actorId,
                     actionId,
@@ -502,20 +611,35 @@ namespace GritGud.Application.Gameplay
                     resultingPropState.Pose.Position,
                     availability.Action.Intent);
             }
-            ValidateRequest(
+            bool valid = ValidateRequest(
                 request,
                 origin,
                 destination,
                 availability.Action,
                 resultingPropState,
+                out DisplacementPathValidation path,
                 out DisplacementResolutionFailure failure);
+            if (valid
+                && prop.HasValue
+                && !TryResolvePinTransition(
+                    actorId,
+                    target.Subject,
+                    availability.Action,
+                    prop.Value,
+                    path,
+                    ref appliedResults,
+                    out _,
+                    out failure))
+            {
+                valid = false;
+            }
             return CreateDestinationEvaluation(
                 actorId,
                 actionId,
                 subjectId,
                 origin,
                 destination,
-                failure,
+                valid ? DisplacementResolutionFailure.None : failure,
                 availability.Action);
         }
 
@@ -567,6 +691,7 @@ namespace GritGud.Application.Gameplay
             switch (availability.Action.Intent)
             {
                 case DisplacementActionKind.Push:
+                case DisplacementActionKind.PushOff:
                     directionX = origin.X - actorPosition.X;
                     directionZ = origin.Z - actorPosition.Z;
                     break;
@@ -580,6 +705,25 @@ namespace GritGud.Application.Gameplay
 
             float directionMagnitude = (float)Math.Sqrt(
                 (directionX * directionX) + (directionZ * directionZ));
+            if (directionMagnitude <= 0f
+                && availability.Action.Intent ==
+                    DisplacementActionKind.PushOff)
+            {
+                ActorPinState pin = gameplay.GetActor(actorId).PinState;
+                directionX = pin?.Contact.Normal.X ?? 0f;
+                directionZ = pin?.Contact.Normal.Z ?? 0f;
+                directionMagnitude = (float)Math.Sqrt(
+                    (directionX * directionX) + (directionZ * directionZ));
+                if (directionMagnitude <= 0f)
+                {
+                    double radians = gameplay.GetActor(actorId)
+                        .Pose.FacingDegrees
+                        * (Math.PI / 180d);
+                    directionX = (float)Math.Sin(radians);
+                    directionZ = (float)Math.Cos(radians);
+                    directionMagnitude = 1f;
+                }
+            }
             if (directionMagnitude <= 0f)
             {
                 return EvaluateDestination(
@@ -779,7 +923,10 @@ namespace GritGud.Application.Gameplay
             ValidateCommit(record);
             var notifications = new GameplayNotificationBatch();
             gameplay.CommitAction(action, notifications);
-            Commit(record);
+            Commit(
+                record,
+                validate: false,
+                notifications: notifications);
             notifications.Publish();
             failure = DisplacementResolutionFailure.None;
             return true;
@@ -808,6 +955,24 @@ namespace GritGud.Application.Gameplay
             }
 
             position = default(GameplayPosition);
+            return false;
+        }
+
+        private bool IsPinningProp(string propId)
+        {
+            foreach (ScenarioActorDefinition definition in
+                gameplay.Scenario.Actors)
+            {
+                ActorPinState pin = gameplay.GetActor(definition.Id).PinState;
+                if (pin != null
+                    && string.Equals(
+                        pin.PropId,
+                        propId,
+                        StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
             return false;
         }
 
@@ -878,6 +1043,10 @@ namespace GritGud.Application.Gameplay
                     return DisplacementResolutionFailure.InsufficientTurnBudget;
                 case DisplacementActionAvailabilityFailure.ActorUnavailable:
                     return DisplacementResolutionFailure.SubjectUnavailable;
+                case DisplacementActionAvailabilityFailure.ActorPinned:
+                    return DisplacementResolutionFailure.ActorPinned;
+                case DisplacementActionAvailabilityFailure.ActorNotPinned:
+                    return DisplacementResolutionFailure.ActorNotPinned;
                 case DisplacementActionAvailabilityFailure.None:
                     throw new ArgumentException(
                         "Available actions do not have resolution failures.",
@@ -902,6 +1071,10 @@ namespace GritGud.Application.Gameplay
                     return DisplacementResolutionFailure.SubjectTooLarge;
                 case DisplacementTargetFailure.SubjectOutOfReach:
                     return DisplacementResolutionFailure.SubjectOutOfReach;
+                case DisplacementTargetFailure.NotPinningActor:
+                    return DisplacementResolutionFailure.NotPinningActor;
+                case DisplacementTargetFailure.SubjectPinned:
+                    return DisplacementResolutionFailure.SubjectPinned;
                 case DisplacementTargetFailure.ActorUnavailable:
                 case DisplacementTargetFailure.CandidateUnavailable:
                 case DisplacementTargetFailure.SelfTarget:
@@ -984,6 +1157,21 @@ namespace GritGud.Application.Gameplay
                     destination,
                     definition,
                     resultingState,
+                    out DisplacementPathValidation path,
+                    out failure))
+            {
+                record = null;
+                return false;
+            }
+
+            if (!TryResolvePinTransition(
+                    actorId,
+                    subject,
+                    definition,
+                    prop,
+                    path,
+                    ref appliedResults,
+                    out ActorPinTransition pinTransition,
                     out failure))
             {
                 record = null;
@@ -995,7 +1183,111 @@ namespace GritGud.Application.Gameplay
                 request,
                 new PropDisplacementState(prop.Pose, prop.Posture),
                 resultingState,
-                appliedResults);
+                appliedResults,
+                pinTransition);
+            failure = DisplacementResolutionFailure.None;
+            return true;
+        }
+
+        private bool TryResolvePinTransition(
+            string actorId,
+            DisplacementSubjectDefinition propSubject,
+            DisplacementActionDefinition action,
+            DestructiblePropSnapshot prop,
+            DisplacementPathValidation path,
+            ref DisplacementResultPolicies appliedResults,
+            out ActorPinTransition transition,
+            out DisplacementResolutionFailure failure)
+        {
+            transition = null;
+            GameplayActorSnapshot actingActor = gameplay.GetActor(actorId);
+            if (action.Intent == DisplacementActionKind.PushOff)
+            {
+                if (actingActor.PinState == null)
+                {
+                    failure = DisplacementResolutionFailure.ActorNotPinned;
+                    return false;
+                }
+                if (!string.Equals(
+                        actingActor.PinState.PropId,
+                        prop.PropId,
+                        StringComparison.Ordinal))
+                {
+                    failure = DisplacementResolutionFailure.NotPinningActor;
+                    return false;
+                }
+                if (!action.AllowedResults.HasFlag(
+                        DisplacementResultPolicies.Release))
+                {
+                    failure = DisplacementResolutionFailure.ActionUnavailable;
+                    return false;
+                }
+                if (path.Contacts.Count > 0)
+                {
+                    failure = DisplacementResolutionFailure.DestinationBlocked;
+                    return false;
+                }
+
+                appliedResults |= DisplacementResultPolicies.Release;
+                transition = new ActorPinTransition(
+                    actorId,
+                    actingActor.Pose,
+                    FaceToward(actingActor.Pose, prop.Position),
+                    actingActor.PinState,
+                    resultingState: null);
+                failure = DisplacementResolutionFailure.None;
+                return true;
+            }
+
+            if (path.Contacts.Count == 0)
+            {
+                failure = DisplacementResolutionFailure.None;
+                return true;
+            }
+            if (!appliedResults.HasFlag(DisplacementResultPolicies.Topple)
+                || propSubject.Pinning == null
+                || !action.AllowedResults.HasFlag(
+                    DisplacementResultPolicies.Pin)
+                || path.Contacts.Count != 1)
+            {
+                failure = DisplacementResolutionFailure.DestinationBlocked;
+                return false;
+            }
+
+            DisplacementContactEvidence contact = path.Contacts[0];
+            if (!subjects.TryGetValue(
+                    contact.EntityId,
+                    out DisplacementSubjectDefinition contactedSubject)
+                || contactedSubject.Kind != DisplacementSubjectKind.Combatant
+                || string.Equals(
+                    contact.EntityId,
+                    actorId,
+                    StringComparison.Ordinal)
+                || !gameplay.TryGetActor(
+                    contact.EntityId,
+                    out GameplayActorSnapshot contactedActor)
+                || contactedActor.IsIncapacitated
+                || contactedActor.IsPinned
+                || !propSubject.Pinning.Accepts(
+                    contactedSubject.Mass,
+                    contact.OverlapDepth))
+            {
+                failure = DisplacementResolutionFailure.DestinationBlocked;
+                return false;
+            }
+
+            var resultingPin = new ActorPinState(
+                contactedActor.ActorId,
+                prop.PropId,
+                records.Count + 1L,
+                contact);
+            transition = new ActorPinTransition(
+                contactedActor.ActorId,
+                contactedActor.Pose,
+                contactedActor.Pose,
+                previousState: null,
+                resultingPin);
+            appliedResults |= DisplacementResultPolicies.Pin;
             failure = DisplacementResolutionFailure.None;
             return true;
         }
@@ -1084,6 +1376,7 @@ namespace GritGud.Application.Gameplay
                     destination,
                     definition,
                     resultingPropState: null,
+                    out _,
                     out failure))
             {
                 record = null;
@@ -1110,13 +1403,33 @@ namespace GritGud.Application.Gameplay
 
         public void Commit(DisplacementRecord record)
         {
-            ValidateCommit(record);
+            var notifications = new GameplayNotificationBatch();
+            Commit(
+                record,
+                validate: true,
+                notifications: notifications);
+            notifications.Publish();
+        }
+
+        private void Commit(
+            DisplacementRecord record,
+            bool validate,
+            GameplayNotificationBatch notifications)
+        {
+            if (notifications == null)
+                throw new ArgumentNullException(nameof(notifications));
+            if (validate)
+                ValidateCommit(record);
 
             if (record.Succeeded)
             {
                 if (record.Request.SubjectKind == DisplacementSubjectKind.Prop)
                 {
                     destructibles.CommitDisplacement(record);
+                    gameplay.CommitPinTransition(
+                        record.PinTransition,
+                        notifications,
+                        validatePrevious: validate);
                 }
                 else
                 {
@@ -1126,6 +1439,23 @@ namespace GritGud.Application.Gameplay
 
             records.Add(record);
             gameplay.Journal.RecordDisplacementResolved(record);
+        }
+
+        private static GameplayActorPose FaceToward(
+            GameplayActorPose pose,
+            GameplayPosition target)
+        {
+            double deltaX = (double)target.X - pose.Position.X;
+            double deltaZ = (double)target.Z - pose.Position.Z;
+            if (Math.Abs(deltaX) <= 0.0001d
+                && Math.Abs(deltaZ) <= 0.0001d)
+                return pose;
+            float facing = (float)(
+                Math.Atan2(deltaX, deltaZ) * (180d / Math.PI));
+            return new GameplayActorPose(
+                pose.Position,
+                facing,
+                pose.Stance);
         }
 
         private void ValidateCommit(DisplacementRecord record)
@@ -1154,6 +1484,8 @@ namespace GritGud.Application.Gameplay
                     throw new InvalidOperationException(
                         "The displacement record no longer starts from authoritative prop state.");
                 }
+
+                gameplay.ValidatePinTransition(record.PinTransition);
             }
             else if (gameplay.GetActor(record.Request.SubjectId).Pose.Position
                 .DistanceTo(record.PreviousPosition) > 0f)
@@ -1169,8 +1501,10 @@ namespace GritGud.Application.Gameplay
             GameplayPosition intendedDestination,
             DisplacementActionDefinition definition,
             PropDisplacementState resultingPropState,
+            out DisplacementPathValidation path,
             out DisplacementResolutionFailure failure)
         {
+            path = DisplacementPathValidation.Allowed();
             if (definition == null
                 || !string.Equals(
                     request.ActionId,
@@ -1224,10 +1558,11 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
-            if (!pathValidator.Validate(
-                    request,
-                    origin,
-                    resultingPropState).Accepted)
+            path = pathValidator.Validate(
+                request,
+                origin,
+                resultingPropState);
+            if (!path.Accepted)
             {
                 failure = DisplacementResolutionFailure.DestinationBlocked;
                 return false;

@@ -495,6 +495,7 @@ namespace GritGud.Presentation.Gameplay
                 actionController,
                 attackController,
                 projectileController,
+                displacementController,
                 emergencyCycle,
                 partyControl,
                 dialogueLog,

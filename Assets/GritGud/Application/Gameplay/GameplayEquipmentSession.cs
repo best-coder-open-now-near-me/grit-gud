@@ -16,6 +16,7 @@ namespace GritGud.Application.Gameplay
         AlreadyInRequestedState,
         InsufficientActionPoints,
         InsufficientMovementOpportunity,
+        ActorPinned,
     }
 
     public sealed class GameplayEquipmentSession
@@ -73,6 +74,15 @@ namespace GritGud.Application.Gameplay
                     default,
                     isSwitch: false,
                     EquipmentChangeFailure.ItemNotFound);
+            }
+
+            if (actor.IsPinned)
+            {
+                return Availability(
+                    requested,
+                    default,
+                    isSwitch: false,
+                    EquipmentChangeFailure.ActorPinned);
             }
 
             if (!requested.IsEquippable)
@@ -310,6 +320,12 @@ namespace GritGud.Application.Gameplay
             if (item == null)
             {
                 failure = EquipmentChangeFailure.ItemNotFound;
+                return false;
+            }
+
+            if (actor.IsPinned)
+            {
+                failure = EquipmentChangeFailure.ActorPinned;
                 return false;
             }
 

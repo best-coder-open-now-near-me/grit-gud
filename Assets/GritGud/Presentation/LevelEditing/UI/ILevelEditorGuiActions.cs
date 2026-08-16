@@ -191,7 +191,10 @@ namespace GritGud.Presentation.LevelEditing.UI
             bool topplingEnabled,
             string topplingPitch,
             string topplingRoll,
-            string topplingElevation);
+            string topplingElevation,
+            bool pinningEnabled,
+            string maximumPinnedActorMass,
+            string minimumPinContactDepth);
 
         void ApplyScenarioObjective(
             string entityId,

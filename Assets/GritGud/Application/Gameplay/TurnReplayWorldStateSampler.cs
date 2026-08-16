@@ -176,6 +176,14 @@ namespace GritGud.Application.Gameplay
                 destructibles[damage.Damage.PropId] = damage.Damage.Resulting;
                 return;
             }
+            if (entry is DisplacementResolvedJournalEntry displacement)
+            {
+                ApplyDisplacement(
+                    displacement.Displacement,
+                    actors,
+                    destructibles);
+                return;
+            }
             if (entry is VehicleMomentumResolvedJournalEntry momentum)
             {
                 vehicles[momentum.Momentum.Resulting.VehicleId] =
@@ -184,6 +192,50 @@ namespace GritGud.Application.Gameplay
             }
             if (entry is ProjectileAdvancedJournalEntry advance)
                 projectiles[advance.Advance.ProjectileId] = advance.Advance.Resulting;
+        }
+
+        private static void ApplyDisplacement(
+            DisplacementRecord record,
+            IDictionary<string, GameplayActorSnapshot> actors,
+            IDictionary<string, DestructiblePropSnapshot> destructibles)
+        {
+            if (!record.Succeeded)
+                return;
+            if (record.Request.SubjectKind == DisplacementSubjectKind.Prop)
+            {
+                DestructiblePropSnapshot prop = destructibles[
+                    record.Request.SubjectId];
+                destructibles[record.Request.SubjectId] =
+                    new DestructiblePropSnapshot(
+                        prop.PropId,
+                        prop.State,
+                        prop.MaximumIntegrity,
+                        prop.RemainingIntegrity,
+                        record.ResultingPropState.Pose,
+                        record.ResultingPropState.Posture,
+                        prop.FractureChunkCount,
+                        prop.DetachedFractureChunks);
+                ActorPinTransition pin = record.PinTransition;
+                if (pin != null)
+                {
+                    GameplayActorSnapshot actor = actors[pin.ActorId];
+                    actors[pin.ActorId] = CopyActor(
+                        actor,
+                        pin.ResultingPose,
+                        pinState: pin.ResultingState,
+                        replacePin: true);
+                }
+                return;
+            }
+
+            GameplayActorSnapshot displaced = actors[
+                record.Request.SubjectId];
+            actors[record.Request.SubjectId] = CopyActor(
+                displaced,
+                new GameplayActorPose(
+                    record.ResultingPosition,
+                    displaced.Pose.FacingDegrees,
+                    displaced.Pose.Stance));
         }
 
         private static void ApplyAction(
@@ -472,7 +524,9 @@ namespace GritGud.Application.Gameplay
             string equippedItemId = null,
             EquipmentEffectSet? equipmentEffects = null,
             ActorInventorySnapshot inventory = null,
-            bool replaceEquipment = false) => new GameplayActorSnapshot(
+            bool replaceEquipment = false,
+            ActorPinState pinState = null,
+            bool replacePin = false) => new GameplayActorSnapshot(
                 actor.ActorId,
                 pose,
                 turnBudget ?? actor.TurnBudget,
@@ -484,7 +538,8 @@ namespace GritGud.Application.Gameplay
                 actor.MaximumWounds,
                 inventory ?? actor.Inventory,
                 actor.TurnActionPointAllowance,
-                actor.TurnMovementAllowance);
+                actor.TurnMovementAllowance,
+                replacePin ? pinState : actor.PinState);
 
         private static GameplayPosition Lerp(
             GameplayPosition from,

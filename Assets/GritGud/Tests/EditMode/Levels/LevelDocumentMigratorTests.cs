@@ -238,5 +238,29 @@ namespace GritGud.Domain.Tests.Levels
             Assert.That(result.scenario.props[0].toppling, Is.Not.Null);
             Assert.That(result.scenario.props[0].toppling.enabled, Is.False);
         }
+
+        [Test]
+        public void VersionThirteenPropsGainDisabledPinningDefaults()
+        {
+            LevelDocument source = LevelDocumentFactory.CreateEmpty(
+                "Legacy pinning");
+            source.schemaVersion = 13;
+            source.scenario.props.Add(new LevelScenarioPropData
+            {
+                entityId = "prop.one",
+                pinning = null,
+            });
+
+            LevelDocument result = new LevelDocumentMigrator()
+                .MigrateToCurrent(source);
+
+            Assert.That(result.schemaVersion,
+                Is.EqualTo(LevelDocument.CurrentSchemaVersion));
+            Assert.That(result.scenario.props[0].pinning, Is.Not.Null);
+            Assert.That(result.scenario.props[0].pinning.enabled, Is.False);
+            Assert.That(result.scenario.props[0].pinning.maximumActorMass,
+                Is.EqualTo(100f));
+        }
+
     }
 }

@@ -161,7 +161,8 @@ namespace GritGud.Application.Gameplay
                         DisplacementSubjectKind.Prop,
                         prop.mass,
                         ParseDisplacementSize(prop.sizeClass),
-                        CreatePropToppling(prop.toppling)));
+                        CreatePropToppling(prop.toppling),
+                        CreatePropPinning(prop.pinning)));
             }
 
             return subjects;
@@ -1088,6 +1089,10 @@ namespace GritGud.Application.Gameplay
                 RequireFinitePositive(prop.mass, $"Prop '{prop.entityId}' mass");
                 ParseDisplacementSize(prop.sizeClass);
                 ValidatePropToppling(prop.entityId, prop.toppling);
+                ValidatePropPinning(
+                    prop.entityId,
+                    prop.toppling,
+                    prop.pinning);
                 Require(
                     index.TryAdd(prop.entityId, prop),
                     $"Prop '{prop.entityId}' is defined more than once.");
@@ -1130,6 +1135,39 @@ namespace GritGud.Application.Gameplay
                     toppling.pitchOffsetDegrees,
                     toppling.rollOffsetDegrees,
                     toppling.elevationOffset)
+                : null;
+
+        private static void ValidatePropPinning(
+            string propId,
+            ScenarioPropTopplingData toppling,
+            ScenarioPropPinningData pinning)
+        {
+            if (pinning == null)
+                return;
+
+            RequireFiniteNonNegative(
+                pinning.maximumActorMass,
+                $"Prop '{propId}' maximum pinned actor mass");
+            RequireFiniteNonNegative(
+                pinning.minimumContactDepth,
+                $"Prop '{propId}' minimum pin contact depth");
+            if (pinning.enabled)
+            {
+                Require(
+                    toppling != null && toppling.enabled,
+                    $"Prop '{propId}' pinning requires enabled toppling.");
+                RequireFinitePositive(
+                    pinning.maximumActorMass,
+                    $"Prop '{propId}' maximum pinned actor mass");
+            }
+        }
+
+        private static PropPinningDefinition CreatePropPinning(
+            ScenarioPropPinningData pinning) =>
+            pinning != null && pinning.enabled
+                ? new PropPinningDefinition(
+                    pinning.maximumActorMass,
+                    pinning.minimumContactDepth)
                 : null;
 
         private static IReadOnlyList<AttackResponseDefinition>
@@ -1471,6 +1509,11 @@ namespace GritGud.Application.Gameplay
                 return DisplacementActionKind.Lift;
             if (string.Equals(value, "throw", StringComparison.OrdinalIgnoreCase))
                 return DisplacementActionKind.Throw;
+            if (string.Equals(
+                value,
+                "push-off",
+                StringComparison.OrdinalIgnoreCase))
+                return DisplacementActionKind.PushOff;
             throw new InvalidOperationException(
                 $"Unknown displacement intent '{value}'.");
         }
@@ -1611,6 +1654,11 @@ namespace GritGud.Application.Gameplay
                     "collision-damage",
                     StringComparison.OrdinalIgnoreCase))
                     result |= DisplacementResultPolicies.CollisionDamage;
+                else if (string.Equals(
+                    value,
+                    "pin",
+                    StringComparison.OrdinalIgnoreCase))
+                    result |= DisplacementResultPolicies.Pin;
                 else
                     throw new InvalidOperationException(
                         $"Unknown displacement result policy '{value}'.");

@@ -258,7 +258,8 @@ namespace GritGud.Application.Gameplay
                 actor.MaximumWounds,
                 actor.Inventory,
                 actor.TurnActionPointAllowance,
-                actor.TurnMovementAllowance);
+                actor.TurnMovementAllowance,
+                actor.PinState);
         }
 
         private static GameplayActorPose FaceToward(

@@ -760,6 +760,39 @@ namespace GritGud.Domain.Levels
                             prop.entityId);
                     }
                 }
+
+                LevelScenarioPropPinningData pinning = prop.pinning;
+                if (pinning != null)
+                {
+                    if (!LevelValidationMath.IsFinite(
+                            pinning.maximumActorMass)
+                        || pinning.maximumActorMass < 0f
+                        || (pinning.enabled
+                            && pinning.maximumActorMass <= 0f))
+                    {
+                        context.Error(
+                            "scenario.prop.pinning.maximumActorMass",
+                            $"Scenario prop '{prop.entityId}' needs a positive finite maximum pinned actor mass when pinning is enabled.",
+                            prop.entityId);
+                    }
+                    if (!LevelValidationMath.IsFinite(
+                            pinning.minimumContactDepth)
+                        || pinning.minimumContactDepth < 0f)
+                    {
+                        context.Error(
+                            "scenario.prop.pinning.minimumContactDepth",
+                            $"Scenario prop '{prop.entityId}' needs a finite non-negative minimum pin contact depth.",
+                            prop.entityId);
+                    }
+                    if (pinning.enabled
+                        && (toppling == null || !toppling.enabled))
+                    {
+                        context.Error(
+                            "scenario.prop.pinning.topplingRequired",
+                            $"Scenario prop '{prop.entityId}' must enable toppling before it can pin actors.",
+                            prop.entityId);
+                    }
+                }
             }
 
             var linkedVehicles = new HashSet<string>(StringComparer.Ordinal);

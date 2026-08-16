@@ -286,6 +286,14 @@ namespace GritGud.Domain.Gameplay
     }
 
     [Serializable]
+    public sealed class ScenarioPropPinningData
+    {
+        public bool enabled;
+        public float maximumActorMass;
+        public float minimumContactDepth;
+    }
+
+    [Serializable]
     public sealed class ScenarioPropContentData
     {
         public string entityId = string.Empty;
@@ -293,6 +301,8 @@ namespace GritGud.Domain.Gameplay
         public string sizeClass = "medium";
         public ScenarioPropTopplingData toppling =
             new ScenarioPropTopplingData();
+        public ScenarioPropPinningData pinning =
+            new ScenarioPropPinningData();
         public ScenarioAttackResponseData attackResponse;
     }
 
@@ -330,7 +340,7 @@ namespace GritGud.Domain.Gameplay
     [Serializable]
     public sealed class ScenarioContentDocument
     {
-        public const int CurrentSchemaVersion = 14;
+        public const int CurrentSchemaVersion = 15;
 
         public int schemaVersion = CurrentSchemaVersion;
         public string scenarioId = string.Empty;

@@ -11,6 +11,7 @@ namespace GritGud.Application.Gameplay
         TurnModeRequired,
         ActorNotActive,
         ActorIncapacitated,
+        ActorPinned,
         OperationInProgress,
         WeaponUnavailable,
         ProjectileUnavailable,
@@ -569,6 +570,11 @@ namespace GritGud.Application.Gameplay
             if (gameplay.IsActorIncapacitated(actorId))
             {
                 failure = ProjectileLaunchFailure.ActorIncapacitated;
+                return false;
+            }
+            if (actor.IsPinned)
+            {
+                failure = ProjectileLaunchFailure.ActorPinned;
                 return false;
             }
 

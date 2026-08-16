@@ -129,7 +129,8 @@ namespace GritGud.Application.Gameplay
             int maximumWounds = int.MaxValue,
             ActorInventorySnapshot inventory = null,
             int turnActionPointAllowance = -1,
-            float turnMovementAllowance = -1f)
+            float turnMovementAllowance = -1f,
+            ActorPinState pinState = null)
         {
             if (!string.Equals(actorId, wounds.ActorId, StringComparison.Ordinal))
             {
@@ -152,6 +153,16 @@ namespace GritGud.Application.Gameplay
                     "Actor snapshots and inventory state must share an identifier.",
                     nameof(inventory));
             }
+            if (pinState != null
+                && !string.Equals(
+                    actorId,
+                    pinState.ActorId,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Actor snapshots and pin state must share an identifier.",
+                    nameof(pinState));
+            }
 
             ActorId = actorId;
             Pose = pose;
@@ -167,6 +178,7 @@ namespace GritGud.Application.Gameplay
             TurnMovementAllowance = turnMovementAllowance < 0f
                 ? turnBudget.MovementOpportunity + wounds.MovementPenalty
                 : turnMovementAllowance;
+            PinState = pinState;
             if (float.IsNaN(TurnMovementAllowance)
                 || float.IsInfinity(TurnMovementAllowance)
                 || TurnActionPointAllowance < turnBudget.ActionPoints
@@ -195,6 +207,10 @@ namespace GritGud.Application.Gameplay
         public int TurnActionPointAllowance { get; }
 
         public float TurnMovementAllowance { get; }
+
+        public ActorPinState PinState { get; }
+
+        public bool IsPinned => PinState != null;
 
         public bool IsIncapacitated => Wounds.WoundCount >= MaximumWounds;
 
@@ -949,6 +965,19 @@ namespace GritGud.Application.Gameplay
             return action != null;
         }
 
+        public bool CanActorUseAction(
+            string actorId,
+            string actionId)
+        {
+            ActorState actor = RequireActor(actorId);
+            return actor.PinState == null
+                || IsPushOffAction(actorId, actionId);
+        }
+
+        private bool IsPushOffAction(string actorId, string actionId) =>
+            TryGetDisplacementAction(actorId, actionId, out var action)
+            && action.Intent == DisplacementActionKind.PushOff;
+
         public InventoryItemDefinition GetInventoryItem(
             string actorId,
             string itemId) => RequireActorDefinition(actorId).GetInventoryItem(
@@ -1019,12 +1048,23 @@ namespace GritGud.Application.Gameplay
                     "Exploration poses cannot be changed while turn mode is active.");
             }
 
-            RequireActor(actorId).Pose = pose;
+            ActorState actor = RequireActor(actorId);
+            if (actor.PinState != null)
+            {
+                throw new InvalidOperationException(
+                    $"Pinned actor '{actorId}' cannot move in exploration.");
+            }
+            actor.Pose = pose;
         }
 
         public void SpendMovement(string actorId, float amount)
         {
             ActorState actor = RequireActiveActor(actorId);
+            if (actor.PinState != null)
+            {
+                throw new InvalidOperationException(
+                    $"Pinned actor '{actorId}' cannot spend movement.");
+            }
             TurnBudget previousBudget = actor.TurnBudget;
             actor.TurnBudget = actor.TurnBudget.SpendMovement(amount);
             Journal.RecordMovementBudgetSpent(
@@ -1044,6 +1084,11 @@ namespace GritGud.Application.Gameplay
             ActorState actor = Mode == GameplaySessionMode.TurnBased
                 ? RequireActiveActor(record.ActorId)
                 : RequireActor(record.ActorId);
+            if (actor.PinState != null)
+            {
+                throw new InvalidOperationException(
+                    $"Pinned actor '{record.ActorId}' cannot change stance.");
+            }
             if (!PosesMatch(actor.Pose, record.PreviousPose))
             {
                 throw new InvalidOperationException(
@@ -1062,6 +1107,11 @@ namespace GritGud.Application.Gameplay
             }
 
             ActorState actor = RequireActiveActor(route.ActorId);
+            if (actor.PinState != null)
+            {
+                throw new InvalidOperationException(
+                    $"Pinned actor '{route.ActorId}' cannot commit movement.");
+            }
             if (!PosesMatch(actor.Pose, route.OriginPose))
             {
                 throw new InvalidOperationException(
@@ -1102,6 +1152,39 @@ namespace GritGud.Application.Gameplay
                 record.ResultingPosition,
                 actor.Pose.FacingDegrees,
                 actor.Pose.Stance);
+        }
+
+        internal void ValidatePinTransition(ActorPinTransition transition)
+        {
+            if (transition == null)
+                return;
+
+            ActorState actor = RequireActor(transition.ActorId);
+            if (!PosesMatch(actor.Pose, transition.PreviousPose)
+                || !PinStatesMatch(actor.PinState, transition.PreviousState))
+            {
+                throw new InvalidOperationException(
+                    "The pin transition no longer starts from authoritative actor state.");
+            }
+        }
+
+        internal void CommitPinTransition(
+            ActorPinTransition transition,
+            GameplayNotificationBatch notifications,
+            bool validatePrevious = true)
+        {
+            if (transition == null)
+                return;
+
+            if (notifications == null)
+                throw new ArgumentNullException(nameof(notifications));
+
+            if (validatePrevious)
+                ValidatePinTransition(transition);
+            ActorState actor = RequireActor(transition.ActorId);
+            actor.Pose = transition.ResultingPose;
+            actor.PinState = transition.ResultingState;
+            notifications.Add(ActorCapabilityChanged, transition.ActorId);
         }
 
         public void CompleteMovementResolution()
@@ -1145,6 +1228,14 @@ namespace GritGud.Application.Gameplay
             ActorState actor = Mode == GameplaySessionMode.TurnBased
                 ? RequireActiveActor(record.Request.ActorId)
                 : RequireActor(record.Request.ActorId);
+            if (actor.PinState != null
+                && !IsPushOffAction(
+                    record.Request.ActorId,
+                    record.Request.ActionId))
+            {
+                throw new InvalidOperationException(
+                    $"Pinned actor '{record.Request.ActorId}' can only Push Off its pinning prop.");
+            }
             actor.TurnBudget = record.ResultingBudget;
             foreach (GameplayActionOutcome outcome in record.Outcomes)
             {
@@ -1261,6 +1352,12 @@ namespace GritGud.Application.Gameplay
                 && left.FacingDegrees == right.FacingDegrees
                 && left.Stance == right.Stance;
         }
+
+        private static bool PinStatesMatch(
+            ActorPinState left,
+            ActorPinState right) =>
+            ReferenceEquals(left, right)
+            || (left != null && left.HasSameState(right));
 
         private static bool TurnBudgetsMatch(
             TurnBudget left,
@@ -2165,6 +2262,8 @@ namespace GritGud.Application.Gameplay
 
             public EquipmentEffectSet EquipmentEffects { get; private set; }
 
+            public ActorPinState PinState { get; set; }
+
             public void ApplyEquipment(InventoryItemDefinition item)
             {
                 EquippedItemId = item?.Id;
@@ -2273,7 +2372,8 @@ namespace GritGud.Application.Gameplay
                     MaximumWounds,
                     new ActorInventorySnapshot(ActorId, quantities),
                     turnBudgetAllowance.ActionPoints,
-                    turnBudgetAllowance.MovementOpportunity);
+                    turnBudgetAllowance.MovementOpportunity,
+                    PinState);
             }
 
             private float WoundedMovementAllowance => Math.Max(

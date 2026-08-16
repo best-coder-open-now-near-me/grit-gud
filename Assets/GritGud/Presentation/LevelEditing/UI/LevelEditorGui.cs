@@ -81,6 +81,9 @@ namespace GritGud.Presentation.LevelEditing.UI
         private string scenarioPropTopplePitchText = "0";
         private string scenarioPropToppleRollText = "90";
         private string scenarioPropToppleElevationText = "0.5";
+        private bool scenarioPropPinningEnabled;
+        private string scenarioPropMaximumPinnedMassText = "100";
+        private string scenarioPropMinimumPinDepthText = "0";
         private string lastScenarioObjectiveKey = string.Empty;
         private bool scenarioObjectiveEnabled;
         private string scenarioObjectiveDisplayName = "Objective";

@@ -352,6 +352,8 @@ namespace GritGud.Presentation.Gameplay
                     return "Not enough AP remains for that equipment change.";
                 case EquipmentChangeFailure.InsufficientMovementOpportunity:
                     return "Not enough movement remains for that equipment change.";
+                case EquipmentChangeFailure.ActorPinned:
+                    return "Push off the pinning prop before changing equipment.";
                 case EquipmentChangeFailure.None:
                     return string.Empty;
                 default:

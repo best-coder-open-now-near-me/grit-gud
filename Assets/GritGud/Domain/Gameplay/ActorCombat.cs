@@ -145,6 +145,7 @@ namespace GritGud.Domain.Gameplay
         Detect,
         Attack,
         Move,
+        PushOff,
         EndTurn,
     }
 

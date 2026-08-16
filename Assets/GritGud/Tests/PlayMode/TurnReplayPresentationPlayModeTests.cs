@@ -47,6 +47,11 @@ namespace GritGud.PlayMode.Tests
                     wounded));
                 view.Wounds.PresentAuthoritative(
                     new ActorWoundSnapshot("player", 0, 0f));
+                ActorPinState livePin = CreatePinState(
+                    "player",
+                    "live-crate",
+                    displacementSequence: 4);
+                view.ReplayActions.PresentPinState(livePin);
 
                 ActorAnimationCoordinator animation =
                     actor.GetComponent<ActorAnimationCoordinator>();
@@ -102,6 +107,68 @@ namespace GritGud.PlayMode.Tests
                     Assert.That(actor.GetComponent<
                         ActorLocomotionAnimationPresenter>().enabled,
                         Is.False);
+
+                    ActorPinState replayPin = CreatePinState(
+                        "player",
+                        "replay-crate",
+                        displacementSequence: 9);
+                    replay.Present(
+                        new GameplayActorSnapshot(
+                            "player",
+                            new GameplayActorPose(
+                                new GameplayPosition(5f, 0f, 3f),
+                                90f,
+                                ActorStance.Crouched),
+                            new TurnBudget(2, 4f),
+                            new ActorWoundSnapshot(
+                                "player",
+                                headWounds: 0,
+                                torsoWounds: 1,
+                                leftArmWounds: 0,
+                                rightArmWounds: 0,
+                                leftLegWounds: 0,
+                                rightLegWounds: 0,
+                                movementPenalty: 1f),
+                            null,
+                            EquipmentEffectSet.None,
+                            pinState: replayPin),
+                        new TurnReplayActorActionState(
+                            "player",
+                            TurnReplayActorActionKind.Pinned,
+                            journalSequence: 2,
+                            normalizedProgress: 0.75f));
+
+                    Assert.That(view.ReplayActions.CurrentPinState,
+                        Is.SameAs(replayPin));
+                    Assert.That(animation.ReplayAction,
+                        Is.EqualTo(ActorAnimationAction.HitReaction));
+
+                    replay.Present(
+                        new GameplayActorSnapshot(
+                            "player",
+                            new GameplayActorPose(
+                                new GameplayPosition(5f, 0f, 3f),
+                                90f,
+                                ActorStance.Crouched),
+                            new TurnBudget(0, 4f),
+                            new ActorWoundSnapshot(
+                                "player",
+                                headWounds: 0,
+                                torsoWounds: 1,
+                                leftArmWounds: 0,
+                                rightArmWounds: 0,
+                                leftLegWounds: 0,
+                                rightLegWounds: 0,
+                                movementPenalty: 1f)),
+                        new TurnReplayActorActionState(
+                            "player",
+                            TurnReplayActorActionKind.GetUp,
+                            journalSequence: 3,
+                            normalizedProgress: 0.25f));
+
+                    Assert.That(view.ReplayActions.CurrentPinState, Is.Null);
+                    Assert.That(animation.ReplayAction,
+                        Is.EqualTo(ActorAnimationAction.Interact));
                 }
 
                 Assert.That(actor.transform.position,
@@ -116,6 +183,8 @@ namespace GritGud.PlayMode.Tests
                     Is.EqualTo(liveActionSequence));
                 Assert.That(animation.ReplayAction, Is.Null);
                 Assert.That(view.ReplayActions.CurrentState, Is.Null);
+                Assert.That(view.ReplayActions.CurrentPinState,
+                    Is.SameAs(livePin));
                 Assert.That(actor.GetComponent<
                     ActorLocomotionAnimationPresenter>().enabled,
                     Is.EqualTo(locomotionEnabled));
@@ -127,6 +196,22 @@ namespace GritGud.PlayMode.Tests
                 if (registry == null)
                     Object.Destroy(actor);
             }
+        }
+
+        private static ActorPinState CreatePinState(
+            string actorId,
+            string propId,
+            long displacementSequence)
+        {
+            return new ActorPinState(
+                actorId,
+                propId,
+                displacementSequence,
+                new DisplacementContactEvidence(
+                    actorId,
+                    new GameplayPosition(0f, 0.5f, 0f),
+                    new GameplayPosition(0f, 1f, 0f),
+                    0.1f));
         }
     }
 }

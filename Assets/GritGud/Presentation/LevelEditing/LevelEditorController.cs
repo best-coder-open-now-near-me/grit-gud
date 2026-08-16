@@ -1874,7 +1874,10 @@ namespace GritGud.Presentation.LevelEditing
             bool topplingEnabled,
             string topplingPitch,
             string topplingRoll,
-            string topplingElevation) => scenarioAuthoring.ApplyProp(
+            string topplingElevation,
+            bool pinningEnabled,
+            string maximumPinnedActorMass,
+            string minimumPinContactDepth) => scenarioAuthoring.ApplyProp(
                 entityId,
                 enabled,
                 mass,
@@ -1883,7 +1886,10 @@ namespace GritGud.Presentation.LevelEditing
                 topplingEnabled,
                 topplingPitch,
                 topplingRoll,
-                topplingElevation);
+                topplingElevation,
+                pinningEnabled,
+                maximumPinnedActorMass,
+                minimumPinContactDepth);
 
         void ILevelEditorGuiActions.ApplyScenarioObjective(
             string entityId,

@@ -441,6 +441,27 @@ namespace GritGud.Application.Gameplay
                 actor.Wounds.UnlocalizedWounds);
             Append(text, root + ".penalty", actor.Wounds.MovementPenalty);
             Append(text, root + ".maximumWounds", actor.MaximumWounds);
+            Append(text, root + ".pin.active", actor.IsPinned);
+            if (actor.PinState != null)
+            {
+                Append(text, root + ".pin.prop", actor.PinState.PropId);
+                Append(
+                    text,
+                    root + ".pin.displacement",
+                    actor.PinState.DisplacementSequence);
+                Append(
+                    text,
+                    root + ".pin.contact.point",
+                    actor.PinState.Contact.Point);
+                Append(
+                    text,
+                    root + ".pin.contact.normal",
+                    actor.PinState.Contact.Normal);
+                Append(
+                    text,
+                    root + ".pin.contact.depth",
+                    actor.PinState.Contact.OverlapDepth);
+            }
             var quantities = new List<InventoryQuantitySnapshot>(
                 actor.Inventory.Quantities);
             quantities.Sort((left, right) => StringComparer.Ordinal.Compare(

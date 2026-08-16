@@ -144,6 +144,38 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void PropPinningRulesAreAuthoredWithToppling()
+        {
+            using var workspace = new LevelEditorWorkspace(
+                LevelDocumentFactory.CreateEmpty());
+            var coordinator = new ScenarioAuthoringCoordinator(
+                workspace,
+                ScenarioAuthoringCatalog.LoadDefault(),
+                () => new LevelEditorCameraState());
+
+            coordinator.ApplyProp(
+                "crate",
+                true,
+                "35",
+                "medium",
+                false,
+                true,
+                "0",
+                "90",
+                "0.5",
+                pinningEnabled: true,
+                maximumPinnedActorMassText: "90",
+                minimumPinContactDepthText: "0.05");
+
+            LevelScenarioPropData prop = workspace.CreateSnapshot()
+                .scenario.props.Single();
+            Assert.That(prop.pinning.enabled, Is.True);
+            Assert.That(prop.pinning.maximumActorMass, Is.EqualTo(90f));
+            Assert.That(prop.pinning.minimumContactDepth,
+                Is.EqualTo(0.05f));
+        }
+
+        [Test]
         public void DeletingActorClearsVehicleOccupantInSameUndoStep()
         {
             LevelDocument document = LevelDocumentFactory.CreateEmpty();

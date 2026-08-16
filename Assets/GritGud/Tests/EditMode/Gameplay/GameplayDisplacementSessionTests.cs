@@ -28,6 +28,21 @@ namespace GritGud.Domain.Tests.Gameplay
                 DisplacementActionKind.Push,
                 DisplacementSubjectKinds.Prop,
                 allowedResults: DisplacementResultPolicies.Topple);
+        private static readonly DisplacementActionDefinition PinningPush =
+            CreateDisplacementAction(
+                "close-quarters.pinning-push",
+                "Pinning Push",
+                DisplacementActionKind.Push,
+                DisplacementSubjectKinds.Prop,
+                allowedResults: DisplacementResultPolicies.Topple
+                    | DisplacementResultPolicies.Pin);
+        private static readonly DisplacementActionDefinition PushOff =
+            CreateDisplacementAction(
+                "close-quarters.push-off",
+                "Push Off",
+                DisplacementActionKind.PushOff,
+                DisplacementSubjectKinds.Prop,
+                allowedResults: DisplacementResultPolicies.Release);
         private static readonly DisplacementActionDefinition CombatantThrow =
             CreateDisplacementAction(
                 "close-quarters.throw-combatant",
@@ -141,6 +156,175 @@ namespace GritGud.Domain.Tests.Gameplay
                 Is.SameAs(record.ResultingPropState));
             Assert.That(destructibles.GetProp("crate").Posture,
                 Is.EqualTo(DestructiblePropPosture.Toppled));
+        }
+
+        [Test]
+        public void ToppledFootprintContactCommitsFirstClassActorPinState()
+        {
+            GameplayDisplacementSession session = CreateSession(
+                new PinThenReleasePaths(),
+                new FixedRolls(),
+                out GameplaySession gameplay,
+                out _,
+                playerPush: PinningPush,
+                propToppling: new PropTopplingDefinition(0f, 90f, 0.5f),
+                propPinning: new PropPinningDefinition(90f),
+                targetActions: new[] { PushOff, PropPush });
+
+            bool resolved = session.TryDisplaceAction(
+                "player",
+                PinningPush.Id,
+                "crate",
+                new GameplayPosition(0f, 0f, 2f),
+                out _,
+                out DisplacementRecord record,
+                out DisplacementResolutionFailure failure);
+
+            Assert.That(resolved, Is.True);
+            Assert.That(failure, Is.EqualTo(DisplacementResolutionFailure.None));
+            Assert.That(record.AppliedResults, Is.EqualTo(
+                DisplacementResultPolicies.Topple
+                | DisplacementResultPolicies.Pin));
+            Assert.That(record.PinTransition.EstablishesPin, Is.True);
+            Assert.That(record.PinTransition.ActorId, Is.EqualTo("target"));
+            Assert.That(record.PinTransition.ResultingState.PropId,
+                Is.EqualTo("crate"));
+            Assert.That(gameplay.GetActor("target").IsPinned, Is.True);
+            Assert.That(
+                session.EvaluateActionAvailability("target", PropPush.Id)
+                    .Failure,
+                Is.EqualTo(DisplacementActionAvailabilityFailure.ActorPinned));
+            Assert.That(
+                session.EvaluateActionAvailability("target", PushOff.Id)
+                    .IsAvailable,
+                Is.True);
+            Assert.That(
+                session.EvaluateTarget("player", PinningPush.Id, "crate")
+                    .Failure,
+                Is.EqualTo(DisplacementTargetFailure.SubjectPinned));
+        }
+
+        [Test]
+        public void PushOffAtomicallyMovesPropAndClearsPinnedActorState()
+        {
+            GameplayDisplacementSession session = CreateSession(
+                new PinThenReleasePaths(),
+                new FixedRolls(),
+                out GameplaySession gameplay,
+                out DestructiblePropSession destructibles,
+                playerPush: PinningPush,
+                propToppling: new PropTopplingDefinition(0f, 90f, 0.5f),
+                propPinning: new PropPinningDefinition(90f),
+                targetActions: new[] { PushOff });
+            Assert.That(session.TryDisplaceAction(
+                "player",
+                PinningPush.Id,
+                "crate",
+                new GameplayPosition(0f, 0f, 2f),
+                out _,
+                out _,
+                out _), Is.True);
+
+            bool released = session.TryDisplaceAction(
+                "target",
+                PushOff.Id,
+                "crate",
+                new GameplayPosition(0f, 0.5f, 3f),
+                out GameplayActionRecord action,
+                out DisplacementRecord record,
+                out DisplacementResolutionFailure failure);
+
+            Assert.That(released, Is.True);
+            Assert.That(failure, Is.EqualTo(DisplacementResolutionFailure.None));
+            Assert.That(action.Request.ActionId, Is.EqualTo(PushOff.Id));
+            Assert.That(record.AppliedResults,
+                Is.EqualTo(DisplacementResultPolicies.Release));
+            Assert.That(record.PinTransition.ReleasesPin, Is.True);
+            Assert.That(gameplay.GetActor("target").IsPinned, Is.False);
+            Assert.That(destructibles.GetProp("crate").Position.Z,
+                Is.EqualTo(3f));
+            Assert.That(destructibles.GetProp("crate").Posture,
+                Is.EqualTo(DestructiblePropPosture.Toppled));
+        }
+
+        [Test]
+        public void PinnedEnemyCommitsPushOffDecisionBeforeResumingItsTurn()
+        {
+            GameplayDisplacementSession session = CreateSession(
+                new PinThenReleasePaths(),
+                new FixedRolls(),
+                out GameplaySession gameplay,
+                out _,
+                playerPush: PinningPush,
+                propToppling: new PropTopplingDefinition(0f, 90f, 0.5f),
+                propPinning: new PropPinningDefinition(90f),
+                targetActions: new[] { PushOff },
+                targetIsEnemy: true);
+            Assert.That(gameplay.BeginEncounter(), Is.True);
+            Assert.That(session.TryDisplaceAction(
+                "player",
+                PinningPush.Id,
+                "crate",
+                new GameplayPosition(1f, 0f, 0f),
+                out _,
+                out _,
+                out _), Is.True);
+            Assert.That(gameplay.TryEndTurn("player", out _), Is.True);
+            Assert.That(gameplay.ActiveActorId, Is.EqualTo("target"));
+
+            var decisions = new GameplayEnemyDecisionSession(gameplay);
+            EnemyTacticalDecisionRecord decision = decisions.EvaluatePushOff(
+                "target",
+                "crate");
+            decisions.Commit(decision);
+
+            Assert.That(decision.Kind,
+                Is.EqualTo(EnemyTacticalDecisionKind.PushOff));
+            Assert.That(decision.TargetId, Is.EqualTo("crate"));
+            Assert.That(gameplay.Journal.LastEntry,
+                Is.TypeOf<EnemyDecisionCommittedJournalEntry>());
+            DisplacementDestinationEvaluation destination =
+                session.EvaluateIntentDestination(
+                    "target",
+                    PushOff.Id,
+                    "crate");
+            Assert.That(destination.IsEligible, Is.True);
+            Assert.That(destination.Destination.Z, Is.GreaterThan(0f));
+            Assert.That(session.TryDisplaceAction(
+                "target",
+                PushOff.Id,
+                "crate",
+                destination.Destination,
+                out _,
+                out _,
+                out _), Is.True);
+            Assert.That(gameplay.GetActor("target").IsPinned, Is.False);
+        }
+
+        [Test]
+        public void ContactCannotBeSilentlyAcceptedWithoutAuthoredPinPolicy()
+        {
+            GameplayDisplacementSession session = CreateSession(
+                new PinThenReleasePaths(),
+                new FixedRolls(),
+                out _,
+                out _,
+                playerPush: TopplingPush,
+                propToppling: new PropTopplingDefinition(0f, 90f, 0.5f),
+                propPinning: new PropPinningDefinition(90f));
+
+            bool resolved = session.TryDisplaceAction(
+                "player",
+                TopplingPush.Id,
+                "crate",
+                new GameplayPosition(0f, 0f, 2f),
+                out _,
+                out _,
+                out DisplacementResolutionFailure failure);
+
+            Assert.That(resolved, Is.False);
+            Assert.That(failure,
+                Is.EqualTo(DisplacementResolutionFailure.DestinationBlocked));
         }
 
         [Test]
@@ -1147,7 +1331,10 @@ namespace GritGud.Domain.Tests.Gameplay
             float playerFacingDegrees = 0f,
             InventoryItemDefinition equippedItem = null,
             bool responsiveTarget = false,
-            PropTopplingDefinition propToppling = null)
+            PropTopplingDefinition propToppling = null,
+            PropPinningDefinition propPinning = null,
+            IEnumerable<DisplacementActionDefinition> targetActions = null,
+            bool targetIsEnemy = false)
         {
             var journal = new GameplayJournal();
             gameplay = new GameplaySession(new ScenarioDefinition(
@@ -1163,7 +1350,11 @@ namespace GritGud.Domain.Tests.Gameplay
                             : new[] { playerPush },
                         playerFacingDegrees,
                         equippedItem),
-                    CreateActor("target", new GameplayPosition(1f, 0f, 0f)),
+                    CreateActor(
+                        "target",
+                        new GameplayPosition(1f, 0f, 0f),
+                        targetActions,
+                        isEnemy: targetIsEnemy),
                 },
                 new ScenarioObjectiveDefinition[0],
                 responsiveTarget
@@ -1186,7 +1377,7 @@ namespace GritGud.Domain.Tests.Gameplay
             return new GameplayDisplacementSession(
                 gameplay,
                 destructibles,
-                CreateSubjects(propToppling),
+                CreateSubjects(propToppling, propPinning),
                 validator,
                 rolls,
                 CreateControlProfiles());
@@ -1197,7 +1388,8 @@ namespace GritGud.Domain.Tests.Gameplay
             GameplayPosition position,
             IEnumerable<DisplacementActionDefinition> displacementActions = null,
             float facingDegrees = 0f,
-            InventoryItemDefinition equippedItem = null)
+            InventoryItemDefinition equippedItem = null,
+            bool isEnemy = false)
         {
             IEnumerable<DisplacementActionDefinition> resolvedActions =
                 displacementActions
@@ -1220,7 +1412,20 @@ namespace GritGud.Domain.Tests.Gameplay
                     new GameplayActorPose(position, facingDegrees),
                     new TurnBudget(4, 8f),
                     attack: null,
-                    displacementAbility: ability)
+                    displacementAbility: ability,
+                    combat: isEnemy
+                        ? new ActorCombatDefinition(
+                            "raider",
+                            new[] { "player" },
+                            maximumWounds: 3,
+                            enemyBehavior: new EnemyBehaviorDefinition(
+                                "behavior.escape-pin",
+                                perceptionRange: 30f,
+                                viewAngleDegrees: 120f,
+                                preferredEngagementRange: 12f,
+                                movementSearchRadius: 6f,
+                                maximumAttacksPerTurn: 1))
+                        : null)
                 : new ScenarioActorDefinition(
                     id,
                     initiative: 0,
@@ -1236,7 +1441,9 @@ namespace GritGud.Domain.Tests.Gameplay
             new[] { PropPush, PropThrow, CombatantThrow };
 
         private static IReadOnlyList<DisplacementSubjectDefinition>
-            CreateSubjects(PropTopplingDefinition propToppling = null) =>
+            CreateSubjects(
+                PropTopplingDefinition propToppling = null,
+                PropPinningDefinition propPinning = null) =>
             new[]
             {
                 new DisplacementSubjectDefinition(
@@ -1251,7 +1458,8 @@ namespace GritGud.Domain.Tests.Gameplay
                     "crate",
                     DisplacementSubjectKind.Prop,
                     35f,
-                    toppling: propToppling),
+                    toppling: propToppling,
+                    pinning: propPinning),
             };
 
         private static IReadOnlyDictionary<string, CloseQuartersControlProfile>
@@ -1330,6 +1538,24 @@ namespace GritGud.Domain.Tests.Gameplay
                 GameplayPosition origin,
                 PropDisplacementState resultingPropState) =>
                 DisplacementPathValidation.Allowed();
+        }
+
+        private sealed class PinThenReleasePaths : IDisplacementPathValidator
+        {
+            public DisplacementPathValidation Validate(
+                DisplacementRequest request,
+                GameplayPosition origin,
+                PropDisplacementState resultingPropState) =>
+                request.ActionKind == DisplacementActionKind.PushOff
+                    ? DisplacementPathValidation.Allowed()
+                    : DisplacementPathValidation.Allowed(new[]
+                    {
+                        new DisplacementContactEvidence(
+                            "target",
+                            new GameplayPosition(0.5f, 0.5f, 1.75f),
+                            new GameplayPosition(0f, 1f, 0f),
+                            0.1f),
+                    });
         }
 
         private sealed class BlockPaths : IDisplacementPathValidator

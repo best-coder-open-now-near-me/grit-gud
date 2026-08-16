@@ -166,6 +166,82 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void ActorActionProjectionDistinguishesPinnedReaction()
+        {
+            var contact = new DisplacementContactEvidence(
+                "raider",
+                new GameplayPosition(1f, 0.5f, 0f),
+                new GameplayPosition(0f, 1f, 0f),
+                0.1f);
+            var pin = new ActorPinState("raider", "crate", 1, contact);
+            var pose = new GameplayActorPose(
+                new GameplayPosition(1f, 0f, 0f),
+                180f);
+            var request = new DisplacementRequest(
+                "mara",
+                "close-quarters.push",
+                "crate",
+                DisplacementSubjectKind.Prop,
+                35f,
+                new GameplayPosition(1f, 0.5f, 0f),
+                DisplacementActionKind.Push);
+            var record = new DisplacementRecord(
+                1,
+                request,
+                new PropDisplacementState(
+                    new GameplayPropPose(
+                        new GameplayPosition(0f, 0f, 0f),
+                        0f,
+                        0f,
+                        0f),
+                    DestructiblePropPosture.Upright),
+                new PropDisplacementState(
+                    new GameplayPropPose(
+                        new GameplayPosition(1f, 0.5f, 0f),
+                        0f,
+                        0f,
+                        90f),
+                    DestructiblePropPosture.Toppled),
+                DisplacementResultPolicies.Topple
+                    | DisplacementResultPolicies.Pin,
+                new ActorPinTransition(
+                    "raider",
+                    pose,
+                    pose,
+                    previousState: null,
+                    pin));
+            var window = new TurnReplayWindow(
+                "mara",
+                new[]
+                {
+                    new TurnReplaySegment(
+                        1,
+                        "mara",
+                        new GameplayJournalEntry[]
+                        {
+                            new DisplacementResolvedJournalEntry(1, record),
+                            new TurnEndedJournalEntry(
+                                2,
+                                new TurnEndRecord(1, "mara", "raider")),
+                        }),
+                });
+            var timeline = new TurnReplayEventTimeline(window);
+            TurnReplayTimedEvent displaced = timeline.Events[0];
+
+            IReadOnlyList<TurnReplayActorActionState> states =
+                TurnReplayActorActionProjector.Project(
+                    timeline,
+                    displaced.StartSeconds
+                        + displaced.DurationSeconds * 0.5f);
+
+            Assert.That(states, Has.Count.EqualTo(2));
+            Assert.That(states.Single(value => value.ActorId == "mara").Kind,
+                Is.EqualTo(TurnReplayActorActionKind.Displacement));
+            Assert.That(states.Single(value => value.ActorId == "raider").Kind,
+                Is.EqualTo(TurnReplayActorActionKind.Pinned));
+        }
+
+        [Test]
         public void WindowBeginsWithActiveActorsPriorTurnAndNestsReactions()
         {
             GameplaySession session = CreateSession();

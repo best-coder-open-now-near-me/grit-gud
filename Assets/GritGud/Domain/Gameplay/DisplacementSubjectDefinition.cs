@@ -60,6 +60,37 @@ namespace GritGud.Domain.Gameplay
             !float.IsNaN(value) && !float.IsInfinity(value);
     }
 
+    public sealed class PropPinningDefinition
+    {
+        public PropPinningDefinition(
+            float maximumActorMass,
+            float minimumContactDepth = 0f)
+        {
+            if (!IsFinitePositive(maximumActorMass))
+                throw new ArgumentOutOfRangeException(nameof(maximumActorMass));
+            if (!IsFinite(minimumContactDepth) || minimumContactDepth < 0f)
+                throw new ArgumentOutOfRangeException(
+                    nameof(minimumContactDepth));
+
+            MaximumActorMass = maximumActorMass;
+            MinimumContactDepth = minimumContactDepth;
+        }
+
+        public float MaximumActorMass { get; }
+
+        public float MinimumContactDepth { get; }
+
+        public bool Accepts(float actorMass, float contactDepth) =>
+            actorMass <= MaximumActorMass
+            && contactDepth >= MinimumContactDepth;
+
+        private static bool IsFinitePositive(float value) =>
+            IsFinite(value) && value > 0f;
+
+        private static bool IsFinite(float value) =>
+            !float.IsNaN(value) && !float.IsInfinity(value);
+    }
+
     public sealed class DisplacementSubjectDefinition
     {
         public DisplacementSubjectDefinition(
@@ -67,7 +98,8 @@ namespace GritGud.Domain.Gameplay
             DisplacementSubjectKind kind,
             float mass,
             DisplacementSizeClass size = DisplacementSizeClass.Medium,
-            PropTopplingDefinition toppling = null)
+            PropTopplingDefinition toppling = null,
+            PropPinningDefinition pinning = null)
         {
             if (string.IsNullOrWhiteSpace(id))
             {
@@ -100,11 +132,20 @@ namespace GritGud.Domain.Gameplay
                     nameof(toppling));
             }
 
+            if (pinning != null && (kind != DisplacementSubjectKind.Prop
+                || toppling == null))
+            {
+                throw new ArgumentException(
+                    "Only toppling props can define actor pinning.",
+                    nameof(pinning));
+            }
+
             Id = id;
             Kind = kind;
             Mass = mass;
             Size = size;
             Toppling = toppling;
+            Pinning = pinning;
         }
 
         public string Id { get; }
@@ -116,5 +157,7 @@ namespace GritGud.Domain.Gameplay
         public DisplacementSizeClass Size { get; }
 
         public PropTopplingDefinition Toppling { get; }
+
+        public PropPinningDefinition Pinning { get; }
     }
 }

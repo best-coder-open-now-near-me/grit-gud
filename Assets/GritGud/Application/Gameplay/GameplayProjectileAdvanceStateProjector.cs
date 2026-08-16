@@ -170,7 +170,8 @@ namespace GritGud.Application.Gameplay
                 actor.MaximumWounds,
                 actor.Inventory,
                 actor.TurnActionPointAllowance,
-                actor.TurnMovementAllowance);
+                actor.TurnMovementAllowance,
+                actor.PinState);
 
         private static int FindActorIndex(
             IList<GameplayActorSnapshot> actors,

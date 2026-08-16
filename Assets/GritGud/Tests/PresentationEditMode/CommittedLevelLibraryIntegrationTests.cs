@@ -72,6 +72,8 @@ namespace GritGud.Presentation.Tests
             Assert.That(level.scenario.props.Select(prop => prop.entityId),
                 Does.Contain("crate-exposure-demo"));
             Assert.That(level.scenario.props.Select(prop => prop.entityId),
+                Does.Contain("crate-pin-demo"));
+            Assert.That(level.scenario.props.Select(prop => prop.entityId),
                 Does.Contain("barrel-yard-01"));
             Assert.That(level.scenario.props.Select(prop => prop.entityId),
                 Does.Contain("crate-warehouse-03"));
@@ -88,6 +90,29 @@ namespace GritGud.Presentation.Tests
                 "crate-warehouse-03",
                 out DisplacementSubjectDefinition pileSubject), Is.True);
             Assert.That(pileSubject.Toppling, Is.Not.Null);
+
+            Assert.That(content.Assembly.TryGetDisplacementSubject(
+                "crate-pin-demo",
+                out DisplacementSubjectDefinition pinSubject), Is.True);
+            Assert.That(pinSubject.Toppling, Is.Not.Null);
+            Assert.That(pinSubject.Pinning, Is.Not.Null);
+            Assert.That(pinSubject.Pinning.MaximumActorMass,
+                Is.EqualTo(90f));
+            Assert.That(
+                content.Assembly.GetActorDefinition("player")
+                    .GetDisplacementAction("close-quarters.push-off")
+                    .AllowedResults,
+                Is.EqualTo(DisplacementResultPolicies.Release));
+            Assert.That(
+                content.Assembly.GetActorDefinition("oren-vale")
+                    .GetDisplacementAction("close-quarters.push-off")
+                    .AllowedResults,
+                Is.EqualTo(DisplacementResultPolicies.Release));
+            Assert.That(
+                content.Assembly.GetActorDefinition("depot-rifleman")
+                    .GetDisplacementAction("close-quarters.push-off")
+                    .AllowedResults,
+                Is.EqualTo(DisplacementResultPolicies.Release));
         }
     }
 }

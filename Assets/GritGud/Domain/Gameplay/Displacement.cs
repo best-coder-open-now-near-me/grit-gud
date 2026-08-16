@@ -13,6 +13,7 @@ namespace GritGud.Domain.Gameplay
         Throw,
         Push,
         Lift,
+        PushOff,
     }
 
     public readonly struct DisplacementRequest
@@ -255,6 +256,169 @@ namespace GritGud.Domain.Gameplay
             && Pose.HasSameState(other.Pose);
     }
 
+    public sealed class DisplacementContactEvidence
+    {
+        public DisplacementContactEvidence(
+            string entityId,
+            GameplayPosition point,
+            GameplayPosition normal,
+            float overlapDepth)
+        {
+            if (string.IsNullOrWhiteSpace(entityId))
+            {
+                throw new ArgumentException(
+                    "Displacement contact evidence requires an entity ID.",
+                    nameof(entityId));
+            }
+
+            if (float.IsNaN(overlapDepth)
+                || float.IsInfinity(overlapDepth)
+                || overlapDepth < 0f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(overlapDepth));
+            }
+
+            EntityId = entityId;
+            Point = point;
+            Normal = normal;
+            OverlapDepth = overlapDepth;
+        }
+
+        public string EntityId { get; }
+
+        public GameplayPosition Point { get; }
+
+        public GameplayPosition Normal { get; }
+
+        public float OverlapDepth { get; }
+    }
+
+    public sealed class ActorPinState
+    {
+        public ActorPinState(
+            string actorId,
+            string propId,
+            long displacementSequence,
+            DisplacementContactEvidence contact)
+        {
+            if (string.IsNullOrWhiteSpace(actorId))
+            {
+                throw new ArgumentException(
+                    "Actor pin state requires an actor ID.",
+                    nameof(actorId));
+            }
+
+            if (string.IsNullOrWhiteSpace(propId))
+            {
+                throw new ArgumentException(
+                    "Actor pin state requires a prop ID.",
+                    nameof(propId));
+            }
+
+            if (displacementSequence <= 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(displacementSequence));
+            if (contact == null)
+                throw new ArgumentNullException(nameof(contact));
+            if (!string.Equals(
+                    actorId,
+                    contact.EntityId,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Actor pin state and contact evidence must identify the same actor.",
+                    nameof(contact));
+            }
+
+            ActorId = actorId;
+            PropId = propId;
+            DisplacementSequence = displacementSequence;
+            Contact = contact;
+        }
+
+        public string ActorId { get; }
+
+        public string PropId { get; }
+
+        public long DisplacementSequence { get; }
+
+        public DisplacementContactEvidence Contact { get; }
+
+        public bool HasSameState(ActorPinState other) =>
+            other != null
+            && string.Equals(ActorId, other.ActorId, StringComparison.Ordinal)
+            && string.Equals(PropId, other.PropId, StringComparison.Ordinal)
+            && DisplacementSequence == other.DisplacementSequence
+            && string.Equals(
+                Contact.EntityId,
+                other.Contact.EntityId,
+                StringComparison.Ordinal)
+            && Contact.Point.DistanceTo(other.Contact.Point) == 0f
+            && Contact.Normal.DistanceTo(other.Contact.Normal) == 0f
+            && Contact.OverlapDepth == other.Contact.OverlapDepth;
+    }
+
+    public sealed class ActorPinTransition
+    {
+        public ActorPinTransition(
+            string actorId,
+            GameplayActorPose previousPose,
+            GameplayActorPose resultingPose,
+            ActorPinState previousState,
+            ActorPinState resultingState)
+        {
+            if (string.IsNullOrWhiteSpace(actorId))
+                throw new ArgumentException(
+                    "Actor pin transitions require an actor ID.",
+                    nameof(actorId));
+            if ((previousState == null) == (resultingState == null))
+            {
+                throw new ArgumentException(
+                    "Actor pin transitions must either establish or release a pin.");
+            }
+            if (previousState != null
+                && !string.Equals(
+                    actorId,
+                    previousState.ActorId,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Previous pin state belongs to another actor.",
+                    nameof(previousState));
+            }
+            if (resultingState != null
+                && !string.Equals(
+                    actorId,
+                    resultingState.ActorId,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Resulting pin state belongs to another actor.",
+                    nameof(resultingState));
+            }
+
+            ActorId = actorId;
+            PreviousPose = previousPose;
+            ResultingPose = resultingPose;
+            PreviousState = previousState;
+            ResultingState = resultingState;
+        }
+
+        public string ActorId { get; }
+
+        public GameplayActorPose PreviousPose { get; }
+
+        public GameplayActorPose ResultingPose { get; }
+
+        public ActorPinState PreviousState { get; }
+
+        public ActorPinState ResultingState { get; }
+
+        public bool EstablishesPin => ResultingState != null;
+
+        public bool ReleasesPin => PreviousState != null;
+    }
+
     public sealed class DisplacementRecord
     {
         public DisplacementRecord(
@@ -316,7 +480,8 @@ namespace GritGud.Domain.Gameplay
             PropDisplacementState previousPropState,
             PropDisplacementState resultingPropState,
             DisplacementResultPolicies appliedResults =
-                DisplacementResultPolicies.None)
+                DisplacementResultPolicies.None,
+            ActorPinTransition pinTransition = null)
         {
             if (sequence <= 0)
             {
@@ -337,7 +502,8 @@ namespace GritGud.Domain.Gameplay
             DisplacementResultPolicies knownResults =
                 DisplacementResultPolicies.Topple
                 | DisplacementResultPolicies.Release
-                | DisplacementResultPolicies.CollisionDamage;
+                | DisplacementResultPolicies.CollisionDamage
+                | DisplacementResultPolicies.Pin;
             if ((appliedResults & ~knownResults) != 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(appliedResults));
@@ -353,6 +519,26 @@ namespace GritGud.Domain.Gameplay
                 throw new ArgumentException(
                     "Recorded Topple policy must agree with prop posture.",
                     nameof(appliedResults));
+            }
+
+
+            bool pinned = appliedResults.HasFlag(
+                DisplacementResultPolicies.Pin);
+            bool released = appliedResults.HasFlag(
+                DisplacementResultPolicies.Release);
+            if (pinned && released)
+            {
+                throw new ArgumentException(
+                    "A displacement cannot establish and release a pin together.",
+                    nameof(appliedResults));
+            }
+            if ((pinned || released) != (pinTransition != null)
+                || (pinned && !pinTransition.EstablishesPin)
+                || (released && !pinTransition.ReleasesPin))
+            {
+                throw new ArgumentException(
+                    "Recorded pin policies must agree with the actor pin transition.",
+                    nameof(pinTransition));
             }
 
             bool changed = !previousPropState.HasSameState(resultingPropState);
@@ -376,6 +562,7 @@ namespace GritGud.Domain.Gameplay
             PreviousPosition = previousPropState.Pose.Position;
             ResultingPosition = resultingPropState.Pose.Position;
             AppliedResults = appliedResults;
+            PinTransition = pinTransition;
         }
 
         public long Sequence { get; }
@@ -393,6 +580,8 @@ namespace GritGud.Domain.Gameplay
         public PropDisplacementState ResultingPropState { get; }
 
         public DisplacementResultPolicies AppliedResults { get; }
+
+        public ActorPinTransition PinTransition { get; }
 
         public bool Succeeded =>
             Request.SubjectKind == DisplacementSubjectKind.Prop

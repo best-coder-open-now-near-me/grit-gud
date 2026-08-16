@@ -318,6 +318,30 @@ namespace GritGud.Application.Gameplay
             return CreateEndTurn(actorId, targetId, rationale);
         }
 
+        public EnemyTacticalDecisionRecord EvaluatePushOff(
+            string actorId,
+            string propId)
+        {
+            RequireEnemy(actorId);
+            GameplayActorSnapshot actor = gameplay.GetActor(actorId);
+            if (!actor.IsPinned
+                || !string.Equals(
+                    actor.PinState.PropId,
+                    propId,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Enemy '{actorId}' is not pinned by prop '{propId}'.");
+            }
+            return Create(
+                EnemyTacticalDecisionKind.PushOff,
+                actorId,
+                propId,
+                exposure: null,
+                movementRoute: null,
+                "pinned actor must free itself before resuming tactics");
+        }
+
         public bool RequiresMovementSearch(
             string actorId,
             string targetId,
@@ -348,7 +372,8 @@ namespace GritGud.Application.Gameplay
                 throw new InvalidOperationException(
                     "Enemy decisions must commit in sequence.");
             gameplay.GetActor(decision.ActorId);
-            gameplay.GetActor(decision.TargetId);
+            if (decision.Kind != EnemyTacticalDecisionKind.PushOff)
+                gameplay.GetActor(decision.TargetId);
             decisions.Add(decision);
             gameplay.Journal.RecordEnemyDecision(decision);
         }

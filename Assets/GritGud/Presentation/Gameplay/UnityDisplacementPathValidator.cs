@@ -55,12 +55,22 @@ namespace GritGud.Presentation.Gameplay
                 if (!BelongsTo(hitTransform, subjectRoot)
                     && !BelongsTo(hitTransform, actorRoot))
                 {
+                    if (resultingPropState != null
+                        && TryResolveSubjectId(
+                            hitTransform,
+                            out _)
+                        && Vector3.Distance(hit.point, to)
+                            <= radius * 2f)
+                    {
+                        continue;
+                    }
                     return DisplacementPathValidation.Blocked(
                         "displacement.path-blocked");
                 }
             }
 
             Collider[] destinationOverlaps;
+            Vector3 destinationCenter;
             float destinationBottom;
             if (resultingPropState != null)
             {
@@ -78,6 +88,7 @@ namespace GritGud.Presentation.Gameplay
                         * Vector3.Scale(localBounds.center, scale));
                 destinationBottom = center.y
                     - ProjectedVerticalExtent(halfExtents, resultingRotation);
+                destinationCenter = center;
                 destinationOverlaps = Physics.OverlapBox(
                     center,
                     Shrink(halfExtents),
@@ -88,12 +99,15 @@ namespace GritGud.Presentation.Gameplay
             else
             {
                 destinationBottom = to.y;
+                destinationCenter = to + castOffset;
                 destinationOverlaps = Physics.OverlapSphere(
                     to + castOffset,
                     radius,
                     Physics.DefaultRaycastLayers,
                     QueryTriggerInteraction.Ignore);
             }
+            var contacts = new Dictionary<string, DisplacementContactEvidence>(
+                StringComparer.Ordinal);
             foreach (Collider overlap in destinationOverlaps)
             {
                 Transform overlapTransform = overlap != null
@@ -102,6 +116,24 @@ namespace GritGud.Presentation.Gameplay
                 if (!BelongsTo(overlapTransform, subjectRoot)
                     && !BelongsTo(overlapTransform, actorRoot))
                 {
+                    if (resultingPropState != null
+                        && TryResolveSubjectId(
+                            overlapTransform,
+                            out string contactEntityId))
+                    {
+                        DisplacementContactEvidence contact = CreateContact(
+                            contactEntityId,
+                            overlap,
+                            destinationCenter);
+                        if (!contacts.TryGetValue(
+                                contactEntityId,
+                                out DisplacementContactEvidence current)
+                            || contact.OverlapDepth > current.OverlapDepth)
+                        {
+                            contacts[contactEntityId] = contact;
+                        }
+                        continue;
+                    }
                     if (resultingPropState != null
                         && overlap.bounds.max.y
                             <= destinationBottom + GroundClearance)
@@ -114,7 +146,46 @@ namespace GritGud.Presentation.Gameplay
                 }
             }
 
-            return DisplacementPathValidation.Allowed();
+            return contacts.Count == 0
+                ? DisplacementPathValidation.Allowed()
+                : DisplacementPathValidation.Allowed(contacts.Values);
+        }
+
+        private bool TryResolveSubjectId(
+            Transform candidate,
+            out string subjectId)
+        {
+            foreach (KeyValuePair<string, Transform> entry in subjectRoots)
+            {
+                if (BelongsTo(candidate, entry.Value))
+                {
+                    subjectId = entry.Key;
+                    return true;
+                }
+            }
+
+            subjectId = null;
+            return false;
+        }
+
+        private static DisplacementContactEvidence CreateContact(
+            string entityId,
+            Collider collider,
+            Vector3 destinationCenter)
+        {
+            Vector3 point = collider.ClosestPoint(destinationCenter);
+            Vector3 offset = destinationCenter - point;
+            float depth = offset.magnitude;
+            Vector3 normal = depth > 0.0001f
+                ? offset / depth
+                : (destinationCenter - collider.bounds.center).normalized;
+            if (normal.sqrMagnitude <= 0.0001f)
+                normal = Vector3.up;
+            return new DisplacementContactEvidence(
+                entityId,
+                ToGameplayPosition(point),
+                ToGameplayPosition(normal),
+                depth > 0.0001f ? depth : GroundClearance);
         }
 
         private Transform RequireRoot(string subjectId)
@@ -223,5 +294,8 @@ namespace GritGud.Presentation.Gameplay
 
         private static Vector3 ToVector3(GameplayPosition position) =>
             new Vector3(position.X, position.Y, position.Z);
+
+        private static GameplayPosition ToGameplayPosition(Vector3 value) =>
+            new GameplayPosition(value.x, value.y, value.z);
     }
 }

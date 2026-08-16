@@ -1,5 +1,6 @@
 using System;
 using GritGud.Application.Gameplay;
+using GritGud.Domain.Gameplay;
 using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
@@ -15,7 +16,11 @@ namespace GritGud.Presentation.Gameplay
 
         public event Action Cleared;
 
+        public event Action<ActorPinState> PinStatePresented;
+
         public TurnReplayActorActionState CurrentState { get; private set; }
+
+        public ActorPinState CurrentPinState { get; private set; }
 
         internal void Present(TurnReplayActorActionState state)
         {
@@ -32,6 +37,12 @@ namespace GritGud.Presentation.Gameplay
                 return;
             CurrentState = null;
             Cleared?.Invoke();
+        }
+
+        internal void PresentPinState(ActorPinState state)
+        {
+            CurrentPinState = state;
+            PinStatePresented?.Invoke(state);
         }
     }
 }

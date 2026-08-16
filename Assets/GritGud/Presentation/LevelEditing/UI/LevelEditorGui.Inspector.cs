@@ -586,6 +586,16 @@ namespace GritGud.Presentation.LevelEditing.UI
                     (configured?.toppling?.elevationOffset ?? 0.5f).ToString(
                         "0.###",
                         CultureInfo.InvariantCulture);
+                scenarioPropPinningEnabled = configured?.pinning?.enabled
+                    ?? false;
+                scenarioPropMaximumPinnedMassText =
+                    (configured?.pinning?.maximumActorMass ?? 100f).ToString(
+                        "0.###",
+                        CultureInfo.InvariantCulture);
+                scenarioPropMinimumPinDepthText =
+                    (configured?.pinning?.minimumContactDepth ?? 0f).ToString(
+                        "0.###",
+                        CultureInfo.InvariantCulture);
             }
 
             GUILayout.Space(LevelEditorGuiMetrics.SpaceInspectorSection);
@@ -618,6 +628,18 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawLabeledField(
                 "Topple elevation",
                 ref scenarioPropToppleElevationText);
+            GUI.enabled = propFieldsEnabled && scenarioPropTopplingEnabled;
+            scenarioPropPinningEnabled = GUILayout.Toggle(
+                scenarioPropPinningEnabled,
+                "Can pin combatants");
+            GUI.enabled = propFieldsEnabled && scenarioPropTopplingEnabled
+                && scenarioPropPinningEnabled;
+            DrawLabeledField(
+                "Maximum pinned mass",
+                ref scenarioPropMaximumPinnedMassText);
+            DrawLabeledField(
+                "Minimum pin depth",
+                ref scenarioPropMinimumPinDepthText);
             GUI.enabled = true;
             if (GUILayout.Button("APPLY PROP", PanelButtonLayout()))
             {
@@ -630,7 +652,10 @@ namespace GritGud.Presentation.LevelEditing.UI
                     scenarioPropTopplingEnabled,
                     scenarioPropTopplePitchText,
                     scenarioPropToppleRollText,
-                    scenarioPropToppleElevationText);
+                    scenarioPropToppleElevationText,
+                    scenarioPropPinningEnabled,
+                    scenarioPropMaximumPinnedMassText,
+                    scenarioPropMinimumPinDepthText);
             }
         }
 

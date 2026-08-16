@@ -114,6 +114,13 @@ namespace GritGud.Application.Gameplay
                         pose,
                         displacement.Displacement.PreviousPosition);
             }
+            else if (entry is DisplacementResolvedJournalEntry pinning
+                && pinning.Displacement.PinTransition != null)
+            {
+                ActorPinTransition transition =
+                    pinning.Displacement.PinTransition;
+                poses[transition.ActorId] = transition.PreviousPose;
+            }
         }
 
         private static void Apply(
@@ -153,6 +160,15 @@ namespace GritGud.Application.Gameplay
                 poses[displacement.Displacement.Request.SubjectId] = WithPosition(
                     pose,
                     Lerp(from, to, clamped));
+            }
+            else if (entry is DisplacementResolvedJournalEntry pinning
+                && pinning.Displacement.PinTransition != null)
+            {
+                ActorPinTransition transition =
+                    pinning.Displacement.PinTransition;
+                poses[transition.ActorId] = clamped < 1f
+                    ? transition.PreviousPose
+                    : transition.ResultingPose;
             }
         }
 

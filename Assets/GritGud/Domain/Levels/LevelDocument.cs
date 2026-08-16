@@ -577,6 +577,22 @@ namespace GritGud.Domain.Levels
     }
 
     [Serializable]
+    public sealed class LevelScenarioPropPinningData
+    {
+        public bool enabled;
+        public float maximumActorMass = 100f;
+        public float minimumContactDepth;
+
+        public LevelScenarioPropPinningData DeepCopy() =>
+            new LevelScenarioPropPinningData
+            {
+                enabled = enabled,
+                maximumActorMass = maximumActorMass,
+                minimumContactDepth = minimumContactDepth,
+            };
+    }
+
+    [Serializable]
     public sealed class LevelScenarioPropData
     {
         public string entityId = string.Empty;
@@ -585,12 +601,15 @@ namespace GritGud.Domain.Levels
         public bool startsEncounterOnAttack;
         public LevelScenarioPropTopplingData toppling =
             new LevelScenarioPropTopplingData();
+        public LevelScenarioPropPinningData pinning =
+            new LevelScenarioPropPinningData();
 
         public void Normalize()
         {
             entityId = entityId ?? string.Empty;
             sizeClass = sizeClass ?? string.Empty;
             toppling = toppling ?? new LevelScenarioPropTopplingData();
+            pinning = pinning ?? new LevelScenarioPropPinningData();
         }
 
         public LevelScenarioPropData DeepCopy()
@@ -603,6 +622,8 @@ namespace GritGud.Domain.Levels
                 startsEncounterOnAttack = startsEncounterOnAttack,
                 toppling = toppling?.DeepCopy()
                     ?? new LevelScenarioPropTopplingData(),
+                pinning = pinning?.DeepCopy()
+                    ?? new LevelScenarioPropPinningData(),
             };
         }
     }
@@ -726,7 +747,7 @@ namespace GritGud.Domain.Levels
     [Serializable]
     public sealed class LevelDocument
     {
-        public const int CurrentSchemaVersion = 13;
+        public const int CurrentSchemaVersion = 14;
         public const int MaximumEntityGroupCount = 64;
 
         public int schemaVersion = CurrentSchemaVersion;

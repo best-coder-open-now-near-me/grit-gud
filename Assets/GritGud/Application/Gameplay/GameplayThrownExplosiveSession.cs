@@ -11,6 +11,7 @@ namespace GritGud.Application.Gameplay
         TurnModeRequired,
         ActorNotActive,
         ActorIncapacitated,
+        ActorPinned,
         OperationInProgress,
         Depleted,
         OutOfRange,
@@ -388,6 +389,12 @@ namespace GritGud.Application.Gameplay
             {
                 return Fail(
                     ThrownExplosiveFailure.ActorIncapacitated,
+                    out failure);
+            }
+            if (actor.IsPinned)
+            {
+                return Fail(
+                    ThrownExplosiveFailure.ActorPinned,
                     out failure);
             }
 

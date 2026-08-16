@@ -324,6 +324,8 @@ namespace GritGud.Presentation.Gameplay
                     return "Only the active actor can attack.";
                 case AttackResolutionFailure.ActorIncapacitated:
                     return "An incapacitated actor cannot attack.";
+                case AttackResolutionFailure.ActorPinned:
+                    return "Push off the pinning prop before attacking.";
                 case AttackResolutionFailure.OperationInProgress:
                     return "Wait for the current movement to resolve.";
                 case AttackResolutionFailure.AttackUnavailable:

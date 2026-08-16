@@ -135,6 +135,8 @@ namespace GritGud.Application.Gameplay
         Throw = 2,
         Displacement = 3,
         Reaction = 4,
+        Pinned = 5,
+        GetUp = 6,
     }
 
     public sealed class TurnReplayActorActionState
@@ -226,10 +228,14 @@ namespace GritGud.Application.Gameplay
             }
             else if (entry is DisplacementResolvedJournalEntry displaced)
             {
+                ActorPinTransition pin =
+                    displaced.Displacement.PinTransition;
                 Add(
                     states,
                     displaced.Displacement.Request.ActorId,
-                    TurnReplayActorActionKind.Displacement,
+                    pin != null && pin.ReleasesPin
+                        ? TurnReplayActorActionKind.GetUp
+                        : TurnReplayActorActionKind.Displacement,
                     entry.Sequence,
                     progress);
                 if (displaced.Displacement.Succeeded
@@ -240,6 +246,16 @@ namespace GritGud.Application.Gameplay
                         states,
                         displaced.Displacement.Request.SubjectId,
                         TurnReplayActorActionKind.Reaction,
+                        entry.Sequence,
+                        progress);
+                }
+                if (pin != null
+                    && pin.EstablishesPin)
+                {
+                    Add(
+                        states,
+                        pin.ActorId,
+                        TurnReplayActorActionKind.Pinned,
                         entry.Sequence,
                         progress);
                 }
@@ -269,7 +285,9 @@ namespace GritGud.Application.Gameplay
             ICollection<TurnReplayActorActionState> states)
         {
             TurnReplayActorActionKind? primary = null;
-            var reactions = new List<string>();
+            var reactions = new Dictionary<
+                string,
+                TurnReplayActorActionKind>(StringComparer.Ordinal);
             foreach (GameplayActionOutcome outcome in resolved.Action.Outcomes)
             {
                 if (outcome is ThrownExplosiveActionOutcome)
@@ -278,20 +296,29 @@ namespace GritGud.Application.Gameplay
                 }
                 else if (outcome is DisplacementActionOutcome displacement)
                 {
-                    primary = TurnReplayActorActionKind.Displacement;
+                    ActorPinTransition pin =
+                        displacement.Displacement.PinTransition;
+                    primary = pin != null && pin.ReleasesPin
+                        ? TurnReplayActorActionKind.GetUp
+                        : TurnReplayActorActionKind.Displacement;
                     if (displacement.Displacement.Succeeded
                         && displacement.Displacement.Request.SubjectKind
                             == DisplacementSubjectKind.Combatant)
                     {
-                        reactions.Add(
-                            displacement.Displacement.Request.SubjectId);
+                        reactions[
+                            displacement.Displacement.Request.SubjectId] =
+                            TurnReplayActorActionKind.Reaction;
                     }
+                    if (pin != null && pin.EstablishesPin)
+                        reactions[pin.ActorId] =
+                            TurnReplayActorActionKind.Pinned;
                 }
                 else if (outcome is AttackResolvedActionOutcome attack)
                 {
                     primary ??= TurnReplayActorActionKind.Attack;
                     if (attack.Attack.Wound != null)
-                        reactions.Add(attack.Attack.TargetId);
+                        reactions[attack.Attack.TargetId] =
+                            TurnReplayActorActionKind.Reaction;
                 }
                 else if (outcome is WeaponDischargedActionOutcome
                     || outcome is ProjectileLaunchedActionOutcome)
@@ -313,12 +340,13 @@ namespace GritGud.Application.Gameplay
                     resolved.Sequence,
                     progress);
             }
-            foreach (string actorId in reactions)
+            foreach (KeyValuePair<string, TurnReplayActorActionKind> reaction
+                in reactions)
             {
                 Add(
                     states,
-                    actorId,
-                    TurnReplayActorActionKind.Reaction,
+                    reaction.Key,
+                    reaction.Value,
                     resolved.Sequence,
                     progress);
             }

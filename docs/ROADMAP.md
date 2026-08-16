@@ -200,18 +200,22 @@ initiative participant:
    replay forward crossings, seeks, scrubbing, and exit restore exact masks
    without rerunning fracture or physics. The published depot lifecycle and the
    full EditMode/PlayMode gates cover the resulting state and presentation.
-3. **Add first-class toppled-prop pinning and escape.** Resolve `Pin` only when
-   the final committed toppled footprint contacts an eligible character and
-   authored prop mass/contact rules accept it. Freeze the responsible prop,
-   affected actor, contact evidence, actor state, and exact poses in the action
-   result. A pinned character cannot move or use incompatible actions. Give
-   them an authored **Push Off** action with explicit cost, hand/capability and
-   maximum-mass rules; success atomically records the released prop pose,
-   clears the pinned state, and enters get-up. Project availability for players
-   and enemies, preserve both states through replay and persistence boundaries,
-   and cover toppling-into-actor, obstruction, stale commits, escape, AI turns,
-   scrubbing, and exact live restoration. Presentation polish is secondary to
-   this state/action slice.
+3. **Add first-class toppled-prop pinning and escape.** **Complete 2026-08-16:**
+   `Pin` resolves only when the final toppled footprint supplies stable actor
+   contact evidence and the authored prop mass/depth rules accept it. The
+   committed displacement freezes the responsible prop, actor, contact, pin
+   transition, and exact poses; canonical state, replay sampling, and journal
+   projection preserve them without rerunning physics. Pinned actors cannot
+   move or use incompatible attack, equipment, inventory, stance, interaction,
+   projectile, explosive, or displacement actions. Player and enemy content
+   now owns a costed, capability-checked **Push Off** action that atomically
+   moves the exact pinning prop, releases the actor, and projects get-up. The
+   published depot includes a dedicated starting pin fixture, level authoring
+   exposes toppling/pinning limits, and automated domain, Unity-contact,
+   migration, replay, published-content, AI-turn, and PlayMode restoration
+   coverage is green. Prop-aware lying, struggle, bounded ragdoll, Push Off,
+   and authored get-up animation remain the secondary polish item above; those
+   visuals consume the committed state rather than deciding it.
 4. **Add authored jump, vault, and mantle traversal.** Keep ordinary grounded
    movement on surfaces that satisfy the authored slope and step limits; cross
    taller objects only through explicit traversal links with stable takeoff,

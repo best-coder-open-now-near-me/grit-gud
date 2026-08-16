@@ -47,6 +47,7 @@ namespace GritGud.Presentation.Gameplay
         private GameplayActionController actionController;
         private GameplayAttackController attackController;
         private GameplayProjectileController projectileController;
+        private GameplayDisplacementController displacementController;
         private GameplayEmergencyCycleSession emergencyCycle;
         private GameplayPartyControlSession partyControl;
         private GameplayEnemyDecisionSession decisions;
@@ -70,6 +71,7 @@ namespace GritGud.Presentation.Gameplay
             GameplayActionController actions,
             GameplayAttackController attacks,
             GameplayProjectileController projectiles,
+            GameplayDisplacementController displacements,
             GameplayEmergencyCycleSession cycle,
             GameplayPartyControlSession controlledParty,
             GameplayDialogueLog dialogueLog,
@@ -90,6 +92,8 @@ namespace GritGud.Presentation.Gameplay
                 nameof(attacks));
             projectileController = projectiles ?? throw new ArgumentNullException(
                 nameof(projectiles));
+            displacementController = displacements
+                ?? throw new ArgumentNullException(nameof(displacements));
             emergencyCycle = cycle ?? throw new ArgumentNullException(
                 nameof(cycle));
             partyControl = controlledParty ?? throw new ArgumentNullException(
@@ -156,6 +160,7 @@ namespace GritGud.Presentation.Gameplay
             actionController = null;
             attackController = null;
             projectileController = null;
+            displacementController = null;
             emergencyCycle = null;
             partyControl = null;
             decisions = null;
@@ -263,6 +268,14 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
+            GameplayActorSnapshot actor = session.GetActor(
+                enemy.Definition.Id);
+            if (actor.IsPinned)
+            {
+                ExecutePushOff(enemy, actor.PinState.PropId);
+                return;
+            }
+
             EnemyTargetSelection target = decisions.SelectBestTarget(
                 enemy.Definition.Id,
                 partyControl.ActorIds,
@@ -302,6 +315,12 @@ namespace GritGud.Presentation.Gameplay
                     actionController.PresentExternalStatus(
                         $"{enemy.Definition.Id} is repositioning.");
                     break;
+                case EnemyTacticalDecisionKind.PushOff:
+                    ExecutePushOff(
+                        enemy,
+                        decision.TargetId,
+                        recordDecision: false);
+                    break;
                 case EnemyTacticalDecisionKind.EndTurn:
                     EndActiveTurn(enemy, decision.Rationale);
                     break;
@@ -309,6 +328,58 @@ namespace GritGud.Presentation.Gameplay
                     throw new InvalidOperationException(
                         $"Decision '{decision.Kind}' cannot execute during a turn.");
             }
+        }
+
+        private void ExecutePushOff(
+            EnemyRuntime enemy,
+            string propId,
+            bool recordDecision = true)
+        {
+            DisplacementActionDefinition pushOff = null;
+            foreach (DisplacementActionDefinition candidate in
+                enemy.Definition.DisplacementActions)
+            {
+                if (candidate.Intent == DisplacementActionKind.PushOff)
+                {
+                    pushOff = candidate;
+                    break;
+                }
+            }
+            if (pushOff == null)
+            {
+                actionController.PresentExternalStatus(
+                    $"{enemy.Definition.Id} has no authored Push Off action.");
+                EndActiveTurn(enemy, "no authored push off action");
+                return;
+            }
+
+            if (recordDecision)
+            {
+                EnemyTacticalDecisionRecord decision =
+                    decisions.EvaluatePushOff(
+                        enemy.Definition.Id,
+                        propId);
+                decisions.Commit(decision);
+                AppendDecisionDiagnostic(decision);
+            }
+            if (displacementController.TryExecuteIntent(
+                    enemy.Definition.Id,
+                    pushOff.Id,
+                    propId,
+                    out _,
+                    out _,
+                    out DisplacementResolutionFailure failure))
+            {
+                actionController.PresentExternalStatus(
+                    $"{enemy.Definition.Id} pushed off the pinning prop.");
+                decisionDelaySeconds = enemy.Presentation
+                    .PresentationDefinition.PostDecisionDelaySeconds;
+                return;
+            }
+
+            actionController.PresentExternalStatus(
+                $"{enemy.Definition.Id} could not push off: {failure}.");
+            EndActiveTurn(enemy, $"push off failed: {failure}");
         }
 
         private void ExecuteAttack(

@@ -40,6 +40,38 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void CanonicalStateIncludesExactActorPinEvidence()
+        {
+            GameplayActorSnapshot unpinned = CreateActor("alpha", 1f, 4);
+            var contact = new DisplacementContactEvidence(
+                "alpha",
+                new GameplayPosition(1f, 0.5f, 0f),
+                new GameplayPosition(0f, 1f, 0f),
+                0.1f);
+            GameplayActorSnapshot pinned = CreateActor(
+                "alpha",
+                1f,
+                4,
+                new ActorPinState("alpha", "crate", 7, contact));
+
+            GameplayCombatStateSnapshot before = CreateState(unpinned);
+            GameplayCombatStateSnapshot after = CreateState(pinned);
+            IReadOnlyList<GameplayStateDifference> differences =
+                GameplayCombatStateDiffer.Compare(before, after);
+
+            Assert.That(after.CanonicalHash, Is.Not.EqualTo(before.CanonicalHash));
+            Assert.That(differences,
+                Has.Some.Property(nameof(GameplayStateDifference.Path))
+                    .EqualTo("actor.alpha.pin.active"));
+            Assert.That(differences,
+                Has.Some.Property(nameof(GameplayStateDifference.Path))
+                    .EqualTo("actor.alpha.pin.prop"));
+            Assert.That(differences,
+                Has.Some.Property(nameof(GameplayStateDifference.Path))
+                    .EqualTo("actor.alpha.pin.contact.depth"));
+        }
+
+        [Test]
         public void CommitRejectsStalePreparedStateBeforeMutation()
         {
             GameplayCombatStateSnapshot previous = CreateState(
@@ -137,7 +169,8 @@ namespace GritGud.Domain.Tests.Gameplay
         private static GameplayActorSnapshot CreateActor(
             string actorId,
             float positionX,
-            int actionPoints)
+            int actionPoints,
+            ActorPinState pinState = null)
         {
             return new GameplayActorSnapshot(
                 actorId,
@@ -151,7 +184,8 @@ namespace GritGud.Domain.Tests.Gameplay
                 maximumWounds: int.MaxValue,
                 inventory: null,
                 turnActionPointAllowance: 4,
-                turnMovementAllowance: 8f);
+                turnMovementAllowance: 8f,
+                pinState: pinState);
         }
     }
 }
