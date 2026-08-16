@@ -10,19 +10,21 @@ namespace GritGud.Presentation.Gameplay
     {
         private readonly Dictionary<string, OriginalActorState> originals =
             new Dictionary<string, OriginalActorState>(StringComparer.Ordinal);
-        private readonly Dictionary<string, GameplayActorPose> finalPoses =
-            new Dictionary<string, GameplayActorPose>(StringComparer.Ordinal);
         private GameplaySession gameplay;
         private GameplayWorldRegistry world;
         private GameplayInputController input;
         private GameplayTurnReplayHud hud;
+        private GameplayProjectileController projectiles;
+        private GameplayDestructibleController destructibles;
         private bool presenting;
 
         public void Bind(
             GameplaySession session,
             GameplayWorldRegistry registry,
             GameplayInputController inputController,
-            GameplayTurnReplayHud replayHud)
+            GameplayTurnReplayHud replayHud,
+            GameplayProjectileController projectileController,
+            GameplayDestructibleController destructibleController)
         {
             Dispose();
             gameplay = session ?? throw new ArgumentNullException(nameof(session));
@@ -30,6 +32,10 @@ namespace GritGud.Presentation.Gameplay
             input = inputController ?? throw new ArgumentNullException(
                 nameof(inputController));
             hud = replayHud ?? throw new ArgumentNullException(nameof(replayHud));
+            projectiles = projectileController ?? throw new ArgumentNullException(
+                nameof(projectileController));
+            destructibles = destructibleController ?? throw new ArgumentNullException(
+                nameof(destructibleController));
             hud.OpenChanged += HandleOpenChanged;
             hud.PlayheadChanged += HandlePlayheadChanged;
         }
@@ -46,6 +52,8 @@ namespace GritGud.Presentation.Gameplay
             world = null;
             input = null;
             hud = null;
+            projectiles = null;
+            destructibles = null;
         }
 
         private void HandleOpenChanged(bool open)
@@ -57,7 +65,6 @@ namespace GritGud.Presentation.Gameplay
             }
 
             originals.Clear();
-            finalPoses.Clear();
             TurnReplayStateWindow stateWindow = hud.StateWindow;
             if (stateWindow == null)
                 return;
@@ -71,9 +78,7 @@ namespace GritGud.Presentation.Gameplay
                         actor.Stance.Stance));
                 actor.Motor?.StopPlanarMovement();
             }
-            foreach (GameplayActorSnapshot actor in
-                stateWindow.End.State.Session.Actors)
-                finalPoses.Add(actor.ActorId, actor.Pose);
+            projectiles.BeginReplayPresentation();
             presenting = true;
             input.SetCameraOnly(true);
             Present(hud.Playhead);
@@ -87,16 +92,17 @@ namespace GritGud.Presentation.Gameplay
 
         private void Present(float playhead)
         {
-            TurnReplayWindow window = hud.Window;
+            TurnReplayStateWindow window = hud.StateWindow;
             if (window == null)
                 return;
-            IReadOnlyDictionary<string, GameplayActorPose> poses =
-                TurnReplayPoseProjector.Project(window, finalPoses, playhead);
-            foreach (KeyValuePair<string, GameplayActorPose> entry in poses)
+            TurnReplayWorldStateSample sample =
+                TurnReplayWorldStateSampler.Sample(window, playhead);
+            foreach (KeyValuePair<string, GameplayActorSnapshot> entry in
+                sample.Actors)
             {
                 if (!world.TryGetActor(entry.Key, out GameplayActorView actor))
                     continue;
-                GameplayActorPose pose = entry.Value;
+                GameplayActorPose pose = entry.Value.Pose;
                 actor.Transform.SetPositionAndRotation(
                     new Vector3(
                         pose.Position.X,
@@ -106,6 +112,8 @@ namespace GritGud.Presentation.Gameplay
                 if (actor.Stance.Stance != pose.Stance)
                     actor.Stance.ApplyResolved(pose.Stance);
             }
+            destructibles.PresentReplay(sample.Destructibles);
+            projectiles.PresentReplay(sample.Projectiles);
         }
 
         private void Restore()
@@ -123,8 +131,9 @@ namespace GritGud.Presentation.Gameplay
                     actor.Stance.ApplyResolved(entry.Value.Stance);
             }
             input?.SetCameraOnly(false);
+            projectiles?.EndReplayPresentation();
+            destructibles?.RestoreAuthoritativePresentation();
             originals.Clear();
-            finalPoses.Clear();
             presenting = false;
         }
 

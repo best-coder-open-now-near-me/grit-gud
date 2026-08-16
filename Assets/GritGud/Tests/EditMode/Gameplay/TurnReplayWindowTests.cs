@@ -222,6 +222,114 @@ namespace GritGud.Domain.Tests.Gameplay
                 Is.EqualTo(lastSequence));
         }
 
+        [Test]
+        public void WorldStateSamplerUsesCanonicalPersistentSegmentState()
+        {
+            GameplaySession session = CreateSession();
+            using (var timeline = new GameplayCombatStateTimeline(
+                session,
+                () => GameplayCombatStateCapture.Capture(session)))
+            {
+                Assert.That(session.BeginEncounter(), Is.True);
+                string anchorActorId = session.ActiveActorId;
+                session.SpendMovement(anchorActorId, 2f);
+                do
+                {
+                    Assert.That(session.TryEndTurn(
+                        session.ActiveActorId,
+                        out _), Is.True);
+                }
+                while (!string.Equals(
+                    session.ActiveActorId,
+                    anchorActorId,
+                    System.StringComparison.Ordinal));
+                Assert.That(TurnReplayWindowProjector.TryProject(
+                    session.Journal,
+                    anchorActorId,
+                    out TurnReplayWindow replay), Is.True);
+                Assert.That(TurnReplayStateWindowProjector.TryProject(
+                    replay,
+                    timeline,
+                    out TurnReplayStateWindow states), Is.True);
+
+                TurnReplayWorldStateSample during =
+                    TurnReplayWorldStateSampler.Sample(states, 0.5f);
+                TurnReplayWorldStateSample afterFirstTurn =
+                    TurnReplayWorldStateSampler.Sample(states, 1f);
+
+                Assert.That(
+                    during.Actors[anchorActorId]
+                        .TurnBudget.MovementOpportunity,
+                    Is.EqualTo(8f));
+                Assert.That(
+                    afterFirstTurn.Actors[anchorActorId]
+                        .TurnBudget.MovementOpportunity,
+                    Is.EqualTo(6f));
+                Assert.That(
+                    session.GetActor(anchorActorId)
+                        .TurnBudget.MovementOpportunity,
+                    Is.EqualTo(8f));
+            }
+        }
+
+        [Test]
+        public void WorldStateSamplerInterpolatesRecordedProjectileFlight()
+        {
+            GameplaySession session = CreateProjectileSession();
+            var destructibles = new DestructiblePropSession(
+                System.Array.Empty<DestructiblePropDefinition>());
+            var projectiles = new GameplayProjectileSession(
+                session,
+                new ClearProjectileQuery(),
+                new GameplayBlastConsequenceResolver(session, destructibles));
+            using (var timeline = new GameplayCombatStateTimeline(
+                session,
+                () => GameplayCombatStateCapture.Capture(
+                    session,
+                    destructibles,
+                    projectiles: projectiles)))
+            {
+                Assert.That(session.BeginEncounter(), Is.True);
+                string anchorActorId = session.ActiveActorId;
+                Assert.That(projectiles.TryLaunch(
+                    anchorActorId,
+                    "target",
+                    new GameplayPosition(0f, 0f, 10f),
+                    out _,
+                    out _), Is.True);
+                projectiles.Advance("projectile.1", 1f);
+                do
+                {
+                    Assert.That(session.TryEndTurn(
+                        session.ActiveActorId,
+                        out _), Is.True);
+                }
+                while (!string.Equals(
+                    session.ActiveActorId,
+                    anchorActorId,
+                    System.StringComparison.Ordinal));
+                Assert.That(TurnReplayWindowProjector.TryProject(
+                    session.Journal,
+                    anchorActorId,
+                    out TurnReplayWindow replay), Is.True);
+                Assert.That(TurnReplayStateWindowProjector.TryProject(
+                    replay,
+                    timeline,
+                    out TurnReplayStateWindow states), Is.True);
+
+                TurnReplayWorldStateSample sample =
+                    TurnReplayWorldStateSampler.Sample(states, 0.5f);
+
+                Assert.That(sample.Projectiles, Has.Count.EqualTo(1));
+                Assert.That(sample.Projectiles[0].Status,
+                    Is.EqualTo(ProjectileFlightStatus.InFlight));
+                Assert.That(sample.Projectiles[0].Position.Z,
+                    Is.EqualTo(2f).Within(0.001f));
+                Assert.That(projectiles.GetProjectile("projectile.1").Position.Z,
+                    Is.EqualTo(4f).Within(0.001f));
+            }
+        }
+
         private static GameplaySession CreateSession()
         {
             return new GameplaySession(new ScenarioDefinition(
@@ -247,6 +355,42 @@ namespace GritGud.Domain.Tests.Gameplay
                     new GameplayPosition(initiative, 0f, 0f),
                     0f),
                 new TurnBudget(4, 8f));
+        }
+
+        private static GameplaySession CreateProjectileSession()
+        {
+            var projectile = new ProjectileFlightDefinition(
+                "projectile.replay",
+                speedPerTurn: 4f,
+                radius: 0.1f,
+                maximumRange: 12f);
+            var player = new ScenarioActorDefinition(
+                "player",
+                10,
+                new GameplayActorPose(new GameplayPosition(0f, 0f, 0f), 0f),
+                new TurnBudget(4, 8f),
+                new AttackDefinition(
+                    "attack.replay-projectile",
+                    "Replay projectile",
+                    new ActionCost(2, 0f, ActionMobility.Set),
+                    woundMovementPenalty: 2f,
+                    projectile: projectile));
+            var target = new ScenarioActorDefinition(
+                "target",
+                0,
+                new GameplayActorPose(new GameplayPosition(0f, 0f, 10f), 180f),
+                new TurnBudget(0, 8f));
+            return new GameplaySession(new ScenarioDefinition(
+                "projectile-replay-test",
+                new ScenarioTimingDefinition(1f),
+                new[] { player, target },
+                System.Array.Empty<ScenarioObjectiveDefinition>()));
+        }
+
+        private sealed class ClearProjectileQuery : IProjectileSegmentQuery
+        {
+            public ProjectileSegmentQueryResult Query(ProjectileSegmentQuery query) =>
+                ProjectileSegmentQueryResult.Clear(query.Flight.Launch.Sequence);
         }
     }
 }

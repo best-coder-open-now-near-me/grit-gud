@@ -68,6 +68,15 @@ namespace GritGud.Presentation.Gameplay
             }
 
             bool destroyed = snapshot.State == DestructiblePropState.Destroyed;
+            transform.SetPositionAndRotation(
+                new Vector3(
+                    snapshot.Pose.Position.X,
+                    snapshot.Pose.Position.Y,
+                    snapshot.Pose.Position.Z),
+                Quaternion.Euler(
+                    snapshot.Pose.PitchDegrees,
+                    snapshot.Pose.YawDegrees,
+                    snapshot.Pose.RollDegrees));
             foreach (ComponentEnabledState<Collider> state in colliderStates)
             {
                 if (state.Component != null)

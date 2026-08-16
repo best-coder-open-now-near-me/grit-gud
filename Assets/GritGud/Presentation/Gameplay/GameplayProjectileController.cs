@@ -14,6 +14,9 @@ namespace GritGud.Presentation.Gameplay
 
         private readonly Dictionary<string, ProjectileFlightPresenter> presenters =
             new Dictionary<string, ProjectileFlightPresenter>(StringComparer.Ordinal);
+        private readonly Dictionary<string, ProjectileFlightPresenter>
+            replayPresenters = new Dictionary<string, ProjectileFlightPresenter>(
+                StringComparer.Ordinal);
 
         private GameplayProjectileSession projectiles;
         private GameplayImpactCycleSession impactCycle;
@@ -181,6 +184,7 @@ namespace GritGud.Presentation.Gameplay
             }
 
             presenters.Clear();
+            EndReplayPresentation();
             Session = null;
             projectiles = null;
             if (impactCycle != null)
@@ -212,6 +216,53 @@ namespace GritGud.Presentation.Gameplay
         {
             getVisualLaunchOrigin = originProvider ?? throw new ArgumentNullException(
                 nameof(originProvider));
+        }
+
+        internal void BeginReplayPresentation()
+        {
+            EndReplayPresentation();
+            foreach (ProjectileFlightPresenter presenter in presenters.Values)
+                presenter.SetPresentationSuppressed(true);
+        }
+
+        internal void PresentReplay(
+            IReadOnlyList<ProjectileFlightSnapshot> snapshots)
+        {
+            if (snapshots == null)
+                throw new ArgumentNullException(nameof(snapshots));
+            var retained = new HashSet<string>(StringComparer.Ordinal);
+            foreach (ProjectileFlightSnapshot snapshot in snapshots)
+            {
+                retained.Add(snapshot.ProjectileId);
+                if (!replayPresenters.TryGetValue(
+                    snapshot.ProjectileId,
+                    out ProjectileFlightPresenter presenter))
+                {
+                    presenter = new ProjectileFlightPresenter(
+                        snapshot,
+                        presentationCatalog.Get(snapshot.Launch.Definition.Id),
+                        transform);
+                    replayPresenters.Add(snapshot.ProjectileId, presenter);
+                }
+                presenter.PresentReplay(snapshot);
+            }
+            var removed = new List<string>();
+            foreach (string projectileId in replayPresenters.Keys)
+                if (!retained.Contains(projectileId)) removed.Add(projectileId);
+            foreach (string projectileId in removed)
+            {
+                replayPresenters[projectileId].Dispose();
+                replayPresenters.Remove(projectileId);
+            }
+        }
+
+        internal void EndReplayPresentation()
+        {
+            foreach (ProjectileFlightPresenter presenter in replayPresenters.Values)
+                presenter.Dispose();
+            replayPresenters.Clear();
+            foreach (ProjectileFlightPresenter presenter in presenters.Values)
+                presenter.SetPresentationSuppressed(false);
         }
 
         public bool TryLaunch()

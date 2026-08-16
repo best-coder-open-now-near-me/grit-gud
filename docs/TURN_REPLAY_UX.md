@@ -115,10 +115,19 @@ mutable live transforms—as the basis for pose sampling. Emergency turns remain
 nested journal evidence inside their triggering normal-turn segment, so they do
 not consume checkpoint capacity or become ordinary timeline segments.
 
-Action animation, wounds and equipment visuals, projectiles, destructibles,
-vehicles, smoke, and other persistent effect snapshots remain subsequent
-presentation slices. Until those are connected, the timeline is an actor-pose
-replay rather than a complete reconstruction of every recorded consequence.
+The replay world sampler now combines those canonical boundaries with recorded
+pose evidence. It preserves authoritative actor wound, equipment, budget, and
+inventory state for the selected boundary; samples actor routes and vehicle
+motion; and interpolates projectile flight from its recorded launch and endpoint
+without moving the live projectile. Replay presentation uses isolated projectile
+presenters, suppresses live projectile visuals while open, applies recorded
+destructible transforms and damage state, and restores both systems from their
+authoritative live sessions on close.
+
+Action animation, visible wound variants, replay-specific equipped-model swaps,
+vehicle presentation, smoke presentation, and transient audio/particle sampling
+remain subsequent presentation slices. The canonical sample already carries
+their gameplay state so those slices do not need another replay state model.
 Replay is available only before the player commits an action in the new live
 turn, ensuring the reconstruction remains anchored to the exact recorded
 turn-boundary state.

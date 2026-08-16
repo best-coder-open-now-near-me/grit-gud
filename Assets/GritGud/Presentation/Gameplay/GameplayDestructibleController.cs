@@ -84,6 +84,22 @@ namespace GritGud.Presentation.Gameplay
             Session.CommitDamage(record);
         }
 
+        internal void PresentReplay(
+            IReadOnlyList<DestructiblePropSnapshot> snapshots)
+        {
+            if (snapshots == null)
+                throw new ArgumentNullException(nameof(snapshots));
+            foreach (DestructiblePropSnapshot snapshot in snapshots)
+                Present(snapshot);
+        }
+
+        internal void RestoreAuthoritativePresentation()
+        {
+            if (Session == null) return;
+            foreach (string propId in Session.PropIds)
+                Present(Session.GetProp(propId));
+        }
+
         public void Unbind()
         {
             if (Session != null)

@@ -193,6 +193,13 @@ endpoint hash must still match live authoritative state before replay can open.
 This creates the stable state source for subsequent persistent visual projection
 without turning replay into a second mutable gameplay session.
 
+Replay sampling now produces one immutable presentation sample containing actor
+state and sampled poses, destructibles, vehicles, projectile flights, and smoke.
+Projectile replay uses isolated presenters while live projectile visuals are
+suppressed, and destructible replay restores authoritative presentation on exit.
+This keeps scrubbing reversible and prevents presentation work from writing back
+to canonical sessions.
+
 ## Alpha-exit use
 
 The adversarial gauntlet is intended to cap alpha, but it cannot prove the
