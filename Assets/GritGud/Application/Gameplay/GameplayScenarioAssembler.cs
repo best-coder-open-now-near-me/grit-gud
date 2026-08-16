@@ -296,7 +296,8 @@ namespace GritGud.Application.Gameplay
                     data.enemyBehavior.viewAngleDegrees,
                     data.enemyBehavior.preferredEngagementRange,
                     data.enemyBehavior.movementSearchRadius,
-                    data.enemyBehavior.maximumAttacksPerTurn);
+                    data.enemyBehavior.maximumAttacksPerTurn,
+                    data.enemyBehavior.minimumAttackHitChancePercent);
             return new ActorCombatDefinition(
                 data.allegianceId,
                 data.hostileAllegianceIds,
@@ -356,6 +357,10 @@ namespace GritGud.Application.Gameplay
                     $"Actor '{actor.id}' movement search radius");
                 Require(data.enemyBehavior.maximumAttacksPerTurn > 0,
                     $"Actor '{actor.id}' maximum attacks per turn must be greater than zero.");
+                Require(
+                    data.enemyBehavior.minimumAttackHitChancePercent >= 0
+                        && data.enemyBehavior.minimumAttackHitChancePercent <= 100,
+                    $"Actor '{actor.id}' minimum attack hit chance must be between 0 and 100.");
                 Require(
                     HasImmediateEnemyAttack(actor),
                     $"Enemy actor '{actor.id}' requires an equipped immediate attack.");

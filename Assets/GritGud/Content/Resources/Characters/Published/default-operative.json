@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "characterId": "character.default-operative",
   "displayName": "Default Operative",
   "appearance": {
@@ -12,6 +12,84 @@
       {
         "slotId": "headwear",
         "accessoryId": "accessory.hat-tacticle-01"
+      }
+    ]
+  },
+  "build": {
+    "archetype": "field-operative",
+    "attributes": [
+      {
+        "id": "attribute.strength",
+        "rating": 3
+      },
+      {
+        "id": "attribute.dexterity",
+        "rating": 4
+      },
+      {
+        "id": "attribute.grit",
+        "rating": 4
+      },
+      {
+        "id": "attribute.charisma",
+        "rating": 3
+      }
+    ],
+    "skills": [
+      {
+        "id": "skill.firearms",
+        "rating": 4
+      },
+      {
+        "id": "skill.demolitions",
+        "rating": 2
+      },
+      {
+        "id": "skill.fieldcraft",
+        "rating": 3
+      },
+      {
+        "id": "skill.close-quarters",
+        "rating": 5
+      }
+    ],
+    "talentIds": [
+      "talent.steady-hands",
+      "talent.combat-awareness",
+      "talent.leverage"
+    ],
+    "startingProgressionPoints": 1,
+    "advancementOptions": [
+      {
+        "id": "advancement.demolitions",
+        "skillId": "skill.demolitions",
+        "pointCost": 1,
+        "maximumBonus": 2
+      }
+    ]
+  },
+  "startingLoadout": {
+    "initiallyEquippedItemId": "weapon.rifle",
+    "items": [
+      {
+        "itemId": "weapon.rifle",
+        "quantity": 0,
+        "hotbarSlot": 1
+      },
+      {
+        "itemId": "weapon.combat-knife",
+        "quantity": 0,
+        "hotbarSlot": 2
+      },
+      {
+        "itemId": "item.frag-grenade",
+        "quantity": 2,
+        "hotbarSlot": 3
+      },
+      {
+        "itemId": "item.smoke-grenade",
+        "quantity": 1,
+        "hotbarSlot": 6
       }
     ]
   }

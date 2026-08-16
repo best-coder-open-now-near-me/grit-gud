@@ -264,6 +264,41 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void AuthoredCharacterOverridesTemplateBuildAndStartingLoadout()
+        {
+            TextAsset asset = Resources.Load<TextAsset>("Levels/basic-construction");
+            LevelDocument source = new UnityLevelJsonSerializer().Deserialize(asset.text);
+            source.levelId = "character-authoring-integration";
+            source.scenario = new LevelScenarioData
+            {
+                actors =
+                {
+                    new LevelScenarioActorData
+                    {
+                        id = "authored-operative",
+                        templateId = "player",
+                        characterId = "character.default-operative",
+                        playerControlled = true,
+                        initiallySelected = true,
+                        transform = new LevelTransformData(new Float3Data(), 0f),
+                    },
+                },
+            };
+
+            GameplayContentPackage package = GameplayContentLoader.LoadSandbox(source);
+            ScenarioActorDefinition actor = package.Assembly.GetActorDefinition(
+                "authored-operative");
+
+            Assert.That(actor.CharacterProfile.DisplayName, Is.EqualTo("Default Operative"));
+            Assert.That(actor.CharacterProfile.Archetype, Is.EqualTo("field-operative"));
+            Assert.That(actor.CharacterProfile.CoreAttributes.Dexterity, Is.EqualTo(4));
+            Assert.That(actor.GetInventoryItem("weapon.rifle").HotbarSlot, Is.EqualTo(1));
+            Assert.That(actor.GetInventoryItem("item.frag-grenade").InitialQuantity,
+                Is.EqualTo(2));
+            Assert.That(actor.InitiallyEquippedItemId, Is.EqualTo("weapon.rifle"));
+        }
+
+        [Test]
         public void UnknownArchetypeFailsBeforeConstructingAWorld()
         {
             LevelDocument document = LevelDocumentFactory.CreateEmpty();

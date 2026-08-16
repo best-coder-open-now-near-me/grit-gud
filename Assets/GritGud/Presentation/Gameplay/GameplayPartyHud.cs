@@ -39,6 +39,8 @@ namespace GritGud.Presentation.Gameplay
         private Texture2D memberActiveTexture;
         private Texture2D whiteTexture;
         private string status = string.Empty;
+        private Func<bool> replayAvailable;
+        private Action replayRequested;
 
         public bool IsVisible => enabled;
 
@@ -50,13 +52,17 @@ namespace GritGud.Presentation.Gameplay
         public void Bind(
             GameplaySession session,
             GameplayPartyControlSession control,
-            IGameplayInputSource authoritativeInputSource)
+            IGameplayInputSource authoritativeInputSource,
+            Func<bool> canOpenReplay = null,
+            Action openReplay = null)
         {
             Unbind();
             gameplay = session ?? throw new ArgumentNullException(nameof(session));
             partyControl = control ?? throw new ArgumentNullException(nameof(control));
             inputSource = authoritativeInputSource ?? throw new ArgumentNullException(
                 nameof(authoritativeInputSource));
+            replayAvailable = canOpenReplay;
+            replayRequested = openReplay;
             status = string.Empty;
             partyControl.ControlChanged += HandleControlChanged;
             enabled = true;
@@ -70,6 +76,8 @@ namespace GritGud.Presentation.Gameplay
             gameplay = null;
             partyControl = null;
             inputSource = null;
+            replayAvailable = null;
+            replayRequested = null;
             status = string.Empty;
             enabled = false;
         }
@@ -226,6 +234,18 @@ namespace GritGud.Presentation.Gameplay
                     18f),
                 details,
                 member.Incapacitated ? disabledDetailStyle : detailStyle);
+            if (member.Commanding
+                && replayAvailable?.Invoke() == true
+                && GUI.Button(
+                    new Rect(
+                        rectangle.xMax - 68f,
+                        rectangle.y + 5f,
+                        58f,
+                        20f),
+                    "REPLAY"))
+            {
+                replayRequested?.Invoke();
+            }
         }
 
         private void HandleControlChanged(GameplayPartyControlSnapshot _)

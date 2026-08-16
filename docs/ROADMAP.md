@@ -1,7 +1,17 @@
 # Foundation Roadmap
 
-Each phase ends in something that can be reviewed independently. Mechanics are
-kept deliberately small until the cross-platform loop is working.
+Each phase ends in something that can be reviewed independently, but phases are
+production-shaped integration checkpoints rather than disposable MVPs. The
+[goal-first development and long-horizon AI decision record](GOAL_FIRST_DEVELOPMENT.md)
+defines the project's delivery standard, future trainable tactical-policy
+direction, and alpha adversarial-testing capstone.
+
+The player-facing turn-replay interaction is specified separately in
+[TURN_REPLAY_UX.md](TURN_REPLAY_UX.md). It uses a bounded, turn-segmented timeline
+from the active player character's previous turn to their current turn and does
+not imply permanent full-match replay storage. The active character retains
+their normal gameplay camera throughout playback, and their previous-turn
+segment is optional context rather than part of the default playback range.
 
 ## Current restart checkpoint — 2026-08-11
 
@@ -307,6 +317,20 @@ and incapacitation visuals; and the turn director only composes those services.
 Enemy attacks use the same seeded attack session, target-region exposure,
 weapon catalog, muzzle effects, animation presenter, AP budget, and combat
 diagnostics as player attacks.
+
+**Tactical-confidence follow-up complete:** active-turn target selection now
+compares every capable party member and prefers the highest-chance shot rather
+than blindly choosing the nearest actor. Rifleman behavior authors a minimum
+acceptable hit chance; low-confidence exposure requests bounded route evidence,
+moves only for a strictly better firing position, and falls back to the legal
+shot when no candidate improves it. The detailed ownership contract and next AI
+slices are recorded in [ENEMY_AI.md](ENEMY_AI.md).
+
+**Exploration-detection follow-up complete:** detection no longer commits to the
+first visible actor in roster order. Each scan captures frozen exposure for the
+whole capable party, rejects candidates outside authored perception, and selects
+the most exposed detection with distance and stable party order as deterministic
+tie-breakers.
 
 ## 6. Projectile and explosion slice
 

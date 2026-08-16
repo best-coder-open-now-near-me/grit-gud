@@ -276,6 +276,14 @@ diagnostics, weapon catalog, humanoid pose, and muzzle-origin path as player
 shots. Incapacitation remains authoritative session state; initiative and
 emergency responder selection skip actors that can no longer act.
 
+The first tactical-confidence extension preserves that boundary. Application
+scores frozen exposure for every capable party target and owns an authored
+minimum acceptable hit chance. Unity supplies bounded route/exposure options
+only when the current shot is obstructed, out of reach, or below that threshold;
+Application moves only for a strictly improved firing solution and otherwise
+records the legal fallback shot. Future investigation, reciprocal-cover, and
+squad coordination work is tracked in [ENEMY_AI.md](ENEMY_AI.md).
+
 ### A15 - Core attributes own their derived rules
 
 **Status: implemented for the authored roster**

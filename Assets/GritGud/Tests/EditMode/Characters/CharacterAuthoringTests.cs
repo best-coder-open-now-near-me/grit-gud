@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using GritGud.Application.Characters;
 using GritGud.Domain.Characters;
+using GritGud.Domain.Gameplay;
 using NUnit.Framework;
 
 namespace GritGud.Domain.Tests.Characters
@@ -105,6 +106,58 @@ namespace GritGud.Domain.Tests.Characters
             Assert.That(session.IsDirty, Is.False);
             Assert.That(session.Redo(), Is.True);
             Assert.That(session.CreateSnapshot().displayName, Is.EqualTo("After"));
+        }
+
+        [Test]
+        public void DocumentDeepCopyKeepsBuildAndLoadoutDetached()
+        {
+            var source = new CharacterDocument();
+            source.build.SetRating(source.build.attributes, CoreAttributeIds.Strength, 4);
+            source.startingLoadout.items.Add(new CharacterLoadoutItemData
+            {
+                itemId = "weapon.rifle",
+                quantity = 1,
+                hotbarSlot = 1,
+            });
+
+            CharacterDocument copy = source.DeepCopy();
+            copy.build.SetRating(copy.build.attributes, CoreAttributeIds.Strength, 2);
+            copy.startingLoadout.items[0].quantity = 3;
+
+            Assert.That(source.build.GetRating(source.build.attributes, CoreAttributeIds.Strength),
+                Is.EqualTo(4));
+            Assert.That(source.startingLoadout.items[0].quantity, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ValidatorRejectsIncompleteBuildAndConflictingLoadout()
+        {
+            var document = new CharacterDocument
+            {
+                characterId = "character.invalid-build",
+                displayName = "Invalid Build",
+                appearance = new CharacterAppearanceData { bodyId = "body.male" },
+            };
+            document.build.attributes.RemoveAll(
+                value => value.id == CoreAttributeIds.Charisma);
+            document.startingLoadout.items.Add(new CharacterLoadoutItemData
+            {
+                itemId = "weapon.rifle",
+                hotbarSlot = 1,
+            });
+            document.startingLoadout.items.Add(new CharacterLoadoutItemData
+            {
+                itemId = "weapon.knife",
+                hotbarSlot = 1,
+            });
+            var content = new CharacterAppearanceValidationContent(
+                new[] { new KeyValuePair<string, string>("body.male", "male") },
+                null);
+
+            IReadOnlyList<string> issues = CharacterValidator.Validate(document, content);
+
+            Assert.That(issues, Has.Some.Contains(CoreAttributeIds.Charisma));
+            Assert.That(issues, Has.Some.Contains("duplicates hotbar slot 1"));
         }
     }
 }

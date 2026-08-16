@@ -29,6 +29,8 @@ namespace GritGud.Presentation.Gameplay
         private GameplayInputController inputController;
         private GameplayHud hud;
         private GameplayPartyHud partyHud;
+        private GameplayTurnReplayHud turnReplayHud;
+        private GameplayTurnReplayWorldPresenter turnReplayWorldPresenter;
         private GameplayDialogueDrawer dialogueDrawer;
         private GameplaySessionPresenter sessionPresenter;
         private TurnMovementController turnMovementController;
@@ -84,6 +86,8 @@ namespace GritGud.Presentation.Gameplay
             inputController = GetOrAddComponent<GameplayInputController>();
             hud = GetOrAddComponent<GameplayHud>();
             partyHud = GetOrAddComponent<GameplayPartyHud>();
+            turnReplayHud = GetOrAddComponent<GameplayTurnReplayHud>();
+            turnReplayWorldPresenter ??= new GameplayTurnReplayWorldPresenter();
             dialogueDrawer = GetOrAddComponent<GameplayDialogueDrawer>();
             sessionPresenter = GetOrAddComponent<GameplaySessionPresenter>();
             turnMovementController = GetOrAddComponent<TurnMovementController>();
@@ -128,6 +132,8 @@ namespace GritGud.Presentation.Gameplay
             inputController?.End();
             hud?.Hide();
             partyHud?.Unbind();
+            turnReplayHud?.Unbind();
+            turnReplayWorldPresenter?.Dispose();
             hud?.UnbindSession();
             hud?.UnbindTurnMovement();
             hud?.UnbindGameplayActions();
@@ -515,7 +521,18 @@ namespace GritGud.Presentation.Gameplay
             Action toggleTurnMode = () =>
                 HandleGameplayControl(GameplayControl.ToggleTurnMode);
             inputController.Begin(HandleGameplayControl);
-            partyHud.Bind(session, partyControl, inputController);
+            turnReplayHud.Bind(session, partyControl);
+            turnReplayWorldPresenter.Bind(
+                session,
+                worldRegistry,
+                inputController,
+                turnReplayHud);
+            partyHud.Bind(
+                session,
+                partyControl,
+                inputController,
+                () => turnReplayHud.IsAvailable,
+                turnReplayHud.Toggle);
             hud.BindInputSource(inputController);
             hud.BindTurnModeToggle(toggleTurnMode);
             hud.BindBugReportExport(ExportBugReport);
@@ -799,6 +816,7 @@ namespace GritGud.Presentation.Gameplay
         private bool IsPointerOverGameplayInterface(Vector2 pointer) =>
             (hud?.ContainsInteractiveScreenPoint(pointer) ?? false)
             || (partyHud?.ContainsInteractiveScreenPoint(pointer) ?? false)
+            || (turnReplayHud?.ContainsInteractiveScreenPoint(pointer) ?? false)
             || (dialogueDrawer?.ContainsInteractiveScreenPoint(pointer)
                 ?? false);
 
