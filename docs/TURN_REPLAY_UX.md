@@ -65,13 +65,13 @@ restores recorded visual state and samples seekable movement and projectile
 paths; transient audio, particles, and other cosmetic effects may snap or
 restart when forward playback resumes.
 
-Playback remains in the perspective of the player-controlled character who
-opened the replay. The camera follows that character's recorded position while
-the player may freely look around from that position using the ordinary
-look controls. Turn segments never switch to their acting characters, and the
-player cannot select a companion viewpoint, orbit around the character, zoom,
-translate the camera, or enter a free-camera mode. Look input changes only the
-view direction; it never changes the playhead or authoritative replay state.
+Replay uses the player-controlled character's normal gameplay camera without a
+special replay camera mode. All ordinary camera behavior and controls remain
+available, including looking around and moving between the normal third-person
+and first-person views. The camera follows that character's recorded movement
+just as it follows the live character during play. Turn segments do not switch
+control or camera ownership to their acting characters. Camera input never
+changes the playhead or authoritative replay state.
 
 The timeline is presentation time, not wall-clock decision time. Idle thinking
 time is omitted, and deterministic visual durations are assigned to recorded
@@ -81,9 +81,9 @@ width rather than giving every turn equal space.
 ## Initial interaction limits
 
 - Replay opens only while a player-controlled character owns the active turn.
-- Opening replay pauses live input.
-- The camera follows the active player character's recorded position and allows
-  look-direction input only; it does not switch, orbit, zoom, or translate.
+- Opening replay pauses live character and action input, but not camera input.
+- The active player character keeps their complete normal gameplay camera and
+  camera controls throughout replay; only character control remains paused.
 - Exiting replay restores the live HUD and camera exactly as they were.
 - No generated prose, replay library, full-match persistence, or free-standing
   recap drawer is required.
