@@ -393,6 +393,13 @@ namespace GritGud.Application.Gameplay
 
         public IReadOnlyList<string> InitiativeOrder => initiativeOrder;
 
+        public IReadOnlyList<string> EmergencyResponders =>
+            emergencyResponders ?? Array.Empty<string>();
+
+        public int EmergencyResponderIndex => emergencyResponderIndex;
+
+        public string EmergencyResumeActorId => emergencyResumeActorId ?? string.Empty;
+
         public IReadOnlyList<GameplayInitiativeResult> InitiativeResults =>
             initiativeResults;
 

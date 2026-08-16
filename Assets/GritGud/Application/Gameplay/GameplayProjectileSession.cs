@@ -137,6 +137,16 @@ namespace GritGud.Application.Gameplay
 
         public IReadOnlyList<ProjectileAdvanceRecord> Advances => readOnlyAdvances;
 
+        public IReadOnlyList<string> ProjectileIds
+        {
+            get
+            {
+                var ids = new List<string>(flights.Keys);
+                ids.Sort(StringComparer.Ordinal);
+                return ids.AsReadOnly();
+            }
+        }
+
         public bool HasActiveProjectiles
         {
             get

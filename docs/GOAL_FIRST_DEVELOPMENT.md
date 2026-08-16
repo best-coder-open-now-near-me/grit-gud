@@ -126,6 +126,37 @@ debugging, replay, save/load, and regression testing. Large-scale training and
 the adversarial gauntlet belong near the end of alpha, after the combat rules and
 content contract are sufficiently complete to make their results durable.
 
+## Current production goals
+
+The active production sequence deliberately completes shared foundations before
+policy optimization begins:
+
+1. **Complete turn replay.** Replay must reconstruct every authoritative visual
+   consequence in its bounded window while retaining the active character's
+   ordinary camera and never mutating live state. Actor poses alone are an
+   integration checkpoint, not completion.
+2. **Canonical state and authoritative verification.** All combat-owning
+   subsystems must contribute immutable, schema-versioned state to one canonical
+   capture. The capture must have deterministic hashing, structured first-field
+   differences, hard invariant validation, and replay verification. The canonical
+   representation is production infrastructure for replay, saves, repro capsules,
+   regression tests, and later high-throughput simulation—not an AI-only model.
+3. **Shared prepare/commit transitions.** Every action family must be able to
+   prepare a non-mutating predicted transition from a canonical state, reject a
+   stale state before mutation, commit through the authoritative owner, and
+   compare the actual result with the prediction. Presentation controllers and
+   offline consumers may request or inspect transitions but may not implement
+   parallel game rules.
+
+The canonical state contract now includes session mode and phase, scenario and
+initiative identity, emergency-turn context, actors, objectives, destructibles,
+vehicles, projectiles, smoke fields, and sequence boundaries. Its hash is based
+on explicit invariant-culture fields rather than runtime object identity or
+collection iteration order. The shared transition coordinator enforces pre-state
+freshness and reports post-commit prediction divergence using those same fields.
+This is the common seam that individual action owners will adopt; it is not a
+claim that every action family or every replay visual has already been migrated.
+
 ## Alpha-exit use
 
 The adversarial gauntlet is intended to cap alpha, but it cannot prove the
