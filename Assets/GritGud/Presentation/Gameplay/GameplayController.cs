@@ -539,7 +539,9 @@ namespace GritGud.Presentation.Gameplay
                 inputController,
                 turnReplayHud,
                 projectileController,
-                destructibleController);
+                destructibleController,
+                vehicleController,
+                smokeFieldController);
             partyHud.Bind(
                 session,
                 partyControl,

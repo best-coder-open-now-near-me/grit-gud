@@ -97,6 +97,17 @@ namespace GritGud.Presentation.Tests
                     catalog.GetThrownExplosive("item.smoke-grenade")
                         .ImpactDelaySeconds,
                     Is.EqualTo(0.85f).Within(0.001f));
+
+                controller.BeginReplayPresentation();
+                Assert.That(controller.ActiveVisualCount, Is.Zero);
+                controller.PresentReplay(smoke.CaptureActiveFields());
+                Assert.That(controller.ActiveVisualCount, Is.EqualTo(1));
+                controller.PresentReplay(
+                    System.Array.Empty<SmokeFieldSnapshot>());
+                Assert.That(controller.ActiveVisualCount, Is.Zero);
+                controller.EndReplayPresentation();
+                Assert.That(controller.ActiveVisualCount, Is.EqualTo(1));
+                Assert.That(smoke.ActiveCount, Is.EqualTo(1));
             }
             finally
             {

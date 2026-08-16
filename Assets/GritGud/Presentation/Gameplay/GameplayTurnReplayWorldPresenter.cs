@@ -16,6 +16,8 @@ namespace GritGud.Presentation.Gameplay
         private GameplayTurnReplayHud hud;
         private GameplayProjectileController projectiles;
         private GameplayDestructibleController destructibles;
+        private GameplayVehicleController vehicles;
+        private GameplaySmokeFieldController smoke;
         private bool presenting;
 
         public void Bind(
@@ -24,7 +26,9 @@ namespace GritGud.Presentation.Gameplay
             GameplayInputController inputController,
             GameplayTurnReplayHud replayHud,
             GameplayProjectileController projectileController,
-            GameplayDestructibleController destructibleController)
+            GameplayDestructibleController destructibleController,
+            GameplayVehicleController vehicleController,
+            GameplaySmokeFieldController smokeController)
         {
             Dispose();
             gameplay = session ?? throw new ArgumentNullException(nameof(session));
@@ -36,6 +40,10 @@ namespace GritGud.Presentation.Gameplay
                 nameof(projectileController));
             destructibles = destructibleController ?? throw new ArgumentNullException(
                 nameof(destructibleController));
+            vehicles = vehicleController ?? throw new ArgumentNullException(
+                nameof(vehicleController));
+            smoke = smokeController ?? throw new ArgumentNullException(
+                nameof(smokeController));
             hud.OpenChanged += HandleOpenChanged;
             hud.PlayheadChanged += HandlePlayheadChanged;
         }
@@ -54,6 +62,8 @@ namespace GritGud.Presentation.Gameplay
             hud = null;
             projectiles = null;
             destructibles = null;
+            vehicles = null;
+            smoke = null;
         }
 
         private void HandleOpenChanged(bool open)
@@ -78,10 +88,20 @@ namespace GritGud.Presentation.Gameplay
                         actor.Stance.Stance));
                 actor.Motor?.StopPlanarMovement();
             }
-            projectiles.BeginReplayPresentation();
             presenting = true;
-            input.SetCameraOnly(true);
-            Present(hud.Playhead);
+            try
+            {
+                projectiles.BeginReplayPresentation();
+                vehicles.BeginReplayPresentation();
+                smoke.BeginReplayPresentation();
+                input.SetCameraOnly(true);
+                Present(hud.Playhead);
+            }
+            catch
+            {
+                Restore();
+                throw;
+            }
         }
 
         private void HandlePlayheadChanged(float playhead)
@@ -114,6 +134,8 @@ namespace GritGud.Presentation.Gameplay
             }
             destructibles.PresentReplay(sample.Destructibles);
             projectiles.PresentReplay(sample.Projectiles);
+            vehicles.PresentReplay(sample.Vehicles);
+            smoke.PresentReplay(sample.SmokeFields);
         }
 
         private void Restore()
@@ -130,9 +152,11 @@ namespace GritGud.Presentation.Gameplay
                 if (actor.Stance.Stance != entry.Value.Stance)
                     actor.Stance.ApplyResolved(entry.Value.Stance);
             }
-            input?.SetCameraOnly(false);
             projectiles?.EndReplayPresentation();
             destructibles?.RestoreAuthoritativePresentation();
+            vehicles?.EndReplayPresentation();
+            smoke?.EndReplayPresentation();
+            input?.SetCameraOnly(false);
             originals.Clear();
             presenting = false;
         }

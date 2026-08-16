@@ -122,11 +122,16 @@ motion; and interpolates projectile flight from its recorded launch and endpoint
 without moving the live projectile. Replay presentation uses isolated projectile
 presenters, suppresses live projectile visuals while open, applies recorded
 destructible transforms and damage state, and restores both systems from their
-authoritative live sessions on close.
+authoritative live sessions on close. Vehicle replay applies the sampled
+transform while hiding the live momentum envelope, then restores the exact
+authoritative momentum state and envelope eligibility. Smoke replay pauses live
+field time, swaps presentation-only fields as the playhead crosses canonical
+boundaries, preserves the normal camera-interior treatment, and rebuilds the
+authoritative live fields on exit.
 
 Action animation, visible wound variants, replay-specific equipped-model swaps,
-vehicle presentation, smoke presentation, and transient audio/particle sampling
-remain subsequent presentation slices. The canonical sample already carries
+and transient action audio/particle sampling remain subsequent presentation
+slices. The canonical sample already carries
 their gameplay state so those slices do not need another replay state model.
 Replay is available only before the player commits an action in the new live
 turn, ensuring the reconstruction remains anchored to the exact recorded

@@ -200,6 +200,13 @@ suppressed, and destructible replay restores authoritative presentation on exit.
 This keeps scrubbing reversible and prevents presentation work from writing back
 to canonical sessions.
 
+Vehicle and smoke replay now follow the same isolation rule. Sampled vehicle
+transforms never enter `VehicleMomentumSession`, live momentum envelopes remain
+hidden during replay, and authoritative transforms return on close. Live smoke
+duration is paused while replay is open; presentation-only smoke fields follow
+the sampled canonical set and are replaced by the untouched authoritative set on
+exit.
+
 ## Alpha-exit use
 
 The adversarial gauntlet is intended to cap alpha, but it cannot prove the

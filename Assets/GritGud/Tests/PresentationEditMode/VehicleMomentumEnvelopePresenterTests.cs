@@ -93,6 +93,38 @@ namespace GritGud.Presentation.Tests
                 "The active driver's vehicle presents its envelope.");
         }
 
+        [Test]
+        public void ReplayTransformUsesSampleWithoutChangingMomentumState()
+        {
+            var vehicle = new GameObject("Replay Vehicle");
+            var authoritative = new VehicleMomentumState(
+                "vehicle",
+                new GameplayPosition(1f, 0f, 2f),
+                15f,
+                3f);
+            var sampled = new VehicleMomentumState(
+                "vehicle",
+                new GameplayPosition(5f, 0f, 7f),
+                90f,
+                6f);
+            try
+            {
+                GameplayVehicleController.ApplyReplayTransform(vehicle, sampled);
+
+                Assert.That(vehicle.transform.position,
+                    Is.EqualTo(new Vector3(5f, 0f, 7f)));
+                Assert.That(vehicle.transform.eulerAngles.y,
+                    Is.EqualTo(90f).Within(0.001f));
+                Assert.That(authoritative.Position,
+                    Is.EqualTo(new GameplayPosition(1f, 0f, 2f)));
+                Assert.That(authoritative.Speed, Is.EqualTo(3f));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(vehicle);
+            }
+        }
+
         private static GameplaySession CreateGameplaySession()
         {
             var player = new ScenarioActorDefinition(
