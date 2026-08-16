@@ -135,6 +135,15 @@ Work resumes in this order:
    A future lighting-polish pass can spend the available low-poly render budget
    on authored practical shadows, emissive/bloom hierarchy, selective shafts,
    and smoke-light interaction without introducing spell-like effects.
+   A future character/prop interaction polish pass may make a toppled crate or
+   barrel look as though it has briefly pinned a character when the committed
+   contact geometry supports that read. The character can struggle, push the
+   prop "off," and play an authored get-up before returning to their exact live
+   state. This is presentation layered over the authoritative toppled pose; it
+   must not invent immobilization, move the prop, or rerun physics during
+   replay. If pinning later becomes a real gameplay condition, it needs an
+   explicit status, escape action, committed prop/actor result, and replay
+   evidence rather than animation-driven rules.
 10. Replace frame-relative weapon-hand correction with authored prop rigs.
     **Complete:** rifle, launcher, and knife presentation now instantiate
     project-owned rig prefabs containing the model, muzzle, support-hand, and
