@@ -92,6 +92,7 @@ namespace GritGud.Presentation.Gameplay
                 projectiles.BeginReplayPresentation();
                 vehicles.BeginReplayPresentation();
                 smoke.BeginReplayPresentation();
+                destructibles.ClearReplayTransients();
                 input.SetCameraOnly(true);
                 crossings = new TurnReplayEventCrossingDetector(
                     hud.EventTimeline,
@@ -187,6 +188,12 @@ namespace GritGud.Presentation.Gameplay
         {
             foreach (TurnReplayEventCrossing crossing in values)
             {
+                if (crossing.Boundary == TurnReplayEventBoundary.Start
+                    && crossing.TimedEvent.Entry
+                        is DestructibleDamagedJournalEntry damage)
+                {
+                    destructibles.PresentReplayTransient(damage.Damage);
+                }
                 PresentActorsAt(crossing.TimeSeconds);
                 float progress = crossing.Boundary
                     == TurnReplayEventBoundary.Start ? 0f : 1f;
@@ -212,6 +219,7 @@ namespace GritGud.Presentation.Gameplay
         {
             foreach (GameplayTurnReplayActorPresenter actor in actors.Values)
                 actor.ClearTransients();
+            destructibles.ClearReplayTransients();
         }
 
         private void Restore()

@@ -305,6 +305,8 @@ namespace GritGud.Application.Gameplay
             string.Equals(left.PropId, right.PropId, StringComparison.Ordinal)
             && left.State == right.State
             && left.Posture == right.Posture
+            && left.FractureChunkCount == right.FractureChunkCount
+            && left.DetachedFractureChunks == right.DetachedFractureChunks
             && Math.Abs(left.MaximumIntegrity - right.MaximumIntegrity) <= 0.0001f
             && Math.Abs(left.RemainingIntegrity - right.RemainingIntegrity) <= 0.0001f
             && left.Pose.Position.DistanceTo(right.Pose.Position) <= 0.0001f

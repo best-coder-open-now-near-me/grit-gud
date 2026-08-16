@@ -139,7 +139,8 @@ namespace GritGud.Presentation.Gameplay
                 aim.Normal.x,
                 aim.Normal.y,
                 aim.Normal.z,
-                aim.WorldStateRevision);
+                aim.WorldStateRevision,
+                aim.PreferredFractureChunkIndex);
             return TryDischarge(
                 aim.TargetId,
                 ToGameplayPosition(aim.Position),

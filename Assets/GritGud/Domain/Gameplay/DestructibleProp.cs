@@ -95,6 +95,23 @@ namespace GritGud.Domain.Gameplay
             DestructiblePropState initialState,
             GameplayPropPose pose,
             DestructiblePropPosture initialPosture)
+            : this(
+                id,
+                maximumIntegrity,
+                initialState,
+                pose,
+                initialPosture,
+                fractureChunkCount: 0)
+        {
+        }
+
+        public DestructiblePropDefinition(
+            string id,
+            float maximumIntegrity,
+            DestructiblePropState initialState,
+            GameplayPropPose pose,
+            DestructiblePropPosture initialPosture,
+            int fractureChunkCount)
         {
             if (string.IsNullOrWhiteSpace(id))
             {
@@ -120,11 +137,14 @@ namespace GritGud.Domain.Gameplay
                 throw new ArgumentOutOfRangeException(nameof(initialPosture));
             }
 
+            DestructibleFracture.AllChunksMask(fractureChunkCount);
+
             Id = id;
             MaximumIntegrity = maximumIntegrity;
             InitialState = initialState;
             Pose = pose;
             InitialPosture = initialPosture;
+            FractureChunkCount = fractureChunkCount;
         }
 
         public string Id { get; }
@@ -138,6 +158,8 @@ namespace GritGud.Domain.Gameplay
         public GameplayPropPose Pose { get; }
 
         public DestructiblePropPosture InitialPosture { get; }
+
+        public int FractureChunkCount { get; }
 
         public DestructiblePropSnapshot CreateInitialSnapshot()
         {
@@ -164,7 +186,12 @@ namespace GritGud.Domain.Gameplay
                 MaximumIntegrity,
                 remainingIntegrity,
                 Pose,
-                InitialPosture);
+                InitialPosture,
+                FractureChunkCount,
+                DestructibleFracture.CreateInitialMask(
+                    InitialState,
+                    FractureChunkCount,
+                    Id));
         }
 
         private static bool IsFinitePositive(float value) =>
@@ -210,6 +237,27 @@ namespace GritGud.Domain.Gameplay
             float remainingIntegrity,
             GameplayPropPose pose,
             DestructiblePropPosture posture)
+            : this(
+                propId,
+                state,
+                maximumIntegrity,
+                remainingIntegrity,
+                pose,
+                posture,
+                fractureChunkCount: 0,
+                detachedFractureChunks: 0UL)
+        {
+        }
+
+        public DestructiblePropSnapshot(
+            string propId,
+            DestructiblePropState state,
+            float maximumIntegrity,
+            float remainingIntegrity,
+            GameplayPropPose pose,
+            DestructiblePropPosture posture,
+            int fractureChunkCount,
+            ulong detachedFractureChunks)
         {
             if (string.IsNullOrWhiteSpace(propId))
             {
@@ -251,6 +299,10 @@ namespace GritGud.Domain.Gameplay
                     "Destructible state must agree with remaining integrity.",
                     nameof(state));
             }
+            DestructibleFracture.ValidateSnapshot(
+                state,
+                fractureChunkCount,
+                detachedFractureChunks);
 
             PropId = propId;
             State = state;
@@ -258,6 +310,8 @@ namespace GritGud.Domain.Gameplay
             RemainingIntegrity = remainingIntegrity;
             Pose = pose;
             Posture = posture;
+            FractureChunkCount = fractureChunkCount;
+            DetachedFractureChunks = detachedFractureChunks;
         }
 
         public string PropId { get; }
@@ -274,6 +328,10 @@ namespace GritGud.Domain.Gameplay
 
         public DestructiblePropPosture Posture { get; }
 
+        public int FractureChunkCount { get; }
+
+        public ulong DetachedFractureChunks { get; }
+
         private static bool IsFinite(float value) =>
             !float.IsNaN(value) && !float.IsInfinity(value);
     }
@@ -285,6 +343,21 @@ namespace GritGud.Domain.Gameplay
             float appliedDamage,
             DestructiblePropSnapshot previous,
             DestructiblePropSnapshot resulting)
+            : this(
+                sequence,
+                appliedDamage,
+                previous,
+                resulting,
+                preferredFractureChunkIndex: -1)
+        {
+        }
+
+        public DestructibleDamageRecord(
+            long sequence,
+            float appliedDamage,
+            DestructiblePropSnapshot previous,
+            DestructiblePropSnapshot resulting,
+            int preferredFractureChunkIndex)
         {
             if (sequence <= 0)
             {
@@ -307,11 +380,19 @@ namespace GritGud.Domain.Gameplay
                     "A damage record cannot change prop identity.",
                     nameof(resulting));
             }
+            if (previous.FractureChunkCount != resulting.FractureChunkCount
+                || preferredFractureChunkIndex < -1
+                || preferredFractureChunkIndex >= previous.FractureChunkCount)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(preferredFractureChunkIndex));
+            }
 
             Sequence = sequence;
             AppliedDamage = appliedDamage;
             Previous = previous;
             Resulting = resulting;
+            PreferredFractureChunkIndex = preferredFractureChunkIndex;
         }
 
         public long Sequence { get; }
@@ -323,5 +404,11 @@ namespace GritGud.Domain.Gameplay
         public DestructiblePropSnapshot Previous { get; }
 
         public DestructiblePropSnapshot Resulting { get; }
+
+        public int PreferredFractureChunkIndex { get; }
+
+        public ulong NewlyDetachedFractureChunks =>
+            Resulting.DetachedFractureChunks
+            & ~Previous.DetachedFractureChunks;
     }
 }

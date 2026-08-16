@@ -16,7 +16,8 @@ namespace GritGud.Presentation.Gameplay
                 targetId,
                 -Vector3.forward,
                 SurfacePresentationCatalog.DefaultSurfaceId,
-                worldStateRevision: 0L)
+                worldStateRevision: 0L,
+                preferredFractureChunkIndex: -1)
         {
         }
 
@@ -25,7 +26,8 @@ namespace GritGud.Presentation.Gameplay
             string targetId,
             Vector3 normal,
             string surfaceId,
-            long worldStateRevision)
+            long worldStateRevision,
+            int preferredFractureChunkIndex)
         {
             Position = position;
             TargetId = string.IsNullOrWhiteSpace(targetId)
@@ -38,6 +40,7 @@ namespace GritGud.Presentation.Gameplay
                 ? SurfacePresentationCatalog.DefaultSurfaceId
                 : surfaceId;
             WorldStateRevision = Math.Max(0L, worldStateRevision);
+            PreferredFractureChunkIndex = preferredFractureChunkIndex;
         }
 
         public Vector3 Position { get; }
@@ -49,6 +52,8 @@ namespace GritGud.Presentation.Gameplay
         public string SurfaceId { get; }
 
         public long WorldStateRevision { get; }
+
+        public int PreferredFractureChunkIndex { get; }
     }
 
     [DisallowMultipleComponent]
@@ -365,13 +370,15 @@ namespace GritGud.Presentation.Gameplay
                 ref aimPoint,
                 ref targetId,
                 out Vector3 normal,
-                out string surfaceId);
+                out string surfaceId,
+                out int preferredFractureChunkIndex);
             aim = new GameplayWeaponAim(
                 aimPoint,
                 targetId,
                 normal,
                 surfaceId,
-                session.Journal.LastEntry?.Sequence ?? 0L);
+                session.Journal.LastEntry?.Sequence ?? 0L,
+                preferredFractureChunkIndex);
             return true;
         }
 
@@ -380,13 +387,15 @@ namespace GritGud.Presentation.Gameplay
             ref Vector3 aimPoint,
             ref string targetId,
             out Vector3 normal,
-            out string surfaceId)
+            out string surfaceId,
+            out int preferredFractureChunkIndex)
         {
             Vector3 offset = aimPoint - origin;
             normal = offset.sqrMagnitude > 0.0001f
                 ? -offset.normalized
                 : Vector3.up;
             surfaceId = SurfacePresentationCatalog.DefaultSurfaceId;
+            preferredFractureChunkIndex = -1;
             if (offset.sqrMagnitude <= 0.0001f)
             {
                 return;
@@ -430,6 +439,13 @@ namespace GritGud.Presentation.Gameplay
                     out LevelEntityView entity))
             {
                 surfaceId = entity.Archetype.SurfacePresentationId;
+                DestructibleFractureProfile fracture =
+                    entity.Archetype.FractureProfile;
+                if (fracture != null)
+                {
+                    preferredFractureChunkIndex = fracture.FindClosestChunkIndex(
+                        entity.transform.InverseTransformPoint(nearest.point));
+                }
             }
         }
 

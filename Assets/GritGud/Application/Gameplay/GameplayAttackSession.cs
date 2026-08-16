@@ -403,6 +403,7 @@ namespace GritGud.Application.Gameplay
                 && destructibles.TryPrepareDamage(
                     targetId,
                     requestedDamage,
+                    impact.PreferredFractureChunkIndex,
                     out DestructibleDamageRecord damage)
                 ? damage
                 : null;

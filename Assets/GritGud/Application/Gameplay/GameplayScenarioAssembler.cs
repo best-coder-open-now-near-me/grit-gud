@@ -776,7 +776,9 @@ namespace GritGud.Application.Gameplay
             ScenarioProjectileCapabilityData projectile = attack.projectile;
             ScenarioContactAttackData contact = attack.contact;
             ScenarioDirectFireDamageData directFireDamage =
-                attack.directFireDamage;
+                HasAuthoredDirectFireDamage(attack.directFireDamage)
+                    ? attack.directFireDamage
+                    : null;
             bool contactEnabled = contact != null && contact.enabled;
             Require(
                 !contactEnabled || projectile == null || !projectile.enabled,
@@ -942,7 +944,7 @@ namespace GritGud.Application.Gameplay
         private static DirectFireDamageDefinition
             CreateDirectFireDamageDefinition(ScenarioDirectFireDamageData data)
         {
-            if (data == null)
+            if (!HasAuthoredDirectFireDamage(data))
             {
                 return null;
             }
@@ -962,6 +964,13 @@ namespace GritGud.Application.Gameplay
                 data.baseIntegrityDamage,
                 modifiers);
         }
+
+        private static bool HasAuthoredDirectFireDamage(
+            ScenarioDirectFireDamageData data) =>
+            data != null
+            && (!string.IsNullOrWhiteSpace(data.damageTypeId)
+                || data.baseIntegrityDamage != 0f
+                || (data.surfaceModifiers?.Count ?? 0) > 0);
 
         private static InventoryItemKind ParseInventoryItemKind(string value)
         {

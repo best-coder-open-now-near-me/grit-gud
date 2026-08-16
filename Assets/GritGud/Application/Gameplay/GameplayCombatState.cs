@@ -316,6 +316,11 @@ namespace GritGud.Application.Gameplay
                 Append(text, root + ".pitch", prop.Pose.PitchDegrees);
                 Append(text, root + ".roll", prop.Pose.RollDegrees);
                 Append(text, root + ".posture", (int)prop.Posture);
+                Append(text, root + ".fracture.count", prop.FractureChunkCount);
+                Append(
+                    text,
+                    root + ".fracture.detached",
+                    prop.DetachedFractureChunks.ToString());
             }
             foreach (VehicleMomentumState vehicle in state.Vehicles)
             {

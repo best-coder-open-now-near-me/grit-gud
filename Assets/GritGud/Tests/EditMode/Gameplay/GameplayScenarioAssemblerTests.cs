@@ -592,6 +592,7 @@ namespace GritGud.Domain.Tests
             ScenarioAttackCapabilityData attack =
                 content.actors[0].attackCapability;
             attack.accuracyDecay = new ScenarioAccuracyDecayData();
+            attack.directFireDamage = new ScenarioDirectFireDamageData();
             attack.projectile = new ScenarioProjectileCapabilityData
             {
                 enabled = true,
@@ -611,6 +612,7 @@ namespace GritGud.Domain.Tests
 
             Assert.That(definition.Projectile, Is.Not.Null);
             Assert.That(definition.AccuracyDecay, Is.Null);
+            Assert.That(definition.DirectFireDamage, Is.Null);
         }
 
         [Test]

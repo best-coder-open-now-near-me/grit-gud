@@ -45,7 +45,14 @@ namespace GritGud.Domain.Tests.Gameplay
                     new DestructiblePropDefinition(
                         "crate",
                         10f,
-                        DestructiblePropState.Intact),
+                        DestructiblePropState.Intact,
+                        new GameplayPropPose(
+                            new GameplayPosition(0f, 0f, 5f),
+                            0f,
+                            0f,
+                            0f),
+                        DestructiblePropPosture.Upright,
+                        fractureChunkCount: 12),
                 },
                 gameplay.Journal);
             gameplay.EnterTurnMode();
@@ -73,6 +80,10 @@ namespace GritGud.Domain.Tests.Gameplay
                 prepared.Predicted.Destructibles[0].RemainingIntegrity,
                 Is.EqualTo(6f));
             Assert.That(
+                (prepared.Predicted.Destructibles[0].DetachedFractureChunks
+                    & (1UL << 7)) != 0UL,
+                Is.True);
+            Assert.That(
                 prepared.Predicted.Session.JournalSequence,
                 Is.EqualTo(prepared.Previous.Session.JournalSequence + 2L));
 
@@ -84,6 +95,9 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(discharge.Impact, Is.SameAs(impact));
             Assert.That(discharge.Damage, Is.Not.Null);
             Assert.That(discharge.Damage.AppliedDamage, Is.EqualTo(4f));
+            Assert.That(
+                discharge.Damage.PreferredFractureChunkIndex,
+                Is.EqualTo(7));
             Assert.That(
                 destructibles.GetProp("crate").RemainingIntegrity,
                 Is.EqualTo(6f));
@@ -180,6 +194,7 @@ namespace GritGud.Domain.Tests.Gameplay
                 0f,
                 0f,
                 -1f,
-                gameplay.Journal.LastEntry?.Sequence ?? 0L);
+                gameplay.Journal.LastEntry?.Sequence ?? 0L,
+                preferredFractureChunkIndex: 7);
     }
 }

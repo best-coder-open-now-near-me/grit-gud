@@ -63,7 +63,8 @@ namespace GritGud.Application.Gameplay
 
         public static DestructiblePropSession FromLevel(
             LevelDocument level,
-            GameplayJournal journal = null)
+            GameplayJournal journal = null,
+            Func<LevelEntity, int> fractureChunkCountResolver = null)
         {
             if (level == null)
             {
@@ -91,7 +92,8 @@ namespace GritGud.Application.Gameplay
                         pitchDegrees: 0f,
                         yawDegrees: entity.transform.yawDegrees,
                         rollDegrees: 0f),
-                    DestructiblePropPosture.Upright));
+                    DestructiblePropPosture.Upright,
+                    fractureChunkCountResolver?.Invoke(entity) ?? 0));
             }
 
             return new DestructiblePropSession(definitions, journal);
@@ -152,6 +154,17 @@ namespace GritGud.Application.Gameplay
             string propId,
             float requestedDamage,
             out DestructibleDamageRecord record)
+            => TryPrepareDamage(
+                propId,
+                requestedDamage,
+                preferredFractureChunkIndex: -1,
+                out record);
+
+        public bool TryPrepareDamage(
+            string propId,
+            float requestedDamage,
+            int preferredFractureChunkIndex,
+            out DestructibleDamageRecord record)
         {
             if (float.IsNaN(requestedDamage)
                 || float.IsInfinity(requestedDamage)
@@ -176,18 +189,28 @@ namespace GritGud.Application.Gameplay
             DestructiblePropState resultingState = remainingIntegrity <= 0f
                 ? DestructiblePropState.Destroyed
                 : DestructiblePropState.Damaged;
+            ulong detachedChunks = DestructibleFracture.CreateResultingMask(
+                previous.PropId,
+                previous.FractureChunkCount,
+                previous.DetachedFractureChunks,
+                previous.MaximumIntegrity,
+                remainingIntegrity,
+                preferredFractureChunkIndex);
             var resulting = new DestructiblePropSnapshot(
                 previous.PropId,
                 resultingState,
                 previous.MaximumIntegrity,
                 remainingIntegrity,
                 previous.Pose,
-                previous.Posture);
+                previous.Posture,
+                previous.FractureChunkCount,
+                detachedChunks);
             record = new DestructibleDamageRecord(
                 damageRecords.Count + 1L,
                 appliedDamage,
                 previous,
-                resulting);
+                resulting,
+                preferredFractureChunkIndex);
             return true;
         }
 
@@ -242,8 +265,20 @@ namespace GritGud.Application.Gameplay
             DestructiblePropState expectedState = expectedRemaining <= 0f
                 ? DestructiblePropState.Destroyed
                 : DestructiblePropState.Damaged;
+            ulong expectedDetachedChunks =
+                DestructibleFracture.CreateResultingMask(
+                    current.PropId,
+                    current.FractureChunkCount,
+                    current.DetachedFractureChunks,
+                    current.MaximumIntegrity,
+                    expectedRemaining,
+                    record.PreferredFractureChunkIndex);
             if (!Approximately(expectedRemaining, record.Resulting.RemainingIntegrity)
                 || record.Resulting.State != expectedState
+                || record.Resulting.FractureChunkCount
+                    != current.FractureChunkCount
+                || record.Resulting.DetachedFractureChunks
+                    != expectedDetachedChunks
                 || !Approximately(
                     current.MaximumIntegrity,
                     record.Resulting.MaximumIntegrity)
@@ -286,7 +321,9 @@ namespace GritGud.Application.Gameplay
                 current.MaximumIntegrity,
                 current.RemainingIntegrity,
                 resulting.Pose,
-                resulting.Posture);
+                resulting.Posture,
+                current.FractureChunkCount,
+                current.DetachedFractureChunks);
         }
 
         public static DestructiblePropState ParseState(string value)
@@ -318,6 +355,8 @@ namespace GritGud.Application.Gameplay
             && left.State == right.State
             && Approximately(left.MaximumIntegrity, right.MaximumIntegrity)
             && Approximately(left.RemainingIntegrity, right.RemainingIntegrity)
+            && left.FractureChunkCount == right.FractureChunkCount
+            && left.DetachedFractureChunks == right.DetachedFractureChunks
             && PropStatesMatch(left, right);
 
         private static bool PropStatesMatch(

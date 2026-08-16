@@ -138,13 +138,21 @@ namespace GritGud.Application.Gameplay
             DestructiblePropState state = remaining <= 0f
                 ? DestructiblePropState.Destroyed
                 : DestructiblePropState.Damaged;
+            ulong detachedChunks = DestructibleFracture.CreateResultingMask(
+                prop.PropId,
+                prop.FractureChunkCount,
+                prop.DetachedFractureChunks,
+                prop.MaximumIntegrity,
+                remaining);
             destructibles[index] = new DestructiblePropSnapshot(
                 prop.PropId,
                 state,
                 prop.MaximumIntegrity,
                 remaining,
                 prop.Pose,
-                prop.Posture);
+                prop.Posture,
+                prop.FractureChunkCount,
+                detachedChunks);
             return true;
         }
 

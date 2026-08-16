@@ -97,6 +97,35 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void DefaultBreakableCoverOwnsStableBakedFractureProfiles()
+        {
+            LevelArchetypeCatalog archetypes = LevelArchetypeCatalog.LoadDefault();
+            foreach (string archetypeId in new[]
+            {
+                "prop.crate.standard",
+                "prop.barrel.metal",
+            })
+            {
+                Assert.That(archetypes.TryGet(archetypeId, out var archetype),
+                    Is.True);
+                DestructibleFractureProfile fracture = archetype.FractureProfile;
+                Assert.That(fracture, Is.Not.Null, archetypeId);
+                Assert.That(fracture.ChunkCount, Is.EqualTo(12), archetypeId);
+                Assert.That(fracture.FracturedPrefab, Is.Not.Null, archetypeId);
+                DestructibleFractureChunk[] chunks = fracture.FracturedPrefab
+                    .GetComponentsInChildren<DestructibleFractureChunk>(true);
+                Assert.That(chunks.Length, Is.EqualTo(fracture.ChunkCount));
+                Assert.That(
+                    chunks.Select(chunk => chunk.ChunkIndex).Distinct().Count(),
+                    Is.EqualTo(fracture.ChunkCount));
+                Assert.That(
+                    chunks.All(chunk =>
+                        chunk.GetComponent<MeshCollider>()?.convex == true),
+                    Is.True);
+            }
+        }
+
+        [Test]
         public void ActorCatalogOwnsPrefabAndInitialInputPolicy()
         {
             ActorPresentationCatalog catalog =

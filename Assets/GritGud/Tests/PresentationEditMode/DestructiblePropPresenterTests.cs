@@ -70,7 +70,7 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
-        public void DamagedPropChangesItsRealCollisionHeight()
+        public void DamagedPropWithoutFractureProfileRetainsItsAuthoredCollision()
         {
             var prop = new GameObject("Destructible Prop");
             GameObject visual = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -95,13 +95,108 @@ namespace GritGud.Presentation.Tests
                 Physics.SyncTransforms();
 
                 Assert.That(visual.GetComponent<Collider>().bounds.size.y,
-                    Is.EqualTo(intactHeight * DestructiblePropPresenter.DamagedHeightFraction)
-                        .Within(0.001f));
+                    Is.EqualTo(intactHeight).Within(0.001f));
                 Assert.That(visual.GetComponent<Collider>().enabled, Is.True);
             }
             finally
             {
                 Object.DestroyImmediate(prop);
+            }
+        }
+
+        [Test]
+        public void BakedFractureReplacesOriginalAndClearsTransientDebrisOnSeek()
+        {
+            var prop = new GameObject("Destructible Prop");
+            GameObject visual = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var fracturePrefab = new GameObject("Fracture Prefab");
+            var profile = ScriptableObject.CreateInstance<
+                DestructibleFractureProfile>();
+            try
+            {
+                visual.transform.SetParent(prop.transform, false);
+                var centers = new[]
+                {
+                    new Vector3(-0.25f, 0.25f, 0f),
+                    new Vector3(0.25f, 0.25f, 0f),
+                    new Vector3(0f, 0.75f, 0f),
+                };
+                for (int index = 0; index < centers.Length; index++)
+                {
+                    GameObject chunk = GameObject.CreatePrimitive(
+                        PrimitiveType.Cube);
+                    chunk.name = $"Chunk {index}";
+                    chunk.transform.SetParent(fracturePrefab.transform, false);
+                    chunk.transform.localPosition = centers[index];
+                    chunk.transform.localScale = Vector3.one * 0.4f;
+                    chunk.AddComponent<DestructibleFractureChunk>()
+                        .Configure(index);
+                }
+                profile.Configure(
+                    "test.fracture",
+                    fracturePrefab,
+                    centers,
+                    impulse: 1f,
+                    lifetime: 2f);
+                var presenter = prop.AddComponent<DestructiblePropPresenter>();
+                var intact = new DestructiblePropSnapshot(
+                    "cover",
+                    DestructiblePropState.Intact,
+                    10f,
+                    10f,
+                    new GameplayPropPose(
+                        new GameplayPosition(0f, 0f, 0f),
+                        0f,
+                        0f,
+                        0f),
+                    DestructiblePropPosture.Upright,
+                    fractureChunkCount: 3,
+                    detachedFractureChunks: 0UL);
+                presenter.Bind(intact, profile);
+                var resulting = new DestructiblePropSnapshot(
+                    "cover",
+                    DestructiblePropState.Damaged,
+                    10f,
+                    5f,
+                    intact.Pose,
+                    intact.Posture,
+                    fractureChunkCount: 3,
+                    detachedFractureChunks: 0b011UL);
+                var record = new DestructibleDamageRecord(
+                    1L,
+                    5f,
+                    intact,
+                    resulting,
+                    preferredFractureChunkIndex: 1);
+
+                presenter.PresentDamage(record, spawnTransientDebris: true);
+
+                Assert.That(visual.GetComponent<Renderer>().enabled, Is.False);
+                Assert.That(visual.GetComponent<Collider>().enabled, Is.False);
+                DestructibleFractureChunk[] presented = prop
+                    .GetComponentsInChildren<DestructibleFractureChunk>(true);
+                Assert.That(
+                    presented[0].gameObject.activeSelf,
+                    Is.False);
+                Assert.That(
+                    presented[1].gameObject.activeSelf,
+                    Is.False);
+                Assert.That(
+                    presented[2].gameObject.activeSelf,
+                    Is.True);
+                Assert.That(presenter.ActiveTransientDebrisCount, Is.EqualTo(2));
+
+                presenter.ClearTransientDebris();
+                Assert.That(presenter.ActiveTransientDebrisCount, Is.Zero);
+                presenter.Present(intact);
+                Assert.That(visual.GetComponent<Renderer>().enabled, Is.True);
+                Assert.That(visual.GetComponent<Collider>().enabled, Is.True);
+            }
+            finally
+            {
+                Object.DestroyImmediate(prop);
+                Object.DestroyImmediate(fracturePrefab);
+                Object.DestroyImmediate(profile);
             }
         }
 

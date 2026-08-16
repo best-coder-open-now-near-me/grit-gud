@@ -106,7 +106,8 @@ namespace GritGud.Domain.Gameplay
             float normalX,
             float normalY,
             float normalZ,
-            long worldStateRevision)
+            long worldStateRevision,
+            int preferredFractureChunkIndex = -1)
         {
             if (string.IsNullOrWhiteSpace(targetId))
             {
@@ -138,6 +139,13 @@ namespace GritGud.Domain.Gameplay
                 throw new ArgumentOutOfRangeException(
                     nameof(worldStateRevision));
             }
+            if (preferredFractureChunkIndex < -1
+                || preferredFractureChunkIndex
+                    >= DestructibleFracture.MaximumChunkCount)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(preferredFractureChunkIndex));
+            }
 
             TargetId = targetId;
             SurfaceId = surfaceId;
@@ -146,6 +154,7 @@ namespace GritGud.Domain.Gameplay
             NormalY = normalY;
             NormalZ = normalZ;
             WorldStateRevision = worldStateRevision;
+            PreferredFractureChunkIndex = preferredFractureChunkIndex;
         }
 
         public string TargetId { get; }
@@ -161,6 +170,8 @@ namespace GritGud.Domain.Gameplay
         public float NormalZ { get; }
 
         public long WorldStateRevision { get; }
+
+        public int PreferredFractureChunkIndex { get; }
 
         private static bool IsFinite(float value) =>
             !float.IsNaN(value) && !float.IsInfinity(value);

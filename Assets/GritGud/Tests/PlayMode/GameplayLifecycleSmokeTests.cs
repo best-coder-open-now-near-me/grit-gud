@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using GritGud.Application.Gameplay;
 using GritGud.Application.Levels;
 using GritGud.Domain.Gameplay;
@@ -158,6 +159,83 @@ namespace GritGud.PlayMode.Tests
             Assert.That(prop.position, Is.EqualTo(expectedPosition));
             Assert.That(Quaternion.Angle(prop.rotation, expectedRotation),
                 Is.LessThan(0.01f));
+
+            bootstrap.ReturnToMenu();
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator PublishedCrateFracturesAndReplayRestoresExactChunkMask()
+        {
+            EnsureBootstrap();
+            bootstrap.ReturnToMenu();
+            bootstrap.PlayMainLevel();
+            yield return WaitForMode(ApplicationMode.Gameplay);
+
+            GameplayController gameplay =
+                bootstrap.GetComponent<GameplayController>();
+            GameplayDestructibleController destructibles =
+                bootstrap.GetComponent<GameplayDestructibleController>();
+            const string propId = "crate-yard-01";
+            DestructiblePropSnapshot before =
+                destructibles.Session.GetProp(propId);
+            GameObject prop = gameplay.WorldRegistry
+                .GetLevelEntity(propId).gameObject;
+            DestructiblePropPresenter presenter =
+                prop.GetComponent<DestructiblePropPresenter>();
+            Renderer originalRenderer = prop.GetComponentInChildren<Renderer>();
+            Collider originalCollider = prop.GetComponentInChildren<Collider>();
+
+            Assert.That(before.FractureChunkCount, Is.EqualTo(12));
+            Assert.That(before.DetachedFractureChunks, Is.Zero);
+            Assert.That(originalRenderer, Is.Not.Null);
+            Assert.That(originalCollider, Is.Not.Null);
+            Assert.That(
+                destructibles.TryApplyDamage(propId, 4f, out var record),
+                Is.True);
+            yield return null;
+
+            DestructiblePropSnapshot damaged =
+                destructibles.Session.GetProp(propId);
+            DestructibleFractureChunk[] chunks = prop
+                .GetComponentsInChildren<DestructibleFractureChunk>(true);
+            int detachedCount = DestructibleFracture.CountDetachedChunks(
+                damaged.DetachedFractureChunks);
+            Assert.That(damaged.State,
+                Is.EqualTo(DestructiblePropState.Damaged));
+            Assert.That(damaged.DetachedFractureChunks,
+                Is.EqualTo(record.Resulting.DetachedFractureChunks));
+            Assert.That(detachedCount, Is.EqualTo(5));
+            Assert.That(chunks.Length, Is.EqualTo(12));
+            Assert.That(originalRenderer.enabled, Is.False);
+            Assert.That(originalCollider.enabled, Is.False);
+            Assert.That(
+                chunks.Count(chunk => chunk.gameObject.activeInHierarchy),
+                Is.EqualTo(12 - detachedCount));
+            Assert.That(presenter.ActiveTransientDebrisCount,
+                Is.EqualTo(detachedCount));
+
+            destructibles.ClearReplayTransients();
+            Assert.That(presenter.ActiveTransientDebrisCount, Is.Zero);
+            destructibles.PresentReplay(
+                new List<DestructiblePropSnapshot> { before });
+            Physics.SyncTransforms();
+            Assert.That(originalRenderer.enabled, Is.True);
+            Assert.That(originalCollider.enabled, Is.True);
+            Assert.That(
+                chunks.Count(chunk => chunk.gameObject.activeInHierarchy),
+                Is.Zero);
+
+            destructibles.RestoreAuthoritativePresentation();
+            Physics.SyncTransforms();
+            Assert.That(originalRenderer.enabled, Is.False);
+            Assert.That(originalCollider.enabled, Is.False);
+            Assert.That(
+                chunks.Count(chunk => chunk.gameObject.activeInHierarchy),
+                Is.EqualTo(12 - detachedCount));
+            Assert.That(
+                destructibles.Session.GetProp(propId).DetachedFractureChunks,
+                Is.EqualTo(damaged.DetachedFractureChunks));
 
             bootstrap.ReturnToMenu();
             yield return null;

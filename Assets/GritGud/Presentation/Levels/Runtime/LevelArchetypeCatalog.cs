@@ -101,6 +101,8 @@ namespace GritGud.Presentation.Levels.Runtime
         [SerializeField] private bool vehicle;
         [SerializeField] private string initialDestructibleState = "intact";
         [SerializeField] private float initialIntegrity = 10f;
+        [SerializeField] private GritGud.Presentation.Gameplay.DestructibleFractureProfile
+            fractureProfile;
 
         public string ArchetypeId => archetypeId;
 
@@ -114,6 +116,9 @@ namespace GritGud.Presentation.Levels.Runtime
                 : surfacePresentationId;
 
         public GameObject Prefab => prefab;
+
+        public GritGud.Presentation.Gameplay.DestructibleFractureProfile
+            FractureProfile => fractureProfile;
 
         public Bounds LocalBounds => new Bounds(localBoundsCenter, localBoundsSize);
 

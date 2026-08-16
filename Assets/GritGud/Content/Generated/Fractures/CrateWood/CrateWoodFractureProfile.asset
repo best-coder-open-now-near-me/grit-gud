@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2726cbbb3943471592553cda2b59199e, type: 3}
+  m_Name: CrateWoodFractureProfile
+  m_EditorClassIdentifier: GritGud.Presentation::GritGud.Presentation.Gameplay.DestructibleFractureProfile
+  profileId: fracture.crate.wood
+  fracturedPrefab: {fileID: 1116138658118167937, guid: 625cdfb3dc759164ba9ccd63aff5b23b, type: 3}
+  chunkCenters:
+  - {x: 0.2238625, y: 0.14775942, z: 0.17080586}
+  - {x: 0.56514573, y: 0.45112452, z: 0.29438812}
+  - {x: -0.26885107, y: 0.7027036, z: -0.8397782}
+  - {x: -0.10828472, y: 0.16565748, z: -0.5891795}
+  - {x: -0.2388721, y: 0.85102564, z: -0.115577534}
+  - {x: 0.50956005, y: 0.8755391, z: -0.03619126}
+  - {x: -0.19370277, y: 0.25652957, z: 0.28250492}
+  - {x: 0.26806414, y: 0.41269875, z: -0.9495545}
+  - {x: 0.23963165, y: 0.7912276, z: -0.8349056}
+  - {x: 0.5719234, y: 0.240983, z: -0.39424178}
+  - {x: -0.32954463, y: 0.43687353, z: -0.025622487}
+  - {x: -0.08564654, y: 0.77539235, z: 0.29061326}
+  debrisImpulse: 2.8
+  debrisLifetime: 3.5

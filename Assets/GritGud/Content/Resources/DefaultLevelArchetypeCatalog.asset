@@ -27,8 +27,10 @@ MonoBehaviour:
     defaultCoverCenter: {x: 0, y: 0, z: 0}
     defaultCoverSize: {x: 1, y: 1, z: 1}
     destructible: 0
+    vehicle: 0
     initialDestructibleState: intact
     initialIntegrity: 0
+    fractureProfile: {fileID: 0}
   - archetypeId: structure.wall.standard
     displayName: Wall
     category: Structure
@@ -43,8 +45,10 @@ MonoBehaviour:
     defaultCoverCenter: {x: -1.25, y: 1.5, z: 0}
     defaultCoverSize: {x: 2.5, y: 3, z: 0.225}
     destructible: 0
+    vehicle: 0
     initialDestructibleState: intact
     initialIntegrity: 0
+    fractureProfile: {fileID: 0}
   - archetypeId: structure.wall.doorway
     displayName: Doorway Wall
     category: Structure
@@ -59,8 +63,10 @@ MonoBehaviour:
     defaultCoverCenter: {x: 0, y: 0, z: 0}
     defaultCoverSize: {x: 1, y: 1, z: 1}
     destructible: 0
+    vehicle: 0
     initialDestructibleState: intact
     initialIntegrity: 0
+    fractureProfile: {fileID: 0}
   - archetypeId: structure.stairs.standard
     displayName: Stairs
     category: Structure
@@ -75,8 +81,10 @@ MonoBehaviour:
     defaultCoverCenter: {x: 0, y: 0, z: 0}
     defaultCoverSize: {x: 1, y: 1, z: 1}
     destructible: 0
+    vehicle: 0
     initialDestructibleState: intact
     initialIntegrity: 0
+    fractureProfile: {fileID: 0}
   - archetypeId: prop.crate.standard
     displayName: Crate
     category: Props
@@ -91,8 +99,10 @@ MonoBehaviour:
     defaultCoverCenter: {x: 0.14, y: 0.48, z: -0.32}
     defaultCoverSize: {x: 1.08, y: 0.95, z: 1.46}
     destructible: 1
+    vehicle: 0
     initialDestructibleState: intact
     initialIntegrity: 10
+    fractureProfile: {fileID: 11400000, guid: 8554c9d47e1f1904684ee6cc9aece9ed, type: 2}
   - archetypeId: prop.barrel.metal
     displayName: Metal Barrel
     category: Props
@@ -107,8 +117,10 @@ MonoBehaviour:
     defaultCoverCenter: {x: 0, y: 0.55, z: 0}
     defaultCoverSize: {x: 0.9, y: 1.1, z: 0.9}
     destructible: 1
+    vehicle: 0
     initialDestructibleState: intact
     initialIntegrity: 8
+    fractureProfile: {fileID: 11400000, guid: 4206395a9d3a6c249a34b67c98070952, type: 2}
   - archetypeId: vehicle.buggy.standard
     displayName: Buggy
     category: Vehicles
@@ -126,6 +138,7 @@ MonoBehaviour:
     vehicle: 1
     initialDestructibleState: intact
     initialIntegrity: 0
+    fractureProfile: {fileID: 0}
   - archetypeId: structure.barrier.concrete
     displayName: Concrete Barrier
     category: Infrastructure
@@ -143,6 +156,7 @@ MonoBehaviour:
     vehicle: 0
     initialDestructibleState: intact
     initialIntegrity: 0
+    fractureProfile: {fileID: 0}
   - archetypeId: structure.barricade.wood
     displayName: Wooden Barricade
     category: Infrastructure
@@ -160,6 +174,7 @@ MonoBehaviour:
     vehicle: 0
     initialDestructibleState: intact
     initialIntegrity: 12
+    fractureProfile: {fileID: 0}
   - archetypeId: prop.pallet-stack.standard
     displayName: Pallet Stack
     category: Props
@@ -177,6 +192,7 @@ MonoBehaviour:
     vehicle: 0
     initialDestructibleState: intact
     initialIntegrity: 10
+    fractureProfile: {fileID: 0}
   - archetypeId: structure.wire-fence.standard
     displayName: Wire Fence
     category: Infrastructure
@@ -194,6 +210,7 @@ MonoBehaviour:
     vehicle: 0
     initialDestructibleState: intact
     initialIntegrity: 8
+    fractureProfile: {fileID: 0}
   - archetypeId: structure.container.small
     displayName: Small Container
     category: Infrastructure
@@ -211,6 +228,7 @@ MonoBehaviour:
     vehicle: 0
     initialDestructibleState: intact
     initialIntegrity: 0
+    fractureProfile: {fileID: 0}
   - archetypeId: prop.generator.standard
     displayName: Generator
     category: Industrial
@@ -228,6 +246,7 @@ MonoBehaviour:
     vehicle: 0
     initialDestructibleState: intact
     initialIntegrity: 18
+    fractureProfile: {fileID: 0}
   - archetypeId: prop.tire-stack.standard
     displayName: Tire Stack
     category: Props
@@ -245,6 +264,7 @@ MonoBehaviour:
     vehicle: 0
     initialDestructibleState: intact
     initialIntegrity: 12
+    fractureProfile: {fileID: 0}
   - archetypeId: prop.propane.standard
     displayName: Propane Tank
     category: Industrial
@@ -262,3 +282,4 @@ MonoBehaviour:
     vehicle: 0
     initialDestructibleState: intact
     initialIntegrity: 6
+    fractureProfile: {fileID: 0}

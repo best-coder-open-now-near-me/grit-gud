@@ -189,13 +189,17 @@ initiative participant:
    exposure/cover, replay scrubbing, and exact live restoration. Add
    Application tests for resolution and PlayMode lifecycle coverage for the
    published fixture.
-2. **Complete direct-fire destructibles and authored break presentation.** Route
-   valid weapon-to-prop impacts through the authoritative integrity session with
-   authored weapon/material damage rather than presentation-only surface hits.
-   Replace the current generic height compression and disappearance with stable
-   damaged/destroyed variants, collision, cover, navigation, debris, replay
-   scrubbing, and exact live restoration. Prove rifle, launcher, and frag paths
-   against a published fixture and PlayMode lifecycle coverage.
+2. **Complete direct-fire destructibles and authored break presentation.**
+   **Complete 2026-08-16:** rifle impacts now freeze point, normal, surface,
+   target, world revision, and the nearest stable fracture chunk before
+   atomically committing authored weapon/material integrity damage. Crates and
+   metal barrels own editor-baked 12-cell Voronoi profiles; authoritative
+   snapshots record a deterministic detached-chunk mask shared by rifle,
+   launcher, and frag damage. Attached chunks provide real collision and
+   exposure geometry, live damage emits bounded presentation-only debris, and
+   replay forward crossings, seeks, scrubbing, and exit restore exact masks
+   without rerunning fracture or physics. The published depot lifecycle and the
+   full EditMode/PlayMode gates cover the resulting state and presentation.
 3. **Add first-class toppled-prop pinning and escape.** Resolve `Pin` only when
    the final committed toppled footprint contacts an eligible character and
    authored prop mass/contact rules accept it. Freeze the responsible prop,
@@ -228,19 +232,28 @@ initiative participant:
    `Fall Over` clip into a bounded presentation-only ragdoll. Record a compact
    bone-pose trace for seekable replay instead of rerunning PhysX during
    playback.
-6. **Extend the shared verification foundation.** Migrate the remaining action
+6. **Add incendiary consumables.** Author Molotov cocktails as first-class
+   throwable consumables that reuse frozen landing and exposure evidence, then
+   create authoritative persistent fire fields with ignition, duration,
+   turn-by-turn injury, area denial, environmental interaction, enemy use,
+   replay scrubbing, and exact live restoration. Treat napalm as a stronger
+   payload/field variant of the same incendiary system unless its delivery
+   method later requires a distinct action family. Include friendly fire,
+   destructible ignition, overlapping fields, extinguishing, stale commits,
+   depleted stacks, and PlayMode lifecycle coverage.
+7. **Extend the shared verification foundation.** Migrate the remaining action
    families to canonical prepare/commit transitions, then add deterministic
    action trajectories, reproducible failure capsules, minimization, API
    fuzzing, disposable simulation, and scripted/random seed baselines.
-7. **Harden authored content, enemy choices, editor workflows, and delivery.**
+8. **Harden authored content, enemy choices, editor workflows, and delivery.**
    Exercise broader enemy action selection, destructible-pile authoring,
    viewport transforms, Windows/WebGL artifacts, and browser-playable preview
    handoff against the same authoritative contracts.
-8. **Add the deployable drone as the final substantial gameplay expansion.**
+9. **Add the deployable drone as the final substantial gameplay expansion.**
    Deployment, ownership, command range, initiative insertion, destruction,
    and removal must use the proven party, transition, replay, and simulation
    seams.
-9. **Run the alpha adversarial capstone.** Complete the scripted, random,
+10. **Run the alpha adversarial capstone.** Complete the scripted, random,
    novelty, optimized, mirrored, held-out, and archived search corpus only after
    the intended gameplay systems, including the drone, are present.
 
@@ -253,7 +266,11 @@ registered as displacement subjects, and both player characters' Push and
 Throw actions allow `Topple`. A PlayMode lifecycle test pushes the near-spawn
 barrel, verifies the authoritative and scene pose, projects an earlier replay
 state, then restores the exact live toppled pose. Blast damage from the launcher
-and frag grenade still exercises the same props. Both player characters also
+and frag grenade still exercises the same props. Rifles now damage them as
+well: wood takes four integrity per hit and metal takes two. Crates and barrels
+switch to their baked Voronoi chunks on first damage, remove deterministic
+impact-local pieces, and restore their exact live chunk mask after replay. Both
+player characters also
 carry the Combat Knife in hotbar slot 5, so reach rejection, committed wounds,
 diagnostics, and the current procedural strike can be tested now.
 

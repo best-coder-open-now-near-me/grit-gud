@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2726cbbb3943471592553cda2b59199e, type: 3}
+  m_Name: BarrelMetalFractureProfile
+  m_EditorClassIdentifier: GritGud.Presentation::GritGud.Presentation.Gameplay.DestructibleFractureProfile
+  profileId: fracture.barrel.metal
+  fracturedPrefab: {fileID: 4205866742145621249, guid: d63da07f6173ca2418d46d48c2bd928a, type: 3}
+  chunkCenters:
+  - {x: 0.20931135, y: 0.19071732, z: 0.10478888}
+  - {x: -0.26111796, y: 0.61679584, z: -0.046252277}
+  - {x: 0.019945154, y: 0.9380425, z: 0.19274384}
+  - {x: 0.0003683974, y: 0.35436687, z: -0.23113513}
+  - {x: 0.15694308, y: 0.6474849, z: 0.21227589}
+  - {x: -0.11939853, y: 0.9568367, z: -0.1297561}
+  - {x: -0.1508297, y: 0.12603159, z: 0.1407428}
+  - {x: 0.20479992, y: 0.31392032, z: -0.19556962}
+  - {x: 0.24700049, y: 0.841838, z: 0.0743385}
+  - {x: -0.12044779, y: 0.15681279, z: -0.19363096}
+  - {x: -0.11801226, y: 0.3816241, z: 0.23606981}
+  - {x: 0.17434888, y: 0.89101565, z: -0.14920844}
+  debrisImpulse: 2.35
+  debrisLifetime: 3.5

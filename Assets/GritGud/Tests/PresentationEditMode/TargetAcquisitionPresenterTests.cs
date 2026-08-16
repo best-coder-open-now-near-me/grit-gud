@@ -158,6 +158,87 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void WeaponAimSelectsNearestStableFractureChunk()
+        {
+            var host = new GameObject("Fracture Weapon Aim Test");
+            var observer = CreateActorObject(
+                "Fracture Aim Observer",
+                Vector3.zero,
+                withVisual: false);
+            var worldRoot = new GameObject("Fracture Weapon Aim World");
+            var entityRoot = new GameObject("Crate Root");
+            LevelWorld world = null;
+            GameplayWorldRegistry registry = null;
+            try
+            {
+                LevelArchetypeCatalog catalog = LevelArchetypeCatalog.LoadDefault();
+                Assert.That(
+                    catalog.TryGet("prop.crate.standard", out var archetype),
+                    Is.True);
+                entityRoot.transform.SetParent(worldRoot.transform, false);
+                LevelEntityView entity =
+                    entityRoot.AddComponent<LevelEntityView>();
+                entity.Initialize(
+                    new LevelEntity
+                    {
+                        id = "fracture-crate",
+                        archetypeId = "prop.crate.standard",
+                        transform = new LevelTransformData(
+                            new Float3Data(0f, 0f, 5f),
+                            0f),
+                    },
+                    archetype);
+                Object.Instantiate(
+                    archetype.Prefab,
+                    entityRoot.transform,
+                    worldPositionStays: false);
+                world = new LevelWorld(
+                    worldRoot,
+                    new Dictionary<string, LevelEntityView>
+                    {
+                        ["fracture-crate"] = entity,
+                    },
+                    null);
+                registry = new GameplayWorldRegistry(world);
+                registry.RegisterActor(
+                    "observer",
+                    "test",
+                    targetable: false,
+                    observer);
+                TargetAcquisitionPresenter presenter =
+                    host.AddComponent<TargetAcquisitionPresenter>();
+                presenter.Bind(CreateSession(), registry, "observer");
+                presenter.SetWeaponAimOriginProvider(
+                    () => new Vector3(0f, 0.5f, 0f));
+                Physics.SyncTransforms();
+                presenter.RefreshNow(new Ray(
+                    new Vector3(0f, 0.5f, 0f),
+                    Vector3.forward));
+
+                Assert.That(
+                    presenter.TryGetWeaponAim(out GameplayWeaponAim aim),
+                    Is.True);
+                int expectedIndex = archetype.FractureProfile
+                    .FindClosestChunkIndex(
+                        entity.transform.InverseTransformPoint(aim.Position));
+                Assert.That(aim.TargetId, Is.EqualTo("fracture-crate"));
+                Assert.That(aim.PreferredFractureChunkIndex,
+                    Is.EqualTo(expectedIndex));
+                Assert.That(aim.PreferredFractureChunkIndex,
+                    Is.InRange(0, archetype.FractureProfile.ChunkCount - 1));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                registry?.Dispose();
+                world?.Dispose();
+                Object.DestroyImmediate(observer);
+                Object.DestroyImmediate(entityRoot);
+                Object.DestroyImmediate(worldRoot);
+            }
+        }
+
+        [Test]
         public void WeaponAimUsesMuzzlePathAfterPointerSelectsWorldPoint()
         {
             var host = new GameObject("Muzzle Path Aim Test");
