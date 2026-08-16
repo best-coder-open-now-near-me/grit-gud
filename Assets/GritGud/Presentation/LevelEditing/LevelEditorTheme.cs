@@ -13,6 +13,9 @@ namespace GritGud.Presentation.LevelEditing
         public static readonly Color ButtonHoverBackground = new Color32(86, 99, 116, 255);
         public static readonly Color ButtonPressedBackground = new Color32(49, 91, 116, 255);
         public static readonly Color ButtonSelectedBackground = new Color32(42, 105, 138, 255);
+        public static readonly Color PrimaryAction = new Color32(28, 132, 177, 255);
+        public static readonly Color PrimaryActionHover = new Color32(36, 151, 199, 255);
+        public static readonly Color DestructiveButtonBackground = new Color32(91, 43, 43, 255);
         public static readonly Color FieldBackground = new Color32(13, 17, 22, 255);
         public static readonly Color FieldFocusedBackground = new Color32(20, 29, 38, 255);
         public static readonly Color PrimaryText = new Color32(224, 231, 239, 255);

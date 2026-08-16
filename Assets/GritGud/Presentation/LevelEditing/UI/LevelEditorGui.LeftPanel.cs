@@ -21,6 +21,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                     - LevelEditorGuiMetrics.ToolbarHeight
                     - LevelEditorGuiMetrics.StatusBarHeight),
                 styles.Panel);
+            DrawPanelHeading("TOOLS", false);
             paletteScroll = GUILayout.BeginScrollView(paletteScroll);
             GUILayout.BeginHorizontal();
             Color panelToggleColor = GUI.backgroundColor;
@@ -401,7 +402,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             if (presentationState.Page == page)
                 GUI.backgroundColor = LevelEditorTheme.Active;
             if (GUILayout.Button(label, PanelButtonLayout()))
-                presentationState.ShowPage(page);
+                ShowWorkspace(page);
             GUI.backgroundColor = previous;
         }
 

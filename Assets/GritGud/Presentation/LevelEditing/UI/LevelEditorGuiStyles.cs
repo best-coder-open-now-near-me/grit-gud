@@ -14,6 +14,13 @@ namespace GritGud.Presentation.LevelEditing.UI
         private GUIStyle floatingPanel;
         private GUIStyle sectionHeader;
         private GUIStyle mutedLabel;
+        private GUIStyle toolbarTitle;
+        private GUIStyle panelTitle;
+        private GUIStyle viewportToolbar;
+        private GUIStyle menuItem;
+        private GUIStyle menuItemSelected;
+        private GUIStyle menuItemDestructive;
+        private GUIStyle menuSeparator;
 
         public GUIStyle Toolbar => toolbar;
         public GUIStyle Panel => panel;
@@ -21,6 +28,13 @@ namespace GritGud.Presentation.LevelEditing.UI
         public GUIStyle FloatingPanel => floatingPanel;
         public GUIStyle SectionHeader => sectionHeader;
         public GUIStyle MutedLabel => mutedLabel;
+        public GUIStyle ToolbarTitle => toolbarTitle;
+        public GUIStyle PanelTitle => panelTitle;
+        public GUIStyle ViewportToolbar => viewportToolbar;
+        public GUIStyle MenuItem => menuItem;
+        public GUIStyle MenuItemSelected => menuItemSelected;
+        public GUIStyle MenuItemDestructive => menuItemDestructive;
+        public GUIStyle MenuSeparator => menuSeparator;
 
         public GUISkin ResolveSkin(GUISkin currentSkin)
         {
@@ -136,6 +150,63 @@ namespace GritGud.Presentation.LevelEditing.UI
                 name = "Muted Label",
             };
             StyleText(mutedLabel, LevelEditorTheme.MutedText);
+
+            toolbarTitle = new GUIStyle(themedSkin.label)
+            {
+                name = "Toolbar Title",
+                alignment = TextAnchor.MiddleLeft,
+                fontStyle = FontStyle.Bold,
+                clipping = TextClipping.Clip,
+                padding = new RectOffset(8, 8, 0, 0),
+            };
+            panelTitle = new GUIStyle(themedSkin.label)
+            {
+                name = "Panel Title",
+                alignment = TextAnchor.MiddleLeft,
+                fontStyle = FontStyle.Bold,
+                fontSize = themedSkin.label.fontSize + 1,
+                padding = new RectOffset(4, 4, 2, 2),
+            };
+            viewportToolbar = CreateChromeStyle(
+                sourceSkin.box,
+                "Viewport Toolbar",
+                LevelEditorTheme.FloatingPanelBackground,
+                new RectOffset(0, 0, 0, 0));
+
+            menuItem = new GUIStyle(themedSkin.button)
+            {
+                name = "Menu Item",
+                alignment = TextAnchor.MiddleLeft,
+                padding = new RectOffset(10, 10, 0, 0),
+            };
+            menuItemSelected = new GUIStyle(menuItem)
+            {
+                name = "Menu Item Selected",
+            };
+            SetState(
+                menuItemSelected.normal,
+                buttonSelectedTexture,
+                LevelEditorTheme.PrimaryText);
+            menuItemDestructive = new GUIStyle(menuItem)
+            {
+                name = "Menu Item Destructive",
+            };
+            Texture2D destructiveTexture = CreateTexture(
+                "Destructive Button",
+                LevelEditorTheme.DestructiveButtonBackground);
+            SetState(
+                menuItemDestructive.normal,
+                destructiveTexture,
+                LevelEditorTheme.PrimaryText);
+            menuSeparator = new GUIStyle(themedSkin.box)
+            {
+                name = "Menu Separator",
+                margin = new RectOffset(5, 5, 0, 0),
+                border = new RectOffset(),
+            };
+            menuSeparator.normal.background = CreateTexture(
+                "Menu Separator",
+                LevelEditorTheme.SectionHeaderBackground);
         }
 
         private GUIStyle CreateChromeStyle(

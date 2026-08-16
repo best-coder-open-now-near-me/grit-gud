@@ -25,8 +25,8 @@ namespace GritGud.Presentation.LevelEditing.UI
                     - LevelEditorGuiMetrics.ToolbarHeight
                     - LevelEditorGuiMetrics.StatusBarHeight),
                 styles.Panel);
+            DrawPanelHeading("INSPECTOR", true);
             inspectorScroll = GUILayout.BeginScrollView(inspectorScroll);
-            DrawSectionHeader("INSPECTOR");
             DrawInspectorTabs();
             if (presentationState.InspectorPage == LevelEditorInspectorPage.Level)
             {

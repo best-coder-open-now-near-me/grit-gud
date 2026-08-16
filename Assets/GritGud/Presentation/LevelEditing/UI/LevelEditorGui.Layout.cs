@@ -55,17 +55,6 @@ namespace GritGud.Presentation.LevelEditing.UI
 
         private void DrawLevelLayoutPanel(LevelDocument document)
         {
-            GUILayout.Space(LevelEditorGuiMetrics.SpaceMajor);
-            DrawSectionHeader("CAMERA VIEW");
-            GUILayout.BeginHorizontal();
-            DrawCameraViewButton("PERSP", LevelEditorCameraView.Perspective);
-            DrawCameraViewButton("TOP", LevelEditorCameraView.Top);
-            GUILayout.EndHorizontal();
-            GUILayout.BeginHorizontal();
-            DrawCameraViewButton("FRONT", LevelEditorCameraView.Front);
-            DrawCameraViewButton("RIGHT", LevelEditorCameraView.Right);
-            GUILayout.EndHorizontal();
-
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
             DrawSectionHeader("LEVEL BOUNDS");
             DrawBoundVector("Center", ref boundsFields.centerX, ref boundsFields.centerY,
@@ -95,16 +84,6 @@ namespace GritGud.Presentation.LevelEditing.UI
             if (GUILayout.Button("CREATE ARRAY", PanelPrimaryButtonLayout()))
                 actions.DuplicateArray(arrayFields);
             GUI.enabled = true;
-        }
-
-        private void DrawCameraViewButton(string label, LevelEditorCameraView view)
-        {
-            Color previous = GUI.backgroundColor;
-            if (actions.CameraView == view)
-                GUI.backgroundColor = LevelEditorTheme.Active;
-            if (GUILayout.Button(label, PanelButtonLayout()))
-                actions.SetCameraView(view);
-            GUI.backgroundColor = previous;
         }
 
         private static void DrawBoundVector(

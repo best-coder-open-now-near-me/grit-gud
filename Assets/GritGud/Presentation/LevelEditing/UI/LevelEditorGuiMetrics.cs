@@ -2,12 +2,20 @@ namespace GritGud.Presentation.LevelEditing.UI
 {
     public static class LevelEditorGuiMetrics
     {
-        public const float ToolbarHeight = 92f;
-        public const float LeftPanelWidth = 300f;
-        public const float InspectorWidth = 360f;
-        public const float StatusBarHeight = 30f;
+        public const float ToolbarHeight = 52f;
+        public const float LeftPanelWidth = 280f;
+        public const float InspectorWidth = 340f;
+        public const float StatusBarHeight = 28f;
+        public const float MinimumViewportWidth = 560f;
+        public const float CompactLayoutWidth =
+            LeftPanelWidth + InspectorWidth + MinimumViewportWidth;
 
-        public const float ToolbarControlHeight = 30f;
+        public const float ToolbarControlHeight = 32f;
+        public const float ViewportToolbarHeight = 32f;
+        public const float ViewportToolbarWidth = 270f;
+        public const float MenuWidth = 246f;
+        public const float MenuItemHeight = 30f;
+        public const float MenuSeparatorHeight = 7f;
         public const float PanelControlHeight = 30f;
         public const float PanelApplyControlHeight = 32f;
         public const float PanelPrimaryControlHeight = 34f;
