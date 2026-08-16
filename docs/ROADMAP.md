@@ -187,6 +187,10 @@ initiative participant:
    and tune equipment transitions, contact timing, IK, interruption, replay,
    and restoration. Then bind the already-imported reload, grenade, reaction,
    turn, and any required traversal clips to the gameplay states that own them.
+   Incapacitation may transition from the authored `Shoulder Hit And Fall` or
+   `Fall Over` clip into a bounded presentation-only ragdoll. Record a compact
+   bone-pose trace for seekable replay instead of rerunning PhysX during
+   playback.
 3. **Extend the shared verification foundation.** Migrate the remaining action
    families to canonical prepare/commit transitions, then add deterministic
    action trajectories, reproducible failure capsules, minimization, API

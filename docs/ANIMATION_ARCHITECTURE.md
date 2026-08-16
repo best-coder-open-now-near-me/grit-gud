@@ -125,6 +125,33 @@ grow substantially, layers must be assembled dynamically per actor, or precise
 deterministic presentation timelines become a product requirement. Root motion
 remains disabled because movement is authoritative outside animation.
 
+## Authored close-quarters and ragdoll handoff
+
+Primary character motion remains authored rather than synthesized from weapon
+mount transforms. The private Mixamo overlay now supplies `Knife Idle`,
+`Stabbing`, `Push`, `Shoulder Hit And Fall`, and `Fall Over` with stable Unity
+`.meta` files. The project-owned controller and animation profile will bind
+those clips to knife pose, contact attack, displacement, hit-reaction, and
+incapacitation semantics after Humanoid/in-place import validation. Procedural
+code remains limited to bounded aim, weapon contact alignment, recoil, and IK.
+
+An incapacitating reaction may hand off from `Shoulder Hit And Fall` or
+`Fall Over` to a ragdoll at an authored normalized time. Application still owns
+the incapacity result and authoritative actor pose. Presentation captures the
+current animated skeleton, enables a joint-limited ragdoll, applies a bounded
+impulse derived from recorded attack or blast evidence, and freezes the body
+after it settles. Ragdoll contacts may affect presentation but never revise the
+committed wound, position, initiative, collision policy, or other gameplay
+outcomes.
+
+Replay must not rerun PhysX to recreate that fall. The bounded live replay
+window records a compact, quantized trace for an explicitly versioned set of
+ragdoll bones from handoff through settle. Replay samples and interpolates that
+trace during forward playback or seeking; backward seeking is therefore
+reversible, and replay exit restores the untouched live presentation exactly.
+If no valid trace exists, replay uses the authored fall without inventing a new
+physics result.
+
 ## Validation
 
 Presentation EditMode tests validate animation-channel ownership, profiles,

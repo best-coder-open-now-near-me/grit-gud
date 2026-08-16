@@ -30,6 +30,14 @@ The selected clips will be consumed through project-owned animation profiles
 and controllers as described in
 [PLAYABLE_THIRD_PERSON_SLICE.md](PLAYABLE_THIRD_PERSON_SLICE.md).
 
+The private `Assets/Mixamo` overlay additionally contains project-selected
+`Knife Idle`, `Stabbing`, `Push`, `Shoulder Hit And Fall`, and `Fall Over`
+source clips. Their Unity `.meta` files are part of the private overlay contract
+and must be preserved alongside the FBX files. Project-owned import tooling will
+enforce Humanoid retargeting, disabled root motion, the intended loop policy,
+and semantic controller/profile bindings rather than relying on workstation
+import defaults.
+
 Their licences permit use in compiled Unity players. Editable source assets stay
 in a separate private repository and are installed into the project only for
 local development and trusted builds. Public Web previews contain only the
