@@ -36,6 +36,26 @@ physics-assisted settle path, then add richer viewport translation and rotation
 handles without moving transform policy into Unity components. Encounter
 scripting remains later work until its portable runtime contracts stabilize.
 
+The current published depot is useful destructible content, not the required
+verification fixture. It contains individual and paired crates/barrels, but no
+dedicated settled pile. Only `crate-exposure-demo` is registered as a runtime
+displacement prop, and the published Push and Throw actions allow no `Topple`
+result. Editor pile settling and gameplay toppling are therefore two distinct
+parts of the next slice rather than features that can already be accepted from
+the current level.
+
+The editor portion is complete when a dedicated fixture:
+
+1. settles an isolated prop, a mixed crate/barrel contact, and a multi-prop pile
+   through the existing **Drop & Settle** command;
+2. commits and undoes each complete selection as one history transaction;
+3. round-trips every resulting position and X/Y/Z rotation through published
+   JSON;
+4. survives Test Play without leaking runtime damage or displacement back into
+   the authoring document; and
+5. supplies stable prop identities to the gameplay scenario so the runtime
+   toppling tests exercise the same published geometry.
+
 ## Usability review
 
 Navigation is the first usability pass because every later authoring tool

@@ -89,9 +89,14 @@ The current risk profile is acceptable but not finished:
   gates.
 
 No architecture blocker requires reverting the current editor slice. Durable
-party save/load and the advancement UI are now complete; the next character
-slice can return to the deployable drone. Editor work can proceed independently
-with destructible pile verification and richer viewport transform tools.
+party save/load and the advancement UI are now complete, but the drone is not
+the next overall slice. Destructible toppling must first become a complete live
+action rather than only a record/replay capability: production displacement
+does not yet resolve `Topple`, prop eligibility is not authored, and the depot's
+actions allow no result policies. The next project slice is end-to-end
+destructible/toppling completion plus a published pile fixture. Knife/action
+animation completion and shared simulation groundwork follow before the drone;
+richer viewport transform tools can proceed alongside those gameplay slices.
 
 
 ## Non-negotiable boundaries
@@ -661,7 +666,15 @@ turn. The full EditMode gate passes 429 tests.
 8. Generalize blast effects and consumable quantities. **Complete.**
 9. Integrate progression persistence. **Complete:** versioned identity-bound
    storage and the confirmation-based advancement surface are live.
-10. Resume the drone slice only after close-quarters exit criteria pass. **Next.**
+10. Complete live toppling resolution, authored prop eligibility, and the
+    published destructible-pile verification fixture. **Next.**
+11. Finish knife, reaction, equipment, reload, grenade, and turn presentation
+    through gameplay-owned semantic animation states.
+12. Migrate remaining action families to canonical prepare/commit transitions
+    and establish deterministic trajectory, repro, minimization, fuzzing, and
+    seed-baseline infrastructure.
+13. Resume the drone only after those existing-system exit criteria pass, then
+    run the full alpha adversarial capstone with the drone included.
 
 ## Review gates for every gameplay slice
 
@@ -686,5 +699,6 @@ turn. The full EditMode gate passes 429 tests.
 - A full `GameplaySession` rewrite. Focused extraction should follow feature
   seams and preserve journal ordering.
 - The deployable drone. It remains valuable, but adding another initiative
-  participant before completing action definitions, equipment requirements,
-  and close-quarters targeting would deepen the current hotspots.
+  participant before end-to-end toppling, close-quarters animation, and the
+  shared simulation foundation are proven would deepen the current hotspots
+  and force the final alpha gauntlet to be rerun around unfinished seams.

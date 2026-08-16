@@ -17,9 +17,12 @@ segment is optional context rather than part of the default playback range.
 
 The project has completed enough of the early tactical foundation that the
 roadmap is active again at **Phase 7: authored player party, progression, and
-the close-quarters action family**. The drone remains deferred until that family
-is complete. The repository-wide [architecture and separation-of-concerns
-review](ARCHITECTURE_REVIEW.md) is the decision record for this restart.
+the close-quarters action family**. The authoritative close-quarters seams are
+in place, but their production verification, authored presentation, and shared
+simulation groundwork are not complete. The drone remains a late gameplay
+expansion rather than the next overall slice. The repository-wide
+[architecture and separation-of-concerns review](ARCHITECTURE_REVIEW.md) is the
+decision record for this restart.
 
 Work resumes in this order:
 
@@ -73,9 +76,14 @@ Work resumes in this order:
    subject to a nearby destination. The intervening core-attribute checkpoint
    is complete: schema 8 makes Strength, Dexterity, Grit, and Charisma mandatory
    1-5 ratings; Dexterity derives initiative and movement, while Strength is
-   included in opposed displacement. Prop toppling is now authoritative and
-   replayable, including pose, posture, collision-facing state, and the applied
-   result policy. **Reach-limited knife attacks are complete:** schema 9 adds an
+   included in opposed displacement. **Prop toppling support is partial:** the
+   authoritative snapshot, displacement record, commit validation, replay, and
+   presentation paths can preserve an already-resolved pose, posture, and
+   `Topple` result policy. Live Push and Throw resolution does not yet produce
+   that result, prop eligibility is not authored, and the published depot's
+   displacement actions currently allow no result policies. Toppling is
+   therefore not an end-to-end playable feature yet. **Reach-limited knife
+   attack rules are complete:** schema 9 adds an
    explicit contact-delivery contract to ordinary inventory attacks; the
    Combat Knife uses authored reach and AP, actor-only targeting, atomic
    out-of-reach rejection, seeded regional wounds, immutable reach evidence,
@@ -109,7 +117,9 @@ Work resumes in this order:
    **Runtime progression persistence is complete:** the versioned local party
    save restores validated identity-bound progression, equipment, and regional
    wounds, and the advancement drawer commits authored options during
-   exploration. The deployable drone is now the next character-system slice.
+   exploration. These character-system prerequisites no longer make the drone
+   the next overall slice; existing combat, presentation, and verification work
+   below takes priority.
 9. Complete a restrained visual-presentation pass without moving gameplay rules
    into effects. **Complete:** the depot now uses level-authored lighting,
    atmosphere, practical pools, depth fog, portable decals, placed dust/haze,
@@ -157,7 +167,53 @@ Work resumes in this order:
    advancement changes flush immediately. The roster opens a confirmation-based
    advancement drawer that exposes effective ratings, costs, caps, remaining
    points, and structured unavailability; spending is restricted to exploration.
-   **Next: revisit the deployable drone.**
+   **Next: complete the existing-system verification sequence below.**
+
+## Current next production sequence — 2026-08-16
+
+The next work closes and proves existing systems before adding another
+initiative participant:
+
+1. **Complete destructible toppling end to end.** Author prop eligibility and a
+   deterministic result-policy resolver that freezes the resulting pose,
+   posture, and environmental evidence in the committed displacement. Add a
+   dedicated published depot fixture with an isolated prop, mixed crate/barrel
+   contacts, and a settled pile. Verify targeting, obstruction, collision,
+   exposure/cover, replay scrubbing, and exact live restoration. Add
+   Application tests for resolution and PlayMode lifecycle coverage for the
+   published fixture.
+2. **Finish close-quarters presentation.** Replace the knife's procedural-only
+   strike with the gameplay-owned authored action state, bind hit reactions,
+   and tune equipment transitions, contact timing, IK, interruption, replay,
+   and restoration. Then bind the already-imported reload, grenade, reaction,
+   turn, and any required traversal clips to the gameplay states that own them.
+3. **Extend the shared verification foundation.** Migrate the remaining action
+   families to canonical prepare/commit transitions, then add deterministic
+   action trajectories, reproducible failure capsules, minimization, API
+   fuzzing, disposable simulation, and scripted/random seed baselines.
+4. **Harden authored content, enemy choices, editor workflows, and delivery.**
+   Exercise broader enemy action selection, destructible-pile authoring,
+   viewport transforms, Windows/WebGL artifacts, and browser-playable preview
+   handoff against the same authoritative contracts.
+5. **Add the deployable drone as the final substantial gameplay expansion.**
+   Deployment, ownership, command range, initiative insertion, destruction,
+   and removal must use the proven party, transition, replay, and simulation
+   seams.
+6. **Run the alpha adversarial capstone.** Complete the scripted, random,
+   novelty, optimized, mirrored, held-out, and archived search corpus only after
+   the intended gameplay systems, including the drone, are present.
+
+### Current playable verification baseline
+
+The published depot already contains destructible crates and barrels, but it is
+not yet a toppling or settled-pile fixture. Blast damage from the launcher and
+frag grenade can damage and destroy those props, and the resulting collision,
+visibility, diagnostics, replay projection, and restoration can be exercised.
+Only `crate-exposure-demo` is currently registered as a prop displacement
+subject. Push and Throw can move it, but it will remain upright because both
+published actions author an empty `allowedResults` list. Both player characters
+already carry the Combat Knife in hotbar slot 5, so reach rejection, committed
+wounds, diagnostics, and the current procedural strike can be tested now.
 
 The 2026-08-12 review follow-up is complete: silhouette exposure is cached,
 displacement and blast rules use canonical Application paths, scenario content
