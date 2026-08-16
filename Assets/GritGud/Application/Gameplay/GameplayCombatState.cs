@@ -363,12 +363,34 @@ namespace GritGud.Application.Gameplay
                 Append(text, root + ".status", (int)projectile.Status);
                 if (projectile.Impact != null)
                 {
+                    Append(text, root + ".impact.entity",
+                        projectile.Impact.HitEntityId);
                     Append(text, root + ".impact.position",
                         projectile.Impact.Position);
                     Append(text, root + ".impact.time",
                         projectile.Impact.ArrivalTurnTime);
                     Append(text, root + ".impact.revision",
                         projectile.Impact.WorldStateRevision);
+                    var effects = new List<BlastEffectRecord>(
+                        projectile.Impact.BlastEffects);
+                    effects.Sort(CompareBlastEffects);
+                    for (int index = 0; index < effects.Count; index++)
+                    {
+                        BlastEffectRecord effect = effects[index];
+                        string effectRoot = root + ".impact.effect." + index;
+                        Append(text, effectRoot + ".entity", effect.EntityId);
+                        Append(text, effectRoot + ".kind",
+                            (int)effect.SubjectKind);
+                        Append(text, effectRoot + ".distance", effect.Distance);
+                        Append(text, effectRoot + ".occlusion",
+                            effect.OcclusionExposure);
+                        Append(text, effectRoot + ".falloff",
+                            effect.DistanceFalloff);
+                        Append(text, effectRoot + ".region",
+                            effect.InjuryRegion.HasValue
+                                ? (int)effect.InjuryRegion.Value
+                                : -1);
+                    }
                 }
             }
             foreach (SmokeFieldSnapshot smoke in state.SmokeFields)
@@ -449,6 +471,26 @@ namespace GritGud.Application.Gameplay
         private static string Normalize(float value) =>
             Math.Round(value, 5, MidpointRounding.AwayFromZero)
                 .ToString("0.#####", CultureInfo.InvariantCulture);
+
+        private static int CompareBlastEffects(
+            BlastEffectRecord left,
+            BlastEffectRecord right)
+        {
+            int comparison = StringComparer.Ordinal.Compare(
+                left.EntityId,
+                right.EntityId);
+            if (comparison != 0) return comparison;
+            comparison = left.SubjectKind.CompareTo(right.SubjectKind);
+            if (comparison != 0) return comparison;
+            comparison = Nullable.Compare(left.InjuryRegion, right.InjuryRegion);
+            if (comparison != 0) return comparison;
+            comparison = left.Distance.CompareTo(right.Distance);
+            if (comparison != 0) return comparison;
+            comparison = left.OcclusionExposure.CompareTo(
+                right.OcclusionExposure);
+            if (comparison != 0) return comparison;
+            return left.DistanceFalloff.CompareTo(right.DistanceFalloff);
+        }
     }
 
     public sealed class GameplayStateDifference

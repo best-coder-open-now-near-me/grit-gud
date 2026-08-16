@@ -174,6 +174,17 @@ registry with that prediction. Projectile advancement and impact consequences
 remain a separate transition family because they consume fresh environmental
 collision evidence at arrival time.
 
+Projectile advancement and impact now form an evidence-bearing prepared
+transition as well. Preparation samples the current segment once, freezes its
+world revision, collision and blast evidence, and projects the resulting flight,
+localized actor wounds, movement clamping, destructible integrity, and shared
+journal advancement without mutation. Commit requires the complete canonical
+pre-state to remain unchanged, applies the recorded evidence without querying
+Unity again, and compares the resulting authoritative state to the prediction.
+This preserves the gameplay rule that a separate preparation performed after an
+emergency reaction samples the changed world rather than reusing earlier
+evidence.
+
 ## Alpha-exit use
 
 The adversarial gauntlet is intended to cap alpha, but it cannot prove the

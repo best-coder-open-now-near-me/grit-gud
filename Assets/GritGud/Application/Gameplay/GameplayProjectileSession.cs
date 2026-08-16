@@ -221,9 +221,7 @@ namespace GritGud.Application.Gameplay
             }
 
             GameplayCombatStateSnapshot previous =
-                GameplayCombatStateCapture.Capture(
-                    gameplay,
-                    projectiles: this);
+                CaptureCombatState();
             long launchSequence = launches.Count + 1L;
             string projectileId = CreateProjectileId(launchSequence);
             GameplayPosition launchOrigin = weapon.Projectile.GetLaunchOrigin(
@@ -266,9 +264,7 @@ namespace GritGud.Application.Gameplay
             GameplayPreparedTransition<GameplayActionRecord> prepared) =>
             GameplayTransitionCoordinator.Commit(
                 prepared,
-                () => GameplayCombatStateCapture.Capture(
-                    gameplay,
-                    projectiles: this),
+                CaptureCombatState,
                 CommitLaunch);
 
         public void CommitLaunch(GameplayActionRecord action)
@@ -317,6 +313,17 @@ namespace GritGud.Application.Gameplay
             string projectileId,
             float turnTime)
         {
+            GameplayPreparedTransition<ProjectileAdvanceRecord> prepared =
+                PrepareAdvance(projectileId, turnTime);
+            CommitPreparedAdvance(prepared);
+            return prepared.Record;
+        }
+
+        public GameplayPreparedTransition<ProjectileAdvanceRecord> PrepareAdvance(
+            string projectileId,
+            float turnTime)
+        {
+            GameplayCombatStateSnapshot previous = CaptureCombatState();
             ProjectileAdvancePrediction prediction = PredictAdvance(
                 projectileId,
                 turnTime);
@@ -377,9 +384,21 @@ namespace GritGud.Application.Gameplay
                 prediction.SegmentEnd,
                 queryResult.WorldStateRevision,
                 collisionFraction);
-            CommitAdvance(record);
-            return record;
+            return new GameplayPreparedTransition<ProjectileAdvanceRecord>(
+                record,
+                previous,
+                GameplayProjectileAdvanceStateProjector.Project(
+                    previous,
+                    record,
+                    consequences.Destructibles.Journal == gameplay.Journal));
         }
+
+        public GameplayTransitionCommitResult CommitPreparedAdvance(
+            GameplayPreparedTransition<ProjectileAdvanceRecord> prepared) =>
+            GameplayTransitionCoordinator.Commit(
+                prepared,
+                CaptureCombatState,
+                CommitAdvance);
 
         public ProjectileAdvancePrediction PredictAdvance(
             string projectileId,
@@ -485,6 +504,12 @@ namespace GritGud.Application.Gameplay
 
             return flight;
         }
+
+        private GameplayCombatStateSnapshot CaptureCombatState() =>
+            GameplayCombatStateCapture.Capture(
+                gameplay,
+                consequences.Destructibles,
+                projectiles: this);
 
         private bool TryPrepareLaunch(
             string actorId,

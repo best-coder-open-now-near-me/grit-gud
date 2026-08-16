@@ -19,6 +19,8 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(destructibleSession));
         }
 
+        internal DestructiblePropSession Destructibles => destructibles;
+
         public void Validate(
             IReadOnlyList<BlastEffectRecord> effects,
             float woundMovementPenalty,
