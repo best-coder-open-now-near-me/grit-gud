@@ -367,15 +367,26 @@ namespace GritGud.Application.Gameplay
         public GameplaySession(
             ScenarioDefinition scenario,
             GameplayJournal journal = null,
-            uint scenarioSeed = 0u)
+            uint scenarioSeed = 0u,
+            GameplayPartySave restoredParty = null)
         {
             Scenario = scenario ?? throw new ArgumentNullException(nameof(scenario));
             Journal = journal ?? new GameplayJournal();
+            if (restoredParty != null)
+                GameplayPartySaveValidator.Validate(restoredParty, scenario);
             int participantCount = scenario.Actors.Count;
             var initiative = new List<GameplayInitiativeResult>(participantCount);
             foreach (ScenarioActorDefinition actor in scenario.Actors)
             {
-                actors.Add(actor.Id, new ActorState(actor));
+                CharacterPersistenceSnapshot restoredCharacter = null;
+                if (restoredParty != null
+                    && actor.CharacterProfile != null)
+                {
+                    restoredParty.TryGetCharacter(
+                        actor.CharacterProfile.IdentityId,
+                        out restoredCharacter);
+                }
+                actors.Add(actor.Id, new ActorState(actor, restoredCharacter));
                 initiative.Add(ResolveInitiative(actor, participantCount));
             }
             initiative.Sort(CompareInitiative);
@@ -2084,14 +2095,27 @@ namespace GritGud.Application.Gameplay
             private readonly Dictionary<string, int> inventoryQuantities =
                 new Dictionary<string, int>(StringComparer.Ordinal);
 
-            public ActorState(ScenarioActorDefinition definition)
+            public ActorState(
+                ScenarioActorDefinition definition,
+                CharacterPersistenceSnapshot restoredCharacter = null)
             {
                 ActorId = definition.Id;
                 Pose = definition.StartingPose;
-                TurnBudget = definition.StartingTurnBudget;
-                Wounds = new ActorWoundSnapshot(definition.Id, 0, 0f);
                 MaximumWounds = definition.Combat.MaximumWounds;
-                EquippedItemId = definition.InitiallyEquippedItemId;
+                Wounds = restoredCharacter == null
+                    ? new ActorWoundSnapshot(definition.Id, 0, 0f)
+                    : RebindWounds(
+                        restoredCharacter.Wounds,
+                        definition.Id);
+                TurnBudget = new TurnBudget(
+                    definition.StartingTurnBudget.ActionPoints,
+                    Math.Max(
+                        0f,
+                        definition.StartingTurnBudget.MovementOpportunity
+                            - Wounds.MovementPenalty));
+                EquippedItemId = restoredCharacter != null
+                    ? restoredCharacter.EquippedItemId
+                    : definition.InitiallyEquippedItemId;
                 EquipmentEffects = definition.GetInventoryItem(
                         EquippedItemId)?.EquippedEffects
                     ?? EquipmentEffectSet.None;
@@ -2104,6 +2128,20 @@ namespace GritGud.Application.Gameplay
                 }
                 turnBudgetAllowance = definition.StartingTurnBudget;
             }
+
+            private static ActorWoundSnapshot RebindWounds(
+                ActorWoundSnapshot wounds,
+                string actorId) =>
+                new ActorWoundSnapshot(
+                    actorId,
+                    wounds.HeadWounds,
+                    wounds.TorsoWounds,
+                    wounds.LeftArmWounds,
+                    wounds.RightArmWounds,
+                    wounds.LeftLegWounds,
+                    wounds.RightLegWounds,
+                    wounds.UnlocalizedWounds,
+                    wounds.MovementPenalty);
 
             public string ActorId { get; }
 

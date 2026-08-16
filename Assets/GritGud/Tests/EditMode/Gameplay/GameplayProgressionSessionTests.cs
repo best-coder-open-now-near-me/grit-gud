@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Turns;
@@ -92,6 +93,165 @@ namespace GritGud.Domain.Tests.Gameplay
                 () => progression.CapturePersistence(gameplay, "vale"));
 
             Assert.That(exception.Message, Does.Contain(mara.IdentityId));
+        }
+
+        [Test]
+        public void ValidPartySaveRestoresIdentityBoundProgressionEquipmentAndWounds()
+        {
+            CharacterProfileDefinition mara = CreateProfile();
+            CharacterProfileDefinition vale = CreateSecondProfile();
+            GameplaySession authored = CreatePartyGameplay(mara, vale);
+            var savedWounds = new ActorWoundSnapshot(
+                "previous-scenario-mara",
+                headWounds: 0,
+                torsoWounds: 1,
+                leftArmWounds: 0,
+                rightArmWounds: 0,
+                leftLegWounds: 0,
+                rightLegWounds: 0,
+                unlocalizedWounds: 0,
+                movementPenalty: 1.5f);
+            var save = new GameplayPartySave(
+                GameplayPartySave.CurrentSchemaVersion,
+                new[]
+                {
+                    new CharacterPersistenceSnapshot(
+                        mara.IdentityId,
+                        new CharacterProgressionSnapshot(
+                            mara.IdentityId,
+                            0,
+                            new Dictionary<string, int>
+                            {
+                                ["skill.demolitions"] = 1,
+                            }),
+                        equippedItemId: null,
+                        wounds: savedWounds),
+                    new CharacterPersistenceSnapshot(
+                        vale.IdentityId,
+                        new CharacterProgressionSnapshot(
+                            vale.IdentityId,
+                            0,
+                            new Dictionary<string, int>()),
+                        "weapon.rifle",
+                        new ActorWoundSnapshot("previous-vale", 0, 0f)),
+                });
+
+            var restoredGameplay = new GameplaySession(
+                authored.Scenario,
+                restoredParty: save);
+            var restoredProgression = new GameplayPartyProgressionSession(
+                restoredGameplay,
+                save);
+
+            GameplayActorSnapshot restoredMara = restoredGameplay.GetActor("mara");
+            Assert.That(restoredMara.EquippedItemId, Is.Null);
+            Assert.That(restoredMara.Wounds.ActorId, Is.EqualTo("mara"));
+            Assert.That(restoredMara.Wounds.TorsoWounds, Is.EqualTo(1));
+            Assert.That(restoredMara.TurnBudget.MovementOpportunity,
+                Is.EqualTo(6.5f));
+            Assert.That(
+                restoredProgression.GetProgression("mara")
+                    .GetEffectiveSkill("skill.demolitions"),
+                Is.EqualTo(3));
+            Assert.That(restoredGameplay.GetActor("vale").EquippedItemId,
+                Is.EqualTo("weapon.rifle"));
+        }
+
+        [Test]
+        public void SaveValidationRejectsProgressionThatCreatesPoints()
+        {
+            CharacterProfileDefinition mara = CreateProfile();
+            CharacterProfileDefinition vale = CreateSecondProfile();
+            GameplaySession gameplay = CreatePartyGameplay(mara, vale);
+            var invalid = new GameplayPartySave(
+                GameplayPartySave.CurrentSchemaVersion,
+                new[]
+                {
+                    new CharacterPersistenceSnapshot(
+                        mara.IdentityId,
+                        new CharacterProgressionSnapshot(
+                            mara.IdentityId,
+                            1,
+                            new Dictionary<string, int>
+                            {
+                                ["skill.demolitions"] = 1,
+                            }),
+                        "weapon.rifle",
+                        new ActorWoundSnapshot("mara", 0, 0f)),
+                    new CharacterPersistenceSnapshot(
+                        vale.IdentityId,
+                        new CharacterProgressionSnapshot(
+                            vale.IdentityId,
+                            0,
+                            new Dictionary<string, int>()),
+                        "weapon.rifle",
+                        new ActorWoundSnapshot("vale", 0, 0f)),
+                });
+
+            InvalidOperationException exception =
+                Assert.Throws<InvalidOperationException>(() =>
+                    GameplayPartySaveValidator.Validate(
+                        invalid,
+                        gameplay.Scenario));
+
+            Assert.That(exception.Message, Does.Contain("point budget"));
+        }
+
+        [Test]
+        public void AdvancementIsExplorationOnlyAndPersistsImmediately()
+        {
+            CharacterProfileDefinition mara = CreateProfile();
+            CharacterProfileDefinition vale = CreateSecondProfile();
+            GameplaySession gameplay = CreatePartyGameplay(mara, vale);
+            var progression = new GameplayPartyProgressionSession(gameplay);
+            var store = new MemoryPartySaveStore();
+            using var persistence = new GameplayPartyPersistenceSession(store);
+            persistence.Bind(gameplay, progression);
+
+            Assert.That(persistence.TryAdvance(
+                "mara",
+                "advance.demolitions-drill",
+                out CharacterAdvancementFailure failure), Is.True);
+            Assert.That(failure, Is.EqualTo(CharacterAdvancementFailure.None));
+            Assert.That(store.SaveCount, Is.EqualTo(1));
+            Assert.That(store.Saved.TryGetCharacter(
+                mara.IdentityId,
+                out CharacterPersistenceSnapshot saved), Is.True);
+            Assert.That(saved.Progression.Bonuses["skill.demolitions"],
+                Is.EqualTo(1));
+
+            Assert.That(gameplay.EnterTurnMode(), Is.True);
+            CharacterAdvancementAvailability availability =
+                persistence.EvaluateAdvancement(
+                    "mara",
+                    "advance.demolitions-drill");
+            Assert.That(availability.CanAdvance, Is.False);
+            Assert.That(availability.Failure,
+                Is.EqualTo(CharacterAdvancementFailure.TurnBasedModeActive));
+        }
+
+        private sealed class MemoryPartySaveStore : IGameplayPartySaveStore
+        {
+            public GameplayPartySave Saved { get; private set; }
+
+            public int SaveCount { get; private set; }
+
+            public bool TryLoad(out GameplayPartySave save)
+            {
+                save = Saved;
+                return save != null;
+            }
+
+            public void Save(GameplayPartySave save)
+            {
+                Saved = save;
+                SaveCount++;
+            }
+
+            public void Delete()
+            {
+                Saved = null;
+            }
         }
 
         private static CharacterProfileDefinition CreateProfile() =>
