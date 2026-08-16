@@ -193,6 +193,26 @@ namespace GritGud.Application.Gameplay
                     actorId,
                     intendedTargetId,
                     aimPoint,
+                    out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                    out failure))
+                return false;
+            action = prepared.Record;
+            CommitPreparedLaunch(prepared);
+            return true;
+        }
+
+        public bool TryPrepareLaunch(
+            string actorId,
+            string intendedTargetId,
+            GameplayPosition aimPoint,
+            out GameplayPreparedTransition<GameplayActionRecord> prepared,
+            out ProjectileLaunchFailure failure)
+        {
+            prepared = null;
+            if (!TryPrepareLaunch(
+                    actorId,
+                    intendedTargetId,
+                    aimPoint,
                     out AttackDefinition weapon,
                     out GameplayActorSnapshot actor,
                     out failure))
@@ -200,6 +220,10 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
+            GameplayCombatStateSnapshot previous =
+                GameplayCombatStateCapture.Capture(
+                    gameplay,
+                    projectiles: this);
             long launchSequence = launches.Count + 1L;
             string projectileId = CreateProjectileId(launchSequence);
             GameplayPosition launchOrigin = weapon.Projectile.GetLaunchOrigin(
@@ -220,7 +244,7 @@ namespace GritGud.Application.Gameplay
             long actionSequence = gameplay.LastResolvedAction == null
                 ? 1L
                 : gameplay.LastResolvedAction.Sequence + 1L;
-            action = new GameplayActionRecord(
+            var action = new GameplayActionRecord(
                 actionSequence,
                 new GameplayActionRequest(
                     actorId,
@@ -230,10 +254,22 @@ namespace GritGud.Application.Gameplay
                 actor.TurnBudget,
                 resultingBudget,
                 new[] { new ProjectileLaunchedActionOutcome(launch) });
-            CommitLaunch(action);
+            prepared = new GameplayPreparedTransition<GameplayActionRecord>(
+                action,
+                previous,
+                GameplayWeaponActionStateProjector.Project(previous, action));
             failure = ProjectileLaunchFailure.None;
             return true;
         }
+
+        public GameplayTransitionCommitResult CommitPreparedLaunch(
+            GameplayPreparedTransition<GameplayActionRecord> prepared) =>
+            GameplayTransitionCoordinator.Commit(
+                prepared,
+                () => GameplayCombatStateCapture.Capture(
+                    gameplay,
+                    projectiles: this),
+                CommitLaunch);
 
         public void CommitLaunch(GameplayActionRecord action)
         {

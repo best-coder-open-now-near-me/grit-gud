@@ -153,11 +153,29 @@ namespace GritGud.Application.Gameplay
                 action.Sequence,
                 session.LastTurnSequence,
                 checked(session.JournalSequence + 1L));
+            var projectiles = new List<ProjectileFlightSnapshot>(
+                previous.Projectiles);
+            if (action.Outcomes[0] is ProjectileLaunchedActionOutcome launched)
+            {
+                foreach (ProjectileFlightSnapshot existing in projectiles)
+                    if (string.Equals(
+                        existing.ProjectileId,
+                        launched.Launch.ProjectileId,
+                        StringComparison.Ordinal))
+                        throw new InvalidOperationException(
+                            "Weapon projection cannot duplicate a projectile ID.");
+                projectiles.Add(new ProjectileFlightSnapshot(
+                    launched.Launch,
+                    launched.Launch.Origin,
+                    distanceTraveled: 0f,
+                    elapsedTurnTime: 0f,
+                    ProjectileFlightStatus.InFlight));
+            }
             return new GameplayCombatStateSnapshot(
                 resultingSession,
                 previous.Destructibles,
                 previous.Vehicles,
-                previous.Projectiles,
+                projectiles,
                 previous.SmokeFields);
         }
 
@@ -182,6 +200,8 @@ namespace GritGud.Application.Gameplay
                         attack.TargetId).Pose.Position;
                 else if (outcome is WeaponDischargedActionOutcome discharge)
                     facingTarget = discharge.Discharge.AimPoint;
+                else if (outcome is ProjectileLaunchedActionOutcome projectile)
+                    facingTarget = projectile.Launch.AimPoint;
                 else
                     throw new ArgumentException(
                         "Weapon projection received a non-weapon outcome.",

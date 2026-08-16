@@ -328,11 +328,36 @@ namespace GritGud.Application.Gameplay
             {
                 string root = "projectile." + projectile.ProjectileId;
                 Append(text, root + ".position", projectile.Position);
+                Append(text, root + ".launch.sequence", projectile.Launch.Sequence);
                 Append(text, root + ".source", projectile.Launch.AttackerId);
                 Append(text, root + ".target", projectile.Launch.IntendedTargetId);
                 Append(text, root + ".action", projectile.Launch.ActionId);
                 Append(text, root + ".origin", projectile.Launch.Origin);
                 Append(text, root + ".aim", projectile.Launch.AimPoint);
+                Append(text, root + ".definition.id",
+                    projectile.Launch.Definition.Id);
+                Append(text, root + ".definition.speed",
+                    projectile.Launch.Definition.SpeedPerTurn);
+                Append(text, root + ".definition.radius",
+                    projectile.Launch.Definition.Radius);
+                Append(text, root + ".definition.range",
+                    projectile.Launch.Definition.MaximumRange);
+                Append(text, root + ".definition.launchHeight.standing",
+                    projectile.Launch.Definition.StandingLaunchHeight);
+                Append(text, root + ".definition.launchHeight.crouched",
+                    projectile.Launch.Definition.CrouchedLaunchHeight);
+                Append(text, root + ".definition.emergency",
+                    projectile.Launch.Definition.OpensEmergencyReactionWindow);
+                Append(text, root + ".definition.blast.radius",
+                    projectile.Launch.Definition.BlastRadius);
+                Append(text, root + ".definition.blast.woundPenalty",
+                    projectile.Launch.Definition.BlastWoundMovementPenalty);
+                Append(text, root + ".definition.blast.integrityDamage",
+                    projectile.Launch.Definition.BlastIntegrityDamage);
+                Append(text, root + ".allowance.ap",
+                    projectile.Launch.TurnActionPointAllowance);
+                Append(text, root + ".remaining.ap",
+                    projectile.Launch.RemainingActionPointsAfterLaunch);
                 Append(text, root + ".distance", projectile.DistanceTraveled);
                 Append(text, root + ".time", projectile.ElapsedTurnTime);
                 Append(text, root + ".status", (int)projectile.Status);

@@ -75,6 +75,70 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void PreparedLaunchIsNonMutatingAndMatchesAuthoritativeFlight()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            gameplay.EnterTurnMode();
+            var projectiles = CreateProjectileSession(
+                gameplay,
+                new QueuedSegmentQuery());
+
+            Assert.That(projectiles.TryPrepareLaunch(
+                "player",
+                "target",
+                new GameplayPosition(0f, 0f, 10f),
+                out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                out ProjectileLaunchFailure failure), Is.True);
+
+            Assert.That(failure, Is.EqualTo(ProjectileLaunchFailure.None));
+            Assert.That(gameplay.ResolvedActions, Is.Empty);
+            Assert.That(projectiles.Launches, Is.Empty);
+            Assert.That(projectiles.ProjectileIds, Is.Empty);
+            Assert.That(prepared.Predicted.Projectiles, Has.Count.EqualTo(1));
+            ProjectileFlightSnapshot predicted = prepared.Predicted.Projectiles[0];
+            Assert.That(predicted.ProjectileId, Is.EqualTo("projectile.1"));
+            Assert.That(predicted.Status, Is.EqualTo(
+                ProjectileFlightStatus.InFlight));
+            Assert.That(predicted.Position, Is.EqualTo(predicted.Launch.Origin));
+            Assert.That(
+                prepared.Predicted.Session.GetActor("player")
+                    .TurnBudget.ActionPoints,
+                Is.EqualTo(2));
+
+            GameplayTransitionCommitResult result =
+                projectiles.CommitPreparedLaunch(prepared);
+
+            Assert.That(result.MatchesPrediction, Is.True);
+            Assert.That(projectiles.Launches, Has.Count.EqualTo(1));
+            Assert.That(projectiles.GetProjectile("projectile.1").Status,
+                Is.EqualTo(ProjectileFlightStatus.InFlight));
+        }
+
+        [Test]
+        public void PreparedLaunchRejectsInterveningTurnBeforeMutation()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            gameplay.EnterTurnMode();
+            var projectiles = CreateProjectileSession(
+                gameplay,
+                new QueuedSegmentQuery());
+            Assert.That(projectiles.TryPrepareLaunch(
+                "player",
+                "target",
+                new GameplayPosition(0f, 0f, 10f),
+                out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                out _), Is.True);
+            Assert.That(gameplay.TryEndTurn("player", out _), Is.True);
+
+            Assert.Throws<InvalidOperationException>(
+                () => projectiles.CommitPreparedLaunch(prepared));
+
+            Assert.That(projectiles.Launches, Is.Empty);
+            Assert.That(projectiles.ProjectileIds, Is.Empty);
+            Assert.That(gameplay.ResolvedActions, Is.Empty);
+        }
+
+        [Test]
         public void ResponsiveExplorationLaunchCommitsBeforeEncounterBegins()
         {
             GameplaySession gameplay = CreateGameplay(

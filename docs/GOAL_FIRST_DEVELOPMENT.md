@@ -166,6 +166,14 @@ before authoritative mutation. The actor snapshot carries authored AP and
 movement allowances so wound-induced movement clamping can be predicted from the
 snapshot without consulting Unity or a second rules implementation.
 
+Projectile launch now uses the same contract. Preparation freezes the stable
+projectile ID, launch definition and trajectory, resource cost, attacker facing,
+and initial in-flight snapshot without adding a live projectile. Commit rejects
+an intervening state change before mutation and compares the authoritative flight
+registry with that prediction. Projectile advancement and impact consequences
+remain a separate transition family because they consume fresh environmental
+collision evidence at arrival time.
+
 ## Alpha-exit use
 
 The adversarial gauntlet is intended to cap alpha, but it cannot prove the
