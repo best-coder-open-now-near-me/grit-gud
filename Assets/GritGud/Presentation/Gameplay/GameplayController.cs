@@ -30,6 +30,7 @@ namespace GritGud.Presentation.Gameplay
         private GameplayHud hud;
         private GameplayPartyHud partyHud;
         private GameplayTurnReplayHud turnReplayHud;
+        private GameplayTurnReplayWorldPresenter turnReplayWorldPresenter;
         private GameplayDialogueDrawer dialogueDrawer;
         private GameplaySessionPresenter sessionPresenter;
         private TurnMovementController turnMovementController;
@@ -86,6 +87,7 @@ namespace GritGud.Presentation.Gameplay
             hud = GetOrAddComponent<GameplayHud>();
             partyHud = GetOrAddComponent<GameplayPartyHud>();
             turnReplayHud = GetOrAddComponent<GameplayTurnReplayHud>();
+            turnReplayWorldPresenter ??= new GameplayTurnReplayWorldPresenter();
             dialogueDrawer = GetOrAddComponent<GameplayDialogueDrawer>();
             sessionPresenter = GetOrAddComponent<GameplaySessionPresenter>();
             turnMovementController = GetOrAddComponent<TurnMovementController>();
@@ -131,6 +133,7 @@ namespace GritGud.Presentation.Gameplay
             hud?.Hide();
             partyHud?.Unbind();
             turnReplayHud?.Unbind();
+            turnReplayWorldPresenter?.Dispose();
             hud?.UnbindSession();
             hud?.UnbindTurnMovement();
             hud?.UnbindGameplayActions();
@@ -519,6 +522,11 @@ namespace GritGud.Presentation.Gameplay
                 HandleGameplayControl(GameplayControl.ToggleTurnMode);
             inputController.Begin(HandleGameplayControl);
             turnReplayHud.Bind(session, partyControl);
+            turnReplayWorldPresenter.Bind(
+                session,
+                worldRegistry,
+                inputController,
+                turnReplayHud);
             partyHud.Bind(
                 session,
                 partyControl,

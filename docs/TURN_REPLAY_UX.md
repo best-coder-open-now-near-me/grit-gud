@@ -97,7 +97,13 @@ control and an interactive top timeline. The timeline starts at the boundary
 after the character's optional previous-turn segment and supports play/pause,
 previous/next turn, speed, and scrubbing.
 
-This checkpoint validates turn grouping and the agreed HUD interaction. World
-snapshot restoration and seekable actor, action, projectile, and effect
-presentation remain the next slice; until those are connected, the playhead is
-a timeline preview and does not yet drive reconstructed world animation.
+The playhead now seeks recorded actor movement, displacement, facing, and
+stance in the world. Opening replay preserves the live presentation state,
+places gameplay input in camera-only mode, and restores the exact live actor
+transforms and stances on exit. The character's ordinary camera remains active
+throughout.
+
+Action animation, wounds and equipment visuals, projectiles, destructibles,
+vehicles, smoke, and other persistent effect snapshots remain subsequent
+presentation slices. Until those are connected, the timeline is an actor-pose
+replay rather than a complete reconstruction of every recorded consequence.

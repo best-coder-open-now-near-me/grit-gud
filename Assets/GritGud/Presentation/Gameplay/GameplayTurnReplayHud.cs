@@ -26,6 +26,14 @@ namespace GritGud.Presentation.Gameplay
 
         public bool IsOpen => isOpen;
 
+        internal TurnReplayWindow Window => window;
+
+        internal float Playhead => playhead;
+
+        internal event Action<bool> OpenChanged;
+
+        internal event Action<float> PlayheadChanged;
+
         public bool IsAvailable
         {
             get
@@ -65,6 +73,9 @@ namespace GritGud.Presentation.Gameplay
             isPlaying = false;
             if (isOpen)
                 playhead = window.DefaultPlayheadBoundary;
+            OpenChanged?.Invoke(isOpen);
+            if (isOpen)
+                PlayheadChanged?.Invoke(playhead);
         }
 
         internal bool ContainsInteractiveScreenPoint(Vector2 screenPoint)
@@ -91,6 +102,7 @@ namespace GritGud.Presentation.Gameplay
                     * speed));
             if (playhead >= window.Segments.Count)
                 isPlaying = false;
+            PlayheadChanged?.Invoke(playhead);
         }
 
         private void OnGUI()
@@ -109,6 +121,7 @@ namespace GritGud.Presentation.Gameplay
 
         private void Draw(Rect bar)
         {
+            float previousPlayhead = playhead;
             GUI.Box(bar, GUIContent.none);
             GUI.Label(
                 new Rect(bar.x + 10f, bar.y + 5f, 150f, 20f),
@@ -204,6 +217,8 @@ namespace GritGud.Presentation.Gameplay
                 playhead,
                 0f,
                 window.Segments.Count);
+            if (!Mathf.Approximately(previousPlayhead, playhead))
+                PlayheadChanged?.Invoke(playhead);
         }
 
         private void RefreshWindow()

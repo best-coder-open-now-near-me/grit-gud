@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Turns;
@@ -94,6 +95,57 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(
                 window.Segments.Sum(segment => segment.Entries.Count),
                 Is.EqualTo(entryCount));
+        }
+
+        [Test]
+        public void PoseProjectionSeeksAlongRecordedMovementWithoutLiveMutation()
+        {
+            var origin = new GameplayActorPose(
+                new GameplayPosition(0f, 0f, 0f),
+                0f);
+            var route = new MovementRouteRecord(
+                "mara",
+                origin,
+                new[] { new GameplayPosition(10f, 0f, 0f) });
+            var window = new TurnReplayWindow(
+                "mara",
+                new[]
+                {
+                    new TurnReplaySegment(
+                        1,
+                        "mara",
+                        new GameplayJournalEntry[]
+                        {
+                            new MovementRouteCommittedJournalEntry(1, route),
+                            new TurnEndedJournalEntry(
+                                2,
+                                new TurnEndRecord(1, "mara", "raider")),
+                        }),
+                });
+            var finalPoses = new Dictionary<string, GameplayActorPose>
+            {
+                ["mara"] = new GameplayActorPose(
+                    route.Destination,
+                    route.FinalFacingDegrees),
+            };
+
+            GameplayActorPose start = TurnReplayPoseProjector.Project(
+                window,
+                finalPoses,
+                0f)["mara"];
+            GameplayActorPose middle = TurnReplayPoseProjector.Project(
+                window,
+                finalPoses,
+                0.5f)["mara"];
+            GameplayActorPose end = TurnReplayPoseProjector.Project(
+                window,
+                finalPoses,
+                1f)["mara"];
+
+            Assert.That(start.Position.X, Is.EqualTo(0f));
+            Assert.That(middle.Position.X, Is.EqualTo(5f).Within(0.001f));
+            Assert.That(end.Position.X, Is.EqualTo(10f));
+            Assert.That(finalPoses["mara"].Position.X, Is.EqualTo(10f));
         }
 
         private static GameplaySession CreateSession()
