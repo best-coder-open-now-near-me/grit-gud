@@ -66,9 +66,9 @@ An invalid import therefore leaves the currently loaded level untouched.
 | `Shift` while using movement keys | Pan the camera three times faster |
 | `F` | Frame the selected entity |
 | `Home` | Frame the authored level bounds |
-| Create → Select → Perspective/Top/Front/Right | Switch camera projection; orbiting an orthographic view returns to perspective |
-| Create → Place entry, then left click | Place the selected archetype |
-| Create → Place ↺ / ↻ buttons | Rotate the active placement stamp left / right |
+| Viewport Perspective/Top/Front/Right menu | Switch camera projection; orbiting an orthographic view returns to perspective |
+| Objects → Place entry, then left click | Place the selected archetype |
+| Objects → Place ↺ / ↻ buttons | Rotate the active placement stamp left / right |
 | Left click | Select an entity |
 | `Ctrl` + left click | Add or remove an entity from the selection |
 | Left drag | Move the selected entity on its current elevation |
@@ -76,7 +76,7 @@ An invalid import therefore leaves the currently loaded level untouched.
 | `Delete` | Delete the selected entity |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
 | `Esc` | Cancel placement or clear selection |
-| Create → Terrain, then left drag | Raise, lower, smooth, or flatten with the configured brush |
+| Terrain, then left drag | Raise, lower, smooth, or flatten with the configured brush |
 | `Shift` while using Raise | Temporarily lower terrain |
 
 A primary touch uses the same press, drag, and release lifecycle as a left
@@ -105,7 +105,7 @@ Rotation and deletion apply to the complete selection as one undoable
 transaction. Entity-specific validation messages are buttons that select and
 frame the affected entity.
 
-Create → Select also owns the spatial-layout controls. **Level Bounds** edits
+**View → Level settings** owns the spatial-layout controls. **Level Bounds** edits
 the portable center and size through undo/redo. **Layout Grid** draws a local,
 non-exported line grid clipped to those bounds at a configurable spacing and
 elevation; its visibility and settings persist with camera preferences. Top,
@@ -118,7 +118,7 @@ multi-selection, allocate new stable IDs, enforce the entity limit, and commit
 up to 256 generated copies as one undo step. This is the fast path for floor modules,
 walls, repeated cover, and other blockout runs.
 
-Create → Select also includes **Organization** for larger levels. Groups are
+**Objects → Select** includes the searchable hierarchy and **Organization** for larger levels. Groups are
 named, portable collections: select one or more world entities, create or choose
 a group, then assign the selection. Lock prevents scene and hierarchy selection;
 Hide removes the group from the authoring projection; Isolate temporarily shows
@@ -165,21 +165,27 @@ height detail, rebuilds its projection, and participates in undo/redo. Width and
 depth must be whole multiples of the grid spacing. Imported legacy levels with
 no terrain expose **Add Flat Terrain** in the same panel.
 
-The toolbar is split into navigation/history and persistence rows so controls do
-not run together on ordinary window sizes. The left panel has five stable
-workspaces: **Create**, **Outline**, **Scenario**, **Env**, and **Dressing**. Create then switches among
-Select, Place, and Terrain and shows only the active mode's controls. Outline
-searches both world entities and scenario objects. Scenario owns player-start
-and actor management; selecting an actor opens its editable properties in the
-right Inspector. Selection and stamp outlines follow rendered prefab mesh geometry,
-not the potentially larger authored gameplay or cover bounds. Inspector rotation
-buttons leave stamp mode before rotating the selected object. The Inspector separates
-**Selection** transforms and physical
-defaults from **Gameplay** links such as objectives, props, vehicles, and actors.
-The **Level** tab owns document-wide validation, portable-file guidance, and
-recovery snapshots, so selecting a world object does not bury its contextual
-controls beneath unrelated project information. Use the **Shortcuts** toolbar
-button to show or hide the input reference without leaving the editor.
+The editor uses one compact application bar. Frequent actions—library navigation,
+undo/redo, snapping, local save, Preview, and Test Play—stay visible. **File** owns
+new/reload, local and cloud drafts, import, and export; **Edit** owns selection
+duplication and deletion; **View** owns panel visibility, level settings, the layout
+grid, and shortcut help. Camera projection and framing live in a floating viewport
+control instead of an authoring panel.
+
+The left panel has five stable workspaces: **Objects**, **Terrain**, **Scenario**,
+**Environment**, and **Dressing**. Objects switches between a searchable hierarchy
+for selection and the placement library. Scenario owns player-start and actor
+management; selecting an actor opens its editable properties in the right Inspector.
+Selection and stamp outlines follow rendered prefab mesh geometry, not the potentially
+larger authored gameplay or cover bounds. Inspector rotation buttons leave stamp mode
+before rotating the selected object. The Inspector separates **Selection** transforms
+and physical defaults from **Gameplay** links such as objectives, props, vehicles, and
+actors. The **Level** tab owns document-wide validation, layout, playability,
+portable-file guidance, and recovery snapshots. Inspector sections use progressive
+disclosure and omit unsupported tools; for example, physics placement appears only for
+loose props. At narrow WebGL sizes, the Tools and Inspector panels become mutually
+exclusive drawers so the viewport retains most of the screen width. Use **View →
+Shortcut reference** to show or hide the input reference without leaving the editor.
 
 **Env** edits ambient sky/horizon/ground colors, fog, the directional key, and
 fixture presentation with invariant-culture numeric fields. Practical lights
@@ -257,7 +263,7 @@ authored bounds, so terrain tools are immediately usable when the editor opens.
 
 ## Playability check
 
-Outline → **Playability Check** runs an on-demand, non-blocking review of the
+**View → Level settings → Playability** runs an on-demand, non-blocking review of the
 current document. It summarizes heightfield walkability using the gameplay
 actor's 50-degree slope and 0.35-meter step assumptions, connected terrain
 regions, scenario anchors without terrain beneath them, objectives disconnected

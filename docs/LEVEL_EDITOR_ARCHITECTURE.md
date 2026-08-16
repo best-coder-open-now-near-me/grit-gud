@@ -41,9 +41,9 @@ copied back into the authoring workspace.
 | Core presentation services | Input capture, camera control, snapping, and scene queries |
 | Runtime projection | Validated construction and incremental entity-view updates |
 | Persistence coordinator | Drafts, import/export, platform transfer, and publish validation |
-| Presentation state | Create/Outline/Scenario navigation and contextual Inspector focus |
+| Presentation state | Objects/Terrain/Scenario/Environment/Dressing navigation and contextual Inspector focus |
 | UI action contract | Typed boundary for user intents, persistence, and history operations |
-| UI shell and panels | IMGUI rendering, transient text fields, and local disclosure state |
+| UI shell and panels | Responsive IMGUI layout, runtime menus, transient text fields, and local disclosure state |
 | Scenario authoring coordinator | Scenario invariants, transactions, and actor/link use cases |
 | Environment authoring coordinator | Numeric parsing, lighting invariants, and undoable atmosphere/practical-light use cases |
 | Dressing authoring coordinator | Decal, ambient-VFX, and audio-zone parsing, limits, stable IDs, and undoable CRUD use cases |
@@ -61,7 +61,9 @@ The GUI must not query `LevelEditorWorkspace` or persistence services directly.
 It receives an immutable view state and submits intent through
 `ILevelEditorGuiActions`. GUI dimensions live in `LevelEditorGuiMetrics`, skin-
 dependent styles in `LevelEditorGuiStyles`, and semantic UI/world colors in
-`LevelEditorTheme`.
+`LevelEditorTheme`. `LevelEditorShellLayout` is the deterministic responsive-width
+policy. Runtime dropdowns use typed `LevelEditorMenuModel` items and remain free of
+`UnityEditor` APIs so the same shell works in Windows and WebGL players.
 
 ## Adding a tool
 

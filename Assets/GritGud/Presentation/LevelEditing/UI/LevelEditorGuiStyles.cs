@@ -84,6 +84,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             StyleTextInput(themedSkin.textField, fieldTexture, fieldFocusedTexture);
             StyleTextInput(themedSkin.textArea, fieldTexture, fieldFocusedTexture);
             StyleText(themedSkin.label, LevelEditorTheme.PrimaryText);
+            themedSkin.label.wordWrap = true;
             StyleText(themedSkin.toggle, LevelEditorTheme.PrimaryText);
             themedSkin.settings.cursorColor = LevelEditorTheme.PrimaryText;
             themedSkin.settings.selectionColor = LevelEditorTheme.ButtonSelectedBackground;
@@ -130,6 +131,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 name = "Section Header",
                 alignment = TextAnchor.MiddleLeft,
                 fontStyle = FontStyle.Bold,
+                fontSize = themedSkin.label.fontSize > 0 ? themedSkin.label.fontSize : 11,
                 padding = new RectOffset(
                     LevelEditorGuiMetrics.SectionHeaderLeftPadding,
                     LevelEditorGuiMetrics.SectionHeaderRightPadding,
@@ -157,6 +159,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 alignment = TextAnchor.MiddleLeft,
                 fontStyle = FontStyle.Bold,
                 clipping = TextClipping.Clip,
+                wordWrap = false,
                 padding = new RectOffset(8, 8, 0, 0),
             };
             panelTitle = new GUIStyle(themedSkin.label)
@@ -164,7 +167,8 @@ namespace GritGud.Presentation.LevelEditing.UI
                 name = "Panel Title",
                 alignment = TextAnchor.MiddleLeft,
                 fontStyle = FontStyle.Bold,
-                fontSize = themedSkin.label.fontSize + 1,
+                fontSize = themedSkin.label.fontSize > 0 ? themedSkin.label.fontSize + 1 : 13,
+                wordWrap = false,
                 padding = new RectOffset(4, 4, 2, 2),
             };
             viewportToolbar = CreateChromeStyle(
@@ -265,6 +269,8 @@ namespace GritGud.Presentation.LevelEditing.UI
             SetState(style.onActive, pressed, LevelEditorTheme.PrimaryText);
             SetState(style.onFocused, selected, LevelEditorTheme.PrimaryText);
             style.border = new RectOffset();
+            style.padding = new RectOffset(8, 8, 4, 4);
+            style.margin = new RectOffset(2, 2, 2, 2);
         }
 
         private static void StyleTextInput(
@@ -277,6 +283,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             SetState(style.active, focused, LevelEditorTheme.PrimaryText);
             SetState(style.focused, focused, LevelEditorTheme.PrimaryText);
             style.border = new RectOffset();
+            style.padding = new RectOffset(7, 7, 4, 4);
         }
 
         private static void StyleText(GUIStyle style, Color textColor)

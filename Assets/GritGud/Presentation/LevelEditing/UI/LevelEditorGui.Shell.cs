@@ -7,23 +7,22 @@ namespace GritGud.Presentation.LevelEditing.UI
 {
     public sealed partial class LevelEditorGui
     {
-        private bool IsCompactLayout =>
-            Screen.width < LevelEditorGuiMetrics.CompactLayoutWidth;
+        private LevelEditorShellLayout ShellLayout => LevelEditorShellLayout.Calculate(
+            Screen.width,
+            drawingPreviewMode,
+            showLeftPanel,
+            showInspectorPanel);
 
-        private float VisibleLeftPanelWidth =>
-            !drawingPreviewMode && showLeftPanel
-                ? LevelEditorGuiMetrics.LeftPanelWidth
-                : 0f;
+        private bool IsCompactLayout => ShellLayout.IsCompact;
 
-        private float VisibleInspectorWidth =>
-            !drawingPreviewMode && showInspectorPanel
-                ? LevelEditorGuiMetrics.InspectorWidth
-                : 0f;
+        private float VisibleLeftPanelWidth => ShellLayout.LeftPanelWidth;
+
+        private float VisibleInspectorWidth => ShellLayout.InspectorWidth;
 
         private Rect ViewportRect => new Rect(
             VisibleLeftPanelWidth,
             LevelEditorGuiMetrics.ToolbarHeight,
-            Mathf.Max(0f, Screen.width - VisibleLeftPanelWidth - VisibleInspectorWidth),
+            ShellLayout.ViewportWidth,
             Mathf.Max(
                 0f,
                 Screen.height
