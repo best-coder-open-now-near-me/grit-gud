@@ -31,6 +31,7 @@ namespace GritGud.Presentation.Gameplay
         private GameplayPartyHud partyHud;
         private GameplayTurnReplayHud turnReplayHud;
         private GameplayTurnReplayWorldPresenter turnReplayWorldPresenter;
+        private GameplayCombatStateTimeline turnReplayStateTimeline;
         private GameplayDialogueDrawer dialogueDrawer;
         private GameplaySessionPresenter sessionPresenter;
         private TurnMovementController turnMovementController;
@@ -134,6 +135,8 @@ namespace GritGud.Presentation.Gameplay
             partyHud?.Unbind();
             turnReplayHud?.Unbind();
             turnReplayWorldPresenter?.Dispose();
+            turnReplayStateTimeline?.Dispose();
+            turnReplayStateTimeline = null;
             hud?.UnbindSession();
             hud?.UnbindTurnMovement();
             hud?.UnbindGameplayActions();
@@ -521,7 +524,15 @@ namespace GritGud.Presentation.Gameplay
             Action toggleTurnMode = () =>
                 HandleGameplayControl(GameplayControl.ToggleTurnMode);
             inputController.Begin(HandleGameplayControl);
-            turnReplayHud.Bind(session, partyControl);
+            turnReplayStateTimeline = new GameplayCombatStateTimeline(
+                session,
+                () => GameplayCombatStateCapture.Capture(
+                    session,
+                    destructibleController.Session,
+                    GetVehicleMomentumSessions(),
+                    projectileController.ProjectileSession,
+                    smokeFieldSession));
+            turnReplayHud.Bind(session, partyControl, turnReplayStateTimeline);
             turnReplayWorldPresenter.Bind(
                 session,
                 worldRegistry,
@@ -537,6 +548,16 @@ namespace GritGud.Presentation.Gameplay
             hud.BindTurnModeToggle(toggleTurnMode);
             hud.BindBugReportExport(ExportBugReport);
             hud.Show();
+        }
+
+        private IReadOnlyList<VehicleMomentumSession> GetVehicleMomentumSessions()
+        {
+            var sessions = new List<VehicleMomentumSession>(
+                scenarioAssembly.Vehicles.Count);
+            foreach (ScenarioVehicleRuntimeDefinition vehicle in
+                scenarioAssembly.Vehicles)
+                sessions.Add(vehicleController.GetSession(vehicle.EntityId));
+            return sessions.AsReadOnly();
         }
 
         private readonly struct GameplayWorldStart

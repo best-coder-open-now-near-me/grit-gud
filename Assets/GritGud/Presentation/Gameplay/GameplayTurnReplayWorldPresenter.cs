@@ -58,6 +58,9 @@ namespace GritGud.Presentation.Gameplay
 
             originals.Clear();
             finalPoses.Clear();
+            TurnReplayStateWindow stateWindow = hud.StateWindow;
+            if (stateWindow == null)
+                return;
             foreach (GameplayActorView actor in world.Actors)
             {
                 originals.Add(
@@ -66,9 +69,11 @@ namespace GritGud.Presentation.Gameplay
                         actor.Transform.position,
                         actor.Transform.rotation,
                         actor.Stance.Stance));
-                finalPoses.Add(actor.ActorId, gameplay.GetActor(actor.ActorId).Pose);
                 actor.Motor?.StopPlanarMovement();
             }
+            foreach (GameplayActorSnapshot actor in
+                stateWindow.End.State.Session.Actors)
+                finalPoses.Add(actor.ActorId, actor.Pose);
             presenting = true;
             input.SetCameraOnly(true);
             Present(hud.Playhead);

@@ -105,6 +105,16 @@ places gameplay input in camera-only mode, and restores the exact live actor
 transforms and stances on exit. The character's ordinary camera remains active
 throughout.
 
+Canonical combat checkpoints are now retained at bounded normal-turn
+boundaries. A replay window is available only when its exact starting checkpoint
+and every segment endpoint remain present and the current authoritative combat
+hash still matches the recorded endpoint. These checkpoints include actors,
+objectives, projectiles, destructibles, vehicles, smoke, initiative, emergency
+context, and sequence state. The world presenter uses the recorded endpoint—not
+mutable live transforms—as the basis for pose sampling. Emergency turns remain
+nested journal evidence inside their triggering normal-turn segment, so they do
+not consume checkpoint capacity or become ordinary timeline segments.
+
 Action animation, wounds and equipment visuals, projectiles, destructibles,
 vehicles, smoke, and other persistent effect snapshots remain subsequent
 presentation slices. Until those are connected, the timeline is an actor-pose

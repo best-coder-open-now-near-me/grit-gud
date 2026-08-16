@@ -185,6 +185,14 @@ This preserves the gameplay rule that a separate preparation performed after an
 emergency reaction samples the changed world rather than reusing earlier
 evidence.
 
+Turn replay now consumes a bounded canonical checkpoint timeline recorded after
+normal turn completion and after earlier turn-end subscribers have finalized
+projectile, smoke, and other subsystem consequences. The replay window must map
+to an exact starting checkpoint and one canonical endpoint per segment, and its
+endpoint hash must still match live authoritative state before replay can open.
+This creates the stable state source for subsequent persistent visual projection
+without turning replay into a second mutable gameplay session.
+
 ## Alpha-exit use
 
 The adversarial gauntlet is intended to cap alpha, but it cannot prove the

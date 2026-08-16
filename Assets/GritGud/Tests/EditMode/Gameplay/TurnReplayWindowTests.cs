@@ -155,6 +155,73 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(finalPoses["mara"].Position.X, Is.EqualTo(10f));
         }
 
+        [Test]
+        public void StateTimelineProjectsCanonicalSegmentBoundariesAndEndpoint()
+        {
+            GameplaySession session = CreateSession();
+            using (var timeline = new GameplayCombatStateTimeline(
+                session,
+                () => GameplayCombatStateCapture.Capture(session)))
+            {
+                Assert.That(session.BeginEncounter(), Is.True);
+                string anchorActorId = session.ActiveActorId;
+                do
+                {
+                    Assert.That(session.TryEndTurn(
+                        session.ActiveActorId,
+                        out _), Is.True);
+                }
+                while (!string.Equals(
+                    session.ActiveActorId,
+                    anchorActorId,
+                    System.StringComparison.Ordinal));
+
+                Assert.That(TurnReplayWindowProjector.TryProject(
+                    session.Journal,
+                    anchorActorId,
+                    out TurnReplayWindow replay), Is.True);
+                Assert.That(TurnReplayStateWindowProjector.TryProject(
+                    replay,
+                    timeline,
+                    out TurnReplayStateWindow states), Is.True);
+
+                Assert.That(states.Start.JournalSequence, Is.Zero);
+                Assert.That(states.SegmentEnds, Has.Count.EqualTo(
+                    replay.Segments.Count));
+                Assert.That(states.End.JournalSequence,
+                    Is.EqualTo(replay.EndJournalSequence));
+                Assert.That(TurnReplayStateWindowProjector
+                    .VerifyCurrentEndpoint(states, timeline).IsVerified,
+                    Is.True);
+                session.SpendMovement(anchorActorId, 1f);
+                Assert.That(TurnReplayStateWindowProjector
+                    .VerifyCurrentEndpoint(states, timeline).IsVerified,
+                    Is.False);
+            }
+        }
+
+        [Test]
+        public void StateTimelineIsBoundedAndStopsCapturingAfterDisposal()
+        {
+            GameplaySession session = CreateSession();
+            var timeline = new GameplayCombatStateTimeline(
+                session,
+                () => GameplayCombatStateCapture.Capture(session),
+                checkpointCapacity: 2);
+            Assert.That(session.BeginEncounter(), Is.True);
+            Assert.That(session.TryEndTurn(session.ActiveActorId, out _), Is.True);
+            Assert.That(session.TryEndTurn(session.ActiveActorId, out _), Is.True);
+            Assert.That(session.TryEndTurn(session.ActiveActorId, out _), Is.True);
+
+            Assert.That(timeline.Checkpoints, Has.Count.EqualTo(2));
+            long lastSequence = timeline.Checkpoints.Last().JournalSequence;
+            timeline.Dispose();
+            Assert.That(session.TryEndTurn(session.ActiveActorId, out _), Is.True);
+
+            Assert.That(timeline.Checkpoints.Last().JournalSequence,
+                Is.EqualTo(lastSequence));
+        }
+
         private static GameplaySession CreateSession()
         {
             return new GameplaySession(new ScenarioDefinition(

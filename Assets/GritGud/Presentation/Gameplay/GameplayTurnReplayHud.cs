@@ -15,7 +15,9 @@ namespace GritGud.Presentation.Gameplay
 
         private GameplaySession gameplay;
         private GameplayPartyControlSession partyControl;
+        private GameplayCombatStateTimeline stateTimeline;
         private TurnReplayWindow window;
+        private TurnReplayStateWindow stateWindow;
         private bool isOpen;
         private bool isPlaying;
         private float playhead;
@@ -27,6 +29,8 @@ namespace GritGud.Presentation.Gameplay
         public bool IsOpen => isOpen;
 
         internal TurnReplayWindow Window => window;
+
+        internal TurnReplayStateWindow StateWindow => stateWindow;
 
         internal float Playhead => playhead;
 
@@ -45,11 +49,14 @@ namespace GritGud.Presentation.Gameplay
 
         public void Bind(
             GameplaySession session,
-            GameplayPartyControlSession control)
+            GameplayPartyControlSession control,
+            GameplayCombatStateTimeline timeline)
         {
             Unbind();
             gameplay = session ?? throw new ArgumentNullException(nameof(session));
             partyControl = control ?? throw new ArgumentNullException(nameof(control));
+            stateTimeline = timeline ?? throw new ArgumentNullException(
+                nameof(timeline));
             enabled = true;
         }
 
@@ -57,7 +64,9 @@ namespace GritGud.Presentation.Gameplay
         {
             gameplay = null;
             partyControl = null;
+            stateTimeline = null;
             window = null;
+            stateWindow = null;
             isOpen = false;
             isPlaying = false;
             playhead = 0f;
@@ -232,9 +241,17 @@ namespace GritGud.Presentation.Gameplay
                     gameplay.Journal,
                     actorId,
                     out window)
-                || !window.IsAtJournalTip(gameplay.Journal))
+                || !window.IsAtJournalTip(gameplay.Journal)
+                || !TurnReplayStateWindowProjector.TryProject(
+                    window,
+                    stateTimeline,
+                    out stateWindow)
+                || !TurnReplayStateWindowProjector.VerifyCurrentEndpoint(
+                    stateWindow,
+                    stateTimeline).IsVerified)
             {
                 window = null;
+                stateWindow = null;
                 isOpen = false;
                 isPlaying = false;
             }
