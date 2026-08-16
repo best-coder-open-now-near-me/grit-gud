@@ -316,6 +316,12 @@ moves only for a strictly better firing position, and falls back to the legal
 shot when no candidate improves it. The detailed ownership contract and next AI
 slices are recorded in [ENEMY_AI.md](ENEMY_AI.md).
 
+**Exploration-detection follow-up complete:** detection no longer commits to the
+first visible actor in roster order. Each scan captures frozen exposure for the
+whole capable party, rejects candidates outside authored perception, and selects
+the most exposed detection with distance and stable party order as deterministic
+tie-breakers.
+
 ## 6. Projectile and explosion slice
 
 - Advance one slow projectile through turn time with segment collision queries.

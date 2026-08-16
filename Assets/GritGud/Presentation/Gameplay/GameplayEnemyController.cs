@@ -236,7 +236,7 @@ namespace GritGud.Presentation.Gameplay
                 if (session.IsActorIncapacitated(enemyId))
                     continue;
                 EnemyTacticalDecisionRecord detection =
-                    decisions.EvaluateFirstDetection(
+                    decisions.EvaluateBestDetection(
                         enemyId,
                         partyControl.ActorIds,
                         enemy.TacticalQuery.CaptureExposure);

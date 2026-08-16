@@ -8,8 +8,10 @@ presents the committed result.
 
 ## Current rifleman decision cycle
 
-1. During exploration, authored perception range, view cone, hostility, and a
-   frozen exposure snapshot determine whether the enemy detects a party member.
+1. During exploration, authored perception range, view cone, hostility, and
+   frozen exposure snapshots determine whether the enemy detects the party. The
+   full capable party is evaluated before the enemy chooses the most exposed
+   detected member, with distance and stable party order resolving ties.
 2. During an enemy turn, every capable hostile party member is evaluated. The
    enemy selects the highest-chance shot, then prefers a more wounded target and
    shorter distance for deterministic ties. This prevents a nearby concealed

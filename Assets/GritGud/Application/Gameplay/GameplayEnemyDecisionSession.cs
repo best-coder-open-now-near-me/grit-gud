@@ -104,6 +104,50 @@ namespace GritGud.Application.Gameplay
             return null;
         }
 
+        public EnemyTacticalDecisionRecord EvaluateBestDetection(
+            string actorId,
+            IReadOnlyList<string> candidateTargetIds,
+            Func<string, TargetExposureSnapshot> captureExposure)
+        {
+            RequireEnemy(actorId);
+            if (candidateTargetIds == null)
+                throw new ArgumentNullException(nameof(candidateTargetIds));
+            if (captureExposure == null)
+                throw new ArgumentNullException(nameof(captureExposure));
+
+            EnemyTacticalDecisionRecord best = null;
+            float bestVisibleFraction = -1f;
+            float bestDistance = float.PositiveInfinity;
+            GameplayPosition observer = gameplay.GetActor(actorId).Pose.Position;
+            foreach (string targetId in candidateTargetIds)
+            {
+                gameplay.GetActor(targetId);
+                if (gameplay.IsActorIncapacitated(targetId)
+                    || !gameplay.IsHostile(actorId, targetId))
+                    continue;
+                TargetExposureSnapshot exposure = captureExposure(targetId);
+                EnemyTacticalDecisionRecord detection = EvaluateDetection(
+                    actorId,
+                    targetId,
+                    exposure);
+                if (detection == null)
+                    continue;
+                float visibleFraction = exposure.VisibleFraction;
+                float distance = observer.DistanceTo(
+                    gameplay.GetActor(targetId).Pose.Position);
+                if (best == null
+                    || visibleFraction > bestVisibleFraction
+                    || (visibleFraction == bestVisibleFraction
+                        && distance < bestDistance))
+                {
+                    best = detection;
+                    bestVisibleFraction = visibleFraction;
+                    bestDistance = distance;
+                }
+            }
+            return best;
+        }
+
         public string SelectNearestCapableHostile(string actorId)
         {
             RequireEnemy(actorId);

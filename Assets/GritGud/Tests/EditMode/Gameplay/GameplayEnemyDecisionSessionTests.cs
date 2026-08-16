@@ -98,6 +98,30 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void ExplorationDetectionEvaluatesTheWholePartyBeforeChoosingThreat()
+        {
+            GameplaySession gameplay = CreateMultiTargetSession();
+            var decisions = new GameplayEnemyDecisionSession(gameplay);
+            var capturedTargets = new System.Collections.Generic.List<string>();
+
+            EnemyTacticalDecisionRecord detection = decisions.EvaluateBestDetection(
+                "enemy",
+                new[] { "player", "ally" },
+                targetId =>
+                {
+                    capturedTargets.Add(targetId);
+                    return CreateRasterExposure(
+                        visibleSamples: targetId == "player" ? 2 : 8,
+                        totalSamples: 10,
+                        targetId: targetId);
+                });
+
+            Assert.That(capturedTargets, Is.EqualTo(new[] { "player", "ally" }));
+            Assert.That(detection.TargetId, Is.EqualTo("ally"));
+            Assert.That(detection.Exposure.VisibleFraction, Is.EqualTo(0.8f));
+        }
+
+        [Test]
         public void ExposedAffordableTargetProducesAttackDecisionAndJournalEntry()
         {
             GameplaySession gameplay = CreateSession();
