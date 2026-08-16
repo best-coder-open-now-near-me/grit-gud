@@ -238,8 +238,8 @@ namespace GritGud.Domain.Characters
                     issues.Add("Starting loadout contains an empty or duplicate item.");
                     continue;
                 }
-                if (item.quantity <= 0)
-                    issues.Add($"Starting item '{item.itemId}' needs a positive quantity.");
+                if (item.quantity < 0)
+                    issues.Add($"Starting item '{item.itemId}' cannot have a negative quantity.");
                 if (item.hotbarSlot < 0 || item.hotbarSlot > GameplayHotbarRules.SlotCount)
                     issues.Add($"Starting item '{item.itemId}' has an invalid hotbar slot.");
                 else if (item.hotbarSlot > 0 && !hotbarSlots.Add(item.hotbarSlot))

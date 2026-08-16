@@ -58,13 +58,13 @@ namespace GritGud.Presentation.CharacterEditing
             ("talent.leverage", "LEVERAGE"),
         };
 
-        private static readonly (string Id, string Label)[] LoadoutItems =
+        private static readonly (string Id, string Label, bool Stackable)[] LoadoutItems =
         {
-            ("weapon.rifle", "RIFLE"),
-            ("weapon.rocket-launcher", "LAUNCHER"),
-            ("weapon.combat-knife", "COMBAT KNIFE"),
-            ("item.frag-grenade", "FRAG GRENADE"),
-            ("item.smoke-grenade", "SMOKE GRENADE"),
+            ("weapon.rifle", "RIFLE", false),
+            ("weapon.rocket-launcher", "LAUNCHER", false),
+            ("weapon.combat-knife", "COMBAT KNIFE", false),
+            ("item.frag-grenade", "FRAG GRENADE", true),
+            ("item.smoke-grenade", "SMOKE GRENADE", true),
         };
 
         private readonly LevelEditorGuiStyles styles = new LevelEditorGuiStyles();
@@ -551,7 +551,7 @@ namespace GritGud.Presentation.CharacterEditing
         {
             GUILayout.Label("EQUIPMENT CATALOG", styles.SectionHeader);
             GUILayout.Label("Add reusable item references to the starting loadout.", styles.MutedLabel);
-            foreach ((string id, string label) in LoadoutItems)
+            foreach ((string id, string label, bool stackable) in LoadoutItems)
             {
                 bool owned = document.startingLoadout.items.Any(
                     item => item != null && string.Equals(item.itemId, id, StringComparison.Ordinal));
@@ -561,7 +561,7 @@ namespace GritGud.Presentation.CharacterEditing
                     document.startingLoadout.items.Add(new CharacterLoadoutItemData
                     {
                         itemId = id,
-                        quantity = 1,
+                        quantity = stackable ? 1 : 0,
                     });
                     session.Apply("Add starting equipment", document);
                 }
@@ -580,13 +580,15 @@ namespace GritGud.Presentation.CharacterEditing
             {
                 if (item == null)
                     continue;
-                string label = LoadoutItems.FirstOrDefault(value => value.Id == item.itemId).Label
+                (string Id, string Label, bool Stackable) definition =
+                    LoadoutItems.FirstOrDefault(value => value.Id == item.itemId);
+                string label = definition.Label
                     ?? item.itemId;
                 GUILayout.Space(8f);
                 GUILayout.Label(label, styles.SectionHeader);
                 GUILayout.BeginHorizontal();
-                GUILayout.Label($"QTY {item.quantity}  ·  SLOT {(item.hotbarSlot == 0 ? "—" : item.hotbarSlot.ToString())}");
-                if (GUILayout.Button("QTY +", GUILayout.Width(58f)))
+                GUILayout.Label($"{(definition.Stackable ? "QTY " + item.quantity + "  ·  " : string.Empty)}SLOT {(item.hotbarSlot == 0 ? "—" : item.hotbarSlot.ToString())}");
+                if (definition.Stackable && GUILayout.Button("QTY +", GUILayout.Width(58f)))
                 {
                     item.quantity++;
                     session.Apply("Change starting quantity", document);

@@ -73,12 +73,12 @@
     "items": [
       {
         "itemId": "weapon.rifle",
-        "quantity": 1,
+        "quantity": 0,
         "hotbarSlot": 1
       },
       {
         "itemId": "weapon.combat-knife",
-        "quantity": 1,
+        "quantity": 0,
         "hotbarSlot": 2
       },
       {
