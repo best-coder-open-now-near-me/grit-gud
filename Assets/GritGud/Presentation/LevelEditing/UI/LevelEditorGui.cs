@@ -322,7 +322,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.BeginHorizontal();
             GUI.enabled = interactionsEnabled;
             if (GUILayout.Button(
-                    new GUIContent("‹ LIBRARY", "Return to the level library"),
+                    new GUIContent("< LIBRARY", "Return to the level library"),
                     ToolbarButtonLayout(82f)))
             {
                 documentActionConfirmation.Request(
@@ -337,13 +337,13 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawToolbarMenuButton("VIEW", LevelEditorMenuKind.View, 58f);
 
             GUI.enabled = interactionsEnabled && state.CanUndo && !previewMode;
-            if (GUILayout.Button(new GUIContent("↶", "Undo (Ctrl+Z)"), ToolbarButtonLayout(38f)))
+            if (GUILayout.Button(new GUIContent("UNDO", "Undo (Ctrl+Z)"), ToolbarButtonLayout(48f)))
             {
                 actions.Undo();
             }
 
             GUI.enabled = interactionsEnabled && state.CanRedo && !previewMode;
-            if (GUILayout.Button(new GUIContent("↷", "Redo (Ctrl+Y)"), ToolbarButtonLayout(38f)))
+            if (GUILayout.Button(new GUIContent("REDO", "Redo (Ctrl+Y)"), ToolbarButtonLayout(48f)))
             {
                 actions.Redo();
             }

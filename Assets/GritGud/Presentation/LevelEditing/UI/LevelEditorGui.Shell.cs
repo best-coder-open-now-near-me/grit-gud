@@ -138,7 +138,10 @@ namespace GritGud.Presentation.LevelEditing.UI
                 return;
 
             LevelEditorMenuModel model = BuildMenu(state, activeMenu);
-            float height = 12f;
+            // Unity's window style reserves more vertical inset than its public
+            // padding reports. Keep enough breathing room for the final command
+            // so destructive/import rows are never clipped by the menu area.
+            float height = 24f;
             foreach (LevelEditorMenuItem item in model.Items)
             {
                 height += item.IsSeparator
