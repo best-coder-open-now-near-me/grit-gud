@@ -5,6 +5,36 @@ using GritGud.Domain.Turns;
 
 namespace GritGud.Application.Gameplay
 {
+    public sealed class GameplayInitiativeResult
+    {
+        public GameplayInitiativeResult(
+            string actorId,
+            int dexterity,
+            int reactionAdvance,
+            int participantCount)
+        {
+            ActorId = string.IsNullOrWhiteSpace(actorId)
+                ? throw new ArgumentException(
+                    "Initiative requires an actor ID.",
+                    nameof(actorId))
+                : actorId;
+            if (participantCount <= 0
+                || reactionAdvance < 1
+                || reactionAdvance > participantCount)
+            {
+                throw new ArgumentOutOfRangeException(nameof(reactionAdvance));
+            }
+            Dexterity = dexterity;
+            ReactionAdvance = reactionAdvance;
+            ParticipantCount = participantCount;
+        }
+
+        public string ActorId { get; }
+        public int Dexterity { get; }
+        public int ReactionAdvance { get; }
+        public int ParticipantCount { get; }
+    }
+
     public enum GameplaySessionMode
     {
         Exploration,
@@ -26,6 +56,12 @@ namespace GritGud.Application.Gameplay
     }
 
     public enum GameplayTurnPhase
+    {
+        Normal,
+        EmergencyReaction,
+    }
+
+    public enum GameplayTurnKind
     {
         Normal,
         EmergencyReaction,
@@ -211,7 +247,9 @@ namespace GritGud.Application.Gameplay
         public TurnEndRecord(
             long sequence,
             string endingActorId,
-            string nextActorId)
+            string nextActorId,
+            GameplayTurnKind kind = GameplayTurnKind.Normal,
+            string interruptedActorId = null)
         {
             if (sequence <= 0)
             {
@@ -220,7 +258,18 @@ namespace GritGud.Application.Gameplay
 
             EndingActorId = RequireActorId(endingActorId, nameof(endingActorId));
             NextActorId = RequireActorId(nextActorId, nameof(nextActorId));
+            if (!Enum.IsDefined(typeof(GameplayTurnKind), kind))
+                throw new ArgumentOutOfRangeException(nameof(kind));
+            if (kind == GameplayTurnKind.EmergencyReaction
+                && string.IsNullOrWhiteSpace(interruptedActorId))
+            {
+                throw new ArgumentException(
+                    "Emergency turns require the interrupted actor identifier.",
+                    nameof(interruptedActorId));
+            }
             Sequence = sequence;
+            Kind = kind;
+            InterruptedActorId = interruptedActorId ?? string.Empty;
         }
 
         public long Sequence { get; }
@@ -228,6 +277,10 @@ namespace GritGud.Application.Gameplay
         public string EndingActorId { get; }
 
         public string NextActorId { get; }
+
+        public GameplayTurnKind Kind { get; }
+
+        public string InterruptedActorId { get; }
 
         private static string RequireActorId(string value, string parameterName)
         {
@@ -281,6 +334,8 @@ namespace GritGud.Application.Gameplay
         private readonly List<GameplayActionRecord> resolvedActions =
             new List<GameplayActionRecord>();
         private readonly IReadOnlyList<string> initiativeOrder;
+        private readonly IReadOnlyList<GameplayInitiativeResult>
+            initiativeResults;
         private readonly IReadOnlyList<GameplayActionRecord> readOnlyResolvedActions;
         private string activeActorId;
         private MovementRouteRecord pendingMovementRoute;
@@ -292,18 +347,22 @@ namespace GritGud.Application.Gameplay
 
         public GameplaySession(
             ScenarioDefinition scenario,
-            GameplayJournal journal = null)
+            GameplayJournal journal = null,
+            uint scenarioSeed = 0u)
         {
             Scenario = scenario ?? throw new ArgumentNullException(nameof(scenario));
             Journal = journal ?? new GameplayJournal();
-            var initiative = new List<ScenarioActorDefinition>(scenario.Actors);
-            initiative.Sort(CompareInitiative);
-            var order = new List<string>(initiative.Count);
-            foreach (ScenarioActorDefinition actor in initiative)
+            int participantCount = scenario.Actors.Count;
+            var initiative = new List<GameplayInitiativeResult>(participantCount);
+            foreach (ScenarioActorDefinition actor in scenario.Actors)
             {
                 actors.Add(actor.Id, new ActorState(actor));
-                order.Add(actor.Id);
+                initiative.Add(ResolveInitiative(actor, participantCount));
             }
+            initiative.Sort(CompareInitiative);
+            var order = new List<string>(initiative.Count);
+            foreach (GameplayInitiativeResult result in initiative)
+                order.Add(result.ActorId);
 
             foreach (ScenarioObjectiveDefinition objective in scenario.Objectives)
             {
@@ -311,6 +370,7 @@ namespace GritGud.Application.Gameplay
             }
 
             initiativeOrder = order.AsReadOnly();
+            initiativeResults = initiative.AsReadOnly();
             readOnlyResolvedActions = resolvedActions.AsReadOnly();
         }
 
@@ -332,6 +392,9 @@ namespace GritGud.Application.Gameplay
         public bool EncounterCompletionRequested { get; private set; }
 
         public IReadOnlyList<string> InitiativeOrder => initiativeOrder;
+
+        public IReadOnlyList<GameplayInitiativeResult> InitiativeResults =>
+            initiativeResults;
 
         public string ActiveActorId => activeActorId;
 
@@ -750,7 +813,9 @@ namespace GritGud.Application.Gameplay
             }
             RecordTurnEnd(
                 endingActorId,
-                responsePassCompleted ? emergencyResumeActorId : activeActorId);
+                responsePassCompleted ? emergencyResumeActorId : activeActorId,
+                GameplayTurnKind.EmergencyReaction,
+                emergencyResumeActorId);
             failure = TurnEndFailure.None;
             return true;
         }
@@ -1024,6 +1089,20 @@ namespace GritGud.Application.Gameplay
 
         public void CommitAction(GameplayActionRecord record)
         {
+            var notifications = new GameplayNotificationBatch();
+            CommitAction(record, notifications);
+            notifications.Publish();
+        }
+
+        internal void CommitAction(
+            GameplayActionRecord record,
+            GameplayNotificationBatch notifications)
+        {
+            if (notifications == null)
+            {
+                throw new ArgumentNullException(nameof(notifications));
+            }
+
             ValidateActionCommit(record);
 
             ActorState actor = Mode == GameplaySessionMode.TurnBased
@@ -1033,7 +1112,7 @@ namespace GritGud.Application.Gameplay
             foreach (GameplayActionOutcome outcome in record.Outcomes)
             {
                 ApplyActionFacing(actor, outcome);
-                ApplyActionOutcome(outcome);
+                ApplyActionOutcome(outcome, notifications);
             }
 
             resolvedActions.Add(record);
@@ -1106,14 +1185,33 @@ namespace GritGud.Application.Gameplay
             ValidateActionOutcomes(record);
         }
 
-        private static int CompareInitiative(
-            ScenarioActorDefinition left,
-            ScenarioActorDefinition right)
+        private static GameplayInitiativeResult ResolveInitiative(
+            ScenarioActorDefinition actor,
+            int participantCount)
         {
-            int initiativeComparison = right.Initiative.CompareTo(left.Initiative);
+            int boundedDexterity = Math.Max(1, Math.Min(5, actor.Initiative));
+            int reactionAdvance = 1 + ((boundedDexterity - 1)
+                * (participantCount - 1) / 4);
+            return new GameplayInitiativeResult(
+                actor.Id,
+                actor.Initiative,
+                reactionAdvance,
+                participantCount);
+        }
+
+        private static int CompareInitiative(
+            GameplayInitiativeResult left,
+            GameplayInitiativeResult right)
+        {
+            int initiativeComparison = right.ReactionAdvance.CompareTo(
+                left.ReactionAdvance);
+            if (initiativeComparison == 0)
+            {
+                initiativeComparison = right.Dexterity.CompareTo(left.Dexterity);
+            }
             return initiativeComparison != 0
                 ? initiativeComparison
-                : StringComparer.Ordinal.Compare(left.Id, right.Id);
+                : StringComparer.Ordinal.Compare(left.ActorId, right.ActorId);
         }
 
         private static bool PosesMatch(
@@ -1207,7 +1305,9 @@ namespace GritGud.Application.Gameplay
             }
         }
 
-        private void ApplyActionOutcome(GameplayActionOutcome outcome)
+        private void ApplyActionOutcome(
+            GameplayActionOutcome outcome,
+            GameplayNotificationBatch notifications)
         {
             switch (outcome)
             {
@@ -1218,7 +1318,9 @@ namespace GritGud.Application.Gameplay
                 case AttackResolvedActionOutcome attackResolved:
                     RequireActor(attackResolved.TargetId).ApplyAttack(
                         attackResolved.Attack);
-                    ActorCapabilityChanged?.Invoke(attackResolved.TargetId);
+                    notifications.Add(
+                        ActorCapabilityChanged,
+                        attackResolved.TargetId);
                     break;
 
                 case WeaponDischargedActionOutcome _:
@@ -1240,7 +1342,7 @@ namespace GritGud.Application.Gameplay
                             : RequireActorDefinition(change.ActorId)
                                 .GetInventoryItem(change.ResultingEquippedItemId);
                     actor.ApplyEquipment(item);
-                    EquipmentChanged?.Invoke(change);
+                    notifications.Add(EquipmentChanged, change);
                     break;
 
                 case ThrownExplosiveActionOutcome thrownExplosive:
@@ -1611,8 +1713,28 @@ namespace GritGud.Application.Gameplay
             TargetRegionId? region,
             float woundMovementPenalty)
         {
+            var notifications = new GameplayNotificationBatch();
+            ApplyBlastInjury(
+                actorId,
+                region,
+                woundMovementPenalty,
+                notifications);
+            notifications.Publish();
+        }
+
+        internal void ApplyBlastInjury(
+            string actorId,
+            TargetRegionId? region,
+            float woundMovementPenalty,
+            GameplayNotificationBatch notifications)
+        {
+            if (notifications == null)
+            {
+                throw new ArgumentNullException(nameof(notifications));
+            }
+
             RequireActor(actorId).ApplyBlast(region, woundMovementPenalty);
-            ActorCapabilityChanged?.Invoke(actorId);
+            notifications.Add(ActorCapabilityChanged, actorId);
         }
 
         private void ValidateEquipmentChangeOutcome(
@@ -1801,12 +1923,18 @@ namespace GritGud.Application.Gameplay
             VoluntaryTurnCycleCompleted?.Invoke(completedCycle);
         }
 
-        private void RecordTurnEnd(string endingActorId, string nextActorId)
+        private void RecordTurnEnd(
+            string endingActorId,
+            string nextActorId,
+            GameplayTurnKind kind = GameplayTurnKind.Normal,
+            string interruptedActorId = null)
         {
             var record = new TurnEndRecord(
                 LastEndedTurn == null ? 1 : LastEndedTurn.Sequence + 1,
                 endingActorId,
-                nextActorId);
+                nextActorId,
+                kind,
+                interruptedActorId);
             LastEndedTurn = record;
             Journal.RecordTurnEnded(record);
             TurnEnded?.Invoke(record);

@@ -7,7 +7,6 @@ namespace GritGud.Application.Levels
     public enum LevelSelectionKind
     {
         Entity,
-        CoverVolume,
         InteractionPoint,
     }
 

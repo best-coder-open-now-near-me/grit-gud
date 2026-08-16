@@ -1,0 +1,1121 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3dcdcf07447f2e44a9318d88618ab630, type: 3}
+  m_Name: CharacterAppearanceCatalog
+  m_EditorClassIdentifier: GritGud.Presentation::GritGud.Presentation.Characters.CharacterAppearanceCatalog
+  bodies:
+  - id: body.military-male-01
+    displayName: Military Male
+    rendererName: Character_MilitaryMale_01
+    compatibilityTag: male
+  - id: body.military-female-01
+    displayName: Military Female
+    rendererName: Character_MilitaryFemale_01
+    compatibilityTag: female
+  - id: body.mercenary-male-01
+    displayName: Mercenary Male
+    rendererName: Character_MercenaryMale_01
+    compatibilityTag: male
+  - id: body.mercenary-female-01
+    displayName: Mercenary Female
+    rendererName: Character_MercenaryFemale_01
+    compatibilityTag: female
+  - id: body.sporty-male-01
+    displayName: Sporty Male 1
+    rendererName: Character_SportyMale_01
+    compatibilityTag: male
+  - id: body.sporty-male-02
+    displayName: Sporty Male 2
+    rendererName: Character_SportyMale_02
+    compatibilityTag: male
+  - id: body.sporty-female-01
+    displayName: Sporty Female 1
+    rendererName: Character_SportyFemale_01
+    compatibilityTag: female
+  - id: body.sporty-female-02
+    displayName: Sporty Female 2
+    rendererName: Character_SportyFemale_02
+    compatibilityTag: female
+  - id: body.business-male-01
+    displayName: Business Male
+    rendererName: Character_BusinessMale_01
+    compatibilityTag: male
+  - id: body.redneck-male-01
+    displayName: Redneck Male
+    rendererName: Character_RedneckMale_01
+    compatibilityTag: male
+  - id: body.topless-male-01
+    displayName: Topless Male
+    rendererName: Character_ToplessMale_01
+    compatibilityTag: male
+  - id: body.70s-female-01
+    displayName: 70s Female
+    rendererName: Character_70sFemale_01
+    compatibilityTag: female
+  - id: body.goth-female-01
+    displayName: Goth Female
+    rendererName: Character_GothFemale_01
+    compatibilityTag: female
+  - id: body.sports-bra-female-01
+    displayName: Sports Bra Female
+    rendererName: Character_SportsBraFemale_01
+    compatibilityTag: female
+  - id: body.ghillie-suit-01
+    displayName: Ghillie Suit
+    rendererName: Character_GhillieSuit_01
+    compatibilityTag: 
+  accessories:
+  - id: accessory.ammo-01
+    displayName: Ammo 01
+    slotId: waist
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1289777341860106, guid: 57829be128e387b4b94b08004197f2d0, type: 3}
+    socket: 4
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.bag-lvl1
+    displayName: Bag Lvl1
+    slotId: back
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1849730539703212, guid: b6d7a2a117800b744af81fdb32063854, type: 3}
+    socket: 3
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.bag-lvl2
+    displayName: Bag Lvl2
+    slotId: back
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1891954525209630, guid: 03f0e9ccf67dd0e4b92891caf43bc9b1, type: 3}
+    socket: 3
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.bag-lvl3
+    displayName: Bag Lvl3
+    slotId: back
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1239348574406318, guid: b85d7680cc4425841af4b10e8cf220c9, type: 3}
+    socket: 3
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.beard-02
+    displayName: Beard 02
+    slotId: facial-hair
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1395447336697490, guid: 85622633d5d3be041b1046022b49ba23, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.beard-03
+    displayName: Beard 03
+    slotId: facial-hair
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1699811905562804, guid: cbcd1c298510d4c48b4bcf78775d2dbe, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.beard-04
+    displayName: Beard 04
+    slotId: facial-hair
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1408416718460414, guid: 5cf1e9d3a005e5f44b027a128156e2d3, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.beard-05
+    displayName: Beard 05
+    slotId: facial-hair
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1787760780986768, guid: a06008e7cd183a944a56bb0d368d6067, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.beard-06
+    displayName: Beard 06
+    slotId: facial-hair
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1858514242760228, guid: f33d4807920b5d84e927b8c82ac33f28, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.beard-07
+    displayName: Beard 07
+    slotId: facial-hair
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1583257336742216, guid: 19309ad8de603e442841465c06251a6e, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.bedroll-01
+    displayName: Bedroll 01
+    slotId: back
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1751292310752084, guid: ce3165d6211838a4aaefef7a56013b17, type: 3}
+    socket: 3
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.bedroll-02
+    displayName: Bedroll 02
+    slotId: back
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 3247144606695368103, guid: 577e1971ec1e7c442ace0d2526a08865, type: 3}
+    socket: 3
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.earmuffs-01
+    displayName: Earmuffs 01
+    slotId: face
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1280081018339942, guid: 2ed3caf25fe13074c9bccd73cc7024da, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.eyepatch-01
+    displayName: Eyepatch 01
+    slotId: face
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1537627069323488, guid: 85fae00b99c7867478ff4c7757125421, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.facemask-01
+    displayName: Facemask 01
+    slotId: face
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1595003166250358, guid: eef31ce69c6621845b5c962d3f3f612e, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.facemask-02
+    displayName: Facemask 02
+    slotId: face
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1902409788212534, guid: e1f4e058646c1564cbd7d7589c854f19, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.facemask-03
+    displayName: Facemask 03
+    slotId: face
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1815976298393174, guid: 28cc8ca255f77464f9425eedc7c947b0, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.female-armor-01
+    displayName: Female Armor 01
+    slotId: armor
+    compatibilityTag: female
+    projectionKind: 0
+    rendererName: SM_Char_Attach_Female_Armor_01
+    prefab: {fileID: 0}
+    socket: 0
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.female-armor-02
+    displayName: Female Armor 02
+    slotId: armor
+    compatibilityTag: female
+    projectionKind: 0
+    rendererName: SM_Char_Attach_Female_Armor_02
+    prefab: {fileID: 0}
+    socket: 0
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.female-armor-03
+    displayName: Female Armor 03
+    slotId: armor
+    compatibilityTag: female
+    projectionKind: 0
+    rendererName: SM_Char_Attach_Female_Armor_03
+    prefab: {fileID: 0}
+    socket: 0
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.female-default-hair-01
+    displayName: Female Default Hair 01
+    slotId: hair
+    compatibilityTag: female
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1521171663515148, guid: 3722dd800daac424dac0695259ae2045, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.female-hair-01
+    displayName: Female Hair 01
+    slotId: hair
+    compatibilityTag: female
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1988116417005888, guid: 4297d9ba1d713a74eb0858fe39fc38c3, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.female-hair-pigtails-01
+    displayName: Female Hair Pigtails 01
+    slotId: hair
+    compatibilityTag: female
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1485026634577410, guid: 16a173ed6513c8e4aac96133c5a5b295, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.gasmask-01
+    displayName: Gasmask 01
+    slotId: face
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1763366611001454, guid: 4e45afc0577b26842ade918da7835882, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.glasses-01
+    displayName: Glasses 01
+    slotId: face
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1512522063044424, guid: e44a4778ba4b43644b663c9806f7bab0, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.hat-bandana-01
+    displayName: Hat Bandana 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1798390247640598, guid: a7c601e8d86bfd543aad62d3ed16d7e6, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-beanie-01
+    displayName: Hat Beanie 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1324470782807942, guid: c5fa49801e1cb7c4691874866014b066, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-beer-01
+    displayName: Hat Beer 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1914578172662308, guid: 262dd57453dcef54b82d0005a815e9de, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-bunny-01
+    displayName: Hat Bunny 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1853224248472396, guid: f1f84af7f1879344f8db0847dccfd296, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-cap-01
+    displayName: Hat Cap 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1852784215551062, guid: dcae944209e7dc44780a76d028db8e91, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-captian-01
+    displayName: Hat Captian 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1167911097765152, guid: 2c1fe3c317b1b9c478ba20712feb1953, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-cowboy-01
+    displayName: Hat Cowboy 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1333905004444912, guid: 2b9f4eaf920953947b1fd5ea06fa1654, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-crown-01
+    displayName: Hat Crown 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1593477179522664, guid: 27507d8de33e3134490eadce78e2b8be, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-cupcake-01
+    displayName: Hat Cupcake 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1028336623360086, guid: c3bedecc2865b814baeb28c58eef6b63, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-elf-01
+    displayName: Hat Elf 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1228612885914040, guid: 7813c71e3d2c0bd4c892b6c09f4c3153, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-fez-01
+    displayName: Hat Fez 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1084548859578234, guid: 0bf010f3db9e87048a36ab32de6616aa, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-flattop-01
+    displayName: Hat Flattop 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1354353214663802, guid: 6c60558da1cb0804b8f03e00cfb1218c, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-football-01
+    displayName: Hat Football 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1267928347703580, guid: 4e5adfecd2780414d9db8b749ddc4403, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-icecream-01
+    displayName: Hat Icecream 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1054813816626682, guid: 818680f6ca257c542941f32c1463cf77, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-irish-01
+    displayName: Hat Irish 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1854431613349330, guid: 068d1edda781a904a97a02f8542af4b5, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-knight-01
+    displayName: Hat Knight 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1560339031157608, guid: 5ee28207ad692ef4fa3b57a66cb0cce8, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-mexican-01
+    displayName: Hat Mexican 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1842926789187584, guid: 2e3047661de938748b71164bbdad79f1, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-mil-01
+    displayName: Hat Mil 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1585754540247218, guid: 63bb644fd4b60d346acb5a64621a2da5, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-party-01
+    displayName: Hat Party 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1928997662969700, guid: 08f9224293928e84b832bc1af8cf72e5, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-pot-01
+    displayName: Hat Pot 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1312147477053388, guid: 073acd292c607a74f87acefe09997b8a, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-racoon-01
+    displayName: Hat Racoon 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1553822407466238, guid: 703daefb4575ac444a02524ae2b0552e, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-roadcone-01
+    displayName: Hat Roadcone 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1486936306088944, guid: b81d2b348895a064183f6679460eab98, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-roman-01
+    displayName: Hat Roman 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1955487103038586, guid: 74c1b9ace53c9b449a8ff95ab92b3503, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-samurai-01
+    displayName: Hat Samurai 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1535529382568860, guid: 1e01c3fef13ba0a439648a704b8203e5, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-shark-01
+    displayName: Hat Shark 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1563237935176394, guid: 87766464316015042857b7ae2ac09b7a, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-squid-01
+    displayName: Hat Squid 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1808829136793856, guid: 6491c78cebfe38848bdaa31989231659, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-tacticle-01
+    displayName: Hat Tacticle 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1500077853164510, guid: 1bfda60b2f8fdac47928353e6d287aa7, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-turban-01
+    displayName: Hat Turban 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1650283668853328, guid: f60f244e507c14849bdaf645fd5232ee, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.hat-unicorn-01
+    displayName: Hat Unicorn 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1434677295353466, guid: e28d36fed7b8a2745a9791fe5267d829, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.helmet-01
+    displayName: Helmet 01
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1983005140116300, guid: 5be55c6877df9394c8d5bce5d776af2a, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.helmet-02
+    displayName: Helmet 02
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1104967478511824, guid: d1d1fb0324ed9084a9665dda8094a654, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.helmet-03
+    displayName: Helmet 03
+    slotId: headwear
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1076520536433196, guid: 7b0c656d342f1f64eb4267baf477675f, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 1
+  - id: accessory.male-armor-01
+    displayName: Male Armor 01
+    slotId: armor
+    compatibilityTag: male
+    projectionKind: 0
+    rendererName: SM_Char_Attach_Male_Armor_01
+    prefab: {fileID: 0}
+    socket: 0
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.male-armor-02
+    displayName: Male Armor 02
+    slotId: armor
+    compatibilityTag: male
+    projectionKind: 0
+    rendererName: SM_Char_Attach_Male_Armor_02
+    prefab: {fileID: 0}
+    socket: 0
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.male-armor-03
+    displayName: Male Armor 03
+    slotId: armor
+    compatibilityTag: male
+    projectionKind: 0
+    rendererName: SM_Char_Attach_Male_Armor_03
+    prefab: {fileID: 0}
+    socket: 0
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.male-default-hair-01
+    displayName: Male Default Hair 01
+    slotId: hair
+    compatibilityTag: male
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1553320175195256, guid: 1fe153fdea188ed4e892bb4c9972beae, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.male-hair-01
+    displayName: Male Hair 01
+    slotId: hair
+    compatibilityTag: male
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1964416899909496, guid: de83cd92389c3bd4f97bcce0a9b2714a, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.male-hair-02
+    displayName: Male Hair 02
+    slotId: hair
+    compatibilityTag: male
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1346800952627374, guid: 9e97aa60fb05bc54db3ac4c1ae34bb8c, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.male-hair-03
+    displayName: Male Hair 03
+    slotId: hair
+    compatibilityTag: male
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1146829034728444, guid: 3ceca72bcb48a4642bb4f845c93e2a19, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.male-hair-04
+    displayName: Male Hair 04
+    slotId: hair
+    compatibilityTag: male
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1740865964181948, guid: 81c2f0d145e746240937a164057fbcdf, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.male-hair-05
+    displayName: Male Hair 05
+    slotId: hair
+    compatibilityTag: male
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1829660885981202, guid: cc17393021b954a4fb3b27e21d3275f2, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.male-hair-06
+    displayName: Male Hair 06
+    slotId: hair
+    compatibilityTag: male
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1787159064215936, guid: 0fba6aa0583f5794c976afadb4b60f28, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.male-hair-07
+    displayName: Male Hair 07
+    slotId: hair
+    compatibilityTag: male
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1614463849732976, guid: 2b3554e8e5bb72a49b25995c0af62a5a, type: 3}
+    socket: 1
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.pouch-01
+    displayName: Pouch 01
+    slotId: waist
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1762522604371954, guid: 8abbb492a844c2149acba9f9a8a44632, type: 3}
+    socket: 4
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.pouch-02
+    displayName: Pouch 02
+    slotId: waist
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1355151068226406, guid: f21d8450a33a16149b37c935ea82171f, type: 3}
+    socket: 4
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.pouch-03
+    displayName: Pouch 03
+    slotId: waist
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1490372384752200, guid: d9fde6557bd14fc4e8dda2514223d26a, type: 3}
+    socket: 4
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.pouch-04
+    displayName: Pouch 04
+    slotId: waist
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1077292687476832, guid: 319a354f3ddbe06438efd554aa2c24f2, type: 3}
+    socket: 4
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.pouch-05
+    displayName: Pouch 05
+    slotId: waist
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1395977217139408, guid: 8c2bb359c828fa14bb3635bf7db1c18a, type: 3}
+    socket: 4
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.pouch-06
+    displayName: Pouch 06
+    slotId: waist
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1626672932480718, guid: e61463c111abdca4b857d5c68e3153ea, type: 3}
+    socket: 4
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.pouch-07
+    displayName: Pouch 07
+    slotId: waist
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1063181261349706, guid: 20a23f0c3f6b2c1498c9c8497c227160, type: 3}
+    socket: 4
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.pouch-08
+    displayName: Pouch 08
+    slotId: waist
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1242382348180414, guid: b0614b0d3d9e1aa429283ae93b5ace8a, type: 3}
+    socket: 4
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.scarf-01
+    displayName: Scarf 01
+    slotId: neck
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1087115859000890, guid: d7d0af54557dbed42a41afce056a102a, type: 3}
+    socket: 2
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.scarf-02
+    displayName: Scarf 02
+    slotId: neck
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1668737066976728, guid: b7a8c5608c486664fba0f824a6693a00, type: 3}
+    socket: 2
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.patch-flag-01
+    displayName: Patch Flag 01
+    slotId: patch
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1018853452916720, guid: 545699ebf7d9b6b41a5f79af1540c0dd, type: 3}
+    socket: 6
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.patch-leaf-01
+    displayName: Patch Leaf 01
+    slotId: patch
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1492095166090114, guid: f08b3d8709d945b43b612d7e5b50d7dc, type: 3}
+    socket: 6
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.patch-medic-01
+    displayName: Patch Medic 01
+    slotId: patch
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1538797906919960, guid: aefb53597d72aaf4f8d1cfed70dffe10, type: 3}
+    socket: 6
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.patch-medic-02
+    displayName: Patch Medic 02
+    slotId: patch
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1924182206583562, guid: ac34cb5c205edb54899940caf92cbca7, type: 3}
+    socket: 6
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.patch-rank-01
+    displayName: Patch Rank 01
+    slotId: patch
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1144329012712994, guid: d8f5b20ff156f5047a8947e311f11767, type: 3}
+    socket: 6
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.patch-rank-02
+    displayName: Patch Rank 02
+    slotId: patch
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1873138370961970, guid: 3bea7e116af962741bb7d820d8e9c44b, type: 3}
+    socket: 6
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.patch-rank-03
+    displayName: Patch Rank 03
+    slotId: patch
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1642815530264894, guid: c95a3c7ebbba30d419dcf7318e978fc5, type: 3}
+    socket: 6
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.patch-star-01
+    displayName: Patch Star 01
+    slotId: patch
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1405209764780842, guid: e141ecc5427925d40b9c0175a600ab47, type: 3}
+    socket: 6
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  - id: accessory.patch-star-02
+    displayName: Patch Star 02
+    slotId: patch
+    compatibilityTag: 
+    projectionKind: 1
+    rendererName: 
+    prefab: {fileID: 1613357480994362, guid: b6284ec289b68244c97d5f1fac68d589, type: 3}
+    socket: 6
+    localPosition: {x: 0, y: 0, z: 0}
+    localEulerAngles: {x: 0, y: 0, z: 0}
+    localScale: {x: 1, y: 1, z: 1}
+    hidesHair: 0
+  previewPrefab: {fileID: 1938837853794670, guid: 30c23f6bcd4f35648bbfc61c9f671e51, type: 3}

@@ -85,6 +85,7 @@ namespace GritGud.Presentation.Gameplay
         private Texture2D buttonHoverTexture;
         private Texture2D buttonActiveTexture;
         private Texture2D equipmentConfirmationTexture;
+        private GameplayHudTextureSet textureSet;
         private bool flyoutExpanded;
         private float flyoutReveal;
         private float equipmentFlyoutReveal;
@@ -94,9 +95,8 @@ namespace GritGud.Presentation.Gameplay
         private string revealingWarningSignature;
         private string cachedEquipmentFlyoutText = string.Empty;
         private string activeTooltip = string.Empty;
-        private bool hotbarChoiceOpen;
-        private int hotbarChoiceSlot;
-        private Rect hotbarChoiceRectangle;
+        private readonly GameplayHotbarChoiceState hotbarChoice =
+            new GameplayHotbarChoiceState();
         private Rect actorAbilityFlyoutRectangle;
         private int cachedActorAbilitySlotNumber;
         private string cachedActorAbilityId;
@@ -130,6 +130,8 @@ namespace GritGud.Presentation.Gameplay
 
         internal bool IsBugReportNoteOpen => bugReportNoteOpen;
 
+        internal bool IsHotbarChoiceOpen => hotbarChoice.IsOpen;
+
         internal bool IsCommandBarVisible => Session != null;
 
         internal bool ContainsInteractiveScreenPoint(Vector2 screenPoint)
@@ -160,7 +162,7 @@ namespace GritGud.Presentation.Gameplay
                 return true;
             }
 
-            if (hotbarChoiceOpen && hotbarChoiceRectangle.Contains(guiPoint))
+            if (hotbarChoice.Contains(guiPoint))
             {
                 return true;
             }
@@ -482,19 +484,17 @@ namespace GritGud.Presentation.Gameplay
 
         public void Show()
         {
-            flyoutExpanded = false;
-            flyoutReveal = 0f;
-            equipmentFlyoutReveal = 0f;
-            warningHintReveal = 0f;
-            actorAbilityFlyoutReveal = 0f;
-            revealingEquipmentItemId = null;
-            revealingWarningSignature = null;
-            cachedEquipmentFlyoutText = string.Empty;
-            ClearCachedActorAbilityFlyout();
+            ResetTransientState();
             enabled = true;
         }
 
         public void Hide()
+        {
+            ResetTransientState();
+            enabled = false;
+        }
+
+        private void ResetTransientState()
         {
             flyoutExpanded = false;
             flyoutReveal = 0f;
@@ -504,8 +504,8 @@ namespace GritGud.Presentation.Gameplay
             revealingEquipmentItemId = null;
             revealingWarningSignature = null;
             cachedEquipmentFlyoutText = string.Empty;
+            hotbarChoice.Close();
             ClearCachedActorAbilityFlyout();
-            enabled = false;
         }
 
         internal void ToggleFlyout()
@@ -1595,15 +1595,8 @@ namespace GritGud.Presentation.Gameplay
         private void OpenHotbarChoiceMenu(int slotNumber, Rect slotRectangle)
         {
             hotbarController?.CloseActorAbilityFlyout();
-            hotbarChoiceSlot = slotNumber;
-            hotbarChoiceOpen = true;
-            const float width = 250f;
             float height = CalculateHotbarChoiceHeight();
-            hotbarChoiceRectangle = new Rect(
-                slotRectangle.x,
-                Mathf.Max(12f, slotRectangle.y - height - 7f),
-                width,
-                height);
+            hotbarChoice.Open(slotNumber, slotRectangle, height);
         }
 
         private float CalculateHotbarChoiceHeight()
@@ -1630,19 +1623,13 @@ namespace GritGud.Presentation.Gameplay
 
         private void DrawHotbarChoiceMenu(float canvasWidth, float canvasHeight)
         {
-            if (!hotbarChoiceOpen)
+            if (!hotbarChoice.IsOpen)
             {
                 return;
             }
 
-            hotbarChoiceRectangle.x = Mathf.Clamp(
-                hotbarChoiceRectangle.x,
-                10f,
-                Mathf.Max(10f, canvasWidth - hotbarChoiceRectangle.width - 10f));
-            hotbarChoiceRectangle.y = Mathf.Clamp(
-                hotbarChoiceRectangle.y,
-                10f,
-                Mathf.Max(10f, canvasHeight - hotbarChoiceRectangle.height - 10f));
+            hotbarChoice.ClampToCanvas(canvasWidth, canvasHeight);
+            Rect hotbarChoiceRectangle = hotbarChoice.Rectangle;
             DrawFramedPanel(hotbarChoiceRectangle, PanelStrongColor);
             DrawGlowLine(new Rect(
                 hotbarChoiceRectangle.x,
@@ -1665,11 +1652,11 @@ namespace GritGud.Presentation.Gameplay
                         ability.DisplayName.ToUpperInvariant(), hotbarItemStyle))
                     {
                         hotbarController?.TryBindSlot(
-                            hotbarChoiceSlot,
+                            hotbarChoice.SlotNumber,
                             new GameplayHotbarBinding(
                                 GameplayHotbarBindingKind.ActorAbility,
                                 ability.Id));
-                        hotbarChoiceOpen = false;
+                        hotbarChoice.Close();
                     }
                     y += 27f;
                 }
@@ -1694,11 +1681,11 @@ namespace GritGud.Presentation.Gameplay
                     hotbarItemStyle))
                 {
                     hotbarController?.TryBindSlot(
-                        hotbarChoiceSlot,
+                        hotbarChoice.SlotNumber,
                         new GameplayHotbarBinding(
                             GameplayHotbarBindingKind.InventoryItem,
                             item.Id));
-                    hotbarChoiceOpen = false;
+                    hotbarChoice.Close();
                 }
                 y += 27f;
             }
@@ -1722,11 +1709,11 @@ namespace GritGud.Presentation.Gameplay
                     item.DisplayName.ToUpperInvariant() + suffix, hotbarItemStyle))
                 {
                     hotbarController?.TryBindSlot(
-                        hotbarChoiceSlot,
+                        hotbarChoice.SlotNumber,
                         new GameplayHotbarBinding(
                             GameplayHotbarBindingKind.InventoryItem,
                             item.Id));
-                    hotbarChoiceOpen = false;
+                    hotbarChoice.Close();
                 }
                 y += 27f;
             }
@@ -1736,7 +1723,7 @@ namespace GritGud.Presentation.Gameplay
                 && current.button == 0
                 && !hotbarChoiceRectangle.Contains(current.mousePosition))
             {
-                hotbarChoiceOpen = false;
+                hotbarChoice.Close();
                 current.Use();
             }
         }
@@ -2062,19 +2049,17 @@ namespace GritGud.Presentation.Gameplay
 
         private void EnsureStyles()
         {
-            if (whiteTexture != null)
+            if (textureSet != null)
             {
                 return;
             }
 
-            whiteTexture = Texture2D.whiteTexture;
-            buttonNormalTexture = CreateTexture(GameplayVisualPalette.ButtonNormal);
-            buttonHoverTexture = CreateTexture(GameplayVisualPalette.ButtonHover);
-            buttonActiveTexture = CreateTexture(GameplayVisualPalette.ButtonActive);
-            equipmentConfirmationTexture = CreateTexture(
-                GameplayVisualPalette.WithAlpha(
-                    GameplayVisualPalette.SignalOrange,
-                    0.42f));
+            textureSet = new GameplayHudTextureSet();
+            whiteTexture = textureSet.White;
+            buttonNormalTexture = textureSet.ButtonNormal;
+            buttonHoverTexture = textureSet.ButtonHover;
+            buttonActiveTexture = textureSet.ButtonActive;
+            equipmentConfirmationTexture = textureSet.EquipmentConfirmation;
 
             headerStyle = new GUIStyle(GUI.skin.label)
             {
@@ -2643,22 +2628,14 @@ namespace GritGud.Presentation.Gameplay
             GUI.color = previousColor;
         }
 
-        private static Texture2D CreateTexture(Color color)
-        {
-            var texture = new Texture2D(1, 1)
-            {
-                hideFlags = HideFlags.HideAndDontSave,
-            };
-            texture.SetPixel(0, 0, color);
-            texture.Apply();
-            return texture;
-        }
-
         private void OnDestroy()
         {
-            Destroy(buttonNormalTexture);
-            Destroy(buttonHoverTexture);
-            Destroy(buttonActiveTexture);
+            textureSet?.Dispose();
+            textureSet = null;
+            buttonNormalTexture = null;
+            buttonHoverTexture = null;
+            buttonActiveTexture = null;
+            equipmentConfirmationTexture = null;
         }
     }
 }

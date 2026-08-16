@@ -32,16 +32,21 @@ namespace GritGud.Presentation.LevelEditing.Tools
             TerrainSurfaceData surface,
             Vector3 point,
             int radiusInSamples,
-            bool lower)
+            TerrainBrushMode mode)
         {
             Vector3[] points = BuildPoints(
                 point + Vector3.up * 0.05f,
                 Mathf.Clamp(radiusInSamples, 1, 16) * surface.sampleSpacing);
             line.positionCount = points.Length;
             line.SetPositions(points);
-            Color color = lower
-                ? new Color(1f, 0.35f, 0.2f)
-                : new Color(0.3f, 1f, 0.45f);
+            Color color = mode switch
+            {
+                TerrainBrushMode.Lower => LevelEditorTheme.LowerTerrain,
+                TerrainBrushMode.Smooth => LevelEditorTheme.SmoothTerrain,
+                TerrainBrushMode.Flatten => LevelEditorTheme.FlattenTerrain,
+                TerrainBrushMode.Paint => Color.cyan,
+                _ => LevelEditorTheme.RaiseTerrain,
+            };
             line.startColor = line.endColor = color;
             if (material != null)
             {

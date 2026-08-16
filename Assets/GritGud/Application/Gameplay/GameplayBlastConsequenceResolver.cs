@@ -76,6 +76,26 @@ namespace GritGud.Application.Gameplay
             float woundMovementPenalty,
             float integrityDamage)
         {
+            var notifications = new GameplayNotificationBatch();
+            Apply(
+                effects,
+                woundMovementPenalty,
+                integrityDamage,
+                notifications);
+            notifications.Publish();
+        }
+
+        internal void Apply(
+            IReadOnlyList<BlastEffectRecord> effects,
+            float woundMovementPenalty,
+            float integrityDamage,
+            GameplayNotificationBatch notifications)
+        {
+            if (notifications == null)
+            {
+                throw new ArgumentNullException(nameof(notifications));
+            }
+
             Validate(effects, woundMovementPenalty, integrityDamage);
             foreach (BlastEffectRecord effect in effects)
             {
@@ -92,7 +112,8 @@ namespace GritGud.Application.Gameplay
                             gameplay.ApplyBlastInjury(
                                 effect.EntityId,
                                 effect.InjuryRegion,
-                                woundMovementPenalty * effect.Exposure);
+                                woundMovementPenalty * effect.Exposure,
+                                notifications);
                         }
                         break;
 
@@ -102,7 +123,8 @@ namespace GritGud.Application.Gameplay
                             destructibles.TryApplyDamage(
                                 effect.EntityId,
                                 integrityDamage * effect.Exposure,
-                                out _);
+                                out _,
+                                notifications);
                         }
                         break;
                 }

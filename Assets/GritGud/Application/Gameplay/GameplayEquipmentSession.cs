@@ -115,6 +115,30 @@ namespace GritGud.Application.Gameplay
             out GameplayActionRecord action,
             out EquipmentChangeFailure failure)
         {
+            var notifications = new GameplayNotificationBatch();
+            bool resolved = TryResolve(
+                actorId,
+                itemId,
+                equip,
+                notifications,
+                out action,
+                out failure);
+            if (resolved)
+            {
+                notifications.Publish();
+            }
+
+            return resolved;
+        }
+
+        private bool TryResolve(
+            string actorId,
+            string itemId,
+            bool equip,
+            GameplayNotificationBatch notifications,
+            out GameplayActionRecord action,
+            out EquipmentChangeFailure failure)
+        {
             action = null;
             if (!TryPrepare(
                     actorId,
@@ -143,7 +167,7 @@ namespace GritGud.Application.Gameplay
                 actor.TurnBudget,
                 resultingBudget,
                 new[] { new EquipmentChangedActionOutcome(change) });
-            Commit(action);
+            Commit(action, notifications);
             failure = EquipmentChangeFailure.None;
             return true;
         }
@@ -196,10 +220,12 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
+            var notifications = new GameplayNotificationBatch();
             if (!TryResolve(
                     actorId,
                     current.Id,
                     equip: false,
+                    notifications,
                     out unequipAction,
                     out failure))
             {
@@ -210,6 +236,7 @@ namespace GritGud.Application.Gameplay
                     actorId,
                     target.Id,
                     equip: true,
+                    notifications,
                     out equipAction,
                     out failure))
             {
@@ -217,11 +244,21 @@ namespace GritGud.Application.Gameplay
                     "A prevalidated equipment switch failed after unequipping.");
             }
 
+            notifications.Publish();
             failure = EquipmentChangeFailure.None;
             return true;
         }
 
         public void Commit(GameplayActionRecord action)
+        {
+            var notifications = new GameplayNotificationBatch();
+            Commit(action, notifications);
+            notifications.Publish();
+        }
+
+        private void Commit(
+            GameplayActionRecord action,
+            GameplayNotificationBatch notifications)
         {
             if (action == null)
             {
@@ -236,7 +273,7 @@ namespace GritGud.Application.Gameplay
                     nameof(action));
             }
 
-            gameplay.CommitAction(action);
+            gameplay.CommitAction(action, notifications);
             records.Add(outcome.Change);
         }
 

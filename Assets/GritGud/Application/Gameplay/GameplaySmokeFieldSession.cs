@@ -81,6 +81,17 @@ namespace GritGud.Application.Gameplay
 
         public void Deploy(SmokeFieldRecord field)
         {
+            var notifications = new GameplayNotificationBatch();
+            Deploy(field, notifications);
+            notifications.Publish();
+        }
+
+        internal void Deploy(
+            SmokeFieldRecord field,
+            GameplayNotificationBatch notifications)
+        {
+            if (notifications == null)
+                throw new ArgumentNullException(nameof(notifications));
             ThrowIfDisposed();
             if (field == null)
                 throw new ArgumentNullException(nameof(field));
@@ -89,7 +100,7 @@ namespace GritGud.Application.Gameplay
                     $"Smoke field '{field.Id}' is already active.");
 
             Revision++;
-            FieldDeployed?.Invoke(field);
+            notifications.Add(FieldDeployed, field);
         }
 
         public void AdvanceContinuousTime(float deltaTime)

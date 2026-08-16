@@ -87,6 +87,12 @@ namespace GritGud.Presentation.Gameplay
             return definition;
         }
 
+        public ISet<string> CreateKnownIdSet()
+        {
+            EnsureIndex();
+            return new HashSet<string>(index.Keys, StringComparer.Ordinal);
+        }
+
         public void Validate() => EnsureIndex();
 
         internal static ActorPresentationCatalog CreateRuntime(

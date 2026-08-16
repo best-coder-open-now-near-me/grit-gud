@@ -237,8 +237,10 @@ namespace GritGud.Application.Gameplay
                     "The attack seed does not match its scenario stream.");
             }
 
-            gameplay.CommitAction(action);
+            var notifications = new GameplayNotificationBatch();
+            gameplay.CommitAction(action, notifications);
             records.Add(attack);
+            notifications.Publish();
         }
 
         private void CommitDischarge(
@@ -252,8 +254,10 @@ namespace GritGud.Application.Gameplay
                     "The discharge is not the next authoritative discharge sequence.");
             }
 
-            gameplay.CommitAction(action);
+            var notifications = new GameplayNotificationBatch();
+            gameplay.CommitAction(action, notifications);
             discharges.Add(discharge);
+            notifications.Publish();
         }
 
         private bool TryPrepare(

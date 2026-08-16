@@ -31,9 +31,10 @@ The heightfield sample lattice is an authoring and storage representation. It
 does not create grid-based movement or change the game's continuous world-space
 rules.
 
-The first slice deliberately excludes caves, overhangs, erosion simulation,
+The bounded system deliberately excludes caves, overhangs, erosion simulation,
 runtime terrain destruction, texture painting, foliage, and arbitrary imported
-heightmaps.
+heightmaps. Portable base/steep color blending and surface response are now
+implemented without introducing engine material references.
 
 ## Ownership model
 
@@ -69,9 +70,9 @@ loadable through `LevelDocumentMigrator`.
 
 ### Tooling
 
-The first `TerrainHeightLevelEditorTool` should support:
+The `TerrainHeightLevelEditorTool` supports:
 
-1. Raise/lower with a fixed-radius brush.
+1. Raise, lower, smooth, and fixed-target flatten with a bounded-radius brush.
 2. A visible brush footprint projected onto the surface.
 3. Strength and radius controls with safe limits.
 4. A temporary preview during the gesture.
@@ -126,8 +127,7 @@ The projection slice has been separated into `TerrainWorldProjector`,
 `TerrainMeshBuilder`, and `TerrainChunkTag` so lifecycle, deterministic geometry,
 and ray-pick identity can evolve independently.
 
-Before adding smoothing, flattening, painting, or additional terrain selection
-modes:
+Before adding painting or additional terrain selection modes:
 
 - **Implemented:** stroke accumulation/commit is isolated in
   `TerrainStrokeAccumulator`, with brush patch creation in
@@ -136,8 +136,16 @@ modes:
   in `TerrainBrushFootprint`;
 - **Implemented:** `TerrainToolPanelModel` owns terrain-panel state, clamping,
   activation intents, and framing delegation instead of exposing the terrain
-  tool directly to the GUI; and
-- move selection-outline ownership out of `LevelEditorController`.
+  tool directly to the GUI;
+- **Implemented:** `TerrainAuthoringCoordinator` owns flat-surface creation and
+  footprint-resize intents. Whole-surface changes use full-projection commands,
+  while height brushes retain their region-specific patch commands;
+- **Implemented:** `LevelEditorOutlinePresenter` owns selection, hover,
+  placement, and secondary-outline creation, visibility, and disposal outside
+  `LevelEditorController`; and
+- **Implemented:** smooth and flatten calculations remain in
+  `TerrainBrushCommandFactory`, while `TerrainStrokeAccumulator` captures a
+  flatten target once and preserves one-command stroke history.
 
 This is a **green** assessment for Domain and Application boundaries and a
 **yellow** assessment for Presentation class size. There is no need to rewrite
@@ -166,6 +174,9 @@ feature family.
 ### Phase 3 — authoring tool
 
 - **Implemented:** click-based raise/lower brush commits one patch command.
+- **Implemented:** smooth moves quantized samples toward their deterministic
+  neighborhood average, and flatten captures one quantized world elevation for
+  the complete dragged stroke.
 - **Implemented:** bounded radius and quantized strength controls, with Shift as
   a temporary lower modifier.
 - Terrain validation remains integrated with the existing validation panel.
@@ -193,8 +204,25 @@ feature family.
   projection fallbacks request a full refresh. A future navigation adapter owns
   batching and rebuilding from those notifications rather than coupling that work
   to brush rendering.
-- Confirm cover, line of sight, projectiles, and saved gameplay poses all use the
-  same world-space terrain surface.
+- **Implemented and verified:** projected terrain collider geometry participates
+  in target exposure/physical cover and projectile segment collision, while
+  grounded transforms are captured into authoritative gameplay poses. Focused
+  tests exercise all three paths against generated terrain.
+
+### Phase 5 — appearance and authoring diagnostics
+
+- **Implemented:** schema 8 stores portable per-surface base/steep colors, slope
+  blending, smoothness, specular response, and preset identity.
+- **Implemented:** appearance updates are incremental material changes with exact
+  undo/redo; they do not rebuild colliders or invalidate navigation.
+- **Implemented:** the authoring UI labels appearance as surface-wide and stages
+  presets behind an explicit whole-surface Apply action so it cannot be mistaken
+  for regional texture painting.
+- **Implemented:** an on-demand Unity-free analyzer reports heightfield slope,
+  connected regions, scenario support, terrain-only objective routes, and actor
+  overlaps without turning advisory results into publish blockers.
+- **Implemented:** a transient green/red slope heatmap uses projected normals,
+  stays out of portable data, and is suppressed across the preview boundary.
 
 ## First-slice acceptance criteria
 

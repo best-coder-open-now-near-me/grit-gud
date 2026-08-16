@@ -188,6 +188,7 @@ namespace GritGud.Presentation.Gameplay
             LevelWorld world,
             GameplayWorldRegistry registry,
             GameplayScenarioAssembly scenarioAssembly,
+            uint randomSeed,
             TargetAcquisitionPresenter acquisition,
             GameplayDialogueLog dialogueLog,
             Func<GameplayActionRecord, bool> onEncounterStartRequested = null)
@@ -244,7 +245,7 @@ namespace GritGud.Presentation.Gameplay
                 destructibles.Session,
                 scenario.DisplacementSubjects,
                 new UnityDisplacementPathValidator(subjectRoots),
-                new SeededD20RollSource(scenario.RandomSeed),
+                new SeededD20RollSource(randomSeed),
                 CreateControlProfiles(scenario));
             preview = new DisplacementPreviewPresenter(transform);
             StatusMessage = string.Empty;

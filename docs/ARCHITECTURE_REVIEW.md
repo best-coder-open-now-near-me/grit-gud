@@ -1,6 +1,6 @@
 # Architecture and Separation-of-Concerns Review
 
-**Reviewed:** 2026-08-11; follow-up audit 2026-08-12
+**Reviewed:** 2026-08-11; follow-up audits 2026-08-12, 2026-08-14, and 2026-08-15
 **Scope:** the repository as a whole, with additional attention on the recent
 emergency-reaction, projectile, explosive, progression, displacement, and HUD
 work.
@@ -21,6 +21,78 @@ features accumulate**. A few composition and presentation classes are becoming
 secondary rules engines, while the central gameplay session and content
 assembler are becoming change hotspots. Close-quarters displacement is the
 right feature family to correct those trends before adding the drone.
+
+### 2026-08-14 follow-up
+
+The latest pass corrected the highest-risk correctness and lifecycle findings
+without attempting a destabilizing rewrite:
+
+- committed-level readiness now uses the same archetype, actor-template, and
+  presentation catalogs as runtime loading; Authoring, Publish, and Runtime
+  validation profiles have distinct enforcement semantics;
+- document copies and read queries no longer normalize or mutate their source;
+- nested terrain command groups project every patch, enforce per-document
+  limits, and replace the visible terrain root only after construction succeeds;
+- gameplay startup is failure-safe, teardown has one authoritative path, and
+  HUD choice state plus generated textures have explicit session ownership;
+- action observers are published only after the shared action, focused session,
+  consequences, smoke fields, and journals finish committing; one failing
+  observer does not prevent later observers from running; and
+- attack, displacement, and thrown-explosive randomness derives stable named
+  streams from the scenario seed instead of starting correlated generators from
+  the same value.
+
+The remaining hotspots are deliberate incremental work. `GameplaySession`
+still centralizes actor state and outcome dispatch, `GameplayHud` still owns too
+many feature drawers, and `GameplayController` is still a large composition
+root. New behavior should continue moving behind focused Application services,
+HUD panels, and feature binders when those seams become stable. Durable
+cross-launch progression storage also remains explicitly deferred.
+
+### 2026-08-15 editor and terrain follow-up
+
+The editor expansion preserves the intended authority boundaries. Portable
+terrain material samples, three-axis transforms, rotation pivots, interaction
+points, destructible defaults, and spatial dressing records live in the Domain
+document. Reversible mutations live in Application commands. Pointer input,
+physics-assisted settling, mesh projection, shaders, and IMGUI controls remain
+Presentation adapters. Repository inspection found no Unity or Presentation
+reference in Domain or Application source.
+
+This follow-up also turns the most important separation rule into a fast gate:
+`tools/validate-repository.py` now verifies the Domain and Application assembly
+contracts and rejects Unity or Presentation references in either neutral source
+tree. Architecture review is therefore no longer dependent only on convention.
+
+The current risk profile is acceptable but not finished:
+
+- `GameplayHud` (2,641 lines), `GameplaySession` (2,219),
+  `LevelEditorController` (1,815), and `GameplayScenarioAssembler` (1,554)
+  remain the largest production change hotspots. Split only along stable feature
+  seams; do not introduce a framework or broad rewrite.
+- The initial terrain-paint implementation coupled serialized numeric values to
+  UI ordering and mesh-color projection. This follow-up resolves that risk with
+  the explicitly numbered Domain-owned `TerrainMaterialKind` contract; UI
+  options and rendering now map named values, and tests freeze the serialized
+  numbers. New values must append or arrive through a schema migration.
+- `TerrainHeightLevelEditorTool` now coordinates both height sculpting and
+  material painting. Its stroke lifecycles are cohesive today, but the name and
+  responsibility should become a generic terrain-brush coordinator or two
+  focused tools if erosion, foliage, masks, or other brush families are added.
+- The next cross-launch party work must preserve the same ports-and-adapters
+  boundary: Application owns a versioned party-save use case and validation;
+  Presentation supplies PlayerPrefs/browser and filesystem adapters. Gameplay
+  controllers must not directly serialize authoritative party state.
+- Planning text had drifted behind implemented interaction-point,
+  destructible, batch-transform, and three-axis work. Roadmap statements should
+  be treated as delivery records, not as substitutes for executable boundary
+  gates.
+
+No architecture blocker requires reverting the current editor slice. The
+highest-value next work remains durable party save/load and advancement UI;
+editor work can proceed independently with destructible pile verification and
+richer viewport transform tools.
+
 
 ## Non-negotiable boundaries
 
@@ -44,6 +116,25 @@ right feature family to correct those trends before adding the drone.
    displacement costs are prevalidated and shown before confirmation. A failed
    displacement must not leave the weapon stowed or spend only part of the
    budget.
+
+## Cloud draft library decision — 2026-08-15
+
+Private cloud drafts use the same ports-and-adapters direction as the rest of
+the editor. Application owns immutable draft identity, name policy, revision
+conflicts, records, and repository use cases. Presentation owns Supabase auth,
+HTTP transport, coroutine bridging, operation cancellation, navigation, and UI.
+
+A cloud draft UUID never changes. Its user-facing name is independent and
+unique per account. Saves carry an expected revision; the database commits the
+document and immutable revision snapshot atomically or reports a conflict.
+Local PlayerPrefs storage is recovery, not the cloud-library identity.
+
+`LevelDraftLibraryCoordinator` is the shared Presentation state boundary for
+menu and editor operations. UI renders its immutable Application summaries and
+submits intents; it does not construct Supabase requests. Async navigation is
+cancellable and must verify the application mode before opening gameplay or an
+editor. Cloud play-test uses Runtime validation and sandbox semantics rather
+than bypassing the committed-level readiness boundary.
 
 ## What is working well
 
@@ -185,6 +276,14 @@ diagnostics, weapon catalog, humanoid pose, and muzzle-origin path as player
 shots. Incapacitation remains authoritative session state; initiative and
 emergency responder selection skip actors that can no longer act.
 
+The first tactical-confidence extension preserves that boundary. Application
+scores frozen exposure for every capable party target and owns an authored
+minimum acceptable hit chance. Unity supplies bounded route/exposure options
+only when the current shot is obstructed, out of reach, or below that threshold;
+Application moves only for a strictly improved firing solution and otherwise
+records the legal fallback shot. Future investigation, reciprocal-cover, and
+squad coordination work is tracked in [ENEMY_AI.md](ENEMY_AI.md).
+
 ### A15 - Core attributes own their derived rules
 
 **Status: implemented for the authored roster**
@@ -204,6 +303,14 @@ combat effect while social resolution is absent.
 ### A3 — Reduce central change hotspots by extracting cohesive services
 
 **Priority: high, incremental**
+
+**Status: partially resolved 2026-08-14.** Blast, displacement, equipment,
+projectile, thrown-explosive, party, and progression behavior already has
+focused sessions. Gameplay startup is now split into explicit bootstrap, world,
+session, binding, and interface stages with one teardown path. HUD choice state
+and generated texture ownership have moved into small lifecycle objects. The
+central session outcome switch and the remaining HUD feature drawers should be
+extracted only along proven behavior seams.
 
 `GameplaySession` is the authoritative aggregate and should remain the owner of
 actor state and journal ordering, but outcome-specific validation and
@@ -282,6 +389,13 @@ specific formatter or an explicit generic-policy declaration.
 ### A9 — Put fast validation before full platform builds
 
 **Priority: immediate delivery hygiene**
+
+**Status: resolved.** The branch-preview workflow validates tracked source and
+JSON, runs the complete EditMode and PlayMode suites, verifies that tests leave
+the workspace clean, and only then builds WebGL. Because license and private
+asset credentials are intentionally unavailable to forks, trusted
+contributions must be pushed to a repository branch before merge so this gate
+can run.
 
 The WebGL build is valuable but too slow to be the first signal. CI should run
 conflict-marker and JSON checks, Unity script compilation, and EditMode tests
@@ -433,11 +547,11 @@ unrelated content.
 
 **Priority: continuous**
 
-**Status: current gate resolved 2026-08-12.** The listed regressions have
-focused tests. The local gate passes 388 EditMode tests plus a PlayMode
-lifecycle smoke that boots default gameplay, sustains 180 frame updates, and
-tears the session down. CI now runs both suites before the WebGL build. This
-remains a continuous requirement for future gameplay slices.
+**Status: current gate resolved 2026-08-14.** The listed regressions have
+focused tests. The local gate passes 536 EditMode tests. PlayMode sustains the
+default gameplay session for 180 frames and separately boots and tears down
+every playable committed level. CI runs both suites before the WebGL build.
+This remains a continuous requirement for future gameplay slices.
 
 The repository has broad Domain/Application and Presentation EditMode coverage,
 a sustained-frame default-content PlayMode lifecycle smoke, and CI gates before
@@ -453,8 +567,10 @@ scene controllers.
 
 - `GameplayVisualTheme` owns post-processing, cel-band response, actor surface
   response, outline widths, contact grounding, and tactical-transition cadence.
-- `LevelLightingCatalog` selects atmosphere, key light, practical fixtures,
-  fixture geometry, and ambient prefab placements by stable level ID.
+- `LevelDocument.environment` owns portable atmosphere, key-light, and practical
+  fixture values used by both editing and play. `LevelLightingCatalog` now owns
+  only Unity prefab references for ambient effects pending their portable
+  placement schema.
 - `SurfacePresentationCatalog` owns concrete, wood, metal, and actor material
   response together with their impact prefab, scale, lifetime, and decal
   treatment. Level archetypes select a stable surface ID.

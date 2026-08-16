@@ -1,10 +1,12 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using GritGud.Application.Levels;
 using GritGud.Domain.Levels;
 using GritGud.Presentation.Bootstrap;
+using GritGud.Presentation.Gameplay;
 using GritGud.Presentation.LevelEditing.Core;
 using GritGud.Presentation.LevelEditing.Persistence;
 using GritGud.Presentation.LevelEditing.Tools;
@@ -12,48 +14,125 @@ using GritGud.Presentation.LevelEditing.UI;
 using GritGud.Presentation.Levels;
 using GritGud.Presentation.Levels.Persistence;
 using GritGud.Presentation.Levels.Runtime;
+using GritGud.Presentation.Characters;
+using GritGud.Presentation.Supabase;
 using UnityEngine;
 
 namespace GritGud.Presentation.LevelEditing
 {
-    public sealed class LevelEditorController : MonoBehaviour
+    public sealed class LevelEditorController : MonoBehaviour, ILevelEditorGuiActions
     {
-        private const string MainLevelResourceName = "Levels/main-level";
-
         private LevelArchetypeCatalog catalog;
+        private ScenarioAuthoringCatalog scenarioCatalog;
+        private LevelDressingCatalog dressingCatalog;
+        private UnityCharacterLibrary characterLibrary;
         private LevelEditorPersistenceCoordinator persistence;
         private LevelEditorWorkspace workspace;
         private LevelSelectionModel selection;
         private LevelWorldProjector projector;
         private TerrainWorldProjector terrainProjector;
         private InteractionPointHandleProjector interactionPointHandles;
+        private ScenarioActorHandleProjector scenarioActorHandles;
         private LevelEditorInputRouter inputRouter;
         private LevelEditorCameraController cameraController;
         private LevelSnapSettings snapSettings;
+        private LevelEditorGridSettings gridSettings;
+        private LevelEditorGridPresenter gridPresenter;
         private ILevelEditorPreferencesStore preferencesStore;
         private LevelEditorSceneQuery sceneQuery;
         private LevelEditorToolManager toolManager;
         private PlacementLevelEditorTool placementTool;
+        private SpatialRecordPlacementTool spatialPlacementTool;
         private TerrainHeightLevelEditorTool terrainTool;
         private LevelEditorGui gui;
+        private LevelEditorPresentationState presentationState;
+        private LevelDocument viewDocument;
+        private ScenarioAuthoringCoordinator scenarioAuthoring;
+        private TerrainAuthoringCoordinator terrainAuthoring;
+        private EnvironmentAuthoringCoordinator environmentAuthoring;
+        private LevelEditorLayoutCoordinator layoutAuthoring;
+        private LevelEditorOrganizationModel organizationModel;
+        private LevelEditorOrganizationCoordinator organizationAuthoring;
+        private LevelEditorPlayabilityCoordinator playabilityAuthoring;
+        private LevelDressingAuthoringCoordinator dressingAuthoring;
+        private GameplayEnvironmentLighting environmentLighting;
+        private LevelDressingProjector dressingProjector;
         private LevelEntityView selectedView;
-        private RuntimeBoundsOutline selectionOutline;
-        private RuntimeBoundsOutline hoverOutline;
-        private RuntimeBoundsOutline placementOutline;
-        private readonly Dictionary<string, RuntimeBoundsOutline> secondarySelectionOutlines =
-            new Dictionary<string, RuntimeBoundsOutline>(StringComparer.Ordinal);
+        private LevelEditorOutlinePresenter outlinePresenter;
         private IReadOnlyList<LevelValidationIssue> validationIssues =
             Array.Empty<LevelValidationIssue>();
         private bool previewMode;
         private bool suspended;
+        private bool audioZonePreviewEnabled;
+        private bool physicsPlacementRunning;
+        private bool cancelPhysicsPlacement;
+        private LevelDocument sourceDocument;
+        private bool sourceDocumentIsSaved;
+        private string sourceLabel = string.Empty;
         private string statusMessage = string.Empty;
+        private bool sessionReady;
+        private bool cloudOperationRunning;
+        private int sessionGeneration;
 
         public void Begin(bool startInPreview)
         {
+            CommittedLevelLibrary levels = UnityCommittedLevelLibrary.LoadDefault();
+            CommittedLevelEntry entry = levels.Find(
+                UnityCommittedLevelLibrary.DefaultResourceKey)
+                ?? throw new InvalidOperationException(
+                    "The default committed level was not found.");
+            Begin(
+                startInPreview,
+                levels.OpenForEditing(entry.ResourceKey),
+                entry.DisplayName);
+        }
+
+        public void Begin(
+            bool startInPreview,
+            LevelDocument initialDocument,
+            string initialSourceLabel,
+            bool initialDocumentIsSaved = true)
+        {
+            if (initialDocument == null)
+            {
+                throw new ArgumentNullException(nameof(initialDocument));
+            }
+
             EndSession();
+            try
+            {
+                InitializeSession(
+                    startInPreview,
+                    initialDocument,
+                    initialSourceLabel,
+                    initialDocumentIsSaved);
+            }
+            catch
+            {
+                EndSession();
+                throw;
+            }
+        }
+
+        private void InitializeSession(
+            bool startInPreview,
+            LevelDocument initialDocument,
+            string initialSourceLabel,
+            bool initialDocumentIsSaved)
+        {
+            previewMode = false;
             suspended = false;
-            enabled = true;
-            catalog = LevelArchetypeCatalog.LoadDefault();
+            sessionReady = false;
+            sourceDocument = initialDocument.DeepCopy();
+            sourceDocumentIsSaved = initialDocumentIsSaved;
+            sourceLabel = string.IsNullOrWhiteSpace(initialSourceLabel)
+                ? initialDocument.displayName
+                : initialSourceLabel.Trim();
+            GameplayContentPackage defaultContent = GameplayContentLoader.LoadDefault();
+            catalog = defaultContent.Archetypes;
+            scenarioCatalog = ScenarioAuthoringCatalog.Create(defaultContent.Scenario);
+            dressingCatalog = LevelDressingCatalog.LoadDefault();
+            characterLibrary = defaultContent.Characters;
             LevelTextTransfer textTransfer = GetComponent<LevelTextTransfer>();
             if (textTransfer == null)
             {
@@ -64,7 +143,7 @@ namespace GritGud.Presentation.LevelEditing
                 new UnityLevelJsonSerializer(),
                 new PlayerPrefsLevelDraftStore(),
                 textTransfer,
-                catalog);
+                defaultContent.ValidationContent);
             persistence.DocumentLoaded += HandleDocumentLoaded;
             persistence.StatusChanged += SetStatus;
             Camera sceneCamera = Camera.main;
@@ -73,13 +152,19 @@ namespace GritGud.Presentation.LevelEditing
                 throw new InvalidOperationException("The bootstrap scene needs a Main Camera.");
             }
 
-            workspace = new LevelEditorWorkspace(LoadMainLevel(), catalog.CreateKnownIdSet());
+            workspace = new LevelEditorWorkspace(
+                sourceDocument.DeepCopy(),
+                defaultContent.ValidationContent,
+                initialDocumentIsSaved);
+            viewDocument = workspace.CreateSnapshot();
             workspace.Changed += HandleWorkspaceChanged;
             selection = new LevelSelectionModel();
             selection.Changed += HandleSelectionChanged;
             projector = new LevelWorldProjector(catalog, transform);
             terrainProjector = new TerrainWorldProjector(transform);
+            dressingProjector = new LevelDressingProjector(transform, dressingCatalog);
             interactionPointHandles = new InteractionPointHandleProjector();
+            scenarioActorHandles = new ScenarioActorHandleProjector(transform);
             inputRouter = new LevelEditorInputRouter();
             cameraController = new LevelEditorCameraController(sceneCamera);
             cameraController.Frame(workspace.CreateSnapshot().bounds);
@@ -88,6 +173,19 @@ namespace GritGud.Presentation.LevelEditing
             cameraController.RestoreState(preferences.camera);
             sceneQuery = new LevelEditorSceneQuery(sceneCamera);
             snapSettings = new LevelSnapSettings { Enabled = preferences.snapEnabled };
+            gridSettings = new LevelEditorGridSettings();
+            float restoredGridSpacing = preferences.gridSpacing > 0f
+                ? preferences.gridSpacing
+                : 2.5f;
+            gridSettings.Configure(
+                preferences.gridVisible,
+                restoredGridSpacing,
+                preferences.gridElevation);
+            gridPresenter = new LevelEditorGridPresenter(transform);
+            gridSettings.Changed += HandleGridSettingsChanged;
+            organizationModel = new LevelEditorOrganizationModel(catalog);
+            organizationModel.Synchronize(viewDocument);
+            organizationModel.Changed += HandleOrganizationViewChanged;
             var toolContext = new LevelEditorToolContext(
                 workspace,
                 selection,
@@ -96,46 +194,83 @@ namespace GritGud.Presentation.LevelEditing
                 sceneQuery,
                 snapSettings,
                 SetStatus,
-                SyncInspectorFields);
+                SyncInspectorFields,
+                organizationModel);
             toolManager = new LevelEditorToolManager(toolContext, SelectionLevelEditorTool.ToolId);
             placementTool = new PlacementLevelEditorTool();
+            spatialPlacementTool = new SpatialRecordPlacementTool(PlaceSpatialRecord);
             terrainTool = new TerrainHeightLevelEditorTool();
             var selectionTool = new SelectionLevelEditorTool();
             toolManager.Register(selectionTool);
             toolManager.Register(placementTool);
+            toolManager.Register(spatialPlacementTool);
             toolManager.Register(terrainTool);
             toolManager.ActivateDefault();
+            terrainAuthoring = new TerrainAuthoringCoordinator(workspace);
+            terrainAuthoring.StatusChanged += SetStatus;
+            playabilityAuthoring = new LevelEditorPlayabilityCoordinator(
+                workspace,
+                terrainProjector);
+            playabilityAuthoring.StatusChanged += SetStatus;
             var terrainPanel = new TerrainToolPanelModel(
                 toolManager,
                 terrainTool,
+                terrainAuthoring,
                 FrameTerrain);
-            gui = new LevelEditorGui(
+            presentationState = new LevelEditorPresentationState();
+            toolManager.ActiveToolChanged += HandleActiveToolChanged;
+            scenarioAuthoring = new ScenarioAuthoringCoordinator(
+                workspace,
+                scenarioCatalog,
+                cameraController.CaptureState);
+            scenarioAuthoring.StatusChanged += SetStatus;
+            scenarioAuthoring.ActorFocusRequested += HandleScenarioActorFocusRequested;
+            scenarioAuthoring.ActorChanged += HandleScenarioActorChanged;
+            scenarioAuthoring.PlayerStartChanged += HandlePlayerStartChanged;
+            environmentAuthoring = new EnvironmentAuthoringCoordinator(
+                workspace,
+                cameraController.CaptureState);
+            environmentAuthoring.StatusChanged += SetStatus;
+            environmentAuthoring.PracticalLightFocusRequested +=
+                HandlePracticalLightFocusRequested;
+            dressingAuthoring = new LevelDressingAuthoringCoordinator(
+                workspace,
+                cameraController.CaptureState);
+            dressingAuthoring.StatusChanged += SetStatus;
+            dressingAuthoring.FocusRequested += HandleDressingFocusRequested;
+            layoutAuthoring = new LevelEditorLayoutCoordinator(
                 workspace,
                 selection,
+                cameraController,
+                gridSettings);
+            layoutAuthoring.StatusChanged += SetStatus;
+            organizationAuthoring = new LevelEditorOrganizationCoordinator(
+                workspace,
+                selection,
+                organizationModel);
+            organizationAuthoring.StatusChanged += SetStatus;
+            organizationAuthoring.GroupFocusRequested += HandleGroupFocusRequested;
+            gui = new LevelEditorGui(
+                selection,
                 catalog,
+                scenarioCatalog,
+                dressingCatalog,
+                characterLibrary,
                 toolManager,
                 placementTool,
                 terrainPanel,
                 selectionTool,
                 snapSettings,
-                persistence,
-                () => GameBootstrap.Instance.ReturnToMenu(),
-                TogglePreview,
-                StartTestPlay,
-                CreateNewLevel,
-                ReloadMainLevel,
-                FrameSelection,
-                FrameLevel,
-                FocusValidationEntity,
-                ApplyInspectorTransform,
-                ApplyPlayerStart,
-                AddInteractionPoint,
-                ApplyInteractionPoint,
-                DeleteInteractionPoint,
-                ApplyDestructibleDefaults);
-            gui.SyncPlayerStartFields(workspace.CreateSnapshot().playtest.playerStart);
-            EnsureOutlines();
+                presentationState,
+                this);
+            gui.SyncScenarioFields(viewDocument, forceLevelIdentity: true);
+            gui.SyncEnvironmentFields(viewDocument, force: true);
+            gui.SyncDressingFields(viewDocument, force: true);
+            gui.SyncLayoutFields(viewDocument, gridSettings, force: true);
+            gui.SyncOrganizationFields(viewDocument, force: true);
+            outlinePresenter = new LevelEditorOutlinePresenter(transform);
             validationIssues = workspace.ValidationIssues;
+            gridPresenter.Refresh(viewDocument.bounds, gridSettings);
 
             if (startInPreview)
             {
@@ -145,12 +280,25 @@ namespace GritGud.Presentation.LevelEditing
             {
                 projector.Replace(workspace.CreateSnapshot());
                 terrainProjector.Replace(workspace.CreateSnapshot());
+                dressingProjector.Replace(
+                    viewDocument.dressing,
+                    showZoneGizmos: true,
+                    playAudio: audioZonePreviewEnabled);
+                scenarioActorHandles.Refresh(workspace.CreateSnapshot());
+                organizationModel.ApplyProjection(projector);
                 SetStatus("Edit the main level or choose New to start from an empty level.");
             }
+
+            RefreshEnvironmentLighting(viewDocument);
+            sessionReady = true;
+            enabled = true;
         }
 
         public void EndSession()
         {
+            sessionGeneration++;
+            sessionReady = false;
+            enabled = false;
             SaveLocalPreferences();
             if (workspace != null)
             {
@@ -169,60 +317,176 @@ namespace GritGud.Presentation.LevelEditing
                 persistence.Dispose();
             }
 
+            if (toolManager != null)
+                toolManager.ActiveToolChanged -= HandleActiveToolChanged;
+            if (scenarioAuthoring != null)
+            {
+                scenarioAuthoring.StatusChanged -= SetStatus;
+                scenarioAuthoring.ActorFocusRequested -= HandleScenarioActorFocusRequested;
+                scenarioAuthoring.ActorChanged -= HandleScenarioActorChanged;
+                scenarioAuthoring.PlayerStartChanged -= HandlePlayerStartChanged;
+            }
+            if (terrainAuthoring != null)
+                terrainAuthoring.StatusChanged -= SetStatus;
+            if (playabilityAuthoring != null)
+                playabilityAuthoring.StatusChanged -= SetStatus;
+            if (environmentAuthoring != null)
+            {
+                environmentAuthoring.StatusChanged -= SetStatus;
+                environmentAuthoring.PracticalLightFocusRequested -=
+                    HandlePracticalLightFocusRequested;
+            }
+            if (dressingAuthoring != null)
+            {
+                dressingAuthoring.StatusChanged -= SetStatus;
+                dressingAuthoring.FocusRequested -= HandleDressingFocusRequested;
+            }
+            if (layoutAuthoring != null)
+                layoutAuthoring.StatusChanged -= SetStatus;
+            if (organizationAuthoring != null)
+            {
+                organizationAuthoring.StatusChanged -= SetStatus;
+                organizationAuthoring.GroupFocusRequested -= HandleGroupFocusRequested;
+            }
+            if (organizationModel != null)
+                organizationModel.Changed -= HandleOrganizationViewChanged;
+            if (gridSettings != null)
+                gridSettings.Changed -= HandleGridSettingsChanged;
+            environmentLighting?.Dispose();
             toolManager?.Dispose();
             projector?.Dispose();
             terrainProjector?.Dispose();
+            dressingProjector?.Dispose();
             interactionPointHandles?.Dispose();
+            scenarioActorHandles?.Dispose();
+            gridPresenter?.Dispose();
+            outlinePresenter?.Dispose();
             workspace?.Dispose();
             toolManager = null;
             projector = null;
             terrainProjector = null;
+            dressingProjector = null;
             interactionPointHandles = null;
+            scenarioActorHandles = null;
             workspace = null;
             selection = null;
             persistence = null;
             placementTool = null;
             terrainTool = null;
+            terrainAuthoring = null;
+            playabilityAuthoring = null;
+            environmentAuthoring = null;
+            dressingAuthoring = null;
+            layoutAuthoring = null;
+            organizationAuthoring = null;
+            organizationModel = null;
+            environmentLighting = null;
+            gridPresenter = null;
+            gridSettings = null;
+            catalog = null;
+            scenarioCatalog = null;
+            dressingCatalog = null;
+            inputRouter = null;
+            cameraController = null;
+            presentationState = null;
+            scenarioAuthoring = null;
             selectedView = null;
+            outlinePresenter = null;
             sceneQuery = null;
             snapSettings = null;
             preferencesStore = null;
             gui = null;
 
-            if (selectionOutline != null)
-            {
-                Destroy(selectionOutline.gameObject);
-            }
-
-            if (hoverOutline != null)
-            {
-                Destroy(hoverOutline.gameObject);
-            }
-
-            if (placementOutline != null)
-            {
-                Destroy(placementOutline.gameObject);
-            }
-
-            foreach (RuntimeBoundsOutline outline in secondarySelectionOutlines.Values)
-            {
-                if (outline != null)
-                {
-                    Destroy(outline.gameObject);
-                }
-            }
-
-            secondarySelectionOutlines.Clear();
-
-            selectionOutline = null;
-            hoverOutline = null;
-            placementOutline = null;
+            previewMode = false;
             suspended = false;
-            enabled = false;
+            audioZonePreviewEnabled = false;
+            viewDocument = null;
+            validationIssues = Array.Empty<LevelValidationIssue>();
+            sourceDocument = null;
+            sourceDocumentIsSaved = false;
+            sourceLabel = string.Empty;
+            statusMessage = string.Empty;
+            cloudOperationRunning = false;
+        }
+
+        private void HandleScenarioActorFocusRequested(string actorId)
+        {
+            selection?.Clear();
+            gui?.SelectScenarioActor(actorId);
+            LevelScenarioActorData actor = viewDocument?.scenario?.actors.FirstOrDefault(candidate =>
+                string.Equals(candidate?.id, actorId, StringComparison.Ordinal));
+            if (actor != null)
+                gui?.SyncScenarioActorFields(actor);
+        }
+
+        private void HandleScenarioActorChanged(LevelScenarioActorData actor)
+        {
+            gui?.SyncScenarioActorFields(actor);
+        }
+
+        private void HandlePlayerStartChanged(LevelTransformData transformData)
+        {
+            gui?.SyncPlayerStartFields(transformData);
+        }
+
+        private void HandleActiveToolChanged(ILevelEditorTool tool)
+        {
+            if (tool == null || presentationState == null)
+                return;
+            if (tool.Id == PlacementLevelEditorTool.ToolId)
+                presentationState.SynchronizeCreateMode(LevelEditorCreateMode.Place);
+            else if (tool.Id == SpatialRecordPlacementTool.ToolId)
+                presentationState.SynchronizeCreateMode(LevelEditorCreateMode.Place);
+            else if (tool.Id == TerrainHeightLevelEditorTool.ToolId)
+                presentationState.SynchronizeCreateMode(LevelEditorCreateMode.Terrain);
+            else
+                presentationState.SynchronizeCreateMode(LevelEditorCreateMode.Select);
+        }
+
+        private void PlaceSpatialRecord(
+            LevelSpatialPlacementKind kind,
+            string targetId,
+            Vector3 position)
+        {
+            bool relocate = !string.IsNullOrEmpty(targetId);
+            switch (kind)
+            {
+                case LevelSpatialPlacementKind.PracticalLight:
+                    if (relocate)
+                        environmentAuthoring.MovePracticalLightAt(targetId, position);
+                    else
+                        environmentAuthoring.AddPracticalLightAt(position);
+                    break;
+                case LevelSpatialPlacementKind.AmbientVfx:
+                    if (relocate)
+                        dressingAuthoring.MoveAmbientVfxAt(targetId, position);
+                    else
+                        dressingAuthoring.AddAmbientVfxAt(position);
+                    break;
+                case LevelSpatialPlacementKind.AudioZone:
+                    if (relocate)
+                        dressingAuthoring.MoveAudioZoneAt(targetId, position);
+                    else
+                        dressingAuthoring.AddAudioZoneAt(position);
+                    break;
+                default:
+                    if (relocate)
+                        dressingAuthoring.MoveDecalAt(targetId, position);
+                    else
+                        dressingAuthoring.AddDecalAt(position);
+                    break;
+            }
+            if (relocate)
+                toolManager.ActivateDefault();
         }
 
         private void Update()
         {
+            if (!suspended && workspace != null && persistence != null)
+            {
+                persistence.TickAutosave(workspace, Time.unscaledTimeAsDouble);
+            }
+
             if (suspended || workspace == null || cameraController == null)
             {
                 return;
@@ -253,15 +517,32 @@ namespace GritGud.Presentation.LevelEditing
             preferencesStore.Save(new LevelEditorLocalPreferences
             {
                 snapEnabled = snapSettings.Enabled,
+                gridVisible = gridSettings?.Visible ?? true,
+                gridSpacing = gridSettings?.Spacing ?? 2.5f,
+                gridElevation = gridSettings?.Elevation ?? 0f,
                 camera = cameraController.CaptureState(),
             });
         }
 
         private void OnGUI()
         {
-            if (!suspended)
+            if (sessionReady
+                && !suspended
+                && workspace != null
+                && viewDocument != null
+                && persistence != null
+                && gui != null)
             {
-                gui?.Draw(previewMode, selectedView, validationIssues, statusMessage);
+                gui.Draw(new LevelEditorViewState(
+                    viewDocument,
+                    workspace.Revision,
+                    workspace.CanUndo,
+                    workspace.CanRedo,
+                    workspace.IsDirty,
+                    previewMode,
+                    selectedView,
+                    validationIssues,
+                    statusMessage));
             }
         }
 
@@ -276,16 +557,12 @@ namespace GritGud.Presentation.LevelEditing
             suspended = true;
             projector.SetVisible(false);
             terrainProjector.SetVisible(false);
-            selectionOutline.gameObject.SetActive(false);
-            hoverOutline.gameObject.SetActive(false);
-            placementOutline.gameObject.SetActive(false);
-            foreach (RuntimeBoundsOutline outline in secondarySelectionOutlines.Values)
-            {
-                if (outline != null)
-                {
-                    outline.gameObject.SetActive(false);
-                }
-            }
+            dressingProjector.SetVisible(false);
+            scenarioActorHandles.SetVisible(false);
+            gridPresenter.SetVisible(false);
+            outlinePresenter.HideAll();
+            environmentLighting?.Dispose();
+            environmentLighting = null;
         }
 
         public void ResumeFromTestPlay()
@@ -298,18 +575,30 @@ namespace GritGud.Presentation.LevelEditing
             suspended = false;
             projector.SetVisible(true);
             terrainProjector.SetVisible(true);
+            dressingProjector.SetVisible(true);
+            dressingProjector.SetEditorPresentation(
+                showZoneGizmos: !previewMode,
+                playAudio: previewMode || audioZonePreviewEnabled);
+            scenarioActorHandles.SetVisible(!previewMode);
+            gridPresenter.Refresh(workspace.CreateSnapshot().bounds, gridSettings);
+            gridPresenter.SetVisible(!previewMode && gridSettings.Visible);
+            if (!previewMode)
+                organizationModel.ApplyProjection(projector);
+            playabilityAuthoring.SetAuthoringProjectionVisible(!previewMode);
+            RefreshEnvironmentLighting(workspace.CreateSnapshot());
             SetStatus("Returned from isolated test play.");
         }
 
         private void StartTestPlay()
         {
+            LevelDocument snapshot = workspace.CreateSnapshot();
             if (LevelValidator.HasErrors(workspace.Validate(LevelValidationProfile.Publish)))
             {
                 SetStatus("Fix publish validation errors before test play.");
                 return;
             }
 
-            GameBootstrap.Instance.PlayEditorTest(workspace.CreateSnapshot());
+            GameBootstrap.Instance.PlayEditorTest(snapshot);
         }
 
         private void HandleGlobalShortcuts(LevelEditorInputState input)
@@ -330,7 +619,10 @@ namespace GritGud.Presentation.LevelEditing
 
             if (input.CancelPressed)
             {
-                toolManager.CancelActive();
+                if (physicsPlacementRunning)
+                    cancelPhysicsPlacement = true;
+                else
+                    toolManager.CancelActive();
             }
 
             if (input.FrameSelectionPressed)
@@ -396,25 +688,55 @@ namespace GritGud.Presentation.LevelEditing
             SetStatus("Framed terrain surfaces.");
         }
 
-        private void FocusValidationEntity(string entityId)
+        private void FocusEntity(string entityId)
         {
-            if (string.IsNullOrWhiteSpace(entityId)
-                || !projector.TryGetEntity(entityId, out LevelEntityView view))
+            if (string.IsNullOrWhiteSpace(entityId))
             {
-                SetStatus("The validation issue does not reference a loaded entity.");
+                SetStatus("The requested entity is not loaded.");
                 return;
             }
 
-            selection.SetSingle(entityId);
-            cameraController.Frame(view.GetWorldBounds());
-            SetStatus($"Focused validation issue on {entityId}.");
+            if (projector.TryGetEntity(entityId, out LevelEntityView view))
+            {
+                if (!organizationModel.CanSelect(entityId))
+                {
+                    SetStatus(
+                        "That entity is hidden, locked, or excluded by the selection filter.");
+                    return;
+                }
+                selection.SetSingle(entityId);
+                cameraController.Frame(view.GetWorldBounds());
+                SetStatus($"Focused entity '{entityId}'.");
+                return;
+            }
+
+            LevelScenarioActorData actor = viewDocument?.scenario?.actors.FirstOrDefault(candidate =>
+                string.Equals(candidate?.id, entityId, StringComparison.Ordinal));
+            if (actor == null)
+            {
+                SetStatus("The requested entity is not loaded.");
+                return;
+            }
+
+            selection.Clear();
+            gui.SelectScenarioActor(actor.id);
+            gui.SyncScenarioActorFields(actor);
+            if (scenarioActorHandles.TryGetHandle(actor.id, out GameObject handle))
+            {
+                Collider collider = handle.GetComponent<Collider>();
+                if (collider != null)
+                    cameraController.Frame(collider.bounds);
+            }
+            SetStatus($"Focused scenario actor '{actor.id}'.");
         }
 
         private void ApplyInspectorTransform(
             string xText,
             string yText,
             string zText,
-            string yawText)
+            string pitchText,
+            string yawText,
+            string rollText)
         {
             LevelEntity entity = workspace.FindEntitySnapshot(selection.PrimaryEntityId);
             if (entity == null)
@@ -425,7 +747,9 @@ namespace GritGud.Presentation.LevelEditing
             if (!TryParse(xText, out float x)
                 || !TryParse(yText, out float y)
                 || !TryParse(zText, out float z)
-                || !TryParse(yawText, out float yaw))
+                || !TryParse(pitchText, out float pitch)
+                || !TryParse(yawText, out float yaw)
+                || !TryParse(rollText, out float roll))
             {
                 SetStatus("Transform values must be finite numbers.");
                 return;
@@ -433,33 +757,289 @@ namespace GritGud.Presentation.LevelEditing
 
             var after = new LevelTransformData(
                 new Float3Data(x, y, z),
-                NormalizeYaw(yaw));
+                NormalizeYaw(pitch),
+                NormalizeYaw(yaw),
+                NormalizeYaw(roll));
             workspace.Execute(new SetEntityTransformCommand(entity.id, entity.transform, after));
             SetStatus("Applied numeric transform.");
         }
 
-        private void ApplyPlayerStart(
-            string xText,
-            string yText,
-            string zText,
-            string yawText)
+        private void SetEntityRotationPivot(float normalizedX, float normalizedZ)
         {
-            if (!TryParse(xText, out float x)
-                || !TryParse(yText, out float y)
-                || !TryParse(zText, out float z)
-                || !TryParse(yawText, out float yaw))
+            var commands = new List<ILevelEditCommand>();
+            foreach (string entityId in selection.Targets
+                .Select(target => target.EntityId)
+                .Distinct(StringComparer.Ordinal))
             {
-                SetStatus("Player-start values must be finite numbers.");
+                LevelEntity entity = workspace.FindEntitySnapshot(entityId);
+                if (entity == null
+                    || !projector.TryGetEntity(entityId, out LevelEntityView view))
+                {
+                    continue;
+                }
+
+                Bounds bounds = LevelEntityView.CalculateVisualLocalBounds(
+                    view.Archetype.Presentation.Prefab,
+                    view.Archetype.Presentation.LocalBounds);
+                Vector3 pivot = LevelEntityView.CalculateBoundsPivot(
+                    bounds,
+                    Mathf.Clamp(normalizedX, -1f, 1f),
+                    Mathf.Clamp(normalizedZ, -1f, 1f));
+                var after = new LevelRotationPivotData
+                {
+                    mode = "bounds",
+                    localPosition = new Float3Data(pivot.x, pivot.y, pivot.z),
+                };
+                commands.Add(new SetEntityRotationPivotCommand(
+                    entity.id,
+                    entity.rotationPivot,
+                    after));
+            }
+
+            if (commands.Count == 0)
+                return;
+
+            workspace.Execute(commands.Count == 1
+                ? commands[0]
+                : new CompositeLevelEditCommand("Set entity rotation pivots", commands));
+            SetStatus(commands.Count == 1
+                ? "Set rotation pivot."
+                : "Set rotation pivots for selected entities.");
+        }
+
+        private void DropAndSettleSelection(string dropHeightText, bool keepUpright)
+        {
+            if (physicsPlacementRunning)
+            {
+                SetStatus("A physics placement is already settling.");
+                return;
+            }
+            if (!TryParse(dropHeightText, out float dropHeight)
+                || dropHeight <= 0f
+                || dropHeight > 25f)
+            {
+                SetStatus("Drop height must be greater than 0 and no more than 25 meters.");
                 return;
             }
 
-            LevelTransformData before = workspace.CreateSnapshot().playtest.playerStart;
-            var after = new LevelTransformData(
-                new Float3Data(x, y, z),
-                NormalizeYaw(yaw));
-            workspace.Execute(new SetPlayerStartCommand(before, after));
-            gui.SyncPlayerStartFields(after);
-            SetStatus("Updated playtest player start.");
+            var candidates = new List<PhysicsPlacementBody>();
+            int unsupportedCount = 0;
+            foreach (string entityId in selection.Targets
+                .Select(target => target.EntityId)
+                .Distinct(StringComparer.Ordinal))
+            {
+                LevelEntity entity = workspace.FindEntitySnapshot(entityId);
+                if (entity == null
+                    || !projector.TryGetEntity(entity.id, out LevelEntityView view))
+                {
+                    unsupportedCount++;
+                    continue;
+                }
+                LevelArchetypeCapabilities blocked = LevelArchetypeCapabilities.PlacementSurface
+                    | LevelArchetypeCapabilities.Vehicle;
+                if ((view.Archetype.Capabilities & blocked) != 0
+                    || view.GetComponent<Rigidbody>() != null)
+                {
+                    unsupportedCount++;
+                    continue;
+                }
+                candidates.Add(new PhysicsPlacementBody(entity, view));
+            }
+            if (candidates.Count == 0)
+            {
+                SetStatus("Select one or more loose world props to drop; structures and vehicles are unsupported.");
+                return;
+            }
+
+            toolManager.ActivateDefault();
+            StartCoroutine(SettleEntities(
+                candidates,
+                dropHeight,
+                keepUpright,
+                unsupportedCount));
+        }
+
+        private IEnumerator SettleEntities(
+            IReadOnlyList<PhysicsPlacementBody> placements,
+            float dropHeight,
+            bool keepUpright,
+            int unsupportedCount)
+        {
+            physicsPlacementRunning = true;
+            cancelPhysicsPlacement = false;
+            int fallbackCount = 0;
+            foreach (PhysicsPlacementBody placement in placements)
+            {
+                Collider[] colliders = placement.View.GetComponentsInChildren<Collider>(true);
+                placement.UsesFallback = RequiresPhysicsBoundsFallback(colliders);
+                if (placement.UsesFallback)
+                {
+                    fallbackCount++;
+                    foreach (Collider collider in colliders)
+                    {
+                        if (!collider.enabled)
+                            continue;
+                        collider.enabled = false;
+                        placement.DisabledColliders.Add(collider);
+                    }
+                    Bounds bounds = LevelEntityView.CalculateVisualLocalBounds(
+                        placement.View.Archetype.Presentation.Prefab,
+                        placement.View.Archetype.Presentation.LocalBounds);
+                    placement.Fallback = placement.View.gameObject.AddComponent<BoxCollider>();
+                    placement.Fallback.center = bounds.center;
+                    placement.Fallback.size = bounds.size;
+                }
+
+                placement.Body = placement.View.gameObject.AddComponent<Rigidbody>();
+                placement.Body.mass = 1f;
+                placement.Body.collisionDetectionMode =
+                    CollisionDetectionMode.ContinuousSpeculative;
+                placement.Body.constraints = keepUpright
+                    ? RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ
+                    : RigidbodyConstraints.None;
+                placement.View.transform.position += Vector3.up * dropHeight;
+                placement.Body.position = placement.View.transform.position;
+                placement.Body.rotation = placement.View.transform.rotation;
+            }
+
+            SetStatus(
+                $"Settling {placements.Count} prop(s): "
+                + $"{placements.Count - fallbackCount} authored collider(s), "
+                + $"{fallbackCount} bounds fallback(s), {unsupportedCount} skipped.");
+
+            int stableSteps = 0;
+            float elapsed = 0f;
+            while (!cancelPhysicsPlacement && elapsed < 5f && stableSteps < 12)
+            {
+                yield return new WaitForFixedUpdate();
+                elapsed += Time.fixedDeltaTime;
+                bool stable = placements.All(placement =>
+                    placement.Body.linearVelocity.sqrMagnitude < 0.0025f
+                    && placement.Body.angularVelocity.sqrMagnitude < 0.0025f);
+                stableSteps = stable ? stableSteps + 1 : 0;
+            }
+
+            foreach (PhysicsPlacementBody placement in placements)
+            {
+                placement.After = placement.View.ReadTransform();
+                placement.Body.isKinematic = true;
+                Destroy(placement.Body);
+                if (placement.Fallback != null)
+                    Destroy(placement.Fallback);
+                foreach (Collider collider in placement.DisabledColliders)
+                    collider.enabled = true;
+            }
+            physicsPlacementRunning = false;
+
+            if (cancelPhysicsPlacement)
+            {
+                cancelPhysicsPlacement = false;
+                foreach (PhysicsPlacementBody placement in placements)
+                    placement.View.ApplyTransform(placement.Before);
+                SyncInspectorFields(placements[0].Before);
+                SetStatus("Canceled physics placement and restored all previous transforms.");
+                yield break;
+            }
+
+            ILevelEditCommand[] commands = placements
+                .Select(placement => (ILevelEditCommand)new SetEntityTransformCommand(
+                    placement.Entity.id,
+                    placement.Before,
+                    placement.After))
+                .ToArray();
+            if (commands.Length == 1)
+                workspace.Execute(commands[0]);
+            else
+                workspace.ExecuteTransaction("Drop and settle props", commands);
+            SyncInspectorFields(placements[0].After);
+            SetStatus(stableSteps >= 12
+                ? $"Dropped and settled {placements.Count} prop(s) as one undoable operation."
+                : $"Physics placement timed out and saved {placements.Count} final pose(s). Undo restores the batch.");
+        }
+
+        private sealed class PhysicsPlacementBody
+        {
+            public PhysicsPlacementBody(LevelEntity entity, LevelEntityView view)
+            {
+                Entity = entity;
+                View = view;
+                Before = entity.transform;
+            }
+
+            public LevelEntity Entity { get; }
+            public LevelEntityView View { get; }
+            public LevelTransformData Before { get; }
+            public LevelTransformData After { get; set; }
+            public Rigidbody Body { get; set; }
+            public BoxCollider Fallback { get; set; }
+            public bool UsesFallback { get; set; }
+            public List<Collider> DisabledColliders { get; } = new List<Collider>();
+        }
+
+        internal static bool RequiresPhysicsBoundsFallback(IEnumerable<Collider> colliders)
+        {
+            Collider[] values = colliders?.Where(collider => collider != null).ToArray()
+                ?? Array.Empty<Collider>();
+            return !values.Any(collider => collider.enabled && !collider.isTrigger)
+                || values.Any(collider => collider.enabled
+                    && collider is MeshCollider mesh
+                    && !mesh.convex);
+        }
+
+        private void ResetEntityRotationPivot()
+        {
+            var commands = new List<ILevelEditCommand>();
+            foreach (string entityId in selection.Targets
+                .Select(target => target.EntityId)
+                .Distinct(StringComparer.Ordinal))
+            {
+                LevelEntity entity = workspace.FindEntitySnapshot(entityId);
+                if (entity?.rotationPivot != null)
+                {
+                    commands.Add(new SetEntityRotationPivotCommand(
+                        entity.id,
+                        entity.rotationPivot,
+                        null));
+                }
+            }
+
+            if (commands.Count == 0)
+                return;
+
+            workspace.Execute(commands.Count == 1
+                ? commands[0]
+                : new CompositeLevelEditCommand("Reset entity rotation pivots", commands));
+            SetStatus("Restored asset rotation pivot.");
+        }
+
+        private void ApplyLevelDisplayName(string displayName)
+        {
+            string normalized = displayName?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                SetStatus("The level display name cannot be empty.");
+                return;
+            }
+
+            LevelDocument snapshot = workspace.CreateSnapshot();
+            if (string.Equals(snapshot.displayName, normalized, StringComparison.Ordinal))
+            {
+                SetStatus("The level already has that display name.");
+                return;
+            }
+
+            workspace.Execute(new SetLevelDisplayNameCommand(snapshot.displayName, normalized));
+            SetStatus($"Renamed the level to '{normalized}'.");
+        }
+
+        private void ExecuteScenarioCommands(
+            string description,
+            IReadOnlyList<ILevelEditCommand> commands)
+        {
+            if (commands.Count == 1)
+                workspace.Execute(commands[0]);
+            else
+                workspace.ExecuteTransaction(description, commands);
         }
 
         private void TogglePreview()
@@ -480,11 +1060,17 @@ namespace GritGud.Presentation.LevelEditing
             toolManager.ActivateDefault();
             selection.Clear();
             previewMode = true;
-            selectionOutline.gameObject.SetActive(false);
-            placementOutline.gameObject.SetActive(false);
+            playabilityAuthoring.SetAuthoringProjectionVisible(false);
+            outlinePresenter.HideAll();
             projector.Replace(workspace.CreateSnapshot());
             terrainProjector.Replace(workspace.CreateSnapshot());
+            dressingProjector.Replace(
+                workspace.CreateSnapshot().dressing,
+                showZoneGizmos: false,
+                playAudio: true);
             interactionPointHandles.Refresh(workspace.CreateSnapshot(), selection, projector);
+            scenarioActorHandles.SetVisible(false);
+            gridPresenter.SetVisible(false);
             SetStatus("Level Preview uses an isolated snapshot; authored data is locked.");
         }
 
@@ -493,7 +1079,17 @@ namespace GritGud.Presentation.LevelEditing
             previewMode = false;
             projector.Replace(workspace.CreateSnapshot());
             terrainProjector.Replace(workspace.CreateSnapshot());
+            dressingProjector.Replace(
+                workspace.CreateSnapshot().dressing,
+                showZoneGizmos: true,
+                playAudio: audioZonePreviewEnabled);
             interactionPointHandles.Refresh(workspace.CreateSnapshot(), selection, projector);
+            scenarioActorHandles.Refresh(workspace.CreateSnapshot());
+            scenarioActorHandles.SetVisible(true);
+            gridPresenter.Refresh(workspace.CreateSnapshot().bounds, gridSettings);
+            organizationModel.Synchronize(workspace.CreateSnapshot());
+            organizationModel.ApplyProjection(projector);
+            playabilityAuthoring.SetAuthoringProjectionVisible(true);
             SetStatus("Returned to the authored level.");
         }
 
@@ -502,6 +1098,10 @@ namespace GritGud.Presentation.LevelEditing
             LevelEditorWorkspaceChangedEventArgs args)
         {
             validationIssues = args.ValidationIssues;
+            playabilityAuthoring?.MarkStale();
+            persistence?.ScheduleAutosave(
+                args.SessionChange.Revision,
+                Time.unscaledTimeAsDouble);
             if (previewMode)
             {
                 return;
@@ -510,10 +1110,42 @@ namespace GritGud.Presentation.LevelEditing
             try
             {
                 LevelDocument snapshot = workspace.CreateSnapshot();
+                viewDocument = snapshot;
                 projector.Apply(snapshot, args.SessionChange);
                 terrainProjector.Apply(snapshot, args.SessionChange);
+                organizationModel.Synchronize(snapshot);
+                organizationModel.ApplyProjection(projector);
+                ReconcileSelection(snapshot);
                 RefreshSelectedView();
                 interactionPointHandles.Refresh(snapshot, selection, projector);
+                scenarioActorHandles.Refresh(snapshot);
+                gui.SyncScenarioFields(snapshot);
+                if (args.SessionChange.RequiresFullProjection
+                    || IsEnvironmentCommand(args.SessionChange.Command))
+                {
+                    gui.SyncEnvironmentFields(snapshot, force: true);
+                    RefreshEnvironmentLighting(snapshot);
+                }
+                if (args.SessionChange.RequiresFullProjection
+                    || IsDressingCommand(args.SessionChange.Command))
+                {
+                    gui.SyncDressingFields(snapshot, force: true);
+                    dressingProjector.Replace(
+                        snapshot.dressing,
+                        showZoneGizmos: true,
+                        playAudio: audioZonePreviewEnabled);
+                }
+                if (args.SessionChange.RequiresFullProjection
+                    || IsBoundsCommand(args.SessionChange.Command))
+                {
+                    gui.SyncLayoutFields(snapshot, gridSettings, force: true);
+                    gridPresenter.Refresh(snapshot.bounds, gridSettings);
+                }
+                if (args.SessionChange.RequiresFullProjection
+                    || IsOrganizationCommand(args.SessionChange.Command))
+                {
+                    gui.SyncOrganizationFields(snapshot, force: true);
+                }
             }
             catch (LevelLoadException exception)
             {
@@ -524,6 +1156,7 @@ namespace GritGud.Presentation.LevelEditing
 
         private void HandleSelectionChanged()
         {
+            presentationState?.FocusWorldSelection(selection?.Primary);
             RefreshSelectedView();
             if (!previewMode && workspace != null)
             {
@@ -588,7 +1221,31 @@ namespace GritGud.Presentation.LevelEditing
             after.type = type;
             after.localPosition = new Float3Data(x, y, z);
             after.radius = radius;
-            workspace.Execute(new SetInteractionPointCommand(entity.id, before.id, before, after));
+            var commands = new List<ILevelEditCommand>
+            {
+                new SetInteractionPointCommand(entity.id, before.id, before, after),
+            };
+            if (!string.Equals(type, "objective", StringComparison.Ordinal))
+            {
+                LevelScenarioData scenarioBefore = workspace.CreateSnapshot().scenario;
+                LevelScenarioData scenarioAfter = scenarioBefore.DeepCopy();
+                int removed = scenarioAfter.objectives.RemoveAll(objective =>
+                    string.Equals(objective?.entityId, entity.id, StringComparison.Ordinal)
+                    && string.Equals(
+                        objective?.interactionPointId,
+                        before.id,
+                        StringComparison.Ordinal));
+                if (removed > 0)
+                {
+                    commands.Add(new SetScenarioConfigurationCommand(
+                        "Remove incompatible objective link",
+                        scenarioBefore,
+                        scenarioAfter,
+                        new[] { entity.id }));
+                }
+            }
+
+            ExecuteScenarioCommands("Edit interaction point", commands);
             SetStatus("Updated interaction point.");
         }
 
@@ -636,11 +1293,6 @@ namespace GritGud.Presentation.LevelEditing
                 projector?.TryGetEntity(entityId, out selectedView);
             }
 
-            if (selectionOutline != null)
-            {
-                selectionOutline.gameObject.SetActive(selectedView != null && !previewMode);
-            }
-
             if (selectedView != null)
             {
                 SyncInspectorFields(selectedView.ReadTransform());
@@ -649,130 +1301,173 @@ namespace GritGud.Presentation.LevelEditing
 
         private void CreateNewLevel()
         {
-            ReplaceWorkspaceDocument(LevelDocumentFactory.CreateEmpty());
-            SetStatus("Created a new empty level. Choose an archetype to begin placing.");
+            sourceDocument = LevelDocumentFactory.CreateNew();
+            sourceDocumentIsSaved = false;
+            sourceLabel = "new level";
+            ReplaceWorkspaceDocument(sourceDocument.DeepCopy(), isSaved: false);
+            SetStatus("Created a new level with flat terrain covering its bounds.");
         }
 
-        private void ReloadMainLevel()
+        private void ReloadSourceLevel()
         {
-            ReplaceWorkspaceDocument(LoadMainLevel());
-            SetStatus("Reloaded the committed main level.");
+            ReplaceWorkspaceDocument(sourceDocument.DeepCopy(), sourceDocumentIsSaved);
+            SetStatus($"Reloaded {sourceLabel}.");
         }
 
-        private void ReplaceWorkspaceDocument(LevelDocument document)
+        private void ReplaceWorkspaceDocument(LevelDocument document, bool isSaved = true)
         {
             placementTool.SelectArchetype(null);
             toolManager.ActivateDefault();
             selection.Clear();
-            workspace.ReplaceDocument(document);
+            workspace.ReplaceDocument(document, isSaved);
             cameraController.Frame(document.bounds);
+            scenarioActorHandles.Refresh(document);
+            gui.SelectScenarioActor(null);
+            gui.SyncScenarioFields(document, forceLevelIdentity: true);
+            gui.SyncEnvironmentFields(document, force: true);
+            gui.SyncDressingFields(document, force: true);
+            gui.SyncLayoutFields(document, gridSettings, force: true);
+            gui.SyncOrganizationFields(document, force: true);
+        }
+
+        private void RefreshEnvironmentLighting(LevelDocument document)
+        {
+            if (document?.environment == null || suspended)
+                return;
+
+            environmentLighting?.Dispose();
+            environmentLighting = GameplayEnvironmentLighting.Create(
+                transform,
+                document.environment);
+        }
+
+        private void HandleDressingFocusRequested(
+            LevelDressingTargetKind kind,
+            string id) =>
+            gui?.SelectDressingItem(kind, id, workspace?.CreateSnapshot());
+
+        private void HandlePracticalLightFocusRequested(string lightId)
+        {
+            gui?.SelectPracticalLight(lightId, workspace?.CreateSnapshot());
+        }
+
+        private static bool IsEnvironmentCommand(ILevelEditCommand command)
+        {
+            if (command is ILevelEnvironmentEditCommand)
+                return true;
+            if (command is ILevelEditCommandGroup group)
+                return group.Commands.Any(IsEnvironmentCommand);
+            return false;
+        }
+
+        private static bool IsBoundsCommand(ILevelEditCommand command)
+        {
+            if (command is ILevelBoundsEditCommand)
+                return true;
+            if (command is ILevelEditCommandGroup group)
+                return group.Commands.Any(IsBoundsCommand);
+            return false;
+        }
+
+        private static bool IsOrganizationCommand(ILevelEditCommand command)
+        {
+            if (command is ILevelOrganizationEditCommand)
+                return true;
+            if (command is ILevelEditCommandGroup group)
+                return group.Commands.Any(IsOrganizationCommand);
+            return false;
+        }
+
+        private static bool IsDressingCommand(ILevelEditCommand command)
+        {
+            if (command is ILevelDressingEditCommand)
+                return true;
+            if (command is ILevelEditCommandGroup group)
+                return group.Commands.Any(IsDressingCommand);
+            return false;
+        }
+
+        private void HandleGridSettingsChanged()
+        {
+            if (workspace == null || gridPresenter == null || previewMode || suspended)
+                return;
+            gridPresenter.Refresh(workspace.CreateSnapshot().bounds, gridSettings);
+            gui?.SyncLayoutFields(workspace.CreateSnapshot(), gridSettings, force: true);
+        }
+
+        private void ReconcileSelection(LevelDocument document)
+        {
+            if (selection == null || document == null || selection.Targets.Count == 0)
+                return;
+            LevelSelectionTarget[] retained = selection.Targets.Where(target =>
+            {
+                LevelEntity entity = document.entities.FirstOrDefault(candidate => string.Equals(
+                    candidate?.id,
+                    target.EntityId,
+                    StringComparison.Ordinal));
+                if (entity == null)
+                    return false;
+                return (organizationModel == null || organizationModel.CanSelect(entity.id))
+                    && (target.Kind != LevelSelectionKind.InteractionPoint
+                    || entity.interactionPoints.Any(point => string.Equals(
+                        point?.id,
+                        target.ElementId,
+                        StringComparison.Ordinal)));
+            }).ToArray();
+            selection.Set(retained);
+        }
+
+        private void HandleOrganizationViewChanged()
+        {
+            if (workspace == null || organizationModel == null || previewMode || suspended)
+                return;
+            LevelDocument snapshot = workspace.CreateSnapshot();
+            organizationModel.ApplyProjection(projector);
+            ReconcileSelection(snapshot);
+        }
+
+        private void HandleGroupFocusRequested(string groupId)
+        {
+            gui?.SelectEntityGroup(groupId, workspace?.CreateSnapshot());
         }
 
         private void HandleDocumentLoaded(object sender, LevelDocumentLoadedEventArgs args)
         {
-            ReplaceWorkspaceDocument(args.Document);
+            sourceDocument = args.Document.DeepCopy();
+            sourceDocumentIsSaved = args.IsSaved;
+            sourceLabel = args.SourceLabel;
+            ReplaceWorkspaceDocument(sourceDocument.DeepCopy(), args.IsSaved);
             SetStatus($"Loaded level from {args.SourceLabel}.");
-        }
-
-        private LevelDocument LoadMainLevel()
-        {
-            TextAsset level = Resources.Load<TextAsset>(MainLevelResourceName);
-            if (level == null)
-            {
-                throw new InvalidOperationException(
-                    $"Main level '{MainLevelResourceName}' was not found.");
-            }
-
-            return persistence.Deserialize(level.text);
-        }
-
-        private void EnsureOutlines()
-        {
-            var selectionObject = new GameObject("Selection Outline");
-            selectionObject.transform.SetParent(transform, false);
-            selectionOutline = selectionObject.AddComponent<RuntimeBoundsOutline>();
-            selectionOutline.Initialize(new Color(0.2f, 0.8f, 1f));
-            selectionOutline.gameObject.SetActive(false);
-
-            var hoverObject = new GameObject("Hover Outline");
-            hoverObject.transform.SetParent(transform, false);
-            hoverOutline = hoverObject.AddComponent<RuntimeBoundsOutline>();
-            hoverOutline.Initialize(new Color(1f, 0.9f, 0.25f));
-            hoverOutline.gameObject.SetActive(false);
-
-            var placementObject = new GameObject("Placement Outline");
-            placementObject.transform.SetParent(transform, false);
-            placementOutline = placementObject.AddComponent<RuntimeBoundsOutline>();
-            placementOutline.Initialize(new Color(1f, 0.6f, 0.15f));
-            placementOutline.gameObject.SetActive(false);
         }
 
         private void UpdateOutlines()
         {
-            if (selectionOutline != null && selectedView != null && !previewMode)
-            {
-                selectionOutline.gameObject.SetActive(true);
-                selectionOutline.SetBounds(selectedView.GetWorldBounds());
-            }
-
-            UpdateSecondarySelectionOutlines();
-
-            if (placementOutline != null
-                && !previewMode
+            outlinePresenter.PresentSelection(
+                selectedView,
+                selection.Targets,
+                projector,
+                !previewMode);
+            if (!previewMode
                 && toolManager.ActiveTool == placementTool
                 && placementTool.TryGetPreviewBounds(out Bounds previewBounds))
             {
-                placementOutline.gameObject.SetActive(true);
-                placementOutline.SetBounds(previewBounds);
+                outlinePresenter.PresentPlacement(previewBounds);
             }
-            else if (placementOutline != null)
+            else if (!previewMode
+                && toolManager.ActiveTool == spatialPlacementTool
+                && spatialPlacementTool.HasPreview)
             {
-                placementOutline.gameObject.SetActive(false);
+                outlinePresenter.PresentPlacement(spatialPlacementTool.GetPreviewBounds());
             }
-        }
-
-        private void UpdateSecondarySelectionOutlines()
-        {
-            var visibleIds = new HashSet<string>(StringComparer.Ordinal);
-            if (!previewMode)
+            else
             {
-                foreach (LevelSelectionTarget target in selection.Targets.Skip(1))
-                {
-                    if (!visibleIds.Add(target.EntityId)
-                        || !projector.TryGetEntity(target.EntityId, out LevelEntityView view))
-                    {
-                        continue;
-                    }
-
-                    if (!secondarySelectionOutlines.TryGetValue(
-                        target.EntityId,
-                        out RuntimeBoundsOutline outline))
-                    {
-                        var outlineObject = new GameObject("Secondary Selection Outline");
-                        outlineObject.transform.SetParent(transform, false);
-                        outline = outlineObject.AddComponent<RuntimeBoundsOutline>();
-                        outline.Initialize(new Color(0.35f, 1f, 0.65f));
-                        secondarySelectionOutlines.Add(target.EntityId, outline);
-                    }
-
-                    outline.gameObject.SetActive(true);
-                    outline.SetBounds(view.GetWorldBounds());
-                }
-            }
-
-            foreach (KeyValuePair<string, RuntimeBoundsOutline> entry
-                in secondarySelectionOutlines)
-            {
-                if (!visibleIds.Contains(entry.Key))
-                {
-                    entry.Value.gameObject.SetActive(false);
-                }
+                outlinePresenter.PresentPlacement(null);
             }
         }
 
         private void UpdateHover(Vector2 pointerPosition, bool pointerBlocked)
         {
-            if (hoverOutline == null)
+            if (outlinePresenter == null)
             {
                 return;
             }
@@ -782,17 +1477,17 @@ namespace GritGud.Presentation.LevelEditing
                 && toolManager.ActiveTool?.Id == SelectionLevelEditorTool.ToolId;
             if (canHover
                 && sceneQuery.TryPickEntity(pointerPosition, out LevelEntityView view, out _)
+                && organizationModel.CanSelect(view.EntityId)
                 && !selection.Targets.Any(target => string.Equals(
                     target.EntityId,
                     view.EntityId,
                     StringComparison.Ordinal)))
             {
-                hoverOutline.gameObject.SetActive(true);
-                hoverOutline.SetBounds(view.GetWorldBounds());
+                outlinePresenter.PresentHover(view);
                 return;
             }
 
-            hoverOutline.gameObject.SetActive(false);
+            outlinePresenter.PresentHover(null);
         }
 
         private void SyncInspectorFields(LevelTransformData value)
@@ -804,6 +1499,429 @@ namespace GritGud.Presentation.LevelEditing
         {
             statusMessage = message ?? string.Empty;
         }
+
+        void ILevelEditorGuiActions.ReturnToMenu() => GameBootstrap.Instance.ReturnToMenu();
+
+        bool ILevelEditorGuiActions.HasDraft => persistence?.HasDraft ?? false;
+
+        bool ILevelEditorGuiActions.HasCloudDraftContext =>
+            GameBootstrap.Instance?.ActiveCloudDraft != null;
+
+        bool ILevelEditorGuiActions.CloudOperationRunning => cloudOperationRunning;
+
+        int ILevelEditorGuiActions.RecoveryGenerationCount =>
+            LevelEditorPersistenceCoordinator.RecoveryGenerationCount;
+
+        bool ILevelEditorGuiActions.HasRecovery(int generation) =>
+            persistence?.HasRecovery(generation) ?? false;
+
+        bool ILevelEditorGuiActions.UsesBrowserFileDialog =>
+            persistence?.UsesBrowserFileDialog ?? false;
+
+        string ILevelEditorGuiActions.DesktopImportPath
+        {
+            get => persistence?.DesktopImportPath ?? string.Empty;
+            set
+            {
+                if (persistence != null)
+                    persistence.DesktopImportPath = value;
+            }
+        }
+
+        LevelEditorCameraView ILevelEditorGuiActions.CameraView => cameraController.View;
+
+        string ILevelEditorGuiActions.IsolatedGroupId => organizationModel.IsolatedGroupId;
+
+        string ILevelEditorGuiActions.SelectionCategoryFilter =>
+            organizationModel.CategoryFilter;
+
+        string ILevelEditorGuiActions.SelectionGroupFilter => organizationModel.GroupFilter;
+
+        LevelPlayabilityReport ILevelEditorGuiActions.PlayabilityReport =>
+            playabilityAuthoring.Report;
+
+        bool ILevelEditorGuiActions.PlayabilityReportIsStale =>
+            playabilityAuthoring.IsStale;
+
+        bool ILevelEditorGuiActions.SlopeOverlayEnabled =>
+            playabilityAuthoring.SlopeOverlayEnabled;
+
+        bool ILevelEditorGuiActions.AudioZonePreviewEnabled =>
+            audioZonePreviewEnabled;
+
+        bool ILevelEditorGuiActions.PhysicsPlacementRunning => physicsPlacementRunning;
+
+        void ILevelEditorGuiActions.Undo() => workspace.Undo();
+
+        void ILevelEditorGuiActions.Redo() => workspace.Redo();
+
+        void ILevelEditorGuiActions.SaveDraft() => persistence.SaveDraft(workspace);
+
+        async void ILevelEditorGuiActions.SaveToCloud()
+        {
+            GameBootstrap bootstrap = GameBootstrap.Instance;
+            LevelDraftLibraryCoordinator library = bootstrap?.DraftLibrary;
+            if (library == null || workspace == null || cloudOperationRunning)
+            {
+                SetStatus(bootstrap?.Supabase?.Status ?? "Cloud saves are not configured.");
+                return;
+            }
+
+            int generation = sessionGeneration;
+            int savedRevision = workspace.Revision;
+            LevelDocument snapshot = workspace.CreateSnapshot();
+            cloudOperationRunning = true;
+            SetStatus("Saving cloud draft…");
+            try
+            {
+                LevelDraftRecord active = bootstrap.ActiveCloudDraft;
+                if (active == null)
+                {
+                    string name = string.IsNullOrWhiteSpace(snapshot.displayName)
+                        ? "Untitled Level"
+                        : snapshot.displayName;
+                    active = await library.CreateAsync(name, snapshot);
+                    if (generation != sessionGeneration || !sessionReady) return;
+                    bootstrap.AdoptActiveCloudDraft(active);
+                    sourceDocument = snapshot.DeepCopy();
+                    sourceDocumentIsSaved = true;
+                    sourceLabel = "cloud draft: " + active.Summary.Name;
+                }
+                else
+                {
+                    LevelDraftSummary summary = await library.SaveAsync(
+                        active.Summary.Id,
+                        active.Summary.Revision,
+                        snapshot);
+                    if (generation != sessionGeneration || !sessionReady) return;
+                    bootstrap.AdoptActiveCloudDraft(new LevelDraftRecord(summary, snapshot));
+                    sourceDocument = snapshot.DeepCopy();
+                    sourceDocumentIsSaved = true;
+                }
+
+                if (workspace.Revision == savedRevision) workspace.MarkSaved();
+                SetStatus("Saved cloud draft.");
+            }
+            catch (Exception exception)
+            {
+                if (generation == sessionGeneration && sessionReady)
+                    SetStatus(exception.Message);
+            }
+            finally
+            {
+                if (generation == sessionGeneration) cloudOperationRunning = false;
+            }
+        }
+
+        async void ILevelEditorGuiActions.LoadFromCloud()
+        {
+            GameBootstrap bootstrap = GameBootstrap.Instance;
+            LevelDraftRecord active = bootstrap?.ActiveCloudDraft;
+            LevelDraftLibraryCoordinator library = bootstrap?.DraftLibrary;
+            if (active == null || library == null || cloudOperationRunning)
+            {
+                SetStatus("Open a cloud draft before loading it.");
+                return;
+            }
+
+            int generation = sessionGeneration;
+            cloudOperationRunning = true;
+            SetStatus("Loading cloud draft…");
+            try
+            {
+                LevelDraftRecord loaded = await library.LoadAsync(active.Summary.Id);
+                if (generation != sessionGeneration || !sessionReady) return;
+                LevelDocument document = loaded.CreateDocumentSnapshot();
+                bootstrap.AdoptActiveCloudDraft(loaded);
+                sourceDocument = document.DeepCopy();
+                sourceDocumentIsSaved = true;
+                sourceLabel = "cloud draft: " + loaded.Summary.Name;
+                ReplaceWorkspaceDocument(document, isSaved: true);
+                SetStatus("Loaded cloud draft.");
+            }
+            catch (Exception exception)
+            {
+                if (generation == sessionGeneration && sessionReady)
+                    SetStatus(exception.Message);
+            }
+            finally
+            {
+                if (generation == sessionGeneration) cloudOperationRunning = false;
+            }
+        }
+
+        void ILevelEditorGuiActions.LoadDraft() => persistence.LoadDraft();
+
+        void ILevelEditorGuiActions.LoadRecovery(int generation) =>
+            persistence.LoadRecovery(generation);
+
+        void ILevelEditorGuiActions.Export() => persistence.Export(workspace);
+
+        void ILevelEditorGuiActions.RequestImport() => persistence.RequestImport();
+
+        void ILevelEditorGuiActions.TogglePreview() => TogglePreview();
+
+        void ILevelEditorGuiActions.StartTestPlay() => StartTestPlay();
+
+        void ILevelEditorGuiActions.CreateNewLevel() => CreateNewLevel();
+
+        void ILevelEditorGuiActions.ReloadSourceLevel() => ReloadSourceLevel();
+
+        void ILevelEditorGuiActions.FrameSelection() => FrameSelection();
+
+        void ILevelEditorGuiActions.FrameLevel() => FrameLevel();
+
+        void ILevelEditorGuiActions.FocusEntity(string entityId) =>
+            FocusEntity(entityId);
+
+        void ILevelEditorGuiActions.ApplyLevelDisplayName(string displayName) =>
+            ApplyLevelDisplayName(displayName);
+
+        void ILevelEditorGuiActions.ApplyLevelBounds(LevelBoundsAuthoringRequest request) =>
+            layoutAuthoring.ApplyBounds(request);
+
+        void ILevelEditorGuiActions.ConfigureGrid(LevelGridAuthoringRequest request) =>
+            layoutAuthoring.ConfigureGrid(request);
+
+        void ILevelEditorGuiActions.SetCameraView(LevelEditorCameraView view) =>
+            layoutAuthoring.SetCameraView(view);
+
+        void ILevelEditorGuiActions.DuplicateArray(LevelArrayAuthoringRequest request) =>
+            layoutAuthoring.DuplicateArray(request);
+
+        void ILevelEditorGuiActions.CreateEntityGroup(string displayName) =>
+            organizationAuthoring.CreateGroup(displayName);
+
+        void ILevelEditorGuiActions.RenameEntityGroup(string groupId, string displayName) =>
+            organizationAuthoring.RenameGroup(groupId, displayName);
+
+        void ILevelEditorGuiActions.SetEntityGroupLocked(string groupId, bool locked) =>
+            organizationAuthoring.SetGroupLocked(groupId, locked);
+
+        void ILevelEditorGuiActions.SetEntityGroupHidden(string groupId, bool hidden) =>
+            organizationAuthoring.SetGroupHidden(groupId, hidden);
+
+        void ILevelEditorGuiActions.AssignSelectionToGroup(string groupId) =>
+            organizationAuthoring.AssignSelection(groupId);
+
+        void ILevelEditorGuiActions.DeleteEntityGroup(string groupId) =>
+            organizationAuthoring.DeleteGroup(groupId);
+
+        void ILevelEditorGuiActions.IsolateEntityGroup(string groupId) =>
+            organizationAuthoring.IsolateGroup(groupId);
+
+        void ILevelEditorGuiActions.SetSelectionCategoryFilter(string category) =>
+            organizationAuthoring.SetCategoryFilter(category);
+
+        void ILevelEditorGuiActions.SetSelectionGroupFilter(string groupId) =>
+            organizationAuthoring.SetGroupFilter(groupId);
+
+        void ILevelEditorGuiActions.SelectMatchingEntities() =>
+            organizationAuthoring.SelectMatching();
+
+        void ILevelEditorGuiActions.RunPlayabilityDiagnostics() =>
+            playabilityAuthoring.Run();
+
+        void ILevelEditorGuiActions.SetSlopeOverlayEnabled(bool enabled) =>
+            playabilityAuthoring.SetSlopeOverlay(enabled);
+
+        void ILevelEditorGuiActions.ApplyEnvironment(
+            LevelEnvironmentAuthoringRequest request) =>
+            environmentAuthoring.ApplyEnvironment(request);
+
+        void ILevelEditorGuiActions.AddPracticalLight() =>
+            environmentAuthoring.AddPracticalLight();
+
+        void ILevelEditorGuiActions.QueueSpatialPlacement(LevelSpatialPlacementKind kind)
+        {
+            spatialPlacementTool.Queue(kind);
+            toolManager.Activate(SpatialRecordPlacementTool.ToolId);
+        }
+
+        void ILevelEditorGuiActions.QueueSpatialRelocation(
+            LevelSpatialPlacementKind kind,
+            string targetId)
+        {
+            spatialPlacementTool.Queue(kind, targetId);
+            toolManager.Activate(SpatialRecordPlacementTool.ToolId);
+        }
+
+        void ILevelEditorGuiActions.ApplyPracticalLight(
+            LevelPracticalLightAuthoringRequest request) =>
+            environmentAuthoring.ApplyPracticalLight(request);
+
+        void ILevelEditorGuiActions.DeletePracticalLight(string lightId) =>
+            environmentAuthoring.DeletePracticalLight(lightId);
+
+        void ILevelEditorGuiActions.AddDecal() => dressingAuthoring.AddDecal();
+
+        void ILevelEditorGuiActions.ApplyDecal(LevelDecalAuthoringRequest request) =>
+            dressingAuthoring.ApplyDecal(request);
+
+        void ILevelEditorGuiActions.DeleteDecal(string decalId) =>
+            dressingAuthoring.DeleteDecal(decalId);
+
+        void ILevelEditorGuiActions.AddAmbientVfx() =>
+            dressingAuthoring.AddAmbientVfx();
+
+        void ILevelEditorGuiActions.ApplyAmbientVfx(
+            LevelAmbientVfxAuthoringRequest request) =>
+            dressingAuthoring.ApplyAmbientVfx(request);
+
+        void ILevelEditorGuiActions.DeleteAmbientVfx(string effectId) =>
+            dressingAuthoring.DeleteAmbientVfx(effectId);
+
+        void ILevelEditorGuiActions.AddAudioZone() => dressingAuthoring.AddAudioZone();
+
+        void ILevelEditorGuiActions.ApplyAudioZone(LevelAudioZoneAuthoringRequest request) =>
+            dressingAuthoring.ApplyAudioZone(request);
+
+        void ILevelEditorGuiActions.DeleteAudioZone(string zoneId) =>
+            dressingAuthoring.DeleteAudioZone(zoneId);
+
+        void ILevelEditorGuiActions.SetAudioZonePreviewEnabled(bool enabled)
+        {
+            audioZonePreviewEnabled = enabled;
+            dressingProjector?.SetEditorPresentation(
+                showZoneGizmos: !previewMode,
+                playAudio: previewMode || enabled);
+            SetStatus(enabled
+                ? "Ambient audio preview enabled."
+                : "Ambient audio preview muted.");
+        }
+
+        void ILevelEditorGuiActions.ApplyEntityTransform(
+            string x,
+            string y,
+            string z,
+            string pitch,
+            string yaw,
+            string roll) => ApplyInspectorTransform(x, y, z, pitch, yaw, roll);
+
+        void ILevelEditorGuiActions.DropAndSettleSelection(
+            string dropHeight,
+            bool keepUpright) => DropAndSettleSelection(dropHeight, keepUpright);
+
+        void ILevelEditorGuiActions.CancelPhysicsPlacement() =>
+            cancelPhysicsPlacement = true;
+
+        void ILevelEditorGuiActions.SetEntityRotationPivot(float normalizedX, float normalizedZ) =>
+            SetEntityRotationPivot(normalizedX, normalizedZ);
+
+        void ILevelEditorGuiActions.ResetEntityRotationPivot() =>
+            ResetEntityRotationPivot();
+
+        void ILevelEditorGuiActions.ApplyPlayerStart(
+            string x,
+            string y,
+            string z,
+            string yaw) => scenarioAuthoring.ApplyPlayerStart(x, y, z, yaw);
+
+        void ILevelEditorGuiActions.AddInteractionPoint() => AddInteractionPoint();
+
+        void ILevelEditorGuiActions.ApplyInteractionPoint(
+            string type,
+            string x,
+            string y,
+            string z,
+            string radius) => ApplyInteractionPoint(type, x, y, z, radius);
+
+        void ILevelEditorGuiActions.DeleteInteractionPoint() => DeleteInteractionPoint();
+
+        void ILevelEditorGuiActions.ApplyDestructibleDefaults(
+            string enabled,
+            string state,
+            string integrity) => ApplyDestructibleDefaults(enabled, state, integrity);
+
+        void ILevelEditorGuiActions.AddScenarioActor(string templateId) =>
+            scenarioAuthoring.AddActor(templateId);
+
+        void ILevelEditorGuiActions.ApplyScenarioActorCharacter(
+            string actorId,
+            string characterId) =>
+            scenarioAuthoring.ApplyActorCharacter(actorId, characterId);
+
+        void ILevelEditorGuiActions.ApplyScenarioActor(
+            string actorId,
+            string x,
+            string y,
+            string z,
+            string yaw,
+            bool playerControlled,
+            bool initiallySelected,
+            bool primaryTarget) => scenarioAuthoring.ApplyActor(
+                actorId,
+                x,
+                y,
+                z,
+                yaw,
+                playerControlled,
+                initiallySelected,
+                primaryTarget);
+
+        void ILevelEditorGuiActions.DeleteScenarioActor(string actorId) =>
+            scenarioAuthoring.DeleteActor(actorId);
+
+        void ILevelEditorGuiActions.PlaceScenarioActorAtView(string actorId) =>
+            scenarioAuthoring.PlaceActorAtView(actorId);
+
+        void ILevelEditorGuiActions.ApplyScenarioProp(
+            string entityId,
+            bool enabled,
+            string mass,
+            string sizeClass,
+            bool startsEncounter) => scenarioAuthoring.ApplyProp(
+                entityId,
+                enabled,
+                mass,
+                sizeClass,
+                startsEncounter);
+
+        void ILevelEditorGuiActions.ApplyScenarioObjective(
+            string entityId,
+            string pointId,
+            bool enabled,
+            string displayName,
+            string activeText,
+            string completedText,
+            string actionPointCost,
+            string movementOpportunityCost,
+            string mobility) => scenarioAuthoring.ApplyObjective(
+                entityId,
+                pointId,
+                enabled,
+                displayName,
+                activeText,
+                completedText,
+                actionPointCost,
+                movementOpportunityCost,
+                mobility);
+
+        void ILevelEditorGuiActions.ApplyScenarioVehicle(
+            string entityId,
+            bool enabled,
+            string maximumSpeed,
+            string acceleration,
+            string braking,
+            string lowSpeedTurn,
+            string highSpeedTurn,
+            string baseRadius,
+            string radiusFactor,
+            string startingSpeed,
+            string occupantActorId,
+            bool startsEncounter) => scenarioAuthoring.ApplyVehicle(
+                entityId,
+                enabled,
+                maximumSpeed,
+                acceleration,
+                braking,
+                lowSpeedTurn,
+                highSpeedTurn,
+                baseRadius,
+                radiusFactor,
+                startingSpeed,
+                occupantActorId,
+                startsEncounter);
 
         private static bool TryParse(string text, out float value)
         {

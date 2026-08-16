@@ -16,6 +16,7 @@ namespace GritGud.Presentation.Tests
             "GritGud/RuntimeOutline",
             "GritGud/EmissiveSurface",
             "GritGud/TacticalWireframe",
+            "GritGud/Portable Gradient Skybox",
         };
 
         [Test]

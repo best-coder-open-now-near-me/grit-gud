@@ -23,6 +23,37 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(session.InitiativeOrder,
                 Is.EqualTo(new[] { "alpha", "bravo", "charlie" }));
             Assert.That(session.ActiveActorId, Is.EqualTo("alpha"));
+            Assert.That(session.InitiativeResults, Has.Count.EqualTo(3));
+            Assert.That(session.InitiativeResults[0].ActorId, Is.EqualTo("alpha"));
+            Assert.That(session.InitiativeResults[0].Dexterity, Is.EqualTo(10));
+            Assert.That(session.InitiativeResults[0].ParticipantCount, Is.EqualTo(3));
+            Assert.That(session.InitiativeResults[0].ReactionAdvance, Is.EqualTo(3));
+
+            GameplaySession repeated = CreateSession(
+                CreateActor("bravo", initiative: 10),
+                CreateActor("charlie", initiative: 5),
+                CreateActor("alpha", initiative: 10));
+            Assert.That(repeated.InitiativeOrder, Is.EqualTo(session.InitiativeOrder));
+            Assert.That(repeated.InitiativeResults[0].ReactionAdvance,
+                Is.EqualTo(session.InitiativeResults[0].ReactionAdvance));
+        }
+
+        [Test]
+        public void InitiativeDiagnosticExplainsReactionAdvanceAndEqualTurns()
+        {
+            GameplaySession session = CreateSession(
+                CreateActor("bravo", initiative: 10),
+                CreateActor("alpha", initiative: 10));
+
+            GameplayDiagnosticProjection diagnostic =
+                GameplayCombatDiagnosticFormatter.FormatInitiative(session);
+
+            Assert.That(diagnostic.Title, Is.EqualTo("Initiative order"));
+            Assert.That(diagnostic.Lines, Has.Count.EqualTo(3));
+            StringAssert.Contains("DEX 10 with 2 combatants", diagnostic.Lines[0]);
+            StringAssert.Contains("advance 2", diagnostic.Lines[0]);
+            StringAssert.Contains("position 1", diagnostic.Lines[0]);
+            StringAssert.Contains("repeat this order", diagnostic.Lines[2]);
         }
 
         [Test]
@@ -464,7 +495,7 @@ namespace GritGud.Domain.Tests.Gameplay
                 new ScenarioTimingDefinition(1.25f),
                 actors,
                 new[] { objective });
-            return new GameplaySession(scenario);
+            return new GameplaySession(scenario, scenarioSeed: 42u);
         }
 
         private static ScenarioActorDefinition CreateActor(

@@ -20,6 +20,7 @@ namespace GritGud.Presentation.Gameplay
         private GameplayWorldRegistry worldRegistry;
         private ThirdPersonMotor player;
         private GameplayEnvironmentLighting environmentLighting;
+        private LevelDressingProjector dressingProjector;
         private GameplayEnvironmentStyle environmentStyle;
         private GameplayPostProcessing postProcessing;
         private GameplayVisualTheme visualTheme;
@@ -28,6 +29,8 @@ namespace GritGud.Presentation.Gameplay
         private GameplayInputController inputController;
         private GameplayHud hud;
         private GameplayPartyHud partyHud;
+        private GameplayTurnReplayHud turnReplayHud;
+        private GameplayTurnReplayWorldPresenter turnReplayWorldPresenter;
         private GameplayDialogueDrawer dialogueDrawer;
         private GameplaySessionPresenter sessionPresenter;
         private TurnMovementController turnMovementController;
@@ -80,210 +83,102 @@ namespace GritGud.Presentation.Gameplay
 
         private void EnsureDependencies()
         {
-            inputController = GetComponent<GameplayInputController>();
-            if (inputController == null)
-            {
-                inputController = gameObject.AddComponent<GameplayInputController>();
-            }
-
-            hud = GetComponent<GameplayHud>();
-            if (hud == null)
-            {
-                hud = gameObject.AddComponent<GameplayHud>();
-            }
-
-            partyHud = GetComponent<GameplayPartyHud>();
-            if (partyHud == null)
-            {
-                partyHud = gameObject.AddComponent<GameplayPartyHud>();
-            }
-
-            dialogueDrawer = GetComponent<GameplayDialogueDrawer>();
-            if (dialogueDrawer == null)
-            {
-                dialogueDrawer = gameObject.AddComponent<GameplayDialogueDrawer>();
-            }
-
-            sessionPresenter = GetComponent<GameplaySessionPresenter>();
-            if (sessionPresenter == null)
-            {
-                sessionPresenter = gameObject.AddComponent<GameplaySessionPresenter>();
-            }
-
-            turnMovementController = GetComponent<TurnMovementController>();
-            if (turnMovementController == null)
-            {
-                turnMovementController = gameObject.AddComponent<TurnMovementController>();
-            }
-
-            actionController = GetComponent<GameplayActionController>();
-            if (actionController == null)
-            {
-                actionController = gameObject.AddComponent<GameplayActionController>();
-            }
-
-            attackController = GetComponent<GameplayAttackController>();
-            if (attackController == null)
-            {
-                attackController = gameObject.AddComponent<GameplayAttackController>();
-            }
-
-            enemyController = GetComponent<GameplayEnemyController>();
-            if (enemyController == null)
-            {
-                enemyController = gameObject.AddComponent<GameplayEnemyController>();
-            }
-
-            equipmentController = GetComponent<GameplayEquipmentController>();
-            if (equipmentController == null)
-            {
-                equipmentController =
-                    gameObject.AddComponent<GameplayEquipmentController>();
-            }
-
-            hotbarController = GetComponent<GameplayHotbarController>();
-            if (hotbarController == null)
-            {
-                hotbarController =
-                    gameObject.AddComponent<GameplayHotbarController>();
-            }
-
-            projectileController = GetComponent<GameplayProjectileController>();
-            if (projectileController == null)
-            {
-                projectileController =
-                    gameObject.AddComponent<GameplayProjectileController>();
-            }
-
-            thrownExplosiveController = GetComponent<GameplayThrownExplosiveController>();
-            if (thrownExplosiveController == null)
-            {
-                thrownExplosiveController =
-                    gameObject.AddComponent<GameplayThrownExplosiveController>();
-            }
-
-            smokeFieldController = GetComponent<GameplaySmokeFieldController>();
-            if (smokeFieldController == null)
-            {
-                smokeFieldController =
-                    gameObject.AddComponent<GameplaySmokeFieldController>();
-            }
-
+            inputController = GetOrAddComponent<GameplayInputController>();
+            hud = GetOrAddComponent<GameplayHud>();
+            partyHud = GetOrAddComponent<GameplayPartyHud>();
+            turnReplayHud = GetOrAddComponent<GameplayTurnReplayHud>();
+            turnReplayWorldPresenter ??= new GameplayTurnReplayWorldPresenter();
+            dialogueDrawer = GetOrAddComponent<GameplayDialogueDrawer>();
+            sessionPresenter = GetOrAddComponent<GameplaySessionPresenter>();
+            turnMovementController = GetOrAddComponent<TurnMovementController>();
+            actionController = GetOrAddComponent<GameplayActionController>();
+            attackController = GetOrAddComponent<GameplayAttackController>();
+            enemyController = GetOrAddComponent<GameplayEnemyController>();
+            equipmentController = GetOrAddComponent<GameplayEquipmentController>();
+            hotbarController = GetOrAddComponent<GameplayHotbarController>();
+            projectileController = GetOrAddComponent<GameplayProjectileController>();
+            thrownExplosiveController =
+                GetOrAddComponent<GameplayThrownExplosiveController>();
+            smokeFieldController = GetOrAddComponent<GameplaySmokeFieldController>();
             weaponTargetingController =
-                GetComponent<GameplayWeaponTargetingController>();
-            if (weaponTargetingController == null)
-            {
-                weaponTargetingController =
-                    gameObject.AddComponent<GameplayWeaponTargetingController>();
-            }
-
+                GetOrAddComponent<GameplayWeaponTargetingController>();
             targetingCursorPresenter =
-                GetComponent<GameplayTargetingCursorPresenter>();
-            if (targetingCursorPresenter == null)
-            {
-                targetingCursorPresenter =
-                    gameObject.AddComponent<GameplayTargetingCursorPresenter>();
-            }
-
-            objectivePresenter = GetComponent<GameplayObjectivePresenter>();
-            if (objectivePresenter == null)
-            {
-                objectivePresenter = gameObject.AddComponent<GameplayObjectivePresenter>();
-            }
-
-            targetAcquisitionPresenter = GetComponent<TargetAcquisitionPresenter>();
-            if (targetAcquisitionPresenter == null)
-            {
-                targetAcquisitionPresenter =
-                    gameObject.AddComponent<TargetAcquisitionPresenter>();
-            }
-
-            destructibleController = GetComponent<GameplayDestructibleController>();
-            if (destructibleController == null)
-            {
-                destructibleController = gameObject.AddComponent<GameplayDestructibleController>();
-            }
-
-            displacementController = GetComponent<GameplayDisplacementController>();
-            if (displacementController == null)
-            {
-                displacementController = gameObject.AddComponent<GameplayDisplacementController>();
-            }
-
-            vehicleController = GetComponent<GameplayVehicleController>();
-            if (vehicleController == null)
-            {
-                vehicleController = gameObject.AddComponent<GameplayVehicleController>();
-            }
-
+                GetOrAddComponent<GameplayTargetingCursorPresenter>();
+            objectivePresenter = GetOrAddComponent<GameplayObjectivePresenter>();
+            targetAcquisitionPresenter =
+                GetOrAddComponent<TargetAcquisitionPresenter>();
+            destructibleController =
+                GetOrAddComponent<GameplayDestructibleController>();
+            displacementController =
+                GetOrAddComponent<GameplayDisplacementController>();
+            vehicleController = GetOrAddComponent<GameplayVehicleController>();
             characterGroundingPresenter =
-                GetComponent<GameplayCharacterGroundingPresenter>();
-            if (characterGroundingPresenter == null)
-            {
-                characterGroundingPresenter =
-                    gameObject.AddComponent<GameplayCharacterGroundingPresenter>();
-            }
-
+                GetOrAddComponent<GameplayCharacterGroundingPresenter>();
             tacticalTransitionPresenter =
-                GetComponent<GameplayTacticalTransitionPresenter>();
-            if (tacticalTransitionPresenter == null)
-            {
-                tacticalTransitionPresenter =
-                    gameObject.AddComponent<GameplayTacticalTransitionPresenter>();
-            }
+                GetOrAddComponent<GameplayTacticalTransitionPresenter>();
+            surfaceImpactPresenter =
+                GetOrAddComponent<GameplaySurfaceImpactPresenter>();
+            ResetPresentationBindings();
+        }
 
-            surfaceImpactPresenter = GetComponent<GameplaySurfaceImpactPresenter>();
-            if (surfaceImpactPresenter == null)
-            {
-                surfaceImpactPresenter =
-                    gameObject.AddComponent<GameplaySurfaceImpactPresenter>();
-            }
+        private T GetOrAddComponent<T>() where T : Component
+        {
+            T component = GetComponent<T>();
+            return component != null ? component : gameObject.AddComponent<T>();
+        }
 
-            inputController.End();
-            hud.Hide();
-            partyHud.Unbind();
-            hud.UnbindSession();
-            hud.UnbindTurnMovement();
-            hud.UnbindGameplayActions();
-            hud.UnbindGameplayAttack();
-            hud.UnbindGameplayEquipment();
-            hud.UnbindGameplayHotbar();
-            hud.UnbindGameplayConsumables();
-            hud.UnbindGameplayWeaponTargeting();
-            hud.UnbindGameplayProjectile();
-            hud.UnbindGameplayDisplacement();
-            dialogueDrawer.Hide();
-            dialogueDrawer.Unbind();
-            turnMovementController.Unbind();
-            actionController.Unbind();
-            enemyController.Unbind();
-            partyPresentation?.Dispose();
-            partyPresentation = null;
-            partyControl?.Dispose();
-            partyControl = null;
-            partyProgression = null;
-            weaponTargetingController.Unbind();
-            targetingCursorPresenter.Unbind();
-            attackController.Unbind();
-            equipmentController.Unbind();
-            hotbarController.Unbind();
-            projectileController.Unbind();
-            consumableController?.CancelPending();
-            consumableController = null;
-            thrownExplosiveController.Unbind();
-            objectivePresenter.Unbind();
-            targetAcquisitionPresenter.Unbind();
-            destructibleController.Unbind();
-            displacementController.Unbind();
-            vehicleController.Unbind();
-            characterGroundingPresenter.Unbind();
-            tacticalTransitionPresenter.Unbind();
-            surfaceImpactPresenter.Unbind();
+        private void ResetPresentationBindings()
+        {
+            inputController?.End();
+            hud?.Hide();
+            partyHud?.Unbind();
+            turnReplayHud?.Unbind();
+            turnReplayWorldPresenter?.Dispose();
+            hud?.UnbindSession();
+            hud?.UnbindTurnMovement();
+            hud?.UnbindGameplayActions();
+            hud?.UnbindGameplayAttack();
+            hud?.UnbindGameplayEquipment();
+            hud?.UnbindGameplayHotbar();
+            hud?.UnbindGameplayConsumables();
+            hud?.UnbindGameplayWeaponTargeting();
+            hud?.UnbindGameplayProjectile();
+            hud?.UnbindGameplayDisplacement();
+            hud?.UnbindInputSource();
+            hud?.UnbindTurnModeToggle();
+            hud?.UnbindBugReportExport();
+            dialogueDrawer?.Hide();
+            dialogueDrawer?.Unbind();
+            turnMovementController?.Unbind();
+            actionController?.Unbind();
+            enemyController?.Unbind();
+            surfaceImpactPresenter?.Unbind();
+            tacticalTransitionPresenter?.Unbind();
+            characterGroundingPresenter?.Unbind();
+            weaponTargetingController?.Unbind();
+            targetingCursorPresenter?.Unbind();
+            attackController?.Unbind();
+            equipmentController?.Unbind();
+            hotbarController?.Unbind();
+            projectileController?.Unbind();
+            thrownExplosiveController?.Unbind();
+            smokeFieldController?.Unbind();
+            objectivePresenter?.Unbind();
+            targetAcquisitionPresenter?.Unbind();
+            destructibleController?.Unbind();
+            displacementController?.Unbind();
+            vehicleController?.Unbind();
+            sessionPresenter?.Unbind();
         }
 
         public void Begin()
         {
             Begin(GameplayContentLoader.LoadDefault());
+        }
+
+        public void BeginCommitted(LevelDocument level)
+        {
+            Begin(GameplayContentLoader.LoadCommitted(level));
         }
 
         public void BeginSandbox(LevelDocument level)
@@ -294,7 +189,27 @@ namespace GritGud.Presentation.Gameplay
         private void Begin(GameplayContentPackage initialContent)
         {
             EndSession();
-            EnsureDependencies();
+            try
+            {
+                EnsureDependencies();
+                RequireBootstrap();
+                enabled = true;
+                content = initialContent
+                    ?? throw new ArgumentNullException(nameof(initialContent));
+                GameplayWorldStart worldStart = BuildWorld();
+                GameplaySession session = BuildSession(worldStart);
+                BindGameplaySystems(session, worldStart);
+                ShowGameplayInterface(session);
+            }
+            catch
+            {
+                EndSession();
+                throw;
+            }
+        }
+
+        private void RequireBootstrap()
+        {
             GameBootstrap bootstrap = GameBootstrap.Instance;
             if (bootstrap == null)
             {
@@ -306,19 +221,23 @@ namespace GritGud.Presentation.Gameplay
                 throw new InvalidOperationException(
                     "Gameplay must be hosted by the application bootstrap.");
             }
+        }
 
-            enabled = true;
-            content = initialContent ?? throw new ArgumentNullException(nameof(initialContent));
+        private GameplayWorldStart BuildWorld()
+        {
             levelWorld = new LevelLoader(content.Archetypes).Load(content.Level);
             visualTheme = GameplayVisualTheme.LoadDefault();
             surfacePresentationCatalog = SurfacePresentationCatalog.LoadDefault();
-            LevelLightingCatalog lightingCatalog = LevelLightingCatalog.LoadDefault();
-            LevelLightingProfile lightingProfile = content.IsSandbox
-                ? lightingCatalog.GetAny()
-                : lightingCatalog.Get(content.Level.levelId);
             environmentLighting = GameplayEnvironmentLighting.Create(
                 levelWorld.Root.transform,
-                lightingProfile);
+                content.Level.environment);
+            dressingProjector = new LevelDressingProjector(
+                levelWorld.Root.transform,
+                LevelDressingCatalog.LoadDefault());
+            dressingProjector.Replace(
+                content.Level.dressing,
+                showZoneGizmos: false,
+                playAudio: true);
             environmentStyle = GameplayEnvironmentStyle.Create(
                 levelWorld.Root.transform,
                 visualTheme,
@@ -336,7 +255,9 @@ namespace GritGud.Presentation.Gameplay
             {
                 GameObject actorRoot = GameplayActorFactory.CreateActor(
                     actorDefinition,
-                    content.ActorPresentations);
+                    content.ActorPresentations,
+                    content.CharacterAppearances,
+                    content.Characters);
                 Vector3 authoredPosition = actorRoot.transform.position;
                 GameplayGroundPlacement.PlaceOnGround(
                     actorRoot.transform,
@@ -372,7 +293,19 @@ namespace GritGud.Presentation.Gameplay
                 GameplayActorView partyActor = worldRegistry.GetActor(partyActorId);
                 partyActor.Motor.SetRespawnPoint(partyActor.Transform.position);
             }
-            var session = new GameplaySession(scenarioAssembly.Scenario, journal);
+
+            return new GameplayWorldStart(
+                journal,
+                initiallySelectedActorId,
+                movementInput);
+        }
+
+        private GameplaySession BuildSession(GameplayWorldStart worldStart)
+        {
+            var session = new GameplaySession(
+                scenarioAssembly.Scenario,
+                worldStart.Journal,
+                scenarioAssembly.RandomSeed);
             partyControl = new GameplayPartyControlSession(session);
             partyProgression = new GameplayPartyProgressionSession(session);
             smokeFieldSession = new GameplaySmokeFieldSession(session);
@@ -391,21 +324,41 @@ namespace GritGud.Presentation.Gameplay
             }
             sessionPresenter.Bind(
                 session,
-                movementInput,
+                worldStart.MovementInput,
                 player.transform,
-                initiallySelectedActorId);
+                worldStart.InitiallySelectedActorId);
             hud.BindSession(
                 session,
-                initiallySelectedActorId,
+                worldStart.InitiallySelectedActorId,
                 scenarioAssembly);
             dialogueLog = new GameplayDialogueLog();
+            dialogueLog.AppendCombatDiagnostic(
+                GameplayCombatDiagnosticFormatter.FormatInitiative(session));
             dialogueDrawer.Bind(dialogueLog, ExportDialogue);
             dialogueDrawer.Show();
 
             cameraRig = GameplayCameraRig.Create(
                 player.transform,
-                movementInput,
+                worldStart.MovementInput,
                 inputController);
+
+            return session;
+        }
+
+        private void BindGameplaySystems(
+            GameplaySession session,
+            GameplayWorldStart worldStart)
+        {
+            string initiallySelectedActorId = worldStart.InitiallySelectedActorId;
+            uint attackRandomSeed = GameplayRandomStreams.DeriveSeed(
+                scenarioAssembly.RandomSeed,
+                GameplayRandomStreams.AttackResolution);
+            uint displacementRandomSeed = GameplayRandomStreams.DeriveSeed(
+                scenarioAssembly.RandomSeed,
+                GameplayRandomStreams.DisplacementControl);
+            uint thrownExplosiveRandomSeed = GameplayRandomStreams.DeriveSeed(
+                scenarioAssembly.RandomSeed,
+                GameplayRandomStreams.ThrownExplosiveUncertainty);
             targetAcquisitionPresenter.Bind(
                 session,
                 worldRegistry,
@@ -419,12 +372,13 @@ namespace GritGud.Presentation.Gameplay
                 levelWorld,
                 worldRegistry,
                 scenarioAssembly,
+                displacementRandomSeed,
                 targetAcquisitionPresenter,
                 dialogueLog,
                 sessionPresenter.TryBeginEncounterFromAction);
             turnMovementController.Bind(
                 session,
-                movementInput,
+                worldStart.MovementInput,
                 inputController,
                 player,
                 initiallySelectedActorId);
@@ -442,7 +396,7 @@ namespace GritGud.Presentation.Gameplay
                 targetAcquisitionPresenter,
                 dialogueLog,
                 initiallySelectedActorId,
-                scenarioAssembly.RandomSeed,
+                attackRandomSeed,
                 sessionPresenter.TryBeginEncounterFromAction);
             surfaceImpactPresenter.Bind(
                 attackController,
@@ -484,7 +438,7 @@ namespace GritGud.Presentation.Gameplay
                 targetAcquisitionPresenter,
                 dialogueLog,
                 initiallySelectedActorId,
-                scenarioAssembly.RandomSeed,
+                thrownExplosiveRandomSeed,
                 sessionPresenter.TryBeginEncounterFromAction,
                 smokeFieldSession: smokeFieldSession);
             consumableController = new GameplayConsumableController(
@@ -550,6 +504,10 @@ namespace GritGud.Presentation.Gameplay
                     session,
                     scenarioAssembly.PrimaryObjectiveId);
             }
+        }
+
+        private void ShowGameplayInterface(GameplaySession session)
+        {
             hud.BindGameplayActions(actionController);
             hud.BindGameplayAttack(attackController);
             hud.BindGameplayEquipment(equipmentController);
@@ -563,39 +521,51 @@ namespace GritGud.Presentation.Gameplay
             Action toggleTurnMode = () =>
                 HandleGameplayControl(GameplayControl.ToggleTurnMode);
             inputController.Begin(HandleGameplayControl);
-            partyHud.Bind(session, partyControl, inputController);
+            turnReplayHud.Bind(session, partyControl);
+            turnReplayWorldPresenter.Bind(
+                session,
+                worldRegistry,
+                inputController,
+                turnReplayHud);
+            partyHud.Bind(
+                session,
+                partyControl,
+                inputController,
+                () => turnReplayHud.IsAvailable,
+                turnReplayHud.Toggle);
             hud.BindInputSource(inputController);
             hud.BindTurnModeToggle(toggleTurnMode);
             hud.BindBugReportExport(ExportBugReport);
             hud.Show();
         }
 
+        private readonly struct GameplayWorldStart
+        {
+            public GameplayWorldStart(
+                GameplayJournal journal,
+                string initiallySelectedActorId,
+                ExplorationMovementInput movementInput)
+            {
+                Journal = journal ?? throw new ArgumentNullException(nameof(journal));
+                InitiallySelectedActorId = string.IsNullOrWhiteSpace(initiallySelectedActorId)
+                    ? throw new ArgumentException(
+                        "An initially selected actor is required.",
+                        nameof(initiallySelectedActorId))
+                    : initiallySelectedActorId;
+                MovementInput = movementInput
+                    ?? throw new ArgumentNullException(nameof(movementInput));
+            }
+
+            public GameplayJournal Journal { get; }
+
+            public string InitiallySelectedActorId { get; }
+
+            public ExplorationMovementInput MovementInput { get; }
+        }
+
         public void EndSession()
         {
-            inputController?.End();
-            hud?.Hide();
-            partyHud?.Unbind();
-            hud?.UnbindSession();
-            hud?.UnbindTurnMovement();
-            hud?.UnbindGameplayActions();
-            hud?.UnbindGameplayAttack();
-            hud?.UnbindGameplayEquipment();
-            hud?.UnbindGameplayHotbar();
-            hud?.UnbindGameplayConsumables();
-            hud?.UnbindGameplayWeaponTargeting();
-            hud?.UnbindGameplayProjectile();
-            hud?.UnbindGameplayDisplacement();
-            hud?.UnbindInputSource();
-            dialogueDrawer?.Hide();
-            dialogueDrawer?.Unbind();
-            hud?.UnbindTurnModeToggle();
-            hud?.UnbindBugReportExport();
-            turnMovementController?.Unbind();
-            actionController?.Unbind();
-            enemyController?.Unbind();
-            surfaceImpactPresenter?.Unbind();
-            tacticalTransitionPresenter?.Unbind();
-            characterGroundingPresenter?.Unbind();
+            ResetPresentationBindings();
             if (partyControl != null)
             {
                 partyControl.ControlChanged -= HandlePartyControlChanged;
@@ -605,30 +575,18 @@ namespace GritGud.Presentation.Gameplay
             partyControl?.Dispose();
             partyControl = null;
             partyProgression = null;
-            weaponTargetingController?.Unbind();
-            targetingCursorPresenter?.Unbind();
-            attackController?.Unbind();
-            equipmentController?.Unbind();
-            hotbarController?.Unbind();
-            projectileController?.Unbind();
             consumableController?.CancelPending();
             consumableController = null;
-            thrownExplosiveController?.Unbind();
-            smokeFieldController?.Unbind();
             smokeFieldSession?.Dispose();
             smokeFieldSession = null;
-            objectivePresenter?.Unbind();
-            targetAcquisitionPresenter?.Unbind();
-            destructibleController?.Unbind();
-            displacementController?.Unbind();
-            vehicleController?.Unbind();
-            sessionPresenter?.Unbind();
             postProcessing?.Dispose();
             postProcessing = null;
             environmentStyle?.Dispose();
             environmentStyle = null;
             environmentLighting?.Dispose();
             environmentLighting = null;
+            dressingProjector?.Dispose();
+            dressingProjector = null;
             surfacePresentationCatalog = null;
             visualTheme = null;
             levelWorld?.Dispose();
@@ -858,6 +816,7 @@ namespace GritGud.Presentation.Gameplay
         private bool IsPointerOverGameplayInterface(Vector2 pointer) =>
             (hud?.ContainsInteractiveScreenPoint(pointer) ?? false)
             || (partyHud?.ContainsInteractiveScreenPoint(pointer) ?? false)
+            || (turnReplayHud?.ContainsInteractiveScreenPoint(pointer) ?? false)
             || (dialogueDrawer?.ContainsInteractiveScreenPoint(pointer)
                 ?? false);
 

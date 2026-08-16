@@ -17,6 +17,7 @@ namespace GritGud.Presentation.LevelEditing.Tools
         private bool dragging;
         private Plane dragPlane;
         private Vector3 dragOffset;
+        private string dragAnchorEntityId = string.Empty;
         private readonly Dictionary<string, LevelTransformData> dragBefore =
             new Dictionary<string, LevelTransformData>();
         private readonly List<LevelEntity> clipboard = new List<LevelEntity>();
@@ -94,6 +95,12 @@ namespace GritGud.Presentation.LevelEditing.Tools
                     out LevelEntityView view,
                     out Ray ray))
                 {
+                    if (!context.SelectionPolicy.CanSelect(view.EntityId))
+                    {
+                        context.SetStatus(
+                            "That entity is locked or excluded by the active selection filter.");
+                        return;
+                    }
                     if (input.AdditiveSelection)
                     {
                         context.Selection.Toggle(new LevelSelectionTarget(view.EntityId));
@@ -146,7 +153,7 @@ namespace GritGud.Presentation.LevelEditing.Tools
             return false;
         }
 
-        private void BeginDrag(LevelEntityView view, Ray ray)
+        internal void BeginDrag(LevelEntityView view, Ray ray)
         {
             LevelEntity entity = context.Workspace.FindEntitySnapshot(view.EntityId);
             if (entity == null)
@@ -178,29 +185,31 @@ namespace GritGud.Presentation.LevelEditing.Tools
             }
 
             dragOffset = view.transform.position - point;
+            dragAnchorEntityId = view.EntityId;
             dragging = true;
             DragFeedback = BuildDragFeedback(Vector3.zero, view.Archetype.PlacementRules.PositionSnap);
             context.SetStatus("Moving on the X/Z plane. Release to apply; Esc to cancel.");
         }
 
-        private void UpdateDrag(Ray ray)
+        internal void UpdateDrag(Ray ray)
         {
-            string entityId = context.Selection.PrimaryEntityId;
-            if (!context.Projector.TryGetEntity(entityId, out LevelEntityView primaryView)
+            if (!context.Projector.TryGetEntity(
+                    dragAnchorEntityId,
+                    out LevelEntityView anchorView)
                 || !context.SceneQuery.TryProjectToPlane(ray, dragPlane, out Vector3 point))
             {
                 return;
             }
 
-            Vector3 primaryPosition = context.SnapSettings.SnapPosition(
+            Vector3 anchorPosition = context.SnapSettings.SnapPosition(
                 point + dragOffset,
-                primaryView.Archetype.PlacementRules.PositionSnap);
-            LevelTransformData primaryBefore = dragBefore[entityId];
-            Vector3 delta = primaryPosition - new Vector3(
-                primaryBefore.position.x,
-                primaryBefore.position.y,
-                primaryBefore.position.z);
-            DragFeedback = BuildDragFeedback(delta, primaryView.Archetype.PlacementRules.PositionSnap);
+                anchorView.Archetype.PlacementRules.PositionSnap);
+            LevelTransformData anchorBefore = dragBefore[dragAnchorEntityId];
+            Vector3 delta = anchorPosition - new Vector3(
+                anchorBefore.position.x,
+                anchorBefore.position.y,
+                anchorBefore.position.z);
+            DragFeedback = BuildDragFeedback(delta, anchorView.Archetype.PlacementRules.PositionSnap);
             foreach (KeyValuePair<string, LevelTransformData> entry in dragBefore)
             {
                 if (!context.Projector.TryGetEntity(entry.Key, out LevelEntityView view))
@@ -216,13 +225,19 @@ namespace GritGud.Presentation.LevelEditing.Tools
                 view.ApplyTransform(preview);
             }
 
-            context.PreviewTransformChanged(primaryView.ReadTransform());
+            if (context.Projector.TryGetEntity(
+                    context.Selection.PrimaryEntityId,
+                    out LevelEntityView primaryView))
+            {
+                context.PreviewTransformChanged(primaryView.ReadTransform());
+            }
         }
 
-        private void CommitDrag()
+        internal void CommitDrag()
         {
             dragging = false;
             DragFeedback = string.Empty;
+            dragAnchorEntityId = string.Empty;
             var commands = new List<ILevelEditCommand>();
             foreach (KeyValuePair<string, LevelTransformData> entry in dragBefore)
             {
@@ -270,6 +285,7 @@ namespace GritGud.Presentation.LevelEditing.Tools
             }
 
             dragBefore.Clear();
+            dragAnchorEntityId = string.Empty;
         }
 
         private string BuildDragFeedback(Vector3 delta, float snapStep)
@@ -280,7 +296,10 @@ namespace GritGud.Presentation.LevelEditing.Tools
             return $"MOVE X {delta.x:+0.###;-0.###;0}  Z {delta.z:+0.###;-0.###;0}  ·  {snap}  ·  ESC CANCEL";
         }
 
-        public void RotateSelection(float? amount = null)
+        public void RotateSelection(float? amount = null) =>
+            RotateSelection(Vector3.up, amount);
+
+        public void RotateSelection(Vector3 localAxis, float? amount = null)
         {
             IReadOnlyList<string> entityIds = SelectedEntityIds();
             if (entityIds.Count == 0)
@@ -299,8 +318,29 @@ namespace GritGud.Presentation.LevelEditing.Tools
                 }
 
                 LevelTransformData after = entity.transform;
-                after.yawDegrees = NormalizeYaw(
-                    after.yawDegrees + (amount ?? view.Archetype.PlacementRules.AngleSnap));
+                float rotationAmount = amount ?? view.Archetype.PlacementRules.AngleSnap;
+                Quaternion beforeRotation = Quaternion.Euler(
+                    after.pitchDegrees,
+                    after.yawDegrees,
+                    after.rollDegrees);
+                if (localAxis == Vector3.right)
+                    after.pitchDegrees = NormalizeYaw(after.pitchDegrees + rotationAmount);
+                else if (localAxis == Vector3.forward)
+                    after.rollDegrees = NormalizeYaw(after.rollDegrees + rotationAmount);
+                else
+                    after.yawDegrees = NormalizeYaw(after.yawDegrees + rotationAmount);
+                Quaternion afterRotation = Quaternion.Euler(
+                    after.pitchDegrees,
+                    after.yawDegrees,
+                    after.rollDegrees);
+                if (entity.rotationPivot != null)
+                {
+                    Vector3 pivot = ToVector(entity.rotationPivot.localPosition);
+                    Vector3 beforeOffset = beforeRotation * pivot;
+                    Vector3 afterOffset = afterRotation * pivot;
+                    Vector3 position = ToVector(after.position) + beforeOffset - afterOffset;
+                    after.position = new Float3Data(position.x, position.y, position.z);
+                }
                 commands.Add(new SetEntityTransformCommand(entity.id, entity.transform, after));
             }
 
@@ -312,6 +352,9 @@ namespace GritGud.Presentation.LevelEditing.Tools
             ExecuteSelectionCommands("Rotate entities", commands);
             context.SetStatus(commands.Count == 1 ? "Rotated entity." : "Rotated selected entities.");
         }
+
+        private static Vector3 ToVector(Float3Data value) =>
+            new Vector3(value.x, value.y, value.z);
 
         public void DeleteSelection()
         {
@@ -437,7 +480,9 @@ namespace GritGud.Presentation.LevelEditing.Tools
             return Mathf.Approximately(left.position.x, right.position.x)
                 && Mathf.Approximately(left.position.y, right.position.y)
                 && Mathf.Approximately(left.position.z, right.position.z)
-                && Mathf.Approximately(left.yawDegrees, right.yawDegrees);
+                && Mathf.Approximately(left.pitchDegrees, right.pitchDegrees)
+                && Mathf.Approximately(left.yawDegrees, right.yawDegrees)
+                && Mathf.Approximately(left.rollDegrees, right.rollDegrees);
         }
     }
 }

@@ -172,6 +172,7 @@ namespace GritGud.Domain.Gameplay
         public float preferredEngagementRange;
         public float movementSearchRadius;
         public int maximumAttacksPerTurn;
+        public int minimumAttackHitChancePercent = 25;
     }
 
     [Serializable]
@@ -189,6 +190,7 @@ namespace GritGud.Domain.Gameplay
         public string id = string.Empty;
         public string displayName = string.Empty;
         public string presentationId = string.Empty;
+        public string characterId = string.Empty;
         public bool targetable = true;
         public Float3Data position;
         public float facingDegrees;

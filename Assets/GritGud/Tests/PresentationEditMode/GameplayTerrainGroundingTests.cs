@@ -14,6 +14,8 @@ namespace GritGud.Presentation.Tests
         private GameObject terrainRoot;
         private TerrainWorldProjector terrainProjector;
         private GameObject actor;
+        private GameObject observer;
+        private GameObject target;
 
         [TearDown]
         public void TearDown()
@@ -30,6 +32,18 @@ namespace GritGud.Presentation.Tests
             {
                 Object.DestroyImmediate(actor);
                 actor = null;
+            }
+
+            if (observer != null)
+            {
+                Object.DestroyImmediate(observer);
+                observer = null;
+            }
+
+            if (target != null)
+            {
+                Object.DestroyImmediate(target);
+                target = null;
             }
         }
 
@@ -49,6 +63,10 @@ namespace GritGud.Presentation.Tests
             Assert.That(actor.transform.position.x, Is.EqualTo(1f).Within(0.001f));
             Assert.That(actor.transform.position.y, Is.EqualTo(2.02f).Within(0.001f));
             Assert.That(actor.transform.position.z, Is.EqualTo(1f).Within(0.001f));
+            GameplayActorPose captured = GameplayPoseAdapter.FromTransform(
+                actor.transform,
+                ActorStance.Standing);
+            Assert.That(captured.Position.Y, Is.EqualTo(2.02f).Within(0.001f));
         }
 
         [Test]
@@ -75,6 +93,35 @@ namespace GritGud.Presentation.Tests
             Assert.That(result.ResolvedPosition.Y, Is.EqualTo(1.52f).Within(0.001f));
         }
 
+        [Test]
+        public void ProjectedTerrainRidgeOccludesTargetExposure()
+        {
+            CreateTerrainRidge();
+            observer = new GameObject("Terrain Exposure Observer");
+            target = new GameObject("Terrain Exposure Target");
+            observer.transform.position = new Vector3(2f, 0f, 0.25f);
+            target.transform.position = new Vector3(2f, 0f, 3.75f);
+            Physics.SyncTransforms();
+            var query = new UnityTargetExposureQuery(
+                observer.transform,
+                target.transform);
+
+            TargetExposureSnapshot result = query.Capture(
+                "observer",
+                new GameplayPosition(2f, 1.2f, 0.25f),
+                "target",
+                new[]
+                {
+                    new TargetRegionSample(
+                        TargetRegionId.Torso,
+                        new GameplayPosition(2f, 1.2f, 3.75f),
+                        0.2f),
+                });
+
+            Assert.That(result.TotalSampleCount, Is.GreaterThan(0));
+            Assert.That(result.VisibleSampleCount, Is.Zero);
+        }
+
         private void CreateFlatTerrain(float elevation)
         {
             terrainRoot = new GameObject("Projected Gameplay Terrain");
@@ -96,6 +143,39 @@ namespace GritGud.Presentation.Tests
                         elevationIncrement = 0.25f,
                         minimumElevation = 0f,
                         heightSamples = new List<int>(new int[9]),
+                    },
+                },
+            };
+            terrainProjector.Replace(document);
+            Physics.SyncTransforms();
+        }
+
+        private void CreateTerrainRidge()
+        {
+            terrainRoot = new GameObject("Projected Terrain Ridge");
+            terrainProjector = new TerrainWorldProjector(terrainRoot.transform);
+            var heights = new List<int>(new int[25]);
+            for (int x = 0; x < 5; x++)
+            {
+                heights[2 * 5 + x] = 12;
+            }
+
+            var document = new LevelDocument
+            {
+                schemaVersion = LevelDocument.CurrentSchemaVersion,
+                levelId = "exposure-terrain-test",
+                displayName = "Exposure Terrain Test",
+                terrainSurfaces = new List<TerrainSurfaceData>
+                {
+                    new TerrainSurfaceData
+                    {
+                        id = "ridge",
+                        origin = new Float3Data(0f, 0f, 0f),
+                        sampleCountX = 5,
+                        sampleCountZ = 5,
+                        sampleSpacing = 1f,
+                        elevationIncrement = 0.25f,
+                        heightSamples = heights,
                     },
                 },
             };

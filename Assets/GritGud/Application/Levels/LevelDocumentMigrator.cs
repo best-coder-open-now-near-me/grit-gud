@@ -26,6 +26,15 @@ namespace GritGud.Application.Levels
                 {
                     new LevelDocumentV1ToV2Migration(),
                     new LevelDocumentV2ToV3Migration(),
+                    new LevelDocumentV3ToV4Migration(),
+                    new LevelDocumentV4ToV5Migration(),
+                    new LevelDocumentV5ToV6Migration(),
+                    new LevelDocumentV6ToV7Migration(),
+                    new LevelDocumentV7ToV8Migration(),
+                    new LevelDocumentV8ToV9Migration(),
+                    new LevelDocumentV9ToV10Migration(),
+                    new LevelDocumentV10ToV11Migration(),
+                    new LevelDocumentV11ToV12Migration(),
                 };
             }
 
@@ -128,8 +137,8 @@ namespace GritGud.Application.Levels
             }
 
             LevelDocument migrated = source.DeepCopy();
-            migrated.playtest = migrated.playtest ?? new LevelPlaytestData();
-            migrated.playtest.playerStart = new LevelTransformData(
+            migrated.legacyPlaytest = migrated.legacyPlaytest ?? new LevelPlaytestData();
+            migrated.legacyPlaytest.playerStart = new LevelTransformData(
                 new Float3Data(
                     migrated.bounds.center.x,
                     migrated.bounds.center.y + (migrated.bounds.size.y * 0.5f),
@@ -139,4 +148,217 @@ namespace GritGud.Application.Levels
             return migrated;
         }
     }
+
+    public sealed class LevelDocumentV3ToV4Migration : ILevelDocumentMigration
+    {
+        public int SourceVersion => 3;
+
+        public int TargetVersion => 4;
+
+        public LevelDocument Migrate(LevelDocument source)
+        {
+            if (source == null)
+            {
+                throw new ArgumentNullException(nameof(source));
+            }
+
+            LevelDocument migrated = source.DeepCopy();
+            LevelTransformData playerStart = migrated.legacyPlaytest != null
+                ? migrated.legacyPlaytest.playerStart
+                : new LevelTransformData(
+                    new Float3Data(
+                        migrated.bounds.center.x,
+                        migrated.bounds.center.y + (migrated.bounds.size.y * 0.5f),
+                        migrated.bounds.center.z),
+                    0f);
+            migrated.scenario = new LevelScenarioData
+            {
+                actors = new List<LevelScenarioActorData>
+                {
+                    new LevelScenarioActorData
+                    {
+                        id = "player",
+                        templateId = "player",
+                        transform = playerStart,
+                        playerControlled = true,
+                        initiallySelected = true,
+                    },
+                },
+            };
+            migrated.legacyPlaytest = null;
+            migrated.schemaVersion = TargetVersion;
+            return migrated;
+        }
+    }
+
+    public sealed class LevelDocumentV4ToV5Migration : ILevelDocumentMigration
+    {
+        public int SourceVersion => 4;
+
+        public int TargetVersion => 5;
+
+        public LevelDocument Migrate(LevelDocument source)
+        {
+            if (source == null)
+            {
+                throw new ArgumentNullException(nameof(source));
+            }
+
+            LevelDocument migrated = source.DeepCopy();
+            foreach (LevelScenarioObjectiveData objective in
+                migrated.scenario.objectives)
+            {
+                if (objective != null && string.IsNullOrWhiteSpace(objective.mobility))
+                {
+                    objective.mobility = "set";
+                }
+            }
+
+            migrated.schemaVersion = TargetVersion;
+            return migrated;
+        }
+    }
+
+    public sealed class LevelDocumentV5ToV6Migration : ILevelDocumentMigration
+    {
+        public int SourceVersion => 5;
+
+        public int TargetVersion => 6;
+
+        public LevelDocument Migrate(LevelDocument source)
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+
+            LevelDocument migrated = source.DeepCopy();
+            migrated.environment = source.environment?.DeepCopy()
+                ?? new LevelEnvironmentData();
+            migrated.schemaVersion = TargetVersion;
+            return migrated;
+        }
+    }
+
+    public sealed class LevelDocumentV6ToV7Migration : ILevelDocumentMigration
+    {
+        public int SourceVersion => 6;
+
+        public int TargetVersion => 7;
+
+        public LevelDocument Migrate(LevelDocument source)
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+            LevelDocument migrated = source.DeepCopy();
+            migrated.groups = migrated.groups ?? new List<LevelEntityGroupData>();
+            foreach (LevelEntity entity in migrated.entities)
+            {
+                if (entity != null)
+                    entity.groupId = entity.groupId ?? string.Empty;
+            }
+            migrated.schemaVersion = TargetVersion;
+            return migrated;
+        }
+    }
+
+    public sealed class LevelDocumentV7ToV8Migration : ILevelDocumentMigration
+    {
+        public int SourceVersion => 7;
+
+        public int TargetVersion => 8;
+
+        public LevelDocument Migrate(LevelDocument source)
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+            LevelDocument migrated = source.DeepCopy();
+            foreach (TerrainSurfaceData surface in migrated.terrainSurfaces)
+            {
+                if (surface != null)
+                    surface.appearance = surface.appearance ?? new TerrainAppearanceData();
+            }
+            migrated.schemaVersion = TargetVersion;
+            return migrated;
+        }
+    }
+
+    public sealed class LevelDocumentV8ToV9Migration : ILevelDocumentMigration
+    {
+        public int SourceVersion => 8;
+
+        public int TargetVersion => 9;
+
+        public LevelDocument Migrate(LevelDocument source)
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+            LevelDocument migrated = source.DeepCopy();
+            migrated.dressing = migrated.dressing ?? new LevelDressingData();
+            migrated.schemaVersion = TargetVersion;
+            return migrated;
+        }
+    }
+
+    public sealed class LevelDocumentV9ToV10Migration : ILevelDocumentMigration
+    {
+        public int SourceVersion => 9;
+
+        public int TargetVersion => 10;
+
+        public LevelDocument Migrate(LevelDocument source)
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+            LevelDocument migrated = source.DeepCopy();
+            // Missing pitch and roll fields deserialize as zero, preserving the
+            // previous yaw-only transform exactly.
+            migrated.schemaVersion = TargetVersion;
+            return migrated;
+        }
+    }
+
+    public sealed class LevelDocumentV10ToV11Migration : ILevelDocumentMigration
+    {
+        public int SourceVersion => 10;
+        public int TargetVersion => 11;
+
+        public LevelDocument Migrate(LevelDocument source)
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+            LevelDocument migrated = source.DeepCopy();
+            foreach (TerrainSurfaceData surface in migrated.terrainSurfaces ?? new List<TerrainSurfaceData>())
+            {
+                if (surface == null)
+                    continue;
+                int count = Math.Max(0, surface.sampleCountX * surface.sampleCountZ);
+                surface.materialSamples = new List<int>(count);
+                for (int index = 0; index < count; index++)
+                    surface.materialSamples.Add(0);
+            }
+            migrated.schemaVersion = TargetVersion;
+            return migrated;
+        }
+    }
+
+    public sealed class LevelDocumentV11ToV12Migration : ILevelDocumentMigration
+    {
+        public int SourceVersion => 11;
+        public int TargetVersion => 12;
+
+        public LevelDocument Migrate(LevelDocument source)
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+            LevelDocument migrated = source.DeepCopy();
+            foreach (LevelScenarioActorData actor in migrated.scenario?.actors
+                ?? new List<LevelScenarioActorData>())
+            {
+                if (actor != null)
+                    actor.characterId = actor.characterId ?? string.Empty;
+            }
+            migrated.schemaVersion = TargetVersion;
+            return migrated;
+        }
+    }
+
 }

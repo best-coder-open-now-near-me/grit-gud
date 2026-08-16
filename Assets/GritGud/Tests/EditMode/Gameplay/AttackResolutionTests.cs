@@ -86,6 +86,33 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void ObserverFailureCannotInterruptAuthoritativeAttackCommit()
+        {
+            GameplaySession session = CreateSession();
+            session.EnterTurnMode();
+            var attacks = new GameplayAttackSession(session, 3u);
+            int successfulObservers = 0;
+            session.ActorCapabilityChanged += _ =>
+                throw new InvalidOperationException("observer failed");
+            session.ActorCapabilityChanged += _ => successfulObservers++;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                attacks.TryResolve(
+                    "player",
+                    CreateExposure(torsoVisible: 5, legsVisible: 5),
+                    out _,
+                    out _));
+
+            Assert.That(successfulObservers, Is.EqualTo(1));
+            Assert.That(attacks.Records, Has.Count.EqualTo(1));
+            Assert.That(session.ResolvedActions, Has.Count.EqualTo(1));
+            Assert.That(session.GetActor("player").TurnBudget.ActionPoints,
+                Is.EqualTo(3));
+            Assert.That(session.Journal.LastEntry,
+                Is.TypeOf<ActionResolvedJournalEntry>());
+        }
+
+        [Test]
         public void WoundSnapshotPreservesLeftAndRightLimbDamageIndependently()
         {
             var clear = new ActorWoundSnapshot("player", 0, 0f);

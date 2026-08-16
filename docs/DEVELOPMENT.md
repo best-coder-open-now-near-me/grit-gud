@@ -30,10 +30,12 @@ from **Grit Gud > Regenerate Bootstrap Scene** in the Editor. Gameplay levels
 must remain external data loaded by this shell rather than additional authored
 Unity scenes.
 
-At runtime, `GameBootstrap` installs the code-driven start menu. **Play Main
-Level** loads the committed portable main level through the shared runtime
-loader. **Level Editor** opens that same level in authoring mode. **Quit** stops
-Play Mode in the Editor and exits standalone players.
+At runtime, `GameBootstrap` installs the code-driven start menu. Its committed
+level library lists validated JSON documents from `Resources/Levels/Published`.
+**Play Selected** and **Edit Selected** route the selected detached document
+through the shared runtime and authoring loaders; **New Level** opens a fresh
+portable document. **Quit** stops Play Mode in the Editor and exits standalone
+players.
 
 Bootstrap is the only enabled build scene and is registered as the Editor's
 Play Mode start scene. A guarded Editor initializer also opens it once when a
@@ -56,17 +58,43 @@ editor behavior. The Bootstrap scene remains the only authored application
 scene; both gameplay preview and editing construct their worlds from portable
 data beneath the application root.
 
+### Publishing an exported level from GitHub
+
+An exported level can be added without a local Unity installation:
+
+1. Open the target source branch on GitHub.
+2. Upload the exported JSON directly into
+   `Assets/GritGud/Content/Resources/Levels/Published/`.
+3. Commit the upload to that branch. No `.meta` file or separate level manifest
+   is required for a JSON text asset.
+4. Wait for the branch preview workflow. Its EditMode gate deserializes and
+   validates every published level before building WebGL.
+5. Open the branch preview and choose the level by its authored `displayName`.
+
+Published documents must have unique `levelId` values and complete scenario
+instances. A malformed or invalid entry fails the branch validation before a
+new preview replaces the last successful build. At runtime, the library also
+isolates invalid entries and reports their status without hiding valid levels.
+
 ## Local validation
 
 The baseline has been validated locally with Unity `6000.4.10f1` and its
 matching Windows and Web build-support modules:
 
-- all four Edit Mode domain tests pass;
+- the full EditMode and PlayMode lifecycle suites pass;
 - the Windows player builds successfully; and
 - the development Web preview builds successfully.
 
 Generated folders such as `Library`, `Temp`, `Logs`, and `UserSettings` are not
 versioned.
+
+Run `tools/validate-repository.py` with Python 3 before invoking Unity. It scans
+tracked source for unresolved conflict markers and parses every tracked JSON
+document. Then run the complete EditMode and PlayMode suites in batch mode; use
+`-testResults <path>` and `-logFile <path>` beneath the ignored `Temp` directory
+so failures remain inspectable. PlayMode coverage includes both a sustained
+default-session smoke and startup/teardown for every committed level whose
+library entry is playable.
 
 Runtime-generated terrain, outlines, and brush previews use the committed
 `GritGud/RuntimeColor` shader. It is explicitly listed in Graphics Settings so

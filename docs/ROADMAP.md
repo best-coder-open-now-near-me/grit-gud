@@ -1,7 +1,17 @@
 # Foundation Roadmap
 
-Each phase ends in something that can be reviewed independently. Mechanics are
-kept deliberately small until the cross-platform loop is working.
+Each phase ends in something that can be reviewed independently, but phases are
+production-shaped integration checkpoints rather than disposable MVPs. The
+[goal-first development and long-horizon AI decision record](GOAL_FIRST_DEVELOPMENT.md)
+defines the project's delivery standard, future trainable tactical-policy
+direction, and alpha adversarial-testing capstone.
+
+The player-facing turn-replay interaction is specified separately in
+[TURN_REPLAY_UX.md](TURN_REPLAY_UX.md). It uses a bounded, turn-segmented timeline
+from the active player character's previous turn to their current turn and does
+not imply permanent full-match replay storage. The active character retains
+their normal gameplay camera throughout playback, and their previous-turn
+segment is optional context rather than part of the default playback range.
 
 ## Current restart checkpoint — 2026-08-11
 
@@ -97,8 +107,9 @@ Work resumes in this order:
    runtime state. A dedicated roster surface supports click or Tab selection
    during exploration and communicates initiative-owned control during combat.
 9. Complete a restrained visual-presentation pass without moving gameplay rules
-   into effects. **Complete:** the depot now uses a level-authored lighting and
-   atmosphere profile with practical pools, depth fog, and placed dust/haze;
+   into effects. **Complete:** the depot now uses level-authored lighting,
+   atmosphere, practical pools, depth fog, portable decals, placed dust/haze,
+   and spatial ambient-audio zones;
    the global theme owns grade, cel response, outlines, grounding, and tactical
    transition cadence; and archetypes select surface-authored concrete, wood,
    metal, or actor response for both shading and physical impacts. Rifle and
@@ -181,8 +192,11 @@ and invalid data produces actionable validation errors.
 unchanged by a desktop build.
 
 The core editor architecture and construction workflow are implemented. The
-remaining metadata-authoring work and the recommended order for expanding the
-editor are tracked in the [level-editor expansion plan](LEVEL_EDITOR_NEXT_STEPS.md).
+metadata-authoring path and folder-discovered committed level library are also
+implemented: a browser export uploaded as one JSON file can be validated,
+listed, edited, and played by the next branch preview. The recommended order
+for further expansion is tracked in the
+[level-editor expansion plan](LEVEL_EDITOR_NEXT_STEPS.md).
 
 ## 3. Gridless turn slice
 
@@ -304,6 +318,20 @@ Enemy attacks use the same seeded attack session, target-region exposure,
 weapon catalog, muzzle effects, animation presenter, AP budget, and combat
 diagnostics as player attacks.
 
+**Tactical-confidence follow-up complete:** active-turn target selection now
+compares every capable party member and prefers the highest-chance shot rather
+than blindly choosing the nearest actor. Rifleman behavior authors a minimum
+acceptable hit chance; low-confidence exposure requests bounded route evidence,
+moves only for a strictly better firing position, and falls back to the legal
+shot when no candidate improves it. The detailed ownership contract and next AI
+slices are recorded in [ENEMY_AI.md](ENEMY_AI.md).
+
+**Exploration-detection follow-up complete:** detection no longer commits to the
+first visible actor in roster order. Each scan captures frozen exposure for the
+whole capable party, rejects candidates outside authored perception, and selects
+the most exposed detection with distance and stable party order as deterministic
+tie-breakers.
+
 ## 6. Projectile and explosion slice
 
 - Advance one slow projectile through turn time with segment collision queries.
@@ -371,10 +399,12 @@ Hotbar activation now routes the authored grenade into a Unity world-query
 adapter: the pointer chooses the intended point, collision determines the
 recorded landing point, and actor blast exposure is frozen before playback.
 Hotbar activation now enters an explicit grenade-aiming state before commitment.
-The intended landing point displays separate ground rings for the deterministic
-uncertainty region and authored blast radius; pressing the reassigned hotkey a
-second time commits the throw, while the shared cancel command dismisses the
-preview without spending AP or sampling a landing. Committed throws now play a
+The actor holds the selected grenade ready in their right hand while a sampled
+trajectory connects that presentation origin to the intended landing point.
+Separate ground rings display the deterministic uncertainty region and authored
+blast radius; pressing the reassigned hotkey a second time commits the throw,
+while the shared cancel command dismisses the held grenade and preview without
+spending AP or sampling a landing. Committed throws now play a
 short arc to the recorded landing point and a blast-radius-scaled impact flash;
 their recorded exposure applies authoritative wound and movement consequences,
 including friendly fire, without repeating the world query during replay.
@@ -390,8 +420,11 @@ their data-derived tooltip.
 - Define one character with fixed baseline attributes, skills, and talents. **Complete:** depot yard now authors Mara Vance as a Field Operative with fixed ratings and talents.
 - Make core attributes authoritative rather than duplicating their outputs in
   scenario data. **Complete:** schema 8 requires Strength, Dexterity, Grit, and
-  Charisma for every actor profile; initiative and movement are derived from
-  Dexterity, opposed displacement includes Strength, and Grit/Charisma expose
+  Charisma for every actor profile; base initiative and movement are derived
+  from Dexterity, while initial combat order maps Dexterity to a deterministic
+  reaction advance sized by the friendly-plus-hostile participant count and
+  publishes the full formula in Dialogue. Opposed displacement includes
+  Strength, and Grit/Charisma expose
   typed resistance/social modifiers without adding an HP system or placeholder
   social combat behavior.
 - Equip and replace an item without altering the character's authored identity. **Foundation complete:** equipment remains actor runtime state rather than character identity data.

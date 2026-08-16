@@ -793,6 +793,7 @@ namespace GritGud.Domain.Tests
                     preferredEngagementRange = 12f,
                     movementSearchRadius = 6f,
                     maximumAttacksPerTurn = 1,
+                    minimumAttackHitChancePercent = 40,
                 },
             };
             content.actors[1].attackCapability = content.actors[0]
@@ -811,6 +812,9 @@ namespace GritGud.Domain.Tests
                 Is.EqualTo(30f));
             Assert.That(enemy.Combat.EnemyBehavior.ViewAngleDegrees,
                 Is.EqualTo(120f));
+            Assert.That(
+                enemy.Combat.EnemyBehavior.MinimumAttackHitChancePercent,
+                Is.EqualTo(40));
         }
 
         private static ScenarioInventoryItemData CreateGrenadeItem(

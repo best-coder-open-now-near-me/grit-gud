@@ -87,7 +87,8 @@ namespace GritGud.Presentation.Tests
 
         private static LevelDocument LoadMainLevelDocument()
         {
-            TextAsset source = Resources.Load<TextAsset>("Levels/main-level");
+            TextAsset source = Resources.Load<TextAsset>(
+                "Levels/Published/main-level");
             Assert.That(source, Is.Not.Null);
             return new UnityLevelJsonSerializer().Deserialize(source.text);
         }

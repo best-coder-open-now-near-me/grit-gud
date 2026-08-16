@@ -250,6 +250,19 @@ namespace GritGud.Presentation.Tests
                 Assert.That(dialogueDrawer, Is.Not.Null);
                 Assert.That(dialogueDrawer.IsExpanded, Is.False);
                 Assert.That(gameplay.DialogueLog, Is.Not.Null);
+                Assert.That(gameplay.DialogueLog.Entries, Is.Not.Empty);
+                Assert.That(
+                    gameplay.DialogueLog.Entries[0].Title,
+                    Is.EqualTo("Initiative order"));
+                StringAssert.Contains(
+                    "DEX ",
+                    gameplay.DialogueLog.Entries[0].Message);
+                StringAssert.Contains(
+                    "→ advance ",
+                    gameplay.DialogueLog.Entries[0].Message);
+                StringAssert.Contains(
+                    "Dexterity affects reaction only",
+                    gameplay.DialogueLog.Entries[0].Message);
                 Assert.That(
                     dialogueDrawer.Log,
                     Is.SameAs(gameplay.DialogueLog));

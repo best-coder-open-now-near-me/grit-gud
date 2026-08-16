@@ -28,12 +28,13 @@ input, raycasts, prefabs, storage, and UI remain presentation adapters, so a new
 feature should not need to move authoritative authoring state into a
 `MonoBehaviour`.
 
-## Recommended next vertical slice: gameplay metadata authoring
+## Recommended next vertical slice: physics verification and viewport transforms
 
-Implement interaction-point editing first. This closes the remaining authored
-gameplay-metadata gap while exercising the intended sub-element, command, and
-projection seams before encounter scripting or more complicated geometry tools
-are introduced.
+Interaction-point and destructible-default authoring are complete. The next
+editor-specific increment should verify destructible prop piles through the
+physics-assisted settle path, then add richer viewport translation and rotation
+handles without moving transform policy into Unity components. Encounter
+scripting remains later work until its portable runtime contracts stabilize.
 
 ## Usability review
 
@@ -52,18 +53,21 @@ and deletion operate on the full selection as one composite history entry.
 
 The next usability improvements, in priority order, are:
 
-1. **Batch transforms:** add an explicit multi-entity move gesture with a shared
-   pivot and one composite command; numeric fields remain primary-only until
-   mixed-value UI is designed.
+1. **Batch transforms:** multi-entity drag already preserves relative offsets,
+   and the entity-array tool now creates repeated X/Z layouts as one composite
+   command. A future numeric mixed-value Inspector can add explicit shared-pivot
+   transforms when its UI semantics are designed.
 2. **Transform feedback:** active drags show X/Z deltas and snap state; Esc
    restores the pre-drag state without creating history.
 3. **Discoverability:** the compact controls reference and explicit tool buttons
    are implemented; add platform-appropriate tooltips when the temporary IMGUI
    adapter is replaced.
-4. **Preferences:** camera and snap settings are retained locally without
-   putting user preferences in portable level JSON.
-5. **Larger scenes:** palette search/category filters and a searchable entity
-   hierarchy are implemented. Keep hierarchy state local to the editor.
+4. **Preferences:** camera, orthographic projection, snap, and grid settings are
+   retained locally without putting user preferences in portable level JSON.
+5. **Larger scenes:** palette search, a searchable entity hierarchy, portable
+   named groups, lock/hide/isolate, category/group selection filters, and bulk
+   selection are implemented. Isolation and filter state stay local to the
+   editor.
 
 These should remain presentation and tooling changes unless they mutate authored
 level data. Camera state, hover state, open panels, and local preferences do not
@@ -83,6 +87,8 @@ belong in `LevelDocument` or command history.
 
 ### 2. Interaction-point editing
 
+**Status: complete.**
+
 - Add reversible add, update, and remove commands keyed by entity and point IDs.
 - Reuse sub-element selection for point handles.
 - Author the typed interaction kind, local position, and radius.
@@ -90,6 +96,8 @@ belong in `LevelDocument` or command history.
   do not introduce free-form behavior payloads.
 
 ### 3. Destructible defaults
+
+**Status: complete.**
 
 - Add an entity command for enabled state, initial state, and integrity.
 - Gate the inspector by the archetype capability profile.
@@ -115,14 +123,13 @@ Each increment is ready to merge when it:
 
 - The IMGUI adapter is intentionally temporary. Feature logic must remain
   outside it so a later UI replacement is an adapter change.
-- Current manipulation is position-and-yaw only. Pitch, roll, and scale should
-  be introduced only with typed transform semantics and corresponding
-  validation.
-- The selection model supports multiple targets, but the current selection tool
-  operates on one entity. Batch transforms should therefore be a separate
-  transaction-based slice rather than an incidental change to metadata editing.
-- Runtime navigation baking, arbitrary asset import, and terrain sculpting are
-  outside the domain-specific editor's current scope.
+- Position and X/Y/Z rotation have typed portable semantics. Arbitrary scale and
+  a free-drag viewport transform gizmo remain intentionally unimplemented.
+- Multi-selection drag, duplicate, array layout, rotation, and deletion use
+  composite history. A future shared-pivot gizmo and numeric mixed-value
+  Inspector still need explicit interaction semantics.
+- Runtime navigation baking and arbitrary asset import remain outside the
+  domain-specific editor's current scope.
 
 After metadata authoring, duplicate/copy-paste and multi-entity transforms are
 implemented through composite command history. Validation navigation, palette
@@ -130,6 +137,18 @@ search/category filters, the entity hierarchy, local editor preferences, and
 transform feedback are also complete.
 Encounter scripting should wait until its portable runtime contracts are known.
 
-Terrain is now the next major editor capability. Its portable heightfield model,
-patch-command history, chunked projection, and phased delivery plan are defined
-in the [terrain-editor architecture plan](TERRAIN_EDITOR_ARCHITECTURE.md).
+Portable heightfield terrain, patch-command history, chunked projection,
+per-surface appearance, on-demand playability diagnostics, the transient slope
+heatmap, surface decals, ambient-VFX placements, and spatial audio zones are
+implemented. Decals, ambient VFX, audio zones, and practical lights now share a
+queued map-placement workflow rather than being created indirectly at the camera
+focus. Portable entity transforms now retain X/Y/Z rotation, and the first
+physics-assisted **Drop & Settle** supports single props and multi-selection
+pile settling with authored colliders or a visible-bounds fallback. The next
+increment is destructible-cover pile testing and richer viewport transform tools.
+Encounter authoring remains deferred until combat structure is stable.
+
+The terrain appearance review's regional-material slice is complete. Surface
+themes remain explicit whole-surface edits, while portable per-cell material
+samples use the shared stroke/footprint lifecycle, undo as one patch, and rebuild
+only affected visual chunks without invalidating collision or navigation.

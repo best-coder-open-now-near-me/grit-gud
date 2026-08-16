@@ -8,6 +8,254 @@ namespace GritGud.Domain.Tests.Levels
     public sealed class TerrainSurfaceTests
     {
         [Test]
+        public void NewLevelFactoryCreatesFlatTerrainAcrossItsBounds()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateNew("Fresh Terrain");
+
+            Assert.That(document.terrainSurfaces, Has.Count.EqualTo(1));
+            TerrainSurfaceData terrain = document.terrainSurfaces[0];
+            Assert.That(terrain.id, Is.EqualTo("ground"));
+            Assert.That(terrain.origin.x, Is.EqualTo(-25f));
+            Assert.That(terrain.origin.z, Is.EqualTo(-25f));
+            Assert.That(terrain.sampleCountX, Is.EqualTo(26));
+            Assert.That(terrain.sampleCountZ, Is.EqualTo(26));
+            Assert.That(terrain.sampleSpacing, Is.EqualTo(2f));
+            Assert.That(terrain.heightSamples, Has.Count.EqualTo(26 * 26));
+            Assert.That(terrain.heightSamples.All(sample => sample == 0), Is.True);
+            Assert.That(terrain.materialSamples, Has.Count.EqualTo(26 * 26));
+            Assert.That(terrain.materialSamples.All(sample => sample == 0), Is.True);
+            Assert.That(
+                document.scenario.FindInitiallySelectedPlayer().transform.position.y,
+                Is.EqualTo(2f));
+            Assert.That(LevelValidator.HasErrors(LevelValidator.Validate(document)), Is.False);
+        }
+
+        [Test]
+        public void ResizeTerrainPreservesCenterAndResamplesAuthoredShape()
+        {
+            TerrainSurfaceData source = CreateDocument().terrainSurfaces[0];
+            source.heightSamples = Enumerable.Range(0, 9).ToList();
+
+            TerrainSurfaceData resized = TerrainSurfaceAuthoring.Resize(source, 4f, 2f, 1f);
+
+            Assert.That(resized.origin.x, Is.EqualTo(-2f));
+            Assert.That(resized.origin.z, Is.EqualTo(-1f));
+            Assert.That(resized.sampleCountX, Is.EqualTo(5));
+            Assert.That(resized.sampleCountZ, Is.EqualTo(3));
+            Assert.That(resized.heightSamples, Has.Count.EqualTo(15));
+            Assert.That(resized.heightSamples[0], Is.EqualTo(0));
+            Assert.That(resized.heightSamples[4], Is.EqualTo(2));
+            Assert.That(resized.heightSamples[10], Is.EqualTo(6));
+            Assert.That(resized.heightSamples[14], Is.EqualTo(8));
+            Assert.That(source.sampleCountX, Is.EqualTo(3));
+            Assert.That(source.heightSamples, Is.EqualTo(Enumerable.Range(0, 9)));
+        }
+
+        [Test]
+        public void ResizeTerrainDoesNotNormalizeItsSource()
+        {
+            TerrainSurfaceData source = CreateDocument().terrainSurfaces[0];
+            source.id = null;
+
+            TerrainSurfaceData resized = TerrainSurfaceAuthoring.Resize(
+                source,
+                4f,
+                2f,
+                1f);
+
+            Assert.That(source.id, Is.Null);
+            Assert.That(resized.id, Is.Empty);
+        }
+
+        [Test]
+        public void ValidationLimitsTerrainSurfaceCount()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty("Surface Limit");
+            for (int index = 0; index <= LevelTerrainValidationRule.MaximumSurfaceCount; index++)
+            {
+                TerrainSurfaceData surface = CreateDocument().terrainSurfaces[0];
+                surface.id = "surface-" + index;
+                document.terrainSurfaces.Add(surface);
+            }
+
+            var issues = LevelValidator.Validate(document);
+
+            Assert.That(
+                issues,
+                Has.Some.Matches<LevelValidationIssue>(issue =>
+                    issue.Code == "terrain.surface-limit"));
+        }
+
+        [Test]
+        public void ValidationLimitsTotalTerrainSamples()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty("Sample Limit");
+            for (int index = 0; index < 4; index++)
+            {
+                document.terrainSurfaces.Add(new TerrainSurfaceData
+                {
+                    id = "surface-" + index,
+                    sampleCountX = LevelTerrainValidationRule.MaximumSamplesPerAxis,
+                    sampleCountZ = LevelTerrainValidationRule.MaximumSamplesPerAxis,
+                    sampleSpacing = 1f,
+                    elevationIncrement = 1f,
+                    heightSamples = Enumerable.Repeat(
+                            0,
+                            LevelTerrainValidationRule.MaximumSamplesPerSurface)
+                        .ToList(),
+                });
+            }
+
+            var issues = LevelValidator.Validate(document);
+
+            Assert.That(
+                issues,
+                Has.Some.Matches<LevelValidationIssue>(issue =>
+                    issue.Code == "terrain.document-sample-limit"));
+        }
+
+        [Test]
+        public void ResizeTerrainCommandIsUndoableAndRequiresFullProjection()
+        {
+            LevelDocument document = CreateDocument();
+            TerrainSurfaceData before = document.terrainSurfaces[0];
+            TerrainSurfaceData after = TerrainSurfaceAuthoring.Resize(before, 4f, 2f, 1f);
+            var command = new SetTerrainSurfaceCommand("ground", before, after);
+            var session = new LevelSession(document);
+
+            session.Execute(command);
+            Assert.That(session.CreateSnapshot().terrainSurfaces[0].sampleCountX, Is.EqualTo(5));
+            Assert.That(command.RequiresFullProjection, Is.True);
+
+            session.Undo();
+            Assert.That(session.CreateSnapshot().terrainSurfaces[0].sampleCountX, Is.EqualTo(3));
+
+            session.Redo();
+            Assert.That(session.CreateSnapshot().terrainSurfaces[0].sampleCountX, Is.EqualTo(5));
+        }
+
+        [Test]
+        public void AddFlatTerrainCommandIsUndoableForTerrainlessLevels()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty("Legacy Terrainless");
+            TerrainSurfaceData terrain = TerrainSurfaceAuthoring.CreateFlat(
+                "ground",
+                document.bounds,
+                TerrainSurfaceAuthoring.DefaultSampleSpacing);
+            var command = new AddTerrainSurfaceCommand(terrain);
+            var session = new LevelSession(document);
+
+            session.Execute(command);
+            Assert.That(session.CreateSnapshot().terrainSurfaces, Has.Count.EqualTo(1));
+            Assert.That(command.RequiresFullProjection, Is.True);
+
+            session.Undo();
+            Assert.That(session.CreateSnapshot().terrainSurfaces, Is.Empty);
+
+            session.Redo();
+            Assert.That(session.CreateSnapshot().terrainSurfaces, Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public void TerrainAppearanceCommandIsIncrementalAndUndoable()
+        {
+            LevelDocument document = CreateDocument();
+            TerrainAppearanceData before = document.terrainSurfaces[0].appearance.DeepCopy();
+            TerrainAppearanceData after = before.DeepCopy();
+            after.presetId = "grass";
+            after.baseColor = new FloatColorData(0.2f, 0.4f, 0.1f);
+            var command = new SetTerrainAppearanceCommand("ground", before, after);
+            var session = new LevelSession(document);
+
+            session.Execute(command);
+            Assert.That(session.CreateSnapshot().terrainSurfaces[0].appearance.presetId,
+                Is.EqualTo("grass"));
+            Assert.That(command.RequiresFullProjection, Is.False);
+            session.Undo();
+            Assert.That(session.CreateSnapshot().terrainSurfaces[0].appearance.presetId,
+                Is.EqualTo("slate"));
+            session.Redo();
+            Assert.That(session.CreateSnapshot().terrainSurfaces[0].appearance.baseColor.g,
+                Is.EqualTo(0.4f));
+        }
+
+        [Test]
+        public void TerrainMaterialPatchIsIncrementalUndoableAndVisualOnly()
+        {
+            LevelDocument document = CreateDocument();
+            var command = new SetTerrainMaterialsCommand(
+                "ground",
+                1,
+                1,
+                2,
+                1,
+                new[] { 2, 3 });
+            var session = new LevelSession(document);
+
+            session.Execute(command);
+            TerrainSurfaceData painted = session.CreateSnapshot().terrainSurfaces[0];
+            Assert.That(painted.materialSamples[4], Is.EqualTo(2));
+            Assert.That(painted.materialSamples[5], Is.EqualTo(3));
+            Assert.That(command.RequiresFullProjection, Is.False);
+            Assert.That(command.AffectsNavigation, Is.False);
+
+            session.Undo();
+            Assert.That(session.CreateSnapshot().terrainSurfaces[0].materialSamples,
+                Is.All.Zero);
+            session.Redo();
+            Assert.That(session.CreateSnapshot().terrainSurfaces[0].materialSamples[4],
+                Is.EqualTo(2));
+        }
+
+        [Test]
+        public void TerrainMaterialKindsKeepStableSerializedValues()
+        {
+            Assert.That((int)TerrainMaterialKind.Surface, Is.Zero);
+            Assert.That((int)TerrainMaterialKind.Slate, Is.EqualTo(1));
+            Assert.That((int)TerrainMaterialKind.Grass, Is.EqualTo(2));
+            Assert.That((int)TerrainMaterialKind.Sand, Is.EqualTo(3));
+            Assert.That((int)TerrainMaterialKind.Snow, Is.EqualTo(4));
+            Assert.That((int)TerrainMaterialKind.Concrete, Is.EqualTo(5));
+            Assert.That(TerrainMaterialKinds.IsSupported(6), Is.False);
+        }
+
+        [Test]
+        public void TerrainMaterialPatchRejectsUnknownSerializedMaterial()
+        {
+            Assert.That(
+                () => new SetTerrainMaterialsCommand(
+                    "ground",
+                    0,
+                    0,
+                    1,
+                    1,
+                    new[] { 99 }),
+                Throws.ArgumentException);
+        }
+
+        [Test]
+        public void ValidationRejectsInvalidTerrainAppearance()
+        {
+            LevelDocument document = CreateDocument();
+            document.terrainSurfaces[0].appearance.slopeBlendStartDegrees = 70f;
+            document.terrainSurfaces[0].appearance.slopeBlendEndDegrees = 40f;
+
+            var issues = LevelValidator.Validate(document);
+
+            Assert.That(issues, Has.Some.Matches<LevelValidationIssue>(issue =>
+                issue.Code == "terrain.appearance"));
+        }
+
+        [Test]
+        public void ResizeTerrainRejectsDimensionsThatDoNotAlignToTheGrid()
+        {
+            TerrainSurfaceData source = CreateDocument().terrainSurfaces[0];
+
+            Assert.Throws<System.ArgumentException>(() =>
+                TerrainSurfaceAuthoring.Resize(source, 3.5f, 2f, 1f));
+        }
+
+        [Test]
         public void TerrainPatchUndoAndRedoRestoreExactSamples()
         {
             LevelDocument document = CreateDocument();
@@ -127,6 +375,7 @@ namespace GritGud.Domain.Tests.Levels
                 minimumElevation = 0f,
                 elevationIncrement = 0.1f,
                 heightSamples = Enumerable.Repeat(0, 9).ToList(),
+                materialSamples = Enumerable.Repeat(0, 9).ToList(),
             });
             return document;
         }

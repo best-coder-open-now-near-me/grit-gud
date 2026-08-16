@@ -236,7 +236,7 @@ namespace GritGud.Presentation.Gameplay
                 if (session.IsActorIncapacitated(enemyId))
                     continue;
                 EnemyTacticalDecisionRecord detection =
-                    decisions.EvaluateFirstDetection(
+                    decisions.EvaluateBestDetection(
                         enemyId,
                         partyControl.ActorIds,
                         enemy.TacticalQuery.CaptureExposure);
@@ -263,20 +263,25 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            string targetId = decisions.SelectNearestCapableHostile(
-                enemy.Definition.Id);
-            if (targetId == null)
+            EnemyTargetSelection target = decisions.SelectBestTarget(
+                enemy.Definition.Id,
+                partyControl.ActorIds,
+                enemy.TacticalQuery.CaptureExposure);
+            if (target == null)
             {
                 EndActiveTurn(enemy, "no capable hostile target remains");
                 return;
             }
 
-            TargetExposureSnapshot exposure =
-                enemy.TacticalQuery.CaptureExposure(targetId);
+            string targetId = target.TargetId;
+            TargetExposureSnapshot exposure = target.Exposure;
             IReadOnlyList<EnemyMovementOption> movementOptions =
-                exposure.VisibleSampleCount > 0
-                    ? Array.Empty<EnemyMovementOption>()
-                    : enemy.TacticalQuery.BuildMovementOptions(targetId);
+                decisions.RequiresMovementSearch(
+                    enemy.Definition.Id,
+                    targetId,
+                    exposure)
+                    ? enemy.TacticalQuery.BuildMovementOptions(targetId)
+                    : Array.Empty<EnemyMovementOption>();
             EnemyTacticalDecisionRecord decision = decisions.EvaluateTurn(
                 enemy.Definition.Id,
                 targetId,

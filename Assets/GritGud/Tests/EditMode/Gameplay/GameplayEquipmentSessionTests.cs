@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
@@ -70,6 +71,34 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(session.Journal.Entries.Count(entry =>
                 entry.Kind == GameplayJournalEntryKind.ActionResolved),
                 Is.EqualTo(2));
+        }
+
+        [Test]
+        public void ObserverFailureCannotInterruptAnEquipmentSwitch()
+        {
+            GameplaySession session = CreateSession(actionPoints: 4);
+            session.EnterTurnMode();
+            var equipment = new GameplayEquipmentSession(session);
+            int successfulObservers = 0;
+            session.EquipmentChanged += _ =>
+                throw new InvalidOperationException("observer failed");
+            session.EquipmentChanged += _ => successfulObservers++;
+
+            Assert.Throws<AggregateException>(() =>
+                equipment.TryResolveSwitch(
+                    "player",
+                    "launcher",
+                    out _,
+                    out _,
+                    out _));
+
+            Assert.That(successfulObservers, Is.EqualTo(2));
+            Assert.That(session.GetActor("player").EquippedItemId,
+                Is.EqualTo("launcher"));
+            Assert.That(session.GetActor("player").TurnBudget.ActionPoints,
+                Is.EqualTo(2));
+            Assert.That(session.ResolvedActions, Has.Count.EqualTo(2));
+            Assert.That(equipment.Records, Has.Count.EqualTo(2));
         }
 
         [Test]

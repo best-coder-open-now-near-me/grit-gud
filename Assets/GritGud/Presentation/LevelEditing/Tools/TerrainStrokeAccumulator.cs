@@ -16,25 +16,34 @@ namespace GritGud.Presentation.LevelEditing.Tools
         private int endX = int.MinValue;
         private int endZ = int.MinValue;
 
-        public TerrainStrokeAccumulator(TerrainSurfaceData surface, int direction)
+        public TerrainStrokeAccumulator(
+            TerrainSurfaceData surface,
+            TerrainBrushMode mode,
+            Vector3 initialPoint)
         {
             PreviewSurface = surface?.DeepCopy()
                 ?? throw new ArgumentNullException(nameof(surface));
-            Direction = Math.Sign(direction);
-            if (Direction == 0)
+            if (!Enum.IsDefined(typeof(TerrainBrushMode), mode))
             {
                 throw new ArgumentOutOfRangeException(
-                    nameof(direction),
-                    "A terrain stroke must raise or lower terrain.");
+                    nameof(mode));
             }
 
+            Mode = mode;
+            FlattenTargetHeight = mode == TerrainBrushMode.Flatten
+                ? TerrainBrushCommandFactory.QuantizeWorldHeight(
+                    PreviewSurface,
+                    initialPoint.y)
+                : (int?)null;
             previewDocument = LevelDocumentFactory.CreateEmpty("Terrain Stroke Preview");
             previewDocument.terrainSurfaces.Add(PreviewSurface);
         }
 
         public string SurfaceId => PreviewSurface.id;
 
-        public int Direction { get; }
+        public TerrainBrushMode Mode { get; }
+
+        public int? FlattenTargetHeight { get; }
 
         public TerrainSurfaceData PreviewSurface { get; }
 
@@ -59,7 +68,8 @@ namespace GritGud.Presentation.LevelEditing.Tools
                 point,
                 radiusInSamples,
                 quantizedStrength,
-                Direction);
+                Mode,
+                FlattenTargetHeight);
             if (patch == null)
             {
                 return null;

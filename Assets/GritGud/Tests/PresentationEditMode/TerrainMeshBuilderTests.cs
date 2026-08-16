@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using GritGud.Application.Levels;
 using GritGud.Domain.Levels;
@@ -5,6 +6,7 @@ using GritGud.Presentation.Gameplay;
 using GritGud.Presentation.Levels.Runtime;
 using NUnit.Framework;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace GritGud.Presentation.Tests
 {
@@ -80,6 +82,26 @@ namespace GritGud.Presentation.Tests
                 Assert.That(mesh.vertices[4], Is.EqualTo(new Vector3(0f, 3f, 6f)));
                 Assert.That(mesh.bounds.min.x, Is.EqualTo(-2f).Within(0.001f));
                 Assert.That(mesh.bounds.max.z, Is.EqualTo(8f).Within(0.001f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(mesh);
+            }
+        }
+
+        [Test]
+        public void BuildChunkMapsPaintedMaterialSamplesToVertexColors()
+        {
+            TerrainSurfaceData surface = CreateSurface(3, 3);
+            surface.materialSamples[4] = 2;
+
+            Mesh mesh = TerrainMeshBuilder.BuildChunk(surface, 0, 0, 32);
+            try
+            {
+                Assert.That(mesh.colors32[0].a, Is.Zero);
+                Assert.That(mesh.colors32[4], Is.EqualTo(TerrainMeshBuilder.MaterialColor(
+                    TerrainMaterialKind.Grass)));
+                Assert.That(mesh.colors32[4].a, Is.EqualTo(255));
             }
             finally
             {
@@ -168,6 +190,53 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void AppearanceAndSlopeDiagnosticsUpdateMaterialWithoutRebuildingMesh()
+        {
+            var owner = new GameObject("Terrain Appearance Projection Test");
+            var projector = new TerrainWorldProjector(owner.transform);
+            try
+            {
+                TerrainSurfaceData surface = CreateSurface(3, 3);
+                LevelDocument document = LevelDocumentFactory.CreateEmpty("Appearance Test");
+                document.terrainSurfaces.Add(surface);
+                projector.Replace(document);
+                MeshFilter filter = owner.GetComponentInChildren<MeshFilter>();
+                Mesh originalMesh = filter.sharedMesh;
+                Material material = owner.GetComponentInChildren<MeshRenderer>().sharedMaterial;
+                TerrainNavigationInvalidation? navigation = null;
+                projector.NavigationInvalidated += value => navigation = value;
+                TerrainAppearanceData before = surface.appearance.DeepCopy();
+                TerrainAppearanceData after = before.DeepCopy();
+                after.baseColor = new FloatColorData(0.2f, 0.4f, 0.1f);
+                after.steepColor = new FloatColorData(0.5f, 0.3f, 0.2f);
+                after.slopeBlendStartDegrees = 25f;
+                after.slopeBlendEndDegrees = 55f;
+                surface.appearance = after.DeepCopy();
+
+                projector.Apply(
+                    document,
+                    new LevelSessionChangedEventArgs(
+                        LevelSessionChangeKind.Execute,
+                        1,
+                        new SetTerrainAppearanceCommand("test", before, after)));
+                projector.SetSlopeDiagnostics(true, 50f);
+
+                Assert.That(filter.sharedMesh, Is.SameAs(originalMesh));
+                Assert.That(navigation, Is.Null);
+                Assert.That(material.GetColor("_BaseColor").g, Is.EqualTo(0.4f).Within(0.001f));
+                Assert.That(material.GetColor("_SteepColor").r, Is.EqualTo(0.5f).Within(0.001f));
+                Assert.That(material.GetFloat("_TerrainDiagnosticsEnabled"), Is.EqualTo(1f));
+                Assert.That(material.GetFloat("_DiagnosticSlopeCos"),
+                    Is.EqualTo(Mathf.Cos(50f * Mathf.Deg2Rad)).Within(0.001f));
+            }
+            finally
+            {
+                projector.Dispose();
+                Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
         public void ProjectorInvalidatesNavigationOnlyForCommittedTerrainChanges()
         {
             var owner = new GameObject("Terrain Navigation Invalidation Test");
@@ -219,6 +288,78 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void ProjectorAppliesTerrainChangesInsideCompositeCommand()
+        {
+            var owner = new GameObject("Composite Terrain Projection Test");
+            var projector = new TerrainWorldProjector(owner.transform);
+            try
+            {
+                LevelDocument document = LevelDocumentFactory.CreateEmpty("Composite Test");
+                document.terrainSurfaces.Add(CreateSurface(4, 4));
+                var session = new LevelSession(document);
+                projector.Replace(session.CreateSnapshot());
+                Mesh before = owner.GetComponentInChildren<MeshFilter>().sharedMesh;
+                int invalidationCount = 0;
+                projector.NavigationInvalidated += _ => invalidationCount++;
+                session.Changed += (_, args) =>
+                    projector.Apply(session.CreateSnapshot(), args);
+
+                session.ExecuteTransaction(
+                    "Edit two terrain regions",
+                    new ILevelEditCommand[]
+                    {
+                        new SetTerrainHeightsCommand("test", 0, 0, 1, 1, new[] { 3 }),
+                        new SetTerrainHeightsCommand("test", 3, 3, 1, 1, new[] { 4 }),
+                    });
+
+                Mesh after = owner.GetComponentInChildren<MeshFilter>().sharedMesh;
+                Assert.That(after, Is.Not.SameAs(before));
+                Assert.That(after.vertices[0].y, Is.EqualTo(3f));
+                Assert.That(after.vertices[15].y, Is.EqualTo(4f));
+                Assert.That(invalidationCount, Is.EqualTo(2));
+            }
+            finally
+            {
+                projector.Dispose();
+                Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
+        public void FailedReplacementPreservesActiveProjection()
+        {
+            var owner = new GameObject("Atomic Terrain Replacement Test");
+            var projector = new TerrainWorldProjector(owner.transform);
+            try
+            {
+                LevelDocument valid = LevelDocumentFactory.CreateEmpty("Valid Terrain");
+                valid.terrainSurfaces.Add(CreateSurface(3, 3));
+                projector.Replace(valid);
+                GameObject originalRoot = owner.transform.Find("Terrain Surfaces").gameObject;
+                Mesh originalMesh = originalRoot.GetComponentInChildren<MeshFilter>().sharedMesh;
+                LevelDocument invalid = valid.DeepCopy();
+                invalid.terrainSurfaces.Add(valid.terrainSurfaces[0].DeepCopy());
+
+                Assert.Throws<InvalidOperationException>(() => projector.Replace(invalid));
+
+                Assert.That(originalRoot, Is.Not.Null);
+                Assert.That(originalRoot.activeSelf, Is.True);
+                Assert.That(
+                    originalRoot.GetComponentInChildren<MeshFilter>().sharedMesh,
+                    Is.SameAs(originalMesh));
+                Assert.That(
+                    owner.transform.Cast<Transform>()
+                        .Count(child => child.name == "Terrain Surfaces"),
+                    Is.EqualTo(1));
+            }
+            finally
+            {
+                projector.Dispose();
+                Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
         public void PreviewPatchRebuildsProjectionWithoutMutatingAuthoredDocument()
         {
             var owner = new GameObject("Terrain Preview Test");
@@ -255,6 +396,7 @@ namespace GritGud.Presentation.Tests
                 sampleSpacing = 1f,
                 elevationIncrement = 1f,
                 heightSamples = Enumerable.Repeat(0, countX * countZ).ToList(),
+                materialSamples = Enumerable.Repeat(0, countX * countZ).ToList(),
             };
         }
     }
