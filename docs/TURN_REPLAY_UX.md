@@ -65,13 +65,14 @@ restores recorded visual state and samples seekable movement and projectile
 paths; transient audio, particles, and other cosmetic effects may snap or
 restart when forward playback resumes.
 
-Playback keeps the perspective of the player-controlled character who opened
-the replay. Every retained character turn is watched from that one perspective;
-turn segments do not switch the camera to their acting characters. The player
-cannot change perspective, select another companion's viewpoint, orbit, zoom,
-or use a free camera during replay. This deliberately keeps the feature to a
-quick review of what the current character could see rather than a tactical
-inspection tool.
+Playback remains anchored to the player-controlled character who opened the
+replay. Turn segments do not switch the camera anchor to their acting
+characters, and the player cannot select a companion as a replacement
+viewpoint. The ordinary camera remains fully interactive, however: the player
+can freely look around, orbit, and zoom while events play or while playback is
+paused. Camera input never changes the playhead or authoritative replay state.
+This keeps one consistent character context without forcing the player to watch
+from one fixed camera angle.
 
 The timeline is presentation time, not wall-clock decision time. Idle thinking
 time is omitted, and deterministic visual durations are assigned to recorded
@@ -82,8 +83,9 @@ width rather than giving every turn equal space.
 
 - Replay opens only while a player-controlled character owns the active turn.
 - Opening replay pauses live input.
-- The camera remains locked to the active player character's perspective for
-  the entire replay.
+- The camera stays anchored to the active player character, does not
+  automatically follow each acting character, and retains free-look, orbit,
+  and zoom controls throughout replay.
 - Exiting replay restores the live HUD and camera exactly as they were.
 - No generated prose, replay library, full-match persistence, or free-standing
   recap drawer is required.
