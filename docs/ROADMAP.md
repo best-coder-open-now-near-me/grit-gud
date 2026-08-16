@@ -1,7 +1,10 @@
 # Foundation Roadmap
 
-Each phase ends in something that can be reviewed independently. Mechanics are
-kept deliberately small until the cross-platform loop is working.
+Each phase ends in something that can be reviewed independently, but phases are
+production-shaped integration checkpoints rather than disposable MVPs. The
+[goal-first development and long-horizon AI decision record](GOAL_FIRST_DEVELOPMENT.md)
+defines the project's delivery standard, future trainable tactical-policy
+direction, and alpha adversarial-testing capstone.
 
 The player-facing turn-replay interaction is specified separately in
 [TURN_REPLAY_UX.md](TURN_REPLAY_UX.md). It uses a bounded, turn-segmented timeline
