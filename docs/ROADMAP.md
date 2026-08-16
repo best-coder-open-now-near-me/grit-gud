@@ -179,8 +179,9 @@ Work resumes in this order:
 The next work closes and proves existing systems before adding another
 initiative participant:
 
-1. **Complete destructible toppling end to end.** **Implementation complete
-   2026-08-16; full Unity runner and hands-on fixture acceptance remain.** Author prop eligibility and a
+1. **Complete destructible toppling end to end.** **Complete 2026-08-16:** the
+   implementation, full Unity runner, and hands-on fixture acceptance pass.
+   Author prop eligibility and a
    deterministic result-policy resolver that freezes the resulting pose,
    posture, and environmental evidence in the committed displacement. Add a
    dedicated published depot fixture with an isolated prop, mixed crate/barrel
@@ -188,7 +189,14 @@ initiative participant:
    exposure/cover, replay scrubbing, and exact live restoration. Add
    Application tests for resolution and PlayMode lifecycle coverage for the
    published fixture.
-2. **Add first-class toppled-prop pinning and escape.** Resolve `Pin` only when
+2. **Complete direct-fire destructibles and authored break presentation.** Route
+   valid weapon-to-prop impacts through the authoritative integrity session with
+   authored weapon/material damage rather than presentation-only surface hits.
+   Replace the current generic height compression and disappearance with stable
+   damaged/destroyed variants, collision, cover, navigation, debris, replay
+   scrubbing, and exact live restoration. Prove rifle, launcher, and frag paths
+   against a published fixture and PlayMode lifecycle coverage.
+3. **Add first-class toppled-prop pinning and escape.** Resolve `Pin` only when
    the final committed toppled footprint contacts an eligible character and
    authored prop mass/contact rules accept it. Freeze the responsible prop,
    affected actor, contact evidence, actor state, and exact poses in the action
@@ -200,28 +208,39 @@ initiative participant:
    and cover toppling-into-actor, obstruction, stale commits, escape, AI turns,
    scrubbing, and exact live restoration. Presentation polish is secondary to
    this state/action slice.
-3. **Finish close-quarters presentation.** Replace the knife's procedural-only
+4. **Add authored jump, vault, and mantle traversal.** Keep ordinary grounded
+   movement on surfaces that satisfy the authored slope and step limits; cross
+   taller objects only through explicit traversal links with stable takeoff,
+   landing, direction, clearance, movement/AP cost, and action identity. Validate
+   the entire capsule sweep and landing footprint before commitment, then freeze
+   the chosen link and trajectory for replay instead of rediscovering geometry
+   during playback. Add a published traversal fixture with below/at/above-limit
+   ramps plus connected and deliberately disconnected tall obstacles. Cover
+   slope classification, graph connectivity, one-way links, obstruction, stale
+   commits, cancellation, enemy path selection, exact live restoration, and
+   PlayMode traversal lifecycle behavior before binding jump/vault/mantle clips.
+5. **Finish close-quarters presentation.** Replace the knife's procedural-only
    strike with the gameplay-owned authored action state, bind hit reactions,
    and tune equipment transitions, contact timing, IK, interruption, replay,
    and restoration. Then bind the already-imported reload, grenade, reaction,
-   turn, and any required traversal clips to the gameplay states that own them.
+   turn, and traversal clips to the gameplay states that own them.
    Incapacitation may transition from the authored `Shoulder Hit And Fall` or
    `Fall Over` clip into a bounded presentation-only ragdoll. Record a compact
    bone-pose trace for seekable replay instead of rerunning PhysX during
    playback.
-4. **Extend the shared verification foundation.** Migrate the remaining action
+6. **Extend the shared verification foundation.** Migrate the remaining action
    families to canonical prepare/commit transitions, then add deterministic
    action trajectories, reproducible failure capsules, minimization, API
    fuzzing, disposable simulation, and scripted/random seed baselines.
-5. **Harden authored content, enemy choices, editor workflows, and delivery.**
+7. **Harden authored content, enemy choices, editor workflows, and delivery.**
    Exercise broader enemy action selection, destructible-pile authoring,
    viewport transforms, Windows/WebGL artifacts, and browser-playable preview
    handoff against the same authoritative contracts.
-6. **Add the deployable drone as the final substantial gameplay expansion.**
+8. **Add the deployable drone as the final substantial gameplay expansion.**
    Deployment, ownership, command range, initiative insertion, destruction,
    and removal must use the proven party, transition, replay, and simulation
    seams.
-7. **Run the alpha adversarial capstone.** Complete the scripted, random,
+9. **Run the alpha adversarial capstone.** Complete the scripted, random,
    novelty, optimized, mirrored, held-out, and archived search corpus only after
    the intended gameplay systems, including the drone, are present.
 
