@@ -90,7 +90,7 @@ namespace GritGud.Editor
                 recoilReturnSeconds: 0.6f);
             ValidateWeaponSet(
                 profile.GetWeaponAnimationSet(ActorAnimationPoseIds.Melee),
-                ActorAnimationParameters.EmptyHandsStateName,
+                ActorAnimationParameters.KnifeIdleStateName,
                 string.Empty,
                 MeleePoseValue,
                 recoilPlaybackSpeed: 1f,
@@ -99,7 +99,7 @@ namespace GritGud.Editor
                 recoilHoldSeconds: 0f,
                 recoilReturnSeconds: 0.18f);
 
-            if (profile.ActionBindings.Count != 3 ||
+            if (profile.ActionBindings.Count != 7 ||
                 !profile.TryGetActionBinding(
                     ActorAnimationAction.Interact,
                     out ActorAnimationActionBinding interaction) ||
@@ -129,12 +129,48 @@ namespace GritGud.Editor
                 !jump.UsesState ||
                 Mathf.Abs(
                     jump.TransitionSeconds -
-                    ActionTransitionSeconds) > 0.001f)
+                    ActionTransitionSeconds) > 0.001f ||
+                !IsStateBinding(
+                    profile,
+                    ActorAnimationAction.ContactStrike,
+                    ActorAnimationParameters.ActionLayerName,
+                    ActorAnimationParameters.KnifeStrikeStateName) ||
+                !IsStateBinding(
+                    profile,
+                    ActorAnimationAction.HitReaction,
+                    ActorAnimationParameters.ReactionLayerName,
+                    ActorAnimationParameters.HitReactionStateName) ||
+                !IsStateBinding(
+                    profile,
+                    ActorAnimationAction.Incapacitate,
+                    ActorAnimationParameters.ReactionLayerName,
+                    ActorAnimationParameters.FallOverStateName) ||
+                !IsStateBinding(
+                    profile,
+                    ActorAnimationAction.IncapacitateShoulder,
+                    ActorAnimationParameters.ReactionLayerName,
+                    ActorAnimationParameters.ShoulderFallStateName))
             {
                 throw new InvalidOperationException(
                     "The default animation profile requires its authored "
-                    + "interaction, throw, and jump action bindings.");
+                    + "interaction, throw, jump, strike, and reaction bindings.");
             }
+        }
+
+        private static bool IsStateBinding(
+            ActorAnimationProfile profile,
+            ActorAnimationAction action,
+            string layerName,
+            string stateName)
+        {
+            return profile.TryGetActionBinding(action, out var binding) &&
+                !binding.UsesTrigger &&
+                binding.UsesState &&
+                binding.LayerName == layerName &&
+                binding.StateName == stateName &&
+                Mathf.Abs(
+                    binding.TransitionSeconds -
+                    ActionTransitionSeconds) <= 0.001f;
         }
 
         private static void ValidateWeaponSet(

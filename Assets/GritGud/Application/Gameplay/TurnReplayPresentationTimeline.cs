@@ -148,7 +148,10 @@ namespace GritGud.Application.Gameplay
             string actorId,
             TurnReplayActorActionKind kind,
             long journalSequence,
-            float normalizedProgress)
+            float normalizedProgress,
+            bool contactReaction = false,
+            int resultingWoundCount = -1,
+            TargetRegionId? hitRegion = null)
         {
             ActorId = string.IsNullOrWhiteSpace(actorId)
                 ? throw new ArgumentException(
@@ -167,6 +170,12 @@ namespace GritGud.Application.Gameplay
             NormalizedProgress = Math.Max(
                 0f,
                 Math.Min(1f, normalizedProgress));
+            if (resultingWoundCount < -1)
+                throw new ArgumentOutOfRangeException(
+                    nameof(resultingWoundCount));
+            IsContactReaction = contactReaction;
+            ResultingWoundCount = resultingWoundCount;
+            HitRegion = hitRegion;
         }
 
         public string ActorId { get; }
@@ -176,6 +185,12 @@ namespace GritGud.Application.Gameplay
         public long JournalSequence { get; }
 
         public float NormalizedProgress { get; }
+
+        public bool IsContactReaction { get; }
+
+        public int ResultingWoundCount { get; }
+
+        public TargetRegionId? HitRegion { get; }
     }
 
     /// <summary>
@@ -184,6 +199,26 @@ namespace GritGud.Application.Gameplay
     /// </summary>
     public static class TurnReplayActorActionProjector
     {
+        private sealed class ReactionProjection
+        {
+            public ReactionProjection(
+                TurnReplayActorActionKind kind,
+                bool contactReaction = false,
+                int resultingWoundCount = -1,
+                TargetRegionId? hitRegion = null)
+            {
+                Kind = kind;
+                ContactReaction = contactReaction;
+                ResultingWoundCount = resultingWoundCount;
+                HitRegion = hitRegion;
+            }
+
+            public TurnReplayActorActionKind Kind { get; }
+            public bool ContactReaction { get; }
+            public int ResultingWoundCount { get; }
+            public TargetRegionId? HitRegion { get; }
+        }
+
         public static IReadOnlyList<TurnReplayActorActionState> Project(
             TurnReplayEventTimeline timeline,
             float timeSeconds)
@@ -342,7 +377,7 @@ namespace GritGud.Application.Gameplay
             TurnReplayActorActionKind? primary = null;
             var reactions = new Dictionary<
                 string,
-                TurnReplayActorActionKind>(StringComparer.Ordinal);
+                ReactionProjection>(StringComparer.Ordinal);
             foreach (GameplayActionOutcome outcome in resolved.Action.Outcomes)
             {
                 if (outcome is ThrownExplosiveActionOutcome)
@@ -362,18 +397,23 @@ namespace GritGud.Application.Gameplay
                     {
                         reactions[
                             displacement.Displacement.Request.SubjectId] =
-                            TurnReplayActorActionKind.Reaction;
+                            new ReactionProjection(
+                                TurnReplayActorActionKind.Reaction);
                     }
                     if (pin != null && pin.EstablishesPin)
-                        reactions[pin.ActorId] =
-                            TurnReplayActorActionKind.Pinned;
+                        reactions[pin.ActorId] = new ReactionProjection(
+                            TurnReplayActorActionKind.Pinned);
                 }
                 else if (outcome is AttackResolvedActionOutcome attack)
                 {
                     primary ??= TurnReplayActorActionKind.Attack;
                     if (attack.Attack.Wound != null)
                         reactions[attack.Attack.TargetId] =
-                            TurnReplayActorActionKind.Reaction;
+                            new ReactionProjection(
+                                TurnReplayActorActionKind.Reaction,
+                                attack.Attack.IsContactAttack,
+                                attack.Attack.TargetWoundsAfter.WoundCount,
+                                attack.Attack.HitRegion);
                 }
                 else if (outcome is WeaponDischargedActionOutcome
                     || outcome is ProjectileLaunchedActionOutcome)
@@ -395,15 +435,17 @@ namespace GritGud.Application.Gameplay
                     resolved.Sequence,
                     progress);
             }
-            foreach (KeyValuePair<string, TurnReplayActorActionKind> reaction
+            foreach (KeyValuePair<string, ReactionProjection> reaction
                 in reactions)
             {
-                Add(
-                    states,
+                states.Add(new TurnReplayActorActionState(
                     reaction.Key,
-                    reaction.Value,
+                    reaction.Value.Kind,
                     resolved.Sequence,
-                    progress);
+                    progress,
+                    reaction.Value.ContactReaction,
+                    reaction.Value.ResultingWoundCount,
+                    reaction.Value.HitRegion));
             }
         }
 

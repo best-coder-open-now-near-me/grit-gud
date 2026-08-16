@@ -239,8 +239,10 @@ authorize publishing raw licensed sources.
 - [ ] Add actor spawn/configuration to the level document and in-game editor.
 - [ ] Add animation-profile selection per actor archetype.
 - [ ] Add objective and encounter authoring tools.
-- [ ] Add upper-body layers, avatar masks, equipment poses, reactions, and NPC
-      animation profiles as gameplay requires them.
+- [x] Add shared upper-body layers, avatar masks, equipment poses, authored
+      knife actions, and full-body wound/fall reactions.
+- [ ] Add actor-archetype-specific animation profile selection and additional
+      NPC-only profiles as gameplay requires them.
 
 **Exit:** additional actors and objectives can be authored without modifying
 core gameplay or animation-driver code.
@@ -282,6 +284,35 @@ Slope boundaries are covered with real Unity colliders in automated tests:
 45 degrees and the authored 50-degree limit are accepted, while 55 degrees is
 rejected. They are intentionally not extra pitched modules in the published
 yard.
+
+## Authored close-quarters verification
+
+Both Mara and Oren carry the Combat Knife in hotbar slot `5`; the published
+Depot Yard therefore needs no extra test fixture for this slice.
+
+1. Press `T` to enter turn mode and press `5` to equip the Combat Knife. The
+   held knife must remain rig-mounted while the upper body enters the looping
+   Knife Idle pose; the legs must keep their ordinary locomotion authority.
+2. Move to within the authored 2-unit reach of a hostile, acquire it with the
+   crosshair, and confirm an attack with `LMB`. The attacker must play one
+   authored 0.8-second stab. There must be no muzzle flash, tracer, or separate
+   procedural rotation of the held knife.
+3. On a hit, the target must remain in its prior pose until the stab reaches its
+   40% contact point, then enter a full-body reaction. A miss must not play a
+   target hit reaction. The wound tile and Combat Diagnostics still update from
+   the already-committed action rather than from the animation frame.
+4. Repeat attacks until an incapacitating wound is committed. Torso/arm
+   presentation may use Shoulder Hit And Fall; head/leg presentation uses Fall
+   Over. The actor must remain down after the non-looping clip instead of
+   snapping back to locomotion.
+5. During a non-incapacitating stab, immediately equip another weapon. The stab
+   must blend back through the owned action idle and the newly equipped pose;
+   the old knife motion must not continue while holding the replacement model.
+6. Open replay and scrub to just before and after contact. The attacker must
+   seek through Stabbing, the target reaction must begin only after contact,
+   backward/arbitrary seeks must emit no one-shot contact effects, and the
+   incapacitated state must remain down after the action event. Exiting replay
+   must restore the exact live pose, animator state, equipped model, and wounds.
 
 ## Directional Push Off verification
 
@@ -338,12 +369,13 @@ uses a short acceleration ramp to play each committed movement record. Ordinary
 firearms remain immediate; emergency-response eligibility is explicitly authored
 only on high-threat ordnance. Eligible impacts derive one shared reaction AP
 allowance and re-query the world once after every responder has acted.
-Authored automatic traversal is now complete through schema, planning,
-clearance, playback, replay, animation, published connected/disconnected
-fixtures, and EditMode/PlayMode lifecycle coverage. The next production slice
-is close-quarters presentation. Directional Push Off now freezes a player-
-chosen cover placement and validates the actor's get-up space; its remaining
-lying, struggle, push, get-up, and bounded ragdoll work is presentation polish.
-Next comes authored knife action timing, reactions, equipment transitions, IK,
-interruption, replay, and restoration, followed by the bounded
-incapacitation-to-ragdoll presentation experiment.
+Authored automatic traversal is complete through schema, planning, clearance,
+playback, replay, animation, published connected/disconnected fixtures, and
+EditMode/PlayMode lifecycle coverage. Authored close-quarters presentation is
+also complete through Knife Idle/Stabbing equipment poses, contact-timed wound
+reactions, persistent regional fall variants, IK suppression, equipment
+interruption, seekable replay, and exact live restoration. Directional Push Off
+freezes a player-chosen cover placement and validates the actor's get-up space;
+its lying, struggle, push, and authored get-up work remains presentation polish.
+The next production slice is the bounded incapacitation-to-ragdoll experiment,
+followed by the prop-aware pinned-character presentation pass.

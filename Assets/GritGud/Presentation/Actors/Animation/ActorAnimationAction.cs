@@ -9,5 +9,7 @@ namespace GritGud.Presentation.Actors.Animation
         Jump = 4,
         HitReaction = 5,
         Incapacitate = 6,
+        ContactStrike = 7,
+        IncapacitateShoulder = 8,
     }
 }

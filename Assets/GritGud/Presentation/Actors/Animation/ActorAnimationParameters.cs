@@ -17,15 +17,22 @@ namespace GritGud.Presentation.Actors.Animation
         public const string WeaponLayerName = "Weapon Upper Body";
         public const string RecoilLayerName = "Weapon Recoil";
         public const string ActionLayerName = "Actor Actions";
+        public const string ReactionLayerName = "Actor Reactions";
         public const string TraversalLayerName = "Actor Traversal";
         public const string EmptyHandsStateName = "Empty Hands";
         public const string RifleAimStateName = "Rifle Aim";
         public const string LauncherAimStateName = "Launcher Aim";
+        public const string KnifeIdleStateName = "Knife Idle";
         public const string NoRecoilStateName = "No Recoil";
         public const string RifleRecoilStateName = "Rifle Recoil";
         public const string LauncherRecoilStateName = "Launcher Recoil";
         public const string NoActionStateName = "No Action";
         public const string ThrowStateName = "Throw";
+        public const string KnifeStrikeStateName = "Knife Strike";
+        public const string NoReactionStateName = "No Reaction";
+        public const string HitReactionStateName = "Hit Reaction";
+        public const string FallOverStateName = "Fall Over";
+        public const string ShoulderFallStateName = "Shoulder Hit And Fall";
         public const string NoTraversalStateName = "No Traversal";
         public const string JumpStateName = "Jump";
 
@@ -45,6 +52,8 @@ namespace GritGud.Presentation.Actors.Animation
             Animator.StringToHash(RifleAimStateName);
         public static readonly int LauncherAimState =
             Animator.StringToHash(LauncherAimStateName);
+        public static readonly int KnifeIdleState =
+            Animator.StringToHash(KnifeIdleStateName);
         public static readonly int NoRecoilState =
             Animator.StringToHash(NoRecoilStateName);
         public static readonly int RifleRecoilState =
@@ -55,6 +64,16 @@ namespace GritGud.Presentation.Actors.Animation
             Animator.StringToHash(NoActionStateName);
         public static readonly int ThrowState =
             Animator.StringToHash(ThrowStateName);
+        public static readonly int KnifeStrikeState =
+            Animator.StringToHash(KnifeStrikeStateName);
+        public static readonly int NoReactionState =
+            Animator.StringToHash(NoReactionStateName);
+        public static readonly int HitReactionState =
+            Animator.StringToHash(HitReactionStateName);
+        public static readonly int FallOverState =
+            Animator.StringToHash(FallOverStateName);
+        public static readonly int ShoulderFallState =
+            Animator.StringToHash(ShoulderFallStateName);
         public static readonly int JumpState =
             Animator.StringToHash(JumpStateName);
     }

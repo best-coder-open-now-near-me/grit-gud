@@ -62,6 +62,7 @@ namespace GritGud.Presentation.Gameplay
         private GameplayCharacterGroundingPresenter characterGroundingPresenter;
         private GameplayTacticalTransitionPresenter tacticalTransitionPresenter;
         private GameplaySurfaceImpactPresenter surfaceImpactPresenter;
+        private GameplayCombatReactionPresenter combatReactionPresenter;
 
         public bool IsRunning => levelWorld != null && player != null;
 
@@ -125,6 +126,8 @@ namespace GritGud.Presentation.Gameplay
                 GetOrAddComponent<GameplayTacticalTransitionPresenter>();
             surfaceImpactPresenter =
                 GetOrAddComponent<GameplaySurfaceImpactPresenter>();
+            combatReactionPresenter =
+                GetOrAddComponent<GameplayCombatReactionPresenter>();
             ResetPresentationBindings();
         }
 
@@ -166,6 +169,7 @@ namespace GritGud.Presentation.Gameplay
             turnMovementController?.Unbind();
             actionController?.Unbind();
             enemyController?.Unbind();
+            combatReactionPresenter?.Unbind();
             surfaceImpactPresenter?.Unbind();
             tacticalTransitionPresenter?.Unbind();
             characterGroundingPresenter?.Unbind();
@@ -503,6 +507,10 @@ namespace GritGud.Presentation.Gameplay
                 sessionPresenter.TryBeginEncounter,
                 obscuranceQuery: smokeFieldSession,
                 traversalLinks: content.Level.traversalLinks);
+            combatReactionPresenter.Bind(
+                session,
+                worldRegistry,
+                attackController);
             targetAcquisitionPresenter.SetWeaponAimOriginProvider(
                 () => partyPresentation?.SelectedWeapon?.Muzzle != null
                     ? partyPresentation.SelectedWeapon.Muzzle.position

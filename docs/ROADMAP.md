@@ -88,7 +88,18 @@ Work resumes in this order:
    Combat Knife uses authored reach and AP, actor-only targeting, atomic
    out-of-reach rejection, seeded regional wounds, immutable reach evidence,
    complete combat diagnostics, contact-aware enemy movement, and a catalog-
-   authored procedural strike with no firearm effects.
+   authored contact presentation with no firearm effects. **Authored close-
+   quarters presentation is complete:** the generated controller uses the
+   imported Knife Idle and Stabbing clips, normalizes the strike to a stable
+   0.8-second presentation, and exposes its 40% contact point without delaying
+   the committed wound. Successful hits enter a higher-priority full-body
+   reaction channel only at that visual contact; ordinary reactions recover,
+   while incapacitating torso/arm hits select Shoulder Hit And Fall and other
+   regions select Fall Over. Equipment changes can interrupt the strike back to
+   its owned idle state. Replay carries contact/reaction metadata, remaps the
+   target reaction after the contact point, holds incapacitated presentation,
+   suppresses transient contact effects during seeks, and restores the exact
+   live animator, weapon, wound, and pose snapshot on exit.
    **The intervening wound-visibility checkpoint is also complete:** direct
    attacks preserve Head, Torso, left/right Arm, and left/right Leg wounds in
    authoritative actor state. The player HUD renders the same six regions as
@@ -148,7 +159,8 @@ Work resumes in this order:
     shooter idle, walk, run, strafe, and firing motions, while the generator and
     validation suite own the controller and socket contracts. Other imported
    shooter motions remain available for their eventual reload, grenade,
-   reaction, jump, and turn behaviors.
+   reload, grenade, and additional turn behaviors; knife idle/strike plus the
+   first wound/fall reactions are now owned by the generated controller.
 11. Replace singleton player ownership before authoring companions. **Complete
    through the player-facing vertical slice:** schema 12 owns the ordered player
    party and stable character identities; exploration selection and turn-mode
@@ -241,15 +253,19 @@ initiative participant:
    traversal layer uses the authored `rifle jump` clip. Vault and mantle retain
    distinct first-class action identities but temporarily share that binding
    until their dedicated clips and published fixtures are authored.
-5. **Finish close-quarters presentation.** Replace the knife's procedural-only
-   strike with the gameplay-owned authored action state, bind hit reactions,
-   and tune equipment transitions, contact timing, IK, interruption, replay,
-   and restoration. Then bind the already-imported reload, grenade, reaction,
-   and turn clips to the gameplay states that own them.
-   Incapacitation may transition from the authored `Shoulder Hit And Fall` or
-   `Fall Over` clip into a bounded presentation-only ragdoll. Record a compact
-   bone-pose trace for seekable replay instead of rerunning PhysX during
-   playback.
+5. **Finish close-quarters presentation.** **Authored slice complete
+   2026-08-16:** Knife Idle owns the equipped melee pose and Stabbing owns a
+   stable 0.8-second upper-body action. The committed wound remains immediate,
+   while a presentation-only scheduler starts the full-body hit/fall reaction
+   at the authored 40% contact point. Equipment changes interrupt the strike to
+   its owned idle; reaction priority suppresses weapon IK; replay remaps contact
+   progress, holds incapacitated actors down, emits no contact transient during
+   seeks, and restores the exact live animator/equipment/wound state. The next
+   presentation experiment transitions the authored `Shoulder Hit And Fall` or
+   `Fall Over` endpoint into a bounded presentation-only ragdoll and records a
+   compact bone-pose trace for seekable replay instead of rerunning PhysX.
+   Reload, grenade, and additional turn clips remain distinct later action-
+   presentation bindings rather than part of the knife slice.
 6. **Add incendiary consumables.** Author Molotov cocktails as first-class
    throwable consumables that reuse frozen landing and exposure evidence, then
    create authoritative persistent fire fields with ignition, duration,
@@ -293,8 +309,8 @@ pinning prop is locked automatically, a wireframe previews its final
 collider-backed cover, a ring shows required get-up space, and invalid headings
 remain uncommitted. Enemy Push Off chooses deterministically through the same
 validator. Both player characters also carry the Combat Knife in hotbar slot 5,
-so reach rejection, committed wounds, diagnostics, and the current procedural
-strike can be tested now.
+so reach rejection, committed wounds, diagnostics, the authored stab/contact
+timing, and wound-driven reactions can be tested now.
 
 The 2026-08-12 review follow-up is complete: silhouette exposure is cached,
 displacement and blast rules use canonical Application paths, scenario content

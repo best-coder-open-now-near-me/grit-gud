@@ -108,10 +108,15 @@ namespace GritGud.Presentation.Gameplay
             weapon?.PresentReplayAction(action);
             view.ReplayActions.Present(action);
             view.ReplayActions.PresentPinState(snapshot.PinState);
+            ResolveAnimationProjection(
+                snapshot,
+                action,
+                out ActorAnimationAction? animationAction,
+                out float animationProgress);
             animation.PresentReplayAction(
                 pose.Stance,
-                MapAnimationAction(action?.Kind),
-                action?.NormalizedProgress ?? 0f);
+                animationAction,
+                animationProgress);
         }
 
         internal void PresentTransient(
@@ -189,29 +194,68 @@ namespace GritGud.Presentation.Gameplay
             }
         }
 
-        private static ActorAnimationAction? MapAnimationAction(
-            TurnReplayActorActionKind? kind)
+        private void ResolveAnimationProjection(
+            GameplayActorSnapshot snapshot,
+            TurnReplayActorActionState state,
+            out ActorAnimationAction? action,
+            out float progress)
         {
-            switch (kind)
+            progress = state?.NormalizedProgress ??
+                (snapshot.IsIncapacitated ? 1f : 0f);
+            if (state == null)
+            {
+                action = snapshot.IsIncapacitated
+                    ? ActorAnimationAction.Incapacitate
+                    : (ActorAnimationAction?)null;
+                return;
+            }
+
+            switch (state.Kind)
             {
                 case TurnReplayActorActionKind.Attack:
-                    return ActorAnimationAction.WeaponFire;
+                    action = weapon?.ResolveReplayAttackAnimation()
+                        ?? ActorAnimationAction.WeaponFire;
+                    return;
                 case TurnReplayActorActionKind.Equipment:
                 case TurnReplayActorActionKind.Displacement:
-                    return ActorAnimationAction.Interact;
+                    action = ActorAnimationAction.Interact;
+                    return;
                 case TurnReplayActorActionKind.Throw:
-                    return ActorAnimationAction.Throw;
+                    action = ActorAnimationAction.Throw;
+                    return;
                 case TurnReplayActorActionKind.Reaction:
+                    if (state.IsContactReaction)
+                    {
+                        float impact = GameplayCloseQuartersPresentationTiming
+                            .ContactImpactNormalizedTime;
+                        if (progress < impact)
+                        {
+                            action = null;
+                            progress = 0f;
+                            return;
+                        }
+                        progress = Mathf.InverseLerp(impact, 1f, progress);
+                    }
+                    action = state.ResultingWoundCount >=
+                        snapshot.MaximumWounds
+                        ? ActorAnimationCoordinator
+                            .SelectIncapacitationAction(state.HitRegion)
+                        : ActorAnimationAction.HitReaction;
+                    return;
                 case TurnReplayActorActionKind.Pinned:
-                    return ActorAnimationAction.HitReaction;
+                    action = ActorAnimationAction.HitReaction;
+                    return;
                 case TurnReplayActorActionKind.GetUp:
-                    return ActorAnimationAction.Interact;
+                    action = ActorAnimationAction.Interact;
+                    return;
                 case TurnReplayActorActionKind.Jump:
                 case TurnReplayActorActionKind.Vault:
                 case TurnReplayActorActionKind.Mantle:
-                    return ActorAnimationAction.Jump;
+                    action = ActorAnimationAction.Jump;
+                    return;
                 default:
-                    return null;
+                    action = null;
+                    return;
             }
         }
     }

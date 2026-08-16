@@ -30,12 +30,8 @@ namespace GritGud.Presentation.Gameplay
 
         private readonly List<TransientVisual> transientVisuals = new();
         private WeaponMountPresenter mount;
-        private WeaponPresentationDefinition contactDefinition;
-        private float contactStrikeElapsed = -1f;
 
         internal int TransientVisualCount => transientVisuals.Count;
-
-        internal bool ContactStrikeActive => contactStrikeElapsed >= 0f;
 
         internal void Bind(WeaponMountPresenter weaponMount)
         {
@@ -69,19 +65,9 @@ namespace GritGud.Presentation.Gameplay
             }
         }
 
-        internal void PresentContactStrike(
-            WeaponPresentationDefinition definition,
-            Vector3 destination)
-        {
-            contactDefinition = definition ?? throw new ArgumentNullException(
-                nameof(definition));
-            contactStrikeElapsed = 0f;
-        }
-
         internal void Tick(float deltaTime)
         {
             TickTransientVisuals(deltaTime);
-            TickContactStrike(deltaTime);
         }
 
         internal void TickTransientVisuals(float deltaTime)
@@ -101,34 +87,6 @@ namespace GritGud.Presentation.Gameplay
             }
         }
 
-        internal void TickContactStrike(float deltaTime)
-        {
-            if (contactStrikeElapsed < 0f || contactDefinition == null)
-            {
-                return;
-            }
-
-            contactStrikeElapsed += Mathf.Max(0f, deltaTime);
-            float progress = Mathf.Clamp01(
-                contactStrikeElapsed / contactDefinition.ContactStrikeSeconds);
-            float weight = Mathf.Sin(progress * Mathf.PI);
-            mount?.SetContactSwing(
-                weight,
-                contactDefinition.ContactSwingAxisLocal,
-                contactDefinition.ContactSwingDegrees);
-            if (progress >= 1f)
-            {
-                ClearWeaponAction();
-            }
-        }
-
-        internal void ClearWeaponAction()
-        {
-            contactStrikeElapsed = -1f;
-            contactDefinition = null;
-            mount?.SetContactSwing(0f, Vector3.up, 0f);
-        }
-
         internal void ClearTransientVisuals()
         {
             foreach (TransientVisual visual in transientVisuals)
@@ -138,7 +96,6 @@ namespace GritGud.Presentation.Gameplay
 
         internal void Clear()
         {
-            ClearWeaponAction();
             ClearTransientVisuals();
             mount = null;
         }

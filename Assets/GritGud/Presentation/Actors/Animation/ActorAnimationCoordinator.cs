@@ -23,6 +23,7 @@ namespace GritGud.Presentation.Actors.Animation
         private string replayOriginalWeaponAnimationSetId;
         private ActorAnimationAction? replayOriginalLastRequestedAction;
         private int replayOriginalActionSequence;
+        private bool incapacitationPresentationDeferred;
 
         public AnimatorDriver Driver => animatorDriver;
 
@@ -154,6 +155,25 @@ namespace GritGud.Presentation.Actors.Animation
             return true;
         }
 
+        internal bool InterruptAction(ActorAnimationAction action)
+        {
+            if (IsPresentingReplay || LastRequestedAction != action ||
+                profile == null || animatorDriver == null ||
+                !profile.TryGetActionBinding(action, out var binding) ||
+                !binding.UsesState)
+            {
+                return false;
+            }
+            string idleState = GetIdleStateName(binding.LayerName);
+            if (idleState == null)
+                return false;
+            animatorDriver.CrossFadeState(
+                binding.LayerName,
+                idleState,
+                binding.TransitionSeconds);
+            return true;
+        }
+
         internal void BeginReplayPresentation()
         {
             if (IsPresentingReplay)
@@ -237,11 +257,50 @@ namespace GritGud.Presentation.Actors.Animation
             Quaternion visualLocalRotation,
             Vector3 visualLocalOffset)
         {
+            if (incapacitationPresentationDeferred)
+                return;
+            if (LastRequestedAction == ActorAnimationAction.Incapacitate
+                || LastRequestedAction ==
+                    ActorAnimationAction.IncapacitateShoulder)
+            {
+                return;
+            }
             if (!TryRequestAction(ActorAnimationAction.Incapacitate))
             {
                 animatorDriver?.DisableAndOffset(
                     visualLocalRotation,
                     visualLocalOffset);
+            }
+        }
+
+        internal bool PresentWoundReaction(
+            TargetRegionId region,
+            bool incapacitated)
+        {
+            if (incapacitated)
+                incapacitationPresentationDeferred = false;
+            ActorAnimationAction action = incapacitated
+                ? SelectIncapacitationAction(region)
+                : ActorAnimationAction.HitReaction;
+            return TryRequestAction(action);
+        }
+
+        internal void DeferIncapacitationPresentation()
+        {
+            incapacitationPresentationDeferred = true;
+        }
+
+        internal static ActorAnimationAction SelectIncapacitationAction(
+            TargetRegionId? region)
+        {
+            switch (region)
+            {
+                case TargetRegionId.Torso:
+                case TargetRegionId.LeftArm:
+                case TargetRegionId.RightArm:
+                    return ActorAnimationAction.IncapacitateShoulder;
+                default:
+                    return ActorAnimationAction.Incapacitate;
             }
         }
 
@@ -285,27 +344,45 @@ namespace GritGud.Presentation.Actors.Animation
                     binding.LayerName,
                     binding.StateName,
                     binding.TransitionSeconds);
-                if (string.Equals(
-                        binding.LayerName,
-                        ActorAnimationParameters.ActionLayerName,
-                        StringComparison.Ordinal))
-                {
-                    animatorDriver.SetLayerWeight(binding.LayerName, 1f);
-                }
+                animatorDriver.SetLayerWeight(binding.LayerName, 1f);
             }
 
             return binding.UsesTrigger || binding.UsesState;
         }
 
+        private static string GetIdleStateName(string layerName)
+        {
+            if (string.Equals(
+                    layerName,
+                    ActorAnimationParameters.ActionLayerName,
+                    StringComparison.Ordinal))
+            {
+                return ActorAnimationParameters.NoActionStateName;
+            }
+            if (string.Equals(
+                    layerName,
+                    ActorAnimationParameters.ReactionLayerName,
+                    StringComparison.Ordinal))
+            {
+                return ActorAnimationParameters.NoReactionStateName;
+            }
+            if (string.Equals(
+                    layerName,
+                    ActorAnimationParameters.TraversalLayerName,
+                    StringComparison.Ordinal))
+            {
+                return ActorAnimationParameters.NoTraversalStateName;
+            }
+            return null;
+        }
+
         private void ResetActionLayer()
         {
-            if (animatorDriver != null && animatorDriver.HasLayer(
-                    ActorAnimationParameters.ActionLayerName))
-            {
-                animatorDriver.SetLayerWeight(
-                    ActorAnimationParameters.ActionLayerName,
-                    0f);
-            }
+            if (animatorDriver == null)
+                return;
+            ResetLayerWeight(ActorAnimationParameters.ActionLayerName);
+            ResetLayerWeight(ActorAnimationParameters.ReactionLayerName);
+            ResetLayerWeight(ActorAnimationParameters.TraversalLayerName);
         }
 
         private void ResetReplayActionLayers()
@@ -330,6 +407,33 @@ namespace GritGud.Presentation.Actors.Animation
                     0f);
                 animatorDriver.SetLayerWeight(actionLayer, 0f);
             }
+            string reactionLayer =
+                ActorAnimationParameters.ReactionLayerName;
+            if (animatorDriver.HasLayer(reactionLayer))
+            {
+                animatorDriver.PlayState(
+                    reactionLayer,
+                    ActorAnimationParameters.NoReactionState,
+                    0f);
+                animatorDriver.SetLayerWeight(reactionLayer, 0f);
+            }
+            string traversalLayer =
+                ActorAnimationParameters.TraversalLayerName;
+            if (animatorDriver.HasLayer(traversalLayer))
+            {
+                animatorDriver.PlayState(
+                    traversalLayer,
+                    Animator.StringToHash(
+                        ActorAnimationParameters.NoTraversalStateName),
+                    0f);
+                animatorDriver.SetLayerWeight(traversalLayer, 0f);
+            }
+        }
+
+        private void ResetLayerWeight(string layerName)
+        {
+            if (animatorDriver.HasLayer(layerName))
+                animatorDriver.SetLayerWeight(layerName, 0f);
         }
 
         private void PresentReplayWeaponFire(float normalizedProgress)

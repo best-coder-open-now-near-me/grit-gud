@@ -162,6 +162,82 @@ namespace GritGud.PlayMode.Tests
                     Assert.That(animation.ReplayAction,
                         Is.EqualTo(ActorAnimationAction.HitReaction));
 
+                    GameplayActorSnapshot contactSnapshot =
+                        new GameplayActorSnapshot(
+                            "player",
+                            new GameplayActorPose(
+                                new GameplayPosition(5f, 0f, 3f),
+                                90f,
+                                ActorStance.Crouched),
+                            new TurnBudget(2, 4f),
+                            new ActorWoundSnapshot(
+                                "player",
+                                headWounds: 0,
+                                torsoWounds: 1,
+                                leftArmWounds: 0,
+                                rightArmWounds: 0,
+                                leftLegWounds: 0,
+                                rightLegWounds: 0,
+                                movementPenalty: 1f));
+                    replay.Present(
+                        contactSnapshot,
+                        new TurnReplayActorActionState(
+                            "player",
+                            TurnReplayActorActionKind.Reaction,
+                            journalSequence: 4,
+                            normalizedProgress: 0.2f,
+                            contactReaction: true,
+                            resultingWoundCount: 1,
+                            hitRegion: TargetRegionId.Torso));
+                    Assert.That(animation.ReplayAction, Is.Null);
+
+                    replay.Present(
+                        contactSnapshot,
+                        new TurnReplayActorActionState(
+                            "player",
+                            TurnReplayActorActionKind.Reaction,
+                            journalSequence: 4,
+                            normalizedProgress: 0.7f,
+                            contactReaction: true,
+                            resultingWoundCount: 1,
+                            hitRegion: TargetRegionId.Torso));
+                    Assert.That(
+                        animation.ReplayAction,
+                        Is.EqualTo(ActorAnimationAction.HitReaction));
+                    Assert.That(
+                        animation.ReplayActionProgress,
+                        Is.EqualTo(0.5f).Within(0.001f));
+
+                    GameplayActorSnapshot incapacitatedSnapshot =
+                        new GameplayActorSnapshot(
+                            "player",
+                            contactSnapshot.Pose,
+                            contactSnapshot.TurnBudget,
+                            contactSnapshot.Wounds,
+                            equippedItemId: null,
+                            equipmentEffects: EquipmentEffectSet.None,
+                            maximumWounds: 1);
+                    replay.Present(
+                        incapacitatedSnapshot,
+                        new TurnReplayActorActionState(
+                            "player",
+                            TurnReplayActorActionKind.Reaction,
+                            journalSequence: 5,
+                            normalizedProgress: 0.7f,
+                            contactReaction: true,
+                            resultingWoundCount: 1,
+                            hitRegion: TargetRegionId.Torso));
+                    Assert.That(
+                        animation.ReplayAction,
+                        Is.EqualTo(
+                            ActorAnimationAction.IncapacitateShoulder));
+
+                    replay.Present(incapacitatedSnapshot, action: null);
+                    Assert.That(
+                        animation.ReplayAction,
+                        Is.EqualTo(ActorAnimationAction.Incapacitate));
+                    Assert.That(animation.ReplayActionProgress, Is.EqualTo(1f));
+
                     replay.Present(
                         new GameplayActorSnapshot(
                             "player",
@@ -182,7 +258,7 @@ namespace GritGud.PlayMode.Tests
                         new TurnReplayActorActionState(
                             "player",
                             TurnReplayActorActionKind.GetUp,
-                            journalSequence: 4,
+                            journalSequence: 6,
                             normalizedProgress: 0.25f));
 
                     Assert.That(view.ReplayActions.CurrentPinState, Is.Null);

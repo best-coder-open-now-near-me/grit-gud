@@ -96,7 +96,7 @@ namespace GritGud.Editor
             ConfigureWeaponAnimationSet(
                 sets.GetArrayElementAtIndex(3),
                 ActorAnimationPoseIds.Melee,
-                ActorAnimationParameters.EmptyHandsStateName,
+                ActorAnimationParameters.KnifeIdleStateName,
                 string.Empty,
                 MeleePoseValue,
                 recoilPlaybackSpeed: 1f,
@@ -168,7 +168,7 @@ namespace GritGud.Editor
         private static void ConfigureActionBindings(
             SerializedProperty bindings)
         {
-            bindings.arraySize = 3;
+            bindings.arraySize = 7;
             SerializedProperty interaction =
                 bindings.GetArrayElementAtIndex(0);
             interaction.FindPropertyRelative("action").enumValueIndex =
@@ -204,6 +204,43 @@ namespace GritGud.Editor
             jump.FindPropertyRelative("stateName").stringValue =
                 ActorAnimationParameters.JumpStateName;
             jump.FindPropertyRelative("transitionSeconds").floatValue =
+                ActionTransitionSeconds;
+
+            ConfigureStateBinding(
+                bindings.GetArrayElementAtIndex(3),
+                ActorAnimationAction.ContactStrike,
+                ActorAnimationParameters.ActionLayerName,
+                ActorAnimationParameters.KnifeStrikeStateName);
+            ConfigureStateBinding(
+                bindings.GetArrayElementAtIndex(4),
+                ActorAnimationAction.HitReaction,
+                ActorAnimationParameters.ReactionLayerName,
+                ActorAnimationParameters.HitReactionStateName);
+            ConfigureStateBinding(
+                bindings.GetArrayElementAtIndex(5),
+                ActorAnimationAction.Incapacitate,
+                ActorAnimationParameters.ReactionLayerName,
+                ActorAnimationParameters.FallOverStateName);
+            ConfigureStateBinding(
+                bindings.GetArrayElementAtIndex(6),
+                ActorAnimationAction.IncapacitateShoulder,
+                ActorAnimationParameters.ReactionLayerName,
+                ActorAnimationParameters.ShoulderFallStateName);
+        }
+
+        private static void ConfigureStateBinding(
+            SerializedProperty binding,
+            ActorAnimationAction action,
+            string layerName,
+            string stateName)
+        {
+            binding.FindPropertyRelative("action").enumValueIndex =
+                (int)action;
+            binding.FindPropertyRelative("triggerParameterName").stringValue =
+                string.Empty;
+            binding.FindPropertyRelative("layerName").stringValue = layerName;
+            binding.FindPropertyRelative("stateName").stringValue = stateName;
+            binding.FindPropertyRelative("transitionSeconds").floatValue =
                 ActionTransitionSeconds;
         }
     }

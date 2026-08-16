@@ -56,6 +56,11 @@ namespace GritGud.Editor
             SourceAnimationRoot + "/Combat/Bazooka/HumanM@Bazooka_Aim01_Shoot01.fbx";
         internal const string ThrowPath =
             SourceAnimationRoot + "/Combat/Grenade/HumanM@ThrowGrenade01_L.fbx";
+        internal const string KnifeIdlePath = "Assets/Mixamo/Knife Idle.fbx";
+        internal const string KnifeStrikePath = "Assets/Mixamo/Stabbing.fbx";
+        internal const string ShoulderFallPath =
+            "Assets/Mixamo/Shoulder Hit And Fall.fbx";
+        internal const string FallOverPath = "Assets/Mixamo/Fall Over.fbx";
         internal const string UpperBodyMaskPath =
             "Assets/Kevin Iglesias/Human Animations/Models/Avatar Masks/Human Body Upper Mask.mask";
         internal const string LowerBodyMaskPath =
@@ -103,6 +108,11 @@ namespace GritGud.Editor
         internal const float ActionTransitionSeconds = 0.08f;
         internal const float ActionExitNormalizedTime = 0.92f;
         internal const float ActionReturnTransitionSeconds = 0.1f;
+        internal const float ContactStrikeSeconds =
+            GritGud.Presentation.Gameplay
+                .GameplayCloseQuartersPresentationTiming
+                .ContactStrikeSeconds;
+        internal const float HitReactionExitNormalizedTime = 0.3f;
 
         internal static readonly DefaultActorClipDefinition[] ClipDefinitions =
         {

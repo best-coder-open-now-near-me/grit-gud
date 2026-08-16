@@ -166,6 +166,79 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void ContactAttackProjectionCarriesReactionTimingAndWoundVariant()
+        {
+            var exposure = new TargetExposureSnapshot(
+                "mara",
+                "raider",
+                new[]
+                {
+                    new TargetRegionExposure(TargetRegionId.Torso, 1, 1),
+                });
+            AttackResolutionRecord resolution = AttackResolutionRules.Resolve(
+                sequence: 1,
+                resolutionSeed: AttackResolutionRules.DeriveResolutionSeed(
+                    17u,
+                    1),
+                exposure: exposure,
+                accuracyDecay: AccuracyDecayDefinition.None,
+                distance: 1f,
+                targetWoundsBefore:
+                    new ActorWoundSnapshot("raider", 0, 0f),
+                woundMovementPenalty: 1f,
+                contact: new ContactAttackDefinition(2f));
+            var previous = new TurnBudget(4, 8f);
+            var action = new GameplayActionRecord(
+                1,
+                new GameplayActionRequest(
+                    "mara",
+                    "attack.knife",
+                    "raider"),
+                new ActionCost(1, 0f, ActionMobility.Mobile),
+                previous,
+                previous.SpendAction(new ActionCost(
+                    1,
+                    0f,
+                    ActionMobility.Mobile)),
+                new GameplayActionOutcome[]
+                {
+                    new AttackResolvedActionOutcome(resolution),
+                });
+            var window = new TurnReplayWindow(
+                "mara",
+                new[]
+                {
+                    new TurnReplaySegment(
+                        1,
+                        "mara",
+                        new GameplayJournalEntry[]
+                        {
+                            new ActionResolvedJournalEntry(1, action),
+                            new TurnEndedJournalEntry(
+                                2,
+                                new TurnEndRecord(1, "mara", "raider")),
+                        }),
+                });
+            var timeline = new TurnReplayEventTimeline(window);
+            TurnReplayTimedEvent attack = timeline.Events[0];
+
+            IReadOnlyList<TurnReplayActorActionState> states =
+                TurnReplayActorActionProjector.Project(
+                    timeline,
+                    attack.StartSeconds + attack.DurationSeconds * 0.5f);
+
+            Assert.That(states, Has.Count.EqualTo(2));
+            TurnReplayActorActionState reaction = states.Single(
+                state => state.ActorId == "raider");
+            Assert.That(
+                reaction.Kind,
+                Is.EqualTo(TurnReplayActorActionKind.Reaction));
+            Assert.That(reaction.IsContactReaction, Is.True);
+            Assert.That(reaction.ResultingWoundCount, Is.EqualTo(1));
+            Assert.That(reaction.HitRegion, Is.EqualTo(TargetRegionId.Torso));
+        }
+
+        [Test]
         public void ActorActionProjectionDistinguishesPinnedReaction()
         {
             var contact = new DisplacementContactEvidence(

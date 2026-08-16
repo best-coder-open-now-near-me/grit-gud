@@ -26,6 +26,7 @@ namespace GritGud.Presentation.Gameplay
         private bool localPlayerPresentation;
         private bool replayPresentation;
         private string replayOriginalItemId;
+        private float contactStrikeElapsed = -1f;
 
         internal string CurrentItemId { get; private set; }
 
@@ -37,7 +38,7 @@ namespace GritGud.Presentation.Gameplay
             effectsPresenter?.TransientVisualCount ?? 0;
 
         internal bool ContactStrikeActive =>
-            effectsPresenter?.ContactStrikeActive ?? false;
+            contactStrikeElapsed >= 0f;
 
         internal float LastShotAimErrorDegrees { get; private set; }
 
@@ -158,12 +159,14 @@ namespace GritGud.Presentation.Gameplay
             replayOriginalItemId = null;
             CurrentItemId = null;
             LastShotAimErrorDegrees = 0f;
+            contactStrikeElapsed = -1f;
             enabled = false;
         }
 
         private void Update()
         {
             effectsPresenter?.Tick(Time.unscaledDeltaTime);
+            TickContactStrike(Time.unscaledDeltaTime);
         }
 
         internal void TickTransientVisuals(float deltaTime)
@@ -195,15 +198,16 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            Vector3 destination = ResolveAttackDestination(resolution);
             if (currentDefinition?.AttackPresentation
                 == WeaponAttackPresentationKind.ContactStrike)
             {
-                PresentContactStrike(destination);
+                PresentContactStrike();
             }
             else
             {
-                PresentFire(destination, drawTracer: true);
+                PresentFire(
+                    ResolveAttackDestination(resolution),
+                    drawTracer: true);
             }
         }
 
@@ -248,6 +252,12 @@ namespace GritGud.Presentation.Gameplay
 
         private void PresentEquippedWeapon(string equippedItemId)
         {
+            if (!replayPresentation && contactStrikeElapsed >= 0f)
+            {
+                animationCoordinator?.InterruptAction(
+                    ActorAnimationAction.ContactStrike);
+                contactStrikeElapsed = -1f;
+            }
             if (string.Equals(
                     equippedItemId,
                     CurrentItemId,
@@ -322,15 +332,8 @@ namespace GritGud.Presentation.Gameplay
                 && currentDefinition?.AttackPresentation
                     == WeaponAttackPresentationKind.ContactStrike)
             {
-                float weight = Mathf.Sin(
-                    Mathf.Clamp01(action.NormalizedProgress) * Mathf.PI);
-                mountPresenter?.SetContactSwing(
-                    weight,
-                    currentDefinition.ContactSwingAxisLocal,
-                    currentDefinition.ContactSwingDegrees);
                 return;
             }
-            effectsPresenter?.ClearWeaponAction();
         }
 
         internal bool PresentReplayTransient(
@@ -390,8 +393,14 @@ namespace GritGud.Presentation.Gameplay
         internal void ClearReplayTransients()
         {
             effectsPresenter?.ClearTransientVisuals();
-            effectsPresenter?.ClearWeaponAction();
+            contactStrikeElapsed = -1f;
         }
+
+        internal ActorAnimationAction ResolveReplayAttackAnimation() =>
+            currentDefinition?.AttackPresentation ==
+                WeaponAttackPresentationKind.ContactStrike
+                ? ActorAnimationAction.ContactStrike
+                : ActorAnimationAction.WeaponFire;
 
         internal void EndReplayPresentation()
         {
@@ -445,7 +454,7 @@ namespace GritGud.Presentation.Gameplay
             aimPresenter.PresentRecoil(animationSet);
         }
 
-        private void PresentContactStrike(Vector3 destination)
+        private void PresentContactStrike()
         {
             if (currentDefinition == null)
             {
@@ -453,14 +462,18 @@ namespace GritGud.Presentation.Gameplay
             }
 
             aimPresenter.SynchronizeAuthoritativeFacing();
-            effectsPresenter.PresentContactStrike(
-                currentDefinition,
-                destination);
+            contactStrikeElapsed = 0f;
+            animationCoordinator.TryRequestAction(
+                ActorAnimationAction.ContactStrike);
         }
 
         internal void TickContactStrike(float deltaTime)
         {
-            effectsPresenter?.TickContactStrike(deltaTime);
+            if (contactStrikeElapsed < 0f || currentDefinition == null)
+                return;
+            contactStrikeElapsed += Mathf.Max(0f, deltaTime);
+            if (contactStrikeElapsed >= currentDefinition.ContactStrikeSeconds)
+                contactStrikeElapsed = -1f;
         }
 
         private Vector3 ResolveAttackDestination(AttackResolutionRecord resolution)
@@ -501,7 +514,7 @@ namespace GritGud.Presentation.Gameplay
         {
             aimPresenter?.ClearWeapon();
 
-            effectsPresenter?.ClearWeaponAction();
+            contactStrikeElapsed = -1f;
 
             if (animationCoordinator != null
                 && animationCoordinator.CanPresentWeaponPose(
