@@ -132,8 +132,8 @@ namespace GritGud.Application.Gameplay
         private readonly GameplaySession gameplay;
         private readonly DestructiblePropSession destructibles;
         private readonly DisplacementActionEvaluator actionEvaluator;
-        private readonly DisplacementPinTransitionResolver pinTransitionResolver;
         private readonly DisplacementDestinationEvaluator destinationEvaluator;
+        private readonly DisplacementPropResolver propResolver;
         private readonly DisplacementContestResolver contestResolver;
         private readonly DisplacementRecordCommitValidator commitValidator;
         private readonly List<DisplacementRecord> records =
@@ -208,7 +208,7 @@ namespace GritGud.Application.Gameplay
                 destructibles,
                 subjects,
                 controlProfiles);
-            pinTransitionResolver = new DisplacementPinTransitionResolver(
+            var pinTransitionResolver = new DisplacementPinTransitionResolver(
                 gameplay,
                 subjects);
             destinationEvaluator = new DisplacementDestinationEvaluator(
@@ -217,6 +217,11 @@ namespace GritGud.Application.Gameplay
                 actionEvaluator,
                 pinTransitionResolver,
                 resolvedPathValidator);
+            propResolver = new DisplacementPropResolver(
+                gameplay,
+                destructibles,
+                destinationEvaluator,
+                pinTransitionResolver);
             contestResolver = new DisplacementContestResolver(
                 gameplay,
                 controlProfiles,
@@ -364,12 +369,13 @@ namespace GritGud.Application.Gameplay
             }
 
             bool resolved = target.Subject.Kind == DisplacementSubjectKind.Prop
-                ? TryResolveProp(
+                ? propResolver.TryResolve(
                     actorId,
                     subjectId,
                     target.Subject,
                     destination,
                     definition,
+                    records.Count + 1L,
                     out record,
                     out failure)
                 : contestResolver.TryResolve(
@@ -431,72 +437,6 @@ namespace GritGud.Application.Gameplay
                     "Displacement identifiers cannot be empty.",
                     parameterName);
             }
-        }
-
-        private bool TryResolveProp(
-            string actorId,
-            string propId,
-            DisplacementSubjectDefinition subject,
-            GameplayPosition destination,
-            DisplacementActionDefinition definition,
-            out DisplacementRecord record,
-            out DisplacementResolutionFailure failure)
-        {
-            gameplay.GetActor(actorId);
-            DestructiblePropSnapshot prop = destructibles.GetProp(propId);
-            PropDisplacementState resultingState =
-                DisplacementDestinationEvaluator.ResolvePropState(
-                subject,
-                definition,
-                prop,
-                destination,
-                out DisplacementResultPolicies appliedResults);
-            var request = new DisplacementRequest(
-                actorId,
-                definition.Id,
-                propId,
-                DisplacementSubjectKind.Prop,
-                subject.Mass,
-                subject.Size,
-                resultingState.Pose.Position,
-                definition.Intent);
-            if (!destinationEvaluator.TryValidateRequest(
-                    request,
-                    prop.Position,
-                    destination,
-                    definition,
-                    resultingState,
-                    out DisplacementPathValidation path,
-                    out failure))
-            {
-                record = null;
-                return false;
-            }
-
-            if (!pinTransitionResolver.TryResolve(
-                    actorId,
-                    subject,
-                    definition,
-                    prop,
-                    path,
-                    records.Count + 1L,
-                    ref appliedResults,
-                    out ActorPinTransition pinTransition,
-                    out failure))
-            {
-                record = null;
-                return false;
-            }
-
-            record = new DisplacementRecord(
-                records.Count + 1L,
-                request,
-                new PropDisplacementState(prop.Pose, prop.Posture),
-                resultingState,
-                appliedResults,
-                pinTransition);
-            failure = DisplacementResolutionFailure.None;
-            return true;
         }
 
         public void Commit(DisplacementRecord record)
