@@ -14,6 +14,8 @@ documents. It does not publish community levels or carry multiplayer traffic.
    filename order. Migration `005` adds stable draft IDs, names, revisions,
    history, and soft deletion. Migration `006` removes the legacy slot mutation
    API and makes the checked RPC functions the only level-draft write boundary.
+   Migration `007` makes every returned summary complete and returns the copied
+   document from duplicate in the same committed RPC response.
 4. In Unity, create **Assets > Create > Grit Gud > Supabase Configuration** and
    place the asset at `Assets/GritGud/Content/Resources/SupabaseConfiguration.asset`.
    Enter the project HTTPS URL and its **publishable** key from Supabase's
@@ -34,6 +36,13 @@ Each cloud draft has an immutable UUID, an editable unique-per-account name,
 and an optimistic revision. Saves fail visibly instead of overwriting a newer
 revision. Rename changes only the name; duplicate creates a new UUID; delete
 soft-archives the row. Immutable revision rows retain saved snapshots.
+
+Every level-draft mutation response is authoritative. Create, save, and rename
+return the complete summary row; duplicate returns that row plus the copied
+document, so the client never reports a committed duplicate as failed because a
+follow-up read was unavailable. `tools/validate-supabase-contracts.py` statically
+checks the ordered migration definitions, parameter and return columns,
+`SECURITY DEFINER`/permission boundary, parser fields, and repository RPC names.
 
 The level editor's **SAVE LOCAL** and **LOAD LOCAL** buttons use PlayerPrefs as
 same-device recovery. **CLOUD SAVE** creates a draft from the level display name

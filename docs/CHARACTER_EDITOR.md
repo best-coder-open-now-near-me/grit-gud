@@ -62,7 +62,9 @@ accessory prefab after the overlay is installed.
 ## Persistence and validation
 
 - Drafts use local `PlayerPrefs` storage and are intended for work in progress.
-- Imports and exports use schema-versioned JSON with a size limit.
+- Imports and exports use schema-versioned JSON with a size limit. Desktop and
+  the Unity Editor read the configured import path; WebGL opens a browser-native
+  file picker. Both paths feed the same validation and replacement flow.
 - Schema 2 adds the baseline build and starting loadout. Appearance-only schema
   1 documents migrate to a balanced default build and empty loadout on import.
 - Published documents are discovered from the Resources folder and rejected for
@@ -111,20 +113,17 @@ dirty-change confirmation. The next UX investments should be:
 1. **Searchable visual option browsing.** Replace previous/clear/next rows with
    thumbnail grids, slot-level search, and clear empty/locked/incompatible
    states. This is the largest remaining usability gap with 87 accessories.
-2. **Browser-native import.** The current path-based JSON import works in the
-   desktop player and editor, but WebGL should use a file-picker/upload bridge
-   equivalent to the existing browser-aware export path.
-3. **Responsive panels.** The fixed side widths are appropriate on desktop but
+2. **Responsive panels.** The fixed side widths are appropriate on desktop but
    should collapse into drawers or tabs at narrow browser widths.
-4. **Catalog depth and rule metadata.** Move the initial skill, talent, and item
+3. **Catalog depth and rule metadata.** Move the initial skill, talent, and item
    choices into authored catalogs with descriptions, prerequisites, conflicts,
    and archetype packages for pre-level character authoring.
-5. **Comparison and inspection tools.** Before/after comparison, hide-all by
+4. **Comparison and inspection tools.** Before/after comparison, hide-all by
    slot, lighting/background presets, and head/torso/full-body framing would
    make clipping and silhouette review faster.
-6. **Library management.** Published entries need search, duplicate-as-new,
+5. **Library management.** Published entries need search, duplicate-as-new,
    explicit delete/archive behavior for drafts, and clearer separation between
    local, cloud, and shipped characters.
-7. **Accessibility and discoverability.** Add scalable text/UI density,
+6. **Accessibility and discoverability.** Add scalable text/UI density,
    keyboard traversal, screen-reader-compatible labels when the runtime UI
    stack supports them, and remappable shortcuts.

@@ -90,7 +90,10 @@ versioned.
 
 Run `tools/validate-repository.py` with Python 3 before invoking Unity. It scans
 tracked source for unresolved conflict markers and parses every tracked JSON
-document. Then run the complete EditMode and PlayMode suites in batch mode; use
+document. Run `tools/validate-supabase-contracts.py` to verify ordered migrations,
+RPC parameters/return rows, permissions, and the matching C# adapter, then run
+`node tools/preview-id.test.mjs` to verify preview identity and workflow routing.
+Then run the complete EditMode and PlayMode suites in batch mode; use
 `-testResults <path>` and `-logFile <path>` beneath the ignored `Temp` directory
 so failures remain inspectable. PlayMode coverage includes both a sustained
 default-session smoke and startup/teardown for every committed level whose
@@ -135,11 +138,28 @@ is absent. Web previews use Brotli compression with Unity's JavaScript
 decompression fallback, so the same release player works on GitHub Pages and on
 plain local HTTP servers that do not attach `Content-Encoding: br` headers.
 
+## Continuous integration
+
+The `CI` workflow runs for every pull request, `main` push, and merge-queue
+candidate. Its **Source and contract checks** job needs no repository secrets and
+is safe for fork pull requests. It validates repository boundaries, the complete
+Supabase migration/RPC contract, and preview identity behavior.
+
+The **Licensed Unity tests** job runs EditMode and PlayMode coverage only for
+trusted branches, same-repository pull requests, `main`, and merge-queue refs. It
+installs the pinned private asset overlay and consumes Unity/private-repository
+secrets, so GitHub skips that job for fork pull requests. Configure both check
+names as required branch protections; a skipped licensed job does not expose
+secrets to a fork, while trusted merge candidates receive the full test gate.
+
 ## GitHub Web previews
 
 The `Branch preview` GitHub Actions workflow builds every push except `main` and
-`gh-pages`. It converts the branch name to a safe folder slug and publishes the
-WebGL player at `/preview/<branch-slug>/` on an orphan `gh-pages` branch. The
+`gh-pages`. It combines a readable ref slug with the first 12 hexadecimal digits
+of a stable SHA-256 hash and publishes the WebGL player at
+`/preview/<slug>-<hash>/` on an orphan `gh-pages` branch. Publication,
+concurrency, reporting, and branch deletion all consume that exact identity, so
+refs that normalize to the same slug cannot overwrite each other. The
 Pages root is regenerated as an index of all live previews, and `.nojekyll`
 keeps the generated Unity files untouched. Re-pushing a branch cancels its older
 in-progress build, while publish operations for different branches retry up to
@@ -151,7 +171,7 @@ workflow. Each successful build writes its finished URL to the Actions job
 summary.
 
 For this repository, a branch named `feature/combat-hud` is published at
-`https://best-coder-open-now-near-me.github.io/grit-gud/preview/feature-combat-hud/`.
+`https://best-coder-open-now-near-me.github.io/grit-gud/preview/feature-combat-hud-d8d86cc36c0e/`.
 
 One-time repository setup is required before the workflow can run:
 
@@ -188,10 +208,11 @@ One-time repository setup is required before the workflow can run:
 6. Push a non-`main` branch or run **Actions > Branch preview > Run workflow** to
    publish a preview.
 
-The workflow intentionally runs on branch pushes rather than pull-request
-events. Forks do not receive license secrets or write access; a maintainer must
-push a trusted contribution to a branch in this repository before it can build
-or publish a preview.
+The preview workflow intentionally runs on branch pushes rather than pull-request
+events. Forks receive the separate source/contract CI checks but do not receive
+license secrets, private assets, or Pages write access; a maintainer must push a
+trusted contribution to a branch in this repository before it can run licensed
+Unity coverage or publish a preview.
 
 The Unity Linux image is large enough to exhaust a standard hosted runner before
 Docker finishes unpacking it. The workflow removes unused preinstalled Android,

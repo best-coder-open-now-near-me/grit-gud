@@ -208,6 +208,9 @@ namespace GritGud.Presentation.Tests
                     serializer);
 
             Assert.That(record.Summary.Revision, Is.EqualTo(2));
+            Assert.That(record.Summary.LevelId, Is.EqualTo("depot"));
+            Assert.That(record.Summary.DisplayName, Is.EqualTo("Depot"));
+            Assert.That(record.Summary.SchemaVersion, Is.EqualTo(7));
             Assert.That(record.CreateDocumentSnapshot().levelId,
                 Is.EqualTo("depot"));
         }

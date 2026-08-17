@@ -89,9 +89,11 @@ namespace GritGud.Presentation.Supabase
             return SupabaseLevelDraftResponseParser.ToSummary(row);
         }
 
-        public async Task<LevelDraftRecord> DuplicateAsync(LevelDraftId id, string name, CancellationToken cancellationToken)
-        {
-            SupabaseLevelDraftSummaryRow row = await Invoke(
+        public Task<LevelDraftRecord> DuplicateAsync(
+            LevelDraftId id,
+            string name,
+            CancellationToken cancellationToken) =>
+            Invoke(
                 "duplicate_level_draft",
                 JsonUtility.ToJson(new RenameRequest
                 {
@@ -99,9 +101,9 @@ namespace GritGud.Presentation.Supabase
                     requested_name = name,
                 }),
                 cancellationToken,
-                SupabaseLevelDraftResponseParser.ParseSingleSummary);
-            return await LoadAsync(new LevelDraftId(row.draft_id), cancellationToken);
-        }
+                json => SupabaseLevelDraftResponseParser.ParseRecord(
+                    json,
+                    serializer));
 
         public Task DeleteAsync(LevelDraftId id, CancellationToken cancellationToken) =>
             Invoke<object>("archive_level_draft", JsonUtility.ToJson(new IdRequest { requested_id = id.Value }), cancellationToken, _ => null);
