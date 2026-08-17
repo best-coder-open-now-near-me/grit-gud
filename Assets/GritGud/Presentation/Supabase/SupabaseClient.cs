@@ -22,10 +22,9 @@ namespace GritGud.Presentation.Supabase
             Action<SupabaseSession> succeeded,
             Action<string> failed)
         {
-            if (succeeded == null)
-                throw new ArgumentNullException(nameof(succeeded));
-            if (failed == null)
-                throw new ArgumentNullException(nameof(failed));
+            var completion = new SupabaseCallbackCompletion<
+                SupabaseSession,
+                string>(succeeded, failed);
 
             using UnityWebRequest request = CreateRequest(
                 "/auth/v1/signup",
@@ -34,41 +33,63 @@ namespace GritGud.Presentation.Supabase
             yield return request.SendWebRequest();
             if (request.result != UnityWebRequest.Result.Success)
             {
-                failed(DescribeFailure(request));
+                completion.Fail(DescribeFailure(request));
                 yield break;
             }
 
-            AnonymousSignInResponse response;
-            try
+            if (!SupabaseResponseParser.TryParseSession(
+                    request.downloadHandler?.text,
+                    "anonymous-session response",
+                    DateTimeOffset.UtcNow,
+                    out SupabaseSession session,
+                    out string error))
             {
-                response = JsonUtility.FromJson<AnonymousSignInResponse>(request.downloadHandler.text);
-            }
-            catch (Exception exception)
-            {
-                failed("Supabase returned an invalid anonymous-session response: " + exception.Message);
+                completion.Fail(error);
                 yield break;
             }
 
-            if (response?.user == null
-                || string.IsNullOrWhiteSpace(response.access_token)
-                || string.IsNullOrWhiteSpace(response.user.id))
-            {
-                failed("Supabase did not return an anonymous session.");
-                yield break;
-            }
-
-            succeeded(CreateSession(response));
+            completion.Succeed(session);
         }
 
-        public IEnumerator RefreshSession(string refreshToken, Action<SupabaseSession> succeeded, Action<string> failed)
+        public IEnumerator RefreshSession(
+            string refreshToken,
+            Action<SupabaseSession> succeeded,
+            Action<string> failed)
         {
-            if (string.IsNullOrWhiteSpace(refreshToken)) throw new ArgumentException("A refresh token is required.", nameof(refreshToken));
-            using UnityWebRequest request = CreateRequest("/auth/v1/token?grant_type=refresh_token", UnityWebRequest.kHttpVerbPOST, "{\"refresh_token\":\"" + refreshToken.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"}");
+            if (string.IsNullOrWhiteSpace(refreshToken))
+            {
+                throw new ArgumentException(
+                    "A refresh token is required.",
+                    nameof(refreshToken));
+            }
+            var completion = new SupabaseCallbackCompletion<
+                SupabaseSession,
+                string>(succeeded, failed);
+            using UnityWebRequest request = CreateRequest(
+                "/auth/v1/token?grant_type=refresh_token",
+                UnityWebRequest.kHttpVerbPOST,
+                "{\"refresh_token\":\""
+                    + refreshToken.Replace("\\", "\\\\").Replace("\"", "\\\"")
+                    + "\"}");
             yield return request.SendWebRequest();
-            if (request.result != UnityWebRequest.Result.Success) { failed(DescribeFailure(request)); yield break; }
-            AnonymousSignInResponse response = JsonUtility.FromJson<AnonymousSignInResponse>(request.downloadHandler.text);
-            if (response?.user == null || string.IsNullOrWhiteSpace(response.access_token) || string.IsNullOrWhiteSpace(response.user.id)) { failed("Supabase did not return a refreshed session."); yield break; }
-            succeeded(CreateSession(response));
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                completion.Fail(DescribeFailure(request));
+                yield break;
+            }
+
+            if (!SupabaseResponseParser.TryParseSession(
+                    request.downloadHandler?.text,
+                    "refreshed-session response",
+                    DateTimeOffset.UtcNow,
+                    out SupabaseSession session,
+                    out string error))
+            {
+                completion.Fail(error);
+                yield break;
+            }
+
+            completion.Succeed(session);
         }
 
         public IEnumerator UpsertDocument(
@@ -89,8 +110,9 @@ namespace GritGud.Presentation.Supabase
                 throw new ArgumentNullException(nameof(session));
             if (succeeded == null)
                 throw new ArgumentNullException(nameof(succeeded));
-            if (failed == null)
-                throw new ArgumentNullException(nameof(failed));
+            var completion = new SupabaseCallbackCompletion<bool, string>(
+                _ => succeeded(),
+                failed);
 
             using UnityWebRequest request = CreateRequest(
                 "/rest/v1/" + table + "?on_conflict=" + Uri.EscapeDataString(conflictColumns),
@@ -100,20 +122,42 @@ namespace GritGud.Presentation.Supabase
             request.SetRequestHeader("Prefer", "resolution=merge-duplicates,return=minimal");
             yield return request.SendWebRequest();
             if (request.result == UnityWebRequest.Result.Success)
-                succeeded();
+                completion.Succeed(true);
             else
-                failed(DescribeFailure(request));
+                completion.Fail(DescribeFailure(request));
         }
 
         public IEnumerator LoadDocument(string functionName, string argumentsJson, SupabaseSession session, Action<string> succeeded, Action<string> failed)
         {
-            using UnityWebRequest request = CreateRequest("/rest/v1/rpc/" + functionName, UnityWebRequest.kHttpVerbPOST, argumentsJson);
+            if (string.IsNullOrWhiteSpace(functionName))
+                throw new ArgumentException("A function name is required.", nameof(functionName));
+            if (session == null)
+                throw new ArgumentNullException(nameof(session));
+            var completion = new SupabaseCallbackCompletion<string, string>(
+                succeeded,
+                failed);
+            using UnityWebRequest request = CreateRequest(
+                "/rest/v1/rpc/" + functionName,
+                UnityWebRequest.kHttpVerbPOST,
+                argumentsJson ?? "{}");
             request.SetRequestHeader("Authorization", "Bearer " + session.AccessToken);
             yield return request.SendWebRequest();
-            if (request.result != UnityWebRequest.Result.Success) { failed(DescribeFailure(request)); yield break; }
-            DocumentRows rows = JsonUtility.FromJson<DocumentRows>("{\"rows\":" + request.downloadHandler.text + "}");
-            if (rows?.rows == null || rows.rows.Length == 0 || string.IsNullOrWhiteSpace(rows.rows[0].document)) { failed("No cloud document was found."); yield break; }
-            succeeded(rows.rows[0].document);
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                completion.Fail(DescribeFailure(request));
+                yield break;
+            }
+
+            if (!SupabaseResponseParser.TryParseDocument(
+                    request.downloadHandler?.text,
+                    out string document,
+                    out string error))
+            {
+                completion.Fail(error);
+                yield break;
+            }
+
+            completion.Succeed(document);
         }
 
         public IEnumerator InvokeRpc(
@@ -124,9 +168,23 @@ namespace GritGud.Presentation.Supabase
             Action<string> succeeded,
             Action<SupabaseRequestFailure> failed)
         {
-            if (string.IsNullOrWhiteSpace(functionName)) throw new ArgumentException("A function name is required.", nameof(functionName));
-            if (session == null) throw new ArgumentNullException(nameof(session));
-            using UnityWebRequest request = CreateRequest("/rest/v1/rpc/" + functionName, UnityWebRequest.kHttpVerbPOST, argumentsJson ?? "{}");
+            if (string.IsNullOrWhiteSpace(functionName))
+                throw new ArgumentException("A function name is required.", nameof(functionName));
+            if (session == null)
+                throw new ArgumentNullException(nameof(session));
+            var completion = new SupabaseCallbackCompletion<
+                string,
+                SupabaseRequestFailure>(succeeded, failed);
+            if (cancellationToken.IsCancellationRequested)
+            {
+                completion.Fail(SupabaseRequestFailure.Cancelled());
+                yield break;
+            }
+
+            using UnityWebRequest request = CreateRequest(
+                "/rest/v1/rpc/" + functionName,
+                UnityWebRequest.kHttpVerbPOST,
+                argumentsJson ?? "{}");
             request.SetRequestHeader("Authorization", "Bearer " + session.AccessToken);
             UnityWebRequestAsyncOperation operation = request.SendWebRequest();
             while (!operation.isDone)
@@ -134,16 +192,21 @@ namespace GritGud.Presentation.Supabase
                 if (cancellationToken.IsCancellationRequested)
                 {
                     request.Abort();
+                    completion.Fail(SupabaseRequestFailure.Cancelled());
                     yield break;
                 }
                 yield return null;
             }
 
-            if (cancellationToken.IsCancellationRequested) yield break;
+            if (cancellationToken.IsCancellationRequested)
+            {
+                completion.Fail(SupabaseRequestFailure.Cancelled());
+                yield break;
+            }
             if (request.result == UnityWebRequest.Result.Success)
-                succeeded?.Invoke(request.downloadHandler?.text ?? string.Empty);
+                completion.Succeed(request.downloadHandler?.text ?? string.Empty);
             else
-                failed?.Invoke(CreateFailure(request));
+                completion.Fail(CreateFailure(request));
         }
 
         private UnityWebRequest CreateRequest(string relativePath, string method, string body)
@@ -169,53 +232,44 @@ namespace GritGud.Presentation.Supabase
         private static SupabaseRequestFailure CreateFailure(UnityWebRequest request)
         {
             string body = request.downloadHandler?.text ?? string.Empty;
-            SupabaseErrorResponse response = null;
-            try { response = JsonUtility.FromJson<SupabaseErrorResponse>(body); }
-            catch (Exception) { }
+            SupabaseResponseParser.TryDeserialize(
+                body,
+                "error response",
+                out SupabaseErrorResponse response,
+                out _);
             return new SupabaseRequestFailure(
                 response?.code ?? string.Empty,
                 string.IsNullOrWhiteSpace(response?.message) ? (request.error ?? "Supabase request failed.") : response.message,
                 request.responseCode);
         }
 
-        private static SupabaseSession CreateSession(AnonymousSignInResponse response) =>
-            new SupabaseSession(
-                response.access_token,
-                response.refresh_token,
-                response.user.id,
-                DateTimeOffset.UtcNow.AddSeconds(Math.Max(60, response.expires_in)));
-
-        [Serializable]
-        private sealed class AnonymousSignInResponse
-        {
-            public string access_token;
-            public string refresh_token;
-            public int expires_in;
-            public User user;
-        }
-
-        [Serializable]
-        private sealed class User
-        {
-            public string id;
-        }
-
-        [Serializable] private sealed class DocumentRows { public DocumentRow[] rows; }
-        [Serializable] private sealed class DocumentRow { public string document; }
         [Serializable] private sealed class SupabaseErrorResponse { public string code; public string message; }
     }
 
     public sealed class SupabaseRequestFailure
     {
-        public SupabaseRequestFailure(string code, string message, long statusCode)
+        public SupabaseRequestFailure(
+            string code,
+            string message,
+            long statusCode,
+            bool isCancelled = false)
         {
             Code = code ?? string.Empty;
             Message = message ?? "Supabase request failed.";
             StatusCode = statusCode;
+            IsCancelled = isCancelled;
         }
 
         public string Code { get; }
         public string Message { get; }
         public long StatusCode { get; }
+        public bool IsCancelled { get; }
+
+        public static SupabaseRequestFailure Cancelled() =>
+            new SupabaseRequestFailure(
+                "cancelled",
+                "Supabase request cancelled.",
+                statusCode: 0,
+                isCancelled: true);
     }
 }

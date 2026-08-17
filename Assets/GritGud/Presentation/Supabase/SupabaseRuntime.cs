@@ -8,11 +8,9 @@ namespace GritGud.Presentation.Supabase
     {
         private const string ConfigurationResourceKey = "SupabaseConfiguration";
         private const string RefreshTokenKey = "grit-gud.supabase.refresh-token";
+        private readonly SupabaseAuthenticationState authentication =
+            new SupabaseAuthenticationState();
         private SupabaseClient client;
-        private string pendingRefreshToken = string.Empty;
-        private bool authRequestRunning;
-        private bool anonymousSignInRequired;
-        private float nextAuthAttemptAt;
 
         public SupabaseSession Session { get; private set; }
 
@@ -38,14 +36,17 @@ namespace GritGud.Presentation.Supabase
 
             client = new SupabaseClient(configuration);
             Status = "Signing in to cloud saves…";
-            pendingRefreshToken = PlayerPrefs.GetString(RefreshTokenKey, string.Empty);
-            anonymousSignInRequired = string.IsNullOrWhiteSpace(pendingRefreshToken);
+            authentication.Initialize(PlayerPrefs.GetString(
+                RefreshTokenKey,
+                string.Empty));
             BeginAuthentication();
         }
 
         private void Update()
         {
-            if (client == null || authRequestRunning || Time.unscaledTime < nextAuthAttemptAt)
+            if (client == null
+                || authentication.RequestRunning
+                || Time.unscaledTime < authentication.NextAttemptAt)
                 return;
             if (Session != null
                 && !Session.NeedsRefresh(DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2)))
@@ -55,12 +56,34 @@ namespace GritGud.Presentation.Supabase
 
         private void BeginAuthentication()
         {
-            if (authRequestRunning) return;
-            authRequestRunning = true;
-            if (!anonymousSignInRequired && !string.IsNullOrWhiteSpace(pendingRefreshToken))
-                StartCoroutine(client.RefreshSession(pendingRefreshToken, HandleSignedIn, HandleRefreshFailed));
-            else
-                StartCoroutine(client.SignInAnonymously(HandleSignedIn, HandleSignInFailed));
+            if (!authentication.TryBegin())
+                return;
+            bool refreshing = authentication.ShouldRefresh;
+            try
+            {
+                if (refreshing)
+                {
+                    StartCoroutine(client.RefreshSession(
+                        authentication.PendingRefreshToken,
+                        HandleSignedIn,
+                        HandleRefreshFailed));
+                }
+                else
+                {
+                    StartCoroutine(client.SignInAnonymously(
+                        HandleSignedIn,
+                        HandleSignInFailed));
+                }
+            }
+            catch (Exception exception)
+            {
+                string error = "Cloud authentication could not start: "
+                    + exception.Message;
+                if (refreshing)
+                    HandleRefreshFailed(error);
+                else
+                    HandleSignInFailed(error);
+            }
         }
 
         public void SaveCharacter(
@@ -89,15 +112,13 @@ namespace GritGud.Presentation.Supabase
 
         private void HandleSignedIn(SupabaseSession session)
         {
-            authRequestRunning = false;
+            authentication.Complete(session);
             Session = session;
             if (!string.IsNullOrWhiteSpace(session.RefreshToken))
             {
                 PlayerPrefs.SetString(RefreshTokenKey, session.RefreshToken);
                 PlayerPrefs.Save();
             }
-            pendingRefreshToken = session.RefreshToken;
-            anonymousSignInRequired = false;
             if (Documents == null)
                 Documents = new SupabaseDocumentStore(client);
             if (DraftLibrary == null)
@@ -110,31 +131,19 @@ namespace GritGud.Presentation.Supabase
 
         private void HandleSignInFailed(string error)
         {
-            authRequestRunning = false;
+            authentication.FailSignIn(Time.unscaledTime);
             Status = error;
-            nextAuthAttemptAt = Time.unscaledTime + 15f;
         }
 
         private void HandleRefreshFailed(string error)
         {
-            authRequestRunning = false;
             Status = error;
-            if (IsInvalidRefreshFailure(error))
+            if (authentication.FailRefresh(error, Time.unscaledTime))
             {
                 PlayerPrefs.DeleteKey(RefreshTokenKey);
                 PlayerPrefs.Save();
-                pendingRefreshToken = string.Empty;
-                anonymousSignInRequired = true;
                 BeginAuthentication();
-                return;
             }
-            nextAuthAttemptAt = Time.unscaledTime + 15f;
         }
-
-        private static bool IsInvalidRefreshFailure(string error) =>
-            !string.IsNullOrWhiteSpace(error)
-            && (error.IndexOf("refresh_token_not_found", StringComparison.OrdinalIgnoreCase) >= 0
-                || error.IndexOf("invalid refresh token", StringComparison.OrdinalIgnoreCase) >= 0
-                || error.IndexOf("already used", StringComparison.OrdinalIgnoreCase) >= 0);
     }
 }
