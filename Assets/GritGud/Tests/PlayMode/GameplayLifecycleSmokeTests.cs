@@ -115,7 +115,7 @@ namespace GritGud.PlayMode.Tests
                 bootstrap.GetComponent<GameplayDisplacementController>();
             GameplayDestructibleController destructibles =
                 bootstrap.GetComponent<GameplayDestructibleController>();
-            const string propId = "crate-pin-demo";
+            const string propId = "barrel-yard-01";
             DestructiblePropSnapshot before =
                 destructibles.Session.GetProp(propId);
             Transform prop = gameplay.WorldRegistry
@@ -191,7 +191,7 @@ namespace GritGud.PlayMode.Tests
             GameplayDisplacementController displacement =
                 bootstrap.GetComponent<GameplayDisplacementController>();
             const string actorId = "oren-vale";
-            const string propId = "crate-pin-demo";
+            const string propId = "barrel-yard-01";
             Transform actor = gameplay.WorldRegistry.GetActor(actorId).Transform;
             Transform prop = gameplay.WorldRegistry.GetLevelEntity(propId)
                 .transform;

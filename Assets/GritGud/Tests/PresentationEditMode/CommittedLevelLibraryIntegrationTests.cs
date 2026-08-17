@@ -72,8 +72,6 @@ namespace GritGud.Presentation.Tests
             Assert.That(level.scenario.props.Select(prop => prop.entityId),
                 Does.Contain("crate-exposure-demo"));
             Assert.That(level.scenario.props.Select(prop => prop.entityId),
-                Does.Contain("crate-pin-demo"));
-            Assert.That(level.scenario.props.Select(prop => prop.entityId),
                 Does.Contain("barrel-yard-01"));
             Assert.That(level.scenario.props.Select(prop => prop.entityId),
                 Does.Contain("crate-warehouse-03"));
@@ -92,7 +90,7 @@ namespace GritGud.Presentation.Tests
             Assert.That(pileSubject.Toppling, Is.Not.Null);
 
             Assert.That(content.Assembly.TryGetDisplacementSubject(
-                "crate-pin-demo",
+                "barrel-yard-01",
                 out DisplacementSubjectDefinition pinSubject), Is.True);
             Assert.That(pinSubject.Toppling, Is.Not.Null);
             Assert.That(pinSubject.Pinning, Is.Not.Null);
