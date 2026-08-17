@@ -324,6 +324,9 @@ namespace GritGud.Presentation.Gameplay
             clone.AddComponent<MeshFilter>().sharedMesh = sharedMesh;
             MeshRenderer renderer = clone.AddComponent<MeshRenderer>();
             renderer.sharedMaterials = source.sharedMaterials;
+            var properties = new MaterialPropertyBlock();
+            source.GetPropertyBlock(properties);
+            renderer.SetPropertyBlock(properties);
             renderer.shadowCastingMode = source.shadowCastingMode;
             renderer.receiveShadows = source.receiveShadows;
             renderer.lightProbeUsage = source.lightProbeUsage;

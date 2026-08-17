@@ -362,5 +362,72 @@ namespace GritGud.Presentation.Tests
                 Object.DestroyImmediate(prop);
             }
         }
+
+        [Test]
+        public void PushVisualPreservesAuthoredMaterialPropertyOverrides()
+        {
+            var prop = new GameObject("Pushed Prop");
+            GameObject visual = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            try
+            {
+                visual.transform.SetParent(prop.transform, false);
+                Renderer sourceRenderer = visual.GetComponent<Renderer>();
+                var authoredColor = new Color(0.12f, 0.34f, 0.56f, 1f);
+                var authoredProperties = new MaterialPropertyBlock();
+                authoredProperties.SetColor("_Color", authoredColor);
+                authoredProperties.SetColor("_BaseColor", authoredColor);
+                sourceRenderer.SetPropertyBlock(authoredProperties);
+
+                var presenter = prop.AddComponent<DestructiblePropPresenter>();
+                var previousPose = new GameplayPropPose(
+                    new GameplayPosition(0f, 0f, 0f), 0f, 0f, 0f);
+                var resultingPose = new GameplayPropPose(
+                    new GameplayPosition(2f, 0f, 0f), 0f, 0f, 0f);
+                presenter.Bind(new DestructiblePropSnapshot(
+                    "barrel",
+                    DestructiblePropState.Intact,
+                    10f,
+                    10f,
+                    previousPose,
+                    DestructiblePropPosture.Upright));
+                var record = new DisplacementRecord(
+                    1,
+                    new DisplacementRequest(
+                        "actor",
+                        "push",
+                        "barrel",
+                        DisplacementSubjectKind.Prop,
+                        30f,
+                        resultingPose.Position,
+                        DisplacementActionKind.Push),
+                    new PropDisplacementState(
+                        previousPose,
+                        DestructiblePropPosture.Upright),
+                    new PropDisplacementState(
+                        resultingPose,
+                        DestructiblePropPosture.Upright));
+
+                presenter.PresentDisplacement(
+                    record,
+                    GameplayDisplacementPresentationTiming.PushSeconds);
+
+                Renderer[] renderers = Object.FindObjectsOfType<Renderer>();
+                Renderer displacementRenderer = System.Array.Find(
+                    renderers,
+                    candidate => candidate.gameObject.name.Contains(
+                        "[Displacement]"));
+                Assert.That(displacementRenderer, Is.Not.Null);
+                var presentedProperties = new MaterialPropertyBlock();
+                displacementRenderer.GetPropertyBlock(presentedProperties);
+                Assert.That(
+                    presentedProperties.GetColor("_BaseColor"),
+                    Is.EqualTo(authoredColor));
+                presenter.Unbind();
+            }
+            finally
+            {
+                Object.DestroyImmediate(prop);
+            }
+        }
     }
 }

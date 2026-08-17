@@ -160,7 +160,7 @@ namespace GritGud.PlayMode.Tests
                     Assert.That(view.ReplayActions.CurrentPinState,
                         Is.SameAs(replayPin));
                     Assert.That(animation.ReplayAction,
-                        Is.EqualTo(ActorAnimationAction.HitReaction));
+                        Is.EqualTo(ActorAnimationAction.Incapacitate));
 
                     GameplayActorSnapshot contactSnapshot =
                         new GameplayActorSnapshot(

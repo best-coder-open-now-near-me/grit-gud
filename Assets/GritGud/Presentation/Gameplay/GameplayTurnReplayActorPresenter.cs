@@ -217,7 +217,9 @@ namespace GritGud.Presentation.Gameplay
             {
                 action = snapshot.IsIncapacitated
                     ? ActorAnimationAction.Incapacitate
-                    : (ActorAnimationAction?)null;
+                    : snapshot.IsPinned
+                        ? ActorAnimationAction.Incapacitate
+                        : (ActorAnimationAction?)null;
                 return;
             }
 
@@ -254,7 +256,7 @@ namespace GritGud.Presentation.Gameplay
                         : ActorAnimationAction.HitReaction;
                     return;
                 case TurnReplayActorActionKind.Pinned:
-                    action = ActorAnimationAction.HitReaction;
+                    action = ActorAnimationAction.Incapacitate;
                     return;
                 case TurnReplayActorActionKind.GetUp:
                     action = ActorAnimationAction.Interact;
