@@ -61,6 +61,7 @@ namespace GritGud.Presentation.Gameplay
         private GameplayTacticalTransitionPresenter tacticalTransitionPresenter;
         private GameplaySurfaceImpactPresenter surfaceImpactPresenter;
         private GameplayCombatReactionPresenter combatReactionPresenter;
+        private GameplayControlRouter controlRouter;
 
         public bool IsRunning => levelWorld != null && player != null;
 
@@ -132,6 +133,7 @@ namespace GritGud.Presentation.Gameplay
         private void ResetPresentationBindings()
         {
             inputController?.End();
+            controlRouter = null;
             hud?.Hide();
             partyHud?.Unbind();
             turnReplayHud?.Unbind();
@@ -538,9 +540,28 @@ namespace GritGud.Presentation.Gameplay
             hud.BindGameplayWeaponTargeting(weaponTargetingController);
             partyControl.ControlChanged += HandlePartyControlChanged;
             ApplyPartyControl(partyControl.Snapshot);
+            controlRouter = new GameplayControlRouter(
+                session,
+                hud,
+                partyHud,
+                actionController,
+                attackController,
+                projectileController,
+                equipmentController,
+                hotbarController,
+                consumableController,
+                sessionPresenter,
+                cameraRig,
+                partyControl,
+                targetAcquisitionPresenter,
+                displacementController,
+                weaponTargetingController,
+                IsPointerOverGameplayInterface,
+                ReadPointer,
+                () => Camera.main);
             Action toggleTurnMode = () =>
-                HandleGameplayControl(GameplayControl.ToggleTurnMode);
-            inputController.Begin(HandleGameplayControl);
+                controlRouter.Handle(GameplayControl.ToggleTurnMode);
+            inputController.Begin(controlRouter.Handle);
             turnReplayStateTimeline = new GameplayCombatStateTimeline(
                 session,
                 () => GameplayCombatStateCapture.Capture(
@@ -715,146 +736,9 @@ namespace GritGud.Presentation.Gameplay
             player = selectedView.Motor;
         }
 
-        private void HandleGameplayControl(GameplayControl control)
-        {
-            if (hud != null && hud.IsBugReportNoteOpen)
-            {
-                if (control == GameplayControl.CancelPendingAction)
-                    hud.CancelBugReportNote();
-                return;
-            }
-
-            bool hotbarControl = control >= GameplayControl.Hotbar1
-                && control <= GameplayControl.CancelPendingAction;
-            if (!hotbarControl)
-            {
-                equipmentController?.ClearStatus();
-                hotbarController?.ClearStatus();
-            }
-
-            if (control != GameplayControl.Attack)
-            {
-                attackController?.ClearStatus();
-                projectileController?.ClearStatus();
-            }
-
-            switch (control)
-            {
-                case GameplayControl.ToggleTurnMode:
-                    if (Session.Mode == GameplaySessionMode.Exploration)
-                    {
-                        actionController.TryEnterTurnMode();
-                    }
-                    else
-                    {
-                        actionController.TryExitTurnMode();
-                    }
-
-                    break;
-                case GameplayControl.Attack:
-                {
-                    Vector2 pointer = Mouse.current == null
-                        ? new Vector2(Screen.width * 0.5f, Screen.height * 0.5f)
-                        : Mouse.current.position.ReadValue();
-                    if (IsPointerOverGameplayInterface(pointer))
-                    {
-                        break;
-                    }
-
-                    targetAcquisitionPresenter?.RefreshAtScreenPoint(
-                        Camera.main,
-                        pointer);
-
-                    if (displacementController != null
-                        && displacementController.IsTargeting)
-                    {
-                        displacementController.TryConfirmTargeting();
-                    }
-                    else if (consumableController != null
-                        && consumableController.IsPending)
-                    {
-                        consumableController.TryConfirmPending();
-                    }
-                    else if (weaponTargetingController != null
-                        && weaponTargetingController.IsTargeting)
-                    {
-                        weaponTargetingController.ConfirmTargeting();
-                    }
-                    else
-                    {
-                        weaponTargetingController?.BeginTargeting();
-                    }
-                    break;
-                }
-                case GameplayControl.ToggleStance:
-                    sessionPresenter.ToggleStance();
-                    break;
-                case GameplayControl.ToggleCameraView:
-                    cameraRig.ToggleView();
-                    break;
-                case GameplayControl.ExportBugReport:
-                    hud.OpenBugReportNote();
-                    break;
-                case GameplayControl.Interact:
-                    actionController.TryInteract();
-                    break;
-                case GameplayControl.EndTurn:
-                    actionController.TryEndTurn();
-                    break;
-                case GameplayControl.CyclePartyMember:
-                    if (!partyControl.TrySelectNextActor(
-                            out GameplayPartySelectionFailure selectionFailure))
-                    {
-                        partyHud.PresentSelectionFailure(selectionFailure);
-                    }
-                    break;
-                case GameplayControl.Hotbar1:
-                case GameplayControl.Hotbar2:
-                case GameplayControl.Hotbar3:
-                case GameplayControl.Hotbar4:
-                case GameplayControl.Hotbar5:
-                case GameplayControl.Hotbar6:
-                case GameplayControl.Hotbar7:
-                case GameplayControl.Hotbar8:
-                    int hotbarNumber =
-                        ((int)control - (int)GameplayControl.Hotbar1) + 1;
-                    if (hotbarController.HasExpandedActorAbility)
-                    {
-                        hotbarController
-                            .TryHandleExpandedActorAbilityHotkey(
-                                hotbarNumber);
-                    }
-                    else
-                    {
-                        hotbarController.TryActivateSlot(hotbarNumber);
-                    }
-                    break;
-                case GameplayControl.CancelPendingAction:
-                    if (hotbarController != null
-                        && hotbarController.CloseActorAbilityFlyout())
-                    {
-                        break;
-                    }
-                    if (displacementController != null
-                        && displacementController.CancelTargeting())
-                    {
-                        break;
-                    }
-                    if (weaponTargetingController != null
-                        && weaponTargetingController.CancelTargeting())
-                    {
-                        break;
-                    }
-                    if (consumableController == null
-                        || !consumableController.CancelPending())
-                    {
-                        equipmentController.CancelPending();
-                    }
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(control));
-            }
-        }
+        private static Vector2 ReadPointer() => Mouse.current == null
+            ? new Vector2(Screen.width * 0.5f, Screen.height * 0.5f)
+            : Mouse.current.position.ReadValue();
 
         private bool IsPointerOverGameplayInterface(Vector2 pointer) =>
             (hud?.ContainsInteractiveScreenPoint(pointer) ?? false)
