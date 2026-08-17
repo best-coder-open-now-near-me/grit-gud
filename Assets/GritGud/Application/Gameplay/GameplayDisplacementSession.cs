@@ -131,14 +131,10 @@ namespace GritGud.Application.Gameplay
     {
         private readonly GameplaySession gameplay;
         private readonly DestructiblePropSession destructibles;
-        private readonly Dictionary<string, DisplacementSubjectDefinition>
-            subjects;
-        private readonly Dictionary<string, CloseQuartersControlProfile>
-            controlProfiles;
-        private readonly ID20RollSource rollSource;
         private readonly DisplacementActionEvaluator actionEvaluator;
         private readonly DisplacementPinTransitionResolver pinTransitionResolver;
         private readonly DisplacementDestinationEvaluator destinationEvaluator;
+        private readonly DisplacementContestResolver contestResolver;
         private readonly List<DisplacementRecord> records =
             new List<DisplacementRecord>();
         private readonly IReadOnlyList<DisplacementRecord> readOnlyRecords;
@@ -168,8 +164,9 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(subjectDefinitions));
             }
 
-            subjects = new Dictionary<string, DisplacementSubjectDefinition>(
-                StringComparer.Ordinal);
+            var subjects =
+                new Dictionary<string, DisplacementSubjectDefinition>(
+                    StringComparer.Ordinal);
             foreach (DisplacementSubjectDefinition subject in
                 subjectDefinitions)
             {
@@ -188,7 +185,7 @@ namespace GritGud.Application.Gameplay
                 }
             }
 
-            controlProfiles =
+            var controlProfiles =
                 new Dictionary<string, CloseQuartersControlProfile>(
                     StringComparer.Ordinal);
             if (authoredControlProfiles != null)
@@ -203,7 +200,7 @@ namespace GritGud.Application.Gameplay
 
             IDisplacementPathValidator resolvedPathValidator = validator ??
                 throw new ArgumentNullException(nameof(validator));
-            rollSource = rolls ??
+            ID20RollSource resolvedRollSource = rolls ??
                 throw new ArgumentNullException(nameof(rolls));
             actionEvaluator = new DisplacementActionEvaluator(
                 gameplay,
@@ -219,6 +216,12 @@ namespace GritGud.Application.Gameplay
                 actionEvaluator,
                 pinTransitionResolver,
                 resolvedPathValidator);
+            contestResolver = new DisplacementContestResolver(
+                gameplay,
+                controlProfiles,
+                resolvedRollSource,
+                actionEvaluator,
+                destinationEvaluator);
             readOnlyRecords = records.AsReadOnly();
         }
 
@@ -365,12 +368,13 @@ namespace GritGud.Application.Gameplay
                     definition,
                     out record,
                     out failure)
-                : TryResolveCombatant(
+                : contestResolver.TryResolve(
                     actorId,
                     subjectId,
                     target.Subject.Mass,
                     destination,
                     definition,
+                    records.Count + 1L,
                     out record,
                     out failure);
             if (!resolved)
@@ -491,92 +495,6 @@ namespace GritGud.Application.Gameplay
             return true;
         }
 
-        private bool TryResolveCombatant(
-            string actorId,
-            string targetActorId,
-            float targetMass,
-            GameplayPosition destination,
-            DisplacementActionDefinition definition,
-            out DisplacementRecord record,
-            out DisplacementResolutionFailure failure)
-        {
-            if (!controlProfiles.TryGetValue(
-                    actorId,
-                    out CloseQuartersControlProfile attacker)
-                || !controlProfiles.TryGetValue(
-                    targetActorId,
-                    out CloseQuartersControlProfile defender))
-            {
-                record = null;
-                failure = DisplacementResolutionFailure.SubjectUnavailable;
-                return false;
-            }
-
-            return TryResolveCombatant(
-                actorId,
-                targetActorId,
-                targetMass,
-                destination,
-                definition,
-                attacker,
-                defender,
-                out record,
-                out failure);
-        }
-
-        private bool TryResolveCombatant(
-            string actorId,
-            string targetActorId,
-            float targetMass,
-            GameplayPosition destination,
-            DisplacementActionDefinition definition,
-            CloseQuartersControlProfile attacker,
-            CloseQuartersControlProfile defender,
-            out DisplacementRecord record,
-            out DisplacementResolutionFailure failure)
-        {
-            gameplay.GetActor(actorId);
-            GameplayActorSnapshot target = gameplay.GetActor(targetActorId);
-            var request = new DisplacementRequest(
-                actorId,
-                definition.Id,
-                targetActorId,
-                DisplacementSubjectKind.Combatant,
-                targetMass,
-                GetSubjectSize(targetActorId),
-                destination,
-                definition.Intent);
-            if (!destinationEvaluator.TryValidateRequest(
-                    request,
-                    target.Pose.Position,
-                    destination,
-                    definition,
-                    resultingPropState: null,
-                    out _,
-                    out failure))
-            {
-                record = null;
-                return false;
-            }
-
-            var contest = new CloseQuartersControlRecord(
-                rollSource.RollD20(),
-                attacker,
-                rollSource.RollD20(),
-                defender);
-            GameplayPosition result = contest.AttackerSucceeded
-                ? destination
-                : target.Pose.Position;
-            record = new DisplacementRecord(
-                records.Count + 1L,
-                request,
-                target.Pose.Position,
-                result,
-                contest);
-            failure = DisplacementResolutionFailure.None;
-            return true;
-        }
-
         public void Commit(DisplacementRecord record)
         {
             var notifications = new GameplayNotificationBatch();
@@ -654,7 +572,5 @@ namespace GritGud.Application.Gameplay
             }
         }
 
-        private DisplacementSizeClass GetSubjectSize(string subjectId) =>
-            actionEvaluator.GetSubjectSize(subjectId);
     }
 }
