@@ -12,6 +12,10 @@ namespace GritGud.Presentation.Gameplay
         private const float ReferenceHeight = 900f;
         internal const float CommandBarMargin = 14f;
         internal const float CommandBarSideRailWidth = 142f;
+        internal const int CommandHintRowCapacity = 10;
+        internal const float CommandHintRowHeight = 16f;
+        internal const float CommandHintRowGap = 3f;
+        internal const float CommandHintPanelGap = 5f;
         internal const float EquipmentFlyoutTop = 126f;
         internal const float WarningHintHeight = 16f;
         internal const float WarningHintGap = 5f;
@@ -880,9 +884,12 @@ namespace GritGud.Presentation.Gameplay
                 canvasWidth - CommandBarSideRailWidth - CommandBarMargin);
             return new Rect(
                 buttonX,
-                commandBarRectangle.y
-                    + 13f
-                    - (CommandBarMargin * 2f),
+                commandBarRectangle.yMax
+                    - CommandBarMargin
+                    - CalculateCommandHintContentHeight(
+                        CommandHintRowCapacity)
+                    - CommandHintPanelGap
+                    - buttonHeight,
                 CommandBarSideRailWidth,
                 buttonHeight);
         }
@@ -976,17 +983,49 @@ namespace GritGud.Presentation.Gameplay
             Rect dialogueButton = CalculateDialogueButtonRectangle(
                 canvasWidth,
                 commandBarRectangle);
-            const float gap = 5f;
-            float y = dialogueButton.yMax + gap;
+            float y = dialogueButton.yMax + CommandHintPanelGap;
             return new Rect(
                 dialogueButton.x,
                 y,
                 dialogueButton.width,
-                Mathf.Max(
-                    0f,
-                    commandBarRectangle.yMax
-                        - CommandBarMargin
-                        - y));
+                CalculateCommandHintContentHeight(
+                    CommandHintRowCapacity));
+        }
+
+        internal static float CalculateCommandHintContentHeight(int rowCount)
+        {
+            if (rowCount < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(rowCount));
+            }
+
+            return rowCount == 0
+                ? 0f
+                : (rowCount * CommandHintRowHeight)
+                    + ((rowCount - 1) * CommandHintRowGap);
+        }
+
+        internal static Rect CalculateCommandHintRowRectangle(
+            Rect rectangle,
+            int rowIndex,
+            int rowCount)
+        {
+            if (rowCount < 1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(rowCount));
+            }
+            if (rowIndex < 0 || rowIndex >= rowCount)
+            {
+                throw new ArgumentOutOfRangeException(nameof(rowIndex));
+            }
+
+            return new Rect(
+                rectangle.x,
+                rectangle.y
+                    + (rowIndex
+                        * (CommandHintRowHeight + CommandHintRowGap)),
+                rectangle.width,
+                CommandHintRowHeight);
         }
 
         internal static Rect CalculateBodyRegionRectangle(
@@ -1103,15 +1142,13 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            float lineHeight = rectangle.height / hints.Count;
             for (int index = 0; index < hints.Count; index++)
             {
                 GUI.Label(
-                    new Rect(
-                        rectangle.x,
-                        rectangle.y + (lineHeight * index),
-                        rectangle.width,
-                        lineHeight),
+                    CalculateCommandHintRowRectangle(
+                        rectangle,
+                        index,
+                        hints.Count),
                     FormatHint(hints[index]),
                     commandHintsStyle);
             }

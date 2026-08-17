@@ -150,16 +150,20 @@ namespace GritGud.Presentation.Tests
                 Is.EqualTo(GameplayHud.CommandBarMargin));
             Assert.That(bodyStatus.x, Is.EqualTo(GameplayHud.CommandBarMargin));
             Assert.That(commandHints.x, Is.EqualTo(dialogueButton.x));
-            Assert.That(commandHints.y, Is.EqualTo(dialogueButton.yMax + 5f));
+            Assert.That(
+                commandHints.y,
+                Is.EqualTo(
+                    dialogueButton.yMax
+                    + GameplayHud.CommandHintPanelGap));
             Assert.That(
                 commandBar.yMax - commandHints.yMax,
                 Is.EqualTo(GameplayHud.CommandBarMargin));
             Assert.That(
                 dialogueButton.y,
                 Is.EqualTo(
-                    commandBar.y
-                    + 13f
-                    - (GameplayHud.CommandBarMargin * 2f)));
+                    commandHints.y
+                    - GameplayHud.CommandHintPanelGap
+                    - dialogueButton.height));
             Assert.That(
                 commandBar.yMax - hotbar.yMax,
                 Is.EqualTo(GameplayHud.CommandBarMargin));
@@ -193,7 +197,36 @@ namespace GritGud.Presentation.Tests
                 Is.EqualTo(GameplayHud.WarningHintHeight));
             Assert.That(1280f - dialoguePanel.xMax,
                 Is.EqualTo(GameplayHud.CommandBarMargin));
-            Assert.That(commandHints.height / 8f, Is.GreaterThan(9f));
+            Assert.That(
+                commandHints.height,
+                Is.EqualTo(
+                    GameplayHud.CalculateCommandHintContentHeight(
+                        GameplayHud.CommandHintRowCapacity)));
+            Rect previousHintRow = default(Rect);
+            for (int index = 0;
+                index < GameplayHud.CommandHintRowCapacity;
+                index++)
+            {
+                Rect hintRow = GameplayHud.CalculateCommandHintRowRectangle(
+                    commandHints,
+                    index,
+                    GameplayHud.CommandHintRowCapacity);
+                Assert.That(
+                    hintRow.height,
+                    Is.EqualTo(GameplayHud.CommandHintRowHeight));
+                Assert.That(hintRow.yMin,
+                    Is.GreaterThanOrEqualTo(commandHints.yMin));
+                Assert.That(hintRow.yMax,
+                    Is.LessThanOrEqualTo(commandHints.yMax));
+                if (index > 0)
+                {
+                    Assert.That(
+                        hintRow.yMin - previousHintRow.yMax,
+                        Is.EqualTo(GameplayHud.CommandHintRowGap));
+                }
+
+                previousHintRow = hintRow;
+            }
             foreach (TargetRegionId region in new[]
             {
                 TargetRegionId.Head,
