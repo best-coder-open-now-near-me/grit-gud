@@ -108,6 +108,10 @@ namespace GritGud.Presentation.Gameplay
         private bool hasPointerRay;
         private Func<Vector2, bool> isPointerBlocked;
         private Func<Vector3?> getWeaponAimOrigin;
+        private bool hasLockedWeaponAimOrigin;
+        private Vector3 lockedWeaponAimOriginLocal;
+        private bool hasResolvedWeaponAim;
+        private GameplayWeaponAim resolvedWeaponAim;
         private ISightObscuranceQuery sightObscurance;
         private object validationFeedbackOwner;
         private string validationTargetId;
@@ -198,6 +202,8 @@ namespace GritGud.Presentation.Gameplay
             exposureQueries.Clear();
             observerId = nextObserverId;
             observer = registry.GetActor(observerId);
+            hasLockedWeaponAimOrigin = false;
+            hasResolvedWeaponAim = false;
             pointerQuery = new UnityPointerTargetQuery(
                 observer.Transform,
                 registry);
@@ -233,6 +239,10 @@ namespace GritGud.Presentation.Gameplay
             WeaponTargetingActive = false;
             isPointerBlocked = null;
             getWeaponAimOrigin = null;
+            hasLockedWeaponAimOrigin = false;
+            lockedWeaponAimOriginLocal = default;
+            hasResolvedWeaponAim = false;
+            resolvedWeaponAim = default;
             enabled = false;
         }
 
@@ -367,21 +377,51 @@ namespace GritGud.Presentation.Gameplay
 
         internal void SetWeaponTargetingActive(bool active)
         {
+            bool wasActive = WeaponTargetingActive;
             WeaponTargetingActive = active;
+            if (active && !wasActive)
+            {
+                LockWeaponAimOrigin();
+            }
+            else if (!active)
+            {
+                hasLockedWeaponAimOrigin = false;
+                hasResolvedWeaponAim = false;
+                resolvedWeaponAim = default;
+            }
+
             if (!active)
             {
                 feedback?.ClearTarget();
             }
-            ApplyFeedbackVisibility();
+
+            if (hasPointerRay)
+            {
+                RefreshNow(currentPointerRay);
+            }
+            else
+            {
+                ApplyFeedbackVisibility();
+            }
         }
 
         internal void SetWeaponAimOriginProvider(Func<Vector3?> originProvider)
         {
             getWeaponAimOrigin = originProvider;
+            if (WeaponTargetingActive)
+            {
+                LockWeaponAimOrigin();
+                if (hasPointerRay)
+                {
+                    RefreshNow(currentPointerRay);
+                }
+            }
         }
 
         internal void InvalidateWorldEvidence()
         {
+            hasResolvedWeaponAim = false;
+            resolvedWeaponAim = default;
             foreach (UnityTargetExposureQuery query in exposureQueries.Values)
             {
                 query.Invalidate();
@@ -397,6 +437,9 @@ namespace GritGud.Presentation.Gameplay
         {
             if (!IsBound || gameplayCamera == null)
             {
+                hasPointerRay = false;
+                hasResolvedWeaponAim = false;
+                resolvedWeaponAim = default;
                 ClearAcquisition();
                 return;
             }
@@ -416,6 +459,8 @@ namespace GritGud.Presentation.Gameplay
                 || (isPointerBlocked?.Invoke(pointerPosition) ?? false))
             {
                 hasPointerRay = false;
+                hasResolvedWeaponAim = false;
+                resolvedWeaponAim = default;
                 ClearAcquisition();
                 return;
             }
@@ -427,9 +472,33 @@ namespace GritGud.Presentation.Gameplay
         {
             currentPointerRay = pointerRay;
             hasPointerRay = true;
-            if (!IsBound
-                || !pointerQuery.TryAcquire(pointerRay, out GameplayActorView target)
-                || session.IsActorIncapacitated(target.ActorId))
+            hasResolvedWeaponAim = false;
+            resolvedWeaponAim = default;
+            if (!IsBound)
+            {
+                ClearAcquisition();
+                return;
+            }
+
+            GameplayActorView target;
+            if (UsesAuthoritativeWeaponAim())
+            {
+                if (!TryGetWeaponAim(out GameplayWeaponAim resolvedAim)
+                    || !registry.TryGetActor(resolvedAim.TargetId, out target)
+                    || !target.Targetable
+                    || ReferenceEquals(target.Transform, observer.Transform))
+                {
+                    ClearAcquisition();
+                    return;
+                }
+            }
+            else if (!pointerQuery.TryAcquire(pointerRay, out target))
+            {
+                ClearAcquisition();
+                return;
+            }
+
+            if (session.IsActorIncapacitated(target.ActorId))
             {
                 ClearAcquisition();
                 return;
@@ -503,12 +572,16 @@ namespace GritGud.Presentation.Gameplay
         }
 
         internal bool TryGetPresentationAimPoint(out Vector3 aimPoint) =>
-            TryGetPresentationAimPoint(
-                WorldAimFallbackDistance,
-                out aimPoint);
+            TryGetResolvedPresentationAimPoint(out aimPoint);
 
         internal bool TryGetWeaponAim(out GameplayWeaponAim aim)
         {
+            if (WeaponTargetingActive && hasResolvedWeaponAim)
+            {
+                aim = resolvedWeaponAim;
+                return true;
+            }
+
             if (!IsBound || observer == null
                 || !TryResolvePointerAimPoint(
                     ResolveWeaponAimOrigin(),
@@ -536,7 +609,26 @@ namespace GritGud.Presentation.Gameplay
                 surfaceId,
                 session.Journal.LastEntry?.Sequence ?? 0L,
                 preferredFractureChunkIndex);
+            if (WeaponTargetingActive)
+            {
+                resolvedWeaponAim = aim;
+                hasResolvedWeaponAim = true;
+            }
             return true;
+        }
+
+        private bool TryGetResolvedPresentationAimPoint(out Vector3 aimPoint)
+        {
+            if (WeaponTargetingActive
+                && TryGetWeaponAim(out GameplayWeaponAim aim))
+            {
+                aimPoint = aim.Position;
+                return true;
+            }
+
+            return TryGetPresentationAimPoint(
+                WorldAimFallbackDistance,
+                out aimPoint);
         }
 
         private void ResolveWeaponImpactEvidence(
@@ -638,28 +730,6 @@ namespace GritGud.Presentation.Gameplay
                 aimPoint = default;
                 targetId = null;
                 return false;
-            }
-
-            if (currentTarget != null)
-            {
-                IReadOnlyList<ActorTargetRegionSample> samples =
-                    currentTarget.Stance.GetTargetRegionSamples();
-                foreach (ActorTargetRegionSample sample in samples)
-                {
-                    if (sample.Id == TargetRegionId.Torso)
-                    {
-                        aimPoint = sample.WorldCenter;
-                        targetId = currentTarget.ActorId;
-                        return true;
-                    }
-                }
-
-                if (samples.Count > 0)
-                {
-                    aimPoint = samples[0].WorldCenter;
-                    targetId = currentTarget.ActorId;
-                    return true;
-                }
             }
 
             if (!hasPointerRay
@@ -809,10 +879,35 @@ namespace GritGud.Presentation.Gameplay
 
         private Vector3 ResolveWeaponAimOrigin()
         {
+            if (WeaponTargetingActive && hasLockedWeaponAimOrigin)
+            {
+                return observer.Transform.TransformPoint(
+                    lockedWeaponAimOriginLocal);
+            }
+
             Vector3? presentedOrigin = getWeaponAimOrigin?.Invoke();
             return presentedOrigin.HasValue
                 ? presentedOrigin.Value
                 : observer.Stance.FirstPersonEyePosition;
+        }
+
+        private void LockWeaponAimOrigin()
+        {
+            hasResolvedWeaponAim = false;
+            resolvedWeaponAim = default;
+            if (observer == null)
+            {
+                hasLockedWeaponAimOrigin = false;
+                return;
+            }
+
+            Vector3? presentedOrigin = getWeaponAimOrigin?.Invoke();
+            Vector3 worldOrigin = presentedOrigin.HasValue
+                ? presentedOrigin.Value
+                : observer.Stance.FirstPersonEyePosition;
+            lockedWeaponAimOriginLocal = observer.Transform
+                .InverseTransformPoint(worldOrigin);
+            hasLockedWeaponAimOrigin = true;
         }
 
         private bool TryFindNearestCharacterSideHit(
@@ -847,13 +942,31 @@ namespace GritGud.Presentation.Gameplay
             return !float.IsPositiveInfinity(nearestDistance);
         }
 
-        private string ResolveAimTargetId(Transform aimTransform) =>
-            registry != null
-            && registry.TryGetLevelEntityContaining(
-                aimTransform,
-                out LevelEntityView entity)
-                ? entity.EntityId
-                : GameplayTargetIds.WorldAimPoint;
+        private string ResolveAimTargetId(Transform aimTransform)
+        {
+            if (registry != null
+                && registry.TryGetActorContaining(
+                    aimTransform,
+                    out GameplayActorView actor))
+            {
+                return actor.ActorId;
+            }
+
+            return registry != null
+                && registry.TryGetLevelEntityContaining(
+                    aimTransform,
+                    out LevelEntityView entity)
+                    ? entity.EntityId
+                    : GameplayTargetIds.WorldAimPoint;
+        }
+
+        private bool UsesAuthoritativeWeaponAim()
+        {
+            AttackDefinition attack = session?.GetEquippedAttack(observerId);
+            return WeaponTargetingActive
+                && attack != null
+                && attack.Contact == null;
+        }
 
         private bool BelongsToObserver(Transform candidate) =>
             candidate != null

@@ -9,6 +9,7 @@ using GritGud.Presentation.Gameplay;
 using GritGud.Presentation.Levels.Runtime;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools.Utils;
 using Object = UnityEngine.Object;
 
 namespace GritGud.Presentation.Tests
@@ -339,6 +340,141 @@ namespace GritGud.Presentation.Tests
                 Object.DestroyImmediate(observer);
                 Object.DestroyImmediate(pointerSurface);
                 Object.DestroyImmediate(muzzleObstruction);
+            }
+        }
+
+        [Test]
+        public void WeaponTargetingHighlightsStableCharacterPathObstruction()
+        {
+            var host = new GameObject("Stable Character Path Target Test");
+            var observer = CreateActorObject(
+                "Stable Character Path Observer",
+                Vector3.zero,
+                withVisual: false);
+            var worldRoot = new GameObject("Stable Character Path World");
+            var pointerRoot = new GameObject("Pointer Target Root");
+            var obstructionRoot = new GameObject("Obstruction Root");
+            var pointerSurface = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var obstructionSurface = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            LevelWorld world = null;
+            GameplayWorldRegistry registry = null;
+            try
+            {
+                pointerRoot.transform.SetParent(worldRoot.transform, false);
+                LevelEntityView pointerEntity =
+                    pointerRoot.AddComponent<LevelEntityView>();
+                pointerEntity.Initialize(
+                    new LevelEntity
+                    {
+                        id = "pointer-target",
+                        archetypeId = "prop.pointer-target",
+                        transform = new LevelTransformData(
+                            new Float3Data(2f, 0f, 6f),
+                            0f),
+                    },
+                    new LevelArchetypeDefinition());
+                pointerSurface.transform.SetParent(pointerRoot.transform, false);
+                pointerSurface.transform.localPosition = new Vector3(0f, 1.2f, 0f);
+                pointerSurface.transform.localScale = new Vector3(1f, 2f, 0.2f);
+
+                obstructionRoot.transform.SetParent(worldRoot.transform, false);
+                LevelEntityView obstructionEntity =
+                    obstructionRoot.AddComponent<LevelEntityView>();
+                obstructionEntity.Initialize(
+                    new LevelEntity
+                    {
+                        id = "character-path-obstruction",
+                        archetypeId = "prop.character-path-obstruction",
+                        transform = new LevelTransformData(
+                            new Float3Data(0.75f, 0f, 2.25f),
+                            0f),
+                    },
+                    new LevelArchetypeDefinition());
+                obstructionSurface.transform.SetParent(
+                    obstructionRoot.transform,
+                    false);
+                obstructionSurface.transform.localPosition =
+                    new Vector3(0f, 1.2f, 0f);
+                obstructionSurface.transform.localScale =
+                    new Vector3(0.5f, 2f, 0.5f);
+
+                world = new LevelWorld(
+                    worldRoot,
+                    new Dictionary<string, LevelEntityView>
+                    {
+                        ["pointer-target"] = pointerEntity,
+                        ["character-path-obstruction"] = obstructionEntity,
+                    },
+                    null);
+                registry = new GameplayWorldRegistry(world);
+                registry.RegisterActor(
+                    "observer",
+                    "test",
+                    targetable: false,
+                    observer);
+                TargetAcquisitionPresenter presenter =
+                    host.AddComponent<TargetAcquisitionPresenter>();
+                presenter.Bind(
+                    CreateSession(includeRangedAttack: true),
+                    registry,
+                    "observer");
+                Vector3 presentedOrigin = new Vector3(0f, 1.2f, 0f);
+                presenter.SetWeaponAimOriginProvider(() => presentedOrigin);
+                Physics.SyncTransforms();
+                var pointerRay = new Ray(
+                    new Vector3(2f, 1.2f, 0f),
+                    Vector3.forward);
+                presenter.RefreshNow(pointerRay);
+                presenter.SetWeaponTargetingActive(true);
+
+                Assert.That(
+                    presenter.TryGetWeaponAim(out GameplayWeaponAim weaponAim),
+                    Is.True);
+                Assert.That(
+                    weaponAim.TargetId,
+                    Is.EqualTo("character-path-obstruction"));
+                Assert.That(
+                    presenter.TryGetPresentationAimPoint(
+                        out Vector3 presentationAim),
+                    Is.True);
+                Assert.That(
+                    presentationAim,
+                    Is.EqualTo(weaponAim.Position)
+                        .Using(Vector3ComparerWithEqualsOperator.Instance));
+                AssertOutlineColor(
+                    obstructionSurface,
+                    TargetAcquisitionPresenter.AcquisitionOutlineColor);
+                Assert.That(
+                    pointerSurface.GetComponent<Renderer>().sharedMaterials.Any(
+                        material => material.shader.name ==
+                            "GritGud/RuntimeOutline"),
+                    Is.False);
+
+                presentedOrigin = new Vector3(-2f, 1.2f, 0f);
+                presenter.RefreshNow(pointerRay);
+
+                Assert.That(
+                    presenter.TryGetWeaponAim(out GameplayWeaponAim stableAim),
+                    Is.True);
+                Assert.That(
+                    stableAim.TargetId,
+                    Is.EqualTo("character-path-obstruction"));
+                Assert.That(
+                    stableAim.Position,
+                    Is.EqualTo(weaponAim.Position)
+                        .Using(Vector3ComparerWithEqualsOperator.Instance));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                registry?.Dispose();
+                world?.Dispose();
+                Object.DestroyImmediate(observer);
+                Object.DestroyImmediate(pointerSurface);
+                Object.DestroyImmediate(obstructionSurface);
+                Object.DestroyImmediate(pointerRoot);
+                Object.DestroyImmediate(obstructionRoot);
+                Object.DestroyImmediate(worldRoot);
             }
         }
 
@@ -746,13 +882,23 @@ namespace GritGud.Presentation.Tests
         }
 
         private static GameplaySession CreateSession(
-            bool includePlayerParty = false)
+            bool includePlayerParty = false,
+            bool includeRangedAttack = false)
         {
+            AttackDefinition attack = includeRangedAttack
+                ? new AttackDefinition(
+                    "attack.test-rifle",
+                    "Test rifle",
+                    new ActionCost(1, 0f, ActionMobility.Set),
+                    2f,
+                    accuracyDecay: AccuracyDecayDefinition.None)
+                : null;
             var observer = new ScenarioActorDefinition(
                 "observer",
                 initiative: 10,
                 new GameplayActorPose(new GameplayPosition(0f, 0f, 0f), 0f),
-                new TurnBudget(4, 8f));
+                new TurnBudget(4, 8f),
+                attack);
             var target = new ScenarioActorDefinition(
                 "target",
                 initiative: 5,
