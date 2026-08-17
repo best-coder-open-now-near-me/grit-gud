@@ -373,22 +373,22 @@ namespace GritGud.Presentation.Bootstrap
                 {
                     await library.RenameAsync(selected.Id, draftDialogName);
                     selectedKey = selected.Id.Value;
-                    cloudDraftStatus = "Renamed cloud draft.";
+                    cloudDraftStatus = library.Status;
                 }
                 else if (draftDialogAction == DraftDialogAction.Duplicate)
                 {
                     LevelDraftRecord duplicate = await library.DuplicateAsync(selected.Id, draftDialogName);
                     selectedKind = LevelSelectionKind.CloudDraft;
                     selectedKey = duplicate.Summary.Id.Value;
-                    cloudDraftStatus = "Duplicated cloud draft.";
+                    cloudDraftStatus = library.Status;
                 }
                 else
                 {
                     await library.DeleteAsync(selected.Id);
-                    selectedKind = LevelSelectionKind.Committed;
+                    selectedKind = LevelSelectionKind.CloudDraft;
                     selectedKey = string.Empty;
                     RefreshCommittedLevels();
-                    cloudDraftStatus = string.Empty;
+                    cloudDraftStatus = library.Status;
                 }
                 draftDialogAction = DraftDialogAction.None;
             }

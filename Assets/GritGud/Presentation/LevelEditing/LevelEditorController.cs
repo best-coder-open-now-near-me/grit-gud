@@ -1600,7 +1600,7 @@ namespace GritGud.Presentation.LevelEditing
                 }
 
                 if (workspace.Revision == savedRevision) workspace.MarkSaved();
-                SetStatus("Saved cloud draft.");
+                SetStatus(library.Status);
             }
             catch (Exception exception)
             {
