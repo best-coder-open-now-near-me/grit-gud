@@ -42,6 +42,9 @@ namespace GritGud.Presentation.Gameplay
 
         internal float PlanningMaximumCost => planner?.MaximumCost ?? 0f;
 
+        internal int PlanningMaximumActionPoints =>
+            planner?.MaximumActionPoints ?? 0;
+
         public RoutePlanFailure LastPlanFailure { get; private set; }
 
         public string StatusMessage { get; private set; } = string.Empty;
@@ -209,16 +212,40 @@ namespace GritGud.Presentation.Gameplay
         private void EnsurePlanner()
         {
             long currentTurnSequence = Session.LastEndedTurn?.Sequence ?? 0L;
-            if (planner != null && plannerTurnSequence == currentTurnSequence)
+            GameplayActorSnapshot actor = Session.GetActor(actorId);
+            if (planner != null
+                && plannerTurnSequence == currentTurnSequence
+                && PlannerMatchesActorState(planner, actor))
             {
                 return;
             }
 
             planner?.Cancel();
             planner = new MovementRoutePlanner(
-                Session.GetActor(actorId),
+                actor,
                 SegmentValidator);
             plannerTurnSequence = currentTurnSequence;
+        }
+
+        private static bool PlannerMatchesActorState(
+            MovementRoutePlanner currentPlanner,
+            GameplayActorSnapshot actor)
+        {
+            GameplayActorPose origin = currentPlanner.OriginPose;
+            GameplayActorPose current = actor.Pose;
+            return string.Equals(
+                    currentPlanner.ActorId,
+                    actor.ActorId,
+                    StringComparison.Ordinal)
+                && origin.Position.X == current.Position.X
+                && origin.Position.Y == current.Position.Y
+                && origin.Position.Z == current.Position.Z
+                && origin.FacingDegrees == current.FacingDegrees
+                && origin.Stance == current.Stance
+                && currentPlanner.MaximumActionPoints
+                    == actor.TurnBudget.ActionPoints
+                && currentPlanner.MaximumCost
+                    == actor.TurnBudget.MovementOpportunity;
         }
 
         private void HandlePlanningInput()

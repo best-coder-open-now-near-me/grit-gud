@@ -69,6 +69,84 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void MovementPlannerRefreshesAfterRifleConsumesActionPoint()
+        {
+            var host = new GameObject("Post-Rifle Turn Movement Refresh Test");
+            try
+            {
+                var player = new ScenarioActorDefinition(
+                    "player",
+                    10,
+                    new GameplayActorPose(
+                        new GameplayPosition(0f, 0f, 0f),
+                        facingDegrees: 0f),
+                    new TurnBudget(actionPoints: 4, movementOpportunity: 8f),
+                    new AttackDefinition(
+                        "attack.rifle",
+                        "Fire rifle",
+                        new ActionCost(1, 0f, ActionMobility.Set),
+                        woundMovementPenalty: 2f,
+                        accuracyDecay: AccuracyDecayDefinition.None));
+                var target = new ScenarioActorDefinition(
+                    "target",
+                    0,
+                    new GameplayActorPose(
+                        new GameplayPosition(0f, 0f, 5f),
+                        facingDegrees: 180f),
+                    new TurnBudget(actionPoints: 4, movementOpportunity: 8f));
+                var session = new GameplaySession(new ScenarioDefinition(
+                    "post-rifle-movement-refresh",
+                    new ScenarioTimingDefinition(1.25f),
+                    new[] { player, target },
+                    System.Array.Empty<ScenarioObjectiveDefinition>()));
+                Assert.That(session.EnterTurnMode(), Is.True);
+
+                ExplorationMovementInput movementInput =
+                    host.AddComponent<ExplorationMovementInput>();
+                ThirdPersonMotor motor = host.AddComponent<ThirdPersonMotor>();
+                TurnMovementController controller =
+                    host.AddComponent<TurnMovementController>();
+                controller.Bind(
+                    session,
+                    movementInput,
+                    new EmptyGameplayInputSource(),
+                    motor,
+                    "player");
+
+                Assert.That(controller.SynchronizePlanningState(), Is.True);
+                Assert.That(controller.PlanningMaximumActionPoints, Is.EqualTo(4));
+
+                var exposure = new TargetExposureSnapshot(
+                    "player",
+                    "target",
+                    new[]
+                    {
+                        new TargetRegionExposure(TargetRegionId.Torso, 5, 5),
+                    });
+                var attacks = new GameplayAttackSession(
+                    session,
+                    authoredScenarioSeed: 3u);
+                Assert.That(
+                    attacks.TryResolve(
+                        "player",
+                        exposure,
+                        out _,
+                        out AttackResolutionFailure failure),
+                    Is.True,
+                    failure.ToString());
+
+                Assert.That(controller.SynchronizePlanningState(), Is.True);
+                Assert.That(controller.PlanningMaximumActionPoints, Is.EqualTo(3));
+                Assert.That(controller.PlanningMaximumCost, Is.EqualTo(8f));
+                Assert.That(controller.PlanPointCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
         public void CameraOrbitUsesMiddleMouseAndLeavesRightMouseContextual()
         {
             InputActionAsset inputActions = GameplayInputController.CreateInputAsset();

@@ -123,6 +123,8 @@ namespace GritGud.Application.Gameplay
 
         public GameplayActorPose OriginPose => actor.Pose;
 
+        public int MaximumActionPoints => actor.TurnBudget.ActionPoints;
+
         public float MaximumCost => actor.TurnBudget.MovementOpportunity;
 
         public IReadOnlyList<GameplayPosition> Points => readOnlyPoints;
