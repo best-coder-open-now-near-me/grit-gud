@@ -9,23 +9,32 @@ namespace GritGud.Presentation.Gameplay
     [DisallowMultipleComponent]
     public sealed class GameplayHud : MonoBehaviour
     {
-        private const float ReferenceHeight = 900f;
-        internal const float CommandBarMargin = 14f;
-        internal const float CommandBarSideRailWidth = 142f;
-        internal const int CommandHintRowCapacity = 10;
-        internal const float CommandHintRowHeight = 16f;
-        internal const float CommandHintRowGap = 3f;
-        internal const float SideRailSectionGap = 5f;
-        internal const float TurnModeButtonTop = 13f;
-        internal const float TurnModeButtonHeight = 31f;
-        internal const float TurnResourceTop = 64f;
-        internal const float EquipmentFlyoutTop = 126f;
-        internal const float WarningHintHeight = 16f;
-        internal const float WarningHintGap = 5f;
+        internal const float CommandBarMargin =
+            GameplayHudLayout.CommandBarMargin;
+        internal const float CommandBarSideRailWidth =
+            GameplayHudLayout.CommandBarSideRailWidth;
+        internal const int CommandHintRowCapacity =
+            GameplayHudLayout.CommandHintRowCapacity;
+        internal const float CommandHintRowHeight =
+            GameplayHudLayout.CommandHintRowHeight;
+        internal const float CommandHintRowGap =
+            GameplayHudLayout.CommandHintRowGap;
+        internal const float SideRailSectionGap =
+            GameplayHudLayout.SideRailSectionGap;
+        internal const float TurnModeButtonTop =
+            GameplayHudLayout.TurnModeButtonTop;
+        internal const float TurnModeButtonHeight =
+            GameplayHudLayout.TurnModeButtonHeight;
+        internal const float TurnResourceTop =
+            GameplayHudLayout.TurnResourceTop;
+        internal const float EquipmentFlyoutTop =
+            GameplayHudLayout.EquipmentFlyoutTop;
+        internal const float WarningHintHeight =
+            GameplayHudLayout.WarningHintHeight;
+        internal const float WarningHintGap = GameplayHudLayout.WarningHintGap;
         internal const float PendingPowerPulseCyclesPerSecond = 1.25f;
         internal const float PendingPowerPulseMinimumAlpha = 0.48f;
-        internal const int HotbarSlotCount =
-            GameplayCommandBarModel.HotbarSlotCount;
+        internal const int HotbarSlotCount = GameplayHudLayout.HotbarSlotCount;
         private static readonly Color PanelStrongColor =
             GameplayVisualPalette.HudPanel;
         private static readonly Color BorderColor =
@@ -145,50 +154,16 @@ namespace GritGud.Presentation.Gameplay
         internal bool IsCommandBarVisible => Session != null;
 
         internal bool ContainsInteractiveScreenPoint(Vector2 screenPoint)
-        {
-            float uiScale = Mathf.Clamp(
-                Screen.height / ReferenceHeight,
-                0.75f,
-                1.35f);
-            float canvasWidth = Screen.width / uiScale;
-            float canvasHeight = Screen.height / uiScale;
-            var guiPoint = new Vector2(
-                screenPoint.x / uiScale,
-                (Screen.height - screenPoint.y) / uiScale);
-            if (bugReportNoteOpen)
-            {
-                return true;
-            }
-            Rect commandBar = CalculateCommandBarRectangle(
-                canvasWidth,
-                canvasHeight);
-            if (commandBar.Contains(guiPoint)
-                || CalculateDialogueButtonRectangle(
-                    canvasWidth,
-                    commandBar).Contains(guiPoint)
-                || CalculateBodyStatusRectangle(
-                    canvasWidth,
-                    commandBar).Contains(guiPoint))
-            {
-                return true;
-            }
-
-            if (hotbarChoice.Contains(guiPoint))
-            {
-                return true;
-            }
-
-            if (actorAbilityFlyoutReveal > 0f
-                && actorAbilityFlyoutRectangle.Contains(guiPoint))
-            {
-                return true;
-            }
-
-            Rect flyout = flyoutExpanded
-                ? new Rect(0f, 18f, Mathf.Min(470f, canvasWidth - 58f), canvasHeight - 36f)
-                : new Rect(0f, 36f, 42f, 82f);
-            return flyout.Contains(guiPoint);
-        }
+            => GameplayHudLayout.ContainsInteractiveScreenPoint(
+                screenPoint,
+                Screen.width,
+                Screen.height,
+                bugReportNoteOpen,
+                hotbarChoice.IsOpen,
+                hotbarChoice.Rectangle,
+                actorAbilityFlyoutReveal,
+                actorAbilityFlyoutRectangle,
+                flyoutExpanded);
 
         internal bool AreTurnResourcesVisible =>
             Session?.Mode == GameplaySessionMode.TurnBased;
@@ -629,7 +604,7 @@ namespace GritGud.Presentation.Gameplay
         {
             EnsureStyles();
 
-            float uiScale = Mathf.Clamp(Screen.height / ReferenceHeight, 0.75f, 1.35f);
+            float uiScale = GameplayHudLayout.CalculateUiScale(Screen.height);
             float canvasWidth = Screen.width / uiScale;
             float canvasHeight = Screen.height / uiScale;
             Matrix4x4 previousMatrix = GUI.matrix;
@@ -862,236 +837,72 @@ namespace GritGud.Presentation.Gameplay
 
         internal static Rect CalculateCommandBarRectangle(
             float canvasWidth,
-            float canvasHeight)
-        {
-            float reservedWidth = 2f * (
-                CommandBarSideRailWidth + (CommandBarMargin * 2f));
-            float width = Mathf.Min(
-                940f,
-                Mathf.Max(0f, canvasWidth - reservedWidth));
-            bool compact = width < 680f;
-            float height = compact ? 142f : 118f;
-            return new Rect(
-                (canvasWidth - width) * 0.5f,
-                canvasHeight - height - 6f,
-                width,
-                height);
-        }
+            float canvasHeight) =>
+            GameplayHudLayout.CalculateCommandBarRectangle(
+                canvasWidth,
+                canvasHeight);
 
         internal static Rect CalculateDialogueButtonRectangle(
             float canvasWidth,
-            Rect commandBarRectangle)
-        {
-            const float buttonHeight = 31f;
-            Rect bodyStatus = CalculateBodyStatusRectangle(
+            Rect commandBarRectangle) =>
+            GameplayHudLayout.CalculateDialogueButtonRectangle(
                 canvasWidth,
                 commandBarRectangle);
-            return new Rect(
-                bodyStatus.x,
-                bodyStatus.y
-                    - SideRailSectionGap
-                    - buttonHeight,
-                CommandBarSideRailWidth,
-                buttonHeight);
-        }
 
         internal static Rect CalculateHotbarRectangle(
             Rect commandBarRectangle,
             float x,
-            float width)
-        {
-            const float topMargin = 18f;
-            return new Rect(
+            float width) =>
+            GameplayHudLayout.CalculateHotbarRectangle(
+                commandBarRectangle,
                 x,
-                commandBarRectangle.y + topMargin,
-                width,
-                commandBarRectangle.height - topMargin - CommandBarMargin);
-        }
+                width);
 
         internal static Rect CalculateHotbarLayoutRectangle(
-            Rect commandBarRectangle)
-        {
-            bool compact = commandBarRectangle.width < 680f;
-            float contentX = commandBarRectangle.x + CommandBarMargin;
-            float contentWidth = commandBarRectangle.width
-                - (CommandBarMargin * 2f);
-            float turnAreaWidth = compact
-                ? Mathf.Clamp(contentWidth * 0.36f, 210f, 245f)
-                : 320f;
-            const float separatorSpacing = 15f;
-            float hotbarWidth = contentWidth
-                - turnAreaWidth
-                - (separatorSpacing * 2f);
-            return CalculateHotbarRectangle(
-                commandBarRectangle,
-                contentX,
-                hotbarWidth);
-        }
+            Rect commandBarRectangle) =>
+            GameplayHudLayout.CalculateHotbarLayoutRectangle(
+                commandBarRectangle);
 
         internal static Rect CalculateEquipmentFlyoutRectangle(
-            Rect commandBarRectangle)
-        {
-            Rect hotbarRectangle = CalculateHotbarLayoutRectangle(
+            Rect commandBarRectangle) =>
+            GameplayHudLayout.CalculateEquipmentFlyoutRectangle(
                 commandBarRectangle);
-            Rect hintRectangle = CalculateWarningHintRectangle(
-                commandBarRectangle);
-            float top = Mathf.Min(
-                EquipmentFlyoutTop,
-                hotbarRectangle.y - 120f);
-            return new Rect(
-                CommandBarMargin,
-                Mathf.Max(8f, top),
-                Mathf.Min(330f, hotbarRectangle.width),
-                hintRectangle.y
-                    - WarningHintGap
-                    - Mathf.Max(8f, top));
-        }
 
         internal static Rect CalculateWarningHintRectangle(
-            Rect commandBarRectangle)
-        {
-            Rect hotbarRectangle = CalculateHotbarLayoutRectangle(
+            Rect commandBarRectangle) =>
+            GameplayHudLayout.CalculateWarningHintRectangle(
                 commandBarRectangle);
-            return new Rect(
-                hotbarRectangle.x,
-                commandBarRectangle.y
-                    - WarningHintGap
-                    - WarningHintHeight,
-                hotbarRectangle.width,
-                WarningHintHeight);
-        }
 
         internal static Rect CalculateBodyStatusRectangle(
             float canvasWidth,
-            Rect commandBarRectangle)
-        {
-            float height = Mathf.Max(
-                0f,
-                commandBarRectangle.height - (CommandBarMargin * 2f));
-            return new Rect(
-                Mathf.Max(
-                    CommandBarMargin,
-                    canvasWidth
-                    - CommandBarSideRailWidth
-                    - CommandBarMargin),
-                commandBarRectangle.yMax
-                    - CommandBarMargin
-                    - height,
-                CommandBarSideRailWidth,
-                height);
-        }
+            Rect commandBarRectangle) =>
+            GameplayHudLayout.CalculateBodyStatusRectangle(
+                canvasWidth,
+                commandBarRectangle);
 
         internal static Rect CalculateCommandHintsRectangle(
-            Rect commandBarRectangle)
-        {
-            return new Rect(
-                CommandBarMargin,
-                commandBarRectangle.yMax
-                    - CommandBarMargin
-                    - CalculateCommandHintContentHeight(
-                        CommandHintRowCapacity),
-                CommandBarSideRailWidth,
-                CalculateCommandHintContentHeight(
-                    CommandHintRowCapacity));
-        }
+            Rect commandBarRectangle) =>
+            GameplayHudLayout.CalculateCommandHintsRectangle(
+                commandBarRectangle);
 
-        internal static float CalculateCommandHintContentHeight(int rowCount)
-        {
-            if (rowCount < 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(rowCount));
-            }
-
-            return rowCount == 0
-                ? 0f
-                : (rowCount * CommandHintRowHeight)
-                    + ((rowCount - 1) * CommandHintRowGap);
-        }
+        internal static float CalculateCommandHintContentHeight(int rowCount) =>
+            GameplayHudLayout.CalculateCommandHintContentHeight(rowCount);
 
         internal static Rect CalculateCommandHintRowRectangle(
             Rect rectangle,
             int rowIndex,
-            int rowCount)
-        {
-            if (rowCount < 1)
-            {
-                throw new ArgumentOutOfRangeException(nameof(rowCount));
-            }
-            if (rowIndex < 0 || rowIndex >= rowCount)
-            {
-                throw new ArgumentOutOfRangeException(nameof(rowIndex));
-            }
-
-            return new Rect(
-                rectangle.x,
-                rectangle.y
-                    + (rowIndex
-                        * (CommandHintRowHeight + CommandHintRowGap)),
-                rectangle.width,
-                CommandHintRowHeight);
-        }
+            int rowCount) =>
+            GameplayHudLayout.CalculateCommandHintRowRectangle(
+                rectangle,
+                rowIndex,
+                rowCount);
 
         internal static Rect CalculateBodyRegionRectangle(
             Rect bodyStatusRectangle,
-            TargetRegionId region)
-        {
-            if (!Enum.IsDefined(typeof(TargetRegionId), region))
-            {
-                throw new ArgumentOutOfRangeException(nameof(region));
-            }
-
-            const float silhouetteWidth = 68f;
-            const float silhouetteHeight = 95f;
-            float scale = Mathf.Max(
-                0f,
-                Mathf.Min(
-                    bodyStatusRectangle.width / silhouetteWidth,
-                    bodyStatusRectangle.height / silhouetteHeight));
-            float centerX = bodyStatusRectangle.center.x;
-            float top = bodyStatusRectangle.center.y
-                - ((silhouetteHeight * scale) * 0.5f);
-            switch (region)
-            {
-                case TargetRegionId.Head:
-                    return new Rect(
-                        centerX - (10f * scale),
-                        top,
-                        20f * scale,
-                        20f * scale);
-                case TargetRegionId.LeftArm:
-                    return new Rect(
-                        centerX - (34f * scale),
-                        top + (25f * scale),
-                        13f * scale,
-                        31f * scale);
-                case TargetRegionId.Torso:
-                    return new Rect(
-                        centerX - (18f * scale),
-                        top + (23f * scale),
-                        36f * scale,
-                        35f * scale);
-                case TargetRegionId.RightArm:
-                    return new Rect(
-                        centerX + (21f * scale),
-                        top + (25f * scale),
-                        13f * scale,
-                        31f * scale);
-                case TargetRegionId.LeftLeg:
-                    return new Rect(
-                        centerX - (17f * scale),
-                        top + (61f * scale),
-                        15f * scale,
-                        34f * scale);
-                case TargetRegionId.RightLeg:
-                    return new Rect(
-                        centerX + (2f * scale),
-                        top + (61f * scale),
-                        15f * scale,
-                        34f * scale);
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(region));
-            }
-        }
+            TargetRegionId region) =>
+            GameplayHudLayout.CalculateBodyRegionRectangle(
+                bodyStatusRectangle,
+                region);
 
         private void DrawCommandBar(
             Rect rectangle,
@@ -1634,24 +1445,10 @@ namespace GritGud.Presentation.Gameplay
 
         internal static Rect CalculateHotbarSlotRectangle(
             Rect commandBarRectangle,
-            int slotNumber)
-        {
-            if (slotNumber < 1 || slotNumber > HotbarSlotCount)
-            {
-                throw new ArgumentOutOfRangeException(nameof(slotNumber));
-            }
-
-            Rect hotbar = CalculateHotbarLayoutRectangle(commandBarRectangle);
-            const float gap = 5f;
-            float slotWidth = (hotbar.width
-                    - (gap * (HotbarSlotCount - 1)))
-                / HotbarSlotCount;
-            return new Rect(
-                hotbar.x + ((slotWidth + gap) * (slotNumber - 1)),
-                hotbar.y,
-                slotWidth,
-                hotbar.height);
-        }
+            int slotNumber) =>
+            GameplayHudLayout.CalculateHotbarSlotRectangle(
+                commandBarRectangle,
+                slotNumber);
 
         internal static string FormatActorAbilityOptionLabel(
             int parentSlot,
@@ -1669,29 +1466,10 @@ namespace GritGud.Presentation.Gameplay
 
         internal static Rect CalculateActorAbilityFlyoutRectangle(
             Rect slotRectangle,
-            int optionCount)
-        {
-            if (optionCount < 1)
-            {
-                throw new ArgumentOutOfRangeException(nameof(optionCount));
-            }
-
-            const float width = 260f;
-            const float padding = 8f;
-            const float headingHeight = 28f;
-            const float optionHeight = 31f;
-            const float optionGap = 5f;
-            const float flyoutGap = 7f;
-            float height = (padding * 2f)
-                + headingHeight
-                + (optionCount * optionHeight)
-                + ((optionCount - 1) * optionGap);
-            return new Rect(
-                slotRectangle.x,
-                slotRectangle.y - flyoutGap - height,
-                width,
-                height);
-        }
+            int optionCount) =>
+            GameplayHudLayout.CalculateActorAbilityFlyoutRectangle(
+                slotRectangle,
+                optionCount);
 
         private void ClearCachedActorAbilityFlyout()
         {
@@ -1706,10 +1484,9 @@ namespace GritGud.Presentation.Gameplay
         internal static bool IsHotbarChoiceRequest(
             Event current,
             Rect itemRectangle) =>
-            current != null
-            && current.rawType == EventType.MouseDown
-            && current.button == 1
-            && itemRectangle.Contains(current.mousePosition);
+            GameplayHudLayout.IsHotbarChoiceRequest(
+                current,
+                itemRectangle);
 
         internal static float CalculatePendingPowerPulse(float unscaledTime)
         {
