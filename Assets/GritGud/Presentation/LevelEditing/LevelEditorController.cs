@@ -74,6 +74,7 @@ namespace GritGud.Presentation.LevelEditing
         private bool sessionReady;
         private bool cloudOperationRunning;
         private int sessionGeneration;
+        private LevelEditorSessionLifecycle sessionLifecycle;
 
         public void Begin(bool startInPreview)
         {
@@ -121,6 +122,7 @@ namespace GritGud.Presentation.LevelEditing
             string initialSourceLabel,
             bool initialDocumentIsSaved)
         {
+            sessionLifecycle = new LevelEditorSessionLifecycle();
             previewMode = false;
             suspended = false;
             sessionReady = false;
@@ -145,8 +147,12 @@ namespace GritGud.Presentation.LevelEditing
                 new PlayerPrefsLevelDraftStore(),
                 textTransfer,
                 defaultContent.ValidationContent);
-            persistence.DocumentLoaded += HandleDocumentLoaded;
-            persistence.StatusChanged += SetStatus;
+            sessionLifecycle.Subscribe(
+                () => persistence.DocumentLoaded += HandleDocumentLoaded,
+                () => persistence.DocumentLoaded -= HandleDocumentLoaded);
+            sessionLifecycle.Subscribe(
+                () => persistence.StatusChanged += SetStatus,
+                () => persistence.StatusChanged -= SetStatus);
             Camera sceneCamera = Camera.main;
             if (sceneCamera == null)
             {
@@ -158,9 +164,13 @@ namespace GritGud.Presentation.LevelEditing
                 defaultContent.ValidationContent,
                 initialDocumentIsSaved);
             viewDocument = workspace.CreateSnapshot();
-            workspace.Changed += HandleWorkspaceChanged;
+            sessionLifecycle.Subscribe(
+                () => workspace.Changed += HandleWorkspaceChanged,
+                () => workspace.Changed -= HandleWorkspaceChanged);
             selection = new LevelSelectionModel();
-            selection.Changed += HandleSelectionChanged;
+            sessionLifecycle.Subscribe(
+                () => selection.Changed += HandleSelectionChanged,
+                () => selection.Changed -= HandleSelectionChanged);
             projector = new LevelWorldProjector(catalog, transform);
             terrainProjector = new TerrainWorldProjector(transform);
             dressingProjector = new LevelDressingProjector(transform, dressingCatalog);
@@ -183,10 +193,16 @@ namespace GritGud.Presentation.LevelEditing
                 restoredGridSpacing,
                 preferences.gridElevation);
             gridPresenter = new LevelEditorGridPresenter(transform);
-            gridSettings.Changed += HandleGridSettingsChanged;
+            sessionLifecycle.Subscribe(
+                () => gridSettings.Changed += HandleGridSettingsChanged,
+                () => gridSettings.Changed -= HandleGridSettingsChanged);
             organizationModel = new LevelEditorOrganizationModel(catalog);
             organizationModel.Synchronize(viewDocument);
-            organizationModel.Changed += HandleOrganizationViewChanged;
+            sessionLifecycle.Subscribe(
+                () => organizationModel.Changed +=
+                    HandleOrganizationViewChanged,
+                () => organizationModel.Changed -=
+                    HandleOrganizationViewChanged);
             var toolContext = new LevelEditorToolContext(
                 workspace,
                 selection,
@@ -208,49 +224,88 @@ namespace GritGud.Presentation.LevelEditing
             toolManager.Register(terrainTool);
             toolManager.ActivateDefault();
             terrainAuthoring = new TerrainAuthoringCoordinator(workspace);
-            terrainAuthoring.StatusChanged += SetStatus;
+            sessionLifecycle.Subscribe(
+                () => terrainAuthoring.StatusChanged += SetStatus,
+                () => terrainAuthoring.StatusChanged -= SetStatus);
             playabilityAuthoring = new LevelEditorPlayabilityCoordinator(
                 workspace,
                 terrainProjector);
-            playabilityAuthoring.StatusChanged += SetStatus;
+            sessionLifecycle.Subscribe(
+                () => playabilityAuthoring.StatusChanged += SetStatus,
+                () => playabilityAuthoring.StatusChanged -= SetStatus);
             var terrainPanel = new TerrainToolPanelModel(
                 toolManager,
                 terrainTool,
                 terrainAuthoring,
                 FrameTerrain);
             presentationState = new LevelEditorPresentationState();
-            toolManager.ActiveToolChanged += HandleActiveToolChanged;
+            sessionLifecycle.Subscribe(
+                () => toolManager.ActiveToolChanged += HandleActiveToolChanged,
+                () => toolManager.ActiveToolChanged -= HandleActiveToolChanged);
             scenarioAuthoring = new ScenarioAuthoringCoordinator(
                 workspace,
                 scenarioCatalog,
                 cameraController.CaptureState);
-            scenarioAuthoring.StatusChanged += SetStatus;
-            scenarioAuthoring.ActorFocusRequested += HandleScenarioActorFocusRequested;
-            scenarioAuthoring.ActorChanged += HandleScenarioActorChanged;
-            scenarioAuthoring.PlayerStartChanged += HandlePlayerStartChanged;
+            sessionLifecycle.Subscribe(
+                () => scenarioAuthoring.StatusChanged += SetStatus,
+                () => scenarioAuthoring.StatusChanged -= SetStatus);
+            sessionLifecycle.Subscribe(
+                () => scenarioAuthoring.ActorFocusRequested +=
+                    HandleScenarioActorFocusRequested,
+                () => scenarioAuthoring.ActorFocusRequested -=
+                    HandleScenarioActorFocusRequested);
+            sessionLifecycle.Subscribe(
+                () => scenarioAuthoring.ActorChanged +=
+                    HandleScenarioActorChanged,
+                () => scenarioAuthoring.ActorChanged -=
+                    HandleScenarioActorChanged);
+            sessionLifecycle.Subscribe(
+                () => scenarioAuthoring.PlayerStartChanged +=
+                    HandlePlayerStartChanged,
+                () => scenarioAuthoring.PlayerStartChanged -=
+                    HandlePlayerStartChanged);
             environmentAuthoring = new EnvironmentAuthoringCoordinator(
                 workspace,
                 cameraController.CaptureState);
-            environmentAuthoring.StatusChanged += SetStatus;
-            environmentAuthoring.PracticalLightFocusRequested +=
-                HandlePracticalLightFocusRequested;
+            sessionLifecycle.Subscribe(
+                () => environmentAuthoring.StatusChanged += SetStatus,
+                () => environmentAuthoring.StatusChanged -= SetStatus);
+            sessionLifecycle.Subscribe(
+                () => environmentAuthoring.PracticalLightFocusRequested +=
+                    HandlePracticalLightFocusRequested,
+                () => environmentAuthoring.PracticalLightFocusRequested -=
+                    HandlePracticalLightFocusRequested);
             dressingAuthoring = new LevelDressingAuthoringCoordinator(
                 workspace,
                 cameraController.CaptureState);
-            dressingAuthoring.StatusChanged += SetStatus;
-            dressingAuthoring.FocusRequested += HandleDressingFocusRequested;
+            sessionLifecycle.Subscribe(
+                () => dressingAuthoring.StatusChanged += SetStatus,
+                () => dressingAuthoring.StatusChanged -= SetStatus);
+            sessionLifecycle.Subscribe(
+                () => dressingAuthoring.FocusRequested +=
+                    HandleDressingFocusRequested,
+                () => dressingAuthoring.FocusRequested -=
+                    HandleDressingFocusRequested);
             layoutAuthoring = new LevelEditorLayoutCoordinator(
                 workspace,
                 selection,
                 cameraController,
                 gridSettings);
-            layoutAuthoring.StatusChanged += SetStatus;
+            sessionLifecycle.Subscribe(
+                () => layoutAuthoring.StatusChanged += SetStatus,
+                () => layoutAuthoring.StatusChanged -= SetStatus);
             organizationAuthoring = new LevelEditorOrganizationCoordinator(
                 workspace,
                 selection,
                 organizationModel);
-            organizationAuthoring.StatusChanged += SetStatus;
-            organizationAuthoring.GroupFocusRequested += HandleGroupFocusRequested;
+            sessionLifecycle.Subscribe(
+                () => organizationAuthoring.StatusChanged += SetStatus,
+                () => organizationAuthoring.StatusChanged -= SetStatus);
+            sessionLifecycle.Subscribe(
+                () => organizationAuthoring.GroupFocusRequested +=
+                    HandleGroupFocusRequested,
+                () => organizationAuthoring.GroupFocusRequested -=
+                    HandleGroupFocusRequested);
             gui = new LevelEditorGui(
                 selection,
                 catalog,
@@ -301,58 +356,9 @@ namespace GritGud.Presentation.LevelEditing
             sessionReady = false;
             enabled = false;
             SaveLocalPreferences();
-            if (workspace != null)
-            {
-                workspace.Changed -= HandleWorkspaceChanged;
-            }
-
-            if (selection != null)
-            {
-                selection.Changed -= HandleSelectionChanged;
-            }
-
-            if (persistence != null)
-            {
-                persistence.DocumentLoaded -= HandleDocumentLoaded;
-                persistence.StatusChanged -= SetStatus;
-                persistence.Dispose();
-            }
-
-            if (toolManager != null)
-                toolManager.ActiveToolChanged -= HandleActiveToolChanged;
-            if (scenarioAuthoring != null)
-            {
-                scenarioAuthoring.StatusChanged -= SetStatus;
-                scenarioAuthoring.ActorFocusRequested -= HandleScenarioActorFocusRequested;
-                scenarioAuthoring.ActorChanged -= HandleScenarioActorChanged;
-                scenarioAuthoring.PlayerStartChanged -= HandlePlayerStartChanged;
-            }
-            if (terrainAuthoring != null)
-                terrainAuthoring.StatusChanged -= SetStatus;
-            if (playabilityAuthoring != null)
-                playabilityAuthoring.StatusChanged -= SetStatus;
-            if (environmentAuthoring != null)
-            {
-                environmentAuthoring.StatusChanged -= SetStatus;
-                environmentAuthoring.PracticalLightFocusRequested -=
-                    HandlePracticalLightFocusRequested;
-            }
-            if (dressingAuthoring != null)
-            {
-                dressingAuthoring.StatusChanged -= SetStatus;
-                dressingAuthoring.FocusRequested -= HandleDressingFocusRequested;
-            }
-            if (layoutAuthoring != null)
-                layoutAuthoring.StatusChanged -= SetStatus;
-            if (organizationAuthoring != null)
-            {
-                organizationAuthoring.StatusChanged -= SetStatus;
-                organizationAuthoring.GroupFocusRequested -= HandleGroupFocusRequested;
-            }
-            if (organizationModel != null)
-                organizationModel.Changed -= HandleOrganizationViewChanged;
-            if (gridSettings != null)
-                gridSettings.Changed -= HandleGridSettingsChanged;
+            sessionLifecycle?.Dispose();
+            sessionLifecycle = null;
+            persistence?.Dispose();
             environmentLighting?.Dispose();
             toolManager?.Dispose();
             projector?.Dispose();
