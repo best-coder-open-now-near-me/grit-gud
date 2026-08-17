@@ -971,17 +971,37 @@ namespace GritGud.Presentation.Tests
                     2f,
                     accuracyDecay: AccuracyDecayDefinition.None)
                 : null;
+            CharacterProfileDefinition CreateProfile(string actorId) =>
+                new CharacterProfileDefinition(
+                    "character." + actorId,
+                    actorId,
+                    "Test Operative",
+                    new[]
+                    {
+                        new CharacterRating(CoreAttributeIds.Strength, 3),
+                        new CharacterRating(CoreAttributeIds.Dexterity, 3),
+                        new CharacterRating(CoreAttributeIds.Grit, 3),
+                        new CharacterRating(CoreAttributeIds.Charisma, 3),
+                    },
+                    Array.Empty<CharacterRating>(),
+                    Array.Empty<string>());
             var observer = new ScenarioActorDefinition(
                 "observer",
                 initiative: 10,
                 new GameplayActorPose(new GameplayPosition(0f, 0f, 0f), 0f),
                 new TurnBudget(4, 8f),
-                attack);
+                attack,
+                characterProfile: includePlayerParty
+                    ? CreateProfile("observer")
+                    : null);
             var target = new ScenarioActorDefinition(
                 "target",
                 initiative: 5,
                 new GameplayActorPose(new GameplayPosition(0f, 0f, 5f), 0f),
-                new TurnBudget(4, 8f));
+                new TurnBudget(4, 8f),
+                characterProfile: includePlayerParty
+                    ? CreateProfile("target")
+                    : null);
             PlayerPartyDefinition playerParty = includePlayerParty
                 ? new PlayerPartyDefinition(
                     new[] { "observer", "target" },
