@@ -192,7 +192,8 @@ namespace GritGud.Application.Gameplay
                     actors.TryGetValue(actorId, out ScenarioActorContentData actor),
                     $"Player party actor '{actorId}' is not defined.");
                 Require(
-                    !HasAuthoredEnemyBehavior(actor.combat?.enemyBehavior),
+                    !GameplayActorCombatAssembler.HasAuthoredEnemyBehavior(
+                        actor.combat?.enemyBehavior),
                     $"Player party actor '{actorId}' cannot own enemy behavior.");
                 string identityId = actor.characterProfile?.identityId;
                 RequireText(
@@ -232,9 +233,11 @@ namespace GritGud.Application.Gameplay
                 ValidateControl(actor);
                 ValidateDisplacementActions(actor);
 
-                ValidateAttack(actor.id, actor.attackCapability);
+                GameplayActorCombatAssembler.ValidateAttack(
+                    actor.id,
+                    actor.attackCapability);
                 ValidateInventory(actor);
-                ValidateCombat(actor);
+                GameplayActorCombatAssembler.ValidateCombat(actor);
             }
 
             return index;
@@ -265,9 +268,12 @@ namespace GritGud.Application.Gameplay
                     derived.Initiative,
                     pose,
                     startingBudget,
-                    CreateAttackDefinition(actor.id, actor.attackCapability),
+                    GameplayActorCombatAssembler.CreateAttackDefinition(
+                        actor.id,
+                        actor.attackCapability),
                     CreateDisplacementAbility(actor),
-                    CreateCombatDefinition(actor.combat),
+                    GameplayActorCombatAssembler.CreateCombatDefinition(
+                        actor.combat),
                     characterProfile)
                 : new ScenarioActorDefinition(
                     actor.id,
@@ -278,132 +284,8 @@ namespace GritGud.Application.Gameplay
                     NormalizeOptionalId(actor.initiallyEquippedItemId),
                     characterProfile,
                     CreateDisplacementAbility(actor),
-                    CreateCombatDefinition(actor.combat));
-        }
-
-        private static ActorCombatDefinition CreateCombatDefinition(
-            ScenarioActorCombatData data)
-        {
-            if (data == null)
-            {
-                return null;
-            }
-
-            EnemyBehaviorDefinition behavior =
-                !HasAuthoredEnemyBehavior(data.enemyBehavior)
-                ? null
-                : new EnemyBehaviorDefinition(
-                    data.enemyBehavior.behaviorId,
-                    data.enemyBehavior.perceptionRange,
-                    data.enemyBehavior.viewAngleDegrees,
-                    data.enemyBehavior.preferredEngagementRange,
-                    data.enemyBehavior.movementSearchRadius,
-                    data.enemyBehavior.maximumAttacksPerTurn,
-                    data.enemyBehavior.minimumAttackHitChancePercent);
-            return new ActorCombatDefinition(
-                data.allegianceId,
-                data.hostileAllegianceIds,
-                data.maximumWounds,
-                behavior);
-        }
-
-        private static void ValidateCombat(ScenarioActorContentData actor)
-        {
-            ScenarioActorCombatData data = actor.combat;
-            if (data == null)
-            {
-                return;
-            }
-
-            RequireText(data.allegianceId,
-                $"Actor '{actor.id}' combat allegiance");
-            Require(data.maximumWounds > 0,
-                $"Actor '{actor.id}' maximum wounds must be greater than zero.");
-            var hostileIds = new HashSet<string>(StringComparer.Ordinal);
-            foreach (string hostileId in data.hostileAllegianceIds
-                ?? new List<string>())
-            {
-                RequireText(hostileId,
-                    $"Actor '{actor.id}' hostile allegiance");
-                Require(
-                    !string.Equals(
-                        hostileId,
-                        data.allegianceId,
-                        StringComparison.Ordinal),
-                    $"Actor '{actor.id}' cannot be hostile to its own allegiance.");
-                Require(hostileIds.Add(hostileId),
-                    $"Actor '{actor.id}' hostile allegiance '{hostileId}' is duplicated.");
-            }
-
-            if (HasAuthoredEnemyBehavior(data.enemyBehavior))
-            {
-                RequireText(data.enemyBehavior.behaviorId,
-                    $"Actor '{actor.id}' enemy behavior ID");
-                RequireFinitePositive(data.enemyBehavior.perceptionRange,
-                    $"Actor '{actor.id}' perception range");
-                Require(
-                    !float.IsNaN(data.enemyBehavior.viewAngleDegrees)
-                    && !float.IsInfinity(data.enemyBehavior.viewAngleDegrees)
-                    && data.enemyBehavior.viewAngleDegrees > 0f
-                    && data.enemyBehavior.viewAngleDegrees <= 360f,
-                    $"Actor '{actor.id}' view angle must be greater than zero and no more than 360 degrees.");
-                RequireFinitePositive(
-                    data.enemyBehavior.preferredEngagementRange,
-                    $"Actor '{actor.id}' preferred engagement range");
-                Require(
-                    data.enemyBehavior.preferredEngagementRange
-                        <= data.enemyBehavior.perceptionRange,
-                    $"Actor '{actor.id}' preferred engagement range cannot exceed perception range.");
-                RequireFinitePositive(
-                    data.enemyBehavior.movementSearchRadius,
-                    $"Actor '{actor.id}' movement search radius");
-                Require(data.enemyBehavior.maximumAttacksPerTurn > 0,
-                    $"Actor '{actor.id}' maximum attacks per turn must be greater than zero.");
-                Require(
-                    data.enemyBehavior.minimumAttackHitChancePercent >= 0
-                        && data.enemyBehavior.minimumAttackHitChancePercent <= 100,
-                    $"Actor '{actor.id}' minimum attack hit chance must be between 0 and 100.");
-                Require(
-                    HasImmediateEnemyAttack(actor),
-                    $"Enemy actor '{actor.id}' requires an equipped immediate attack.");
-                Require(hostileIds.Count > 0,
-                    $"Enemy actor '{actor.id}' requires at least one hostile allegiance.");
-            }
-
-            _ = CreateCombatDefinition(data);
-        }
-
-        private static bool HasAuthoredEnemyBehavior(
-            ScenarioEnemyBehaviorData behavior) =>
-            behavior != null
-            && (!string.IsNullOrWhiteSpace(behavior.behaviorId)
-                || behavior.perceptionRange != 0f
-                || behavior.viewAngleDegrees != 0f
-                || behavior.preferredEngagementRange != 0f
-                || behavior.movementSearchRadius != 0f
-                || behavior.maximumAttacksPerTurn != 0);
-
-        private static bool HasImmediateEnemyAttack(
-            ScenarioActorContentData actor)
-        {
-            if (actor.attackCapability?.enabled == true
-                && (actor.attackCapability.projectile == null
-                    || !actor.attackCapability.projectile.enabled))
-                return true;
-            if (string.IsNullOrWhiteSpace(actor.initiallyEquippedItemId))
-                return false;
-            foreach (ScenarioInventoryItemData item in actor.inventory
-                ?? new List<ScenarioInventoryItemData>())
-                if (item != null
-                    && string.Equals(
-                        item.id,
-                        actor.initiallyEquippedItemId,
-                        StringComparison.Ordinal)
-                    && item.attackCapability?.enabled == true
-                    && (item.attackCapability.projectile == null
-                        || !item.attackCapability.projectile.enabled))
-                    return true;
-            return false;
+                    GameplayActorCombatAssembler.CreateCombatDefinition(
+                        actor.combat));
         }
 
         private static CharacterProfileDefinition CreateCharacterProfile(
@@ -485,7 +367,9 @@ namespace GritGud.Application.Gameplay
                         cost.movementOpportunity,
                         ParseMobility(cost.mobility)),
                     effects,
-                    CreateAttackDefinition(actor.id, item.attackCapability),
+                    GameplayActorCombatAssembler.CreateAttackDefinition(
+                        actor.id,
+                        item.attackCapability),
                     CreateConsumablePowerDefinition(item),
                     ResolveOccupiedHands(item),
                     item.quantity));
@@ -555,7 +439,9 @@ namespace GritGud.Application.Gameplay
                         string.IsNullOrWhiteSpace(
                             item.consumablePower?.type),
                         $"Actor '{actor.id}' weapon '{item.id}' cannot author a consumable power.");
-                    ValidateAttack(actor.id, item.attackCapability);
+                    GameplayActorCombatAssembler.ValidateAttack(
+                        actor.id,
+                        item.attackCapability);
                 }
                 else
                 {
@@ -741,226 +627,6 @@ namespace GritGud.Application.Gameplay
                 data.minimumObscuredPath <= data.radius * 2f,
                 $"Actor '{actorId}' consumable '{itemId}' minimum obscured path cannot exceed its diameter.");
         }
-
-        private static void ValidateAttack(
-            string actorId,
-            ScenarioAttackCapabilityData attack)
-        {
-            if (attack == null || !attack.enabled)
-            {
-                return;
-            }
-
-            RequireText(attack.actionId, $"Actor '{actorId}' attack ID");
-            RequireText(
-                attack.displayName,
-                $"Actor '{actorId}' attack display name");
-            Require(
-                attack.turnCost != null,
-                $"Actor '{actorId}' attack requires a turn cost.");
-            RequireFinitePositive(
-                attack.woundMovementPenalty,
-                $"Actor '{actorId}' wound movement penalty");
-            ParseMobility(attack.turnCost.mobility);
-
-            ScenarioProjectileCapabilityData projectile = attack.projectile;
-            ScenarioContactAttackData contact = attack.contact;
-            ScenarioDirectFireDamageData directFireDamage =
-                HasAuthoredDirectFireDamage(attack.directFireDamage)
-                    ? attack.directFireDamage
-                    : null;
-            bool contactEnabled = contact != null && contact.enabled;
-            Require(
-                !contactEnabled || projectile == null || !projectile.enabled,
-                $"Actor '{actorId}' attack cannot be both contact and projectile-delivered.");
-            Require(
-                !contactEnabled
-                    || attack.accuracyDecay == null
-                    || (attack.accuracyDecay.halfLifeDistance == 0f
-                        && attack.accuracyDecay.minimumAccuracyPercent == 0f),
-                $"Actor '{actorId}' contact attack cannot author ranged accuracy decay.");
-            if (contactEnabled)
-            {
-                Require(
-                    directFireDamage == null,
-                    $"Actor '{actorId}' contact attack cannot author direct-fire prop damage.");
-                RequireFinitePositive(
-                    contact.maximumReach,
-                    $"Actor '{actorId}' contact attack maximum reach");
-                return;
-            }
-
-            if (projectile == null || !projectile.enabled)
-            {
-                Require(
-                    attack.accuracyDecay != null,
-                    $"Actor '{actorId}' ranged immediate attack requires an accuracy-decay function.");
-                RequireFinitePositive(
-                    attack.accuracyDecay.halfLifeDistance,
-                    $"Actor '{actorId}' attack accuracy half-life distance");
-                Require(
-                    !float.IsNaN(
-                        attack.accuracyDecay.minimumAccuracyPercent)
-                        && !float.IsInfinity(
-                            attack.accuracyDecay.minimumAccuracyPercent)
-                        && attack.accuracyDecay.minimumAccuracyPercent > 0f
-                        && attack.accuracyDecay.minimumAccuracyPercent <= 100f,
-                    $"Actor '{actorId}' attack minimum accuracy must be greater than zero and no more than 100 percent.");
-                ValidateDirectFireDamage(actorId, directFireDamage);
-                return;
-            }
-
-            Require(
-                directFireDamage == null,
-                $"Actor '{actorId}' projectile attack cannot author immediate direct-fire prop damage.");
-
-            RequireText(projectile.id, $"Actor '{actorId}' projectile ID");
-            RequireFinitePositive(
-                projectile.speedPerTurn,
-                $"Actor '{actorId}' projectile speed per turn");
-            RequireFinitePositive(
-                projectile.radius,
-                $"Actor '{actorId}' projectile radius");
-            RequireFinitePositive(
-                projectile.maximumRange,
-                $"Actor '{actorId}' projectile maximum range");
-            RequireFiniteNonNegative(
-                projectile.standingLaunchHeight,
-                $"Actor '{actorId}' standing projectile launch height");
-            RequireFiniteNonNegative(
-                projectile.crouchedLaunchHeight,
-                $"Actor '{actorId}' crouched projectile launch height");
-            RequireFiniteNonNegative(projectile.blastRadius,
-                $"Actor '{actorId}' projectile blast radius");
-            RequireFiniteNonNegative(projectile.blastWoundMovementPenalty,
-                $"Actor '{actorId}' projectile blast wound penalty");
-            RequireFiniteNonNegative(projectile.blastIntegrityDamage,
-                $"Actor '{actorId}' projectile blast integrity damage");
-            Require((projectile.blastRadius == 0f)
-                    == (projectile.blastWoundMovementPenalty == 0f
-                        && projectile.blastIntegrityDamage == 0f),
-                $"Actor '{actorId}' projectile blast radius and consequences must be authored together.");
-        }
-
-        private static void ValidateDirectFireDamage(
-            string actorId,
-            ScenarioDirectFireDamageData damage)
-        {
-            if (damage == null)
-            {
-                return;
-            }
-
-            RequireText(
-                damage.damageTypeId,
-                $"Actor '{actorId}' direct-fire damage type");
-            RequireFinitePositive(
-                damage.baseIntegrityDamage,
-                $"Actor '{actorId}' direct-fire base integrity damage");
-            var surfaceIds = new HashSet<string>(StringComparer.Ordinal);
-            foreach (ScenarioSurfaceDamageModifierData modifier in
-                damage.surfaceModifiers
-                    ?? new List<ScenarioSurfaceDamageModifierData>())
-            {
-                Require(
-                    modifier != null,
-                    $"Actor '{actorId}' direct-fire surface modifiers cannot contain null entries.");
-                RequireText(
-                    modifier.surfaceId,
-                    $"Actor '{actorId}' direct-fire surface ID");
-                Require(
-                    surfaceIds.Add(modifier.surfaceId),
-                    $"Actor '{actorId}' direct-fire surface '{modifier.surfaceId}' is duplicated.");
-                RequireFiniteNonNegative(
-                    modifier.multiplier,
-                    $"Actor '{actorId}' direct-fire surface multiplier");
-            }
-        }
-
-        private static AttackDefinition CreateAttackDefinition(
-            string actorId,
-            ScenarioAttackCapabilityData attack)
-        {
-            if (attack == null || !attack.enabled)
-            {
-                return null;
-            }
-
-            ScenarioActionCostData cost = attack.turnCost ??
-                throw new InvalidOperationException(
-                    $"Actor '{actorId}' attack requires a turn cost.");
-            ScenarioProjectileCapabilityData projectile = attack.projectile;
-            ProjectileFlightDefinition projectileDefinition =
-                projectile != null && projectile.enabled
-                    ? new ProjectileFlightDefinition(
-                        projectile.id,
-                        projectile.speedPerTurn,
-                        projectile.radius,
-                        projectile.maximumRange,
-                        projectile.standingLaunchHeight,
-                        projectile.crouchedLaunchHeight,
-                        projectile.opensEmergencyReactionWindow,
-                        projectile.blastRadius,
-                        projectile.blastWoundMovementPenalty,
-                        projectile.blastIntegrityDamage)
-                    : null;
-            AccuracyDecayDefinition accuracyDecayDefinition =
-                projectileDefinition != null
-                    || (attack.contact != null && attack.contact.enabled)
-                    ? null
-                    : new AccuracyDecayDefinition(
-                        attack.accuracyDecay.halfLifeDistance,
-                        attack.accuracyDecay.minimumAccuracyPercent);
-            ContactAttackDefinition contactDefinition = attack.contact == null
-                || !attack.contact.enabled
-                ? null
-                : new ContactAttackDefinition(attack.contact.maximumReach);
-            DirectFireDamageDefinition directFireDamageDefinition =
-                CreateDirectFireDamageDefinition(attack.directFireDamage);
-            return new AttackDefinition(
-                attack.actionId,
-                attack.displayName,
-                new ActionCost(
-                    cost.actionPoints,
-                    cost.movementOpportunity,
-                    ParseMobility(cost.mobility)),
-                attack.woundMovementPenalty,
-                projectileDefinition,
-                accuracyDecayDefinition,
-                contactDefinition,
-                directFireDamageDefinition);
-        }
-
-        private static DirectFireDamageDefinition
-            CreateDirectFireDamageDefinition(ScenarioDirectFireDamageData data)
-        {
-            if (!HasAuthoredDirectFireDamage(data))
-            {
-                return null;
-            }
-
-            var modifiers = new List<SurfaceIntegrityDamageModifier>();
-            foreach (ScenarioSurfaceDamageModifierData modifier in
-                data.surfaceModifiers
-                    ?? new List<ScenarioSurfaceDamageModifierData>())
-            {
-                modifiers.Add(new SurfaceIntegrityDamageModifier(
-                    modifier.surfaceId,
-                    modifier.multiplier));
-            }
-
-            return new DirectFireDamageDefinition(
-                data.damageTypeId,
-                data.baseIntegrityDamage,
-                modifiers);
-        }
-
-        private static bool HasAuthoredDirectFireDamage(
-            ScenarioDirectFireDamageData data) =>
-            data != null
-            && (!string.IsNullOrWhiteSpace(data.damageTypeId)
-                || data.baseIntegrityDamage != 0f
-                || (data.surfaceModifiers?.Count ?? 0) > 0);
 
         private static InventoryItemKind ParseInventoryItemKind(string value)
         {
@@ -1671,46 +1337,25 @@ namespace GritGud.Application.Gameplay
             throw new InvalidOperationException($"Unknown actor stance '{value}'.");
         }
 
-        private static ActionMobility ParseMobility(string value)
-        {
-            if (string.Equals(value, "mobile", StringComparison.OrdinalIgnoreCase))
-            {
-                return ActionMobility.Mobile;
-            }
+        private static ActionMobility ParseMobility(string value) =>
+            GameplayScenarioAssemblyValidation.ParseMobility(value);
 
-            if (string.Equals(value, "set", StringComparison.OrdinalIgnoreCase))
-            {
-                return ActionMobility.Set;
-            }
+        private static void RequireText(string value, string label) =>
+            GameplayScenarioAssemblyValidation.RequireText(value, label);
 
-            throw new InvalidOperationException($"Unknown action mobility '{value}'.");
-        }
+        private static void RequireFinitePositive(float value, string label) =>
+            GameplayScenarioAssemblyValidation.RequireFinitePositive(
+                value,
+                label);
 
-        private static void RequireText(string value, string label)
-        {
-            Require(!string.IsNullOrWhiteSpace(value), label + " cannot be empty.");
-        }
+        private static void RequireFiniteNonNegative(
+            float value,
+            string label) =>
+            GameplayScenarioAssemblyValidation.RequireFiniteNonNegative(
+                value,
+                label);
 
-        private static void RequireFinitePositive(float value, string label)
-        {
-            Require(
-                !float.IsNaN(value) && !float.IsInfinity(value) && value > 0f,
-                label + " must be finite and greater than zero.");
-        }
-
-        private static void RequireFiniteNonNegative(float value, string label)
-        {
-            Require(
-                !float.IsNaN(value) && !float.IsInfinity(value) && value >= 0f,
-                label + " must be finite and non-negative.");
-        }
-
-        private static void Require(bool condition, string message)
-        {
-            if (!condition)
-            {
-                throw new InvalidOperationException(message);
-            }
-        }
+        private static void Require(bool condition, string message) =>
+            GameplayScenarioAssemblyValidation.Require(condition, message);
     }
 }
