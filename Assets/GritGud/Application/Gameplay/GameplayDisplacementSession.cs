@@ -150,6 +150,7 @@ namespace GritGud.Application.Gameplay
             controlProfiles;
         private readonly IDisplacementPathValidator pathValidator;
         private readonly ID20RollSource rollSource;
+        private readonly DisplacementActionEvaluator actionEvaluator;
         private readonly List<DisplacementRecord> records =
             new List<DisplacementRecord>();
         private readonly IReadOnlyList<DisplacementRecord> readOnlyRecords;
@@ -216,6 +217,11 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(validator));
             rollSource = rolls ??
                 throw new ArgumentNullException(nameof(rolls));
+            actionEvaluator = new DisplacementActionEvaluator(
+                gameplay,
+                destructibles,
+                subjects,
+                controlProfiles);
             readOnlyRecords = records.AsReadOnly();
         }
 
@@ -225,19 +231,8 @@ namespace GritGud.Application.Gameplay
 
         public GameplaySessionMode Mode => gameplay.Mode;
 
-        public CloseQuartersControlProfile GetControlProfile(string actorId)
-        {
-            RequireId(actorId, nameof(actorId));
-            if (!controlProfiles.TryGetValue(
-                    actorId,
-                    out CloseQuartersControlProfile profile))
-            {
-                throw new KeyNotFoundException(
-                    $"Actor '{actorId}' has no close-quarters control profile.");
-            }
-
-            return profile;
-        }
+        public CloseQuartersControlProfile GetControlProfile(string actorId) =>
+            actionEvaluator.GetControlProfile(actorId);
 
         public DisplacementActionAvailability EvaluateActionAvailability(
             string actorId,
@@ -250,295 +245,17 @@ namespace GritGud.Application.Gameplay
         private DisplacementActionAvailability EvaluateActionAvailability(
             string actorId,
             string actionId,
-            bool startsEncounter)
-        {
-            RequireId(actorId, nameof(actorId));
-            RequireId(actionId, nameof(actionId));
-
-            if (!gameplay.TryGetActor(actorId, out GameplayActorSnapshot actor))
-            {
-                return CreateActionAvailability(
-                    actorId,
-                    actionId,
-                    DisplacementActionAvailabilityFailure.ActorUnavailable);
-            }
-
-            if (!gameplay.TryGetDisplacementAction(
-                    actorId,
-                    actionId,
-                    out DisplacementActionDefinition action))
-            {
-                return CreateActionAvailability(
-                    actorId,
-                    actionId,
-                    DisplacementActionAvailabilityFailure.ActionUnavailable);
-            }
-
-            if (actor.IsPinned
-                && action.Intent != DisplacementActionKind.PushOff)
-            {
-                return CreateActionAvailability(
-                    actorId,
-                    actionId,
-                    DisplacementActionAvailabilityFailure.ActorPinned,
-                    action,
-                    ResolveActionCost(action, startsEncounter));
-            }
-            if (!actor.IsPinned
-                && action.Intent == DisplacementActionKind.PushOff)
-            {
-                return CreateActionAvailability(
-                    actorId,
-                    actionId,
-                    DisplacementActionAvailabilityFailure.ActorNotPinned,
-                    action,
-                    ResolveActionCost(action, startsEncounter));
-            }
-
-            InventoryItemDefinition equipped = gameplay.GetEquippedItem(actorId);
-            ActionCost cost = ResolveActionCost(
-                action,
-                startsEncounter);
-            string autoStowItemId = null;
-            if (!HasRequiredFreeHands(action, equipped))
-            {
-                if (action.AutoStowPolicy == DisplacementAutoStowPolicy.Never)
-                {
-                    return CreateActionAvailability(
-                        actorId,
-                        actionId,
-                        DisplacementActionAvailabilityFailure.HandsOccupied,
-                        action,
-                        cost);
-                }
-
-                autoStowItemId = equipped.Id;
-                cost = ActionCost.Combine(
-                    cost,
-                    ResolveEquipmentCost(
-                        equipped,
-                        startsEncounter));
-            }
-
-            if (gameplay.Operation != GameplaySessionOperation.None)
-            {
-                return CreateActionAvailability(
-                    actorId,
-                    actionId,
-                    DisplacementActionAvailabilityFailure.OperationInProgress,
-                    action,
-                    cost,
-                    autoStowItemId);
-            }
-
-            if (gameplay.Mode == GameplaySessionMode.TurnBased
-                && !string.Equals(
-                    gameplay.ActiveActorId,
-                    actorId,
-                    StringComparison.Ordinal))
-            {
-                return CreateActionAvailability(
-                    actorId,
-                    actionId,
-                    DisplacementActionAvailabilityFailure.ActorNotActive,
-                    action,
-                    cost,
-                    autoStowItemId);
-            }
-
-            if (!actor.TurnBudget.CanAfford(cost))
-            {
-                return CreateActionAvailability(
-                    actorId,
-                    actionId,
-                    DisplacementActionAvailabilityFailure.InsufficientTurnBudget,
-                    action,
-                    cost,
-                    autoStowItemId);
-            }
-
-            return CreateActionAvailability(
+            bool startsEncounter) =>
+            actionEvaluator.EvaluateAvailability(
                 actorId,
                 actionId,
-                DisplacementActionAvailabilityFailure.None,
-                action,
-                cost,
-                autoStowItemId);
-        }
+                startsEncounter);
 
         public DisplacementTargetEvaluation EvaluateTarget(
             string actorId,
             string actionId,
-            string candidateId)
-        {
-            RequireId(actorId, nameof(actorId));
-            RequireId(actionId, nameof(actionId));
-            RequireId(candidateId, nameof(candidateId));
-
-            if (!gameplay.TryGetActor(actorId, out GameplayActorSnapshot actor))
-            {
-                return CreateTargetEvaluation(
-                    actorId,
-                    actionId,
-                    candidateId,
-                    DisplacementTargetFailure.ActorUnavailable);
-            }
-
-            if (!gameplay.TryGetDisplacementAction(
-                    actorId,
-                    actionId,
-                    out DisplacementActionDefinition action))
-            {
-                return CreateTargetEvaluation(
-                    actorId,
-                    actionId,
-                    candidateId,
-                    DisplacementTargetFailure.ActionUnavailable);
-            }
-
-            if (!subjects.TryGetValue(
-                    candidateId,
-                    out DisplacementSubjectDefinition subject)
-                || !TryGetSubjectPosition(
-                    subject,
-                    out GameplayPosition subjectPosition))
-            {
-                return CreateTargetEvaluation(
-                    actorId,
-                    actionId,
-                    candidateId,
-                    DisplacementTargetFailure.CandidateUnavailable,
-                    action: action);
-            }
-
-            float distance = actor.Pose.Position.DistanceTo(subjectPosition);
-            if (string.Equals(actorId, candidateId, StringComparison.Ordinal))
-            {
-                return CreateTargetEvaluation(
-                    actorId,
-                    actionId,
-                    candidateId,
-                    DisplacementTargetFailure.SelfTarget,
-                    subject,
-                    distance,
-                    action);
-            }
-
-            if (action.Intent == DisplacementActionKind.PushOff
-                && (!actor.IsPinned
-                    || !string.Equals(
-                        actor.PinState.PropId,
-                        candidateId,
-                        StringComparison.Ordinal)))
-            {
-                return CreateTargetEvaluation(
-                    actorId,
-                    actionId,
-                    candidateId,
-                    DisplacementTargetFailure.NotPinningActor,
-                    subject,
-                    distance,
-                    action);
-            }
-
-            if (subject.Kind == DisplacementSubjectKind.Combatant
-                && gameplay.GetActor(candidateId).IsPinned)
-            {
-                return CreateTargetEvaluation(
-                    actorId,
-                    actionId,
-                    candidateId,
-                    DisplacementTargetFailure.SubjectPinned,
-                    subject,
-                    distance,
-                    action);
-            }
-
-            if (subject.Kind == DisplacementSubjectKind.Prop
-                && action.Intent != DisplacementActionKind.PushOff
-                && IsPinningProp(candidateId))
-            {
-                return CreateTargetEvaluation(
-                    actorId,
-                    actionId,
-                    candidateId,
-                    DisplacementTargetFailure.SubjectPinned,
-                    subject,
-                    distance,
-                    action);
-            }
-
-            if (!action.Accepts(subject.Kind))
-            {
-                return CreateTargetEvaluation(
-                    actorId,
-                    actionId,
-                    candidateId,
-                    DisplacementTargetFailure.SubjectKindNotAccepted,
-                    subject,
-                    distance,
-                    action);
-            }
-
-            if (subject.Mass > action.MaximumSubjectMass)
-            {
-                return CreateTargetEvaluation(
-                    actorId,
-                    actionId,
-                    candidateId,
-                    DisplacementTargetFailure.SubjectTooHeavy,
-                    subject,
-                    distance,
-                    action);
-            }
-
-            if (subject.Size > action.MaximumSubjectSize)
-            {
-                return CreateTargetEvaluation(
-                    actorId,
-                    actionId,
-                    candidateId,
-                    DisplacementTargetFailure.SubjectTooLarge,
-                    subject,
-                    distance,
-                    action);
-            }
-
-            if (subject.Kind == DisplacementSubjectKind.Combatant
-                && (!controlProfiles.ContainsKey(actorId)
-                    || !controlProfiles.ContainsKey(candidateId)))
-            {
-                return CreateTargetEvaluation(
-                    actorId,
-                    actionId,
-                    candidateId,
-                    DisplacementTargetFailure.CandidateUnavailable,
-                    subject,
-                    distance,
-                    action);
-            }
-
-            if (distance > action.Reach)
-            {
-                return CreateTargetEvaluation(
-                    actorId,
-                    actionId,
-                    candidateId,
-                    DisplacementTargetFailure.SubjectOutOfReach,
-                    subject,
-                    distance,
-                    action);
-            }
-
-            return CreateTargetEvaluation(
-                actorId,
-                actionId,
-                candidateId,
-                DisplacementTargetFailure.None,
-                subject,
-                distance,
-                action);
-        }
+            string candidateId) =>
+            actionEvaluator.EvaluateTarget(actorId, actionId, candidateId);
 
         public DisplacementDestinationEvaluation EvaluateDestination(
             string actorId,
@@ -1072,64 +789,8 @@ namespace GritGud.Application.Gameplay
 
         private bool TryGetSubjectPosition(
             DisplacementSubjectDefinition subject,
-            out GameplayPosition position)
-        {
-            if (subject.Kind == DisplacementSubjectKind.Prop)
-            {
-                if (destructibles.TryGetProp(
-                        subject.Id,
-                        out DestructiblePropSnapshot prop))
-                {
-                    position = prop.Position;
-                    return true;
-                }
-            }
-            else if (gameplay.TryGetActor(
-                subject.Id,
-                out GameplayActorSnapshot actor))
-            {
-                position = actor.Pose.Position;
-                return true;
-            }
-
-            position = default(GameplayPosition);
-            return false;
-        }
-
-        private bool IsPinningProp(string propId)
-        {
-            foreach (ScenarioActorDefinition definition in
-                gameplay.Scenario.Actors)
-            {
-                ActorPinState pin = gameplay.GetActor(definition.Id).PinState;
-                if (pin != null
-                    && string.Equals(
-                        pin.PropId,
-                        propId,
-                        StringComparison.Ordinal))
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        private static DisplacementTargetEvaluation CreateTargetEvaluation(
-            string actorId,
-            string actionId,
-            string candidateId,
-            DisplacementTargetFailure failure,
-            DisplacementSubjectDefinition subject = null,
-            float distance = 0f,
-            DisplacementActionDefinition action = null) =>
-            new DisplacementTargetEvaluation(
-                actorId,
-                actionId,
-                candidateId,
-                failure,
-                subject,
-                distance,
-                action);
+            out GameplayPosition position) =>
+            actionEvaluator.TryGetSubjectPosition(subject, out position);
 
         private static DisplacementDestinationEvaluation
             CreateDestinationEvaluation(
@@ -1148,21 +809,6 @@ namespace GritGud.Application.Gameplay
                 destination,
                 failure,
                 action);
-
-        private static DisplacementActionAvailability CreateActionAvailability(
-            string actorId,
-            string actionId,
-            DisplacementActionAvailabilityFailure failure,
-            DisplacementActionDefinition action = null,
-            ActionCost resolvedCost = default(ActionCost),
-            string autoStowItemId = null) =>
-            new DisplacementActionAvailability(
-                actorId,
-                actionId,
-                failure,
-                action,
-                resolvedCost,
-                autoStowItemId);
 
         private static DisplacementResolutionFailure ToResolutionFailure(
             DisplacementActionAvailabilityFailure failure)
@@ -1235,33 +881,6 @@ namespace GritGud.Application.Gameplay
                     parameterName);
             }
         }
-
-        private ActionCost ResolveActionCost(
-            DisplacementActionDefinition definition,
-            bool startsEncounter) =>
-            gameplay.Mode == GameplaySessionMode.TurnBased
-                || startsEncounter
-                ? definition.Cost
-                : new ActionCost(
-                    0,
-                    0f,
-                    definition.Cost.Mobility);
-
-        private ActionCost ResolveEquipmentCost(
-            InventoryItemDefinition item,
-            bool startsEncounter) =>
-            gameplay.Mode == GameplaySessionMode.TurnBased
-                || startsEncounter
-                ? item.EquipmentCost
-                : new ActionCost(
-                    0,
-                    0f,
-                    item.EquipmentCost.Mobility);
-
-        private static bool HasRequiredFreeHands(
-            DisplacementActionDefinition action,
-            InventoryItemDefinition equipped) =>
-            action.HasRequiredFreeHands(equipped?.OccupiedHands ?? 0);
 
         private bool TryResolveProp(
             string actorId,
@@ -1717,10 +1336,6 @@ namespace GritGud.Application.Gameplay
         }
 
         private DisplacementSizeClass GetSubjectSize(string subjectId) =>
-            subjects.TryGetValue(
-                subjectId,
-                out DisplacementSubjectDefinition subject)
-                    ? subject.Size
-                    : DisplacementSizeClass.Medium;
+            actionEvaluator.GetSubjectSize(subjectId);
     }
 }
