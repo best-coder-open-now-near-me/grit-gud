@@ -36,25 +36,23 @@ namespace GritGud.Presentation.Gameplay
         internal const float PendingPowerPulseMinimumAlpha = 0.48f;
         internal const int HotbarSlotCount = GameplayHudLayout.HotbarSlotCount;
         private static readonly Color PanelStrongColor =
-            GameplayVisualPalette.HudPanel;
+            GameplayHudStyleSet.PanelStrongColor;
         private static readonly Color BorderColor =
-            GameplayVisualPalette.HudBorder;
+            GameplayHudStyleSet.BorderColor;
         private static readonly Color SignalColor =
-            GameplayVisualPalette.HudPrimarySignal;
-        private static readonly Color SignalSoftColor = GameplayVisualPalette.WithAlpha(
-            GameplayVisualPalette.HudPrimarySignal,
-            0.16f);
+            GameplayHudStyleSet.SignalColor;
+        private static readonly Color SignalSoftColor =
+            GameplayHudStyleSet.SignalSoftColor;
         private static readonly Color EquipmentSignalColor =
-            GameplayVisualPalette.HudSecondarySignal;
-        private static readonly Color ModeButtonEdgeColor = GameplayVisualPalette.WithAlpha(
-            GameplayVisualPalette.HudPrimarySignal,
-            0.48f);
+            GameplayHudStyleSet.EquipmentSignalColor;
+        private static readonly Color ModeButtonEdgeColor =
+            GameplayHudStyleSet.ModeButtonEdgeColor;
         private static readonly Color ModeButtonTextColor =
-            GameplayVisualPalette.HudTextBright;
+            GameplayHudStyleSet.ModeButtonTextColor;
         private static readonly Color PrimaryTextColor =
-            GameplayVisualPalette.HudTextPrimary;
+            GameplayHudStyleSet.PrimaryTextColor;
         private static readonly Color SecondaryTextColor =
-            GameplayVisualPalette.HudTextSecondary;
+            GameplayHudStyleSet.SecondaryTextColor;
 
         private readonly GameplayHudBindings bindings =
             new GameplayHudBindings();
@@ -82,37 +80,36 @@ namespace GritGud.Presentation.Gameplay
             get => bindings.BugReportNote;
             set => bindings.BugReportNote = value;
         }
-        private GUIStyle headerStyle;
-        private GUIStyle bodyStyle;
-        private GUIStyle guidanceStyle;
-        private GUIStyle controlsStyle;
-        private GUIStyle commandHintsStyle;
-        private GUIStyle bodyRegionStyle;
-        private GUIStyle woundedBodyRegionStyle;
-        private GUIStyle buttonStyle;
-        private GUIStyle statusStyle;
-        private GUIStyle tabStyle;
-        private GUIStyle resourceLabelStyle;
-        private GUIStyle resourceValueStyle;
-        private GUIStyle hotbarNumberStyle;
-        private GUIStyle hotbarItemStyle;
-        private GUIStyle pendingPowerButtonStyle;
-        private GUIStyle equipmentButtonStyle;
-        private GUIStyle equippedButtonStyle;
-        private GUIStyle equipmentConfirmationStyle;
-        private GUIStyle tooltipStyle;
-        private GUIStyle confirmationFlyoutStyle;
-        private GUIStyle warningHintStyle;
-        private GUIStyle choiceHeaderStyle;
-        private GUIStyle tipTitleStyle;
-        private GUIStyle tipBodyStyle;
-        private GUIStyle modeButtonStyle;
-        private Texture2D whiteTexture;
-        private Texture2D buttonNormalTexture;
-        private Texture2D buttonHoverTexture;
-        private Texture2D buttonActiveTexture;
-        private Texture2D equipmentConfirmationTexture;
-        private GameplayHudTextureSet textureSet;
+        private readonly GameplayHudStyleSet styles =
+            new GameplayHudStyleSet();
+        private GUIStyle headerStyle => styles.Header;
+        private GUIStyle bodyStyle => styles.Body;
+        private GUIStyle guidanceStyle => styles.Guidance;
+        private GUIStyle controlsStyle => styles.Controls;
+        private GUIStyle commandHintsStyle => styles.CommandHints;
+        private GUIStyle bodyRegionStyle => styles.BodyRegion;
+        private GUIStyle woundedBodyRegionStyle => styles.WoundedBodyRegion;
+        private GUIStyle buttonStyle => styles.Button;
+        private GUIStyle statusStyle => styles.Status;
+        private GUIStyle tabStyle => styles.Tab;
+        private GUIStyle resourceLabelStyle => styles.ResourceLabel;
+        private GUIStyle resourceValueStyle => styles.ResourceValue;
+        private GUIStyle hotbarNumberStyle => styles.HotbarNumber;
+        private GUIStyle hotbarItemStyle => styles.HotbarItem;
+        private GUIStyle pendingPowerButtonStyle => styles.PendingPowerButton;
+        private GUIStyle equipmentButtonStyle => styles.EquipmentButton;
+        private GUIStyle equippedButtonStyle => styles.EquippedButton;
+        private GUIStyle equipmentConfirmationStyle =>
+            styles.EquipmentConfirmation;
+        private GUIStyle tooltipStyle => styles.Tooltip;
+        private GUIStyle confirmationFlyoutStyle => styles.ConfirmationFlyout;
+        private GUIStyle warningHintStyle => styles.WarningHint;
+        private GUIStyle choiceHeaderStyle => styles.ChoiceHeader;
+        private GUIStyle tipTitleStyle => styles.TipTitle;
+        private GUIStyle tipBodyStyle => styles.TipBody;
+        private GUIStyle modeButtonStyle => styles.ModeButton;
+        private Texture2D whiteTexture => styles.WhiteTexture;
+        private GameplayHudTextureSet textureSet => styles.TextureSet;
         private bool flyoutExpanded;
         private float flyoutReveal;
         private float equipmentFlyoutReveal;
@@ -1615,324 +1612,7 @@ namespace GritGud.Presentation.Gameplay
 
         private void EnsureStyles()
         {
-            if (textureSet != null)
-            {
-                return;
-            }
-
-            textureSet = new GameplayHudTextureSet();
-            whiteTexture = textureSet.White;
-            buttonNormalTexture = textureSet.ButtonNormal;
-            buttonHoverTexture = textureSet.ButtonHover;
-            buttonActiveTexture = textureSet.ButtonActive;
-            equipmentConfirmationTexture = textureSet.EquipmentConfirmation;
-
-            headerStyle = new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.MiddleLeft,
-                fontSize = 13,
-                fontStyle = FontStyle.Bold,
-                normal = { textColor = SignalColor },
-            };
-            choiceHeaderStyle = new GUIStyle(headerStyle)
-            {
-                fontSize = 11,
-                alignment = TextAnchor.MiddleLeft,
-            };
-            tipTitleStyle = new GUIStyle(headerStyle)
-            {
-                fontSize = 10,
-                clipping = TextClipping.Clip,
-            };
-            tipBodyStyle = new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.UpperLeft,
-                fontSize = 11,
-                wordWrap = true,
-                normal = { textColor = PrimaryTextColor },
-            };
-            bodyStyle = new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.UpperLeft,
-                fontSize = 14,
-                fontStyle = FontStyle.Bold,
-                wordWrap = true,
-                normal = { textColor = PrimaryTextColor },
-            };
-            guidanceStyle = new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.UpperLeft,
-                fontSize = 12,
-                wordWrap = true,
-                normal = { textColor = PrimaryTextColor },
-            };
-            controlsStyle = new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.UpperLeft,
-                fontSize = 11,
-                fontStyle = FontStyle.Bold,
-                wordWrap = true,
-                normal = { textColor = SecondaryTextColor },
-            };
-            commandHintsStyle = new GUIStyle(controlsStyle)
-            {
-                alignment = TextAnchor.MiddleLeft,
-                fontSize = 11,
-                fontStyle = FontStyle.Normal,
-                clipping = TextClipping.Clip,
-                wordWrap = false,
-                normal = { textColor = PrimaryTextColor },
-            };
-            statusStyle = new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.MiddleLeft,
-                fontSize = 11,
-                fontStyle = FontStyle.Bold,
-                clipping = TextClipping.Clip,
-                normal = { textColor = SecondaryTextColor },
-            };
-            tabStyle = new GUIStyle(GUI.skin.button)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 9,
-                fontStyle = FontStyle.Bold,
-                wordWrap = true,
-                border = new RectOffset(0, 0, 0, 0),
-                normal =
-                {
-                    background = buttonNormalTexture,
-                    textColor = SignalColor,
-                },
-                hover =
-                {
-                    background = buttonHoverTexture,
-                    textColor = PrimaryTextColor,
-                },
-                active =
-                {
-                    background = buttonActiveTexture,
-                    textColor = PrimaryTextColor,
-                },
-            };
-            resourceLabelStyle = new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.MiddleLeft,
-                fontSize = 9,
-                fontStyle = FontStyle.Bold,
-                clipping = TextClipping.Clip,
-                normal = { textColor = SignalColor },
-            };
-            resourceValueStyle = new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.MiddleRight,
-                fontSize = 9,
-                fontStyle = FontStyle.Bold,
-                clipping = TextClipping.Clip,
-                normal = { textColor = PrimaryTextColor },
-            };
-            hotbarNumberStyle = new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.UpperLeft,
-                fontSize = 11,
-                fontStyle = FontStyle.Bold,
-                clipping = TextClipping.Clip,
-                padding = new RectOffset(0, 0, 0, 0),
-                normal = { textColor = ModeButtonTextColor },
-            };
-            modeButtonStyle = new GUIStyle(GUI.skin.button)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 12,
-                fontStyle = FontStyle.Bold,
-                wordWrap = false,
-                clipping = TextClipping.Clip,
-                padding = new RectOffset(8, 8, 0, 0),
-                border = new RectOffset(0, 0, 0, 0),
-                normal =
-                {
-                    background = buttonHoverTexture,
-                    textColor = ModeButtonTextColor,
-                },
-                hover =
-                {
-                    background = buttonActiveTexture,
-                    textColor = ModeButtonTextColor,
-                },
-                active =
-                {
-                    background = buttonActiveTexture,
-                    textColor = ModeButtonTextColor,
-                },
-                focused =
-                {
-                    background = buttonHoverTexture,
-                    textColor = ModeButtonTextColor,
-                },
-            };
-            bodyRegionStyle = new GUIStyle(modeButtonStyle)
-            {
-                fontSize = 8,
-                padding = new RectOffset(2, 2, 0, 0),
-                normal =
-                {
-                    background = buttonNormalTexture,
-                    textColor = PrimaryTextColor,
-                },
-            };
-            woundedBodyRegionStyle = new GUIStyle(bodyRegionStyle)
-            {
-                normal =
-                {
-                    background = equipmentConfirmationTexture,
-                    textColor = EquipmentSignalColor,
-                },
-            };
-            hotbarItemStyle = new GUIStyle(modeButtonStyle)
-            {
-                fontSize = 10,
-                padding = new RectOffset(5, 5, 10, 0),
-            };
-            pendingPowerButtonStyle = new GUIStyle(hotbarItemStyle)
-            {
-                normal =
-                {
-                    background = equipmentConfirmationTexture,
-                    textColor = EquipmentSignalColor,
-                },
-                hover =
-                {
-                    background = equipmentConfirmationTexture,
-                    textColor = GameplayVisualPalette.TextBright,
-                },
-                active =
-                {
-                    background = equipmentConfirmationTexture,
-                    textColor = GameplayVisualPalette.TextBright,
-                },
-                focused =
-                {
-                    background = equipmentConfirmationTexture,
-                    textColor = EquipmentSignalColor,
-                },
-            };
-            equipmentButtonStyle = new GUIStyle(GUI.skin.button)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 8,
-                fontStyle = FontStyle.Bold,
-                wordWrap = false,
-                clipping = TextClipping.Clip,
-                border = new RectOffset(0, 0, 0, 0),
-                normal =
-                {
-                    background = buttonNormalTexture,
-                    textColor = PrimaryTextColor,
-                },
-                hover =
-                {
-                    background = buttonHoverTexture,
-                    textColor = ModeButtonTextColor,
-                },
-                active =
-                {
-                    background = buttonActiveTexture,
-                    textColor = ModeButtonTextColor,
-                },
-            };
-            equippedButtonStyle = new GUIStyle(equipmentButtonStyle)
-            {
-                contentOffset = new Vector2(0f, 1f),
-                normal =
-                {
-                    background = buttonActiveTexture,
-                    textColor = ModeButtonTextColor,
-                },
-                hover =
-                {
-                    background = buttonActiveTexture,
-                    textColor = ModeButtonTextColor,
-                },
-            };
-            equipmentConfirmationStyle = new GUIStyle(equipmentButtonStyle)
-            {
-                normal =
-                {
-                    background = equipmentConfirmationTexture,
-                    textColor = EquipmentSignalColor,
-                },
-                hover =
-                {
-                    background = equipmentConfirmationTexture,
-                    textColor = GameplayVisualPalette.TextBright,
-                },
-                active =
-                {
-                    background = equipmentConfirmationTexture,
-                    textColor = GameplayVisualPalette.TextBright,
-                },
-            };
-            tooltipStyle = new GUIStyle(GUI.skin.box)
-            {
-                alignment = TextAnchor.UpperLeft,
-                fontSize = 10,
-                fontStyle = FontStyle.Bold,
-                wordWrap = false,
-                padding = new RectOffset(10, 10, 8, 8),
-                border = new RectOffset(0, 0, 0, 0),
-                normal =
-                {
-                    background = buttonNormalTexture,
-                    textColor = PrimaryTextColor,
-                },
-            };
-            confirmationFlyoutStyle = new GUIStyle(tooltipStyle)
-            {
-                alignment = TextAnchor.UpperLeft,
-                fontSize = 10,
-                wordWrap = true,
-                normal =
-                {
-                    background = buttonNormalTexture,
-                    textColor = PrimaryTextColor,
-                },
-            };
-            warningHintStyle = new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.MiddleLeft,
-                clipping = TextClipping.Clip,
-                fontSize = 9,
-                fontStyle = FontStyle.Bold,
-                wordWrap = false,
-                padding = new RectOffset(0, 0, 0, 0),
-                normal =
-                {
-                    background = null,
-                    textColor = EquipmentSignalColor,
-                },
-            };
-            buttonStyle = new GUIStyle(GUI.skin.button)
-            {
-                alignment = TextAnchor.MiddleLeft,
-                fontSize = 11,
-                fontStyle = FontStyle.Bold,
-                padding = new RectOffset(14, 10, 0, 0),
-                border = new RectOffset(0, 0, 0, 0),
-                normal =
-                {
-                    background = buttonNormalTexture,
-                    textColor = PrimaryTextColor,
-                },
-                hover =
-                {
-                    background = buttonHoverTexture,
-                    textColor = SignalColor,
-                },
-                active =
-                {
-                    background = buttonActiveTexture,
-                    textColor = SignalColor,
-                },
-            };
+            styles.Ensure();
         }
 
         private void DrawFramedPanel(Rect rectangle, Color fillColor)
@@ -2201,12 +1881,7 @@ namespace GritGud.Presentation.Gameplay
 
         private void OnDestroy()
         {
-            textureSet?.Dispose();
-            textureSet = null;
-            buttonNormalTexture = null;
-            buttonHoverTexture = null;
-            buttonActiveTexture = null;
-            equipmentConfirmationTexture = null;
+            styles.Dispose();
         }
     }
 }
