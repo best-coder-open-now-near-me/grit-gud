@@ -135,6 +135,7 @@ namespace GritGud.Application.Gameplay
         private readonly DisplacementPinTransitionResolver pinTransitionResolver;
         private readonly DisplacementDestinationEvaluator destinationEvaluator;
         private readonly DisplacementContestResolver contestResolver;
+        private readonly DisplacementRecordCommitValidator commitValidator;
         private readonly List<DisplacementRecord> records =
             new List<DisplacementRecord>();
         private readonly IReadOnlyList<DisplacementRecord> readOnlyRecords;
@@ -222,6 +223,9 @@ namespace GritGud.Application.Gameplay
                 resolvedRollSource,
                 actionEvaluator,
                 destinationEvaluator);
+            commitValidator = new DisplacementRecordCommitValidator(
+                gameplay,
+                destructibles);
             readOnlyRecords = records.AsReadOnly();
         }
 
@@ -407,7 +411,7 @@ namespace GritGud.Application.Gameplay
                 resultingBudget,
                 outcomes);
             gameplay.ValidateActionCommit(action);
-            ValidateCommit(record);
+            commitValidator.Validate(record, records.Count + 1L);
             var notifications = new GameplayNotificationBatch();
             gameplay.CommitAction(action, notifications);
             Commit(
@@ -513,7 +517,7 @@ namespace GritGud.Application.Gameplay
             if (notifications == null)
                 throw new ArgumentNullException(nameof(notifications));
             if (validate)
-                ValidateCommit(record);
+                commitValidator.Validate(record, records.Count + 1L);
 
             if (record.Succeeded)
             {
@@ -533,43 +537,6 @@ namespace GritGud.Application.Gameplay
 
             records.Add(record);
             gameplay.Journal.RecordDisplacementResolved(record);
-        }
-
-        private void ValidateCommit(DisplacementRecord record)
-        {
-            if (record == null)
-            {
-                throw new ArgumentNullException(nameof(record));
-            }
-
-            long expectedSequence = records.Count + 1L;
-            if (record.Sequence != expectedSequence)
-            {
-                throw new InvalidOperationException(
-                    "The displacement record is not the next authoritative sequence.");
-            }
-
-            if (record.Request.SubjectKind == DisplacementSubjectKind.Prop)
-            {
-                DestructiblePropSnapshot current = destructibles.GetProp(
-                    record.Request.SubjectId);
-                if (record.PreviousPropState == null
-                    || current.Posture != record.PreviousPropState.Posture
-                    || !current.Pose.HasSameState(
-                        record.PreviousPropState.Pose))
-                {
-                    throw new InvalidOperationException(
-                        "The displacement record no longer starts from authoritative prop state.");
-                }
-
-                gameplay.ValidatePinTransition(record.PinTransition);
-            }
-            else if (gameplay.GetActor(record.Request.SubjectId).Pose.Position
-                .DistanceTo(record.PreviousPosition) > 0f)
-            {
-                throw new InvalidOperationException(
-                    "The displacement record no longer starts at authoritative position.");
-            }
         }
 
     }

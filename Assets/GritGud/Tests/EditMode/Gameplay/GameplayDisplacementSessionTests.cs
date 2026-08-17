@@ -1422,6 +1422,83 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void ReplayRejectsDuplicateSequenceWithoutMutatingAgain()
+        {
+            GameplayDisplacementSession source = CreateSession(
+                new AllowPaths(),
+                new FixedRolls(8, 10));
+            Assert.That(source.TryDisplaceAction(
+                "player",
+                CombatantThrow.Id,
+                "target",
+                new GameplayPosition(2f, 0f, 1f),
+                out _,
+                out DisplacementRecord record,
+                out _), Is.True);
+            GameplayDisplacementSession replay = CreateSession(
+                new AllowPaths(),
+                new ThrowIfRolled(),
+                out GameplaySession replayGameplay,
+                out _);
+            replay.Commit(record);
+
+            Assert.Throws<InvalidOperationException>(() =>
+                replay.Commit(record));
+
+            Assert.That(replay.Records.Count, Is.EqualTo(1));
+            Assert.That(
+                replayGameplay.GetActor("target").Pose.Position.X,
+                Is.EqualTo(2f));
+        }
+
+        [Test]
+        public void ReplayRestoresExactToppledPropAndPinState()
+        {
+            GameplayDisplacementSession source = CreateSession(
+                new PinThenReleasePaths(),
+                new FixedRolls(),
+                out _,
+                out _,
+                playerPush: PinningPush,
+                propToppling: new PropTopplingDefinition(0f, 90f, 0.5f),
+                propPinning: new PropPinningDefinition(90f),
+                targetActions: new[] { PushOff });
+            Assert.That(source.TryDisplaceAction(
+                "player",
+                PinningPush.Id,
+                "crate",
+                new GameplayPosition(0f, 0f, 2f),
+                out _,
+                out DisplacementRecord record,
+                out _), Is.True);
+            GameplayDisplacementSession replay = CreateSession(
+                new PinThenReleasePaths(),
+                new ThrowIfRolled(),
+                out GameplaySession replayGameplay,
+                out DestructiblePropSession replayDestructibles,
+                playerPush: PinningPush,
+                propToppling: new PropTopplingDefinition(0f, 90f, 0.5f),
+                propPinning: new PropPinningDefinition(90f),
+                targetActions: new[] { PushOff });
+
+            replay.Commit(record);
+
+            DestructiblePropSnapshot replayProp =
+                replayDestructibles.GetProp("crate");
+            Assert.That(
+                replayProp.Pose.HasSameState(record.ResultingPropState.Pose),
+                Is.True);
+            Assert.That(
+                replayProp.Posture,
+                Is.EqualTo(record.ResultingPropState.Posture));
+            Assert.That(
+                replayGameplay.GetActor("target").PinState.HasSameState(
+                    record.PinTransition.ResultingState),
+                Is.True);
+            Assert.That(replay.Records[0], Is.SameAs(record));
+        }
+
+        [Test]
         public void BlockedDestinationIsRejectedBeforeRollOrRecord()
         {
             GameplayDisplacementSession session = CreateSession(
