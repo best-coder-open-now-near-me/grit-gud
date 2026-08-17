@@ -190,21 +190,24 @@ namespace GritGud.PlayMode.Tests
                 bootstrap.GetComponent<GameplayDisplacementController>();
             const string actorId = "oren-vale";
             const string propId = "barrel-yard-01";
-            Transform actor = gameplay.WorldRegistry.GetActor(actorId).Transform;
             Transform prop = gameplay.WorldRegistry.GetLevelEntity(propId)
                 .transform;
-            GameplayPosition actorPosition = gameplay.Session.GetActor(
-                actorId).Pose.Position;
-            var pinDestination = new Vector3(
-                actorPosition.X + 0.5f,
-                actorPosition.Y,
-                actorPosition.Z + 0.3f);
+            DisplacementDestinationEvaluation pinDestination =
+                displacement.Session.EvaluateIntentDestination(
+                    "player",
+                    "close-quarters.push",
+                    propId);
+            Assert.That(pinDestination.IsEligible, Is.True,
+                pinDestination.Failure.ToString());
 
             Assert.That(displacement.TryDisplaceSubject(
                 "player",
                 "close-quarters.push",
                 propId,
-                pinDestination,
+                new Vector3(
+                    pinDestination.Destination.X,
+                    pinDestination.Destination.Y,
+                    pinDestination.Destination.Z),
                 out DisplacementRecord pinRecord,
                 out DisplacementResolutionFailure pinFailure),
                 Is.True,
