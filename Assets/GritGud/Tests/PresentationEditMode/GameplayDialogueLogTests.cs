@@ -115,6 +115,7 @@ namespace GritGud.Presentation.Tests
             Rect commandHints = GameplayHud.CalculateCommandHintsRectangle(
                 commandBar);
             Rect bodyStatus = GameplayHud.CalculateBodyStatusRectangle(
+                1280f,
                 commandBar);
             Rect hotbar = GameplayHud.CalculateHotbarRectangle(
                 commandBar,
@@ -145,22 +146,21 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 1280f - dialogueButton.xMax,
                 Is.EqualTo(GameplayHud.CommandBarMargin));
-            Assert.That(commandBar.x - bodyStatus.xMax,
+            Assert.That(commandBar.x - commandHints.xMax,
                 Is.EqualTo(GameplayHud.CommandBarMargin));
-            Assert.That(bodyStatus.x, Is.EqualTo(GameplayHud.CommandBarMargin));
-            Assert.That(commandHints.x, Is.EqualTo(bodyStatus.x));
-            Assert.That(commandHints.width, Is.EqualTo(bodyStatus.width));
+            Assert.That(commandHints.x,
+                Is.EqualTo(GameplayHud.CommandBarMargin));
+            Assert.That(bodyStatus.x, Is.EqualTo(dialogueButton.x));
+            Assert.That(bodyStatus.width, Is.EqualTo(dialogueButton.width));
             Assert.That(
-                commandHints.y - bodyStatus.yMax,
-                Is.EqualTo(
-                    GameplayHud.SideRailSectionGap));
+                bodyStatus.y - dialogueButton.yMax,
+                Is.EqualTo(GameplayHud.SideRailSectionGap));
             Assert.That(
                 commandBar.yMax - commandHints.yMax,
                 Is.EqualTo(GameplayHud.CommandBarMargin));
             Assert.That(
-                commandBar.yMax - dialogueButton.yMax,
+                commandBar.yMax - bodyStatus.yMax,
                 Is.EqualTo(GameplayHud.CommandBarMargin));
-            Assert.That(dialogueButton.yMax, Is.EqualTo(commandHints.yMax));
             Assert.That(
                 commandBar.yMax - hotbar.yMax,
                 Is.EqualTo(GameplayHud.CommandBarMargin));

@@ -167,6 +167,7 @@ namespace GritGud.Presentation.Gameplay
                     canvasWidth,
                     commandBar).Contains(guiPoint)
                 || CalculateBodyStatusRectangle(
+                    canvasWidth,
                     commandBar).Contains(guiPoint))
             {
                 return true;
@@ -660,7 +661,9 @@ namespace GritGud.Presentation.Gameplay
                 model.CommandBar.HotbarSlots);
             DrawHotbarChoiceMenu(canvasWidth, canvasHeight);
             DrawBodyStatus(
-                CalculateBodyStatusRectangle(commandBarRectangle),
+                CalculateBodyStatusRectangle(
+                    canvasWidth,
+                    commandBarRectangle),
                 model.CommandBar.BodyStatus);
             DrawCommandHints(
                 CalculateCommandHintsRectangle(
@@ -880,13 +883,13 @@ namespace GritGud.Presentation.Gameplay
             Rect commandBarRectangle)
         {
             const float buttonHeight = 31f;
-            float buttonX = Mathf.Min(
-                commandBarRectangle.xMax + CommandBarMargin,
-                canvasWidth - CommandBarSideRailWidth - CommandBarMargin);
+            Rect bodyStatus = CalculateBodyStatusRectangle(
+                canvasWidth,
+                commandBarRectangle);
             return new Rect(
-                buttonX,
-                commandBarRectangle.yMax
-                    - CommandBarMargin
+                bodyStatus.x,
+                bodyStatus.y
+                    - SideRailSectionGap
                     - buttonHeight,
                 CommandBarSideRailWidth,
                 buttonHeight);
@@ -959,42 +962,35 @@ namespace GritGud.Presentation.Gameplay
         }
 
         internal static Rect CalculateBodyStatusRectangle(
+            float canvasWidth,
             Rect commandBarRectangle)
         {
-            float commandHintTop = commandBarRectangle.yMax
-                - CommandBarMargin
-                - CalculateCommandHintContentHeight(
-                    CommandHintRowCapacity);
-            float bottom = commandHintTop - SideRailSectionGap;
-            float desiredHeight = Mathf.Max(
+            float height = Mathf.Max(
                 0f,
                 commandBarRectangle.height - (CommandBarMargin * 2f));
-            float y = Mathf.Max(
-                CommandBarMargin,
-                bottom - desiredHeight);
             return new Rect(
                 Mathf.Max(
                     CommandBarMargin,
-                    commandBarRectangle.x
+                    canvasWidth
+                    - CommandBarSideRailWidth
+                    - CommandBarMargin),
+                commandBarRectangle.yMax
                     - CommandBarMargin
-                    - CommandBarSideRailWidth),
-                y,
+                    - height,
                 CommandBarSideRailWidth,
-                Mathf.Max(0f, bottom - y));
+                height);
         }
 
         internal static Rect CalculateCommandHintsRectangle(
             Rect commandBarRectangle)
         {
-            Rect bodyStatus = CalculateBodyStatusRectangle(
-                commandBarRectangle);
             return new Rect(
-                bodyStatus.x,
+                CommandBarMargin,
                 commandBarRectangle.yMax
                     - CommandBarMargin
                     - CalculateCommandHintContentHeight(
                         CommandHintRowCapacity),
-                bodyStatus.width,
+                CommandBarSideRailWidth,
                 CalculateCommandHintContentHeight(
                     CommandHintRowCapacity));
         }
@@ -1208,10 +1204,24 @@ namespace GritGud.Presentation.Gameplay
             Color frameColor)
         {
             DrawTintedTexture(
+                ExpandRectangle(rectangle, 4f),
+                textureSet.BodyRegionCircleMask,
+                GameplayVisualPalette.WithAlpha(
+                    frameColor,
+                    frameColor.a * 0.06f));
+            DrawTintedTexture(
+                ExpandRectangle(rectangle, 2f),
+                textureSet.BodyRegionCircleMask,
+                GameplayVisualPalette.WithAlpha(
+                    frameColor,
+                    frameColor.a * 0.14f));
+            DrawTintedTexture(
                 rectangle,
                 textureSet.BodyRegionCircleMask,
                 frameColor);
-            float inset = Mathf.Max(1f, rectangle.width * 0.08f);
+            float inset = Mathf.Min(
+                1f,
+                Mathf.Min(rectangle.width, rectangle.height) * 0.08f);
             Rect fillRectangle = new Rect(
                 rectangle.x + inset,
                 rectangle.y + inset,
@@ -1226,6 +1236,13 @@ namespace GritGud.Presentation.Gameplay
                         0.42f)
                     : GameplayVisualPalette.ButtonNormal);
         }
+
+        private static Rect ExpandRectangle(Rect rectangle, float amount) =>
+            new Rect(
+                rectangle.x - amount,
+                rectangle.y - amount,
+                rectangle.width + (amount * 2f),
+                rectangle.height + (amount * 2f));
 
         private static bool ContainsBodyRegionPoint(
             Rect rectangle,
