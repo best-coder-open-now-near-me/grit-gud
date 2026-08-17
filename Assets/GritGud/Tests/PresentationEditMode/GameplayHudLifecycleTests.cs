@@ -14,6 +14,10 @@ namespace GritGud.Presentation.Tests
             try
             {
                 GameplayHud hud = root.AddComponent<GameplayHud>();
+                // GameplayHud creates its renderer lazily. Exercise the public-facing
+                // state before inspecting the renderer so reflection never receives a
+                // null target in EditMode, where no GUI lifecycle has run yet.
+                Assert.That(hud.IsHotbarChoiceOpen, Is.False);
                 var renderer = (GameplayHudRenderer)typeof(GameplayHud)
                     .GetField(
                         "hudRenderer",

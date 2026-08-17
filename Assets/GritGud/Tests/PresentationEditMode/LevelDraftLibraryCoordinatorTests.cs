@@ -112,7 +112,7 @@ namespace GritGud.Presentation.Tests
 
             Assert.That(result, Is.SameAs(saved));
             Assert.That(coordinator.SelectedId, Is.EqualTo(saved.Id));
-            Assert.That(coordinator.Drafts, Has.Count.EqualTo(1));
+            Assert.That(coordinator.Drafts.Count, Is.EqualTo(1));
             Assert.That(coordinator.Drafts[0].Revision, Is.EqualTo(2));
             Assert.That(coordinator.Status, Does.Contain("write succeeded"));
         }
@@ -134,7 +134,7 @@ namespace GritGud.Presentation.Tests
                 expectedRevision: 1,
                 NewLevel("level.saved"));
 
-            Assert.That(coordinator.Drafts, Has.Count.EqualTo(1));
+            Assert.That(coordinator.Drafts.Count, Is.EqualTo(1));
             Assert.That(coordinator.Drafts[0].Revision, Is.EqualTo(2));
             Assert.That(coordinator.Status, Is.EqualTo("Saved cloud draft."));
         }
@@ -155,7 +155,7 @@ namespace GritGud.Presentation.Tests
 
             await coordinator.RenameAsync(original.Id, "New Name");
 
-            Assert.That(coordinator.Drafts, Has.Count.EqualTo(1));
+            Assert.That(coordinator.Drafts.Count, Is.EqualTo(1));
             Assert.That(coordinator.Drafts[0].Name, Is.EqualTo("New Name"));
             Assert.That(coordinator.Drafts[0].Revision, Is.EqualTo(2));
             Assert.That(coordinator.Status, Does.Contain("write succeeded"));
@@ -180,7 +180,7 @@ namespace GritGud.Presentation.Tests
                 "Draft Copy");
 
             Assert.That(result.Summary, Is.SameAs(duplicate));
-            Assert.That(coordinator.Drafts, Has.Count.EqualTo(2));
+            Assert.That(coordinator.Drafts.Count, Is.EqualTo(2));
             Assert.That(coordinator.Drafts, Does.Contain(duplicate));
             Assert.That(coordinator.SelectedId, Is.EqualTo(duplicate.Id));
             Assert.That(coordinator.Status, Does.Contain("write succeeded"));
@@ -243,10 +243,12 @@ namespace GritGud.Presentation.Tests
             };
             using var coordinator = CreateCoordinator(repository);
 
-            Assert.ThrowsAsync<OperationCanceledException>(async () =>
-                await coordinator.CreateAsync(
-                    "Cancelled",
-                    NewLevel("level.cancelled")));
+            Assert.That(
+                Assert.CatchAsync<OperationCanceledException>(async () =>
+                    await coordinator.CreateAsync(
+                        "Cancelled",
+                        NewLevel("level.cancelled"))),
+                Is.InstanceOf<OperationCanceledException>());
 
             Assert.That(coordinator.Drafts, Is.Empty);
             Assert.That(coordinator.SelectedId, Is.Null);
