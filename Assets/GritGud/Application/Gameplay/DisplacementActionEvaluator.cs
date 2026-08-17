@@ -359,12 +359,89 @@ namespace GritGud.Application.Gameplay
             return false;
         }
 
+        public bool TryGetSubjectPosition(
+            string subjectId,
+            out GameplayPosition position)
+        {
+            if (subjects.TryGetValue(
+                    subjectId,
+                    out DisplacementSubjectDefinition subject))
+            {
+                return TryGetSubjectPosition(subject, out position);
+            }
+
+            position = default(GameplayPosition);
+            return false;
+        }
+
         public DisplacementSizeClass GetSubjectSize(string subjectId) =>
             subjects.TryGetValue(
                 subjectId,
                 out DisplacementSubjectDefinition subject)
                     ? subject.Size
                     : DisplacementSizeClass.Medium;
+
+        public static DisplacementResolutionFailure ToResolutionFailure(
+            DisplacementActionAvailabilityFailure failure)
+        {
+            switch (failure)
+            {
+                case DisplacementActionAvailabilityFailure.ActionUnavailable:
+                    return DisplacementResolutionFailure.ActionUnavailable;
+                case DisplacementActionAvailabilityFailure.OperationInProgress:
+                    return DisplacementResolutionFailure.OperationInProgress;
+                case DisplacementActionAvailabilityFailure.ActorNotActive:
+                    return DisplacementResolutionFailure.ActorNotActive;
+                case DisplacementActionAvailabilityFailure.HandsOccupied:
+                    return DisplacementResolutionFailure.HandsOccupied;
+                case DisplacementActionAvailabilityFailure.InsufficientTurnBudget:
+                    return DisplacementResolutionFailure.InsufficientTurnBudget;
+                case DisplacementActionAvailabilityFailure.ActorUnavailable:
+                    return DisplacementResolutionFailure.SubjectUnavailable;
+                case DisplacementActionAvailabilityFailure.ActorPinned:
+                    return DisplacementResolutionFailure.ActorPinned;
+                case DisplacementActionAvailabilityFailure.ActorNotPinned:
+                    return DisplacementResolutionFailure.ActorNotPinned;
+                case DisplacementActionAvailabilityFailure.None:
+                    throw new ArgumentException(
+                        "Available actions do not have resolution failures.",
+                        nameof(failure));
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(failure));
+            }
+        }
+
+        public static DisplacementResolutionFailure ToResolutionFailure(
+            DisplacementTargetFailure failure)
+        {
+            switch (failure)
+            {
+                case DisplacementTargetFailure.ActionUnavailable:
+                    return DisplacementResolutionFailure.ActionUnavailable;
+                case DisplacementTargetFailure.SubjectKindNotAccepted:
+                    return DisplacementResolutionFailure.SubjectKindNotAccepted;
+                case DisplacementTargetFailure.SubjectTooHeavy:
+                    return DisplacementResolutionFailure.SubjectTooHeavy;
+                case DisplacementTargetFailure.SubjectTooLarge:
+                    return DisplacementResolutionFailure.SubjectTooLarge;
+                case DisplacementTargetFailure.SubjectOutOfReach:
+                    return DisplacementResolutionFailure.SubjectOutOfReach;
+                case DisplacementTargetFailure.NotPinningActor:
+                    return DisplacementResolutionFailure.NotPinningActor;
+                case DisplacementTargetFailure.SubjectPinned:
+                    return DisplacementResolutionFailure.SubjectPinned;
+                case DisplacementTargetFailure.ActorUnavailable:
+                case DisplacementTargetFailure.CandidateUnavailable:
+                case DisplacementTargetFailure.SelfTarget:
+                    return DisplacementResolutionFailure.SubjectUnavailable;
+                case DisplacementTargetFailure.None:
+                    throw new ArgumentException(
+                        "Eligible targets do not have resolution failures.",
+                        nameof(failure));
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(failure));
+            }
+        }
 
         private bool IsPinningProp(string propId)
         {
