@@ -249,6 +249,7 @@ namespace GritGud.Application.Gameplay
 
             if (subject.Kind == DisplacementSubjectKind.Prop
                 && action.Intent != DisplacementActionKind.PushOff
+                && action.Intent != DisplacementActionKind.Push
                 && IsPinningProp(candidateId))
             {
                 return CreateTarget(

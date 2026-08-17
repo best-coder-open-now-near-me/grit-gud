@@ -200,8 +200,8 @@ namespace GritGud.Domain.Tests.Gameplay
                 Is.True);
             Assert.That(
                 session.EvaluateTarget("player", PinningPush.Id, "crate")
-                    .Failure,
-                Is.EqualTo(DisplacementTargetFailure.SubjectPinned));
+                    .IsEligible,
+                Is.True);
         }
 
         [Test]
@@ -245,6 +245,52 @@ namespace GritGud.Domain.Tests.Gameplay
                 Is.EqualTo(3f));
             Assert.That(destructibles.GetProp("crate").Posture,
                 Is.EqualTo(DestructiblePropPosture.Toppled));
+        }
+
+        [Test]
+        public void AnotherActorCanPushPinningPropToReleasePinnedActor()
+        {
+            GameplayDisplacementSession session = CreateSession(
+                new PinThenAllowPaths(),
+                new FixedRolls(),
+                out GameplaySession gameplay,
+                out DestructiblePropSession destructibles,
+                playerPush: PinningPush,
+                propToppling: new PropTopplingDefinition(0f, 90f, 0.5f),
+                propPinning: new PropPinningDefinition(90f),
+                targetActions: new[] { PushOff });
+            Assert.That(session.TryDisplaceAction(
+                "player",
+                PinningPush.Id,
+                "crate",
+                new GameplayPosition(0f, 0f, 2f),
+                out _,
+                out _,
+                out _), Is.True);
+            Assert.That(gameplay.GetActor("target").IsPinned, Is.True);
+            Assert.That(
+                session.EvaluateTarget("player", PinningPush.Id, "crate")
+                    .IsEligible,
+                Is.True);
+
+            bool released = session.TryDisplaceAction(
+                "player",
+                PinningPush.Id,
+                "crate",
+                new GameplayPosition(0f, 0.5f, 3f),
+                out _,
+                out DisplacementRecord record,
+                out DisplacementResolutionFailure failure);
+
+            Assert.That(released, Is.True);
+            Assert.That(failure, Is.EqualTo(DisplacementResolutionFailure.None));
+            Assert.That(record.AppliedResults.HasFlag(
+                DisplacementResultPolicies.Release), Is.True);
+            Assert.That(record.PinTransition.ReleasesPin, Is.True);
+            Assert.That(record.PinTransition.ActorId, Is.EqualTo("target"));
+            Assert.That(gameplay.GetActor("target").IsPinned, Is.False);
+            Assert.That(destructibles.GetProp("crate").Position.Z,
+                Is.EqualTo(3f));
         }
 
         [Test]
@@ -1787,6 +1833,30 @@ namespace GritGud.Domain.Tests.Gameplay
                             new GameplayPosition(0f, 1f, 0f),
                             0.1f),
                     });
+        }
+
+        private sealed class PinThenAllowPaths : IDisplacementPathValidator
+        {
+            private bool pinned;
+
+            public DisplacementPathValidation Validate(
+                DisplacementRequest request,
+                GameplayPosition origin,
+                PropDisplacementState resultingPropState)
+            {
+                if (pinned)
+                    return DisplacementPathValidation.Allowed();
+
+                pinned = true;
+                return DisplacementPathValidation.Allowed(new[]
+                {
+                    new DisplacementContactEvidence(
+                        "target",
+                        new GameplayPosition(0.5f, 0.5f, 1.75f),
+                        new GameplayPosition(0f, 1f, 0f),
+                        0.1f),
+                });
+            }
         }
 
         private sealed class PinThenBlockPushOffBeyondDistance :

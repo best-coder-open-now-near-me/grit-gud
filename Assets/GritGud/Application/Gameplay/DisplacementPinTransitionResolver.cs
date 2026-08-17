@@ -58,6 +58,25 @@ namespace GritGud.Application.Gameplay
                     out failure);
             }
 
+            if (action.Intent == DisplacementActionKind.Push
+                && TryGetActorPinnedBy(prop.PropId, out GameplayActorSnapshot pinned))
+            {
+                if (path.Contacts.Count > 0)
+                {
+                    failure = DisplacementResolutionFailure.DestinationBlocked;
+                    return false;
+                }
+                appliedResults |= DisplacementResultPolicies.Release;
+                transition = new ActorPinTransition(
+                    pinned.ActorId,
+                    pinned.Pose,
+                    pinned.Pose,
+                    pinned.PinState,
+                    resultingState: null);
+                failure = DisplacementResolutionFailure.None;
+                return true;
+            }
+
             if (path.Contacts.Count == 0)
             {
                 failure = DisplacementResolutionFailure.None;
@@ -109,6 +128,28 @@ namespace GritGud.Application.Gameplay
             appliedResults |= DisplacementResultPolicies.Pin;
             failure = DisplacementResolutionFailure.None;
             return true;
+        }
+
+        private bool TryGetActorPinnedBy(
+            string propId,
+            out GameplayActorSnapshot pinnedActor)
+        {
+            foreach (ScenarioActorDefinition definition in gameplay.Scenario.Actors)
+            {
+                GameplayActorSnapshot candidate = gameplay.GetActor(definition.Id);
+                if (candidate.PinState != null
+                    && string.Equals(
+                        candidate.PinState.PropId,
+                        propId,
+                        StringComparison.Ordinal))
+                {
+                    pinnedActor = candidate;
+                    return true;
+                }
+            }
+
+            pinnedActor = null;
+            return false;
         }
 
         private static bool TryResolveRelease(
