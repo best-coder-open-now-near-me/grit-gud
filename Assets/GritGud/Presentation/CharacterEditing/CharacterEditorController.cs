@@ -71,6 +71,7 @@ namespace GritGud.Presentation.CharacterEditing
         private CharacterAppearanceCatalog catalog;
         private UnityCharacterLibrary library;
         private UnityCharacterJsonSerializer serializer;
+        private TextFileImportReceiver textImport;
         private CharacterAuthoringSession session;
         private GameObject stage;
         private GameObject preview;
@@ -85,6 +86,7 @@ namespace GritGud.Presentation.CharacterEditing
         private Vector2 accessoryScroll;
         private string displayNameText = string.Empty;
         private string importPath = string.Empty;
+        private long pendingImportRequestId;
         private string status = "Ready.";
         private float previewYaw = 180f;
         private bool autoRotate;
@@ -117,6 +119,9 @@ namespace GritGud.Presentation.CharacterEditing
             catalog = CharacterAppearanceCatalog.LoadDefault();
             library = UnityCharacterLibrary.LoadDefault(catalog);
             serializer = new UnityCharacterJsonSerializer();
+            textImport = GetComponent<TextFileImportReceiver>();
+            if (textImport == null)
+                textImport = gameObject.AddComponent<TextFileImportReceiver>();
             CharacterDocument document = initial?.DeepCopy()
                 ?? library.Entries.FirstOrDefault()?.CreateSnapshot()
                 ?? CreateNewDocument();
@@ -134,6 +139,11 @@ namespace GritGud.Presentation.CharacterEditing
 
         public void EndSession()
         {
+            if (pendingImportRequestId != 0 && textImport != null)
+            {
+                textImport.CancelImport(pendingImportRequestId);
+                pendingImportRequestId = 0;
+            }
             if (session != null)
                 session.Changed -= HandleChanged;
             session = null;
@@ -452,7 +462,16 @@ namespace GritGud.Presentation.CharacterEditing
             }
             GUILayout.Space(12f);
             GUILayout.Label("IMPORT", styles.SectionHeader);
-            importPath = GUILayout.TextField(importPath);
+            if (textImport != null && textImport.UsesBrowserFileDialog)
+            {
+                GUILayout.Label(
+                    "Choose a portable character JSON file from your browser.",
+                    styles.MutedLabel);
+            }
+            else
+            {
+                importPath = GUILayout.TextField(importPath);
+            }
             if (GUILayout.Button("IMPORT JSON", GUILayout.Height(32f)))
                 Import();
             GUILayout.EndScrollView();
@@ -948,11 +967,33 @@ namespace GritGud.Presentation.CharacterEditing
 
         private void Import()
         {
+            if (pendingImportRequestId != 0)
+            {
+                status = "A character import is already in progress.";
+                return;
+            }
             try
             {
-                if (!File.Exists(importPath))
-                    throw new FileNotFoundException("The character import file does not exist.", importPath);
-                CharacterDocument document = serializer.Deserialize(File.ReadAllText(importPath));
+                long requestId = textImport.RequestImport(
+                    importPath,
+                    HandleImportedCharacterText,
+                    HandleCharacterImportFailure);
+                pendingImportRequestId = requestId;
+                if (requestId != 0 && textImport.UsesBrowserFileDialog)
+                    status = "Choose a portable character JSON file.";
+            }
+            catch (Exception exception)
+            {
+                status = exception.Message;
+            }
+        }
+
+        private void HandleImportedCharacterText(string text)
+        {
+            pendingImportRequestId = 0;
+            try
+            {
+                CharacterDocument document = serializer.Deserialize(text);
                 RequireValid(document);
                 Replace(document, false, "Imported the character document.");
             }
@@ -960,6 +1001,12 @@ namespace GritGud.Presentation.CharacterEditing
             {
                 status = exception.Message;
             }
+        }
+
+        private void HandleCharacterImportFailure(string message)
+        {
+            pendingImportRequestId = 0;
+            status = message;
         }
 
         private void RequireValid(CharacterDocument document)

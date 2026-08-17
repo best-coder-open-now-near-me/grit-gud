@@ -15,6 +15,7 @@ using GritGud.Presentation.Levels;
 using GritGud.Presentation.Levels.Persistence;
 using GritGud.Presentation.Levels.Runtime;
 using GritGud.Presentation.Characters;
+using GritGud.Presentation.Persistence;
 using GritGud.Presentation.Supabase;
 using UnityEngine;
 
@@ -133,10 +134,10 @@ namespace GritGud.Presentation.LevelEditing
             scenarioCatalog = ScenarioAuthoringCatalog.Create(defaultContent.Scenario);
             dressingCatalog = LevelDressingCatalog.LoadDefault();
             characterLibrary = defaultContent.Characters;
-            LevelTextTransfer textTransfer = GetComponent<LevelTextTransfer>();
+            TextFileImportReceiver textTransfer = GetComponent<TextFileImportReceiver>();
             if (textTransfer == null)
             {
-                textTransfer = gameObject.AddComponent<LevelTextTransfer>();
+                textTransfer = gameObject.AddComponent<TextFileImportReceiver>();
             }
 
             persistence = new LevelEditorPersistenceCoordinator(

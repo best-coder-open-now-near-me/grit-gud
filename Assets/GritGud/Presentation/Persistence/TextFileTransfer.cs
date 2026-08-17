@@ -54,6 +54,24 @@ namespace GritGud.Presentation.Persistence
 #endif
         }
 
+        public static string CreateSlugFileName(
+            string displayName,
+            string fallbackName,
+            string suffix)
+        {
+            if (string.IsNullOrWhiteSpace(fallbackName))
+                throw new ArgumentException("A fallback file name is required.", nameof(fallbackName));
+            if (string.IsNullOrWhiteSpace(suffix))
+                throw new ArgumentException("A file-name suffix is required.", nameof(suffix));
+
+            string result = string.IsNullOrWhiteSpace(displayName)
+                ? fallbackName.Trim()
+                : displayName.Trim();
+            foreach (char invalid in Path.GetInvalidFileNameChars())
+                result = result.Replace(invalid, '-');
+            return result.Replace(' ', '-').ToLowerInvariant() + suffix;
+        }
+
         private static string SanitizeFileName(string value)
         {
             string result = Path.GetFileName(value.Trim());

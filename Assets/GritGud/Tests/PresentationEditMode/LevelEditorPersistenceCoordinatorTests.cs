@@ -5,6 +5,7 @@ using GritGud.Domain.Levels;
 using GritGud.Presentation.LevelEditing.Persistence;
 using GritGud.Presentation.Levels;
 using GritGud.Presentation.Levels.Persistence;
+using GritGud.Presentation.Persistence;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -20,7 +21,7 @@ namespace GritGud.Presentation.Tests
             var serializer = new UnityLevelJsonSerializer();
             try
             {
-                LevelTextTransfer transfer = transferRoot.AddComponent<LevelTextTransfer>();
+                TextFileImportReceiver transfer = transferRoot.AddComponent<TextFileImportReceiver>();
                 using var coordinator = new LevelEditorPersistenceCoordinator(
                     serializer,
                     store,
@@ -52,7 +53,7 @@ namespace GritGud.Presentation.Tests
             var store = new MemoryDraftStore();
             try
             {
-                LevelTextTransfer transfer = transferRoot.AddComponent<LevelTextTransfer>();
+                TextFileImportReceiver transfer = transferRoot.AddComponent<TextFileImportReceiver>();
                 using var coordinator = new LevelEditorPersistenceCoordinator(
                     new UnityLevelJsonSerializer(),
                     store,
@@ -106,7 +107,7 @@ namespace GritGud.Presentation.Tests
                 var serializer = new UnityLevelJsonSerializer();
                 LevelDocument document = LevelDocumentFactory.CreateEmpty("Recovered Level");
                 store.SaveDraft("recovery.0", serializer.Serialize(document));
-                LevelTextTransfer transfer = transferRoot.AddComponent<LevelTextTransfer>();
+                TextFileImportReceiver transfer = transferRoot.AddComponent<TextFileImportReceiver>();
                 using var coordinator = new LevelEditorPersistenceCoordinator(
                     serializer,
                     store,

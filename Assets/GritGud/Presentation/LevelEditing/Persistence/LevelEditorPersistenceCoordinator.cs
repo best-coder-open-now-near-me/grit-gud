@@ -4,6 +4,8 @@ using GritGud.Application.Levels;
 using GritGud.Domain.Levels;
 using GritGud.Presentation.Levels;
 using GritGud.Presentation.Levels.Persistence;
+using GritGud.Presentation.Persistence;
+using UnityEngine;
 
 namespace GritGud.Presentation.LevelEditing.Persistence
 {
@@ -35,8 +37,10 @@ namespace GritGud.Presentation.LevelEditing.Persistence
 
         private readonly UnityLevelJsonSerializer serializer;
         private readonly ILevelDraftStore draftStore;
-        private readonly LevelTextTransfer textTransfer;
+        private readonly TextFileImportReceiver textTransfer;
         private readonly LevelValidationContent validationContent;
+        private string desktopImportPath;
+        private long pendingImportRequestId;
         private int pendingAutosaveRevision = -1;
         private int lastAutosavedRevision = -1;
         private double autosaveDueAt = double.PositiveInfinity;
@@ -45,7 +49,7 @@ namespace GritGud.Presentation.LevelEditing.Persistence
         public LevelEditorPersistenceCoordinator(
             UnityLevelJsonSerializer serializer,
             ILevelDraftStore draftStore,
-            LevelTextTransfer textTransfer,
+            TextFileImportReceiver textTransfer,
             LevelValidationContent validationContent)
         {
             this.serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
@@ -53,8 +57,10 @@ namespace GritGud.Presentation.LevelEditing.Persistence
             this.textTransfer = textTransfer ?? throw new ArgumentNullException(nameof(textTransfer));
             this.validationContent = validationContent
                 ?? throw new ArgumentNullException(nameof(validationContent));
-            textTransfer.ImportCompleted += HandleImportedText;
-            textTransfer.ImportFailed += HandleImportFailure;
+            desktopImportPath = System.IO.Path.Combine(
+                UnityEngine.Application.persistentDataPath,
+                "Imports",
+                "level.json");
         }
 
         public event EventHandler<LevelDocumentLoadedEventArgs> DocumentLoaded;
@@ -73,8 +79,8 @@ namespace GritGud.Presentation.LevelEditing.Persistence
 
         public string DesktopImportPath
         {
-            get => textTransfer.DesktopImportPath;
-            set => textTransfer.DesktopImportPath = value;
+            get => desktopImportPath;
+            set => desktopImportPath = value;
         }
 
         public LevelDocument Deserialize(string text)
@@ -194,9 +200,13 @@ namespace GritGud.Presentation.LevelEditing.Persistence
             try
             {
                 LevelDocument snapshot = workspace.CreateSnapshot();
-                Report(textTransfer.Export(
-                    snapshot.displayName,
-                    serializer.Serialize(snapshot)));
+                Report(TextFileTransfer.Export(
+                    TextFileTransfer.CreateSlugFileName(
+                        snapshot.displayName,
+                        "level",
+                        ".json"),
+                    serializer.Serialize(snapshot),
+                    "application/json;charset=utf-8"));
             }
             catch (Exception exception)
             {
@@ -207,10 +217,19 @@ namespace GritGud.Presentation.LevelEditing.Persistence
         public void RequestImport()
         {
             ThrowIfDisposed();
+            if (pendingImportRequestId != 0)
+            {
+                Report("A level import is already in progress.");
+                return;
+            }
             try
             {
-                textTransfer.RequestImport();
-                if (textTransfer.UsesBrowserFileDialog)
+                pendingImportRequestId = textTransfer.RequestImport(
+                    desktopImportPath,
+                    HandleImportedText,
+                    HandleImportFailure);
+                if (pendingImportRequestId != 0
+                    && textTransfer.UsesBrowserFileDialog)
                 {
                     Report("Choose a portable level JSON file.");
                 }
@@ -228,8 +247,11 @@ namespace GritGud.Presentation.LevelEditing.Persistence
                 return;
             }
 
-            textTransfer.ImportCompleted -= HandleImportedText;
-            textTransfer.ImportFailed -= HandleImportFailure;
+            if (pendingImportRequestId != 0)
+            {
+                textTransfer.CancelImport(pendingImportRequestId);
+                pendingImportRequestId = 0;
+            }
             disposed = true;
         }
 
@@ -251,6 +273,7 @@ namespace GritGud.Presentation.LevelEditing.Persistence
 
         private void HandleImportedText(string text)
         {
+            pendingImportRequestId = 0;
             try
             {
                 AdoptSerializedDocument(
@@ -266,6 +289,7 @@ namespace GritGud.Presentation.LevelEditing.Persistence
 
         private void HandleImportFailure(string message)
         {
+            pendingImportRequestId = 0;
             Report(message);
         }
 
