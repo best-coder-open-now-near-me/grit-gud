@@ -360,7 +360,7 @@ namespace GritGud.Application.Gameplay
         public GameplaySessionMode CurrentMode { get; }
     }
 
-    public sealed class GameplaySession
+    public sealed class GameplaySession : IGameplayTurnLifecycleHost
     {
         private readonly Dictionary<string, ActorState> actors =
             new Dictionary<string, ActorState>(StringComparer.Ordinal);
@@ -372,13 +372,8 @@ namespace GritGud.Application.Gameplay
         private readonly IReadOnlyList<GameplayInitiativeResult>
             initiativeResults;
         private readonly IReadOnlyList<GameplayActionRecord> readOnlyResolvedActions;
-        private string activeActorId;
+        private readonly GameplayTurnLifecycle turnLifecycle;
         private MovementRouteRecord pendingMovementRoute;
-        private VoluntaryTurnCycleRecord pendingVoluntaryTurnCycle;
-        private float voluntaryTurnReentrySecondsRemaining;
-        private IReadOnlyList<string> emergencyResponders;
-        private int emergencyResponderIndex = -1;
-        private string emergencyResumeActorId;
 
         public GameplaySession(
             ScenarioDefinition scenario,
@@ -418,53 +413,52 @@ namespace GritGud.Application.Gameplay
             initiativeOrder = order.AsReadOnly();
             initiativeResults = initiative.AsReadOnly();
             readOnlyResolvedActions = resolvedActions.AsReadOnly();
+            turnLifecycle = new GameplayTurnLifecycle(this);
         }
 
         public ScenarioDefinition Scenario { get; }
 
         public GameplayJournal Journal { get; }
 
-        public GameplaySessionMode Mode { get; private set; } =
-            GameplaySessionMode.Exploration;
+        public GameplaySessionMode Mode => turnLifecycle.Mode;
 
         public GameplaySessionOperation Operation { get; private set; } =
             GameplaySessionOperation.None;
 
-        public TurnModeContext TurnContext { get; private set; } =
-            TurnModeContext.None;
+        public TurnModeContext TurnContext => turnLifecycle.TurnContext;
 
-        public bool EncounterActive { get; private set; }
+        public bool EncounterActive => turnLifecycle.EncounterActive;
 
-        public bool EncounterCompletionRequested { get; private set; }
+        public bool EncounterCompletionRequested =>
+            turnLifecycle.EncounterCompletionRequested;
 
         public IReadOnlyList<string> InitiativeOrder => initiativeOrder;
 
         public IReadOnlyList<string> EmergencyResponders =>
-            emergencyResponders ?? Array.Empty<string>();
+            turnLifecycle.EmergencyResponders;
 
-        public int EmergencyResponderIndex => emergencyResponderIndex;
+        public int EmergencyResponderIndex =>
+            turnLifecycle.EmergencyResponderIndex;
 
-        public string EmergencyResumeActorId => emergencyResumeActorId ?? string.Empty;
+        public string EmergencyResumeActorId =>
+            turnLifecycle.EmergencyResumeActorId;
 
         public IReadOnlyList<GameplayInitiativeResult> InitiativeResults =>
             initiativeResults;
 
-        public string ActiveActorId => activeActorId;
+        public string ActiveActorId => turnLifecycle.ActiveActorId;
 
-        public GameplayTurnPhase TurnPhase { get; private set; } =
-            GameplayTurnPhase.Normal;
+        public GameplayTurnPhase TurnPhase => turnLifecycle.TurnPhase;
 
         public float VoluntaryTurnReentrySecondsRemaining =>
-            voluntaryTurnReentrySecondsRemaining;
+            turnLifecycle.VoluntaryTurnReentrySecondsRemaining;
 
-        public bool CanEnterTurnMode =>
-            Mode == GameplaySessionMode.Exploration
-            && (EncounterActive || voluntaryTurnReentrySecondsRemaining <= 0f);
+        public bool CanEnterTurnMode => turnLifecycle.CanEnterTurnMode;
 
         public MovementRouteRecord PendingMovementRoute => pendingMovementRoute;
 
         public VoluntaryTurnCycleRecord PendingVoluntaryTurnCycle =>
-            pendingVoluntaryTurnCycle;
+            turnLifecycle.PendingVoluntaryTurnCycle;
 
         public IReadOnlyList<GameplayActionRecord> ResolvedActions =>
             readOnlyResolvedActions;
@@ -548,21 +542,36 @@ namespace GritGud.Application.Gameplay
 
         public VoluntaryTurnCycleRecord LastCompletedVoluntaryTurnCycle
         {
-            get;
-            private set;
+            get => turnLifecycle.LastCompletedVoluntaryTurnCycle;
         }
 
-        public TurnEndRecord LastEndedTurn { get; private set; }
+        public TurnEndRecord LastEndedTurn => turnLifecycle.LastEndedTurn;
 
-        public event Action<VoluntaryTurnCycleRecord> VoluntaryTurnCycleCompleted;
+        public event Action<VoluntaryTurnCycleRecord> VoluntaryTurnCycleCompleted
+        {
+            add => turnLifecycle.VoluntaryTurnCycleCompleted += value;
+            remove => turnLifecycle.VoluntaryTurnCycleCompleted -= value;
+        }
 
-        public event Action<TurnEndRecord> TurnEnded;
+        public event Action<TurnEndRecord> TurnEnded
+        {
+            add => turnLifecycle.TurnEnded += value;
+            remove => turnLifecycle.TurnEnded -= value;
+        }
 
         public event Action<EquipmentChangeRecord> EquipmentChanged;
 
-        public event Action<GameplayActiveActorChange> ActiveActorChanged;
+        public event Action<GameplayActiveActorChange> ActiveActorChanged
+        {
+            add => turnLifecycle.ActiveActorChanged += value;
+            remove => turnLifecycle.ActiveActorChanged -= value;
+        }
 
-        public event Action<GameplayModeChange> ModeChanged;
+        public event Action<GameplayModeChange> ModeChanged
+        {
+            add => turnLifecycle.ModeChanged += value;
+            remove => turnLifecycle.ModeChanged -= value;
+        }
 
         public event Action<string> ActorCapabilityChanged;
 
@@ -571,82 +580,13 @@ namespace GritGud.Application.Gameplay
             return TryEnterTurnMode(out _);
         }
 
-        public bool TryEnterTurnMode(out TurnModeEntryFailure failure)
-        {
-            if (Mode == GameplaySessionMode.TurnBased)
-            {
-                failure = TurnModeEntryFailure.AlreadyInTurnMode;
-                return false;
-            }
+        public bool TryEnterTurnMode(out TurnModeEntryFailure failure) =>
+            turnLifecycle.TryEnterTurnMode(out failure);
 
-            if (!EncounterActive && voluntaryTurnReentrySecondsRemaining > 0f)
-            {
-                failure = TurnModeEntryFailure.VoluntaryReentryLocked;
-                return false;
-            }
+        public void AdvanceContinuousTime(float elapsedSeconds) =>
+            turnLifecycle.AdvanceContinuousTime(elapsedSeconds);
 
-            if (!EncounterActive || activeActorId == null)
-            {
-                SetActiveActor(
-                    FindNextCapableActor(startingAfterIndex: -1)
-                        ?? initiativeOrder[0]);
-            }
-
-            GameplaySessionMode previousMode = Mode;
-            SetMode(GameplaySessionMode.TurnBased);
-            Operation = GameplaySessionOperation.None;
-            TurnContext = EncounterActive
-                ? TurnModeContext.InitiatedEncounter
-                : TurnModeContext.Voluntary;
-            Journal.RecordTurnModeChanged(
-                previousMode,
-                Mode,
-                TurnContext,
-                activeActorId);
-            failure = TurnModeEntryFailure.None;
-            return true;
-        }
-
-        public void AdvanceContinuousTime(float elapsedSeconds)
-        {
-            if (float.IsNaN(elapsedSeconds)
-                || float.IsInfinity(elapsedSeconds)
-                || elapsedSeconds < 0f)
-            {
-                throw new ArgumentOutOfRangeException(nameof(elapsedSeconds));
-            }
-
-            if (Mode != GameplaySessionMode.Exploration
-                || EncounterActive
-                || voluntaryTurnReentrySecondsRemaining <= 0f
-                || elapsedSeconds == 0f)
-            {
-                return;
-            }
-
-            voluntaryTurnReentrySecondsRemaining = Math.Max(
-                0f,
-                voluntaryTurnReentrySecondsRemaining - elapsedSeconds);
-        }
-
-        public bool BeginEncounter()
-        {
-            if (EncounterActive)
-            {
-                return false;
-            }
-
-            EncounterActive = true;
-            EncounterCompletionRequested = false;
-            Journal.RecordEncounterChanged(isActive: true);
-            if (Mode == GameplaySessionMode.Exploration)
-            {
-                return EnterTurnMode();
-            }
-
-            TurnContext = TurnModeContext.InitiatedEncounter;
-            return true;
-        }
+        public bool BeginEncounter() => turnLifecycle.BeginEncounter();
 
         public bool BeginEncounterFromAction(GameplayActionRecord action)
         {
@@ -662,264 +602,40 @@ namespace GritGud.Application.Gameplay
             return BeginEncounter();
         }
 
-        public bool CompleteEncounter()
-        {
-            if (!EncounterActive)
-            {
-                return false;
-            }
+        public bool CompleteEncounter() => turnLifecycle.CompleteEncounter();
 
-            EncounterActive = false;
-            EncounterCompletionRequested = false;
-            if (Mode == GameplaySessionMode.TurnBased)
-            {
-                TurnContext = TurnModeContext.Voluntary;
-            }
+        public bool RequestEncounterCompletionAtTurnEnd() =>
+            turnLifecycle.RequestEncounterCompletionAtTurnEnd();
 
-            Journal.RecordEncounterChanged(isActive: false);
+        public bool TryExitTurnMode(out TurnModeExitFailure failure) =>
+            turnLifecycle.TryExitTurnMode(out failure);
 
-            return true;
-        }
-
-        public bool RequestEncounterCompletionAtTurnEnd()
-        {
-            if (!EncounterActive || EncounterCompletionRequested)
-            {
-                return false;
-            }
-
-            EncounterCompletionRequested = true;
-            return true;
-        }
-
-        public bool TryExitTurnMode(out TurnModeExitFailure failure)
-        {
-            if (Mode != GameplaySessionMode.TurnBased)
-            {
-                failure = TurnModeExitFailure.NotInTurnMode;
-                return false;
-            }
-
-            if (Operation != GameplaySessionOperation.None)
-            {
-                failure = TurnModeExitFailure.OperationInProgress;
-                return false;
-            }
-
-            if (EncounterActive)
-            {
-                failure = TurnModeExitFailure.EncounterActive;
-                return false;
-            }
-
-            CompleteVoluntaryTurnCycleAndExit();
-            failure = TurnModeExitFailure.None;
-            return true;
-        }
-
-        public bool TryEndTurn(string actorId, out TurnEndFailure failure)
-        {
-            if (TurnPhase == GameplayTurnPhase.EmergencyReaction)
-            {
-                return TryEndEmergencyTurn(actorId, out _, out failure);
-            }
-            if (Mode != GameplaySessionMode.TurnBased)
-            {
-                failure = TurnEndFailure.NotInTurnMode;
-                return false;
-            }
-
-            if (Operation != GameplaySessionOperation.None)
-            {
-                failure = TurnEndFailure.OperationInProgress;
-                return false;
-            }
-
-            if (!string.Equals(activeActorId, actorId, StringComparison.Ordinal))
-            {
-                failure = TurnEndFailure.ActorNotActive;
-                return false;
-            }
-
-            string endingActorId = activeActorId;
-            if (!EncounterActive)
-            {
-                BeginVoluntaryWorldTurn();
-                RecordTurnEnd(endingActorId, activeActorId);
-                failure = TurnEndFailure.None;
-                return true;
-            }
-
-            int activeIndex = 0;
-            while (activeIndex < initiativeOrder.Count
-                && !string.Equals(
-                    initiativeOrder[activeIndex],
-                    activeActorId,
-                    StringComparison.Ordinal))
-            {
-                activeIndex++;
-            }
-
-            if (activeIndex >= initiativeOrder.Count)
-            {
-                throw new InvalidOperationException(
-                    "The active actor is missing from initiative order.");
-            }
-
-            if (EncounterCompletionRequested)
-            {
-                RecordTurnEnd(endingActorId, endingActorId);
-                CompleteEncounter();
-                CompleteVoluntaryTurnCycleAndExit();
-                failure = TurnEndFailure.None;
-                return true;
-            }
-
-            string nextActorId = FindNextCapableActor(activeIndex)
-                ?? endingActorId;
-            actors[nextActorId].RefreshTurnBudget();
-            SetActiveActor(nextActorId);
-            RecordTurnEnd(endingActorId, activeActorId);
-            failure = TurnEndFailure.None;
-            return true;
-        }
+        public bool TryEndTurn(string actorId, out TurnEndFailure failure) =>
+            turnLifecycle.TryEndTurn(actorId, out failure);
 
         public void BeginEmergencyReaction(
             string attackerId,
             IReadOnlyList<string> responderIds,
-            int actionPointAllowance)
-        {
-            if (Mode != GameplaySessionMode.TurnBased || !EncounterActive
-                || Operation != GameplaySessionOperation.None)
-            {
-                throw new InvalidOperationException("Emergency reactions require an idle encounter turn.");
-            }
-            if (TurnPhase != GameplayTurnPhase.Normal)
-            {
-                throw new InvalidOperationException("An emergency reaction is already active.");
-            }
-            if (responderIds == null || responderIds.Count == 0)
-            {
-                throw new ArgumentException(
-                    "Emergency reactions require responders.",
-                    nameof(responderIds));
-            }
-            if (actionPointAllowance <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(actionPointAllowance));
-            }
-            RequireActor(attackerId);
-            var responders = new List<string>(responderIds.Count);
-            var unique = new HashSet<string>(StringComparer.Ordinal);
-            foreach (string responderId in responderIds)
-            {
-                RequireActor(responderId);
-                if (string.Equals(attackerId, responderId, StringComparison.Ordinal)
-                    || !unique.Add(responderId))
-                {
-                    throw new ArgumentException(
-                        "Emergency responders must be unique and cannot include the attacker.",
-                        nameof(responderIds));
-                }
-                responders.Add(responderId);
-            }
-            emergencyResponders = responders.AsReadOnly();
-            emergencyResponderIndex = 0;
-            emergencyResumeActorId = attackerId;
-            TurnPhase = GameplayTurnPhase.EmergencyReaction;
-            string firstResponderId = emergencyResponders[0];
-            actors[firstResponderId].BeginEmergencyTurn(actionPointAllowance);
-            SetActiveActor(firstResponderId);
-        }
+            int actionPointAllowance) =>
+            turnLifecycle.BeginEmergencyReaction(
+                attackerId,
+                responderIds,
+                actionPointAllowance);
 
         public bool TryEndEmergencyTurn(
             string actorId,
             out bool responsePassCompleted,
-            out TurnEndFailure failure)
-        {
-            responsePassCompleted = false;
-            if (TurnPhase != GameplayTurnPhase.EmergencyReaction)
-            {
-                return TryEndTurn(actorId, out failure);
-            }
-            if (Operation != GameplaySessionOperation.None)
-            {
-                failure = TurnEndFailure.OperationInProgress;
-                return false;
-            }
-            if (!string.Equals(activeActorId, actorId, StringComparison.Ordinal))
-            {
-                failure = TurnEndFailure.ActorNotActive;
-                return false;
-            }
-            string endingActorId = activeActorId;
-            emergencyResponderIndex++;
-            responsePassCompleted =
-                emergencyResponderIndex >= emergencyResponders.Count;
-            if (!responsePassCompleted)
-            {
-                string nextResponderId =
-                    emergencyResponders[emergencyResponderIndex];
-                actors[nextResponderId].BeginEmergencyTurn(
-                    actors[endingActorId].EmergencyActionPointAllowance);
-                SetActiveActor(nextResponderId);
-            }
-            RecordTurnEnd(
-                endingActorId,
-                responsePassCompleted ? emergencyResumeActorId : activeActorId,
-                GameplayTurnKind.EmergencyReaction,
-                emergencyResumeActorId);
-            failure = TurnEndFailure.None;
-            return true;
-        }
+            out TurnEndFailure failure) =>
+            turnLifecycle.TryEndEmergencyTurn(
+                actorId,
+                out responsePassCompleted,
+                out failure);
 
-        public void CompleteEmergencyReaction(string resumeActorId)
-        {
-            if (TurnPhase != GameplayTurnPhase.EmergencyReaction)
-            {
-                throw new InvalidOperationException("No emergency reaction is active.");
-            }
-            if (!string.Equals(
-                    resumeActorId,
-                    emergencyResumeActorId,
-                    StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "Emergency reactions must resume their triggering attacker.");
-            }
-            ActorState actor = RequireActor(resumeActorId);
-            emergencyResponders = null;
-            emergencyResponderIndex = -1;
-            emergencyResumeActorId = null;
-            TurnPhase = GameplayTurnPhase.Normal;
-            actor.RefreshTurnBudget();
-            SetActiveActor(resumeActorId);
-        }
+        public void CompleteEmergencyReaction(string resumeActorId) =>
+            turnLifecycle.CompleteEmergencyReaction(resumeActorId);
 
-        public bool CompleteVoluntaryWorldTurn()
-        {
-            if (Mode != GameplaySessionMode.TurnBased
-                || EncounterActive
-                || Operation != GameplaySessionOperation.ResolvingWorldTurn
-                || pendingVoluntaryTurnCycle == null)
-            {
-                return false;
-            }
-
-            VoluntaryTurnCycleRecord completedCycle =
-                pendingVoluntaryTurnCycle;
-            pendingVoluntaryTurnCycle = null;
-            LastCompletedVoluntaryTurnCycle = completedCycle;
-            RefreshTurnBudgets();
-            SetActiveActor(
-                FindNextCapableActor(startingAfterIndex: -1)
-                    ?? initiativeOrder[0]);
-            Operation = GameplaySessionOperation.None;
-            TurnContext = TurnModeContext.Voluntary;
-            Journal.RecordVoluntaryTurnCycleCompleted(completedCycle);
-            VoluntaryTurnCycleCompleted?.Invoke(completedCycle);
-            return true;
-        }
+        public bool CompleteVoluntaryWorldTurn() =>
+            turnLifecycle.CompleteVoluntaryWorldTurn();
 
         public GameplayActorSnapshot GetActor(string actorId)
         {
@@ -2044,94 +1760,48 @@ namespace GritGud.Application.Gameplay
                     == right.BlastIntegrityDamage;
         }
 
-        private void BeginVoluntaryWorldTurn()
+        GameplayJournal IGameplayTurnLifecycleHost.Journal => Journal;
+
+        GameplaySessionOperation IGameplayTurnLifecycleHost.Operation
         {
-            pendingVoluntaryTurnCycle = CreateVoluntaryTurnCycleRecord();
-            Operation = GameplaySessionOperation.ResolvingWorldTurn;
+            get => Operation;
+            set => Operation = value;
         }
 
-        private void CompleteVoluntaryTurnCycleAndExit()
-        {
-            VoluntaryTurnCycleRecord completedCycle =
-                CreateVoluntaryTurnCycleRecord();
-            LastCompletedVoluntaryTurnCycle = completedCycle;
-            RefreshTurnBudgets();
-            GameplaySessionMode previousMode = Mode;
-            SetMode(GameplaySessionMode.Exploration);
-            TurnContext = TurnModeContext.None;
-            voluntaryTurnReentrySecondsRemaining =
-                Scenario.Timing.MinimumVoluntaryTurnSeconds;
-            Journal.RecordVoluntaryTurnCycleCompleted(completedCycle);
-            Journal.RecordTurnModeChanged(
-                previousMode,
-                Mode,
-                TurnContext,
-                activeActorId);
-            VoluntaryTurnCycleCompleted?.Invoke(completedCycle);
-        }
+        IReadOnlyList<string> IGameplayTurnLifecycleHost.InitiativeOrder =>
+            initiativeOrder;
 
-        private void RecordTurnEnd(
-            string endingActorId,
-            string nextActorId,
-            GameplayTurnKind kind = GameplayTurnKind.Normal,
-            string interruptedActorId = null)
-        {
-            var record = new TurnEndRecord(
-                LastEndedTurn == null ? 1 : LastEndedTurn.Sequence + 1,
-                endingActorId,
-                nextActorId,
-                kind,
-                interruptedActorId);
-            LastEndedTurn = record;
-            Journal.RecordTurnEnded(record);
-            TurnEnded?.Invoke(record);
-        }
+        float IGameplayTurnLifecycleHost.MinimumVoluntaryTurnSeconds =>
+            Scenario.Timing.MinimumVoluntaryTurnSeconds;
 
-        private void SetActiveActor(string actorId)
-        {
-            if (string.Equals(activeActorId, actorId, StringComparison.Ordinal))
-                return;
+        void IGameplayTurnLifecycleHost.RequireActorForTurnLifecycle(
+            string actorId) => RequireActor(actorId);
 
-            string previousActorId = activeActorId;
-            activeActorId = actorId;
-            ActiveActorChanged?.Invoke(new GameplayActiveActorChange(
-                previousActorId,
-                activeActorId));
-        }
+        bool IGameplayTurnLifecycleHost.IsActorIncapacitatedForTurnLifecycle(
+            string actorId) => RequireActor(actorId).IsIncapacitated;
 
-        private void SetMode(GameplaySessionMode mode)
-        {
-            if (Mode == mode)
-                return;
+        void IGameplayTurnLifecycleHost.RefreshTurnBudgetForTurnLifecycle(
+            string actorId) => RequireActor(actorId).RefreshTurnBudget();
 
-            GameplaySessionMode previousMode = Mode;
-            Mode = mode;
-            ModeChanged?.Invoke(new GameplayModeChange(previousMode, Mode));
-        }
-
-        private void RefreshTurnBudgets()
+        void IGameplayTurnLifecycleHost.RefreshAllTurnBudgetsForTurnLifecycle()
         {
             foreach (string actorId in initiativeOrder)
-            {
                 actors[actorId].RefreshTurnBudget();
-            }
         }
 
-        private string FindNextCapableActor(int startingAfterIndex)
-        {
-            for (int offset = 1; offset <= initiativeOrder.Count; offset++)
-            {
-                int index = (startingAfterIndex + offset)
-                    % initiativeOrder.Count;
-                string candidateId = initiativeOrder[index];
-                if (!actors[candidateId].IsIncapacitated)
-                {
-                    return candidateId;
-                }
-            }
+        void IGameplayTurnLifecycleHost.BeginEmergencyTurnForTurnLifecycle(
+            string actorId,
+            int actionPointAllowance) =>
+            RequireActor(actorId).BeginEmergencyTurn(actionPointAllowance);
 
-            return null;
-        }
+        int IGameplayTurnLifecycleHost
+            .GetEmergencyActionPointAllowanceForTurnLifecycle(
+                string actorId) =>
+            RequireActor(actorId).EmergencyActionPointAllowance;
+
+        VoluntaryTurnCycleRecord IGameplayTurnLifecycleHost
+            .CreateVoluntaryTurnCycleRecordForTurnLifecycle() =>
+            CreateVoluntaryTurnCycleRecord();
 
         private ActorState RequireActiveActor(string actorId)
         {
@@ -2141,7 +1811,7 @@ namespace GritGud.Application.Gameplay
                     "Turn resources can only be used while turn mode is active.");
             }
 
-            if (!string.Equals(activeActorId, actorId, StringComparison.Ordinal))
+            if (!string.Equals(ActiveActorId, actorId, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
                     "Only the active actor can use turn resources.");
