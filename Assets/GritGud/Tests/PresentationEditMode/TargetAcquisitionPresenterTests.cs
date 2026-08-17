@@ -794,6 +794,84 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void NonTargetablePartyCompanionIsAcknowledgedAsFriendlyAim()
+        {
+            var host = new GameObject("Friendly Companion Aim Test");
+            var observer = CreateActorObject(
+                "Friendly Companion Observer",
+                Vector3.zero,
+                withVisual: false);
+            var companion = CreateActorObject(
+                "Friendly Companion Target",
+                new Vector3(0f, 0f, 5f),
+                withVisual: true);
+            LevelWorld world = null;
+            GameplayWorldRegistry registry = null;
+            try
+            {
+                world = new LevelWorld(
+                    new GameObject("Friendly Companion Aim World"),
+                    new Dictionary<string, LevelEntityView>(),
+                    null);
+                registry = new GameplayWorldRegistry(world);
+                registry.RegisterActor(
+                    "observer",
+                    "test",
+                    targetable: false,
+                    observer);
+                registry.RegisterActor(
+                    "target",
+                    "test",
+                    targetable: false,
+                    companion);
+                TargetAcquisitionPresenter presenter =
+                    host.AddComponent<TargetAcquisitionPresenter>();
+                presenter.Bind(
+                    CreateSession(
+                        includePlayerParty: true,
+                        includeRangedAttack: true),
+                    registry,
+                    "observer");
+                presenter.SetWeaponAimOriginProvider(
+                    () => new Vector3(0f, 1.2f, 0f));
+                Physics.SyncTransforms();
+                presenter.RefreshNow(new Ray(
+                    new Vector3(0f, 1.2f, 0f),
+                    Vector3.forward));
+                presenter.SetWeaponTargetingActive(true);
+
+                Assert.That(
+                    presenter.CurrentTargetActorId,
+                    Is.EqualTo("target"));
+                Assert.That(presenter.TargetOutlineVisible, Is.True);
+                AssertOutlineColor(
+                    companion,
+                    TargetAcquisitionPresenter.FriendlyOutlineColor);
+                Material outline = FindOutlineMaterial(companion);
+                Assert.That(
+                    outline.GetFloat("_OutlineScreenSpace"),
+                    Is.EqualTo(1f));
+                Assert.That(
+                    outline.GetFloat("_OutlineScreenWidth"),
+                    Is.EqualTo(
+                        TargetFeedbackPresenter.TargetOutlineScreenWidthPixels));
+                Assert.That(
+                    presenter.TryGetPointerFeedback(
+                        out TargetingPointerFeedback pointerFeedback),
+                    Is.True);
+                Assert.That(pointerFeedback.IsValid, Is.True);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                registry?.Dispose();
+                world?.Dispose();
+                Object.DestroyImmediate(observer);
+                Object.DestroyImmediate(companion);
+            }
+        }
+
+        [Test]
         public void GeometricChanceRoundsVisibleRegionFraction()
         {
             var snapshot = new TargetExposureSnapshot(
@@ -947,16 +1025,19 @@ namespace GritGud.Presentation.Tests
             GameObject target,
             Color expected)
         {
-            Material outline = target
-                .GetComponent<Renderer>()
-                .sharedMaterials
-                .Single(material =>
-                    material.shader.name == "GritGud/RuntimeOutline");
+            Material outline = FindOutlineMaterial(target);
             Color actual = outline.GetColor("_OutlineColor");
             Assert.That(actual.r, Is.EqualTo(expected.r).Within(0.001f));
             Assert.That(actual.g, Is.EqualTo(expected.g).Within(0.001f));
             Assert.That(actual.b, Is.EqualTo(expected.b).Within(0.001f));
         }
+
+        private static Material FindOutlineMaterial(GameObject target) =>
+            target.GetComponentsInChildren<Renderer>(true)
+                .SelectMany(renderer => renderer.sharedMaterials)
+                .Distinct()
+                .Single(material =>
+                    material.shader.name == "GritGud/RuntimeOutline");
 
         private static ScenarioActorDefinition CreateActorDefinition(
             string id,

@@ -10,6 +10,7 @@ namespace GritGud.Presentation.Gameplay
         private const string GroundHaloShaderName = "GritGud/EmissiveSurface";
         private const string TargetOutlineShaderName = "GritGud/RuntimeOutline";
         private const int HaloSegments = 48;
+        internal const float TargetOutlineScreenWidthPixels = 4f;
         private static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionColor =
             Shader.PropertyToID("_EmissionColor");
@@ -19,6 +20,10 @@ namespace GritGud.Presentation.Gameplay
             Shader.PropertyToID("_OutlineColor");
         private static readonly int OutlineWidth =
             Shader.PropertyToID("_OutlineWidth");
+        private static readonly int OutlineScreenSpace =
+            Shader.PropertyToID("_OutlineScreenSpace");
+        private static readonly int OutlineScreenWidth =
+            Shader.PropertyToID("_OutlineScreenWidth");
         private static readonly int OutlineEnabled =
             Shader.PropertyToID("_OutlineEnabled");
 
@@ -195,6 +200,10 @@ namespace GritGud.Presentation.Gameplay
                 OutlineColor,
                 feedbackColor);
             targetOutlineMaterial.SetFloat(OutlineWidth, 0.024f);
+            targetOutlineMaterial.SetFloat(OutlineScreenSpace, 1f);
+            targetOutlineMaterial.SetFloat(
+                OutlineScreenWidth,
+                TargetOutlineScreenWidthPixels);
             targetOutlineMaterial.SetFloat(OutlineEnabled, 0f);
 
             foreach (Renderer renderer in

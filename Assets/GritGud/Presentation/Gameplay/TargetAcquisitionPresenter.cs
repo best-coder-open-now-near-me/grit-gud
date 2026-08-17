@@ -206,7 +206,8 @@ namespace GritGud.Presentation.Gameplay
             hasResolvedWeaponAim = false;
             pointerQuery = new UnityPointerTargetQuery(
                 observer.Transform,
-                registry);
+                registry,
+                actorEligibility: CanAcquireActorTarget);
             InvalidateWorldEvidence();
             RefreshNow();
         }
@@ -485,7 +486,7 @@ namespace GritGud.Presentation.Gameplay
             {
                 if (!TryGetWeaponAim(out GameplayWeaponAim resolvedAim)
                     || !registry.TryGetActor(resolvedAim.TargetId, out target)
-                    || !target.Targetable
+                    || !CanAcquireActorTarget(target)
                     || ReferenceEquals(target.Transform, observer.Transform))
                 {
                     ClearAcquisition();
@@ -1091,6 +1092,11 @@ namespace GritGud.Presentation.Gameplay
                 && party.Contains(observerId)
                 && party.Contains(targetId);
         }
+
+        private bool CanAcquireActorTarget(GameplayActorView target) =>
+            target != null
+            && (target.Targetable
+                || IsFriendlyActorTarget(target.ActorId));
 
         private void OnDestroy()
         {
