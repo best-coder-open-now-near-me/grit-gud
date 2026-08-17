@@ -37,6 +37,34 @@ namespace GritGud.Application.Gameplay
 
     public static class GameplayCombatDiagnosticFormatter
     {
+        public static GameplayDiagnosticProjection FormatInitiative(
+            GameplaySession session)
+        {
+            if (session == null)
+            {
+                throw new ArgumentNullException(nameof(session));
+            }
+
+            var lines = new List<string>(session.InitiativeResults.Count);
+            for (int index = 0; index < session.InitiativeResults.Count; index++)
+            {
+                GameplayInitiativeResult result = session.InitiativeResults[index];
+                ScenarioActorDefinition actor = session.Scenario.GetActor(
+                    result.ActorId);
+                string name = actor.CharacterProfile?.DisplayName ?? actor.Id;
+                lines.Add(
+                    name
+                    + " — DEX " + result.Dexterity
+                    + " with " + result.ParticipantCount + " combatants"
+                    + " → advance " + result.ReactionAdvance
+                    + " → position " + (index + 1));
+            }
+
+            lines.Add("All later rounds repeat this order; Dexterity affects reaction only.");
+
+            return new GameplayDiagnosticProjection("Initiative order", lines);
+        }
+
         public static bool TryFormatAction(
             GameplayActionRecord action,
             out GameplayDiagnosticProjection projection)

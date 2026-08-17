@@ -91,6 +91,22 @@ namespace GritGud.Domain.Gameplay
     }
 
     [Serializable]
+    public sealed class ScenarioSurfaceDamageModifierData
+    {
+        public string surfaceId = string.Empty;
+        public float multiplier = 1f;
+    }
+
+    [Serializable]
+    public sealed class ScenarioDirectFireDamageData
+    {
+        public string damageTypeId = string.Empty;
+        public float baseIntegrityDamage;
+        public List<ScenarioSurfaceDamageModifierData> surfaceModifiers =
+            new List<ScenarioSurfaceDamageModifierData>();
+    }
+
+    [Serializable]
     public sealed class ScenarioAttackCapabilityData
     {
         public bool enabled;
@@ -101,6 +117,7 @@ namespace GritGud.Domain.Gameplay
         public ScenarioAccuracyDecayData accuracyDecay;
         public ScenarioProjectileCapabilityData projectile;
         public ScenarioContactAttackData contact;
+        public ScenarioDirectFireDamageData directFireDamage;
     }
 
     [Serializable]
@@ -172,6 +189,7 @@ namespace GritGud.Domain.Gameplay
         public float preferredEngagementRange;
         public float movementSearchRadius;
         public int maximumAttacksPerTurn;
+        public int minimumAttackHitChancePercent = 25;
     }
 
     [Serializable]
@@ -189,6 +207,7 @@ namespace GritGud.Domain.Gameplay
         public string id = string.Empty;
         public string displayName = string.Empty;
         public string presentationId = string.Empty;
+        public string characterId = string.Empty;
         public bool targetable = true;
         public Float3Data position;
         public float facingDegrees;
@@ -215,15 +234,6 @@ namespace GritGud.Domain.Gameplay
     }
 
     [Serializable]
-    public sealed class ScenarioAdvancementOptionData
-    {
-        public string id = string.Empty;
-        public string skillId = string.Empty;
-        public int pointCost;
-        public int maximumBonus;
-    }
-
-    [Serializable]
     public sealed class ScenarioCharacterProfileData
     {
         public string identityId = string.Empty;
@@ -232,8 +242,6 @@ namespace GritGud.Domain.Gameplay
         public List<ScenarioCharacterRatingData> attributes = new List<ScenarioCharacterRatingData>();
         public List<ScenarioCharacterRatingData> skills = new List<ScenarioCharacterRatingData>();
         public List<string> talentIds = new List<string>();
-        public int startingProgressionPoints;
-        public List<ScenarioAdvancementOptionData> advancementOptions = new List<ScenarioAdvancementOptionData>();
     }
 
     [Serializable]
@@ -258,11 +266,32 @@ namespace GritGud.Domain.Gameplay
     }
 
     [Serializable]
+    public sealed class ScenarioPropTopplingData
+    {
+        public bool enabled;
+        public float pitchOffsetDegrees;
+        public float rollOffsetDegrees = 90f;
+        public float elevationOffset;
+    }
+
+    [Serializable]
+    public sealed class ScenarioPropPinningData
+    {
+        public bool enabled;
+        public float maximumActorMass;
+        public float minimumContactDepth;
+    }
+
+    [Serializable]
     public sealed class ScenarioPropContentData
     {
         public string entityId = string.Empty;
         public float mass;
         public string sizeClass = "medium";
+        public ScenarioPropTopplingData toppling =
+            new ScenarioPropTopplingData();
+        public ScenarioPropPinningData pinning =
+            new ScenarioPropPinningData();
         public ScenarioAttackResponseData attackResponse;
     }
 
@@ -300,7 +329,7 @@ namespace GritGud.Domain.Gameplay
     [Serializable]
     public sealed class ScenarioContentDocument
     {
-        public const int CurrentSchemaVersion = 12;
+        public const int CurrentSchemaVersion = 15;
 
         public int schemaVersion = CurrentSchemaVersion;
         public string scenarioId = string.Empty;

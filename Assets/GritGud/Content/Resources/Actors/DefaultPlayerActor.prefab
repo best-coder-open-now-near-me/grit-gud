@@ -15,6 +15,7 @@ GameObject:
   - component: {fileID: 340282534900913198}
   - component: {fileID: 6393417305509046758}
   - component: {fileID: 6217044626611956091}
+  - component: {fileID: 2414097639294645278}
   - component: {fileID: 882139567204958673}
   - component: {fileID: 3028598812794721758}
   m_Layer: 0
@@ -160,6 +161,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: GritGud.Presentation::GritGud.Presentation.Actors.Animation.ActorAnimationCoordinator
   animatorDriver: {fileID: 6393417305509046758}
   profile: {fileID: 11400000, guid: fe422a090531a3a4b866a9de0d472c8c, type: 2}
+--- !u!114 &2414097639294645278
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7791663623579650733}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3f777a025d9eb7c4c95a2899c0423811, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: GritGud.Presentation::GritGud.Presentation.Actors.ActorRagdollPresenter
+  profile: {fileID: 11400000, guid: e11a71f71f859c24aaf9f14884dd3b39, type: 2}
+  animatorDriver: {fileID: 6393417305509046758}
 --- !u!114 &882139567204958673
 MonoBehaviour:
   m_ObjectHideFlags: 0

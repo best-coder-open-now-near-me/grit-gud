@@ -22,6 +22,8 @@ namespace GritGud.Presentation.LevelEditing.Tools
 
         public LevelArchetypeDefinition Archetype => archetype;
 
+        public float YawDegrees => yaw;
+
         public bool HasPreview { get; private set; }
 
         public void SelectArchetype(LevelArchetypeDefinition definition)
@@ -53,7 +55,7 @@ namespace GritGud.Presentation.LevelEditing.Tools
 
             if (input.RotatePressed)
             {
-                yaw = NormalizeYaw(yaw + archetype.PlacementRules.AngleSnap);
+                RotatePreview();
             }
 
             HasPreview = context.SceneQuery.TryGetPlacementPoint(
@@ -86,6 +88,14 @@ namespace GritGud.Presentation.LevelEditing.Tools
             return false;
         }
 
+        public void RotatePreview(float direction = 1f)
+        {
+            if (archetype == null || Mathf.Approximately(direction, 0f))
+                return;
+
+            yaw = NormalizeYaw(yaw + Mathf.Sign(direction) * archetype.PlacementRules.AngleSnap);
+        }
+
         public bool TryGetPreviewBounds(out Bounds bounds)
         {
             if (!HasPreview || archetype == null)
@@ -94,7 +104,9 @@ namespace GritGud.Presentation.LevelEditing.Tools
                 return false;
             }
 
-            Bounds local = archetype.Presentation.LocalBounds;
+            Bounds local = LevelEntityView.CalculateVisualLocalBounds(
+                archetype.Presentation.Prefab,
+                archetype.Presentation.LocalBounds);
             Quaternion rotation = Quaternion.Euler(0f, yaw, 0f);
             bounds = new Bounds(
                 pointerWorld + rotation * local.center,

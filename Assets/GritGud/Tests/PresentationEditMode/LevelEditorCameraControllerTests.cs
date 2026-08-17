@@ -41,6 +41,22 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void MiddleDragOrbitsCameraInYawAndPitch()
+        {
+            Quaternion before = camera.transform.rotation;
+
+            controller.Tick(new LevelEditorInputState
+            {
+                MiddleHeld = true,
+                PointerDelta = new Vector2(40f, 20f),
+            });
+
+            Assert.That(Quaternion.Angle(before, camera.transform.rotation), Is.GreaterThan(1f));
+            Assert.That(camera.transform.eulerAngles.x, Is.EqualTo(50f).Within(0.01f));
+            Assert.That(camera.transform.eulerAngles.y, Is.EqualTo(10f).Within(0.01f));
+        }
+
+        [Test]
         public void ScrollZoomUsesAUsefulStepForSmallBrowserDeltas()
         {
             Vector3 target = camera.transform.position + camera.transform.forward * 15f;
@@ -102,6 +118,50 @@ namespace GritGud.Presentation.Tests
 
             Assert.That(camera.transform.position, Is.EqualTo(expectedPosition));
             Assert.That(camera.transform.rotation, Is.EqualTo(expectedRotation));
+        }
+
+        [Test]
+        public void OrthographicViewsUseStableAxesAndReturnToPerspectiveOrbit()
+        {
+            controller.Tick(new LevelEditorInputState
+            {
+                SecondaryHeld = true,
+                PointerDelta = new Vector2(60f, -12f),
+            });
+            Quaternion perspectiveRotation = camera.transform.rotation;
+
+            controller.SetView(LevelEditorCameraView.Top);
+
+            Assert.That(camera.orthographic, Is.True);
+            Assert.That(Vector3.Angle(camera.transform.forward, Vector3.down), Is.LessThan(0.01f));
+            float beforeZoom = camera.orthographicSize;
+            controller.Tick(new LevelEditorInputState { ZoomDelta = 1f });
+            Assert.That(camera.orthographicSize, Is.LessThan(beforeZoom));
+
+            controller.SetView(LevelEditorCameraView.Perspective);
+            Assert.That(camera.orthographic, Is.False);
+            Assert.That(Quaternion.Angle(camera.transform.rotation, perspectiveRotation),
+                Is.LessThan(0.01f));
+        }
+
+        [Test]
+        public void CapturedOrthographicViewRestoresItsProjectionAndPerspectiveMemory()
+        {
+            controller.Tick(new LevelEditorInputState
+            {
+                SecondaryHeld = true,
+                PointerDelta = new Vector2(80f, 10f),
+            });
+            controller.SetView(LevelEditorCameraView.Right);
+            LevelEditorCameraState state = controller.CaptureState();
+
+            controller.SetView(LevelEditorCameraView.Perspective);
+            controller.RestoreState(state);
+
+            Assert.That(controller.View, Is.EqualTo(LevelEditorCameraView.Right));
+            Assert.That(camera.orthographic, Is.True);
+            controller.SetView(LevelEditorCameraView.Perspective);
+            Assert.That(camera.transform.eulerAngles.y, Is.EqualTo(20f).Within(0.01f));
         }
     }
 }

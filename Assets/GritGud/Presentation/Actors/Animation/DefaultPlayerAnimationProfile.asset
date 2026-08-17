@@ -39,7 +39,7 @@ MonoBehaviour:
     recoilStateName: 
     recoilPlaybackSpeed: 1
     animatorPoseValue: 0
-    poseLayerWeight: 0.68
+    poseLayerWeight: 0
     poseTransitionSeconds: 0.12
     recoilLayerWeight: 0
     recoilTransitionSeconds: 0
@@ -71,7 +71,7 @@ MonoBehaviour:
     recoilHoldSeconds: 0.1
     recoilReturnSeconds: 0.6
   - id: pose.melee
-    poseStateName: Empty Hands
+    poseStateName: Knife Idle
     recoilStateName: 
     recoilPlaybackSpeed: 1
     animatorPoseValue: 3
@@ -92,4 +92,34 @@ MonoBehaviour:
     triggerParameterName: 
     layerName: Actor Actions
     stateName: Throw
+    transitionSeconds: 0.08
+  - action: 4
+    triggerParameterName: 
+    layerName: Actor Traversal
+    stateName: Jump
+    transitionSeconds: 0.08
+  - action: 7
+    triggerParameterName: 
+    layerName: Actor Actions
+    stateName: Knife Strike
+    transitionSeconds: 0.08
+  - action: 5
+    triggerParameterName: 
+    layerName: Actor Reactions
+    stateName: Hit Reaction
+    transitionSeconds: 0.08
+  - action: 6
+    triggerParameterName: 
+    layerName: Actor Reactions
+    stateName: Fall Over
+    transitionSeconds: 0.08
+  - action: 8
+    triggerParameterName: 
+    layerName: Actor Reactions
+    stateName: Shoulder Hit And Fall
+    transitionSeconds: 0.08
+  - action: 9
+    triggerParameterName: 
+    layerName: Actor Displacement
+    stateName: Push
     transitionSeconds: 0.08

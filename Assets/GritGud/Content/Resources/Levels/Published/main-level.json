@@ -1,0 +1,498 @@
+{
+    "schemaVersion": 15,
+  "levelId": "main-depot-yard-v1",
+  "displayName": "Depot Yard",
+  "bounds": {
+    "center": { "x": 0.0, "y": 3.0, "z": 0.0 },
+    "size": { "x": 32.0, "y": 12.0, "z": 28.0 }
+  },
+  "environment": {
+    "presetId": "depot-night",
+    "atmosphere": {
+      "ambientSky": { "r": 0.055, "g": 0.11, "b": 0.23, "a": 1.0 },
+      "ambientEquator": { "r": 0.028, "g": 0.075, "b": 0.17, "a": 1.0 },
+      "ambientGround": { "r": 0.012, "g": 0.026, "b": 0.065, "a": 1.0 },
+      "ambientIntensity": 0.76,
+      "reflectionIntensity": 0.52,
+      "subtractiveShadow": { "r": 0.01, "g": 0.02, "b": 0.052, "a": 1.0 },
+      "fogEnabled": true,
+      "fogColor": { "r": 0.018, "g": 0.052, "b": 0.125, "a": 1.0 },
+      "fogStartDistance": 16.0,
+      "fogEndDistance": 54.0
+    },
+    "keyLight": {
+      "color": { "r": 0.49, "g": 0.69, "b": 1.0, "a": 1.0 },
+      "intensity": 0.82,
+      "bounceIntensity": 0.2,
+      "shadowStrength": 0.9,
+      "shadowBias": 0.07,
+      "shadowNormalBias": 0.38,
+      "rotationEuler": { "x": 42.0, "y": -28.0, "z": 0.0 }
+    },
+    "fixtureHousingColor": { "r": 0.025, "g": 0.055, "b": 0.1, "a": 1.0 },
+    "lensEmissionIntensity": 5.5,
+    "practicalLights": [
+      { "id": "gate-security-flood", "displayName": "Gate Security Flood", "position": { "x": -1.5, "y": 6.0, "z": -7.5 }, "target": { "x": 0.5, "y": 0.0, "z": -2.5 }, "color": { "r": 0.08, "g": 0.72, "b": 1.55, "a": 1.0 }, "intensity": 5.2, "range": 18.0, "spotAngle": 56.0, "innerSpotFraction": 0.56, "baseHeight": 0.0 },
+      { "id": "workshop-sodium-flood", "displayName": "Workshop Sodium Flood", "position": { "x": 8.5, "y": 6.0, "z": -3.5 }, "target": { "x": 8.0, "y": 0.0, "z": -4.5 }, "color": { "r": 1.55, "g": 0.39, "b": 0.025, "a": 1.0 }, "intensity": 3.8, "range": 15.0, "spotAngle": 60.0, "innerSpotFraction": 0.55, "baseHeight": 0.0 },
+      { "id": "deck-security-flood", "displayName": "Deck Security Flood", "position": { "x": 10.5, "y": 8.0, "z": 7.5 }, "target": { "x": 9.5, "y": 3.0, "z": 5.0 }, "color": { "r": 0.11, "g": 0.56, "b": 1.42, "a": 1.0 }, "intensity": 4.5, "range": 17.0, "spotAngle": 52.0, "innerSpotFraction": 0.58, "baseHeight": 3.0 },
+      { "id": "warehouse-loading-flood", "displayName": "Warehouse Loading Flood", "position": { "x": -8.5, "y": 5.2, "z": 4.75 }, "target": { "x": -7.5, "y": 0.0, "z": 1.5 }, "color": { "r": 0.08, "g": 0.64, "b": 1.5, "a": 1.0 }, "intensity": 4.2, "range": 16.0, "spotAngle": 50.0, "innerSpotFraction": 0.6, "baseHeight": 0.0 },
+      { "id": "north-yard-work-light", "displayName": "North Yard Work Light", "position": { "x": -3.5, "y": 5.4, "z": 8.5 }, "target": { "x": 0.0, "y": 0.0, "z": 4.5 }, "color": { "r": 1.35, "g": 0.32, "b": 0.025, "a": 1.0 }, "intensity": 2.4, "range": 13.0, "spotAngle": 48.0, "innerSpotFraction": 0.55, "baseHeight": 0.0 }
+    ]
+  },
+  "dressing": {
+    "decals": [
+      { "id": "decal-workshop-oil", "displayName": "Workshop Oil Stain", "styleId": "oil", "position": { "x": 8.25, "y": 0.03, "z": -4.0 }, "rotationEuler": { "x": -90.0, "y": 0.0, "z": 18.0 }, "size": { "x": 2.8, "y": 1.7, "z": 1.0 }, "color": { "r": 0.025, "g": 0.035, "b": 0.05, "a": 0.62 } },
+      { "id": "decal-south-hazard", "displayName": "South Gate Hazard Marking", "styleId": "hazard", "position": { "x": 0.5, "y": 0.035, "z": -7.4 }, "rotationEuler": { "x": -90.0, "y": 0.0, "z": 0.0 }, "size": { "x": 4.5, "y": 1.1, "z": 1.0 }, "color": { "r": 0.95, "g": 0.52, "b": 0.06, "a": 0.72 } },
+      { "id": "decal-deck-arrow", "displayName": "Raised Deck Direction", "styleId": "arrow", "position": { "x": 3.4, "y": 0.035, "z": 2.2 }, "rotationEuler": { "x": -90.0, "y": 0.0, "z": -90.0 }, "size": { "x": 2.0, "y": 3.2, "z": 1.0 }, "color": { "r": 0.2, "g": 0.74, "b": 1.0, "a": 0.68 } },
+      { "id": "decal-warehouse-grime", "displayName": "Warehouse Floor Grime", "styleId": "grime", "position": { "x": -8.0, "y": 0.028, "z": -1.2 }, "rotationEuler": { "x": -90.0, "y": 0.0, "z": -12.0 }, "size": { "x": 3.6, "y": 2.8, "z": 1.0 }, "color": { "r": 0.045, "g": 0.07, "b": 0.075, "a": 0.48 } }
+    ],
+    "ambientVfx": [
+      { "id": "vfx-yard-dust", "displayName": "Yard Dust", "effectId": "dust-air", "position": { "x": 0.0, "y": 1.25, "z": -1.5 }, "rotationEuler": { "x": 0.0, "y": 12.0, "z": 0.0 }, "scale": { "x": 2.2, "y": 1.4, "z": 2.2 } },
+      { "id": "vfx-workshop-dust", "displayName": "Workshop Dust", "effectId": "dust-air", "position": { "x": 8.0, "y": 1.0, "z": -4.25 }, "rotationEuler": { "x": 0.0, "y": -25.0, "z": 0.0 }, "scale": { "x": 1.25, "y": 0.9, "z": 1.25 } },
+      { "id": "vfx-warehouse-haze", "displayName": "Warehouse Ground Haze", "effectId": "ground-haze", "position": { "x": -7.5, "y": 0.18, "z": 2.5 }, "rotationEuler": { "x": 0.0, "y": 0.0, "z": 0.0 }, "scale": { "x": 1.6, "y": 0.55, "z": 1.6 } }
+    ],
+    "audioZones": [
+      { "id": "audio-yard-wind", "displayName": "Open Yard Wind", "soundId": "wind", "center": { "x": 0.0, "y": 2.0, "z": -1.5 }, "size": { "x": 14.0, "y": 5.0, "z": 15.0 }, "volume": 0.14, "fadeDistance": 4.0 },
+      { "id": "audio-warehouse-hum", "displayName": "Warehouse Electrical Hum", "soundId": "industrial-hum", "center": { "x": -7.5, "y": 2.0, "z": -1.0 }, "size": { "x": 8.0, "y": 5.0, "z": 11.0 }, "volume": 0.16, "fadeDistance": 4.0 },
+      { "id": "audio-workshop-vent", "displayName": "Workshop Ventilation", "soundId": "ventilation", "center": { "x": 8.0, "y": 2.0, "z": -4.5 }, "size": { "x": 7.0, "y": 5.0, "z": 7.0 }, "volume": 0.16, "fadeDistance": 4.0 }
+    ]
+  },
+  "groups": [
+    {
+      "id": "toppling-verification",
+      "displayName": "Toppling Verification",
+      "locked": false,
+      "hidden": false
+    },
+    {
+      "id": "traversal-verification",
+      "displayName": "Traversal Verification",
+      "locked": false,
+      "hidden": false
+    }
+  ],
+  "entities": [
+    { "id": "floor-r01-c01", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -10.0, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r01-c02", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -7.5, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r01-c03", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -5.0, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r01-c04", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -2.5, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r01-c05", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 0.0, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r01-c06", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 2.5, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r01-c07", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 5.0, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r01-c08", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 7.5, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r01-c09", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 10.0, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r01-c10", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 12.5, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r02-c01", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -10.0, "y": 0.0, "z": -7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r02-c02", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -7.5, "y": 0.0, "z": -7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r02-c03", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -5.0, "y": 0.0, "z": -7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r02-c04", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -2.5, "y": 0.0, "z": -7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r02-c05", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 0.0, "y": 0.0, "z": -7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r02-c06", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 2.5, "y": 0.0, "z": -7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r02-c07", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 5.0, "y": 0.0, "z": -7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r02-c08", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 7.5, "y": 0.0, "z": -7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r02-c09", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 10.0, "y": 0.0, "z": -7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r02-c10", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 12.5, "y": 0.0, "z": -7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r03-c01", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -10.0, "y": 0.0, "z": -5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r03-c02", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -7.5, "y": 0.0, "z": -5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r03-c03", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -5.0, "y": 0.0, "z": -5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r03-c04", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -2.5, "y": 0.0, "z": -5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r03-c05", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 0.0, "y": 0.0, "z": -5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r03-c06", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 2.5, "y": 0.0, "z": -5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r03-c07", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 5.0, "y": 0.0, "z": -5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r03-c08", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 7.5, "y": 0.0, "z": -5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r03-c09", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 10.0, "y": 0.0, "z": -5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r03-c10", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 12.5, "y": 0.0, "z": -5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r04-c01", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -10.0, "y": 0.0, "z": -2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r04-c02", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -7.5, "y": 0.0, "z": -2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r04-c03", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -5.0, "y": 0.0, "z": -2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r04-c04", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -2.5, "y": 0.0, "z": -2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r04-c05", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 0.0, "y": 0.0, "z": -2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r04-c06", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 2.5, "y": 0.0, "z": -2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r04-c07", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 5.0, "y": 0.0, "z": -2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r04-c08", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 7.5, "y": 0.0, "z": -2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r04-c09", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 10.0, "y": 0.0, "z": -2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r04-c10", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 12.5, "y": 0.0, "z": -2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r05-c01", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -10.0, "y": 0.0, "z": 0.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r05-c02", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -7.5, "y": 0.0, "z": 0.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r05-c03", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -5.0, "y": 0.0, "z": 0.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r05-c04", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -2.5, "y": 0.0, "z": 0.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r05-c05", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 0.0, "y": 0.0, "z": 0.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r05-c06", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 2.5, "y": 0.0, "z": 0.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r05-c07", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 5.0, "y": 0.0, "z": 0.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r05-c08", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 7.5, "y": 0.0, "z": 0.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r05-c09", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 10.0, "y": 0.0, "z": 0.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r05-c10", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 12.5, "y": 0.0, "z": 0.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r06-c01", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -10.0, "y": 0.0, "z": 2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r06-c02", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -7.5, "y": 0.0, "z": 2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r06-c03", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -5.0, "y": 0.0, "z": 2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r06-c04", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -2.5, "y": 0.0, "z": 2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r06-c05", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 0.0, "y": 0.0, "z": 2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r06-c06", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 2.5, "y": 0.0, "z": 2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r06-c07", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 5.0, "y": 0.0, "z": 2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r06-c08", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 7.5, "y": 0.0, "z": 2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r06-c09", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 10.0, "y": 0.0, "z": 2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r06-c10", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 12.5, "y": 0.0, "z": 2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r07-c01", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -10.0, "y": 0.0, "z": 5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r07-c02", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -7.5, "y": 0.0, "z": 5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r07-c03", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -5.0, "y": 0.0, "z": 5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r07-c04", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -2.5, "y": 0.0, "z": 5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r07-c05", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 0.0, "y": 0.0, "z": 5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r07-c06", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 2.5, "y": 0.0, "z": 5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r07-c07", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 5.0, "y": 0.0, "z": 5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r07-c08", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 7.5, "y": 0.0, "z": 5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r07-c09", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 10.0, "y": 0.0, "z": 5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r07-c10", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 12.5, "y": 0.0, "z": 5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r08-c01", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -10.0, "y": 0.0, "z": 7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r08-c02", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -7.5, "y": 0.0, "z": 7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r08-c03", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -5.0, "y": 0.0, "z": 7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r08-c04", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": -2.5, "y": 0.0, "z": 7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r08-c05", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 0.0, "y": 0.0, "z": 7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r08-c06", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 2.5, "y": 0.0, "z": 7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r08-c07", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 5.0, "y": 0.0, "z": 7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r08-c08", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 7.5, "y": 0.0, "z": 7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r08-c09", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 10.0, "y": 0.0, "z": 7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "floor-r08-c10", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 12.5, "y": 0.0, "z": 7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+
+    { "id": "wall-south-01", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -10.0, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-south-02", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -7.5, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-south-03", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -5.0, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-south-04", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -2.5, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "gate-south-01", "archetypeId": "structure.wall.doorway", "transform": { "position": { "x": 0.0, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [{ "id": "passage", "type": "doorway", "localPosition": { "x": -1.25, "y": 0.0, "z": 0.0 }, "radius": 1.1 }] },
+    { "id": "gate-south-02", "archetypeId": "structure.wall.doorway", "transform": { "position": { "x": 2.5, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [{ "id": "passage", "type": "doorway", "localPosition": { "x": -1.25, "y": 0.0, "z": 0.0 }, "radius": 1.1 }] },
+    { "id": "wall-south-07", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 5.0, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-south-08", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 7.5, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-south-09", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 10.0, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-south-10", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 12.5, "y": 0.0, "z": -10.0 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+
+    { "id": "wall-north-01", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -10.0, "y": 0.0, "z": 10.0 }, "yawDegrees": 180.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-north-02", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -7.5, "y": 0.0, "z": 10.0 }, "yawDegrees": 180.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-north-03", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -5.0, "y": 0.0, "z": 10.0 }, "yawDegrees": 180.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-north-04", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -2.5, "y": 0.0, "z": 10.0 }, "yawDegrees": 180.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-north-05", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 0.0, "y": 0.0, "z": 10.0 }, "yawDegrees": 180.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-north-06", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 2.5, "y": 0.0, "z": 10.0 }, "yawDegrees": 180.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-north-07", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 5.0, "y": 0.0, "z": 10.0 }, "yawDegrees": 180.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "gate-north-08", "archetypeId": "structure.wall.doorway", "transform": { "position": { "x": 7.5, "y": 0.0, "z": 10.0 }, "yawDegrees": 180.0 }, "coverVolumes": [], "interactionPoints": [{ "id": "passage", "type": "doorway", "localPosition": { "x": -1.25, "y": 0.0, "z": 0.0 }, "radius": 1.1 }] },
+    { "id": "wall-north-09", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 10.0, "y": 0.0, "z": 10.0 }, "yawDegrees": 180.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-north-10", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 12.5, "y": 0.0, "z": 10.0 }, "yawDegrees": 180.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+
+    { "id": "wall-west-01", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -12.5, "y": 0.0, "z": -10.0 }, "yawDegrees": 90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-west-02", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -12.5, "y": 0.0, "z": -7.5 }, "yawDegrees": 90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-west-03", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -12.5, "y": 0.0, "z": -5.0 }, "yawDegrees": 90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "gate-west-04", "archetypeId": "structure.wall.doorway", "transform": { "position": { "x": -12.5, "y": 0.0, "z": -2.5 }, "yawDegrees": 90.0 }, "coverVolumes": [], "interactionPoints": [{ "id": "passage", "type": "doorway", "localPosition": { "x": -1.25, "y": 0.0, "z": 0.0 }, "radius": 1.1 }] },
+    { "id": "wall-west-05", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -12.5, "y": 0.0, "z": 0.0 }, "yawDegrees": 90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-west-06", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -12.5, "y": 0.0, "z": 2.5 }, "yawDegrees": 90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-west-07", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -12.5, "y": 0.0, "z": 5.0 }, "yawDegrees": 90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-west-08", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -12.5, "y": 0.0, "z": 7.5 }, "yawDegrees": 90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-east-01", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 12.5, "y": 0.0, "z": -10.0 }, "yawDegrees": -90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-east-02", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 12.5, "y": 0.0, "z": -7.5 }, "yawDegrees": -90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-east-03", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 12.5, "y": 0.0, "z": -5.0 }, "yawDegrees": -90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-east-04", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 12.5, "y": 0.0, "z": -2.5 }, "yawDegrees": -90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-east-05", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 12.5, "y": 0.0, "z": 0.0 }, "yawDegrees": -90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "gate-east-06", "archetypeId": "structure.wall.doorway", "transform": { "position": { "x": 12.5, "y": 0.0, "z": 2.5 }, "yawDegrees": -90.0 }, "coverVolumes": [], "interactionPoints": [{ "id": "passage", "type": "doorway", "localPosition": { "x": -1.25, "y": 0.0, "z": 0.0 }, "radius": 1.1 }] },
+    { "id": "wall-east-07", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 12.5, "y": 0.0, "z": 5.0 }, "yawDegrees": -90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "wall-east-08", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 12.5, "y": 0.0, "z": 7.5 }, "yawDegrees": -90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+
+    { "id": "divider-west-01", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -2.5, "y": 0.0, "z": -7.5 }, "yawDegrees": 90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "divider-west-02", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -2.5, "y": 0.0, "z": -5.0 }, "yawDegrees": 90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "divider-west-door", "archetypeId": "structure.wall.doorway", "transform": { "position": { "x": -2.5, "y": 0.0, "z": -2.5 }, "yawDegrees": 90.0 }, "coverVolumes": [], "interactionPoints": [{ "id": "passage", "type": "doorway", "localPosition": { "x": -1.25, "y": 0.0, "z": 0.0 }, "radius": 1.1 }] },
+    { "id": "divider-west-04", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -2.5, "y": 0.0, "z": 0.0 }, "yawDegrees": 90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "divider-west-05", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -2.5, "y": 0.0, "z": 2.5 }, "yawDegrees": 90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "divider-north-01", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -10.0, "y": 0.0, "z": 5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "divider-north-02", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -7.5, "y": 0.0, "z": 5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "divider-north-door", "archetypeId": "structure.wall.doorway", "transform": { "position": { "x": -5.0, "y": 0.0, "z": 5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [{ "id": "passage", "type": "doorway", "localPosition": { "x": -1.25, "y": 0.0, "z": 0.0 }, "radius": 1.1 }] },
+    { "id": "divider-north-04", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": -2.5, "y": 0.0, "z": 5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "workshop-wall-01", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 5.0, "y": 0.0, "z": -7.5 }, "yawDegrees": 90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "workshop-door", "archetypeId": "structure.wall.doorway", "transform": { "position": { "x": 5.0, "y": 0.0, "z": -5.0 }, "yawDegrees": 90.0 }, "coverVolumes": [], "interactionPoints": [{ "id": "passage", "type": "doorway", "localPosition": { "x": -1.25, "y": 0.0, "z": 0.0 }, "radius": 1.1 }] },
+    { "id": "workshop-wall-03", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 5.0, "y": 0.0, "z": -2.5 }, "yawDegrees": 90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "workshop-cross-01", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 2.5, "y": 0.0, "z": 0.0 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "workshop-cross-door", "archetypeId": "structure.wall.doorway", "transform": { "position": { "x": 5.0, "y": 0.0, "z": 0.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [{ "id": "passage", "type": "doorway", "localPosition": { "x": -1.25, "y": 0.0, "z": 0.0 }, "radius": 1.1 }] },
+    { "id": "workshop-cross-04", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 10.0, "y": 0.0, "z": 0.0 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+
+    { "id": "deck-floor-r01-c01", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 7.5, "y": 3.0, "z": 2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "deck-floor-r01-c02", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 10.0, "y": 3.0, "z": 2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "deck-floor-r01-c03", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 12.5, "y": 3.0, "z": 2.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "deck-floor-r02-c01", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 7.5, "y": 3.0, "z": 5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "deck-floor-r02-c02", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 10.0, "y": 3.0, "z": 5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "deck-floor-r02-c03", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 12.5, "y": 3.0, "z": 5.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [{ "id": "raised-deck", "type": "objective", "localPosition": { "x": 0.0, "y": 0.02, "z": 0.0 }, "radius": 1.5 }] },
+    { "id": "deck-floor-r03-c01", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 7.5, "y": 3.0, "z": 7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "deck-floor-r03-c02", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 10.0, "y": 3.0, "z": 7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "deck-floor-r03-c03", "archetypeId": "structure.floor.standard", "transform": { "position": { "x": 12.5, "y": 3.0, "z": 7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "deck-stairs-south", "archetypeId": "structure.stairs.standard", "transform": { "position": { "x": 5.0, "y": 0.0, "z": -2.5 }, "yawDegrees": 180.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "deck-stairs-south-upper", "archetypeId": "structure.stairs.standard", "transform": { "position": { "x": 5.0, "y": 1.5, "z": 0.0 }, "yawDegrees": 180.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "deck-stairs-west", "archetypeId": "structure.stairs.standard", "transform": { "position": { "x": 0.0, "y": 0.0, "z": 10.0 }, "yawDegrees": -90.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "deck-stairs-west-upper", "archetypeId": "structure.stairs.standard", "transform": { "position": { "x": 2.5, "y": 1.5, "z": 10.0 }, "yawDegrees": -90.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "deck-wall-north-01", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 7.5, "y": 3.0, "z": 10.0 }, "yawDegrees": 180.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "deck-wall-north-02", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 10.0, "y": 3.0, "z": 10.0 }, "yawDegrees": 180.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+    { "id": "deck-wall-north-03", "archetypeId": "structure.wall.standard", "transform": { "position": { "x": 12.5, "y": 3.0, "z": 10.0 }, "yawDegrees": 180.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": -1.25, "y": 1.5, "z": 0.0 }, "size": { "x": 2.5, "y": 3.0, "z": 0.225 } }], "interactionPoints": [] },
+
+    { "id": "traversal-connected-crate", "archetypeId": "prop.crate.standard", "groupId": "traversal-verification", "transform": { "position": { "x": 3.75, "y": 0.0, "z": -8.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+    { "id": "traversal-disconnected-crate", "archetypeId": "prop.crate.standard", "groupId": "traversal-verification", "transform": { "position": { "x": 7.0, "y": 0.0, "z": -8.0 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+
+    { "id": "yard-runner", "archetypeId": "vehicle.buggy.standard", "transform": { "position": { "x": -1.5, "y": 0.0, "z": -3.5 }, "yawDegrees": 0.0 }, "coverVolumes": [], "interactionPoints": [] },
+
+    { "id": "crate-warehouse-01", "archetypeId": "prop.crate.standard", "groupId": "toppling-verification", "transform": { "position": { "x": -9.0, "y": 0.0, "z": -7.5 }, "yawDegrees": 15.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
+    { "id": "crate-warehouse-02", "archetypeId": "prop.crate.standard", "groupId": "toppling-verification", "transform": { "position": { "x": -7.75, "y": 0.0, "z": -7.4 }, "yawDegrees": -12.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
+    { "id": "crate-warehouse-03", "archetypeId": "prop.crate.standard", "groupId": "toppling-verification", "transform": { "position": { "x": -8.35, "y": 0.95, "z": -7.45 }, "pitchDegrees": 1.5, "yawDegrees": 6.0, "rollDegrees": -2.5 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
+    { "id": "crate-warehouse-04", "archetypeId": "prop.crate.standard", "transform": { "position": { "x": -6.0, "y": 0.0, "z": -4.25 }, "yawDegrees": 30.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
+    { "id": "crate-warehouse-05", "archetypeId": "prop.crate.standard", "transform": { "position": { "x": -4.5, "y": 0.0, "z": 2.0 }, "yawDegrees": 90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
+    { "id": "crate-yard-01", "archetypeId": "prop.crate.standard", "groupId": "toppling-verification", "transform": { "position": { "x": -0.5, "y": 0.0, "z": -5.75 }, "yawDegrees": 15.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
+    { "id": "crate-yard-02", "archetypeId": "prop.crate.standard", "transform": { "position": { "x": 1.0, "y": 0.0, "z": -4.5 }, "yawDegrees": -30.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
+    { "id": "crate-exposure-demo", "archetypeId": "prop.crate.standard", "groupId": "toppling-verification", "transform": { "position": { "x": 3.15, "y": 0.0, "z": -4.4 }, "yawDegrees": 15.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
+    { "id": "crate-yard-03", "archetypeId": "prop.crate.standard", "transform": { "position": { "x": 2.75, "y": 0.0, "z": 2.0 }, "yawDegrees": 45.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
+    { "id": "crate-yard-04", "archetypeId": "prop.crate.standard", "transform": { "position": { "x": 0.5, "y": 0.0, "z": 5.75 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
+    { "id": "crate-workshop-01", "archetypeId": "prop.crate.standard", "transform": { "position": { "x": 8.75, "y": 0.0, "z": -7.5 }, "yawDegrees": 75.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
+    { "id": "crate-workshop-02", "archetypeId": "prop.crate.standard", "transform": { "position": { "x": 10.25, "y": 0.0, "z": -6.25 }, "yawDegrees": 90.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
+    { "id": "crate-deck-01", "archetypeId": "prop.crate.standard", "transform": { "position": { "x": 9.0, "y": 3.0, "z": 5.5 }, "yawDegrees": 15.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.14, "y": 0.48, "z": -0.32 }, "size": { "x": 1.08, "y": 0.95, "z": 1.46 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 10.0 } },
+
+    { "id": "barrel-warehouse-01", "archetypeId": "prop.barrel.metal", "transform": { "position": { "x": -10.0, "y": 0.0, "z": 1.5 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.0, "y": 0.55, "z": 0.0 }, "size": { "x": 0.9, "y": 1.1, "z": 0.9 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 8.0 } },
+    { "id": "barrel-warehouse-02", "archetypeId": "prop.barrel.metal", "transform": { "position": { "x": -8.75, "y": 0.0, "z": 1.75 }, "yawDegrees": 15.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.0, "y": 0.55, "z": 0.0 }, "size": { "x": 0.9, "y": 1.1, "z": 0.9 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 8.0 } },
+    { "id": "barrel-yard-01", "archetypeId": "prop.barrel.metal", "groupId": "toppling-verification", "transform": { "position": { "x": 0.0, "y": 0.0, "z": -8.75 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.0, "y": 0.55, "z": 0.0 }, "size": { "x": 0.9, "y": 1.1, "z": 0.9 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 8.0 } },
+    { "id": "barrel-yard-02", "archetypeId": "prop.barrel.metal", "groupId": "toppling-verification", "transform": { "position": { "x": -0.25, "y": 0.0, "z": -6.75 }, "yawDegrees": 30.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.0, "y": 0.55, "z": 0.0 }, "size": { "x": 0.9, "y": 1.1, "z": 0.9 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 8.0 } },
+    { "id": "barrel-yard-03", "archetypeId": "prop.barrel.metal", "transform": { "position": { "x": -0.75, "y": 0.0, "z": 2.75 }, "yawDegrees": -15.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.0, "y": 0.55, "z": 0.0 }, "size": { "x": 0.9, "y": 1.1, "z": 0.9 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 8.0 } },
+    { "id": "barrel-workshop-01", "archetypeId": "prop.barrel.metal", "transform": { "position": { "x": 7.25, "y": 0.0, "z": -3.5 }, "yawDegrees": 15.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.0, "y": 0.55, "z": 0.0 }, "size": { "x": 0.9, "y": 1.1, "z": 0.9 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 8.0 } },
+    { "id": "barrel-workshop-02", "archetypeId": "prop.barrel.metal", "transform": { "position": { "x": 8.5, "y": 0.0, "z": -3.25 }, "yawDegrees": -15.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.0, "y": 0.55, "z": 0.0 }, "size": { "x": 0.9, "y": 1.1, "z": 0.9 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 8.0 } },
+    { "id": "barrel-deck-01", "archetypeId": "prop.barrel.metal", "transform": { "position": { "x": 11.0, "y": 3.0, "z": 7.5 }, "yawDegrees": 0.0 }, "coverVolumes": [{ "id": "primary", "localCenter": { "x": 0.0, "y": 0.55, "z": 0.0 }, "size": { "x": 0.9, "y": 1.1, "z": 0.9 } }], "interactionPoints": [], "destructible": { "enabled": true, "initialState": "intact", "integrity": 8.0 } }
+  ],
+  "terrainSurfaces": [
+    {
+      "id": "depot-ground",
+      "origin": { "x": -16.0, "y": -0.15, "z": -14.0 },
+      "sampleCountX": 17,
+      "sampleCountZ": 15,
+      "sampleSpacing": 2.0,
+      "minimumElevation": 0.0,
+      "elevationIncrement": 0.1,
+      "appearance": {
+        "presetId": "concrete",
+        "baseColor": { "r": 0.34, "g": 0.36, "b": 0.38, "a": 1.0 },
+        "steepColor": { "r": 0.24, "g": 0.26, "b": 0.29, "a": 1.0 },
+        "slopeBlendStartDegrees": 34.0,
+        "slopeBlendEndDegrees": 62.0,
+        "smoothness": 0.08,
+        "specularStrength": 0.025
+      },
+      "heightSamples": [
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+      ]
+    }
+  ],
+  "traversalLinks": [
+    {
+      "id": "jump.connected-crate",
+      "actionId": "traversal.jump",
+      "kind": "jump",
+      "takeoff": { "x": 2.75, "y": 0.02, "z": -8.0 },
+      "landing": { "x": 4.75, "y": 0.02, "z": -8.0 },
+      "bidirectional": true,
+      "activationRadius": 0.45,
+      "movementCost": 2.25,
+      "actionPointCost": 0,
+      "arcHeight": 1.25,
+      "playbackDurationSeconds": 0.75,
+      "clearancePadding": 0.04
+    }
+  ],
+  "scenario": {
+    "randomSeed": 12648430,
+    "minimumVoluntaryTurnSeconds": 1.25,
+    "actors": [
+      {
+        "id": "player",
+        "templateId": "player",
+        "transform": {
+          "position": { "x": 1.25, "y": 2.0, "z": -8.75 },
+          "yawDegrees": 0.0
+        },
+        "playerControlled": true,
+        "initiallySelected": true,
+        "primaryTarget": false
+      },
+      {
+        "id": "oren-vale",
+        "templateId": "oren-vale",
+        "transform": {
+          "position": { "x": -1.0, "y": 2.0, "z": -8.75 },
+          "yawDegrees": 0.0
+        },
+        "playerControlled": true,
+        "initiallySelected": false,
+        "primaryTarget": false
+      },
+      {
+        "id": "depot-rifleman",
+        "templateId": "depot-rifleman",
+        "transform": {
+          "position": { "x": 5.0, "y": 2.0, "z": 0.0 },
+          "yawDegrees": 180.0
+        },
+        "playerControlled": false,
+        "initiallySelected": false,
+        "primaryTarget": true
+      }
+    ],
+    "objectives": [
+      {
+        "id": "raised-deck",
+        "entityId": "deck-floor-r02-c03",
+        "interactionPointId": "raised-deck",
+        "actionId": "secure-raised-deck",
+        "displayName": "Secure raised deck",
+        "activeHudText": "REACH THE RAISED DECK AND INTERACT",
+        "completedHudText": "RAISED DECK SECURED",
+        "actionPointCost": 1,
+        "movementOpportunityCost": 1.0,
+        "mobility": "set"
+      }
+    ],
+    "props": [
+      {
+        "entityId": "crate-exposure-demo",
+        "mass": 35.0,
+        "sizeClass": "medium",
+        "startsEncounterOnAttack": false,
+        "toppling": {
+          "enabled": true,
+          "pitchOffsetDegrees": 0.0,
+          "rollOffsetDegrees": 90.0,
+          "elevationOffset": 0.5
+        },
+        "pinning": {
+          "enabled": true,
+          "maximumActorMass": 90.0,
+          "minimumContactDepth": 0.0
+        }
+      },
+      {
+        "entityId": "barrel-yard-01",
+        "mass": 28.0,
+        "sizeClass": "medium",
+        "startsEncounterOnAttack": false,
+        "toppling": {
+          "enabled": true,
+          "pitchOffsetDegrees": 90.0,
+          "rollOffsetDegrees": 0.0,
+          "elevationOffset": 0.55
+        },
+        "pinning": {
+          "enabled": true,
+          "maximumActorMass": 90.0,
+          "minimumContactDepth": 0.0
+        }
+      },
+      {
+        "entityId": "barrel-yard-02",
+        "mass": 28.0,
+        "sizeClass": "medium",
+        "startsEncounterOnAttack": false,
+        "toppling": {
+          "enabled": true,
+          "pitchOffsetDegrees": 90.0,
+          "rollOffsetDegrees": 0.0,
+          "elevationOffset": 0.55
+        },
+        "pinning": {
+          "enabled": true,
+          "maximumActorMass": 90.0,
+          "minimumContactDepth": 0.0
+        }
+      },
+      {
+        "entityId": "crate-yard-01",
+        "mass": 35.0,
+        "sizeClass": "medium",
+        "startsEncounterOnAttack": false,
+        "toppling": {
+          "enabled": true,
+          "pitchOffsetDegrees": 0.0,
+          "rollOffsetDegrees": 90.0,
+          "elevationOffset": 0.5
+        },
+        "pinning": {
+          "enabled": true,
+          "maximumActorMass": 90.0,
+          "minimumContactDepth": 0.0
+        }
+      },
+      {
+        "entityId": "crate-warehouse-01",
+        "mass": 35.0,
+        "sizeClass": "medium",
+        "startsEncounterOnAttack": false,
+        "toppling": {
+          "enabled": true,
+          "pitchOffsetDegrees": 0.0,
+          "rollOffsetDegrees": 90.0,
+          "elevationOffset": 0.5
+        },
+        "pinning": {
+          "enabled": true,
+          "maximumActorMass": 90.0,
+          "minimumContactDepth": 0.0
+        }
+      },
+      {
+        "entityId": "crate-warehouse-02",
+        "mass": 35.0,
+        "sizeClass": "medium",
+        "startsEncounterOnAttack": false,
+        "toppling": {
+          "enabled": true,
+          "pitchOffsetDegrees": 0.0,
+          "rollOffsetDegrees": 90.0,
+          "elevationOffset": 0.5
+        },
+        "pinning": {
+          "enabled": true,
+          "maximumActorMass": 90.0,
+          "minimumContactDepth": 0.0
+        }
+      },
+      {
+        "entityId": "crate-warehouse-03",
+        "mass": 35.0,
+        "sizeClass": "medium",
+        "startsEncounterOnAttack": false,
+        "toppling": {
+          "enabled": true,
+          "pitchOffsetDegrees": 0.0,
+          "rollOffsetDegrees": 90.0,
+          "elevationOffset": 0.5
+        },
+        "pinning": {
+          "enabled": true,
+          "maximumActorMass": 90.0,
+          "minimumContactDepth": 0.0
+        }
+      }
+    ],
+    "vehicles": [
+      {
+        "entityId": "yard-runner",
+        "maximumSpeed": 10.0,
+        "accelerationPerTurn": 4.0,
+        "brakingPerTurn": 2.0,
+        "lowSpeedTurnDegrees": 75.0,
+        "highSpeedTurnDegrees": 25.0,
+        "baseTurningRadius": 0.6,
+        "speedTurningRadiusFactor": 0.16,
+        "startingSpeed": 4.0,
+        "startingOccupantActorId": "",
+        "startsEncounterOnAttack": false
+      }
+    ]
+  }
+}

@@ -11,6 +11,7 @@ namespace GritGud.Application.Gameplay
         TurnModeRequired,
         ActorNotActive,
         ActorIncapacitated,
+        ActorPinned,
         OperationInProgress,
         AttackUnavailable,
         TargetNotFound,
@@ -18,6 +19,7 @@ namespace GritGud.Application.Gameplay
         ExposureMismatch,
         TargetRequired,
         TargetOutOfReach,
+        WorldStateChanged,
         InsufficientActionPoints,
         InsufficientMovementOpportunity,
     }
@@ -25,6 +27,7 @@ namespace GritGud.Application.Gameplay
     public sealed class GameplayAttackSession
     {
         private readonly GameplaySession gameplay;
+        private readonly DestructiblePropSession destructibles;
         private readonly uint scenarioSeed;
         private readonly List<AttackResolutionRecord> records =
             new List<AttackResolutionRecord>();
@@ -36,11 +39,20 @@ namespace GritGud.Application.Gameplay
 
         public GameplayAttackSession(
             GameplaySession gameplaySession,
-            uint authoredScenarioSeed)
+            uint authoredScenarioSeed,
+            DestructiblePropSession destructibleSession = null)
         {
             gameplay = gameplaySession ??
                 throw new ArgumentNullException(nameof(gameplaySession));
             scenarioSeed = authoredScenarioSeed;
+            destructibles = destructibleSession;
+            if (destructibles != null
+                && !ReferenceEquals(gameplay.Journal, destructibles.Journal))
+            {
+                throw new ArgumentException(
+                    "Direct-fire attacks and destructibles must share one gameplay journal.",
+                    nameof(destructibleSession));
+            }
             readOnlyRecords = records.AsReadOnly();
             readOnlyDischarges = discharges.AsReadOnly();
         }
@@ -69,12 +81,20 @@ namespace GritGud.Application.Gameplay
         public AttackResolutionFailure EvaluateDischarge(
             string actorId,
             string targetId,
-            GameplayPosition aimPoint)
+            GameplayPosition aimPoint) =>
+            EvaluateDischarge(actorId, targetId, aimPoint, impact: null);
+
+        public AttackResolutionFailure EvaluateDischarge(
+            string actorId,
+            string targetId,
+            GameplayPosition aimPoint,
+            DirectFireImpactRecord impact)
         {
             return TryPrepareDischarge(
                 actorId,
                 targetId,
                 aimPoint,
+                impact,
                 out _,
                 out _,
                 out _,
@@ -90,6 +110,24 @@ namespace GritGud.Application.Gameplay
             out AttackResolutionFailure failure)
         {
             action = null;
+            if (!TryPrepareResolve(
+                    actorId,
+                    exposure,
+                    out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                    out failure))
+                return false;
+            action = prepared.Record;
+            CommitPrepared(prepared);
+            return true;
+        }
+
+        public bool TryPrepareResolve(
+            string actorId,
+            TargetExposureSnapshot exposure,
+            out GameplayPreparedTransition<GameplayActionRecord> prepared,
+            out AttackResolutionFailure failure)
+        {
+            prepared = null;
             if (!TryPrepare(
                     actorId,
                     exposure,
@@ -102,6 +140,7 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
+            GameplayCombatStateSnapshot previous = CaptureCombatState();
             long attackSequence = records.Count + 1L;
             uint resolutionSeed = AttackResolutionRules.DeriveResolutionSeed(
                 scenarioSeed,
@@ -119,7 +158,7 @@ namespace GritGud.Application.Gameplay
             long actionSequence = gameplay.LastResolvedAction == null
                 ? 1L
                 : gameplay.LastResolvedAction.Sequence + 1L;
-            action = new GameplayActionRecord(
+            var action = new GameplayActionRecord(
                 actionSequence,
                 new GameplayActionRequest(
                     actorId,
@@ -129,7 +168,10 @@ namespace GritGud.Application.Gameplay
                 actor.TurnBudget,
                 resultingBudget,
                 new[] { new AttackResolvedActionOutcome(resolution) });
-            Commit(action);
+            prepared = new GameplayPreparedTransition<GameplayActionRecord>(
+                action,
+                previous,
+                GameplayWeaponActionStateProjector.Project(previous, action));
             failure = AttackResolutionFailure.None;
             return true;
         }
@@ -151,6 +193,21 @@ namespace GritGud.Application.Gameplay
             string targetId,
             GameplayPosition aimPoint,
             out GameplayActionRecord action,
+            out AttackResolutionFailure failure) =>
+            TryDischarge(
+                actorId,
+                targetId,
+                aimPoint,
+                impact: null,
+                out action,
+                out failure);
+
+        public bool TryDischarge(
+            string actorId,
+            string targetId,
+            GameplayPosition aimPoint,
+            DirectFireImpactRecord impact,
+            out GameplayActionRecord action,
             out AttackResolutionFailure failure)
         {
             action = null;
@@ -158,6 +215,43 @@ namespace GritGud.Application.Gameplay
                     actorId,
                     targetId,
                     aimPoint,
+                    impact,
+                    out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                    out failure))
+                return false;
+            action = prepared.Record;
+            CommitPrepared(prepared);
+            return true;
+        }
+
+        public bool TryPrepareDischarge(
+            string actorId,
+            string targetId,
+            GameplayPosition aimPoint,
+            out GameplayPreparedTransition<GameplayActionRecord> prepared,
+            out AttackResolutionFailure failure) =>
+            TryPrepareDischarge(
+                actorId,
+                targetId,
+                aimPoint,
+                impact: null,
+                out prepared,
+                out failure);
+
+        public bool TryPrepareDischarge(
+            string actorId,
+            string targetId,
+            GameplayPosition aimPoint,
+            DirectFireImpactRecord impact,
+            out GameplayPreparedTransition<GameplayActionRecord> prepared,
+            out AttackResolutionFailure failure)
+        {
+            prepared = null;
+            if (!TryPrepareDischarge(
+                    actorId,
+                    targetId,
+                    aimPoint,
+                    impact,
                     out AttackDefinition attack,
                     out GameplayActorSnapshot actor,
                     out ActionCost cost,
@@ -166,18 +260,25 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
+            GameplayCombatStateSnapshot previous = CaptureCombatState();
+            DestructibleDamageRecord damage = PrepareDirectFireDamage(
+                attack,
+                targetId,
+                impact);
             var discharge = new WeaponDischargeRecord(
                 discharges.Count + 1L,
                 actorId,
                 attack.ActionId,
                 targetId,
                 actor.Pose.Position,
-                aimPoint);
+                aimPoint,
+                impact,
+                damage);
             TurnBudget resultingBudget = actor.TurnBudget.SpendAction(cost);
             long actionSequence = gameplay.LastResolvedAction == null
                 ? 1L
                 : gameplay.LastResolvedAction.Sequence + 1L;
-            action = new GameplayActionRecord(
+            var action = new GameplayActionRecord(
                 actionSequence,
                 new GameplayActionRequest(
                     actorId,
@@ -187,10 +288,20 @@ namespace GritGud.Application.Gameplay
                 actor.TurnBudget,
                 resultingBudget,
                 new[] { new WeaponDischargedActionOutcome(discharge) });
-            Commit(action);
+            prepared = new GameplayPreparedTransition<GameplayActionRecord>(
+                action,
+                previous,
+                GameplayWeaponActionStateProjector.Project(previous, action));
             failure = AttackResolutionFailure.None;
             return true;
         }
+
+        public GameplayTransitionCommitResult CommitPrepared(
+            GameplayPreparedTransition<GameplayActionRecord> prepared) =>
+            GameplayTransitionCoordinator.Commit(
+                prepared,
+                CaptureCombatState,
+                Commit);
 
         public void Commit(GameplayActionRecord action)
         {
@@ -237,8 +348,10 @@ namespace GritGud.Application.Gameplay
                     "The attack seed does not match its scenario stream.");
             }
 
-            gameplay.CommitAction(action);
+            var notifications = new GameplayNotificationBatch();
+            gameplay.CommitAction(action, notifications);
             records.Add(attack);
+            notifications.Publish();
         }
 
         private void CommitDischarge(
@@ -252,9 +365,53 @@ namespace GritGud.Application.Gameplay
                     "The discharge is not the next authoritative discharge sequence.");
             }
 
-            gameplay.CommitAction(action);
+            var notifications = new GameplayNotificationBatch();
+            if (discharge.Damage != null)
+            {
+                if (destructibles == null)
+                {
+                    throw new InvalidOperationException(
+                        "Direct-fire prop damage requires a destructible session.");
+                }
+
+                destructibles.ValidateDamage(discharge.Damage);
+            }
+            gameplay.CommitAction(action, notifications);
+            if (discharge.Damage != null)
+            {
+                destructibles.CommitDamage(discharge.Damage, notifications);
+            }
             discharges.Add(discharge);
+            notifications.Publish();
         }
+
+        private DestructibleDamageRecord PrepareDirectFireDamage(
+            AttackDefinition attack,
+            string targetId,
+            DirectFireImpactRecord impact)
+        {
+            if (destructibles == null
+                || impact == null
+                || attack.DirectFireDamage == null
+                || !destructibles.TryGetProp(targetId, out _))
+            {
+                return null;
+            }
+
+            float requestedDamage = attack.DirectFireDamage
+                .EvaluateIntegrityDamage(impact.SurfaceId);
+            return requestedDamage > 0f
+                && destructibles.TryPrepareDamage(
+                    targetId,
+                    requestedDamage,
+                    impact.PreferredFractureChunkIndex,
+                    out DestructibleDamageRecord damage)
+                ? damage
+                : null;
+        }
+
+        private GameplayCombatStateSnapshot CaptureCombatState() =>
+            GameplayCombatStateCapture.Capture(gameplay, destructibles);
 
         private bool TryPrepare(
             string actorId,
@@ -353,6 +510,11 @@ namespace GritGud.Application.Gameplay
                 failure = AttackResolutionFailure.ActorIncapacitated;
                 return false;
             }
+            if (actor.IsPinned)
+            {
+                failure = AttackResolutionFailure.ActorPinned;
+                return false;
+            }
 
             if (startsEncounter
                 && !gameplay.EncounterActive
@@ -397,6 +559,7 @@ namespace GritGud.Application.Gameplay
             string actorId,
             string targetId,
             GameplayPosition aimPoint,
+            DirectFireImpactRecord impact,
             out AttackDefinition attack,
             out GameplayActorSnapshot actor,
             out ActionCost cost,
@@ -408,6 +571,25 @@ namespace GritGud.Application.Gameplay
             if (string.IsNullOrWhiteSpace(targetId))
             {
                 failure = AttackResolutionFailure.TargetNotFound;
+                return false;
+            }
+
+            if (impact != null
+                && (!string.Equals(
+                        impact.TargetId,
+                        targetId,
+                        StringComparison.Ordinal)
+                    || impact.Point.DistanceTo(aimPoint) > 0.0001f))
+            {
+                failure = AttackResolutionFailure.TargetNotFound;
+                return false;
+            }
+
+            long currentRevision = gameplay.Journal.LastEntry?.Sequence ?? 0L;
+            if (impact != null
+                && impact.WorldStateRevision != currentRevision)
+            {
+                failure = AttackResolutionFailure.WorldStateChanged;
                 return false;
             }
 

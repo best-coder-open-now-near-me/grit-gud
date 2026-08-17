@@ -45,6 +45,9 @@ namespace GritGud.Presentation.Levels.Runtime
         private readonly Dictionary<string, TerrainSurfaceView> surfaces =
             new Dictionary<string, TerrainSurfaceView>(StringComparer.Ordinal);
         private GameObject root;
+        private bool slopeDiagnosticsEnabled;
+        private float diagnosticMaximumSlopeDegrees =
+            LevelPlayabilityAnalyzer.DefaultMaximumWalkableSlopeDegrees;
 
         public event Action<TerrainNavigationInvalidation> NavigationInvalidated;
 
@@ -60,13 +63,51 @@ namespace GritGud.Presentation.Levels.Runtime
                 throw new ArgumentNullException(nameof(document));
             }
 
-            DisposeRoot();
-            root = new GameObject("Terrain Surfaces");
-            root.transform.SetParent(parent, false);
-            foreach (TerrainSurfaceData surface in document.terrainSurfaces)
+            var replacementRoot = new GameObject("Terrain Surfaces");
+            replacementRoot.SetActive(false);
+            replacementRoot.transform.SetParent(parent, false);
+            var replacementSurfaces = new Dictionary<string, TerrainSurfaceView>(
+                StringComparer.Ordinal);
+            try
             {
-                surfaces.Add(surface.id, new TerrainSurfaceView(surface, root.transform));
+                foreach (TerrainSurfaceData surface in document.terrainSurfaces)
+                {
+                    if (replacementSurfaces.ContainsKey(surface.id))
+                    {
+                        throw new InvalidOperationException(
+                            $"Terrain surface ID '{surface.id}' is duplicated.");
+                    }
+
+                    replacementSurfaces.Add(
+                        surface.id,
+                        new TerrainSurfaceView(
+                            surface,
+                            replacementRoot.transform,
+                            slopeDiagnosticsEnabled,
+                            diagnosticMaximumSlopeDegrees));
+                }
             }
+            catch
+            {
+                DisposeSurfaces(replacementSurfaces.Values);
+                Destroy(replacementRoot);
+                throw;
+            }
+
+            bool replacementVisible = root == null || root.activeSelf;
+            GameObject previousRoot = root;
+            TerrainSurfaceView[] previousSurfaces = surfaces.Values.ToArray();
+            previousRoot?.SetActive(false);
+            root = replacementRoot;
+            surfaces.Clear();
+            foreach (KeyValuePair<string, TerrainSurfaceView> pair in replacementSurfaces)
+            {
+                surfaces.Add(pair.Key, pair.Value);
+            }
+
+            root.SetActive(replacementVisible);
+            DisposeSurfaces(previousSurfaces);
+            Destroy(previousRoot);
         }
 
         public void SetVisible(bool visible)
@@ -75,6 +116,21 @@ namespace GritGud.Presentation.Levels.Runtime
             {
                 root.SetActive(visible);
             }
+        }
+
+        public void SetSlopeDiagnostics(bool enabled, float maximumSlopeDegrees)
+        {
+            if (float.IsNaN(maximumSlopeDegrees)
+                || float.IsInfinity(maximumSlopeDegrees)
+                || maximumSlopeDegrees <= 0f
+                || maximumSlopeDegrees >= 90f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(maximumSlopeDegrees));
+            }
+            slopeDiagnosticsEnabled = enabled;
+            diagnosticMaximumSlopeDegrees = maximumSlopeDegrees;
+            foreach (TerrainSurfaceView surface in surfaces.Values)
+                surface.ApplyDiagnostics(enabled, maximumSlopeDegrees);
         }
 
         public void Apply(LevelDocument document, LevelSessionChangedEventArgs change)
@@ -86,33 +142,75 @@ namespace GritGud.Presentation.Levels.Runtime
                 return;
             }
 
-            if (!(change.Command is ITerrainLevelEditCommand terrainChange))
+            ITerrainLevelEditCommand[] terrainChanges = EnumerateTerrainChanges(
+                    change.Command)
+                .ToArray();
+            ITerrainAppearanceEditCommand[] appearanceChanges =
+                EnumerateTerrainAppearanceChanges(change.Command).ToArray();
+            if (terrainChanges.Length == 0 && appearanceChanges.Length == 0)
             {
                 return;
             }
 
-            TerrainSurfaceData surface = document.terrainSurfaces.FirstOrDefault(candidate =>
-                string.Equals(candidate?.id, terrainChange.SurfaceId, StringComparison.Ordinal));
-            if (surface == null || !surfaces.TryGetValue(terrainChange.SurfaceId, out TerrainSurfaceView view))
+            foreach (ITerrainAppearanceEditCommand appearanceChange in appearanceChanges)
             {
-                Replace(document);
-                NavigationInvalidated?.Invoke(TerrainNavigationInvalidation.FullRefresh);
-                return;
+                TerrainSurfaceData surface = document.terrainSurfaces.FirstOrDefault(candidate =>
+                    string.Equals(
+                        candidate?.id,
+                        appearanceChange.SurfaceId,
+                        StringComparison.Ordinal));
+                if (surface == null
+                    || !surfaces.TryGetValue(
+                        appearanceChange.SurfaceId,
+                        out TerrainSurfaceView view))
+                {
+                    Replace(document);
+                    NavigationInvalidated?.Invoke(TerrainNavigationInvalidation.FullRefresh);
+                    return;
+                }
+                view.ApplyAppearance(surface.appearance);
             }
 
-            view.ApplyPatch(
-                surface,
-                terrainChange.StartX,
-                terrainChange.StartZ,
-                terrainChange.Width,
-                terrainChange.Depth);
-            NavigationInvalidated?.Invoke(new TerrainNavigationInvalidation(
-                terrainChange.SurfaceId,
-                terrainChange.StartX,
-                terrainChange.StartZ,
-                terrainChange.Width,
-                terrainChange.Depth,
-                false));
+            var projections = new List<(ITerrainLevelEditCommand Change,
+                TerrainSurfaceData Surface, TerrainSurfaceView View)>(terrainChanges.Length);
+            foreach (ITerrainLevelEditCommand terrainChange in terrainChanges)
+            {
+                TerrainSurfaceData surface = document.terrainSurfaces.FirstOrDefault(candidate =>
+                    string.Equals(candidate?.id, terrainChange.SurfaceId, StringComparison.Ordinal));
+                if (surface == null
+                    || !surfaces.TryGetValue(
+                        terrainChange.SurfaceId,
+                        out TerrainSurfaceView view))
+                {
+                    Replace(document);
+                    NavigationInvalidated?.Invoke(TerrainNavigationInvalidation.FullRefresh);
+                    return;
+                }
+
+                projections.Add((terrainChange, surface, view));
+            }
+
+            foreach ((ITerrainLevelEditCommand terrainChange,
+                         TerrainSurfaceData surface,
+                         TerrainSurfaceView view) in projections)
+            {
+                view.ApplyPatch(
+                    surface,
+                    terrainChange.StartX,
+                    terrainChange.StartZ,
+                    terrainChange.Width,
+                    terrainChange.Depth);
+                if (terrainChange.AffectsNavigation)
+                {
+                    NavigationInvalidated?.Invoke(new TerrainNavigationInvalidation(
+                        terrainChange.SurfaceId,
+                        terrainChange.StartX,
+                        terrainChange.StartZ,
+                        terrainChange.Width,
+                        terrainChange.Depth,
+                        false));
+                }
+            }
         }
 
         public void PreviewPatch(
@@ -144,14 +242,59 @@ namespace GritGud.Presentation.Levels.Runtime
 
         private void DisposeRoot()
         {
-            foreach (TerrainSurfaceView surface in surfaces.Values)
-            {
-                surface.Dispose();
-            }
+            root?.SetActive(false);
+            DisposeSurfaces(surfaces.Values);
 
             surfaces.Clear();
             Destroy(root);
             root = null;
+        }
+
+        private static IEnumerable<ITerrainLevelEditCommand> EnumerateTerrainChanges(
+            ILevelEditCommand command)
+        {
+            if (command is ITerrainLevelEditCommand terrainChange)
+            {
+                yield return terrainChange;
+            }
+
+            if (!(command is ILevelEditCommandGroup group))
+            {
+                yield break;
+            }
+
+            foreach (ILevelEditCommand child in group.Commands)
+            {
+                foreach (ITerrainLevelEditCommand nested in EnumerateTerrainChanges(child))
+                {
+                    yield return nested;
+                }
+            }
+        }
+
+        private static IEnumerable<ITerrainAppearanceEditCommand>
+            EnumerateTerrainAppearanceChanges(ILevelEditCommand command)
+        {
+            if (command is ITerrainAppearanceEditCommand appearanceChange)
+                yield return appearanceChange;
+            if (!(command is ILevelEditCommandGroup group))
+                yield break;
+            foreach (ILevelEditCommand child in group.Commands)
+            {
+                foreach (ITerrainAppearanceEditCommand nested in
+                    EnumerateTerrainAppearanceChanges(child))
+                {
+                    yield return nested;
+                }
+            }
+        }
+
+        private static void DisposeSurfaces(IEnumerable<TerrainSurfaceView> values)
+        {
+            foreach (TerrainSurfaceView surface in values)
+            {
+                surface.Dispose();
+            }
         }
 
         private static void Destroy(Object target)
@@ -178,14 +321,31 @@ namespace GritGud.Presentation.Levels.Runtime
             private readonly Dictionary<Vector2Int, TerrainChunkView> chunks =
                 new Dictionary<Vector2Int, TerrainChunkView>();
 
-            public TerrainSurfaceView(TerrainSurfaceData surface, Transform parent)
+            public TerrainSurfaceView(
+                TerrainSurfaceData surface,
+                Transform parent,
+                bool diagnosticsEnabled,
+                float maximumSlopeDegrees)
             {
                 root = new GameObject($"Terrain - {surface.id}");
                 root.transform.SetParent(parent, false);
-                material = RuntimeMaterialFactory.CreateCelColor(
-                    new Color(0.18f, 0.24f, 0.27f),
-                    "Terrain Surface Material");
-                RebuildAll(surface);
+                material = null;
+                try
+                {
+                    material = RuntimeMaterialFactory.CreateCelColor(
+                        ToColor(surface.appearance?.baseColor
+                            ?? new TerrainAppearanceData().baseColor),
+                        "Terrain Surface Material");
+                    ApplyAppearance(surface.appearance);
+                    ApplyDiagnostics(diagnosticsEnabled, maximumSlopeDegrees);
+                    RebuildAll(surface);
+                }
+                catch
+                {
+                    Dispose();
+                    Destroy(root);
+                    throw;
+                }
             }
 
             public void ApplyPatch(
@@ -210,6 +370,41 @@ namespace GritGud.Presentation.Levels.Runtime
                         RebuildChunk(surface, chunkX, chunkZ);
                     }
                 }
+            }
+
+            public void ApplyAppearance(TerrainAppearanceData value)
+            {
+                if (material == null)
+                    return;
+                TerrainAppearanceData appearance = value ?? new TerrainAppearanceData();
+                Color baseColor = ToColor(appearance.baseColor);
+                material.color = baseColor;
+                SetColor(material, "_BaseColor", baseColor);
+                SetColor(material, "_Color", baseColor);
+                SetColor(material, "_SteepColor", ToColor(appearance.steepColor));
+                SetFloat(material, "_TerrainSlopeEnabled", 1f);
+                SetFloat(material, "_TerrainVertexColorEnabled", 1f);
+                SetFloat(
+                    material,
+                    "_SlopeBlendStartCos",
+                    Mathf.Cos(appearance.slopeBlendStartDegrees * Mathf.Deg2Rad));
+                SetFloat(
+                    material,
+                    "_SlopeBlendEndCos",
+                    Mathf.Cos(appearance.slopeBlendEndDegrees * Mathf.Deg2Rad));
+                SetFloat(material, "_Smoothness", appearance.smoothness);
+                SetFloat(material, "_SpecularStrength", appearance.specularStrength);
+            }
+
+            public void ApplyDiagnostics(bool enabled, float maximumSlopeDegrees)
+            {
+                if (material == null)
+                    return;
+                SetFloat(material, "_TerrainDiagnosticsEnabled", enabled ? 1f : 0f);
+                SetFloat(
+                    material,
+                    "_DiagnosticSlopeCos",
+                    Mathf.Cos(maximumSlopeDegrees * Mathf.Deg2Rad));
             }
 
             public void Dispose()
@@ -251,6 +446,21 @@ namespace GritGud.Presentation.Levels.Runtime
                 }
 
                 chunk.ReplaceMesh(TerrainMeshBuilder.BuildChunk(surface, chunkX, chunkZ, ChunkQuadSize));
+            }
+
+            private static Color ToColor(FloatColorData value) =>
+                new Color(value.r, value.g, value.b, value.a);
+
+            private static void SetColor(Material target, string property, Color value)
+            {
+                if (target.HasProperty(property))
+                    target.SetColor(property, value);
+            }
+
+            private static void SetFloat(Material target, string property, float value)
+            {
+                if (target.HasProperty(property))
+                    target.SetFloat(property, value);
             }
         }
 

@@ -74,6 +74,7 @@ namespace GritGud.Presentation.Gameplay
         private ConsumablePresentationCatalog presentationCatalog;
         private float insideOverlayAlpha;
         private Color insideOverlayColor;
+        private bool replayPresenting;
 
         internal int ActiveVisualCount => visuals.Count;
 
@@ -111,13 +112,45 @@ namespace GritGud.Presentation.Gameplay
             smokeFields = null;
             presentationCatalog = null;
             insideOverlayAlpha = 0f;
+            replayPresenting = false;
             enabled = false;
+        }
+
+        internal void BeginReplayPresentation()
+        {
+            if (smokeFields == null)
+                throw new InvalidOperationException(
+                    "Bind smoke fields before replay presentation.");
+            replayPresenting = true;
+            ReplaceVisuals(Array.Empty<SmokeFieldSnapshot>());
+        }
+
+        internal void PresentReplay(IReadOnlyList<SmokeFieldSnapshot> snapshots)
+        {
+            if (!replayPresenting)
+                throw new InvalidOperationException(
+                    "Begin smoke replay presentation before sampling it.");
+            SynchronizeVisuals(snapshots ?? throw new ArgumentNullException(
+                nameof(snapshots)));
+        }
+
+        internal void EndReplayPresentation()
+        {
+            if (!replayPresenting) return;
+            replayPresenting = false;
+            ReplaceVisuals(smokeFields.CaptureActiveFields());
         }
 
         private void Update()
         {
             if (smokeFields == null)
                 return;
+
+            if (replayPresenting)
+            {
+                UpdateCameraInterior(Camera.main);
+                return;
+            }
 
             smokeFields.AdvanceContinuousTime(Time.unscaledDeltaTime);
             UpdateFades(Time.unscaledDeltaTime);
@@ -226,6 +259,39 @@ namespace GritGud.Presentation.Gameplay
             if (activateImmediately)
                 PlayParticles(systems);
             visuals.Add(field.Id, visual);
+        }
+
+        private void ReplaceVisuals(IReadOnlyList<SmokeFieldSnapshot> snapshots)
+        {
+            foreach (SmokeVisual visual in visuals.Values)
+                GameplayObjectLifecycle.Destroy(visual.Root);
+            visuals.Clear();
+            completedFades.Clear();
+            foreach (SmokeFieldSnapshot snapshot in snapshots)
+                CreateVisual(snapshot.Field);
+            insideOverlayAlpha = 0f;
+        }
+
+        private void SynchronizeVisuals(
+            IReadOnlyList<SmokeFieldSnapshot> snapshots)
+        {
+            var retained = new HashSet<string>(StringComparer.Ordinal);
+            foreach (SmokeFieldSnapshot snapshot in snapshots)
+            {
+                retained.Add(snapshot.Field.Id);
+                if (!visuals.ContainsKey(snapshot.Field.Id))
+                    CreateVisual(snapshot.Field);
+            }
+            completedFades.Clear();
+            foreach (string fieldId in visuals.Keys)
+                if (!retained.Contains(fieldId)) completedFades.Add(fieldId);
+            foreach (string fieldId in completedFades)
+            {
+                GameplayObjectLifecycle.Destroy(visuals[fieldId].Root);
+                visuals.Remove(fieldId);
+            }
+            completedFades.Clear();
+            insideOverlayAlpha = 0f;
         }
 
         internal static void ConfigureParticleSystems(

@@ -13,6 +13,7 @@ namespace GritGud.Presentation.Gameplay
         IGameplayConsumablePowerHandler
     {
         private const int CircleSegments = 64;
+        private const int TrajectorySegments = 32;
         private GameplayThrownExplosiveSession throws;
         private GameplayWorldRegistry registry;
         private string actorId;
@@ -26,8 +27,11 @@ namespace GritGud.Presentation.Gameplay
         private ThrownExplosivePresentationDefinition aimedPresentation;
         private LineRenderer uncertaintyCircle;
         private LineRenderer blastCircle;
+        private LineRenderer trajectoryLine;
         private Material uncertaintyMaterial;
         private Material blastMaterial;
+        private Material trajectoryMaterial;
+        private GameObject armedProjectileRoot;
         private GameObject playbackRoot;
         private GameObject impactRoot;
 
@@ -122,6 +126,7 @@ namespace GritGud.Presentation.Gameplay
             StopAllCoroutines();
             ClearPlayback();
             CancelAim();
+            ClearAimFeedback();
             Session = null;
             throws = null;
             registry = null;
@@ -206,6 +211,7 @@ namespace GritGud.Presentation.Gameplay
                     aimedItemId = null;
                     aimedPresentation = null;
                     HideAimPreview();
+                    ClearAimFeedback();
                 }
                 return false;
             }
@@ -230,10 +236,14 @@ namespace GritGud.Presentation.Gameplay
             LastThrow = ((ThrownExplosiveActionOutcome)action.Outcomes[0]).Record;
             SynchronizeAuthoritativeFacing();
             animationCoordinator?.TryPresentThrow();
-            PresentThrow(LastThrow);
+            Vector3 visualLaunchOrigin = armedProjectileRoot != null
+                ? armedProjectileRoot.transform.position
+                : ToVector3(LastThrow.LaunchOrigin);
+            PresentThrow(LastThrow, visualLaunchOrigin);
             HideAimPreview();
             aimedItemId = null;
             aimedPresentation = null;
+            ClearAimFeedback();
             int exposedTargetCount = CountExposedTargets(
                 LastThrow.BlastEffects);
             StatusMessage = LastThrow.SmokeField != null
@@ -274,6 +284,7 @@ namespace GritGud.Presentation.Gameplay
             aimedItemId = null;
             aimedPresentation = null;
             HideAimPreview();
+            ClearAimFeedback();
             StatusMessage = "Throw canceled.";
             return true;
         }
@@ -297,7 +308,9 @@ namespace GritGud.Presentation.Gameplay
 
             aimedPresentation = presentationCatalog.GetThrownExplosive(itemId);
             aimedItemId = itemId;
+            acquisition.SetFeedbackSuppressed(this, true);
             EnsureAimPreview(aimedPresentation);
+            PresentArmedProjectile(aimedPresentation);
             RefreshAimPreview();
             StatusMessage = "AIMING " + item.DisplayName.ToUpperInvariant()
                 + " - LMB THROW; PRESS ITS BUTTON/HOTKEY AGAIN OR ESC TO CANCEL";
@@ -306,15 +319,24 @@ namespace GritGud.Presentation.Gameplay
 
         private void RefreshAimPreview()
         {
+            InventoryItemDefinition item = Session.GetInventoryItem(
+                actorId,
+                aimedItemId);
+            var thrownExplosive =
+                (ThrownExplosiveDefinition)item.ConsumablePower;
             if (!TryGetAimPoint(out GameplayPosition aimPoint))
             {
-                HideAimPreview();
+                HideAimPreview(clearArmedProjectile: false);
+                acquisition.PresentValidationFeedback(
+                    this,
+                    targetId: null,
+                    targetRoot: null,
+                    isValid: false,
+                    $"INVALID LANDING - AIM AT GROUND WITHIN "
+                        + $"{thrownExplosive.MaximumRange:0.#} M");
                 return;
             }
 
-            InventoryItemDefinition item = Session.GetInventoryItem(actorId, aimedItemId);
-            var thrownExplosive =
-                (ThrownExplosiveDefinition)item.ConsumablePower;
             if (!throws.TryPreview(
                     actorId,
                     thrownExplosive,
@@ -323,8 +345,16 @@ namespace GritGud.Presentation.Gameplay
                     out ThrownExplosiveFailure failure))
             {
                 LastFailure = failure;
-                HideAimPreview();
+                HideAimPreview(clearArmedProjectile: false);
                 StatusMessage = "Throw unavailable: " + failure + ".";
+                acquisition.PresentValidationFeedback(
+                    this,
+                    targetId: null,
+                    targetRoot: null,
+                    isValid: false,
+                    FormatAimFailure(
+                        failure,
+                        thrownExplosive.MaximumRange));
                 return;
             }
 
@@ -336,9 +366,61 @@ namespace GritGud.Presentation.Gameplay
                 + Vector3.up * presentation.AimPreviewHeight;
             DrawCircle(uncertaintyCircle, center, uncertaintyRadius);
             DrawCircle(blastCircle, center, thrownExplosive.AreaRadius);
+            DrawTrajectory(
+                trajectoryLine,
+                GetPresentationLaunchOrigin(thrownExplosive),
+                ToVector3(aimPoint),
+                presentation);
             uncertaintyCircle.enabled = true;
             blastCircle.enabled = true;
+            trajectoryLine.enabled = true;
             LastFailure = ThrownExplosiveFailure.None;
+            float distance = Session.GetActor(actorId).Pose.Position
+                .DistanceTo(aimPoint);
+            acquisition.PresentValidationFeedback(
+                this,
+                targetId: null,
+                targetRoot: null,
+                isValid: true,
+                $"VALID LANDING  {distance:0.#} / "
+                    + $"{thrownExplosive.MaximumRange:0.#} M");
+        }
+
+        internal static string FormatAimFailure(
+            ThrownExplosiveFailure failure,
+            float maximumRange)
+        {
+            switch (failure)
+            {
+                case ThrownExplosiveFailure.OutOfRange:
+                    return $"OUT OF RANGE  {maximumRange:0.#} M MAX";
+                case ThrownExplosiveFailure.ActorNotActive:
+                    return "THROW UNAVAILABLE - NOT YOUR TURN";
+                case ThrownExplosiveFailure.ActorIncapacitated:
+                    return "THROW UNAVAILABLE - ACTOR INCAPACITATED";
+                case ThrownExplosiveFailure.ActorPinned:
+                    return "THROW UNAVAILABLE - ACTOR PINNED";
+                case ThrownExplosiveFailure.OperationInProgress:
+                    return "THROW UNAVAILABLE - ACTION IN PROGRESS";
+                case ThrownExplosiveFailure.Depleted:
+                    return "THROW UNAVAILABLE - ITEM DEPLETED";
+                case ThrownExplosiveFailure.InsufficientActionPoints:
+                    return "THROW UNAVAILABLE - INSUFFICIENT AP";
+                case ThrownExplosiveFailure.InsufficientMovementOpportunity:
+                    return "THROW UNAVAILABLE - INSUFFICIENT MOVEMENT";
+                case ThrownExplosiveFailure.TurnModeRequired:
+                    return "THROW UNAVAILABLE - ENTER TURN MODE";
+                case ThrownExplosiveFailure.None:
+                    return "VALID LANDING";
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(failure));
+            }
+        }
+
+        private void ClearAimFeedback()
+        {
+            acquisition?.ClearValidationFeedback(this);
+            acquisition?.SetFeedbackSuppressed(this, false);
         }
 
         private void EnsureAimPreview(
@@ -365,14 +447,35 @@ namespace GritGud.Presentation.Gameplay
                     "Thrown Explosive Blast Radius",
                     blastMaterial,
                     presentation.BlastRingWidth);
+                trajectoryMaterial = RuntimeMaterialFactory.CreateColor(
+                    presentation.UncertaintyColor,
+                    "Thrown Explosive Trajectory Material");
+                trajectoryLine = CreateLine(
+                    "Thrown Explosive Trajectory",
+                    trajectoryMaterial,
+                    presentation.UncertaintyRingWidth);
             }
 
             uncertaintyMaterial.color = presentation.UncertaintyColor;
             blastMaterial.color = presentation.BlastColor;
+            trajectoryMaterial.color = presentation.UncertaintyColor;
             uncertaintyCircle.startWidth = presentation.UncertaintyRingWidth;
             uncertaintyCircle.endWidth = presentation.UncertaintyRingWidth;
             blastCircle.startWidth = presentation.BlastRingWidth;
             blastCircle.endWidth = presentation.BlastRingWidth;
+            trajectoryLine.startWidth = presentation.UncertaintyRingWidth;
+            trajectoryLine.endWidth = presentation.UncertaintyRingWidth * 0.35f;
+        }
+
+        private LineRenderer CreateLine(
+            string objectName,
+            Material material,
+            float width)
+        {
+            LineRenderer line = CreateCircle(objectName, material, width);
+            line.loop = false;
+            line.positionCount = TrajectorySegments;
+            return line;
         }
 
         private LineRenderer CreateCircle(string objectName, Material material, float width)
@@ -403,7 +506,22 @@ namespace GritGud.Presentation.Gameplay
             }
         }
 
-        private void HideAimPreview()
+        private static void DrawTrajectory(
+            LineRenderer line,
+            Vector3 origin,
+            Vector3 landing,
+            ThrownExplosivePresentationDefinition presentation)
+        {
+            for (int index = 0; index < TrajectorySegments; index++)
+            {
+                float progress = index / (TrajectorySegments - 1f);
+                line.SetPosition(
+                    index,
+                    EvaluateThrowPosition(origin, landing, progress, presentation));
+            }
+        }
+
+        private void HideAimPreview(bool clearArmedProjectile = true)
         {
             if (uncertaintyCircle != null)
             {
@@ -413,6 +531,15 @@ namespace GritGud.Presentation.Gameplay
             {
                 blastCircle.enabled = false;
             }
+            if (trajectoryLine != null)
+            {
+                trajectoryLine.enabled = false;
+            }
+            if (clearArmedProjectile)
+            {
+                GameplayObjectLifecycle.Destroy(armedProjectileRoot);
+                armedProjectileRoot = null;
+            }
         }
 
         private void OnDestroy()
@@ -420,9 +547,45 @@ namespace GritGud.Presentation.Gameplay
             ClearPlayback();
             GameplayObjectLifecycle.Destroy(uncertaintyMaterial);
             GameplayObjectLifecycle.Destroy(blastMaterial);
+            GameplayObjectLifecycle.Destroy(trajectoryMaterial);
         }
 
-        private void PresentThrow(ThrownExplosiveRecord record)
+        private void PresentArmedProjectile(
+            ThrownExplosivePresentationDefinition presentation)
+        {
+            GameplayObjectLifecycle.Destroy(armedProjectileRoot);
+            Transform hand = animationCoordinator?.TargetAnimator != null
+                ? animationCoordinator.TargetAnimator.GetBoneTransform(
+                    HumanBodyBones.RightHand)
+                : null;
+            Transform parent = hand != null ? hand : actorTransform;
+            if (parent == null || presentation.ProjectilePrefab == null)
+            {
+                return;
+            }
+
+            armedProjectileRoot = Instantiate(
+                presentation.ProjectilePrefab,
+                parent);
+            armedProjectileRoot.name = "Armed Thrown Explosive";
+            armedProjectileRoot.transform.localPosition = hand != null
+                ? new Vector3(0.02f, 0.08f, 0.04f)
+                : new Vector3(0.32f, 1.35f, -0.18f);
+            armedProjectileRoot.transform.localRotation =
+                presentation.VisualRotation * Quaternion.Euler(0f, 0f, -35f);
+            armedProjectileRoot.transform.localScale = Vector3.Scale(
+                presentation.ProjectilePrefab.transform.localScale,
+                Vector3.one * presentation.VisualScale);
+            foreach (Collider collider in
+                armedProjectileRoot.GetComponentsInChildren<Collider>(true))
+            {
+                collider.enabled = false;
+            }
+        }
+
+        private void PresentThrow(
+            ThrownExplosiveRecord record,
+            Vector3 visualLaunchOrigin)
         {
             StopAllCoroutines();
             ClearPlayback();
@@ -430,12 +593,14 @@ namespace GritGud.Presentation.Gameplay
                 presentationCatalog.GetThrownExplosive(record.Definition.Id);
             StartCoroutine(PlayCommittedThrow(
                 record,
-                presentation));
+                presentation,
+                visualLaunchOrigin));
         }
 
         private IEnumerator PlayCommittedThrow(
             ThrownExplosiveRecord record,
-            ThrownExplosivePresentationDefinition presentation)
+            ThrownExplosivePresentationDefinition presentation,
+            Vector3 visualLaunchOrigin)
         {
             if (presentation.ReleaseDelaySeconds > 0f)
             {
@@ -445,7 +610,7 @@ namespace GritGud.Presentation.Gameplay
 
             playbackRoot = Instantiate(
                 presentation.ProjectilePrefab,
-                ToVector3(record.LaunchOrigin),
+                visualLaunchOrigin,
                 presentation.VisualRotation,
                 transform);
             playbackRoot.name = "Committed Thrown Explosive";
@@ -457,7 +622,7 @@ namespace GritGud.Presentation.Gameplay
             {
                 collider.enabled = false;
             }
-            Vector3 origin = ToVector3(record.LaunchOrigin);
+            Vector3 origin = visualLaunchOrigin;
             Vector3 landing = ToVector3(record.ResolvedLanding);
             float elapsed = 0f;
             while (elapsed < presentation.FlightSeconds && playbackRoot != null)
@@ -552,6 +717,18 @@ namespace GritGud.Presentation.Gameplay
 
         private static Vector3 ToVector3(GameplayPosition position) =>
             new Vector3(position.X, position.Y, position.Z);
+
+        private Vector3 GetPresentationLaunchOrigin(
+            ThrownExplosiveDefinition definition)
+        {
+            if (armedProjectileRoot != null)
+            {
+                return armedProjectileRoot.transform.position;
+            }
+
+            return ToVector3(definition.GetLaunchOrigin(
+                Session.GetActor(actorId).Pose));
+        }
 
         private static string FormatPosition(GameplayPosition position) =>
             $"({position.X:0.00}, {position.Y:0.00}, {position.Z:0.00})";

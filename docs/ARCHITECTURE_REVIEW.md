@@ -1,8 +1,9 @@
 # Architecture and Separation-of-Concerns Review
 
-**Reviewed:** 2026-08-11; follow-up audit 2026-08-12
+**Reviewed:** 2026-08-11; follow-up audits 2026-08-12, 2026-08-14, 2026-08-15,
+and 2026-08-17
 **Scope:** the repository as a whole, with additional attention on the recent
-emergency-reaction, projectile, explosive, progression, displacement, and HUD
+emergency-reaction, projectile, explosive, party-persistence, displacement, and HUD
 work.
 
 This review is the durable record of the architecture pass. It is intentionally
@@ -21,6 +22,127 @@ features accumulate**. A few composition and presentation classes are becoming
 secondary rules engines, while the central gameplay session and content
 assembler are becoming change hotspots. Close-quarters displacement is the
 right feature family to correct those trends before adding the drone.
+
+### 2026-08-14 follow-up
+
+The latest pass corrected the highest-risk correctness and lifecycle findings
+without attempting a destabilizing rewrite:
+
+- committed-level readiness now uses the same archetype, actor-template, and
+  presentation catalogs as runtime loading; Authoring, Publish, and Runtime
+  validation profiles have distinct enforcement semantics;
+- document copies and read queries no longer normalize or mutate their source;
+- nested terrain command groups project every patch, enforce per-document
+  limits, and replace the visible terrain root only after construction succeeds;
+- gameplay startup is failure-safe, teardown has one authoritative path, and
+  HUD choice state plus generated textures have explicit session ownership;
+- action observers are published only after the shared action, focused session,
+  consequences, smoke fields, and journals finish committing; one failing
+  observer does not prevent later observers from running; and
+- attack, displacement, and thrown-explosive randomness derives stable named
+  streams from the scenario seed instead of starting correlated generators from
+  the same value.
+
+The remaining hotspots are deliberate incremental work. `GameplaySession`
+still centralizes actor state and outcome dispatch, `GameplayHud` still owns too
+many feature drawers, and `GameplayController` is still a large composition
+root. New behavior should continue moving behind focused Application services,
+HUD panels, and feature binders when those seams become stable. Durable
+cross-launch party-state storage also remains explicitly deferred.
+
+### 2026-08-15 editor and terrain follow-up
+
+The editor expansion preserves the intended authority boundaries. Portable
+terrain material samples, three-axis transforms, rotation pivots, interaction
+points, destructible defaults, and spatial dressing records live in the Domain
+document. Reversible mutations live in Application commands. Pointer input,
+physics-assisted settling, mesh projection, shaders, and IMGUI controls remain
+Presentation adapters. Repository inspection found no Unity or Presentation
+reference in Domain or Application source.
+
+This follow-up also turns the most important separation rule into a fast gate:
+`tools/validate-repository.py` now verifies the Domain and Application assembly
+contracts and rejects Unity or Presentation references in either neutral source
+tree. Architecture review is therefore no longer dependent only on convention.
+
+The current risk profile is acceptable but not finished:
+
+- `GameplayHud` (2,641 lines), `GameplaySession` (2,219),
+  `LevelEditorController` (1,815), and `GameplayScenarioAssembler` (1,554)
+  remain the largest production change hotspots. Split only along stable feature
+  seams; do not introduce a framework or broad rewrite.
+- The initial terrain-paint implementation coupled serialized numeric values to
+  UI ordering and mesh-color projection. This follow-up resolves that risk with
+  the explicitly numbered Domain-owned `TerrainMaterialKind` contract; UI
+  options and rendering now map named values, and tests freeze the serialized
+  numbers. New values must append or arrive through a schema migration.
+- `TerrainHeightLevelEditorTool` now coordinates both height sculpting and
+  material painting. Its stroke lifecycles are cohesive today, but the name and
+  responsibility should become a generic terrain-brush coordinator or two
+  focused tools if erosion, foliage, masks, or other brush families are added.
+- Cross-launch party work must preserve the same ports-and-adapters
+  boundary: Application owns a versioned party-save use case and validation;
+  Presentation supplies PlayerPrefs/browser and filesystem adapters. Gameplay
+  controllers must not directly serialize authoritative party state.
+- Planning text had drifted behind implemented interaction-point,
+  destructible, batch-transform, and three-axis work. Roadmap statements should
+  be treated as delivery records, not as substitutes for executable boundary
+  gates.
+
+No architecture blocker requires reverting the current editor slice. Durable
+party equipment/wound save/load is complete. The earlier advancement UI and
+point model were removed on 2026-08-17 after product clarification: Character
+Creator authors the starting character before a level, and there is no runtime
+progression or player-side spending. The drone is not
+the next overall slice. Destructible toppling must first become a complete live
+action rather than only a record/replay capability: production displacement
+does not yet resolve `Topple`, prop eligibility is not authored, and the depot's
+actions allow no result policies. The next project slice is end-to-end
+destructible/toppling completion plus a published pile fixture. Knife/action
+animation completion and shared simulation groundwork follow before the drone;
+richer viewport transform tools can proceed alongside those gameplay slices.
+
+### 2026-08-17 pre-encounter stabilization checkpoint
+
+The stabilization goal prompted by the repository-wide follow-up review is
+complete. It deliberately preserved current encounter behavior while reducing
+the cost and risk of the next encounter slice:
+
+- successful cloud-draft mutations now retain their authoritative returned
+  identity, revision, and local state even when the best-effort list refresh
+  fails; refresh failure is a warning rather than a failed write;
+- Supabase authentication, document, draft, and RPC responses cross centralized
+  parsing and validation boundaries, and every request finishes through one
+  success, failure, or cancellation path;
+- browser and desktop JSON import share reusable text-transfer seams for both
+  level and character documents;
+- pull-request/default-branch CI separates fork-safe validation from jobs that
+  require licensed private assets, and preview publication, concurrency, and
+  deletion use one collision-resistant slug-plus-hash identifier;
+- gameplay characterization is partitioned by lifecycle, and runtime ownership
+  is divided among enemy registry, exploration evidence orchestration,
+  combat-turn execution, outcome presentation, application-owned turn
+  lifecycle, scenario validation/combat assembly, and an explicit control
+  router;
+- HUD ownership is divided among binding/input, model projection,
+  layout/hit-testing, rendering, and style resources while `GameplayHud`
+  remains the Unity-facing facade;
+- the level-editor GUI consumes six capability interfaces instead of one broad
+  action surface, and a tested session-lifecycle scope owns symmetrical event
+  release; and
+- `GameplayDisplacementSession` is now the atomic action/journal boundary.
+  Availability/target policy, destination and path evidence, prop and contest
+  resolution, pin transitions, and commit validation have focused Application
+  owners. Replay coverage freezes the exact toppled prop and pin state and
+  rejects duplicate authoritative sequences without rerolling or remutating.
+
+No patrol, suspicion/awareness, sound detection, new line-of-sight policy,
+scoped initiative, encounter authoring, or encounter UI was added in this
+checkpoint. Those belong to the next goal. Unity supplies spatial evidence and
+presentation; Application owns awareness, participant scope, initiative
+entry/exit, and recorded decisions; authored content owns sensing and patrol
+policy.
+
 
 ## Non-negotiable boundaries
 
@@ -44,6 +166,25 @@ right feature family to correct those trends before adding the drone.
    displacement costs are prevalidated and shown before confirmation. A failed
    displacement must not leave the weapon stowed or spend only part of the
    budget.
+
+## Cloud draft library decision — 2026-08-15
+
+Private cloud drafts use the same ports-and-adapters direction as the rest of
+the editor. Application owns immutable draft identity, name policy, revision
+conflicts, records, and repository use cases. Presentation owns Supabase auth,
+HTTP transport, coroutine bridging, operation cancellation, navigation, and UI.
+
+A cloud draft UUID never changes. Its user-facing name is independent and
+unique per account. Saves carry an expected revision; the database commits the
+document and immutable revision snapshot atomically or reports a conflict.
+Local PlayerPrefs storage is recovery, not the cloud-library identity.
+
+`LevelDraftLibraryCoordinator` is the shared Presentation state boundary for
+menu and editor operations. UI renders its immutable Application summaries and
+submits intents; it does not construct Supabase requests. Async navigation is
+cancellable and must verify the application mode before opening gameplay or an
+editor. Cloud play-test uses Runtime validation and sandbox semantics rather
+than bypassing the committed-level readiness boundary.
 
 ## What is working well
 
@@ -185,6 +326,14 @@ diagnostics, weapon catalog, humanoid pose, and muzzle-origin path as player
 shots. Incapacitation remains authoritative session state; initiative and
 emergency responder selection skip actors that can no longer act.
 
+The first tactical-confidence extension preserves that boundary. Application
+scores frozen exposure for every capable party target and owns an authored
+minimum acceptable hit chance. Unity supplies bounded route/exposure options
+only when the current shot is obstructed, out of reach, or below that threshold;
+Application moves only for a strictly improved firing solution and otherwise
+records the legal fallback shot. Future investigation, reciprocal-cover, and
+squad coordination work is tracked in [ENEMY_AI.md](ENEMY_AI.md).
+
 ### A15 - Core attributes own their derived rules
 
 **Status: implemented for the authored roster**
@@ -204,6 +353,14 @@ combat effect while social resolution is absent.
 ### A3 — Reduce central change hotspots by extracting cohesive services
 
 **Priority: high, incremental**
+
+**Status: partially resolved 2026-08-14.** Blast, displacement, equipment,
+projectile, thrown-explosive, and party-persistence behavior already has
+focused sessions. Gameplay startup is now split into explicit bootstrap, world,
+session, binding, and interface stages with one teardown path. HUD choice state
+and generated texture ownership have moved into small lifecycle objects. The
+central session outcome switch and the remaining HUD feature drawers should be
+extracted only along proven behavior seams.
 
 `GameplaySession` is the authoritative aggregate and should remain the owner of
 actor state and journal ordering, but outcome-specific validation and
@@ -248,17 +405,21 @@ quantity, charges, or a consumed-item record. The corrective requirement was
 authoritative stack state with before/after evidence in the same committed
 action while keeping preview and cancellation side-effect free.
 
-### A6 — Connect progression to runtime ownership and persistence
+### A6 — Connect authored party identity to runtime persistence
 
 **Priority: medium**
 
-**Status: runtime ownership resolved 2026-08-12; durable save/load remains.**
-`GameplayPartyProgressionSession` now composes one identity-bound progression
-aggregate for every authored player-party member and captures progression,
-equipment, and wounds without allowing one actor to be persisted through
-another character's identity. Bug reports project those per-character snapshots
-alongside selected and command authority. A durable cross-launch store and the
-player-facing advancement UI remain separate delivery work.
+**Status: corrected 2026-08-17.** `GameplayPartySave` is a versioned,
+exact-roster Application contract keyed by the stable identities authored in the
+pre-level Character Creator. It validates equipped-item ownership and captures
+only mutable runtime equipment and wound state; `GameplaySession` rebinds saved
+wounds to the current scenario actor. The PlayerPrefs adapter supplies local
+browser/desktop durability, and equipment/wound changes flush immediately.
+The previously implemented points, bonuses, advancement options, progression
+session, save fields, diagnostics, and runtime drawer were based on a mistaken
+product assumption and have been removed. Authored attributes, skills, talents,
+appearance, and starting loadout remain creator-owned inputs, not spendable
+runtime state.
 
 ### A7 — Eliminate duplicate scenario assembly
 
@@ -282,6 +443,13 @@ specific formatter or an explicit generic-policy declaration.
 ### A9 — Put fast validation before full platform builds
 
 **Priority: immediate delivery hygiene**
+
+**Status: resolved.** The branch-preview workflow validates tracked source and
+JSON, runs the complete EditMode and PlayMode suites, verifies that tests leave
+the workspace clean, and only then builds WebGL. Because license and private
+asset credentials are intentionally unavailable to forks, trusted
+contributions must be pushed to a repository branch before merge so this gate
+can run.
 
 The WebGL build is valuable but too slow to be the first signal. CI should run
 conflict-marker and JSON checks, Unity script compilation, and EditMode tests
@@ -433,11 +601,11 @@ unrelated content.
 
 **Priority: continuous**
 
-**Status: current gate resolved 2026-08-12.** The listed regressions have
-focused tests. The local gate passes 388 EditMode tests plus a PlayMode
-lifecycle smoke that boots default gameplay, sustains 180 frame updates, and
-tears the session down. CI now runs both suites before the WebGL build. This
-remains a continuous requirement for future gameplay slices.
+**Status: current gate resolved 2026-08-14.** The listed regressions have
+focused tests. The local gate passes 536 EditMode tests. PlayMode sustains the
+default gameplay session for 180 frames and separately boots and tears down
+every playable committed level. CI runs both suites before the WebGL build.
+This remains a continuous requirement for future gameplay slices.
 
 The repository has broad Domain/Application and Presentation EditMode coverage,
 a sustained-frame default-content PlayMode lifecycle smoke, and CI gates before
@@ -453,8 +621,10 @@ scene controllers.
 
 - `GameplayVisualTheme` owns post-processing, cel-band response, actor surface
   response, outline widths, contact grounding, and tactical-transition cadence.
-- `LevelLightingCatalog` selects atmosphere, key light, practical fixtures,
-  fixture geometry, and ambient prefab placements by stable level ID.
+- `LevelDocument.environment` owns portable atmosphere, key-light, and practical
+  fixture values used by both editing and play. `LevelLightingCatalog` now owns
+  only Unity prefab references for ambient effects pending their portable
+  placement schema.
 - `SurfacePresentationCatalog` owns concrete, wood, metal, and actor material
   response together with their impact prefab, scale, lifetime, and decal
   treatment. Level archetypes select a stable surface ID.
@@ -537,9 +707,25 @@ turn. The full EditMode gate passes 429 tests.
 6. Add opposed combatant displacement.
 7. Add authored knife attacks.
 8. Generalize blast effects and consumable quantities. **Complete.**
-9. Integrate progression persistence. **Runtime party ownership complete;
-   durable cross-launch storage remains.**
-10. Resume the drone slice only after close-quarters exit criteria pass.
+9. Integrate party persistence. **Corrected and complete:** versioned,
+   identity-bound equipment/wound storage is live; runtime progression and its
+   advancement surface do not exist.
+10. Complete live toppling resolution, authored prop eligibility, and the
+    published destructible-pile verification fixture. **Implemented
+    2026-08-16; full Unity runner and hands-on fixture acceptance remain.**
+11. Add first-class toppled-prop pinning, an authoritative pinned actor state,
+    and an atomic Push Off/escape action with exact replay restoration.
+    **Complete 2026-08-17:** pin establishment/release, directional Push Off,
+    destination evidence, atomic commit validation, and exact prop/pin replay
+    restoration are covered through focused Application collaborators.
+12. Finish knife, reaction, equipment, reload, grenade, pinned struggle,
+    push-off, get-up, and turn presentation through gameplay-owned semantic
+    animation states.
+13. Migrate remaining action families to canonical prepare/commit transitions
+    and establish deterministic trajectory, repro, minimization, fuzzing, and
+    seed-baseline infrastructure.
+14. Resume the drone only after those existing-system exit criteria pass, then
+    run the full alpha adversarial capstone with the drone included.
 
 ## Review gates for every gameplay slice
 
@@ -564,5 +750,6 @@ turn. The full EditMode gate passes 429 tests.
 - A full `GameplaySession` rewrite. Focused extraction should follow feature
   seams and preserve journal ordering.
 - The deployable drone. It remains valuable, but adding another initiative
-  participant before completing action definitions, equipment requirements,
-  and close-quarters targeting would deepen the current hotspots.
+  participant before end-to-end toppling, close-quarters animation, and the
+  shared simulation foundation are proven would deepen the current hotspots
+  and force the final alpha gauntlet to be rerun around unfinished seams.

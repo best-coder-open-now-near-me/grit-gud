@@ -32,6 +32,7 @@ namespace GritGud.Application.Gameplay
         internal ScenarioActorRuntimeDefinition(
             string displayName,
             string presentationId,
+            string characterId,
             bool targetable,
             float mass,
             ScenarioActorDefinition gameplayDefinition,
@@ -47,6 +48,7 @@ namespace GritGud.Application.Gameplay
                     "Actor presentation identifiers cannot be empty.",
                     nameof(presentationId))
                 : presentationId;
+            CharacterId = characterId?.Trim() ?? string.Empty;
             Targetable = targetable;
             Mass = mass;
             GameplayDefinition = gameplayDefinition
@@ -59,6 +61,8 @@ namespace GritGud.Application.Gameplay
         public string DisplayName { get; }
 
         public string PresentationId { get; }
+
+        public string CharacterId { get; }
 
         public bool Targetable { get; }
 
@@ -73,6 +77,7 @@ namespace GritGud.Application.Gameplay
             new ScenarioActorRuntimeDefinition(
                 DisplayName,
                 PresentationId,
+                CharacterId,
                 Targetable,
                 Mass,
                 gameplayDefinition,

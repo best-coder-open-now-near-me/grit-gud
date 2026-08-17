@@ -70,6 +70,11 @@ namespace GritGud.Presentation.Tests
                 GameplayDisplacementController.FormatDestinationFailure(
                     DisplacementResolutionFailure.DestinationBlocked),
                 Is.EqualTo("INVALID DESTINATION - PATH BLOCKED"));
+            Assert.That(
+                GameplayDisplacementController.FormatDestinationFailure(
+                    DisplacementResolutionFailure.GetUpSpaceBlocked),
+                Is.EqualTo(
+                    "INVALID DESTINATION - GET-UP SPACE BLOCKED"));
         }
 
         [Test]

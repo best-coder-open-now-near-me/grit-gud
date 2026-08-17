@@ -29,7 +29,8 @@ namespace GritGud.Presentation.Gameplay
             Unbind();
             Session = DestructiblePropSession.FromLevel(
                 level,
-                journal ?? throw new ArgumentNullException(nameof(journal)));
+                journal ?? throw new ArgumentNullException(nameof(journal)),
+                entity => ResolveFractureChunkCount(world, entity));
             Session.Damaged += HandleDamage;
             foreach (string propId in Session.PropIds)
             {
@@ -46,7 +47,9 @@ namespace GritGud.Presentation.Gameplay
                     presenter = view.gameObject.AddComponent<DestructiblePropPresenter>();
                 }
 
-                presenter.Bind(Session.GetProp(propId));
+                presenter.Bind(
+                    Session.GetProp(propId),
+                    view.Archetype.FractureProfile);
                 presenters.Add(propId, presenter);
             }
 
@@ -84,6 +87,63 @@ namespace GritGud.Presentation.Gameplay
             Session.CommitDamage(record);
         }
 
+        internal void PresentReplay(
+            IReadOnlyList<DestructiblePropSnapshot> snapshots)
+        {
+            if (snapshots == null)
+                throw new ArgumentNullException(nameof(snapshots));
+            foreach (DestructiblePropSnapshot snapshot in snapshots)
+                Present(snapshot);
+        }
+
+        internal void PresentDisplacement(DisplacementRecord record)
+        {
+            if (record == null)
+                throw new ArgumentNullException(nameof(record));
+            if (!record.Succeeded ||
+                record.Request.SubjectKind != DisplacementSubjectKind.Prop)
+            {
+                return;
+            }
+            if (!presenters.TryGetValue(
+                    record.Request.SubjectId,
+                    out DestructiblePropPresenter presenter))
+            {
+                throw new InvalidOperationException(
+                    $"Destructible prop '{record.Request.SubjectId}' has no "
+                    + "level presenter.");
+            }
+
+            presenter.PresentDisplacement(
+                record,
+                GameplayDisplacementPresentationTiming.GetDurationSeconds(
+                    record));
+            Physics.SyncTransforms();
+        }
+
+        internal void RestoreAuthoritativePresentation()
+        {
+            if (Session == null) return;
+            ClearReplayTransients();
+            foreach (string propId in Session.PropIds)
+                Present(Session.GetProp(propId));
+        }
+
+        internal void PresentReplayTransient(DestructibleDamageRecord record)
+        {
+            if (record == null)
+                throw new ArgumentNullException(nameof(record));
+            if (!presenters.TryGetValue(record.PropId, out var presenter))
+                return;
+            presenter.PresentDamage(record, spawnTransientDebris: true);
+        }
+
+        internal void ClearReplayTransients()
+        {
+            foreach (DestructiblePropPresenter presenter in presenters.Values)
+                presenter?.ClearTransientDebris();
+        }
+
         public void Unbind()
         {
             if (Session != null)
@@ -113,7 +173,36 @@ namespace GritGud.Presentation.Gameplay
             Physics.SyncTransforms();
         }
 
-        private void HandleDamage(DestructibleDamageRecord record) =>
-            Present(record.Resulting);
+        private void HandleDamage(DestructibleDamageRecord record)
+        {
+            if (!presenters.TryGetValue(record.PropId, out var presenter))
+            {
+                throw new InvalidOperationException(
+                    $"Destructible prop '{record.PropId}' has no level presenter.");
+            }
+
+            presenter.PresentDamage(record, spawnTransientDebris: true);
+            Physics.SyncTransforms();
+        }
+
+        private void Update()
+        {
+            float deltaTime = Time.deltaTime;
+            foreach (DestructiblePropPresenter presenter in presenters.Values)
+                presenter?.TickDisplacement(deltaTime);
+        }
+
+        private static int ResolveFractureChunkCount(
+            LevelWorld world,
+            LevelEntity entity)
+        {
+            if (!world.TryGetEntity(entity.id, out LevelEntityView view))
+            {
+                throw new InvalidOperationException(
+                    $"Loaded level is missing destructible prop '{entity.id}'.");
+            }
+
+            return view.Archetype.FractureProfile?.ChunkCount ?? 0;
+        }
     }
 }

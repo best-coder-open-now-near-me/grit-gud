@@ -13,18 +13,16 @@ namespace GritGud.Presentation.Gameplay
         private const float HeaderHeight = 28f;
         private const float MemberHeight = 52f;
         private const float MemberGap = 6f;
-        private static readonly Color PanelColor = GameplayVisualPalette.Panel;
-        private static readonly Color BorderColor = GameplayVisualPalette.WithAlpha(
-            GameplayVisualPalette.Border,
-            0.34f);
+        private static readonly Color PanelColor = GameplayVisualPalette.HudPanel;
+        private static readonly Color BorderColor = GameplayVisualPalette.HudBorder;
         private static readonly Color SelectedColor =
-            GameplayVisualPalette.SignalOrangeGlow;
+            GameplayVisualPalette.HudSecondarySignal;
         private static readonly Color CommandColor =
-            GameplayVisualPalette.SignalBlueGlow;
+            GameplayVisualPalette.HudPrimarySignal;
         private static readonly Color PrimaryTextColor =
-            GameplayVisualPalette.TextPrimary;
+            GameplayVisualPalette.HudTextPrimary;
         private static readonly Color SecondaryTextColor =
-            GameplayVisualPalette.TextSecondary;
+            GameplayVisualPalette.HudTextSecondary;
 
         private GameplaySession gameplay;
         private GameplayPartyControlSession partyControl;
@@ -34,11 +32,15 @@ namespace GritGud.Presentation.Gameplay
         private GUIStyle detailStyle;
         private GUIStyle disabledDetailStyle;
         private GUIStyle memberButtonStyle;
+        private GUIStyle actionButtonStyle;
         private Texture2D memberNormalTexture;
         private Texture2D memberHoverTexture;
         private Texture2D memberActiveTexture;
         private Texture2D whiteTexture;
+        private GameplayHudTextureSet textureSet;
         private string status = string.Empty;
+        private Func<bool> replayAvailable;
+        private Action replayRequested;
 
         public bool IsVisible => enabled;
 
@@ -50,13 +52,17 @@ namespace GritGud.Presentation.Gameplay
         public void Bind(
             GameplaySession session,
             GameplayPartyControlSession control,
-            IGameplayInputSource authoritativeInputSource)
+            IGameplayInputSource authoritativeInputSource,
+            Func<bool> canOpenReplay = null,
+            Action openReplay = null)
         {
             Unbind();
             gameplay = session ?? throw new ArgumentNullException(nameof(session));
             partyControl = control ?? throw new ArgumentNullException(nameof(control));
             inputSource = authoritativeInputSource ?? throw new ArgumentNullException(
                 nameof(authoritativeInputSource));
+            replayAvailable = canOpenReplay;
+            replayRequested = openReplay;
             status = string.Empty;
             partyControl.ControlChanged += HandleControlChanged;
             enabled = true;
@@ -70,6 +76,8 @@ namespace GritGud.Presentation.Gameplay
             gameplay = null;
             partyControl = null;
             inputSource = null;
+            replayAvailable = null;
+            replayRequested = null;
             status = string.Empty;
             enabled = false;
         }
@@ -83,7 +91,7 @@ namespace GritGud.Presentation.Gameplay
         internal bool ContainsInteractiveScreenPoint(Vector2 screenPoint)
         {
             GameplayPartyHudModel model = CurrentModel;
-            if (model == null || model.Members.Count <= 1)
+            if (model == null)
                 return false;
 
             float uiScale = CalculateUiScale();
@@ -117,7 +125,7 @@ namespace GritGud.Presentation.Gameplay
         private void OnGUI()
         {
             GameplayPartyHudModel model = CurrentModel;
-            if (model == null || model.Members.Count <= 1)
+            if (model == null)
                 return;
 
             EnsureStyles();
@@ -143,11 +151,19 @@ namespace GritGud.Presentation.Gameplay
                     panel.height - 2f),
                 PanelColor);
 
-            string binding = inputSource.GetBindingDisplay(
-                GameplayControl.CyclePartyMember);
-            string header = model.InitiativeControlsSelection
-                ? "PARTY - INITIATIVE CONTROL"
-                : $"PARTY - [{binding}] SWITCH";
+            string header;
+            if (model.Members.Count == 1)
+            {
+                header = "CHARACTER";
+            }
+            else
+            {
+                string binding = inputSource.GetBindingDisplay(
+                    GameplayControl.CyclePartyMember);
+                header = model.InitiativeControlsSelection
+                    ? "PARTY - INITIATIVE CONTROL"
+                    : $"PARTY - [{binding}] SWITCH";
+            }
             GUI.Label(
                 new Rect(panel.x + 12f, panel.y + 5f, panel.width - 24f, 20f),
                 header,
@@ -179,9 +195,22 @@ namespace GritGud.Presentation.Gameplay
             GameplayPartyMemberHudModel member,
             Rect rectangle)
         {
+            bool hasReplay = member.Commanding
+                && replayAvailable?.Invoke() == true;
+            bool hasActionRail = hasReplay;
+            Rect selectionRectangle = hasActionRail
+                ? new Rect(
+                    rectangle.x,
+                    rectangle.y,
+                    rectangle.width - 76f,
+                    rectangle.height)
+                : rectangle;
             bool previousEnabled = GUI.enabled;
             GUI.enabled = member.CanSelect;
-            if (GUI.Button(rectangle, GUIContent.none, memberButtonStyle))
+            if (GUI.Button(
+                    selectionRectangle,
+                    GUIContent.none,
+                    memberButtonStyle))
             {
                 if (!partyControl.TrySelectActor(
                         member.ActorId,
@@ -209,7 +238,7 @@ namespace GritGud.Presentation.Gameplay
                 new Rect(
                     rectangle.x + 12f,
                     rectangle.y + 4f,
-                    rectangle.width - 24f,
+                    rectangle.width - (hasActionRail ? 100f : 24f),
                     20f),
                 member.DisplayName.ToUpperInvariant(),
                 nameStyle);
@@ -222,10 +251,22 @@ namespace GritGud.Presentation.Gameplay
                 new Rect(
                     rectangle.x + 12f,
                     rectangle.y + 26f,
-                    rectangle.width - 24f,
+                    rectangle.width - (hasActionRail ? 100f : 24f),
                     18f),
                 details,
                 member.Incapacitated ? disabledDetailStyle : detailStyle);
+            if (hasReplay
+                && GUI.Button(
+                    new Rect(
+                        rectangle.xMax - 68f,
+                        rectangle.y + 5f,
+                        58f,
+                        18f),
+                    "REPLAY",
+                    actionButtonStyle))
+            {
+                replayRequested?.Invoke();
+            }
         }
 
         private void HandleControlChanged(GameplayPartyControlSnapshot _)
@@ -235,13 +276,14 @@ namespace GritGud.Presentation.Gameplay
 
         private void EnsureStyles()
         {
-            if (whiteTexture != null)
+            if (textureSet != null)
                 return;
 
-            whiteTexture = Texture2D.whiteTexture;
-            memberNormalTexture = CreateTexture(GameplayVisualPalette.ButtonNormal);
-            memberHoverTexture = CreateTexture(GameplayVisualPalette.ButtonHover);
-            memberActiveTexture = CreateTexture(GameplayVisualPalette.ButtonActive);
+            textureSet = new GameplayHudTextureSet();
+            whiteTexture = textureSet.White;
+            memberNormalTexture = textureSet.ButtonNormal;
+            memberHoverTexture = textureSet.ButtonHover;
+            memberActiveTexture = textureSet.ButtonActive;
             headerStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleLeft,
@@ -275,6 +317,27 @@ namespace GritGud.Presentation.Gameplay
                 active = { background = memberActiveTexture },
                 focused = { background = memberNormalTexture },
                 onNormal = { background = memberActiveTexture },
+            };
+            actionButtonStyle = new GUIStyle(memberButtonStyle)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 9,
+                fontStyle = FontStyle.Bold,
+                normal =
+                {
+                    background = memberNormalTexture,
+                    textColor = PrimaryTextColor,
+                },
+                hover =
+                {
+                    background = memberHoverTexture,
+                    textColor = PrimaryTextColor,
+                },
+                active =
+                {
+                    background = memberActiveTexture,
+                    textColor = PrimaryTextColor,
+                },
             };
         }
 
@@ -319,23 +382,15 @@ namespace GritGud.Presentation.Gameplay
             }
         }
 
-        private static Texture2D CreateTexture(Color color)
-        {
-            var texture = new Texture2D(1, 1)
-            {
-                hideFlags = HideFlags.HideAndDontSave,
-            };
-            texture.SetPixel(0, 0, color);
-            texture.Apply();
-            return texture;
-        }
-
         private void OnDestroy()
         {
             Unbind();
-            GameplayObjectLifecycle.Destroy(memberNormalTexture);
-            GameplayObjectLifecycle.Destroy(memberHoverTexture);
-            GameplayObjectLifecycle.Destroy(memberActiveTexture);
+            textureSet?.Dispose();
+            textureSet = null;
+            memberNormalTexture = null;
+            memberHoverTexture = null;
+            memberActiveTexture = null;
+            whiteTexture = null;
         }
     }
 }

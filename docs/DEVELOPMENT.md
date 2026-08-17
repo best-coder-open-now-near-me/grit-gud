@@ -30,10 +30,12 @@ from **Grit Gud > Regenerate Bootstrap Scene** in the Editor. Gameplay levels
 must remain external data loaded by this shell rather than additional authored
 Unity scenes.
 
-At runtime, `GameBootstrap` installs the code-driven start menu. **Play Main
-Level** loads the committed portable main level through the shared runtime
-loader. **Level Editor** opens that same level in authoring mode. **Quit** stops
-Play Mode in the Editor and exits standalone players.
+At runtime, `GameBootstrap` installs the code-driven start menu. Its committed
+level library lists validated JSON documents from `Resources/Levels/Published`.
+**Play Selected** and **Edit Selected** route the selected detached document
+through the shared runtime and authoring loaders; **New Level** opens a fresh
+portable document. **Quit** stops Play Mode in the Editor and exits standalone
+players.
 
 Bootstrap is the only enabled build scene and is registered as the Editor's
 Play Mode start scene. A guarded Editor initializer also opens it once when a
@@ -56,17 +58,46 @@ editor behavior. The Bootstrap scene remains the only authored application
 scene; both gameplay preview and editing construct their worlds from portable
 data beneath the application root.
 
+### Publishing an exported level from GitHub
+
+An exported level can be added without a local Unity installation:
+
+1. Open the target source branch on GitHub.
+2. Upload the exported JSON directly into
+   `Assets/GritGud/Content/Resources/Levels/Published/`.
+3. Commit the upload to that branch. No `.meta` file or separate level manifest
+   is required for a JSON text asset.
+4. Wait for the branch preview workflow. Its EditMode gate deserializes and
+   validates every published level before building WebGL.
+5. Open the branch preview and choose the level by its authored `displayName`.
+
+Published documents must have unique `levelId` values and complete scenario
+instances. A malformed or invalid entry fails the branch validation before a
+new preview replaces the last successful build. At runtime, the library also
+isolates invalid entries and reports their status without hiding valid levels.
+
 ## Local validation
 
 The baseline has been validated locally with Unity `6000.4.10f1` and its
 matching Windows and Web build-support modules:
 
-- all four Edit Mode domain tests pass;
+- the full EditMode and PlayMode lifecycle suites pass;
 - the Windows player builds successfully; and
 - the development Web preview builds successfully.
 
 Generated folders such as `Library`, `Temp`, `Logs`, and `UserSettings` are not
 versioned.
+
+Run `tools/validate-repository.py` with Python 3 before invoking Unity. It scans
+tracked source for unresolved conflict markers and parses every tracked JSON
+document. Run `tools/validate-supabase-contracts.py` to verify ordered migrations,
+RPC parameters/return rows, permissions, and the matching C# adapter, then run
+`node tools/preview-id.test.mjs` to verify preview identity and workflow routing.
+Then run the complete EditMode and PlayMode suites in batch mode; use
+`-testResults <path>` and `-logFile <path>` beneath the ignored `Temp` directory
+so failures remain inspectable. PlayMode coverage includes both a sustained
+default-session smoke and startup/teardown for every committed level whose
+library entry is playable.
 
 Runtime-generated terrain, outlines, and brush previews use the committed
 `GritGud/RuntimeColor` shader. It is explicitly listed in Graphics Settings so
@@ -107,11 +138,28 @@ is absent. Web previews use Brotli compression with Unity's JavaScript
 decompression fallback, so the same release player works on GitHub Pages and on
 plain local HTTP servers that do not attach `Content-Encoding: br` headers.
 
+## Continuous integration
+
+The `CI` workflow runs for every pull request, `main` push, and merge-queue
+candidate. Its **Source and contract checks** job needs no repository secrets and
+is safe for fork pull requests. It validates repository boundaries, the complete
+Supabase migration/RPC contract, and preview identity behavior.
+
+The **Licensed Unity tests** job runs EditMode and PlayMode coverage only for
+trusted branches, same-repository pull requests, `main`, and merge-queue refs. It
+installs the pinned private asset overlay and consumes Unity/private-repository
+secrets, so GitHub skips that job for fork pull requests. Configure both check
+names as required branch protections; a skipped licensed job does not expose
+secrets to a fork, while trusted merge candidates receive the full test gate.
+
 ## GitHub Web previews
 
 The `Branch preview` GitHub Actions workflow builds every push except `main` and
-`gh-pages`. It converts the branch name to a safe folder slug and publishes the
-WebGL player at `/preview/<branch-slug>/` on an orphan `gh-pages` branch. The
+`gh-pages`. It combines a readable ref slug with the first 12 hexadecimal digits
+of a stable SHA-256 hash and publishes the WebGL player at
+`/preview/<slug>-<hash>/` on an orphan `gh-pages` branch. Publication,
+concurrency, reporting, and branch deletion all consume that exact identity, so
+refs that normalize to the same slug cannot overwrite each other. The
 Pages root is regenerated as an index of all live previews, and `.nojekyll`
 keeps the generated Unity files untouched. Re-pushing a branch cancels its older
 in-progress build, while publish operations for different branches retry up to
@@ -123,7 +171,7 @@ workflow. Each successful build writes its finished URL to the Actions job
 summary.
 
 For this repository, a branch named `feature/combat-hud` is published at
-`https://best-coder-open-now-near-me.github.io/grit-gud/preview/feature-combat-hud/`.
+`https://best-coder-open-now-near-me.github.io/grit-gud/preview/feature-combat-hud-d8d86cc36c0e/`.
 
 One-time repository setup is required before the workflow can run:
 
@@ -160,10 +208,11 @@ One-time repository setup is required before the workflow can run:
 6. Push a non-`main` branch or run **Actions > Branch preview > Run workflow** to
    publish a preview.
 
-The workflow intentionally runs on branch pushes rather than pull-request
-events. Forks do not receive license secrets or write access; a maintainer must
-push a trusted contribution to a branch in this repository before it can build
-or publish a preview.
+The preview workflow intentionally runs on branch pushes rather than pull-request
+events. Forks receive the separate source/contract CI checks but do not receive
+license secrets, private assets, or Pages write access; a maintainer must push a
+trusted contribution to a branch in this repository before it can run licensed
+Unity coverage or publish a preview.
 
 The Unity Linux image is large enough to exhaust a standard hosted runner before
 Docker finishes unpacking it. The workflow removes unused preinstalled Android,

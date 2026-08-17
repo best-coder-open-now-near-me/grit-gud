@@ -167,7 +167,7 @@ namespace GritGud.Presentation.Gameplay
 
             string variantCacheKey = string.IsNullOrEmpty(variant)
                 ? null
-                : $"{source.GetInstanceID()}:{(usesPlayerCutout ? 1 : 0)}:{variant}";
+                : $"{source.GetEntityId()}:{(usesPlayerCutout ? 1 : 0)}:{variant}";
             if (variantCacheKey != null
                 && variantCelMaterials.TryGetValue(
                     variantCacheKey,

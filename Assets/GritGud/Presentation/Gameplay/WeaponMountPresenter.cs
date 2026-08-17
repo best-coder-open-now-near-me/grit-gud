@@ -91,22 +91,6 @@ namespace GritGud.Presentation.Gameplay
             baseLocalRotation = heldWeapon.transform.localRotation;
         }
 
-        internal void SetContactSwing(
-            float normalizedWeight,
-            Vector3 localAxis,
-            float degrees)
-        {
-            if (heldWeapon == null)
-            {
-                return;
-            }
-
-            heldWeapon.transform.localRotation = baseLocalRotation
-                * Quaternion.AngleAxis(
-                    degrees * Mathf.Clamp01(normalizedWeight),
-                    localAxis);
-        }
-
         internal void Clear()
         {
             style?.Dispose();

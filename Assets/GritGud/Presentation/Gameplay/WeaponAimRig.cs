@@ -253,8 +253,19 @@ namespace GritGud.Presentation.Gameplay
                 return false;
             }
 
-            int layer = animator.GetLayerIndex(
-                ActorAnimationParameters.ActionLayerName);
+            return IsOverrideLayerActive(
+                    ActorAnimationParameters.ActionLayerName,
+                    ActorAnimationParameters.NoActionStateName)
+                || IsOverrideLayerActive(
+                    ActorAnimationParameters.ReactionLayerName,
+                    ActorAnimationParameters.NoReactionStateName);
+        }
+
+        private bool IsOverrideLayerActive(
+            string layerName,
+            string idleStateName)
+        {
+            int layer = animator.GetLayerIndex(layerName);
             if (layer < 0)
             {
                 return false;
@@ -265,14 +276,14 @@ namespace GritGud.Presentation.Gameplay
             }
 
             bool currentIsIdle = animator.GetCurrentAnimatorStateInfo(layer)
-                .IsName(ActorAnimationParameters.NoActionStateName);
+                .IsName(idleStateName);
             if (!animator.IsInTransition(layer))
             {
                 return !currentIsIdle;
             }
 
             bool nextIsIdle = animator.GetNextAnimatorStateInfo(layer)
-                .IsName(ActorAnimationParameters.NoActionStateName);
+                .IsName(idleStateName);
             return !currentIsIdle || !nextIsIdle;
         }
 

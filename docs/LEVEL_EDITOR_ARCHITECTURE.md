@@ -18,9 +18,15 @@ The normal mutation flow is:
    transaction to `LevelEditorWorkspace`.
 3. The workspace updates history and registered validation rules, then publishes
    a `LevelSessionChangedEventArgs` containing the affected stable entity IDs.
-4. `LevelWorldProjector` updates only those entity views. Replacement documents
+4. `LevelWorldProjector` updates only those entity views. Environment and
+   dressing commands refresh their shared runtime projections from the same
+   document snapshot used by Test Play. Replacement documents
    and commands marked for full projection use the staging loader instead.
-5. Selection and UI refresh from the projected world and detached read models.
+5. The controller caches one detached `LevelEditorViewState` per workspace
+   revision. All IMGUI panels render that same snapshot instead of cloning the
+   document independently.
+6. `LevelEditorPresentationState` coordinates workspace navigation, create mode,
+   and exclusive Inspector focus across world selections and scenario actors.
 
 Play preview always uses a deep document snapshot. Runtime state must never be
 copied back into the authoring workspace.
@@ -35,12 +41,29 @@ copied back into the authoring workspace.
 | Core presentation services | Input capture, camera control, snapping, and scene queries |
 | Runtime projection | Validated construction and incremental entity-view updates |
 | Persistence coordinator | Drafts, import/export, platform transfer, and publish validation |
-| UI adapter | Temporary IMGUI rendering and user intents |
-| Controller | Composition, lifecycle, preview boundary, and cross-service routing |
+| Presentation state | Objects/Terrain/Scenario/Environment/Dressing navigation and contextual Inspector focus |
+| UI action contract | Typed boundary for user intents, persistence, and history operations |
+| UI shell and panels | Responsive IMGUI layout, runtime menus, transient text fields, and local disclosure state |
+| Scenario authoring coordinator | Scenario invariants, transactions, and actor/link use cases |
+| Environment authoring coordinator | Numeric parsing, lighting invariants, and undoable atmosphere/practical-light use cases |
+| Dressing authoring coordinator | Decal, ambient-VFX, and audio-zone parsing, limits, stable IDs, and undoable CRUD use cases |
+| Layout coordinator | Bounds validation, local grid/view settings, and transaction-based entity arrays |
+| Organization model | Group visibility, locks, isolation, and transient category/group selection policy |
+| Organization coordinator | Group lifecycle, bulk assignment, filtering, and selection use cases |
+| Playability coordinator | On-demand report freshness and transient terrain heatmap state |
+| Controller | Composition, Unity lifecycle, preview boundary, and cross-service routing |
 
 Domain and Application assemblies have no Unity references. Unity asset paths,
 prefabs, raycasts, cameras, input devices, `PlayerPrefs`, browser JavaScript,
 and GUI calls remain in Presentation.
+
+The GUI must not query `LevelEditorWorkspace` or persistence services directly.
+It receives an immutable view state and submits intent through
+`ILevelEditorGuiActions`. GUI dimensions live in `LevelEditorGuiMetrics`, skin-
+dependent styles in `LevelEditorGuiStyles`, and semantic UI/world colors in
+`LevelEditorTheme`. `LevelEditorShellLayout` is the deterministic responsive-width
+policy. Runtime dropdowns use typed `LevelEditorMenuModel` items and remain free of
+`UnityEditor` APIs so the same shell works in Windows and WebGL players.
 
 ## Adding a tool
 
@@ -98,9 +121,66 @@ Each definition exposes four distinct concerns:
 New palette filters and tools should depend on capabilities or placement rules,
 not on prefab names or third-party asset paths.
 
+## Environment and lighting
+
+Schema 6 stores atmosphere, fog, the directional key, fixture presentation, and
+practical spotlights in `LevelDocument.environment`. `SetLevelEnvironmentCommand`
+is the single reversible boundary for these settings. Both the editor and
+gameplay call `GameplayEnvironmentLighting` with this portable data, so Level
+Preview, Test Play, exported JSON, and committed play cannot select different
+lighting values.
+
+Schema 9 stores surface decals, ambient-VFX placements, and box-shaped audio
+zones in `LevelDocument.dressing`. `SetLevelDressingCommand` is their reversible
+boundary. `LevelDressingProjector` is shared by the editor and gameplay;
+`LevelDressingCatalog` maps only stable VFX IDs to curated Unity prefabs, while
+procedural ambient sounds remain deterministic Presentation-owned adapters.
+The document therefore never stores asset paths, prefab GUIDs, or audio clips.
+Authoring-only zone lines and the audio-preview toggle are transient and never
+enter JSON.
+
+## Entity organization
+
+Schema 7 stores named entity groups and each entity's optional stable group ID.
+Group names, lock state, and hidden state are authored data changed only through
+`ILevelOrganizationEditCommand` implementations. Group deletion is a composite
+transaction that first ungroups every member, so undo restores both the group
+and its membership atomically.
+
+`LevelEditorOrganizationModel` is the presentation-owned selection policy. It
+combines portable lock/hidden state with transient isolation and category/group
+filters, applies authoring visibility to projected entity views, and prevents
+scene picking or hierarchy focus from bypassing that policy. Isolation and
+filters deliberately stay out of `LevelDocument`: they describe the current
+author's view, not the playable or portable level. Preview and Test Play rebuild
+from the document snapshot without authoring visibility applied, so hidden
+groups are never mistaken for disabled gameplay content.
+
+## Terrain appearance and diagnostics
+
+Schema 8 adds `TerrainAppearanceData` to each heightfield surface. It stores
+preset identity, base/steep colors, a slope blend interval, smoothness, and
+specular response. `SetTerrainAppearanceCommand` updates that data without a
+full world rebuild; `TerrainWorldProjector` updates the existing shared surface
+material and leaves mesh/collider identity and navigation invalidation untouched.
+The cel shader's slope branch is opt-in, so non-terrain users retain their
+existing material behavior.
+
+`LevelPlayabilityAnalyzer` is a Unity-free, deterministic advisory service. It
+derives slope samples, heightfield-connected regions, scenario terrain support,
+terrain-only objective reachability, and actor-start overlap from a detached
+document. It is not part of publish validation because structural geometry can
+provide routes and support that a heightfield-only analysis cannot prove.
+`LevelEditorPlayabilityCoordinator` keeps report freshness and heatmap state in
+Presentation. The heatmap changes material properties only, is suppressed at
+the preview boundary, and never mutates the document.
+
 ## Scaling rules
 
 - Prefer a new tool or service over another mode flag in the controller.
+- Keep document selection and Inspector focus coordinated; do not store a
+  second selected object privately inside a panel.
+- Render every panel from the same revision snapshot.
 - Prefer typed portable data plus a migration over stringly typed metadata.
 - Prefer stable IDs over object references across commands and persistence.
 - Prefer a composite command over several independently undoable fragments of

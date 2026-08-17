@@ -75,6 +75,70 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void PreparedLaunchIsNonMutatingAndMatchesAuthoritativeFlight()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            gameplay.EnterTurnMode();
+            var projectiles = CreateProjectileSession(
+                gameplay,
+                new QueuedSegmentQuery());
+
+            Assert.That(projectiles.TryPrepareLaunch(
+                "player",
+                "target",
+                new GameplayPosition(0f, 0f, 10f),
+                out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                out ProjectileLaunchFailure failure), Is.True);
+
+            Assert.That(failure, Is.EqualTo(ProjectileLaunchFailure.None));
+            Assert.That(gameplay.ResolvedActions, Is.Empty);
+            Assert.That(projectiles.Launches, Is.Empty);
+            Assert.That(projectiles.ProjectileIds, Is.Empty);
+            Assert.That(prepared.Predicted.Projectiles, Has.Count.EqualTo(1));
+            ProjectileFlightSnapshot predicted = prepared.Predicted.Projectiles[0];
+            Assert.That(predicted.ProjectileId, Is.EqualTo("projectile.1"));
+            Assert.That(predicted.Status, Is.EqualTo(
+                ProjectileFlightStatus.InFlight));
+            Assert.That(predicted.Position, Is.EqualTo(predicted.Launch.Origin));
+            Assert.That(
+                prepared.Predicted.Session.GetActor("player")
+                    .TurnBudget.ActionPoints,
+                Is.EqualTo(2));
+
+            GameplayTransitionCommitResult result =
+                projectiles.CommitPreparedLaunch(prepared);
+
+            Assert.That(result.MatchesPrediction, Is.True);
+            Assert.That(projectiles.Launches, Has.Count.EqualTo(1));
+            Assert.That(projectiles.GetProjectile("projectile.1").Status,
+                Is.EqualTo(ProjectileFlightStatus.InFlight));
+        }
+
+        [Test]
+        public void PreparedLaunchRejectsInterveningTurnBeforeMutation()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            gameplay.EnterTurnMode();
+            var projectiles = CreateProjectileSession(
+                gameplay,
+                new QueuedSegmentQuery());
+            Assert.That(projectiles.TryPrepareLaunch(
+                "player",
+                "target",
+                new GameplayPosition(0f, 0f, 10f),
+                out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                out _), Is.True);
+            Assert.That(gameplay.TryEndTurn("player", out _), Is.True);
+
+            Assert.Throws<InvalidOperationException>(
+                () => projectiles.CommitPreparedLaunch(prepared));
+
+            Assert.That(projectiles.Launches, Is.Empty);
+            Assert.That(projectiles.ProjectileIds, Is.Empty);
+            Assert.That(gameplay.ResolvedActions, Is.Empty);
+        }
+
+        [Test]
         public void ResponsiveExplorationLaunchCommitsBeforeEncounterBegins()
         {
             GameplaySession gameplay = CreateGameplay(
@@ -353,10 +417,19 @@ namespace GritGud.Domain.Tests.Gameplay
                 "player", "world.aim-point", new GameplayPosition(0f, 1f, 10f),
                 out _, out _);
 
-            ProjectileAdvanceRecord advance = projectiles.Advance(
-                "projectile.1", 1f);
+            GameplayPreparedTransition<ProjectileAdvanceRecord> prepared =
+                projectiles.PrepareAdvance("projectile.1", 1f);
 
-            Assert.That(advance.Resulting.Impact.BlastEffects, Has.Count.EqualTo(1));
+            Assert.That(prepared.Record.Resulting.Impact.BlastEffects,
+                Has.Count.EqualTo(1));
+            Assert.That(projectiles.HasActiveProjectiles, Is.True);
+            Assert.That(gameplay.GetActor("target").Wounds.WoundCount, Is.Zero);
+            Assert.That(
+                prepared.Predicted.Session.GetActor("target")
+                    .Wounds.LeftLegWounds,
+                Is.EqualTo(1));
+            Assert.That(projectiles.CommitPreparedAdvance(prepared)
+                .MatchesPrediction, Is.True);
             Assert.That(projectiles.HasActiveProjectiles, Is.False);
             Assert.That(gameplay.GetActor("target").Wounds.WoundCount, Is.EqualTo(1));
             Assert.That(gameplay.GetActor("target").Wounds.MovementPenalty,
@@ -367,6 +440,80 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(
                 gameplay.GetActor("target").Wounds.TorsoWounds,
                 Is.Zero);
+        }
+
+        [Test]
+        public void PreparedAdvanceRejectsInterveningTurnBeforeMutation()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            gameplay.EnterTurnMode();
+            var query = new QueuedSegmentQuery(
+                ProjectileSegmentQueryResult.Clear(worldStateRevision: 12));
+            var projectiles = CreateProjectileSession(gameplay, query);
+            projectiles.TryLaunch(
+                "player",
+                "target",
+                new GameplayPosition(0f, 0f, 10f),
+                out _,
+                out _);
+            GameplayPreparedTransition<ProjectileAdvanceRecord> prepared =
+                projectiles.PrepareAdvance("projectile.1", 1f);
+            Assert.That(gameplay.TryEndTurn("player", out _), Is.True);
+
+            Assert.Throws<InvalidOperationException>(
+                () => projectiles.CommitPreparedAdvance(prepared));
+
+            Assert.That(projectiles.Advances, Is.Empty);
+            Assert.That(
+                projectiles.GetProjectile("projectile.1").DistanceTraveled,
+                Is.Zero);
+        }
+
+        [Test]
+        public void PreparedImpactPredictsDestructibleDamage()
+        {
+            GameplaySession gameplay = CreateGameplayWithBlast();
+            gameplay.EnterTurnMode();
+            var destructibles = new DestructiblePropSession(new[]
+            {
+                new DestructiblePropDefinition(
+                    "crate",
+                    10f,
+                    DestructiblePropState.Intact),
+            }, gameplay.Journal);
+            var query = new QueuedSegmentQuery(
+                ProjectileSegmentQueryResult.Collision(
+                    15L,
+                    "crate",
+                    0.5f,
+                    new[]
+                    {
+                        new BlastEffectRecord(
+                            "crate",
+                            BlastSubjectKind.DestructibleProp,
+                            1f,
+                            occlusionExposure: 1f,
+                            distanceFalloff: 0.5f),
+                    }));
+            GameplayProjectileSession projectiles = CreateProjectileSession(
+                gameplay,
+                query,
+                destructibles);
+            projectiles.TryLaunch(
+                "player", "world.aim-point", new GameplayPosition(0f, 1f, 10f),
+                out _, out _);
+
+            GameplayPreparedTransition<ProjectileAdvanceRecord> prepared =
+                projectiles.PrepareAdvance("projectile.1", 1f);
+
+            Assert.That(destructibles.GetProp("crate").RemainingIntegrity,
+                Is.EqualTo(10f));
+            Assert.That(prepared.Predicted.Destructibles[0].RemainingIntegrity,
+                Is.EqualTo(8f));
+            Assert.That(projectiles.CommitPreparedAdvance(prepared)
+                .MatchesPrediction, Is.True);
+            Assert.That(destructibles.GetProp("crate").RemainingIntegrity,
+                Is.EqualTo(8f));
         }
 
         private static GameplaySession CreateGameplay(
@@ -407,7 +554,8 @@ namespace GritGud.Domain.Tests.Gameplay
         private static GameplaySession CreateGameplayWithBlast()
         {
             var projectile = new ProjectileFlightDefinition(
-                "projectile.rocket", 4f, 0.1f, 12f, 1f, 1f, true, 5f, 2f);
+                "projectile.rocket", 4f, 0.1f, 12f, 1f, 1f, true, 5f, 2f,
+                blastIntegrityDamage: 4f);
             var player = new ScenarioActorDefinition(
                 "player", 10,
                 new GameplayActorPose(new GameplayPosition(0f, 0f, 0f), 0f),
@@ -498,6 +646,14 @@ namespace GritGud.Domain.Tests.Gameplay
         {
             var destructibles = new DestructiblePropSession(
                 Array.Empty<DestructiblePropDefinition>());
+            return CreateProjectileSession(gameplay, query, destructibles);
+        }
+
+        private static GameplayProjectileSession CreateProjectileSession(
+            GameplaySession gameplay,
+            IProjectileSegmentQuery query,
+            DestructiblePropSession destructibles)
+        {
             return new GameplayProjectileSession(
                 gameplay,
                 query,

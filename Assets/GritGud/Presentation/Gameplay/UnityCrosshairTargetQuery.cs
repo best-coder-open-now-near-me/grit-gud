@@ -10,11 +10,13 @@ namespace GritGud.Presentation.Gameplay
         private readonly Transform observer;
         private readonly GameplayWorldRegistry registry;
         private readonly int layerMask;
+        private readonly Func<GameplayActorView, bool> canAcquire;
 
         public UnityPointerTargetQuery(
             Transform observingActor,
             GameplayWorldRegistry worldRegistry,
-            int physicsLayerMask = Physics.DefaultRaycastLayers)
+            int physicsLayerMask = Physics.DefaultRaycastLayers,
+            Func<GameplayActorView, bool> actorEligibility = null)
         {
             observer = observingActor != null
                 ? observingActor
@@ -22,6 +24,8 @@ namespace GritGud.Presentation.Gameplay
             registry = worldRegistry ??
                 throw new ArgumentNullException(nameof(worldRegistry));
             layerMask = physicsLayerMask;
+            canAcquire = actorEligibility
+                ?? (candidate => candidate.Targetable);
         }
 
         public bool TryAcquire(Ray ray, out GameplayActorView target)
@@ -64,7 +68,7 @@ namespace GritGud.Presentation.Gameplay
                     || !registry.TryGetActorContaining(
                         hit.collider.transform,
                         out GameplayActorView candidate)
-                    || !candidate.Targetable
+                    || !canAcquire(candidate)
                     || ReferenceEquals(candidate.Transform, observer))
                 {
                     continue;

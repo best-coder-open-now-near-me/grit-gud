@@ -153,8 +153,7 @@ namespace GritGud.Presentation.Gameplay
             camera.fieldOfView = 60f;
             camera.nearClipPlane = 0.08f;
             camera.farClipPlane = 80f;
-            camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = GameplayVisualPalette.CameraClear;
+            camera.clearFlags = CameraClearFlags.Skybox;
             UniversalAdditionalCameraData cameraData =
                 camera.GetUniversalAdditionalCameraData();
             cameraData.renderPostProcessing = true;

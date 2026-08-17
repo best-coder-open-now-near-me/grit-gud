@@ -10,6 +10,7 @@ namespace GritGud.Application.Gameplay
         ActorUnavailable,
         ActorNotActive,
         ActorIncapacitated,
+        ActorPinned,
         OperationInProgress,
         ItemUnavailable,
         PowerUnavailable,
@@ -160,6 +161,13 @@ namespace GritGud.Application.Gameplay
                     authoredCost,
                     InventoryPowerAvailabilityFailure.ActorIncapacitated);
             }
+            if (actor.IsPinned)
+            {
+                return Power(
+                    item,
+                    authoredCost,
+                    InventoryPowerAvailabilityFailure.ActorPinned);
+            }
 
             bool turnBased = gameplay.Mode == GameplaySessionMode.TurnBased;
             if (turnBased
@@ -240,6 +248,8 @@ namespace GritGud.Application.Gameplay
                     return "REQUIRES ACTIVE TURN";
                 case InventoryPowerAvailabilityFailure.ActorIncapacitated:
                     return "ACTOR INCAPACITATED";
+                case InventoryPowerAvailabilityFailure.ActorPinned:
+                    return "PUSH OFF THE PINNING PROP FIRST";
                 case InventoryPowerAvailabilityFailure.OperationInProgress:
                     return "WAIT FOR CURRENT ACTION";
                 case InventoryPowerAvailabilityFailure.ItemUnavailable:
@@ -283,6 +293,8 @@ namespace GritGud.Application.Gameplay
                     return "CURRENT ITEM MUST BE UNEQUIPPED";
                 case EquipmentChangeFailure.AlreadyInRequestedState:
                     return "ITEM ALREADY IN REQUESTED STATE";
+                case EquipmentChangeFailure.ActorPinned:
+                    return "PUSH OFF THE PINNING PROP FIRST";
                 default:
                     throw new ArgumentOutOfRangeException(nameof(failure));
             }

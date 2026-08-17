@@ -79,9 +79,10 @@ the generated controller, profiles, and prefab bindings against that recipe.
 - `GameplayWeaponPresenter` coordinates committed gameplay events and
   animation intent.
 - `WeaponMountPresenter` owns held-prefab lifetime, sockets, visual materials,
-  render layers, disabled physics, and contact-swing mount rotation.
-- `WeaponActionEffectsPresenter` owns muzzle flash, light, tracer lifetime, and
-  contact-strike timing.
+  render layers, and disabled held-model physics.
+- `WeaponActionEffectsPresenter` owns muzzle flash, light, and tracer lifetime.
+- `GameplayCombatReactionPresenter` aligns committed wound reactions and
+  incapacitation handoff with authored contact timing.
 - `WeaponAimPresenter` projects targeting state and authoritative facing into
   the post-animation solver.
 - `WeaponAimRig` owns the single ordered post-animation weapon solve.
@@ -124,6 +125,47 @@ Move specialized state selection to Playables only if controller combinations
 grow substantially, layers must be assembled dynamically per actor, or precise
 deterministic presentation timelines become a product requirement. Root motion
 remains disabled because movement is authoritative outside animation.
+
+## Authored close-quarters and ragdoll handoff
+
+Primary character motion remains authored rather than synthesized from weapon
+mount transforms. The private Mixamo overlay supplies `Knife Idle`, `Stabbing`,
+`Push`, `Shoulder Hit And Fall`, and `Fall Over` with stable Unity `.meta`
+files. The project-owned controller and animation profile bind Knife Idle,
+Stabbing, Push, Shoulder Hit And Fall, and Fall Over to melee pose, contact
+attack, displacement, hit reaction, and regional incapacitation semantics after
+Humanoid/in-place import validation. Push uses a dedicated full-body override
+layer synchronized to deterministic prop-displacement presentation timing;
+Push Off/get-up retains its existing interaction fallback until its own authored
+motion is selected.
+Procedural code remains limited to bounded aim, recoil, IK, and the explicitly
+bounded ragdoll handoff below.
+
+An incapacitating reaction hands off from `Shoulder Hit And Fall` or `Fall
+Over` at normalized time `0.72`. Application still owns the incapacity result,
+authoritative actor pose, and root `CharacterController`. The default actor's
+generated `ActorRagdollProfile` owns twelve Humanoid bodies, eleven limited
+joints, mass distribution, collider proportions, settle thresholds, trace
+schema, and impulse bounds. Presentation captures the evaluated skeleton,
+enables those bodies, applies a maximum `2.4 m/s` impulse derived from the
+recorded attacker-to-target direction and wound region, and freezes the body
+within `2.25` seconds. Bone colliders ignore actors and dynamic rigidbodies, so
+the experiment can react to static level geometry without pushing an
+authoritative prop or moving the gameplay root. Frozen bodies disable their
+presentation colliders. Projectile and thrown-blast presentation can feed the
+same evidence seam later; until then those sources retain the authored-fall
+fallback.
+
+Replay never reruns PhysX to recreate that fall. A trace keyed by the
+incapacitating journal entry records the versioned bone order at 20 Hz using
+root-relative millimetre positions and normalized 16-bit quaternion
+components. Each actor retains at most four traces. Replay samples and
+interpolates the matching trace during forward playback or arbitrary seeking;
+backward seeking is therefore reversible. Entering replay snapshots the live
+bone transforms, collider/body flags, and velocities; exit restores that live
+presentation exactly, including a fall that had not settled yet. If the replay
+window has no matching schema/trace, it uses the authored fall without
+inventing a physics result.
 
 ## Validation
 

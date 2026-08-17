@@ -15,6 +15,7 @@ namespace GritGud.Editor
             GameObject prefab,
             ActorAnimationProfile profile,
             ActorMotionProfile motionProfile,
+            ActorRagdollProfile ragdollProfile,
             AnimatorController controller)
         {
             ThirdPersonMotor motor = prefab.GetComponent<ThirdPersonMotor>();
@@ -24,6 +25,8 @@ namespace GritGud.Editor
                 prefab.GetComponent<AnimatorDriver>();
             ActorAnimationCoordinator animationCoordinator =
                 prefab.GetComponent<ActorAnimationCoordinator>();
+            ActorRagdollPresenter ragdollPresenter =
+                prefab.GetComponent<ActorRagdollPresenter>();
             ActorLocomotionAnimationPresenter locomotionPresenter =
                 prefab.GetComponent<ActorLocomotionAnimationPresenter>();
             ActorStancePresenter stancePresenter =
@@ -34,7 +37,8 @@ namespace GritGud.Editor
                 prefab.GetComponent<CharacterController>();
             Animator animator = prefab.GetComponentInChildren<Animator>(true);
             if (motor == null || input == null || animatorDriver == null ||
-                animationCoordinator == null || locomotionPresenter == null ||
+                animationCoordinator == null || ragdollPresenter == null ||
+                locomotionPresenter == null ||
                 stancePresenter == null || celShadingPresenter == null ||
                 characterController == null || animator == null)
             {
@@ -42,7 +46,7 @@ namespace GritGud.Editor
                     "The default player prefab requires its input, motor, "
                     + "locomotion presenter, stance presenter, cel-shading "
                     + "presenter, animator driver, animation coordinator, "
-                    + "character controller, and animator.");
+                    + "ragdoll presenter, character controller, and animator.");
             }
 
             if ((motor.MovementCommandSource as UnityEngine.Object) != input ||
@@ -74,6 +78,10 @@ namespace GritGud.Editor
             if (animationCoordinator.Profile != profile)
             {
                 animatorBindingErrors.Add("ActorAnimationCoordinator.profile");
+            }
+            if (ragdollPresenter.Profile != ragdollProfile)
+            {
+                animatorBindingErrors.Add("ActorRagdollPresenter.profile");
             }
             if (profile.AnimatorController != controller)
             {

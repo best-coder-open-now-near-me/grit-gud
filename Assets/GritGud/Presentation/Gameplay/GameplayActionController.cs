@@ -421,6 +421,8 @@ namespace GritGud.Presentation.Gameplay
                     return "Not enough AP remains for this interaction.";
                 case GameplayActionFailure.InsufficientMovementOpportunity:
                     return "Not enough movement remains for this interaction.";
+                case GameplayActionFailure.ActorPinned:
+                    return "Push off the pinning prop before interacting.";
                 case GameplayActionFailure.None:
                     return string.Empty;
                 default:

@@ -219,9 +219,7 @@ namespace GritGud.Domain.Tests
                     new CharacterRating(CoreAttributeIds.Charisma, 3),
                 },
                 Array.Empty<CharacterRating>(),
-                Array.Empty<string>(),
-                0,
-                Array.Empty<CharacterAdvancementOption>());
+                Array.Empty<string>());
             var combat = new ActorCombatDefinition(
                 allegianceId,
                 new[] { hostileAllegianceId },

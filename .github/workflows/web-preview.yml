@@ -17,22 +17,52 @@ permissions:
   checks: write
   contents: write
 
-concurrency:
-  group: branch-preview-${{ github.event_name == 'delete' && github.event.ref || inputs.ref || github.ref_name }}
-  cancel-in-progress: true
-
-env:
-  UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-  UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-  UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-  UNITY_LICENSING_SERVER: ${{ secrets.UNITY_LICENSING_SERVER }}
-
 jobs:
+  identity:
+    name: Resolve preview identity
+    runs-on: ubuntu-latest
+    outputs:
+      preview_id: ${{ steps.preview.outputs.id }}
+      legacy_id: ${{ steps.preview.outputs.legacy_id }}
+    steps:
+      - name: Check out identity tools
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'delete' && github.event.repository.default_branch || github.event_name == 'workflow_dispatch' && inputs.ref || github.sha }}
+
+      - name: Create collision-resistant preview identity
+        id: preview
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          PREVIEW_REF: ${{ github.event_name == 'delete' && github.event.ref || github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
+        run: |
+          id_script="$RUNNER_TEMP/preview-id.mjs"
+          if [ -f tools/preview-id.mjs ]; then
+            cp tools/preview-id.mjs "$id_script"
+          else
+            git fetch origin "$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
+            git show "origin/$DEFAULT_BRANCH:tools/preview-id.mjs" > "$id_script"
+          fi
+          preview_id="$(node "$id_script" "$PREVIEW_REF")"
+          legacy_id="$(node "$id_script" --legacy "$PREVIEW_REF")"
+          echo "id=$preview_id" >> "$GITHUB_OUTPUT"
+          echo "legacy_id=$legacy_id" >> "$GITHUB_OUTPUT"
+          echo "Preview path: preview/$preview_id/"
+
   publish:
     name: Build and publish preview
     if: github.event_name != 'delete'
+    needs: identity
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    concurrency:
+      group: branch-preview-${{ needs.identity.outputs.preview_id }}
+      cancel-in-progress: true
+    env:
+      UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+      UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+      UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+      UNITY_LICENSING_SERVER: ${{ secrets.UNITY_LICENSING_SERVER }}
     steps:
       - name: Check out preview source
         uses: actions/checkout@v4
@@ -81,19 +111,6 @@ jobs:
           rsync -a --exclude='.git*' .private-assets/grit-gud/Assets/ Assets/
           echo "revision=$revision" >> "$GITHUB_OUTPUT"
           rm -rf .private-assets
-
-      - name: Create preview slug
-        id: preview
-        env:
-          PREVIEW_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
-        run: |
-          slug="$(printf '%s' "$PREVIEW_REF" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+//; s/-+$//')"
-          if [ -z "$slug" ] || [ "$slug" = "." ] || [ "$slug" = ".." ]; then
-            echo "Could not create a safe preview slug from: $PREVIEW_REF" >&2
-            exit 1
-          fi
-          echo "slug=$slug" >> "$GITHUB_OUTPUT"
-          echo "Preview path: preview/$slug/"
 
       - name: Reclaim runner disk space
         run: |
@@ -179,7 +196,8 @@ jobs:
       - name: Publish branch folder
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          PREVIEW_SLUG: ${{ steps.preview.outputs.slug }}
+          PREVIEW_ID: ${{ needs.identity.outputs.preview_id }}
+          LEGACY_PREVIEW_ID: ${{ needs.identity.outputs.legacy_id }}
         run: |
           build_dir="$RUNNER_TEMP/web-preview-build"
           index_script="$RUNNER_TEMP/preview-index.mjs"
@@ -207,13 +225,16 @@ jobs:
               git -C "$publish_dir" switch --orphan "gh-pages-seed-${GITHUB_RUN_ID}-${attempt}"
             fi
 
-            rm -rf "$publish_dir/preview/$PREVIEW_SLUG"
-            mkdir -p "$publish_dir/preview/$PREVIEW_SLUG"
-            cp -a "$build_dir/." "$publish_dir/preview/$PREVIEW_SLUG/"
+            rm -rf "$publish_dir/preview/$PREVIEW_ID"
+            if [ "$LEGACY_PREVIEW_ID" != "$PREVIEW_ID" ]; then
+              rm -rf "$publish_dir/preview/$LEGACY_PREVIEW_ID"
+            fi
+            mkdir -p "$publish_dir/preview/$PREVIEW_ID"
+            cp -a "$build_dir/." "$publish_dir/preview/$PREVIEW_ID/"
             touch "$publish_dir/.nojekyll"
             node "$index_script" "$publish_dir"
             git -C "$publish_dir" add --all
-            git -C "$publish_dir" commit -m "Publish preview for $PREVIEW_SLUG" || true
+            git -C "$publish_dir" commit -m "Publish preview for $PREVIEW_ID" || true
 
             if git -C "$publish_dir" push origin HEAD:gh-pages; then
               exit 0
@@ -228,16 +249,20 @@ jobs:
 
       - name: Report preview URL
         env:
-          PREVIEW_SLUG: ${{ steps.preview.outputs.slug }}
+          PREVIEW_ID: ${{ needs.identity.outputs.preview_id }}
         run: |
-          url="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/preview/$PREVIEW_SLUG/"
+          url="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/preview/$PREVIEW_ID/"
           echo "## WebGL branch preview" >> "$GITHUB_STEP_SUMMARY"
           echo "[$url]($url)" >> "$GITHUB_STEP_SUMMARY"
 
   remove:
     name: Remove deleted branch preview
     if: github.event_name == 'delete' && github.event.ref_type == 'branch'
+    needs: identity
     runs-on: ubuntu-latest
+    concurrency:
+      group: branch-preview-${{ needs.identity.outputs.preview_id }}
+      cancel-in-progress: true
     steps:
       - name: Check out maintenance tools
         uses: actions/checkout@v4
@@ -246,8 +271,9 @@ jobs:
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           DELETED_REF: ${{ github.event.ref }}
+          PREVIEW_ID: ${{ needs.identity.outputs.preview_id }}
+          LEGACY_PREVIEW_ID: ${{ needs.identity.outputs.legacy_id }}
         run: |
-          slug="$(printf '%s' "$DELETED_REF" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g; s/^-+//; s/-+$//')"
           index_script="$RUNNER_TEMP/preview-index.mjs"
           git fetch origin "$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
           git show "origin/$DEFAULT_BRANCH:tools/preview-index.mjs" > "$index_script"
@@ -260,7 +286,10 @@ jobs:
               exit 0
             fi
             git checkout -B gh-pages origin/gh-pages
-            rm -rf "preview/$slug"
+            rm -rf "preview/$PREVIEW_ID"
+            if [ "$LEGACY_PREVIEW_ID" != "$PREVIEW_ID" ]; then
+              rm -rf "preview/$LEGACY_PREVIEW_ID"
+            fi
             touch .nojekyll
             node "$index_script" .
             git add --all
@@ -268,7 +297,7 @@ jobs:
               echo "No preview exists for $DELETED_REF."
               exit 0
             fi
-            git commit -m "Remove preview for $slug"
+            git commit -m "Remove preview for $PREVIEW_ID"
 
             if git push origin HEAD:gh-pages; then
               exit 0

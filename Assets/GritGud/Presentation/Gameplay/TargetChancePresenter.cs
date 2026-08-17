@@ -29,7 +29,9 @@ namespace GritGud.Presentation.Gameplay
 
         private void OnGUI()
         {
-            if (acquisition == null || !acquisition.ShouldPresentHitChance)
+            if (acquisition == null
+                || !acquisition.TryGetPointerFeedback(
+                    out TargetingPointerFeedback feedback))
             {
                 return;
             }
@@ -43,8 +45,11 @@ namespace GritGud.Presentation.Gameplay
             float canvasHeight = Screen.height / uiScale;
             Matrix4x4 previousMatrix = GUI.matrix;
             GUI.matrix = Matrix4x4.Scale(new Vector3(uiScale, uiScale, 1f));
-            const float width = 184f;
             const float height = 27f;
+            float width = Mathf.Clamp(
+                chanceStyle.CalcSize(new GUIContent(feedback.Text)).x + 24f,
+                184f,
+                360f);
             Vector2 screenPointer = Mouse.current == null
                 ? new Vector2(Screen.width * 0.5f, Screen.height * 0.5f)
                 : Mouse.current.position.ReadValue();
@@ -61,24 +66,11 @@ namespace GritGud.Presentation.Gameplay
                 chanceBackground,
                 ScaleMode.StretchToFill,
                 true);
-            GritGud.Application.Gameplay.TargetAcquisitionPreview preview =
-                acquisition.CurrentPreview;
-            chanceStyle.normal.textColor = preview.IsWithinReach
-                ? GameplayVisualPalette.SignalBlueBright
-                : GameplayVisualPalette.SignalOrangeGlow;
-            GUI.Label(rectangle, BuildLabel(preview), chanceStyle);
+            chanceStyle.normal.textColor = feedback.IsValid
+                ? GameplayVisualPalette.TargetingValid
+                : GameplayVisualPalette.TargetingInvalid;
+            GUI.Label(rectangle, feedback.Text, chanceStyle);
             GUI.matrix = previousMatrix;
-        }
-
-        private static string BuildLabel(
-            GritGud.Application.Gameplay.TargetAcquisitionPreview preview)
-        {
-            if (!preview.IsWithinReach)
-            {
-                return $"OUT OF REACH  {preview.Distance:0.#} / {preview.MaximumReach:0.#} M";
-            }
-
-            return $"CHANCE TO HIT  {preview.HitChancePercent}%";
         }
 
         private void EnsureGuiResources()

@@ -77,6 +77,51 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void CombatTargetSelectionPrefersTheBestShotOverNearestDistance()
+        {
+            GameplaySession gameplay = CreateMultiTargetSession();
+            var decisions = new GameplayEnemyDecisionSession(gameplay);
+
+            EnemyTargetSelection selection = decisions.SelectBestTarget(
+                "enemy",
+                new[] { "player", "ally" },
+                targetId => CreateRasterExposure(
+                    visibleSamples: targetId == "player" ? 9 : 2,
+                    totalSamples: 10,
+                    targetId: targetId));
+
+            Assert.That(selection.TargetId, Is.EqualTo("player"));
+            Assert.That(selection.HitChancePercent, Is.EqualTo(90));
+            Assert.That(selection.Exposure.TargetId, Is.EqualTo("player"));
+            Assert.That(decisions.SelectNearestCapableHostile("enemy"),
+                Is.EqualTo("ally"));
+        }
+
+        [Test]
+        public void ExplorationDetectionEvaluatesTheWholePartyBeforeChoosingThreat()
+        {
+            GameplaySession gameplay = CreateMultiTargetSession();
+            var decisions = new GameplayEnemyDecisionSession(gameplay);
+            var capturedTargets = new System.Collections.Generic.List<string>();
+
+            EnemyTacticalDecisionRecord detection = decisions.EvaluateBestDetection(
+                "enemy",
+                new[] { "player", "ally" },
+                targetId =>
+                {
+                    capturedTargets.Add(targetId);
+                    return CreateRasterExposure(
+                        visibleSamples: targetId == "player" ? 2 : 8,
+                        totalSamples: 10,
+                        targetId: targetId);
+                });
+
+            Assert.That(capturedTargets, Is.EqualTo(new[] { "player", "ally" }));
+            Assert.That(detection.TargetId, Is.EqualTo("ally"));
+            Assert.That(detection.Exposure.VisibleFraction, Is.EqualTo(0.8f));
+        }
+
+        [Test]
         public void ExposedAffordableTargetProducesAttackDecisionAndJournalEntry()
         {
             GameplaySession gameplay = CreateSession();
@@ -100,6 +145,71 @@ namespace GritGud.Domain.Tests.Gameplay
                 ((EnemyDecisionCommittedJournalEntry)gameplay.Journal.LastEntry)
                     .Decision,
                 Is.SameAs(decision));
+        }
+
+        [Test]
+        public void LowConfidenceShotRepositionsForMeaningfullyBetterExposure()
+        {
+            GameplaySession gameplay = CreateSession();
+            Assert.That(gameplay.BeginEncounter(), Is.True);
+            var decisions = new GameplayEnemyDecisionSession(gameplay);
+            GameplayActorSnapshot enemy = gameplay.GetActor("enemy");
+            var betterRoute = new MovementRouteRecord(
+                "enemy",
+                enemy.Pose,
+                new[] { new GameplayPosition(2f, 0f, 6f) });
+            TargetExposureSnapshot lowConfidence = CreateRasterExposure(
+                visibleSamples: 2,
+                totalSamples: 10);
+
+            Assert.That(decisions.RequiresMovementSearch(
+                "enemy", "player", lowConfidence), Is.True);
+            EnemyTacticalDecisionRecord decision = decisions.EvaluateTurn(
+                "enemy",
+                "player",
+                lowConfidence,
+                new[]
+                {
+                    new EnemyMovementOption(
+                        betterRoute,
+                        CreateRasterExposure(visibleSamples: 8, totalSamples: 10),
+                        resultingTargetDistance: 6f),
+                },
+                attacksCommittedThisTurn: 0);
+
+            Assert.That(decision.Kind, Is.EqualTo(EnemyTacticalDecisionKind.Move));
+            Assert.That(decision.MovementRoute, Is.SameAs(betterRoute));
+            Assert.That(decision.Rationale, Does.Contain("improves attack position"));
+        }
+
+        [Test]
+        public void LowConfidenceShotIsTakenWhenNoRouteImprovesIt()
+        {
+            GameplaySession gameplay = CreateSession();
+            Assert.That(gameplay.BeginEncounter(), Is.True);
+            var decisions = new GameplayEnemyDecisionSession(gameplay);
+            GameplayActorSnapshot enemy = gameplay.GetActor("enemy");
+            var worseRoute = new MovementRouteRecord(
+                "enemy",
+                enemy.Pose,
+                new[] { new GameplayPosition(2f, 0f, 6f) });
+
+            EnemyTacticalDecisionRecord decision = decisions.EvaluateTurn(
+                "enemy",
+                "player",
+                CreateRasterExposure(visibleSamples: 2, totalSamples: 10),
+                new[]
+                {
+                    new EnemyMovementOption(
+                        worseRoute,
+                        CreateRasterExposure(visibleSamples: 1, totalSamples: 10),
+                        resultingTargetDistance: 6f),
+                },
+                attacksCommittedThisTurn: 0);
+
+            Assert.That(decision.Kind, Is.EqualTo(EnemyTacticalDecisionKind.Attack));
+            Assert.That(decision.Rationale, Does.Contain("no better firing position"));
+            Assert.That(decision.Rationale, Does.Contain("20%"));
         }
 
         [Test]
@@ -442,10 +552,11 @@ namespace GritGud.Domain.Tests.Gameplay
 
         private static TargetExposureSnapshot CreateRasterExposure(
             int visibleSamples,
-            int totalSamples) =>
+            int totalSamples,
+            string targetId = "player") =>
             new TargetExposureSnapshot(
                 "enemy",
-                "player",
+                targetId,
                 new[]
                 {
                     new TargetRegionExposure(

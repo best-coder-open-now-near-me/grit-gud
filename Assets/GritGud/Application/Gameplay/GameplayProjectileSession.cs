@@ -11,6 +11,7 @@ namespace GritGud.Application.Gameplay
         TurnModeRequired,
         ActorNotActive,
         ActorIncapacitated,
+        ActorPinned,
         OperationInProgress,
         WeaponUnavailable,
         ProjectileUnavailable,
@@ -137,6 +138,16 @@ namespace GritGud.Application.Gameplay
 
         public IReadOnlyList<ProjectileAdvanceRecord> Advances => readOnlyAdvances;
 
+        public IReadOnlyList<string> ProjectileIds
+        {
+            get
+            {
+                var ids = new List<string>(flights.Keys);
+                ids.Sort(StringComparer.Ordinal);
+                return ids.AsReadOnly();
+            }
+        }
+
         public bool HasActiveProjectiles
         {
             get
@@ -183,6 +194,26 @@ namespace GritGud.Application.Gameplay
                     actorId,
                     intendedTargetId,
                     aimPoint,
+                    out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                    out failure))
+                return false;
+            action = prepared.Record;
+            CommitPreparedLaunch(prepared);
+            return true;
+        }
+
+        public bool TryPrepareLaunch(
+            string actorId,
+            string intendedTargetId,
+            GameplayPosition aimPoint,
+            out GameplayPreparedTransition<GameplayActionRecord> prepared,
+            out ProjectileLaunchFailure failure)
+        {
+            prepared = null;
+            if (!TryPrepareLaunch(
+                    actorId,
+                    intendedTargetId,
+                    aimPoint,
                     out AttackDefinition weapon,
                     out GameplayActorSnapshot actor,
                     out failure))
@@ -190,6 +221,8 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
+            GameplayCombatStateSnapshot previous =
+                CaptureCombatState();
             long launchSequence = launches.Count + 1L;
             string projectileId = CreateProjectileId(launchSequence);
             GameplayPosition launchOrigin = weapon.Projectile.GetLaunchOrigin(
@@ -210,7 +243,7 @@ namespace GritGud.Application.Gameplay
             long actionSequence = gameplay.LastResolvedAction == null
                 ? 1L
                 : gameplay.LastResolvedAction.Sequence + 1L;
-            action = new GameplayActionRecord(
+            var action = new GameplayActionRecord(
                 actionSequence,
                 new GameplayActionRequest(
                     actorId,
@@ -220,10 +253,20 @@ namespace GritGud.Application.Gameplay
                 actor.TurnBudget,
                 resultingBudget,
                 new[] { new ProjectileLaunchedActionOutcome(launch) });
-            CommitLaunch(action);
+            prepared = new GameplayPreparedTransition<GameplayActionRecord>(
+                action,
+                previous,
+                GameplayWeaponActionStateProjector.Project(previous, action));
             failure = ProjectileLaunchFailure.None;
             return true;
         }
+
+        public GameplayTransitionCommitResult CommitPreparedLaunch(
+            GameplayPreparedTransition<GameplayActionRecord> prepared) =>
+            GameplayTransitionCoordinator.Commit(
+                prepared,
+                CaptureCombatState,
+                CommitLaunch);
 
         public void CommitLaunch(GameplayActionRecord action)
         {
@@ -253,7 +296,8 @@ namespace GritGud.Application.Gameplay
                     "The projectile launch is not the next authoritative launch.");
             }
 
-            gameplay.CommitAction(action);
+            var notifications = new GameplayNotificationBatch();
+            gameplay.CommitAction(action, notifications);
             launches.Add(launch);
             flights.Add(
                 launch.ProjectileId,
@@ -263,12 +307,24 @@ namespace GritGud.Application.Gameplay
                     distanceTraveled: 0f,
                     elapsedTurnTime: 0f,
                     ProjectileFlightStatus.InFlight));
+            notifications.Publish();
         }
 
         public ProjectileAdvanceRecord Advance(
             string projectileId,
             float turnTime)
         {
+            GameplayPreparedTransition<ProjectileAdvanceRecord> prepared =
+                PrepareAdvance(projectileId, turnTime);
+            CommitPreparedAdvance(prepared);
+            return prepared.Record;
+        }
+
+        public GameplayPreparedTransition<ProjectileAdvanceRecord> PrepareAdvance(
+            string projectileId,
+            float turnTime)
+        {
+            GameplayCombatStateSnapshot previousState = CaptureCombatState();
             ProjectileAdvancePrediction prediction = PredictAdvance(
                 projectileId,
                 turnTime);
@@ -329,9 +385,21 @@ namespace GritGud.Application.Gameplay
                 prediction.SegmentEnd,
                 queryResult.WorldStateRevision,
                 collisionFraction);
-            CommitAdvance(record);
-            return record;
+            return new GameplayPreparedTransition<ProjectileAdvanceRecord>(
+                record,
+                previousState,
+                GameplayProjectileAdvanceStateProjector.Project(
+                    previousState,
+                    record,
+                    consequences.Destructibles.Journal == gameplay.Journal));
         }
+
+        public GameplayTransitionCommitResult CommitPreparedAdvance(
+            GameplayPreparedTransition<ProjectileAdvanceRecord> prepared) =>
+            GameplayTransitionCoordinator.Commit(
+                prepared,
+                CaptureCombatState,
+                CommitAdvance);
 
         public ProjectileAdvancePrediction PredictAdvance(
             string projectileId,
@@ -438,6 +506,12 @@ namespace GritGud.Application.Gameplay
             return flight;
         }
 
+        private GameplayCombatStateSnapshot CaptureCombatState() =>
+            GameplayCombatStateCapture.Capture(
+                gameplay,
+                consequences.Destructibles,
+                projectiles: this);
+
         private bool TryPrepareLaunch(
             string actorId,
             string intendedTargetId,
@@ -496,6 +570,11 @@ namespace GritGud.Application.Gameplay
             if (gameplay.IsActorIncapacitated(actorId))
             {
                 failure = ProjectileLaunchFailure.ActorIncapacitated;
+                return false;
+            }
+            if (actor.IsPinned)
+            {
+                failure = ProjectileLaunchFailure.ActorPinned;
                 return false;
             }
 

@@ -47,6 +47,9 @@ namespace GritGud.Editor
             ValidateWeaponLayer(controller);
             ValidateRecoilLayer(controller);
             ValidateActionLayer(controller);
+            ValidateTraversalLayer(controller);
+            ValidateDisplacementLayer(controller);
+            ValidateReactionLayer(controller);
         }
 
         internal static bool HasRequiredTurnLayer(
@@ -113,7 +116,73 @@ namespace GritGud.Editor
                         ActorAnimationParameters.NoActionStateName)) &&
                 FindState(
                     actionLayer.stateMachine,
-                    ActorAnimationParameters.ThrowStateName) != null;
+                    ActorAnimationParameters.ThrowStateName) != null &&
+                FindState(
+                    actionLayer.stateMachine,
+                    ActorAnimationParameters.KnifeStrikeStateName) != null;
+        }
+
+        internal static bool HasRequiredTraversalLayer(
+            AnimatorController controller)
+        {
+            AnimatorControllerLayer layer = FindLayer(
+                controller,
+                ActorAnimationParameters.TraversalLayerName);
+            return layer != null &&
+                layer.avatarMask == null &&
+                layer.blendingMode == AnimatorLayerBlendingMode.Override &&
+                !layer.iKPass &&
+                Mathf.Abs(layer.defaultWeight) <= 0.001f &&
+                HasActionLayerReleaseBehaviour(FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.NoTraversalStateName)) &&
+                FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.JumpStateName) != null;
+        }
+
+        internal static bool HasRequiredReactionLayer(
+            AnimatorController controller)
+        {
+            AnimatorControllerLayer layer = FindLayer(
+                controller,
+                ActorAnimationParameters.ReactionLayerName);
+            return layer != null &&
+                layer.avatarMask == null &&
+                layer.blendingMode == AnimatorLayerBlendingMode.Override &&
+                !layer.iKPass &&
+                Mathf.Abs(layer.defaultWeight) <= 0.001f &&
+                HasActionLayerReleaseBehaviour(FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.NoReactionStateName)) &&
+                FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.HitReactionStateName) != null &&
+                FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.FallOverStateName) != null &&
+                FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.ShoulderFallStateName) != null;
+        }
+
+        internal static bool HasRequiredDisplacementLayer(
+            AnimatorController controller)
+        {
+            AnimatorControllerLayer layer = FindLayer(
+                controller,
+                ActorAnimationParameters.DisplacementLayerName);
+            return layer != null &&
+                layer.avatarMask == null &&
+                layer.blendingMode == AnimatorLayerBlendingMode.Override &&
+                !layer.iKPass &&
+                Mathf.Abs(layer.defaultWeight) <= 0.001f &&
+                HasActionLayerReleaseBehaviour(FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.NoDisplacementStateName)) &&
+                FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.PushStateName) != null;
         }
 
         private static void ValidateParameters(AnimatorController controller)
@@ -328,7 +397,10 @@ namespace GritGud.Editor
             AnimatorState launcherAim = FindState(
                 weaponLayer.stateMachine,
                 ActorAnimationParameters.LauncherAimStateName);
-            if (rifleAim == null || launcherAim == null ||
+            AnimatorState knifeIdle = FindState(
+                weaponLayer.stateMachine,
+                ActorAnimationParameters.KnifeIdleStateName);
+            if (rifleAim == null || launcherAim == null || knifeIdle == null ||
                 !(rifleAim.motion is BlendTree rifleLocomotion) ||
                 rifleLocomotion.blendType !=
                     BlendTreeType.FreeformCartesian2D ||
@@ -369,7 +441,8 @@ namespace GritGud.Editor
                 }
             }
 
-            if (launcherAim.motion != LoadAnimationClip(LauncherAimPath))
+            if (launcherAim.motion != LoadAnimationClip(LauncherAimPath) ||
+                knifeIdle.motion != LoadAnimationClip(KnifeIdlePath))
             {
                 throw new InvalidOperationException(
                     "Weapon launcher motions do not match their "
@@ -446,22 +519,164 @@ namespace GritGud.Editor
                     actionLayer.stateMachine,
                     ActorAnimationParameters.ThrowStateName)
                 : null;
+            AnimatorState knifeStrike = actionLayer != null
+                ? FindState(
+                    actionLayer.stateMachine,
+                    ActorAnimationParameters.KnifeStrikeStateName)
+                : null;
             if (actionLayer == null || actionLayer.avatarMask == null ||
                 weaponLayer == null ||
                 actionLayer.avatarMask != weaponLayer.avatarMask ||
                 actionLayer.blendingMode != AnimatorLayerBlendingMode.Override ||
                 actionLayer.iKPass ||
                 Mathf.Abs(actionLayer.defaultWeight) > 0.001f ||
-                idle == null || throwing == null ||
+                idle == null || throwing == null || knifeStrike == null ||
                 actionLayer.stateMachine.defaultState != idle ||
                 idle.motion != null ||
                 !HasActionLayerReleaseBehaviour(idle) ||
                 throwing.motion != LoadAnimationClip(ThrowPath) ||
-                !HasActionReturnTransition(throwing, idle))
+                !HasActionReturnTransition(
+                    throwing,
+                    idle,
+                    ActionExitNormalizedTime) ||
+                knifeStrike.motion != LoadAnimationClip(KnifeStrikePath) ||
+                Mathf.Abs(
+                    knifeStrike.speed -
+                    LoadAnimationClip(KnifeStrikePath).length /
+                        ContactStrikeSeconds) > 0.001f ||
+                !HasActionReturnTransition(
+                    knifeStrike,
+                    idle,
+                    ActionExitNormalizedTime))
             {
                 throw new InvalidOperationException(
                     "Actor actions require an upper-body override layer, "
-                    + "an authored throw motion and a self-releasing return.");
+                    + "authored throw/knife motions and self-releasing returns.");
+            }
+        }
+
+        private static void ValidateTraversalLayer(
+            AnimatorController controller)
+        {
+            AnimatorControllerLayer layer = FindLayer(
+                controller,
+                ActorAnimationParameters.TraversalLayerName);
+            AnimatorState idle = layer != null
+                ? FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.NoTraversalStateName)
+                : null;
+            AnimatorState jump = layer != null
+                ? FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.JumpStateName)
+                : null;
+            if (layer == null || layer.avatarMask != null ||
+                layer.blendingMode != AnimatorLayerBlendingMode.Override ||
+                layer.iKPass ||
+                Mathf.Abs(layer.defaultWeight) > 0.001f ||
+                idle == null || jump == null ||
+                layer.stateMachine.defaultState != idle ||
+                idle.motion != null ||
+                !HasActionLayerReleaseBehaviour(idle) ||
+                jump.motion != LoadAnimationClip(JumpPath) ||
+                !HasActionReturnTransition(
+                    jump,
+                    idle,
+                    ActionExitNormalizedTime))
+            {
+                throw new InvalidOperationException(
+                    "Actor traversal requires a full-body override layer, "
+                    + "an authored jump motion and a self-releasing return.");
+            }
+        }
+
+        private static void ValidateReactionLayer(
+            AnimatorController controller)
+        {
+            AnimatorControllerLayer layer = FindLayer(
+                controller,
+                ActorAnimationParameters.ReactionLayerName);
+            AnimatorState idle = layer != null
+                ? FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.NoReactionStateName)
+                : null;
+            AnimatorState hit = layer != null
+                ? FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.HitReactionStateName)
+                : null;
+            AnimatorState fall = layer != null
+                ? FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.FallOverStateName)
+                : null;
+            AnimatorState shoulder = layer != null
+                ? FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.ShoulderFallStateName)
+                : null;
+            if (layer == null || layer.avatarMask != null ||
+                layer.blendingMode != AnimatorLayerBlendingMode.Override ||
+                layer.iKPass ||
+                Mathf.Abs(layer.defaultWeight) > 0.001f ||
+                idle == null || hit == null || fall == null ||
+                shoulder == null ||
+                layer.stateMachine.defaultState != idle ||
+                idle.motion != null ||
+                !HasActionLayerReleaseBehaviour(idle) ||
+                hit.motion != LoadAnimationClip(ShoulderFallPath) ||
+                !HasActionReturnTransition(
+                    hit,
+                    idle,
+                    HitReactionExitNormalizedTime) ||
+                fall.motion != LoadAnimationClip(FallOverPath) ||
+                shoulder.motion != LoadAnimationClip(ShoulderFallPath) ||
+                fall.transitions.Length != 0 ||
+                shoulder.transitions.Length != 0)
+            {
+                throw new InvalidOperationException(
+                    "Actor reactions require a full-body override layer, "
+                    + "a recovering hit reaction, and persistent authored falls.");
+            }
+        }
+
+        private static void ValidateDisplacementLayer(
+            AnimatorController controller)
+        {
+            AnimatorControllerLayer layer = FindLayer(
+                controller,
+                ActorAnimationParameters.DisplacementLayerName);
+            AnimatorState idle = layer != null
+                ? FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.NoDisplacementStateName)
+                : null;
+            AnimatorState push = layer != null
+                ? FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.PushStateName)
+                : null;
+            AnimationClip pushClip = LoadAnimationClip(PushPath);
+            if (layer == null || layer.avatarMask != null ||
+                layer.blendingMode != AnimatorLayerBlendingMode.Override ||
+                layer.iKPass ||
+                Mathf.Abs(layer.defaultWeight) > 0.001f ||
+                idle == null || push == null || pushClip == null ||
+                layer.stateMachine.defaultState != idle ||
+                idle.motion != null ||
+                !HasActionLayerReleaseBehaviour(idle) ||
+                push.motion != pushClip ||
+                Mathf.Abs(push.speed - pushClip.length / PushSeconds) > 0.001f ||
+                !HasActionReturnTransition(
+                    push,
+                    idle,
+                    ActionExitNormalizedTime))
+            {
+                throw new InvalidOperationException(
+                    "Actor displacement requires a full-body override layer, "
+                    + "the authored Push motion, and a self-releasing return.");
             }
         }
 
@@ -485,17 +700,18 @@ namespace GritGud.Editor
         }
 
         private static bool HasActionReturnTransition(
-            AnimatorState throwing,
-            AnimatorState idle)
+            AnimatorState action,
+            AnimatorState idle,
+            float exitNormalizedTime)
         {
-            foreach (AnimatorStateTransition transition in throwing.transitions)
+            foreach (AnimatorStateTransition transition in action.transitions)
             {
                 if (transition.destinationState == idle &&
                     transition.hasExitTime &&
                     transition.hasFixedDuration &&
                     Mathf.Abs(
                         transition.exitTime -
-                        ActionExitNormalizedTime) <= 0.001f &&
+                        exitNormalizedTime) <= 0.001f &&
                     Mathf.Abs(
                         transition.duration -
                         ActionReturnTransitionSeconds) <= 0.001f)

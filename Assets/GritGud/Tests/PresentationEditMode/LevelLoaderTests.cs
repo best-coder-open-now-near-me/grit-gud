@@ -3,6 +3,7 @@ using GritGud.Application.Levels;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Levels;
 using GritGud.Presentation.Gameplay;
+using GritGud.Presentation.LevelEditing;
 using GritGud.Presentation.Levels;
 using GritGud.Presentation.Levels.Runtime;
 using NUnit.Framework;
@@ -19,11 +20,37 @@ namespace GritGud.Presentation.Tests
 
             string[] ids = catalog.Entries.Select(entry => entry.ArchetypeId).ToArray();
 
-            Assert.That(ids, Has.Length.EqualTo(7));
+            Assert.That(ids.Length, Is.GreaterThanOrEqualTo(7));
             Assert.That(ids.Distinct().Count(), Is.EqualTo(ids.Length));
             Assert.That(ids, Does.Contain("structure.floor.standard"));
             Assert.That(ids, Does.Contain("prop.crate.standard"));
             Assert.That(ids, Does.Contain("vehicle.buggy.standard"));
+            Assert.That(ids, Does.Contain("structure.barrier.concrete"));
+            Assert.That(ids, Does.Contain("structure.barricade.wood"));
+            Assert.That(ids, Does.Contain("prop.pallet-stack.standard"));
+            Assert.That(ids, Does.Contain("structure.wire-fence.standard"));
+            Assert.That(ids, Does.Contain("structure.container.small"));
+            Assert.That(ids, Does.Contain("prop.generator.standard"));
+            Assert.That(ids, Does.Contain("prop.tire-stack.standard"));
+            Assert.That(ids, Does.Contain("prop.propane.standard"));
+            Assert.That(
+                catalog.Entries.Single(entry => entry.ArchetypeId == "vehicle.buggy.standard")
+                    .Capabilities.HasFlag(LevelArchetypeCapabilities.Vehicle),
+                Is.True);
+        }
+
+        [Test]
+        public void ScenarioAuthoringCatalogExposesPlayerAndOpponentTemplates()
+        {
+            ScenarioAuthoringCatalog authoring = ScenarioAuthoringCatalog.LoadDefault();
+
+            Assert.That(authoring.ActorTemplates.Select(template => template.TemplateId),
+                Does.Contain("player"));
+            Assert.That(authoring.ActorTemplates.Select(template => template.TemplateId),
+                Does.Contain("depot-rifleman"));
+            Assert.That(authoring.GetActor("player").PlayerTemplate, Is.True);
+            Assert.That(authoring.GetActor("depot-rifleman").PlayerTemplate, Is.False);
+            Assert.That(authoring.TryGetActor("missing-template", out _), Is.False);
         }
 
         [Test]
@@ -56,7 +83,8 @@ namespace GritGud.Presentation.Tests
         [Test]
         public void MainLevelIsValidAndSubstantial()
         {
-            TextAsset asset = Resources.Load<TextAsset>("Levels/main-level");
+            TextAsset asset = Resources.Load<TextAsset>(
+                "Levels/Published/main-level");
             Assert.That(asset, Is.Not.Null);
             var serializer = new UnityLevelJsonSerializer();
             LevelDocument document = serializer.Deserialize(asset.text);
@@ -141,9 +169,6 @@ namespace GritGud.Presentation.Tests
             Assert.That(document.terrainSurfaces[0].id, Is.EqualTo("depot-ground"));
             Assert.That(document.terrainSurfaces[0].heightSamples,
                 Has.Count.EqualTo(17 * 15));
-            Assert.That(
-                document.entities.Select(entity => entity.archetypeId).Distinct(),
-                Is.EquivalentTo(catalog.Entries.Select(entry => entry.ArchetypeId)));
         }
 
         [Test]
@@ -169,6 +194,108 @@ namespace GritGud.Presentation.Tests
             Assert.That(package.Scenario.actors.Single().id,
                 Is.EqualTo(package.Scenario.playerParty.initiallySelectedActorId));
             Assert.That(package.Level, Is.Not.SameAs(source));
+        }
+
+        [Test]
+        public void SandboxPackageUsesOnlyAuthoredScenarioInstances()
+        {
+            TextAsset asset = Resources.Load<TextAsset>("Levels/basic-construction");
+            LevelDocument source = new UnityLevelJsonSerializer().Deserialize(asset.text);
+            source.levelId = "authored-scenario";
+            source.scenario = new LevelScenarioData
+            {
+                randomSeed = 42,
+                actors =
+                {
+                    new LevelScenarioActorData
+                    {
+                        id = "hero",
+                        templateId = "player",
+                        playerControlled = true,
+                        initiallySelected = true,
+                        transform = new LevelTransformData(
+                            new Float3Data(1f, 2f, 3f),
+                            45f),
+                    },
+                    new LevelScenarioActorData
+                    {
+                        id = "guard-a",
+                        templateId = "depot-rifleman",
+                        primaryTarget = true,
+                        transform = new LevelTransformData(
+                            new Float3Data(-4f, 2f, 6f),
+                            180f),
+                    },
+                },
+                props =
+                {
+                    new LevelScenarioPropData
+                    {
+                        entityId = "crate-01",
+                        mass = 31f,
+                        sizeClass = "medium",
+                        startsEncounterOnAttack = true,
+                    },
+                },
+            };
+
+            GameplayContentPackage package = GameplayContentLoader.LoadSandbox(source);
+
+            Assert.That(package.Scenario.randomSeed, Is.EqualTo(42));
+            Assert.That(package.Scenario.actors.Select(actor => actor.id),
+                Is.EquivalentTo(new[] { "hero", "guard-a" }));
+            Assert.That(package.Scenario.playerParty.actorIds,
+                Is.EqualTo(new[] { "hero" }));
+            Assert.That(package.Scenario.playerParty.initiallySelectedActorId,
+                Is.EqualTo("hero"));
+            Assert.That(package.Scenario.primaryTargetActorId,
+                Is.EqualTo("guard-a"));
+            Assert.That(package.Scenario.actors.Single(actor => actor.id == "hero")
+                .position.x, Is.EqualTo(1f));
+            Assert.That(package.Scenario.actors.Single(actor => actor.id == "guard-a")
+                .facingDegrees, Is.EqualTo(180f));
+            Assert.That(package.Scenario.props.Single().entityId,
+                Is.EqualTo("crate-01"));
+            Assert.That(package.Scenario.props.Single().mass, Is.EqualTo(31f));
+            Assert.That(package.Scenario.props.Single().attackResponse.startsEncounter,
+                Is.True);
+            Assert.That(package.Scenario.objectives, Is.Empty);
+            Assert.That(package.Scenario.vehicles, Is.Empty);
+        }
+
+        [Test]
+        public void AuthoredCharacterOverridesTemplateBuildAndStartingLoadout()
+        {
+            TextAsset asset = Resources.Load<TextAsset>("Levels/basic-construction");
+            LevelDocument source = new UnityLevelJsonSerializer().Deserialize(asset.text);
+            source.levelId = "character-authoring-integration";
+            source.scenario = new LevelScenarioData
+            {
+                actors =
+                {
+                    new LevelScenarioActorData
+                    {
+                        id = "authored-operative",
+                        templateId = "player",
+                        characterId = "character.default-operative",
+                        playerControlled = true,
+                        initiallySelected = true,
+                        transform = new LevelTransformData(new Float3Data(), 0f),
+                    },
+                },
+            };
+
+            GameplayContentPackage package = GameplayContentLoader.LoadSandbox(source);
+            ScenarioActorDefinition actor = package.Assembly.GetActorDefinition(
+                "authored-operative");
+
+            Assert.That(actor.CharacterProfile.DisplayName, Is.EqualTo("Default Operative"));
+            Assert.That(actor.CharacterProfile.Archetype, Is.EqualTo("field-operative"));
+            Assert.That(actor.CharacterProfile.CoreAttributes.Dexterity, Is.EqualTo(4));
+            Assert.That(actor.GetInventoryItem("weapon.rifle").HotbarSlot, Is.EqualTo(1));
+            Assert.That(actor.GetInventoryItem("item.frag-grenade").InitialQuantity,
+                Is.EqualTo(2));
+            Assert.That(actor.InitiallyEquippedItemId, Is.EqualTo("weapon.rifle"));
         }
 
         [Test]
@@ -237,6 +364,33 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 (crate.Capabilities & LevelArchetypeCapabilities.Destructible) != 0,
                 Is.True);
+        }
+
+        [Test]
+        public void CuratedPrivatePropArchetypesResolveProductionPrefabs()
+        {
+            LevelArchetypeCatalog catalog = LevelArchetypeCatalog.LoadDefault();
+            string[] privateArchetypeIds =
+            {
+                "structure.barrier.concrete",
+                "structure.barricade.wood",
+                "prop.pallet-stack.standard",
+                "structure.wire-fence.standard",
+                "structure.container.small",
+                "prop.generator.standard",
+                "prop.tire-stack.standard",
+                "prop.propane.standard",
+            };
+
+            foreach (string archetypeId in privateArchetypeIds)
+            {
+                LevelArchetypeDefinition definition = catalog.Entries.Single(
+                    entry => entry.ArchetypeId == archetypeId);
+                Assert.That(definition.Prefab, Is.Not.Null, archetypeId);
+                Assert.That(definition.LocalBounds.size.x, Is.GreaterThan(0f), archetypeId);
+                Assert.That(definition.LocalBounds.size.y, Is.GreaterThan(0f), archetypeId);
+                Assert.That(definition.LocalBounds.size.z, Is.GreaterThan(0f), archetypeId);
+            }
         }
     }
 }

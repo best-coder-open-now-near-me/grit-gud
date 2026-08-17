@@ -90,8 +90,12 @@ For the first playable slice:
    movement clips because those are the complete crouch family in the installed
    source package; all crouched movement projects onto that cycle until authored
    strafe and reverse clips exist.
-4. Defer jump unless traversal requires it. The Depot Yard stairs should work
-   through grounded locomotion and step/slope handling.
+4. Keep stairs and valid slopes on grounded locomotion. When normal route input
+   reaches an authored traversal link, automatically plan its frozen jump,
+   vault, or mantle segment; do not expose a separate general-purpose Jump
+   button. The current full-body traversal layer binds the authored
+   `rifle jump` clip, while vault and mantle share it until dedicated clips are
+   selected.
 5. Keep the inert target visually simple until player movement and turn flow are
    stable.
 
@@ -235,8 +239,10 @@ authorize publishing raw licensed sources.
 - [ ] Add actor spawn/configuration to the level document and in-game editor.
 - [ ] Add animation-profile selection per actor archetype.
 - [ ] Add objective and encounter authoring tools.
-- [ ] Add upper-body layers, avatar masks, equipment poses, reactions, and NPC
-      animation profiles as gameplay requires them.
+- [x] Add shared upper-body layers, avatar masks, equipment poses, authored
+      knife actions, and full-body wound/fall reactions.
+- [ ] Add actor-archetype-specific animation profile selection and additional
+      NPC-only profiles as gameplay requires them.
 
 **Exit:** additional actors and objectives can be authored without modifying
 core gameplay or animation-driver code.
@@ -254,6 +260,106 @@ core gameplay or animation-driver code.
 | Animation state leaks into rules | One-way application-to-presentation data flow; no Animator reads in domain code. |
 | Repository and build bloat | Curate raw packages, avoid vendor demo dependencies, and audit referenced build assets. |
 | WebGL input traps the player | Gameplay never requests cursor lock; `Esc` may release host/browser capture without triggering application navigation. |
+
+## Traversal verification
+
+The published Depot Yard places two tall crates in a row east of the player at
+the south side of the yard. The nearer crate has the bidirectional authored
+`jump.connected-crate` link; the farther crate is deliberately disconnected.
+
+1. Press `T` to enter turn mode, then use the ordinary movement keys to extend
+   the ghost route east through the nearer crate. No Jump button is involved.
+2. Confirm that the route snaps to the takeoff, draws a raised arc, and reports
+   `JUMP - 2.25 MOVE - 0 AP`; press `Enter` to commit it.
+3. Confirm that the actor plays the authored jump action and lands on the exact
+   committed endpoint. Plan back across it to verify the bidirectional link.
+4. Try to continue through the farther crate. Planning must stop because no
+   traversal link authorizes that crossing.
+5. Open replay and scrub across the committed movement. Forward playback must
+   reproduce the same arc and Jump state; backward seeking and arbitrary
+   scrubbing must not emit transient effects, and exiting replay must restore
+   the exact live pose and animation/equipment state.
+
+Slope boundaries are covered with real Unity colliders in automated tests:
+45 degrees and the authored 50-degree limit are accepted, while 55 degrees is
+rejected. They are intentionally not extra pitched modules in the published
+yard.
+
+## Authored close-quarters verification
+
+Both Mara and Oren carry the Combat Knife in hotbar slot `5`; the published
+Depot Yard therefore needs no extra test fixture for this slice.
+
+1. Press `T` to enter turn mode and press `5` to equip the Combat Knife. The
+   held knife must remain rig-mounted while the upper body enters the looping
+   Knife Idle pose; the legs must keep their ordinary locomotion authority.
+2. Move to within the authored 2-unit reach of a hostile, acquire it with the
+   crosshair, and confirm an attack with `LMB`. The attacker must play one
+   authored 0.8-second stab. There must be no muzzle flash, tracer, or separate
+   procedural rotation of the held knife.
+3. On a hit, the target must remain in its prior pose until the stab reaches its
+   40% contact point, then enter a full-body reaction. A miss must not play a
+   target hit reaction. The wound tile and Combat Diagnostics still update from
+   the already-committed action rather than from the animation frame.
+4. Repeat attacks until an incapacitating wound is committed. Torso/arm
+   presentation may use Shoulder Hit And Fall; head/leg presentation uses Fall
+   Over. The actor must remain down after the non-looping clip instead of
+   snapping back to locomotion.
+5. During a non-incapacitating stab, immediately equip another weapon. The stab
+   must blend back through the owned action idle and the newly equipped pose;
+   the old knife motion must not continue while holding the replacement model.
+6. Open replay and scrub to just before and after contact. The attacker must
+   seek through Stabbing, the target reaction must begin only after contact,
+   backward/arbitrary seeks must emit no one-shot contact effects, and the
+   incapacitated state must remain down after the action event. Exiting replay
+   must restore the exact live pose, animator state, equipped model, and wounds.
+
+## Directional Push Off verification
+
+The south-yard `crate-pin-demo` starts directly between Mara and Oren so the
+full pin-and-escape flow can be exercised without editing the level.
+
+1. With Mara selected, activate hotbar slot `4` (`Displace`), choose `Push`,
+   point at `crate-pin-demo`, and confirm. The intent-derived push sends the
+   crate toward Oren; its toppled footprint must establish the authoritative
+   pin.
+2. Press `Tab` to select Oren, activate slot `4`, and choose `Push Off`. The
+   exact pinning crate must lock immediately—there is no second prop-selection
+   click—and the prompt must change to directional aiming.
+3. Move the pointer around Oren. The line/ring and oriented crate wireframe are
+   green for a legal heading and red when the swept path, final prop footprint,
+   or standing get-up volume is blocked. The wireframe is the exact final
+   collider-backed cover pose, not an animation estimate.
+4. Confirm a green heading. Oren must become unpinned, the crate must remain at
+   the previewed pose as usable collision/cover, and the action must spend its
+   authored cost exactly once. Canceling or clicking while red must spend
+   nothing and leave the pin intact.
+5. Open replay and scrub across the Push Off. Replay must reproduce the exact
+   chosen prop and actor state; exiting replay must restore the live pose,
+   equipment, wounds, and animation presentation.
+
+Enemies do not aim a cursor. A pinned enemy evaluates the same fixed heading
+set and deterministically commits the farthest legal candidate, with stable
+tie ordering.
+
+## Bounded ragdoll verification
+
+The existing Depot Yard knife setup is sufficient; no extra fixture is needed.
+
+1. Enter turn mode with `T`, equip slot `5`, and incapacitate a hostile with
+   the Combat Knife. The regional authored fall must play first.
+2. At roughly 72% of Shoulder Hit And Fall or Fall Over, the current pose must
+   loosen into a short joint-limited ragdoll. It may bounce or fold against the
+   static yard geometry, but the actor root, wound state, initiative, and HUD
+   position must not move with the skeleton.
+3. The body must settle or be forcibly bounded within 2.25 seconds, then remain
+   frozen. It must not keep buzzing, push a topple prop, or snap back to the
+   standing controller.
+4. Open replay and scrub repeatedly across the late portion of the
+   incapacitating action. The authored fall must precede the recorded ragdoll
+   motion; paused/backward seeking must be stable rather than running physics.
+   Exiting replay must restore the exact live frozen body—or resume the exact
+   live in-flight fall if replay was opened before settle.
 
 ## Current next action
 
@@ -282,3 +388,16 @@ uses a short acceleration ramp to play each committed movement record. Ordinary
 firearms remain immediate; emergency-response eligibility is explicitly authored
 only on high-threat ordnance. Eligible impacts derive one shared reaction AP
 allowance and re-query the world once after every responder has acted.
+Authored automatic traversal is complete through schema, planning, clearance,
+playback, replay, animation, published connected/disconnected fixtures, and
+EditMode/PlayMode lifecycle coverage. Authored close-quarters presentation is
+also complete through Knife Idle/Stabbing equipment poses, contact-timed wound
+reactions, persistent regional fall variants, IK suppression, equipment
+interruption, seekable replay, and exact live restoration. Directional Push Off
+freezes a player-chosen cover placement and validates the actor's get-up space;
+its lying, struggle, push, and authored get-up work remains presentation polish.
+The bounded attack-incapacitation-to-ragdoll experiment is complete through
+authored handoff, static-world collision, settle/freeze, quantized pose traces,
+seekable replay, and exact live restoration. The next production slice is the
+prop-aware pinned-character presentation pass. Projectile and thrown-blast
+reaction evidence remains a later hookup to the same ragdoll seam.

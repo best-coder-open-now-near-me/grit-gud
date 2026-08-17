@@ -66,6 +66,7 @@ namespace GritGud.Editor
                 ActorAnimationParameters.EmptyHandsStateName,
                 string.Empty,
                 EmptyPoseValue,
+                poseLayerWeight: 0f,
                 recoilPlaybackSpeed: 1f,
                 recoilLayerWeight: 0f,
                 recoilKickDegrees: 0f,
@@ -77,6 +78,7 @@ namespace GritGud.Editor
                 ActorAnimationParameters.RifleAimStateName,
                 ActorAnimationParameters.RifleRecoilStateName,
                 RiflePoseValue,
+                poseLayerWeight: WeaponPoseLayerWeight,
                 recoilPlaybackSpeed: RifleRecoilPlaybackSpeed,
                 recoilLayerWeight: 0.8f,
                 recoilKickDegrees: 9f,
@@ -88,6 +90,7 @@ namespace GritGud.Editor
                 ActorAnimationParameters.LauncherAimStateName,
                 ActorAnimationParameters.LauncherRecoilStateName,
                 LauncherPoseValue,
+                poseLayerWeight: WeaponPoseLayerWeight,
                 recoilPlaybackSpeed: LauncherRecoilPlaybackSpeed,
                 recoilLayerWeight: 1f,
                 recoilKickDegrees: 14f,
@@ -96,9 +99,10 @@ namespace GritGud.Editor
             ConfigureWeaponAnimationSet(
                 sets.GetArrayElementAtIndex(3),
                 ActorAnimationPoseIds.Melee,
-                ActorAnimationParameters.EmptyHandsStateName,
+                ActorAnimationParameters.KnifeIdleStateName,
                 string.Empty,
                 MeleePoseValue,
+                poseLayerWeight: WeaponPoseLayerWeight,
                 recoilPlaybackSpeed: 1f,
                 recoilLayerWeight: 0f,
                 recoilKickDegrees: 0f,
@@ -112,6 +116,7 @@ namespace GritGud.Editor
             string poseStateName,
             string recoilStateName,
             int animatorPoseValue,
+            float poseLayerWeight,
             float recoilPlaybackSpeed,
             float recoilLayerWeight,
             float recoilKickDegrees,
@@ -128,7 +133,7 @@ namespace GritGud.Editor
             set.FindPropertyRelative("animatorPoseValue").intValue =
                 animatorPoseValue;
             set.FindPropertyRelative("poseLayerWeight").floatValue =
-                WeaponPoseLayerWeight;
+                poseLayerWeight;
             set.FindPropertyRelative("poseTransitionSeconds").floatValue =
                 WeaponPoseTransitionSeconds;
             set.FindPropertyRelative("recoilLayerWeight").floatValue =
@@ -168,7 +173,7 @@ namespace GritGud.Editor
         private static void ConfigureActionBindings(
             SerializedProperty bindings)
         {
-            bindings.arraySize = 2;
+            bindings.arraySize = 8;
             SerializedProperty interaction =
                 bindings.GetArrayElementAtIndex(0);
             interaction.FindPropertyRelative("action").enumValueIndex =
@@ -192,6 +197,60 @@ namespace GritGud.Editor
             throwing.FindPropertyRelative("stateName").stringValue =
                 ActorAnimationParameters.ThrowStateName;
             throwing.FindPropertyRelative("transitionSeconds").floatValue =
+                ActionTransitionSeconds;
+
+            SerializedProperty jump = bindings.GetArrayElementAtIndex(2);
+            jump.FindPropertyRelative("action").enumValueIndex =
+                (int)ActorAnimationAction.Jump;
+            jump.FindPropertyRelative("triggerParameterName").stringValue =
+                string.Empty;
+            jump.FindPropertyRelative("layerName").stringValue =
+                ActorAnimationParameters.TraversalLayerName;
+            jump.FindPropertyRelative("stateName").stringValue =
+                ActorAnimationParameters.JumpStateName;
+            jump.FindPropertyRelative("transitionSeconds").floatValue =
+                ActionTransitionSeconds;
+
+            ConfigureStateBinding(
+                bindings.GetArrayElementAtIndex(3),
+                ActorAnimationAction.ContactStrike,
+                ActorAnimationParameters.ActionLayerName,
+                ActorAnimationParameters.KnifeStrikeStateName);
+            ConfigureStateBinding(
+                bindings.GetArrayElementAtIndex(4),
+                ActorAnimationAction.HitReaction,
+                ActorAnimationParameters.ReactionLayerName,
+                ActorAnimationParameters.HitReactionStateName);
+            ConfigureStateBinding(
+                bindings.GetArrayElementAtIndex(5),
+                ActorAnimationAction.Incapacitate,
+                ActorAnimationParameters.ReactionLayerName,
+                ActorAnimationParameters.FallOverStateName);
+            ConfigureStateBinding(
+                bindings.GetArrayElementAtIndex(6),
+                ActorAnimationAction.IncapacitateShoulder,
+                ActorAnimationParameters.ReactionLayerName,
+                ActorAnimationParameters.ShoulderFallStateName);
+            ConfigureStateBinding(
+                bindings.GetArrayElementAtIndex(7),
+                ActorAnimationAction.Push,
+                ActorAnimationParameters.DisplacementLayerName,
+                ActorAnimationParameters.PushStateName);
+        }
+
+        private static void ConfigureStateBinding(
+            SerializedProperty binding,
+            ActorAnimationAction action,
+            string layerName,
+            string stateName)
+        {
+            binding.FindPropertyRelative("action").enumValueIndex =
+                (int)action;
+            binding.FindPropertyRelative("triggerParameterName").stringValue =
+                string.Empty;
+            binding.FindPropertyRelative("layerName").stringValue = layerName;
+            binding.FindPropertyRelative("stateName").stringValue = stateName;
+            binding.FindPropertyRelative("transitionSeconds").floatValue =
                 ActionTransitionSeconds;
         }
     }

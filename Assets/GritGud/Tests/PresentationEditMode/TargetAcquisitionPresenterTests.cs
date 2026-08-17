@@ -9,12 +9,45 @@ using GritGud.Presentation.Gameplay;
 using GritGud.Presentation.Levels.Runtime;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools.Utils;
 using Object = UnityEngine.Object;
 
 namespace GritGud.Presentation.Tests
 {
     public sealed class TargetAcquisitionPresenterTests
     {
+        [Test]
+        public void TargetingCursorTracksSharedValidationState()
+        {
+            var host = new GameObject("Targeting Cursor Validation Test");
+            try
+            {
+                bool visible = true;
+                bool? valid = false;
+                GameplayTargetingCursorPresenter cursor =
+                    host.AddComponent<GameplayTargetingCursorPresenter>();
+                cursor.Bind(() => visible, () => valid);
+
+                Assert.That(cursor.IsTargetingVisible, Is.True);
+                Assert.That(cursor.IsTargetingValid, Is.False);
+
+                valid = true;
+                cursor.RefreshNow();
+
+                Assert.That(cursor.IsTargetingVisible, Is.True);
+                Assert.That(cursor.IsTargetingValid, Is.True);
+
+                visible = false;
+                cursor.RefreshNow();
+
+                Assert.That(cursor.IsTargetingVisible, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
         [Test]
         public void CharacterSurfaceAimIgnoresCameraSideWallButKeepsForwardWall()
         {
@@ -144,6 +177,17 @@ namespace GritGud.Presentation.Tests
                     Is.True);
                 Assert.That(aim.TargetId, Is.EqualTo("alarm-panel"));
                 Assert.That(aim.Position.z, Is.EqualTo(4.9f).Within(0.02f));
+
+                presenter.SetWeaponTargetingActive(true);
+
+                Assert.That(presenter.TargetOutlineVisible, Is.True);
+                AssertOutlineColor(
+                    surface,
+                    TargetAcquisitionPresenter.AcquisitionOutlineColor);
+
+                presenter.SetWeaponTargetingActive(false);
+
+                Assert.That(presenter.TargetOutlineVisible, Is.False);
             }
             finally
             {
@@ -152,6 +196,87 @@ namespace GritGud.Presentation.Tests
                 world?.Dispose();
                 Object.DestroyImmediate(observer);
                 Object.DestroyImmediate(surface);
+                Object.DestroyImmediate(entityRoot);
+                Object.DestroyImmediate(worldRoot);
+            }
+        }
+
+        [Test]
+        public void WeaponAimSelectsNearestStableFractureChunk()
+        {
+            var host = new GameObject("Fracture Weapon Aim Test");
+            var observer = CreateActorObject(
+                "Fracture Aim Observer",
+                Vector3.zero,
+                withVisual: false);
+            var worldRoot = new GameObject("Fracture Weapon Aim World");
+            var entityRoot = new GameObject("Crate Root");
+            LevelWorld world = null;
+            GameplayWorldRegistry registry = null;
+            try
+            {
+                LevelArchetypeCatalog catalog = LevelArchetypeCatalog.LoadDefault();
+                Assert.That(
+                    catalog.TryGet("prop.crate.standard", out var archetype),
+                    Is.True);
+                entityRoot.transform.SetParent(worldRoot.transform, false);
+                LevelEntityView entity =
+                    entityRoot.AddComponent<LevelEntityView>();
+                entity.Initialize(
+                    new LevelEntity
+                    {
+                        id = "fracture-crate",
+                        archetypeId = "prop.crate.standard",
+                        transform = new LevelTransformData(
+                            new Float3Data(0f, 0f, 5f),
+                            0f),
+                    },
+                    archetype);
+                Object.Instantiate(
+                    archetype.Prefab,
+                    entityRoot.transform,
+                    worldPositionStays: false);
+                world = new LevelWorld(
+                    worldRoot,
+                    new Dictionary<string, LevelEntityView>
+                    {
+                        ["fracture-crate"] = entity,
+                    },
+                    null);
+                registry = new GameplayWorldRegistry(world);
+                registry.RegisterActor(
+                    "observer",
+                    "test",
+                    targetable: false,
+                    observer);
+                TargetAcquisitionPresenter presenter =
+                    host.AddComponent<TargetAcquisitionPresenter>();
+                presenter.Bind(CreateSession(), registry, "observer");
+                presenter.SetWeaponAimOriginProvider(
+                    () => new Vector3(0f, 0.5f, 0f));
+                Physics.SyncTransforms();
+                presenter.RefreshNow(new Ray(
+                    new Vector3(0f, 0.5f, 0f),
+                    Vector3.forward));
+
+                Assert.That(
+                    presenter.TryGetWeaponAim(out GameplayWeaponAim aim),
+                    Is.True);
+                int expectedIndex = archetype.FractureProfile
+                    .FindClosestChunkIndex(
+                        entity.transform.InverseTransformPoint(aim.Position));
+                Assert.That(aim.TargetId, Is.EqualTo("fracture-crate"));
+                Assert.That(aim.PreferredFractureChunkIndex,
+                    Is.EqualTo(expectedIndex));
+                Assert.That(aim.PreferredFractureChunkIndex,
+                    Is.InRange(0, archetype.FractureProfile.ChunkCount - 1));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                registry?.Dispose();
+                world?.Dispose();
+                Object.DestroyImmediate(observer);
                 Object.DestroyImmediate(entityRoot);
                 Object.DestroyImmediate(worldRoot);
             }
@@ -215,6 +340,141 @@ namespace GritGud.Presentation.Tests
                 Object.DestroyImmediate(observer);
                 Object.DestroyImmediate(pointerSurface);
                 Object.DestroyImmediate(muzzleObstruction);
+            }
+        }
+
+        [Test]
+        public void WeaponTargetingHighlightsStableCharacterPathObstruction()
+        {
+            var host = new GameObject("Stable Character Path Target Test");
+            var observer = CreateActorObject(
+                "Stable Character Path Observer",
+                Vector3.zero,
+                withVisual: false);
+            var worldRoot = new GameObject("Stable Character Path World");
+            var pointerRoot = new GameObject("Pointer Target Root");
+            var obstructionRoot = new GameObject("Obstruction Root");
+            var pointerSurface = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var obstructionSurface = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            LevelWorld world = null;
+            GameplayWorldRegistry registry = null;
+            try
+            {
+                pointerRoot.transform.SetParent(worldRoot.transform, false);
+                LevelEntityView pointerEntity =
+                    pointerRoot.AddComponent<LevelEntityView>();
+                pointerEntity.Initialize(
+                    new LevelEntity
+                    {
+                        id = "pointer-target",
+                        archetypeId = "prop.pointer-target",
+                        transform = new LevelTransformData(
+                            new Float3Data(2f, 0f, 6f),
+                            0f),
+                    },
+                    new LevelArchetypeDefinition());
+                pointerSurface.transform.SetParent(pointerRoot.transform, false);
+                pointerSurface.transform.localPosition = new Vector3(0f, 1.2f, 0f);
+                pointerSurface.transform.localScale = new Vector3(1f, 2f, 0.2f);
+
+                obstructionRoot.transform.SetParent(worldRoot.transform, false);
+                LevelEntityView obstructionEntity =
+                    obstructionRoot.AddComponent<LevelEntityView>();
+                obstructionEntity.Initialize(
+                    new LevelEntity
+                    {
+                        id = "character-path-obstruction",
+                        archetypeId = "prop.character-path-obstruction",
+                        transform = new LevelTransformData(
+                            new Float3Data(0.75f, 0f, 2.25f),
+                            0f),
+                    },
+                    new LevelArchetypeDefinition());
+                obstructionSurface.transform.SetParent(
+                    obstructionRoot.transform,
+                    false);
+                obstructionSurface.transform.localPosition =
+                    new Vector3(0f, 1.2f, 0f);
+                obstructionSurface.transform.localScale =
+                    new Vector3(0.5f, 2f, 0.5f);
+
+                world = new LevelWorld(
+                    worldRoot,
+                    new Dictionary<string, LevelEntityView>
+                    {
+                        ["pointer-target"] = pointerEntity,
+                        ["character-path-obstruction"] = obstructionEntity,
+                    },
+                    null);
+                registry = new GameplayWorldRegistry(world);
+                registry.RegisterActor(
+                    "observer",
+                    "test",
+                    targetable: false,
+                    observer);
+                TargetAcquisitionPresenter presenter =
+                    host.AddComponent<TargetAcquisitionPresenter>();
+                presenter.Bind(
+                    CreateSession(includeRangedAttack: true),
+                    registry,
+                    "observer");
+                Vector3 presentedOrigin = new Vector3(0f, 1.2f, 0f);
+                presenter.SetWeaponAimOriginProvider(() => presentedOrigin);
+                Physics.SyncTransforms();
+                var pointerRay = new Ray(
+                    new Vector3(2f, 1.2f, 0f),
+                    Vector3.forward);
+                presenter.RefreshNow(pointerRay);
+                presenter.SetWeaponTargetingActive(true);
+
+                Assert.That(
+                    presenter.TryGetWeaponAim(out GameplayWeaponAim weaponAim),
+                    Is.True);
+                Assert.That(
+                    weaponAim.TargetId,
+                    Is.EqualTo("character-path-obstruction"));
+                Assert.That(
+                    presenter.TryGetPresentationAimPoint(
+                        out Vector3 presentationAim),
+                    Is.True);
+                Assert.That(
+                    presentationAim,
+                    Is.EqualTo(weaponAim.Position)
+                        .Using(Vector3ComparerWithEqualsOperator.Instance));
+                AssertOutlineColor(
+                    obstructionSurface,
+                    TargetAcquisitionPresenter.AcquisitionOutlineColor);
+                Assert.That(
+                    pointerSurface.GetComponent<Renderer>().sharedMaterials.Any(
+                        material => material.shader.name ==
+                            "GritGud/RuntimeOutline"),
+                    Is.False);
+
+                presentedOrigin = new Vector3(-2f, 1.2f, 0f);
+                presenter.RefreshNow(pointerRay);
+
+                Assert.That(
+                    presenter.TryGetWeaponAim(out GameplayWeaponAim stableAim),
+                    Is.True);
+                Assert.That(
+                    stableAim.TargetId,
+                    Is.EqualTo("character-path-obstruction"));
+                Assert.That(
+                    stableAim.Position,
+                    Is.EqualTo(weaponAim.Position)
+                        .Using(Vector3ComparerWithEqualsOperator.Instance));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                registry?.Dispose();
+                world?.Dispose();
+                Object.DestroyImmediate(observer);
+                Object.DestroyImmediate(pointerSurface);
+                Object.DestroyImmediate(obstructionSurface);
+                Object.DestroyImmediate(pointerRoot);
+                Object.DestroyImmediate(obstructionRoot);
+                Object.DestroyImmediate(worldRoot);
             }
         }
 
@@ -393,6 +653,225 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void ContextualValidationHighlightsGenericTargetsWithSemanticColor()
+        {
+            var host = new GameObject("Contextual Target Feedback Test");
+            var observer = CreateActorObject(
+                "Contextual Feedback Observer",
+                Vector3.zero,
+                withVisual: false);
+            GameObject prop = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            LevelWorld world = null;
+            GameplayWorldRegistry registry = null;
+            try
+            {
+                prop.name = "Contextual Feedback Prop";
+                world = new LevelWorld(
+                    new GameObject("Contextual Feedback World"),
+                    new Dictionary<string, LevelEntityView>(),
+                    null);
+                registry = new GameplayWorldRegistry(world);
+                registry.RegisterActor(
+                    "observer",
+                    "test",
+                    targetable: false,
+                    observer);
+                TargetAcquisitionPresenter presenter =
+                    host.AddComponent<TargetAcquisitionPresenter>();
+                presenter.Bind(CreateSession(), registry, "observer");
+                var feedbackOwner = new object();
+
+                presenter.PresentValidationFeedback(
+                    feedbackOwner,
+                    "crate",
+                    prop.transform,
+                    isValid: false,
+                    "INVALID TARGET - OUT OF REACH");
+
+                Assert.That(presenter.HasValidationFeedback, Is.True);
+                Assert.That(presenter.TargetOutlineVisible, Is.True);
+                Assert.That(presenter.CurrentValidationIsValid, Is.False);
+                Assert.That(
+                    presenter.TryGetPointerFeedback(
+                        out TargetingPointerFeedback pointerFeedback),
+                    Is.True);
+                Assert.That(pointerFeedback.Text,
+                    Is.EqualTo("INVALID TARGET - OUT OF REACH"));
+                Assert.That(pointerFeedback.IsValid, Is.False);
+                AssertOutlineColor(
+                    prop,
+                    TargetAcquisitionPresenter.InvalidOutlineColor);
+
+                presenter.PresentValidationFeedback(
+                    feedbackOwner,
+                    "crate",
+                    prop.transform,
+                    isValid: true,
+                    "VALID TARGET - PUSH");
+
+                Assert.That(presenter.CurrentValidationIsValid, Is.True);
+                AssertOutlineColor(
+                    prop,
+                    TargetAcquisitionPresenter.AcquisitionOutlineColor);
+
+                presenter.ClearValidationFeedback(feedbackOwner);
+
+                Assert.That(presenter.HasValidationFeedback, Is.False);
+                Assert.That(presenter.TargetOutlineVisible, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                registry?.Dispose();
+                world?.Dispose();
+                Object.DestroyImmediate(observer);
+                Object.DestroyImmediate(prop);
+            }
+        }
+
+        [Test]
+        public void ValidPartyTargetUsesFriendlyGreenButInvalidRemainsOrange()
+        {
+            var host = new GameObject("Friendly Target Feedback Test");
+            var observer = CreateActorObject(
+                "Friendly Feedback Observer",
+                Vector3.zero,
+                withVisual: false);
+            GameObject friendly = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            LevelWorld world = null;
+            GameplayWorldRegistry registry = null;
+            try
+            {
+                friendly.name = "Friendly Feedback Target";
+                world = new LevelWorld(
+                    new GameObject("Friendly Feedback World"),
+                    new Dictionary<string, LevelEntityView>(),
+                    null);
+                registry = new GameplayWorldRegistry(world);
+                registry.RegisterActor(
+                    "observer",
+                    "test",
+                    targetable: false,
+                    observer);
+                TargetAcquisitionPresenter presenter =
+                    host.AddComponent<TargetAcquisitionPresenter>();
+                presenter.Bind(
+                    CreateSession(includePlayerParty: true),
+                    registry,
+                    "observer");
+                var feedbackOwner = new object();
+
+                presenter.PresentValidationFeedback(
+                    feedbackOwner,
+                    "target",
+                    friendly.transform,
+                    isValid: true,
+                    "VALID FRIENDLY TARGET");
+
+                AssertOutlineColor(
+                    friendly,
+                    TargetAcquisitionPresenter.FriendlyOutlineColor);
+
+                presenter.PresentValidationFeedback(
+                    feedbackOwner,
+                    "target",
+                    friendly.transform,
+                    isValid: false,
+                    "INVALID TARGET - OUT OF REACH");
+
+                AssertOutlineColor(
+                    friendly,
+                    TargetAcquisitionPresenter.InvalidOutlineColor);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                registry?.Dispose();
+                world?.Dispose();
+                Object.DestroyImmediate(observer);
+                Object.DestroyImmediate(friendly);
+            }
+        }
+
+        [Test]
+        public void NonTargetablePartyCompanionIsAcknowledgedAsFriendlyAim()
+        {
+            var host = new GameObject("Friendly Companion Aim Test");
+            var observer = CreateActorObject(
+                "Friendly Companion Observer",
+                Vector3.zero,
+                withVisual: false);
+            var companion = CreateActorObject(
+                "Friendly Companion Target",
+                new Vector3(0f, 0f, 5f),
+                withVisual: true);
+            LevelWorld world = null;
+            GameplayWorldRegistry registry = null;
+            try
+            {
+                world = new LevelWorld(
+                    new GameObject("Friendly Companion Aim World"),
+                    new Dictionary<string, LevelEntityView>(),
+                    null);
+                registry = new GameplayWorldRegistry(world);
+                registry.RegisterActor(
+                    "observer",
+                    "test",
+                    targetable: false,
+                    observer);
+                registry.RegisterActor(
+                    "target",
+                    "test",
+                    targetable: false,
+                    companion);
+                TargetAcquisitionPresenter presenter =
+                    host.AddComponent<TargetAcquisitionPresenter>();
+                presenter.Bind(
+                    CreateSession(
+                        includePlayerParty: true,
+                        includeRangedAttack: true),
+                    registry,
+                    "observer");
+                presenter.SetWeaponAimOriginProvider(
+                    () => new Vector3(0f, 1.2f, 0f));
+                Physics.SyncTransforms();
+                presenter.RefreshNow(new Ray(
+                    new Vector3(0f, 1.2f, 0f),
+                    Vector3.forward));
+                presenter.SetWeaponTargetingActive(true);
+
+                Assert.That(
+                    presenter.CurrentTargetActorId,
+                    Is.EqualTo("target"));
+                Assert.That(presenter.TargetOutlineVisible, Is.True);
+                AssertOutlineColor(
+                    companion,
+                    TargetAcquisitionPresenter.FriendlyOutlineColor);
+                Material outline = FindOutlineMaterial(companion);
+                Assert.That(
+                    outline.GetFloat("_OutlineScreenSpace"),
+                    Is.EqualTo(1f));
+                Assert.That(
+                    outline.GetFloat("_OutlineScreenWidth"),
+                    Is.EqualTo(
+                        TargetFeedbackPresenter.TargetOutlineScreenWidthPixels));
+                Assert.That(
+                    presenter.TryGetPointerFeedback(
+                        out TargetingPointerFeedback pointerFeedback),
+                    Is.True);
+                Assert.That(pointerFeedback.IsValid, Is.True);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                registry?.Dispose();
+                world?.Dispose();
+                Object.DestroyImmediate(observer);
+                Object.DestroyImmediate(companion);
+            }
+        }
+
+        [Test]
         public void GeometricChanceRoundsVisibleRegionFraction()
         {
             var snapshot = new TargetExposureSnapshot(
@@ -480,23 +959,60 @@ namespace GritGud.Presentation.Tests
             }
         }
 
-        private static GameplaySession CreateSession()
+        private static GameplaySession CreateSession(
+            bool includePlayerParty = false,
+            bool includeRangedAttack = false)
         {
+            AttackDefinition attack = includeRangedAttack
+                ? new AttackDefinition(
+                    "attack.test-rifle",
+                    "Test rifle",
+                    new ActionCost(1, 0f, ActionMobility.Set),
+                    2f,
+                    accuracyDecay: AccuracyDecayDefinition.None)
+                : null;
+            CharacterProfileDefinition CreateProfile(string actorId) =>
+                new CharacterProfileDefinition(
+                    "character." + actorId,
+                    actorId,
+                    "Test Operative",
+                    new[]
+                    {
+                        new CharacterRating(CoreAttributeIds.Strength, 3),
+                        new CharacterRating(CoreAttributeIds.Dexterity, 3),
+                        new CharacterRating(CoreAttributeIds.Grit, 3),
+                        new CharacterRating(CoreAttributeIds.Charisma, 3),
+                    },
+                    Array.Empty<CharacterRating>(),
+                    Array.Empty<string>());
             var observer = new ScenarioActorDefinition(
                 "observer",
                 initiative: 10,
                 new GameplayActorPose(new GameplayPosition(0f, 0f, 0f), 0f),
-                new TurnBudget(4, 8f));
+                new TurnBudget(4, 8f),
+                attack,
+                characterProfile: includePlayerParty
+                    ? CreateProfile("observer")
+                    : null);
             var target = new ScenarioActorDefinition(
                 "target",
                 initiative: 5,
                 new GameplayActorPose(new GameplayPosition(0f, 0f, 5f), 0f),
-                new TurnBudget(4, 8f));
+                new TurnBudget(4, 8f),
+                characterProfile: includePlayerParty
+                    ? CreateProfile("target")
+                    : null);
+            PlayerPartyDefinition playerParty = includePlayerParty
+                ? new PlayerPartyDefinition(
+                    new[] { "observer", "target" },
+                    "observer")
+                : null;
             return new GameplaySession(new ScenarioDefinition(
                 "target-acquisition-test",
                 new ScenarioTimingDefinition(1.25f),
                 new[] { observer, target },
-                Array.Empty<ScenarioObjectiveDefinition>()));
+                Array.Empty<ScenarioObjectiveDefinition>(),
+                playerParty: playerParty));
         }
 
         private static GameObject CreateActorObject(
@@ -524,6 +1040,24 @@ namespace GritGud.Presentation.Tests
 
             return actor;
         }
+
+        private static void AssertOutlineColor(
+            GameObject target,
+            Color expected)
+        {
+            Material outline = FindOutlineMaterial(target);
+            Color actual = outline.GetColor("_OutlineColor");
+            Assert.That(actual.r, Is.EqualTo(expected.r).Within(0.001f));
+            Assert.That(actual.g, Is.EqualTo(expected.g).Within(0.001f));
+            Assert.That(actual.b, Is.EqualTo(expected.b).Within(0.001f));
+        }
+
+        private static Material FindOutlineMaterial(GameObject target) =>
+            target.GetComponentsInChildren<Renderer>(true)
+                .SelectMany(renderer => renderer.sharedMaterials)
+                .Distinct()
+                .Single(material =>
+                    material.shader.name == "GritGud/RuntimeOutline");
 
         private static ScenarioActorDefinition CreateActorDefinition(
             string id,

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
+using GritGud.Domain.Levels;
 using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
@@ -32,7 +33,8 @@ namespace GritGud.Presentation.Gameplay
             GameplayWorldRegistry worldRegistry,
             ScenarioActorDefinition actorDefinition,
             GameplayActorView actorView,
-            ISightObscuranceQuery obscuranceQuery = null)
+            ISightObscuranceQuery obscuranceQuery = null,
+            IEnumerable<LevelTraversalLinkData> traversalLinks = null)
         {
             session = gameplaySession ?? throw new ArgumentNullException(
                 nameof(gameplaySession));
@@ -45,7 +47,8 @@ namespace GritGud.Presentation.Gameplay
             CharacterController controller =
                 view.Root.GetComponent<CharacterController>();
             movementValidator = new UnityMovementRouteSegmentValidator(
-                controller);
+                controller,
+                traversalLinks);
         }
 
         public TargetExposureSnapshot CaptureExposure(string targetId) =>

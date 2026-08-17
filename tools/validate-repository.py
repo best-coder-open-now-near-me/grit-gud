@@ -10,11 +10,40 @@ TEXT_SUFFIXES = {
     ".compute",
     ".cs",
     ".hlsl",
+    ".js",
+    ".jslib",
     ".json",
+    ".md",
+    ".mjs",
+    ".py",
     ".shader",
+    ".sh",
+    ".sql",
     ".yaml",
     ".yml",
 }
+
+ASSEMBLY_CONTRACTS = {
+    "Assets/GritGud/Domain/GritGud.Domain.asmdef": {
+        "references": [],
+        "noEngineReferences": True,
+    },
+    "Assets/GritGud/Application/GritGud.Application.asmdef": {
+        "references": ["GritGud.Domain"],
+        "noEngineReferences": True,
+    },
+}
+
+NEUTRAL_SOURCE_ROOTS = (
+    Path("Assets/GritGud/Domain"),
+    Path("Assets/GritGud/Application"),
+)
+
+FORBIDDEN_NEUTRAL_SOURCE_REFERENCES = (
+    "using Unity",
+    "UnityEngine",
+    "GritGud.Presentation",
+)
 
 
 def tracked_files() -> list[Path]:
@@ -59,6 +88,35 @@ def main() -> int:
                 failures.append(
                     f"{relative_path}:{error.lineno}:{error.colno}: {error.msg}"
                 )
+
+    for relative_name, expected in ASSEMBLY_CONTRACTS.items():
+        path = REPOSITORY_ROOT / relative_name
+        try:
+            assembly = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, json.JSONDecodeError) as error:
+            failures.append(f"{relative_name}: cannot validate assembly contract: {error}")
+            continue
+        for field, expected_value in expected.items():
+            if assembly.get(field) != expected_value:
+                failures.append(
+                    f"{relative_name}: {field} must be {expected_value!r}, "
+                    f"found {assembly.get(field)!r}"
+                )
+
+    for path in files:
+        relative_path = path.relative_to(REPOSITORY_ROOT)
+        if path.suffix.lower() != ".cs" or not any(
+            relative_path.is_relative_to(root) for root in NEUTRAL_SOURCE_ROOTS
+        ):
+            continue
+        text = path.read_text(encoding="utf-8-sig")
+        for line_number, line in enumerate(text.splitlines(), start=1):
+            for forbidden in FORBIDDEN_NEUTRAL_SOURCE_REFERENCES:
+                if forbidden in line:
+                    failures.append(
+                        f"{relative_path}:{line_number}: platform-neutral source "
+                        f"must not reference {forbidden!r}"
+                    )
 
     if failures:
         print("Repository validation failed:", file=sys.stderr)

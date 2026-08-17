@@ -38,6 +38,7 @@ namespace GritGud.Presentation.Gameplay
         private float ghostDistance;
         private float ghostEndpointHoldRemaining;
         private bool disposed;
+        private bool presentationSuppressed;
 
         public ProjectileFlightPresenter(
             ProjectileFlightSnapshot initialSnapshot,
@@ -129,6 +130,29 @@ namespace GritGud.Presentation.Gameplay
             ghostDistance = 0f;
             ghostEndpointHoldRemaining = 0f;
             UpdateGhost(0f);
+        }
+
+        internal void PresentReplay(ProjectileFlightSnapshot value)
+        {
+            ThrowIfDisposed();
+            scheduledAdvances.Clear();
+            playback = null;
+            scheduledSnapshot = value;
+            previewEndpoint = null;
+            ApplySnapshot(value, createImpactEffect: false);
+        }
+
+        internal void SetPresentationSuppressed(bool suppressed)
+        {
+            ThrowIfDisposed();
+            presentationSuppressed = suppressed;
+            solidRoot.SetActive(
+                !suppressed
+                && snapshot.Status == ProjectileFlightStatus.InFlight);
+            if (suppressed)
+                ghostRoot.SetActive(false);
+            else
+                UpdateGhost(0f);
         }
 
         public void PlayAdvance(
@@ -231,14 +255,19 @@ namespace GritGud.Presentation.Gameplay
             GameplayObjectLifecycle.Destroy(ghostMaterial);
         }
 
-        private void ApplySnapshot(ProjectileFlightSnapshot value)
+        private void ApplySnapshot(
+            ProjectileFlightSnapshot value,
+            bool createImpactEffect = true)
         {
             snapshot = value;
             solidRoot.transform.SetPositionAndRotation(
                 ToVector3(value.Position),
                 trajectoryRotation);
-            solidRoot.SetActive(value.Status == ProjectileFlightStatus.InFlight);
-            if (value.Status == ProjectileFlightStatus.Impacted)
+            solidRoot.SetActive(
+                !presentationSuppressed
+                && value.Status == ProjectileFlightStatus.InFlight);
+            if (createImpactEffect
+                && value.Status == ProjectileFlightStatus.Impacted)
             {
                 effects.CreateImpact(
                     ToVector3(value.Position),
@@ -254,7 +283,8 @@ namespace GritGud.Presentation.Gameplay
 
         private void UpdateGhost(float deltaTime)
         {
-            if (playback != null
+            if (presentationSuppressed
+                || playback != null
                 || snapshot.Status != ProjectileFlightStatus.InFlight)
             {
                 ghostRoot.SetActive(false);

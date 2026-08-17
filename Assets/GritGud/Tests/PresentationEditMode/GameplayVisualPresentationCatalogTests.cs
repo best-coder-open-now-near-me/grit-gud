@@ -23,19 +23,19 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
-        public void DepotLightingProfileOwnsFixturesAndAmbientEffects()
+        public void DressingCatalogOwnsPortableAmbientEffectReferences()
         {
-            LevelLightingProfile profile = LevelLightingCatalog
-                .LoadDefault()
-                .Get("main-depot-yard-v1");
+            LevelDressingCatalog catalog = LevelDressingCatalog.LoadDefault();
 
-            Assert.That(profile.PracticalLights.Count, Is.EqualTo(5));
-            Assert.That(profile.AmbientEffects.Count, Is.EqualTo(3));
+            Assert.That(catalog.AmbientEffects.Count, Is.EqualTo(2));
             Assert.That(
-                profile.PracticalLights.Count(light => light.Color.r > light.Color.b),
-                Is.EqualTo(2));
+                catalog.AmbientEffects.All(effect => effect.Prefab != null),
+                Is.True);
             Assert.That(
-                profile.AmbientEffects.All(effect => effect.Prefab != null),
+                catalog.TryGetAmbientEffect("dust-air", out _),
+                Is.True);
+            Assert.That(
+                catalog.TryGetAmbientEffect("ground-haze", out _),
                 Is.True);
         }
 
@@ -93,6 +93,35 @@ namespace GritGud.Presentation.Tests
                     surfaces.TryGet(archetype.SurfacePresentationId, out _),
                     Is.True,
                     archetype.ArchetypeId);
+            }
+        }
+
+        [Test]
+        public void DefaultBreakableCoverOwnsStableBakedFractureProfiles()
+        {
+            LevelArchetypeCatalog archetypes = LevelArchetypeCatalog.LoadDefault();
+            foreach (string archetypeId in new[]
+            {
+                "prop.crate.standard",
+                "prop.barrel.metal",
+            })
+            {
+                Assert.That(archetypes.TryGet(archetypeId, out var archetype),
+                    Is.True);
+                DestructibleFractureProfile fracture = archetype.FractureProfile;
+                Assert.That(fracture, Is.Not.Null, archetypeId);
+                Assert.That(fracture.ChunkCount, Is.EqualTo(12), archetypeId);
+                Assert.That(fracture.FracturedPrefab, Is.Not.Null, archetypeId);
+                DestructibleFractureChunk[] chunks = fracture.FracturedPrefab
+                    .GetComponentsInChildren<DestructibleFractureChunk>(true);
+                Assert.That(chunks.Length, Is.EqualTo(fracture.ChunkCount));
+                Assert.That(
+                    chunks.Select(chunk => chunk.ChunkIndex).Distinct().Count(),
+                    Is.EqualTo(fracture.ChunkCount));
+                Assert.That(
+                    chunks.All(chunk =>
+                        chunk.GetComponent<MeshCollider>()?.convex == true),
+                    Is.True);
             }
         }
 

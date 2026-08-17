@@ -109,10 +109,17 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            string surfaceId = ResolveSurfaceId(discharge.TargetId);
+            string surfaceId = discharge.Impact?.SurfaceId
+                ?? ResolveSurfaceId(discharge.TargetId);
             Vector3 position = aimPoint;
-            Vector3 normal = -direction.normalized;
-            if (Physics.Raycast(
+            Vector3 normal = discharge.Impact == null
+                ? -direction.normalized
+                : new Vector3(
+                    discharge.Impact.NormalX,
+                    discharge.Impact.NormalY,
+                    discharge.Impact.NormalZ).normalized;
+            if (discharge.Impact == null
+                && Physics.Raycast(
                     origin,
                     direction.normalized,
                     out RaycastHit hit,

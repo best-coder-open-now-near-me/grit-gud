@@ -46,19 +46,21 @@ namespace GritGud.Domain.Levels
 
         internal LevelValidationContext(
             LevelDocument document,
-            ISet<string> knownArchetypeIds,
+            LevelValidationContent content,
             LevelValidationProfile profile,
             ICollection<LevelValidationIssue> issues)
         {
             Document = document ?? throw new ArgumentNullException(nameof(document));
-            KnownArchetypeIds = knownArchetypeIds;
+            Content = content;
             Profile = profile;
             this.issues = issues ?? throw new ArgumentNullException(nameof(issues));
         }
 
         public LevelDocument Document { get; }
 
-        public ISet<string> KnownArchetypeIds { get; }
+        public LevelValidationContent Content { get; }
+
+        public ISet<string> KnownArchetypeIds => Content?.KnownArchetypeIds;
 
         public LevelValidationProfile Profile { get; }
 
@@ -102,6 +104,17 @@ namespace GritGud.Domain.Levels
             ISet<string> knownArchetypeIds = null,
             LevelValidationProfile profile = LevelValidationProfile.Authoring)
         {
+            return Validate(
+                source,
+                new LevelValidationContent(knownArchetypeIds),
+                profile);
+        }
+
+        public IReadOnlyList<LevelValidationIssue> Validate(
+            LevelDocument source,
+            LevelValidationContent content,
+            LevelValidationProfile profile = LevelValidationProfile.Authoring)
+        {
             var issues = new List<LevelValidationIssue>();
             if (source == null)
             {
@@ -114,7 +127,7 @@ namespace GritGud.Domain.Levels
 
             LevelDocument document = source.DeepCopy();
             document.Normalize();
-            var context = new LevelValidationContext(document, knownArchetypeIds, profile, issues);
+            var context = new LevelValidationContext(document, content, profile, issues);
             foreach (ILevelValidationRule rule in rules)
             {
                 rule.Evaluate(context);
@@ -132,9 +145,13 @@ namespace GritGud.Domain.Levels
             new ILevelValidationRule[]
             {
                 new LevelDocumentValidationRule(),
+                new LevelEnvironmentValidationRule(),
+                new LevelDressingValidationRule(),
+                new LevelOrganizationValidationRule(),
                 new LevelEntityValidationRule(),
                 new LevelGameplayMetadataValidationRule(),
-                new LevelPlaytestValidationRule(),
+                new LevelTraversalValidationRule(),
+                new LevelScenarioValidationRule(),
                 new LevelTerrainValidationRule(),
             });
 
@@ -144,6 +161,14 @@ namespace GritGud.Domain.Levels
             LevelValidationProfile profile = LevelValidationProfile.Authoring)
         {
             return DefaultService.Validate(document, knownArchetypeIds, profile);
+        }
+
+        public static IReadOnlyList<LevelValidationIssue> Validate(
+            LevelDocument document,
+            LevelValidationContent content,
+            LevelValidationProfile profile = LevelValidationProfile.Authoring)
+        {
+            return DefaultService.Validate(document, content, profile);
         }
 
         public static bool HasErrors(IReadOnlyList<LevelValidationIssue> issues)
@@ -157,11 +182,34 @@ namespace GritGud.Domain.Levels
     {
         public const int MaximumSamplesPerAxis = 257;
         public const int MaximumSamplesPerSurface = 66049;
+        public const int MaximumSurfaceCount = 16;
+        public const int MaximumSamplesPerDocument = 262144;
         public const int MinimumQuantizedHeight = -1000000;
         public const int MaximumQuantizedHeight = 1000000;
 
         public void Evaluate(LevelValidationContext context)
         {
+            if (context.Document.terrainSurfaces.Count > MaximumSurfaceCount)
+            {
+                context.Error(
+                    "terrain.surface-limit",
+                    $"The level contains {context.Document.terrainSurfaces.Count} terrain "
+                    + $"surfaces; the limit is {MaximumSurfaceCount}.");
+            }
+
+            long totalSampleCount = context.Document.terrainSurfaces
+                .Where(surface => surface != null
+                    && surface.sampleCountX > 0
+                    && surface.sampleCountZ > 0)
+                .Sum(surface => (long)surface.sampleCountX * surface.sampleCountZ);
+            if (totalSampleCount > MaximumSamplesPerDocument)
+            {
+                context.Error(
+                    "terrain.document-sample-limit",
+                    $"The level contains {totalSampleCount} terrain samples; the total limit "
+                    + $"is {MaximumSamplesPerDocument}.");
+            }
+
             var ids = new HashSet<string>(StringComparer.Ordinal);
             foreach (TerrainSurfaceData surface in context.Document.terrainSurfaces)
             {
@@ -201,6 +249,21 @@ namespace GritGud.Domain.Levels
                         + $"expected {expectedSamples}.");
                 }
 
+                if (surface.materialSamples.Count != expectedSamples)
+                {
+                    context.Error(
+                        "terrain.material-samples",
+                        $"Terrain '{surface.id}' has {surface.materialSamples.Count} material samples; "
+                        + $"expected {expectedSamples}.");
+                }
+                else if (surface.materialSamples.Any(value =>
+                    !TerrainMaterialKinds.IsSupported(value)))
+                {
+                    context.Error(
+                        "terrain.material-range",
+                        $"Terrain '{surface.id}' contains an unsupported painted material index.");
+                }
+
                 if (!LevelValidationMath.IsFinite(surface.origin)
                     || !LevelValidationMath.IsFinite(surface.sampleSpacing)
                     || !LevelValidationMath.IsFinite(surface.minimumElevation)
@@ -220,7 +283,41 @@ namespace GritGud.Domain.Levels
                         "terrain.height-range",
                         $"Terrain '{surface.id}' contains a height outside the quantized range.");
                 }
+
+                TerrainAppearanceData appearance = surface.appearance;
+                if (appearance == null
+                    || string.IsNullOrWhiteSpace(appearance.presetId)
+                    || !ValidUnitColor(appearance.baseColor)
+                    || !ValidUnitColor(appearance.steepColor)
+                    || !LevelValidationMath.IsFinite(appearance.slopeBlendStartDegrees)
+                    || !LevelValidationMath.IsFinite(appearance.slopeBlendEndDegrees)
+                    || appearance.slopeBlendStartDegrees < 0f
+                    || appearance.slopeBlendEndDegrees > 89f
+                    || appearance.slopeBlendEndDegrees
+                        <= appearance.slopeBlendStartDegrees
+                    || !UnitInterval(appearance.smoothness)
+                    || !UnitInterval(appearance.specularStrength))
+                {
+                    context.Error(
+                        "terrain.appearance",
+                        $"Terrain '{surface.id}' needs valid colors, a 0-89 degree slope blend, "
+                        + "and unit-range surface response values.");
+                }
             }
+        }
+
+        private static bool ValidUnitColor(FloatColorData color)
+        {
+            return LevelValidationMath.IsFinite(color)
+                && UnitInterval(color.r)
+                && UnitInterval(color.g)
+                && UnitInterval(color.b)
+                && UnitInterval(color.a);
+        }
+
+        private static bool UnitInterval(float value)
+        {
+            return LevelValidationMath.IsFinite(value) && value >= 0f && value <= 1f;
         }
     }
 
@@ -269,29 +366,879 @@ namespace GritGud.Domain.Levels
         }
     }
 
-    public sealed class LevelPlaytestValidationRule : ILevelValidationRule
+    public sealed class LevelTraversalValidationRule : ILevelValidationRule
     {
         public void Evaluate(LevelValidationContext context)
         {
-            LevelPlaytestData playtest = context.Document.playtest;
-            if (playtest == null)
+            IReadOnlyList<LevelTraversalLinkData> links =
+                context.Document.traversalLinks;
+            if (links.Count > LevelDocument.MaximumTraversalLinkCount)
             {
-                context.Error("playtest.missing", "The level needs playtest settings.");
+                context.Error(
+                    "traversal.links.limit",
+                    $"The level contains {links.Count} traversal links; the limit is "
+                    + $"{LevelDocument.MaximumTraversalLinkCount}.");
+            }
+
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (LevelTraversalLinkData link in links)
+            {
+                if (link == null)
+                {
+                    context.Error(
+                        "traversal.link.missing",
+                        "The traversal-link list contains an empty entry.");
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(link.id) || !ids.Add(link.id))
+                {
+                    context.Error(
+                        "traversal.link.id",
+                        "Traversal-link IDs must be present and unique.",
+                        link.id);
+                }
+                if (string.IsNullOrWhiteSpace(link.actionId))
+                {
+                    context.Error(
+                        "traversal.link.action",
+                        $"Traversal link '{link.id}' needs a stable action ID.",
+                        link.id);
+                }
+                if (link.kind != LevelTraversalLinkData.JumpKind
+                    && link.kind != LevelTraversalLinkData.VaultKind
+                    && link.kind != LevelTraversalLinkData.MantleKind)
+                {
+                    context.Error(
+                        "traversal.link.kind",
+                        $"Traversal link '{link.id}' must be jump, vault, or mantle.",
+                        link.id);
+                }
+                if (!LevelValidationMath.IsFinite(link.takeoff)
+                    || !LevelValidationMath.IsFinite(link.landing)
+                    || DistanceSquared(link.takeoff, link.landing) <= 0.0001f)
+                {
+                    context.Error(
+                        "traversal.link.endpoints",
+                        $"Traversal link '{link.id}' needs distinct finite endpoints.",
+                        link.id);
+                }
+                else if (!LevelValidationMath.Contains(
+                        context.Document.bounds,
+                        link.takeoff)
+                    || !LevelValidationMath.Contains(
+                        context.Document.bounds,
+                        link.landing))
+                {
+                    context.Error(
+                        "traversal.link.outside-bounds",
+                        $"Traversal link '{link.id}' leaves the authored level bounds.",
+                        link.id);
+                }
+                if (!PositiveFinite(link.activationRadius)
+                    || !PositiveFinite(link.movementCost)
+                    || link.actionPointCost < 0
+                    || !NonNegativeFinite(link.arcHeight)
+                    || !PositiveFinite(link.playbackDurationSeconds)
+                    || !NonNegativeFinite(link.clearancePadding))
+                {
+                    context.Error(
+                        "traversal.link.cost-or-trajectory",
+                        $"Traversal link '{link.id}' has invalid activation, cost, arc, duration, or clearance values.",
+                        link.id);
+                }
+            }
+        }
+
+        private static float DistanceSquared(Float3Data left, Float3Data right)
+        {
+            float x = right.x - left.x;
+            float y = right.y - left.y;
+            float z = right.z - left.z;
+            return (x * x) + (y * y) + (z * z);
+        }
+
+        private static bool PositiveFinite(float value) =>
+            LevelValidationMath.IsFinite(value) && value > 0f;
+
+        private static bool NonNegativeFinite(float value) =>
+            LevelValidationMath.IsFinite(value) && value >= 0f;
+    }
+
+    public sealed class LevelEnvironmentValidationRule : ILevelValidationRule
+    {
+        public void Evaluate(LevelValidationContext context)
+        {
+            LevelEnvironmentData environment = context.Document.environment;
+            if (environment == null)
+            {
+                context.Error("environment.missing", "The level needs environment settings.");
                 return;
             }
 
-            if (!LevelValidationMath.IsFinite(playtest.playerStart.position)
-                || !LevelValidationMath.IsFinite(playtest.playerStart.yawDegrees))
+            if (string.IsNullOrWhiteSpace(environment.presetId))
             {
-                context.Error("playtest.start.not-finite", "The player start must be finite.");
+                context.Error(
+                    "environment.preset.missing",
+                    "The level environment needs a stable preset ID.");
             }
-            else if (!LevelValidationMath.Contains(
-                         context.Document.bounds,
-                         playtest.playerStart.position))
+
+            LevelAtmosphereData atmosphere = environment.atmosphere;
+            if (atmosphere == null
+                || !ValidColor(atmosphere.ambientSky)
+                || !ValidColor(atmosphere.ambientEquator)
+                || !ValidColor(atmosphere.ambientGround)
+                || !ValidColor(atmosphere.subtractiveShadow)
+                || !ValidColor(atmosphere.fogColor)
+                || !NonNegative(atmosphere.ambientIntensity)
+                || !NonNegative(atmosphere.reflectionIntensity)
+                || !NonNegative(atmosphere.fogStartDistance)
+                || !LevelValidationMath.IsFinite(atmosphere.fogEndDistance)
+                || (atmosphere.fogEnabled
+                    && atmosphere.fogEndDistance <= atmosphere.fogStartDistance))
+            {
+                context.Error(
+                    "environment.atmosphere.invalid",
+                    "Environment colors and intensities must be finite and non-negative; fog must end after it starts.");
+            }
+
+            LevelDirectionalLightData key = environment.keyLight;
+            if (key == null
+                || !ValidColor(key.color)
+                || !NonNegative(key.intensity)
+                || !NonNegative(key.bounceIntensity)
+                || !UnitInterval(key.shadowStrength)
+                || !NonNegative(key.shadowBias)
+                || !NonNegative(key.shadowNormalBias)
+                || !LevelValidationMath.IsFinite(key.rotationEuler))
+            {
+                context.Error(
+                    "environment.key-light.invalid",
+                    "The environment key light contains invalid color, intensity, shadow, or rotation values.");
+            }
+
+            if (!ValidColor(environment.fixtureHousingColor)
+                || !NonNegative(environment.lensEmissionIntensity))
+            {
+                context.Error(
+                    "environment.fixture.invalid",
+                    "Practical-light fixture color and emission must be finite and non-negative.");
+            }
+
+            if (environment.practicalLights.Count > LevelEnvironmentData.MaximumPracticalLights)
+            {
+                context.Error(
+                    "environment.lights.limit",
+                    $"The environment contains {environment.practicalLights.Count} practical lights; "
+                    + $"the cross-platform limit is {LevelEnvironmentData.MaximumPracticalLights}.");
+            }
+
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (LevelPracticalLightData light in environment.practicalLights)
+            {
+                if (light == null)
+                {
+                    context.Error(
+                        "environment.light.missing",
+                        "The practical-light list contains an empty entry.");
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(light.id) || !ids.Add(light.id))
+                {
+                    context.Error(
+                        "environment.light.id",
+                        "Practical-light IDs must be present and unique.");
+                }
+                if (string.IsNullOrWhiteSpace(light.displayName)
+                    || !LevelValidationMath.IsFinite(light.position)
+                    || !LevelValidationMath.IsFinite(light.target)
+                    || !ValidColor(light.color)
+                    || !NonNegative(light.intensity)
+                    || !LevelValidationMath.IsFinite(light.range)
+                    || light.range <= 0f
+                    || !LevelValidationMath.IsFinite(light.spotAngle)
+                    || light.spotAngle < 1f
+                    || light.spotAngle > 179f
+                    || !LevelValidationMath.IsFinite(light.innerSpotFraction)
+                    || light.innerSpotFraction <= 0f
+                    || light.innerSpotFraction > 1f
+                    || !LevelValidationMath.IsFinite(light.baseHeight))
+                {
+                    context.Error(
+                        "environment.light.invalid",
+                        $"Practical light '{light.id}' contains invalid display, transform, color, or projection values.");
+                }
+            }
+        }
+
+        private static bool ValidColor(FloatColorData color)
+        {
+            return LevelValidationMath.IsFinite(color)
+                && color.r >= 0f
+                && color.g >= 0f
+                && color.b >= 0f
+                && color.a >= 0f;
+        }
+
+        private static bool NonNegative(float value) =>
+            LevelValidationMath.IsFinite(value) && value >= 0f;
+
+        private static bool UnitInterval(float value) =>
+            LevelValidationMath.IsFinite(value) && value >= 0f && value <= 1f;
+    }
+
+    public sealed class LevelScenarioValidationRule : ILevelValidationRule
+    {
+        public void Evaluate(LevelValidationContext context)
+        {
+            LevelScenarioData scenario = context.Document.scenario;
+            if (scenario == null)
+            {
+                context.Error("scenario.missing", "The level needs scenario settings.");
+                return;
+            }
+
+            if (!LevelValidationMath.IsFinite(scenario.minimumVoluntaryTurnSeconds)
+                || scenario.minimumVoluntaryTurnSeconds < 0f)
+            {
+                context.Error(
+                    "scenario.timing.invalid",
+                    "The scenario minimum turn duration must be finite and non-negative.");
+            }
+
+            var actorIds = new HashSet<string>(StringComparer.Ordinal);
+            int playerCount = 0;
+            int selectedPlayerCount = 0;
+            int primaryTargetCount = 0;
+            foreach (LevelScenarioActorData actor in scenario.actors)
+            {
+                if (actor == null)
+                {
+                    context.Error("scenario.actor.missing", "The scenario contains an empty actor.");
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(actor.id))
+                {
+                    context.Error("scenario.actor.id.missing", "A scenario actor needs a stable ID.");
+                }
+                else if (!actorIds.Add(actor.id))
+                {
+                    context.Error(
+                        "scenario.actor.id.duplicate",
+                        $"Scenario actor ID '{actor.id}' is duplicated.");
+                }
+
+                if (string.IsNullOrWhiteSpace(actor.templateId))
+                {
+                    context.Error(
+                        "scenario.actor.template.missing",
+                        $"Scenario actor '{actor.id}' needs an actor template.");
+                }
+                else
+                {
+                    ValidateActorTemplate(context, actor);
+                }
+
+                if (!string.IsNullOrWhiteSpace(actor.characterId)
+                    && context.Content?.HasCharacterCatalog == true
+                    && !context.Content.KnownCharacterIds.Contains(actor.characterId))
+                {
+                    ReportRuntimeContentIssue(
+                        context,
+                        "scenario.actor.character.unknown",
+                        $"Scenario actor '{actor.id}' references unavailable character "
+                        + $"'{actor.characterId}'.",
+                        actor.id);
+                }
+
+                if (!LevelValidationMath.IsFinite(actor.transform.position)
+                    || !LevelValidationMath.IsFinite(actor.transform.yawDegrees))
+                {
+                    context.Error(
+                        "scenario.actor.transform.not-finite",
+                        $"Scenario actor '{actor.id}' must have a finite transform.");
+                }
+                else if (!LevelValidationMath.Contains(
+                             context.Document.bounds,
+                             actor.transform.position))
+                {
+                    context.Warning(
+                        "scenario.actor.outside-bounds",
+                        $"Scenario actor '{actor.id}' is outside the authored level bounds.");
+                }
+
+                if (actor.playerControlled)
+                    playerCount++;
+                if (actor.initiallySelected)
+                {
+                    selectedPlayerCount++;
+                    if (!actor.playerControlled)
+                    {
+                        context.Error(
+                            "scenario.actor.selection.not-player",
+                            $"Initially selected actor '{actor.id}' must be player controlled.");
+                    }
+                }
+
+                if (actor.primaryTarget)
+                {
+                    primaryTargetCount++;
+                    if (actor.playerControlled)
+                    {
+                        context.Error(
+                            "scenario.actor.target.player",
+                            $"Player actor '{actor.id}' cannot be the primary target.");
+                    }
+                }
+            }
+
+            if (playerCount == 0)
+            {
+                context.Error(
+                    "scenario.party.empty",
+                    "The scenario needs at least one player-controlled actor.");
+            }
+
+            if (selectedPlayerCount != 1)
+            {
+                context.Error(
+                    "scenario.party.selection",
+                    "The scenario needs exactly one initially selected player actor.");
+            }
+
+            if (primaryTargetCount > 1)
+            {
+                context.Error(
+                    "scenario.target.multiple",
+                    "The scenario can define at most one primary target actor.");
+            }
+
+            ValidateEntityLinks(context, scenario, actorIds);
+        }
+
+        private static void ValidateActorTemplate(
+            LevelValidationContext context,
+            LevelScenarioActorData actor)
+        {
+            LevelValidationContent content = context.Content;
+            if (content?.HasActorTemplateCatalog != true)
+            {
+                return;
+            }
+
+            if (!content.TryGetActorPresentationId(
+                    actor.templateId,
+                    out string presentationId))
+            {
+                ReportRuntimeContentIssue(
+                    context,
+                    "scenario.actor.template.unknown",
+                    $"Scenario actor '{actor.id}' references unavailable template "
+                    + $"'{actor.templateId}'.",
+                    actor.id);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(presentationId))
+            {
+                ReportRuntimeContentIssue(
+                    context,
+                    "scenario.actor.presentation.missing",
+                    $"Actor template '{actor.templateId}' does not define a presentation.",
+                    actor.id);
+            }
+            else if (content.HasActorPresentationCatalog
+                && !content.KnownActorPresentationIds.Contains(presentationId))
+            {
+                ReportRuntimeContentIssue(
+                    context,
+                    "scenario.actor.presentation.unknown",
+                    $"Actor template '{actor.templateId}' references unavailable presentation "
+                    + $"'{presentationId}'.",
+                    actor.id);
+            }
+        }
+
+        private static void ReportRuntimeContentIssue(
+            LevelValidationContext context,
+            string code,
+            string message,
+            string actorId)
+        {
+            if (context.Profile == LevelValidationProfile.Authoring)
+            {
+                context.Warning(code, message, actorId);
+            }
+            else
+            {
+                context.Error(code, message, actorId);
+            }
+        }
+
+        private static void ValidateEntityLinks(
+            LevelValidationContext context,
+            LevelScenarioData scenario,
+            ISet<string> actorIds)
+        {
+            var entities = context.Document.entities
+                .Where(entity => entity != null && !string.IsNullOrWhiteSpace(entity.id))
+                .GroupBy(entity => entity.id, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+            var linkedProps = new HashSet<string>(StringComparer.Ordinal);
+            foreach (LevelScenarioPropData prop in scenario.props)
+            {
+                if (prop == null || string.IsNullOrWhiteSpace(prop.entityId))
+                {
+                    context.Error("scenario.prop.entity.missing", "A scenario prop needs an entity link.");
+                    continue;
+                }
+
+                if (!entities.ContainsKey(prop.entityId))
+                {
+                    context.Error(
+                        "scenario.prop.entity.unknown",
+                        $"Scenario prop entity '{prop.entityId}' does not exist.",
+                        prop.entityId);
+                }
+                else if (!linkedProps.Add(prop.entityId))
+                {
+                    context.Error(
+                        "scenario.prop.entity.duplicate",
+                        $"Entity '{prop.entityId}' is linked as a scenario prop more than once.",
+                        prop.entityId);
+                }
+
+                if (!LevelValidationMath.IsFinite(prop.mass) || prop.mass <= 0f)
+                {
+                    context.Error(
+                        "scenario.prop.mass",
+                        $"Scenario prop '{prop.entityId}' needs a positive finite mass.",
+                        prop.entityId);
+                }
+                if (!IsSupportedSizeClass(prop.sizeClass))
+                {
+                    context.Error(
+                        "scenario.prop.size",
+                        $"Scenario prop '{prop.entityId}' has unsupported size "
+                        + $"'{prop.sizeClass}'.",
+                        prop.entityId);
+                }
+
+
+                LevelScenarioPropTopplingData toppling = prop.toppling;
+                if (toppling != null)
+                {
+                    if (!LevelValidationMath.IsFinite(
+                            toppling.pitchOffsetDegrees)
+                        || !LevelValidationMath.IsFinite(
+                            toppling.rollOffsetDegrees))
+                    {
+                        context.Error(
+                            "scenario.prop.toppling.rotation",
+                            $"Scenario prop '{prop.entityId}' needs finite toppling rotation offsets.",
+                            prop.entityId);
+                    }
+                    else if (toppling.enabled
+                        && toppling.pitchOffsetDegrees == 0f
+                        && toppling.rollOffsetDegrees == 0f)
+                    {
+                        context.Error(
+                            "scenario.prop.toppling.rotation.zero",
+                            $"Scenario prop '{prop.entityId}' needs a non-zero toppling pitch or roll offset.",
+                            prop.entityId);
+                    }
+
+                    if (!LevelValidationMath.IsFinite(
+                            toppling.elevationOffset)
+                        || toppling.elevationOffset < 0f)
+                    {
+                        context.Error(
+                            "scenario.prop.toppling.elevation",
+                            $"Scenario prop '{prop.entityId}' needs a finite non-negative toppling elevation offset.",
+                            prop.entityId);
+                    }
+                }
+
+                LevelScenarioPropPinningData pinning = prop.pinning;
+                if (pinning != null)
+                {
+                    if (!LevelValidationMath.IsFinite(
+                            pinning.maximumActorMass)
+                        || pinning.maximumActorMass < 0f
+                        || (pinning.enabled
+                            && pinning.maximumActorMass <= 0f))
+                    {
+                        context.Error(
+                            "scenario.prop.pinning.maximumActorMass",
+                            $"Scenario prop '{prop.entityId}' needs a positive finite maximum pinned actor mass when pinning is enabled.",
+                            prop.entityId);
+                    }
+                    if (!LevelValidationMath.IsFinite(
+                            pinning.minimumContactDepth)
+                        || pinning.minimumContactDepth < 0f)
+                    {
+                        context.Error(
+                            "scenario.prop.pinning.minimumContactDepth",
+                            $"Scenario prop '{prop.entityId}' needs a finite non-negative minimum pin contact depth.",
+                            prop.entityId);
+                    }
+                    if (pinning.enabled
+                        && (toppling == null || !toppling.enabled))
+                    {
+                        context.Error(
+                            "scenario.prop.pinning.topplingRequired",
+                            $"Scenario prop '{prop.entityId}' must enable toppling before it can pin actors.",
+                            prop.entityId);
+                    }
+                }
+            }
+
+            var linkedVehicles = new HashSet<string>(StringComparer.Ordinal);
+            foreach (LevelScenarioVehicleData vehicle in scenario.vehicles)
+            {
+                if (vehicle == null || string.IsNullOrWhiteSpace(vehicle.entityId))
+                {
+                    context.Error(
+                        "scenario.vehicle.entity.missing",
+                        "A scenario vehicle needs an entity link.");
+                    continue;
+                }
+
+                if (!entities.ContainsKey(vehicle.entityId))
+                {
+                    context.Error(
+                        "scenario.vehicle.entity.unknown",
+                        $"Scenario vehicle entity '{vehicle.entityId}' does not exist.",
+                        vehicle.entityId);
+                }
+                else if (!linkedVehicles.Add(vehicle.entityId))
+                {
+                    context.Error(
+                        "scenario.vehicle.entity.duplicate",
+                        $"Entity '{vehicle.entityId}' is linked as a vehicle more than once.",
+                        vehicle.entityId);
+                }
+
+                if (!string.IsNullOrWhiteSpace(vehicle.startingOccupantActorId)
+                    && !actorIds.Contains(vehicle.startingOccupantActorId))
+                {
+                    context.Error(
+                        "scenario.vehicle.occupant.unknown",
+                        $"Vehicle '{vehicle.entityId}' references unknown actor "
+                        + $"'{vehicle.startingOccupantActorId}'.",
+                        vehicle.entityId);
+                }
+
+                if (!LevelValidationMath.IsFinite(vehicle.maximumSpeed)
+                    || !LevelValidationMath.IsFinite(vehicle.accelerationPerTurn)
+                    || !LevelValidationMath.IsFinite(vehicle.brakingPerTurn)
+                    || !LevelValidationMath.IsFinite(vehicle.lowSpeedTurnDegrees)
+                    || !LevelValidationMath.IsFinite(vehicle.highSpeedTurnDegrees)
+                    || !LevelValidationMath.IsFinite(vehicle.baseTurningRadius)
+                    || !LevelValidationMath.IsFinite(vehicle.speedTurningRadiusFactor)
+                    || !LevelValidationMath.IsFinite(vehicle.startingSpeed)
+                    || vehicle.maximumSpeed <= 0f
+                    || vehicle.accelerationPerTurn < 0f
+                    || vehicle.brakingPerTurn < 0f
+                    || vehicle.lowSpeedTurnDegrees < 0f
+                    || vehicle.highSpeedTurnDegrees < 0f
+                    || vehicle.baseTurningRadius <= 0f
+                    || vehicle.speedTurningRadiusFactor < 0f
+                    || vehicle.startingSpeed < 0f
+                    || vehicle.startingSpeed > vehicle.maximumSpeed)
+                {
+                    context.Error(
+                        "scenario.vehicle.motion",
+                        $"Scenario vehicle '{vehicle.entityId}' has invalid motion settings.",
+                        vehicle.entityId);
+                }
+            }
+
+            var objectiveIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (LevelScenarioObjectiveData objective in scenario.objectives)
+            {
+                if (objective == null || string.IsNullOrWhiteSpace(objective.id))
+                {
+                    context.Error("scenario.objective.id.missing", "A scenario objective needs a stable ID.");
+                    continue;
+                }
+
+                if (!objectiveIds.Add(objective.id))
+                {
+                    context.Error(
+                        "scenario.objective.id.duplicate",
+                        $"Scenario objective ID '{objective.id}' is duplicated.");
+                }
+
+                if (!entities.TryGetValue(objective.entityId ?? string.Empty, out LevelEntity entity))
+                {
+                    context.Error(
+                        "scenario.objective.entity.unknown",
+                        $"Objective '{objective.id}' references an unknown entity "
+                        + $"'{objective.entityId}'.",
+                        objective.entityId);
+                    continue;
+                }
+
+                bool pointExists = entity.interactionPoints.Any(point =>
+                    point != null
+                    && string.Equals(
+                        point.id,
+                        objective.interactionPointId,
+                        StringComparison.Ordinal));
+                if (!pointExists)
+                {
+                    context.Error(
+                        "scenario.objective.interaction.unknown",
+                        $"Objective '{objective.id}' references unknown interaction point "
+                        + $"'{objective.interactionPointId}'.",
+                        objective.entityId);
+                }
+
+                if (objective.actionPointCost < 0
+                    || !LevelValidationMath.IsFinite(
+                        objective.movementOpportunityCost)
+                    || objective.movementOpportunityCost < 0f
+                    || !IsSupportedMobility(objective.mobility))
+                {
+                    context.Error(
+                        "scenario.objective.cost",
+                        $"Objective '{objective.id}' has an invalid action cost.",
+                        objective.entityId);
+                }
+                if (string.IsNullOrWhiteSpace(objective.actionId)
+                    || string.IsNullOrWhiteSpace(objective.displayName))
+                {
+                    context.Error(
+                        "scenario.objective.presentation",
+                        $"Objective '{objective.id}' needs an action and display name.",
+                        objective.entityId);
+                }
+            }
+        }
+
+        private static bool IsSupportedSizeClass(string value)
+        {
+            return string.Equals(value, "small", StringComparison.Ordinal)
+                || string.Equals(value, "medium", StringComparison.Ordinal)
+                || string.Equals(value, "large", StringComparison.Ordinal)
+                || string.Equals(value, "huge", StringComparison.Ordinal);
+        }
+
+        private static bool IsSupportedMobility(string value)
+        {
+            return string.Equals(value, "mobile", StringComparison.Ordinal)
+                || string.Equals(value, "momentum", StringComparison.Ordinal)
+                || string.Equals(value, "set", StringComparison.Ordinal);
+        }
+    }
+
+    public sealed class LevelDressingValidationRule : ILevelValidationRule
+    {
+        public void Evaluate(LevelValidationContext context)
+        {
+            LevelDressingData dressing = context.Document.dressing;
+            if (dressing == null)
+            {
+                context.Error("dressing.missing", "The level needs dressing data.");
+                return;
+            }
+            CheckLimit(
+                context,
+                "dressing.decals.limit",
+                "decals",
+                dressing.decals.Count,
+                LevelDressingData.MaximumDecalCount);
+            CheckLimit(
+                context,
+                "dressing.vfx.limit",
+                "ambient VFX placements",
+                dressing.ambientVfx.Count,
+                LevelDressingData.MaximumAmbientVfxCount);
+            CheckLimit(
+                context,
+                "dressing.audio.limit",
+                "audio zones",
+                dressing.audioZones.Count,
+                LevelDressingData.MaximumAudioZoneCount);
+
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (LevelDecalData decal in dressing.decals)
+            {
+                if (decal == null)
+                {
+                    context.Error("dressing.decal.missing", "The decal list contains an empty entry.");
+                    continue;
+                }
+                CheckIdentity(context, ids, "decal", decal.id, decal.displayName);
+                if (!LevelDressingIds.IsDecalStyle(decal.styleId)
+                    || !LevelValidationMath.IsFinite(decal.position)
+                    || !LevelValidationMath.IsFinite(decal.rotationEuler)
+                    || !Positive(decal.size.x)
+                    || !Positive(decal.size.y)
+                    || !UnitColor(decal.color))
+                {
+                    context.Error(
+                        "dressing.decal.invalid",
+                        $"Decal '{decal.id}' has an unsupported style or invalid transform, size, or color.");
+                }
+                WarnOutsideBounds(context, "Decal", decal.id, decal.position);
+            }
+
+            foreach (LevelAmbientVfxData effect in dressing.ambientVfx)
+            {
+                if (effect == null)
+                {
+                    context.Error("dressing.vfx.missing", "The ambient-VFX list contains an empty entry.");
+                    continue;
+                }
+                CheckIdentity(context, ids, "ambient VFX", effect.id, effect.displayName);
+                if (!LevelDressingIds.IsAmbientEffect(effect.effectId)
+                    || !LevelValidationMath.IsFinite(effect.position)
+                    || !LevelValidationMath.IsFinite(effect.rotationEuler)
+                    || !Positive(effect.scale.x)
+                    || !Positive(effect.scale.y)
+                    || !Positive(effect.scale.z))
+                {
+                    context.Error(
+                        "dressing.vfx.invalid",
+                        $"Ambient VFX '{effect.id}' has an unsupported effect or invalid transform or scale.");
+                }
+                WarnOutsideBounds(context, "Ambient VFX", effect.id, effect.position);
+            }
+
+            foreach (LevelAudioZoneData zone in dressing.audioZones)
+            {
+                if (zone == null)
+                {
+                    context.Error("dressing.audio.missing", "The audio-zone list contains an empty entry.");
+                    continue;
+                }
+                CheckIdentity(context, ids, "audio zone", zone.id, zone.displayName);
+                if (!LevelDressingIds.IsAmbientSound(zone.soundId)
+                    || !LevelValidationMath.IsFinite(zone.center)
+                    || !Positive(zone.size.x)
+                    || !Positive(zone.size.y)
+                    || !Positive(zone.size.z)
+                    || !UnitInterval(zone.volume)
+                    || !LevelValidationMath.IsFinite(zone.fadeDistance)
+                    || zone.fadeDistance < 0f)
+                {
+                    context.Error(
+                        "dressing.audio.invalid",
+                        $"Audio zone '{zone.id}' has an unsupported sound or invalid bounds, volume, or fade.");
+                }
+                WarnOutsideBounds(context, "Audio zone", zone.id, zone.center);
+            }
+        }
+
+        private static void CheckLimit(
+            LevelValidationContext context,
+            string code,
+            string label,
+            int count,
+            int maximum)
+        {
+            if (count > maximum)
+                context.Error(code, $"The level contains {count} {label}; the limit is {maximum}.");
+        }
+
+        private static void CheckIdentity(
+            LevelValidationContext context,
+            ISet<string> ids,
+            string label,
+            string id,
+            string displayName)
+        {
+            if (string.IsNullOrWhiteSpace(id) || !ids.Add(id))
+                context.Error("dressing.id", "Dressing IDs must be present and unique.");
+            if (string.IsNullOrWhiteSpace(displayName))
+                context.Error("dressing.name", $"The {label} '{id}' needs a display name.");
+        }
+
+        private static void WarnOutsideBounds(
+            LevelValidationContext context,
+            string label,
+            string id,
+            Float3Data position)
+        {
+            if (LevelValidationMath.IsFinite(position)
+                && !LevelValidationMath.Contains(context.Document.bounds, position))
             {
                 context.Warning(
-                    "playtest.start.outside-bounds",
-                    "The player start is outside the authored level bounds.");
+                    "dressing.outside-bounds",
+                    $"{label} '{id}' is outside the authored level bounds.");
+            }
+        }
+
+        private static bool Positive(float value) =>
+            LevelValidationMath.IsFinite(value) && value > 0f;
+
+        private static bool UnitInterval(float value) =>
+            LevelValidationMath.IsFinite(value) && value >= 0f && value <= 1f;
+
+        private static bool UnitColor(FloatColorData value) =>
+            LevelValidationMath.IsFinite(value)
+            && UnitInterval(value.r)
+            && UnitInterval(value.g)
+            && UnitInterval(value.b)
+            && UnitInterval(value.a);
+    }
+
+    public sealed class LevelOrganizationValidationRule : ILevelValidationRule
+    {
+        public void Evaluate(LevelValidationContext context)
+        {
+            if (context.Document.groups.Count > LevelDocument.MaximumEntityGroupCount)
+            {
+                context.Error(
+                    "groups.limit",
+                    $"The level contains {context.Document.groups.Count} groups; the limit is "
+                    + $"{LevelDocument.MaximumEntityGroupCount}.");
+            }
+
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (LevelEntityGroupData group in context.Document.groups)
+            {
+                if (group == null)
+                {
+                    context.Error("group.missing", "The entity-group list contains an empty entry.");
+                    continue;
+                }
+                if (string.IsNullOrWhiteSpace(group.id) || !ids.Add(group.id))
+                {
+                    context.Error(
+                        "group.id",
+                        "Entity-group IDs must be present and unique.");
+                }
+                if (string.IsNullOrWhiteSpace(group.displayName))
+                {
+                    context.Error(
+                        "group.name.missing",
+                        $"Entity group '{group.id}' needs a display name.");
+                }
+                else if (!names.Add(group.displayName.Trim()))
+                {
+                    context.Warning(
+                        "group.name.duplicate",
+                        $"More than one entity group is named '{group.displayName.Trim()}'.");
+                }
+            }
+
+            foreach (LevelEntity entity in context.Document.entities)
+            {
+                if (entity != null
+                    && !string.IsNullOrWhiteSpace(entity.groupId)
+                    && !ids.Contains(entity.groupId))
+                {
+                    context.Error(
+                        "entity.group.unknown",
+                        $"Entity '{entity.id}' references missing group '{entity.groupId}'.",
+                        entity.id);
+                }
             }
         }
     }
@@ -339,7 +1286,9 @@ namespace GritGud.Domain.Levels
                 }
 
                 if (!LevelValidationMath.IsFinite(entity.transform.position)
-                    || !LevelValidationMath.IsFinite(entity.transform.yawDegrees))
+                    || !LevelValidationMath.IsFinite(entity.transform.pitchDegrees)
+                    || !LevelValidationMath.IsFinite(entity.transform.yawDegrees)
+                    || !LevelValidationMath.IsFinite(entity.transform.rollDegrees))
                 {
                     context.Error(
                         "entity.transform.not-finite",
@@ -353,6 +1302,16 @@ namespace GritGud.Domain.Levels
                     context.Warning(
                         "entity.outside-bounds",
                         "The entity origin is outside the authored level bounds.",
+                        entityId);
+                }
+
+                if (entity.rotationPivot != null
+                    && (!string.Equals(entity.rotationPivot.mode, "bounds", StringComparison.Ordinal)
+                    || !LevelValidationMath.IsFinite(entity.rotationPivot.localPosition)))
+                {
+                    context.Error(
+                        "entity.rotation-pivot.invalid",
+                        "Entity rotation pivots must use a finite bounds-relative position.",
                         entityId);
                 }
             }
@@ -517,6 +1476,14 @@ namespace GritGud.Domain.Levels
         public static bool IsFinite(Float3Data value)
         {
             return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+        }
+
+        public static bool IsFinite(FloatColorData value)
+        {
+            return IsFinite(value.r)
+                && IsFinite(value.g)
+                && IsFinite(value.b)
+                && IsFinite(value.a);
         }
 
         public static bool IsFinite(float value)

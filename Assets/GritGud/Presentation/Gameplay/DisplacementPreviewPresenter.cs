@@ -1,4 +1,5 @@
 using System;
+using GritGud.Domain.Gameplay;
 using GritGud.Presentation.Levels.Runtime;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -16,7 +17,19 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameObject root;
         private readonly LineRenderer path;
         private readonly LineRenderer destinationRing;
+        private readonly LineRenderer getUpRing;
+        private readonly GameObject propBoundsObject;
+        private readonly Mesh propBoundsMesh;
         private readonly Material material;
+
+        internal bool IsPropBoundsVisible => propBoundsObject.activeSelf;
+
+        internal bool IsGetUpRingVisible => getUpRing.enabled;
+
+        internal Vector3 PropBoundsCenter => propBoundsObject.transform.position;
+
+        internal Vector3 PropBoundsHalfExtents =>
+            propBoundsObject.transform.localScale;
 
         public DisplacementPreviewPresenter(Transform parent)
         {
@@ -34,6 +47,21 @@ namespace GritGud.Presentation.Gameplay
                 RingWidth,
                 RingSegments,
                 true);
+            getUpRing = CreateLine(
+                "Push Off Get-Up Clearance",
+                RingWidth,
+                RingSegments,
+                true);
+            propBoundsObject = new GameObject("Push Off Cover Bounds");
+            propBoundsObject.transform.SetParent(root.transform, false);
+            propBoundsMesh = CreateBoundsMesh();
+            propBoundsObject.AddComponent<MeshFilter>().sharedMesh =
+                propBoundsMesh;
+            MeshRenderer boundsRenderer =
+                propBoundsObject.AddComponent<MeshRenderer>();
+            boundsRenderer.sharedMaterial = material;
+            boundsRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            boundsRenderer.receiveShadows = false;
             Hide();
         }
 
@@ -60,17 +88,73 @@ namespace GritGud.Presentation.Gameplay
 
             path.enabled = true;
             destinationRing.enabled = true;
+            propBoundsObject.SetActive(false);
+            getUpRing.enabled = false;
+        }
+
+        public void ShowPushOff(
+            Vector3 origin,
+            Vector3 destination,
+            bool valid,
+            Transform subjectRoot,
+            Transform actorRoot)
+        {
+            if (subjectRoot == null)
+                throw new ArgumentNullException(nameof(subjectRoot));
+            if (actorRoot == null)
+                throw new ArgumentNullException(nameof(actorRoot));
+
+            Show(origin, destination, valid);
+            Color color = valid
+                ? GameplayVisualPalette.DisplacementPreview
+                : GameplayVisualPalette.DisplacementPreviewInvalid;
+            ApplyColor(color);
+
+            UnityDisplacementOrientedBounds bounds =
+                UnityDisplacementGeometry.ResolveOrientedBounds(
+                    subjectRoot,
+                    destination,
+                    subjectRoot.rotation);
+            propBoundsObject.transform.SetPositionAndRotation(
+                bounds.Center,
+                bounds.Rotation);
+            propBoundsObject.transform.localScale = bounds.HalfExtents;
+            propBoundsObject.SetActive(true);
+
+            CharacterController controller =
+                actorRoot.GetComponent<CharacterController>();
+            float radius = controller != null
+                ? controller.radius * Mathf.Max(
+                    Mathf.Abs(actorRoot.lossyScale.x),
+                    Mathf.Abs(actorRoot.lossyScale.z))
+                : RingRadius;
+            Vector3 center = actorRoot.position
+                + (Vector3.up * SurfaceOffset);
+            for (int index = 0; index < RingSegments; index++)
+            {
+                float angle = index * Mathf.PI * 2f / RingSegments;
+                getUpRing.SetPosition(
+                    index,
+                    center + new Vector3(
+                        Mathf.Cos(angle) * radius,
+                        0f,
+                        Mathf.Sin(angle) * radius));
+            }
+            getUpRing.enabled = true;
         }
 
         public void Hide()
         {
             path.enabled = false;
             destinationRing.enabled = false;
+            getUpRing.enabled = false;
+            propBoundsObject.SetActive(false);
         }
 
         public void Dispose()
         {
             GameplayObjectLifecycle.Destroy(root);
+            GameplayObjectLifecycle.Destroy(propBoundsMesh);
             GameplayObjectLifecycle.Destroy(material);
         }
 
@@ -101,6 +185,37 @@ namespace GritGud.Presentation.Gameplay
             {
                 material.SetColor("_BaseColor", color);
             }
+        }
+
+        private static Mesh CreateBoundsMesh()
+        {
+            var mesh = new Mesh
+            {
+                name = "Push Off Cover Bounds Mesh",
+                hideFlags = HideFlags.HideAndDontSave,
+                vertices = new[]
+                {
+                    new Vector3(-1f, -1f, -1f),
+                    new Vector3(1f, -1f, -1f),
+                    new Vector3(1f, -1f, 1f),
+                    new Vector3(-1f, -1f, 1f),
+                    new Vector3(-1f, 1f, -1f),
+                    new Vector3(1f, 1f, -1f),
+                    new Vector3(1f, 1f, 1f),
+                    new Vector3(-1f, 1f, 1f),
+                },
+            };
+            mesh.SetIndices(
+                new[]
+                {
+                    0, 1, 1, 2, 2, 3, 3, 0,
+                    4, 5, 5, 6, 6, 7, 7, 4,
+                    0, 4, 1, 5, 2, 6, 3, 7,
+                },
+                MeshTopology.Lines,
+                0);
+            mesh.RecalculateBounds();
+            return mesh;
         }
     }
 }

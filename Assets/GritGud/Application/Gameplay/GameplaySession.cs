@@ -5,6 +5,36 @@ using GritGud.Domain.Turns;
 
 namespace GritGud.Application.Gameplay
 {
+    public sealed class GameplayInitiativeResult
+    {
+        public GameplayInitiativeResult(
+            string actorId,
+            int dexterity,
+            int reactionAdvance,
+            int participantCount)
+        {
+            ActorId = string.IsNullOrWhiteSpace(actorId)
+                ? throw new ArgumentException(
+                    "Initiative requires an actor ID.",
+                    nameof(actorId))
+                : actorId;
+            if (participantCount <= 0
+                || reactionAdvance < 1
+                || reactionAdvance > participantCount)
+            {
+                throw new ArgumentOutOfRangeException(nameof(reactionAdvance));
+            }
+            Dexterity = dexterity;
+            ReactionAdvance = reactionAdvance;
+            ParticipantCount = participantCount;
+        }
+
+        public string ActorId { get; }
+        public int Dexterity { get; }
+        public int ReactionAdvance { get; }
+        public int ParticipantCount { get; }
+    }
+
     public enum GameplaySessionMode
     {
         Exploration,
@@ -26,6 +56,12 @@ namespace GritGud.Application.Gameplay
     }
 
     public enum GameplayTurnPhase
+    {
+        Normal,
+        EmergencyReaction,
+    }
+
+    public enum GameplayTurnKind
     {
         Normal,
         EmergencyReaction,
@@ -91,7 +127,10 @@ namespace GritGud.Application.Gameplay
             string equippedItemId,
             EquipmentEffectSet equipmentEffects,
             int maximumWounds = int.MaxValue,
-            ActorInventorySnapshot inventory = null)
+            ActorInventorySnapshot inventory = null,
+            int turnActionPointAllowance = -1,
+            float turnMovementAllowance = -1f,
+            ActorPinState pinState = null)
         {
             if (!string.Equals(actorId, wounds.ActorId, StringComparison.Ordinal))
             {
@@ -114,6 +153,16 @@ namespace GritGud.Application.Gameplay
                     "Actor snapshots and inventory state must share an identifier.",
                     nameof(inventory));
             }
+            if (pinState != null
+                && !string.Equals(
+                    actorId,
+                    pinState.ActorId,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Actor snapshots and pin state must share an identifier.",
+                    nameof(pinState));
+            }
 
             ActorId = actorId;
             Pose = pose;
@@ -123,6 +172,20 @@ namespace GritGud.Application.Gameplay
             EquipmentEffects = equipmentEffects;
             MaximumWounds = maximumWounds;
             Inventory = resolvedInventory;
+            TurnActionPointAllowance = turnActionPointAllowance < 0
+                ? turnBudget.ActionPoints
+                : turnActionPointAllowance;
+            TurnMovementAllowance = turnMovementAllowance < 0f
+                ? turnBudget.MovementOpportunity + wounds.MovementPenalty
+                : turnMovementAllowance;
+            PinState = pinState;
+            if (float.IsNaN(TurnMovementAllowance)
+                || float.IsInfinity(TurnMovementAllowance)
+                || TurnActionPointAllowance < turnBudget.ActionPoints
+                || TurnMovementAllowance + 0.0001f
+                    < turnBudget.MovementOpportunity + wounds.MovementPenalty)
+                throw new ArgumentException(
+                    "Actor allowances cannot be below the represented state.");
         }
 
         public string ActorId { get; }
@@ -140,6 +203,14 @@ namespace GritGud.Application.Gameplay
         public int MaximumWounds { get; }
 
         public ActorInventorySnapshot Inventory { get; }
+
+        public int TurnActionPointAllowance { get; }
+
+        public float TurnMovementAllowance { get; }
+
+        public ActorPinState PinState { get; }
+
+        public bool IsPinned => PinState != null;
 
         public bool IsIncapacitated => Wounds.WoundCount >= MaximumWounds;
 
@@ -211,7 +282,9 @@ namespace GritGud.Application.Gameplay
         public TurnEndRecord(
             long sequence,
             string endingActorId,
-            string nextActorId)
+            string nextActorId,
+            GameplayTurnKind kind = GameplayTurnKind.Normal,
+            string interruptedActorId = null)
         {
             if (sequence <= 0)
             {
@@ -220,7 +293,18 @@ namespace GritGud.Application.Gameplay
 
             EndingActorId = RequireActorId(endingActorId, nameof(endingActorId));
             NextActorId = RequireActorId(nextActorId, nameof(nextActorId));
+            if (!Enum.IsDefined(typeof(GameplayTurnKind), kind))
+                throw new ArgumentOutOfRangeException(nameof(kind));
+            if (kind == GameplayTurnKind.EmergencyReaction
+                && string.IsNullOrWhiteSpace(interruptedActorId))
+            {
+                throw new ArgumentException(
+                    "Emergency turns require the interrupted actor identifier.",
+                    nameof(interruptedActorId));
+            }
             Sequence = sequence;
+            Kind = kind;
+            InterruptedActorId = interruptedActorId ?? string.Empty;
         }
 
         public long Sequence { get; }
@@ -228,6 +312,10 @@ namespace GritGud.Application.Gameplay
         public string EndingActorId { get; }
 
         public string NextActorId { get; }
+
+        public GameplayTurnKind Kind { get; }
+
+        public string InterruptedActorId { get; }
 
         private static string RequireActorId(string value, string parameterName)
         {
@@ -272,7 +360,7 @@ namespace GritGud.Application.Gameplay
         public GameplaySessionMode CurrentMode { get; }
     }
 
-    public sealed class GameplaySession
+    public sealed class GameplaySession : IGameplayTurnLifecycleHost
     {
         private readonly Dictionary<string, ActorState> actors =
             new Dictionary<string, ActorState>(StringComparer.Ordinal);
@@ -281,29 +369,41 @@ namespace GritGud.Application.Gameplay
         private readonly List<GameplayActionRecord> resolvedActions =
             new List<GameplayActionRecord>();
         private readonly IReadOnlyList<string> initiativeOrder;
+        private readonly IReadOnlyList<GameplayInitiativeResult>
+            initiativeResults;
         private readonly IReadOnlyList<GameplayActionRecord> readOnlyResolvedActions;
-        private string activeActorId;
+        private readonly GameplayTurnLifecycle turnLifecycle;
         private MovementRouteRecord pendingMovementRoute;
-        private VoluntaryTurnCycleRecord pendingVoluntaryTurnCycle;
-        private float voluntaryTurnReentrySecondsRemaining;
-        private IReadOnlyList<string> emergencyResponders;
-        private int emergencyResponderIndex = -1;
-        private string emergencyResumeActorId;
 
         public GameplaySession(
             ScenarioDefinition scenario,
-            GameplayJournal journal = null)
+            GameplayJournal journal = null,
+            uint scenarioSeed = 0u,
+            GameplayPartySave restoredParty = null)
         {
             Scenario = scenario ?? throw new ArgumentNullException(nameof(scenario));
             Journal = journal ?? new GameplayJournal();
-            var initiative = new List<ScenarioActorDefinition>(scenario.Actors);
+            if (restoredParty != null)
+                GameplayPartySaveValidator.Validate(restoredParty, scenario);
+            int participantCount = scenario.Actors.Count;
+            var initiative = new List<GameplayInitiativeResult>(participantCount);
+            foreach (ScenarioActorDefinition actor in scenario.Actors)
+            {
+                CharacterPersistenceSnapshot restoredCharacter = null;
+                if (restoredParty != null
+                    && actor.CharacterProfile != null)
+                {
+                    restoredParty.TryGetCharacter(
+                        actor.CharacterProfile.IdentityId,
+                        out restoredCharacter);
+                }
+                actors.Add(actor.Id, new ActorState(actor, restoredCharacter));
+                initiative.Add(ResolveInitiative(actor, participantCount));
+            }
             initiative.Sort(CompareInitiative);
             var order = new List<string>(initiative.Count);
-            foreach (ScenarioActorDefinition actor in initiative)
-            {
-                actors.Add(actor.Id, new ActorState(actor));
-                order.Add(actor.Id);
-            }
+            foreach (GameplayInitiativeResult result in initiative)
+                order.Add(result.ActorId);
 
             foreach (ScenarioObjectiveDefinition objective in scenario.Objectives)
             {
@@ -311,44 +411,54 @@ namespace GritGud.Application.Gameplay
             }
 
             initiativeOrder = order.AsReadOnly();
+            initiativeResults = initiative.AsReadOnly();
             readOnlyResolvedActions = resolvedActions.AsReadOnly();
+            turnLifecycle = new GameplayTurnLifecycle(this);
         }
 
         public ScenarioDefinition Scenario { get; }
 
         public GameplayJournal Journal { get; }
 
-        public GameplaySessionMode Mode { get; private set; } =
-            GameplaySessionMode.Exploration;
+        public GameplaySessionMode Mode => turnLifecycle.Mode;
 
         public GameplaySessionOperation Operation { get; private set; } =
             GameplaySessionOperation.None;
 
-        public TurnModeContext TurnContext { get; private set; } =
-            TurnModeContext.None;
+        public TurnModeContext TurnContext => turnLifecycle.TurnContext;
 
-        public bool EncounterActive { get; private set; }
+        public bool EncounterActive => turnLifecycle.EncounterActive;
 
-        public bool EncounterCompletionRequested { get; private set; }
+        public bool EncounterCompletionRequested =>
+            turnLifecycle.EncounterCompletionRequested;
 
         public IReadOnlyList<string> InitiativeOrder => initiativeOrder;
 
-        public string ActiveActorId => activeActorId;
+        public IReadOnlyList<string> EmergencyResponders =>
+            turnLifecycle.EmergencyResponders;
 
-        public GameplayTurnPhase TurnPhase { get; private set; } =
-            GameplayTurnPhase.Normal;
+        public int EmergencyResponderIndex =>
+            turnLifecycle.EmergencyResponderIndex;
+
+        public string EmergencyResumeActorId =>
+            turnLifecycle.EmergencyResumeActorId;
+
+        public IReadOnlyList<GameplayInitiativeResult> InitiativeResults =>
+            initiativeResults;
+
+        public string ActiveActorId => turnLifecycle.ActiveActorId;
+
+        public GameplayTurnPhase TurnPhase => turnLifecycle.TurnPhase;
 
         public float VoluntaryTurnReentrySecondsRemaining =>
-            voluntaryTurnReentrySecondsRemaining;
+            turnLifecycle.VoluntaryTurnReentrySecondsRemaining;
 
-        public bool CanEnterTurnMode =>
-            Mode == GameplaySessionMode.Exploration
-            && (EncounterActive || voluntaryTurnReentrySecondsRemaining <= 0f);
+        public bool CanEnterTurnMode => turnLifecycle.CanEnterTurnMode;
 
         public MovementRouteRecord PendingMovementRoute => pendingMovementRoute;
 
         public VoluntaryTurnCycleRecord PendingVoluntaryTurnCycle =>
-            pendingVoluntaryTurnCycle;
+            turnLifecycle.PendingVoluntaryTurnCycle;
 
         public IReadOnlyList<GameplayActionRecord> ResolvedActions =>
             readOnlyResolvedActions;
@@ -432,21 +542,36 @@ namespace GritGud.Application.Gameplay
 
         public VoluntaryTurnCycleRecord LastCompletedVoluntaryTurnCycle
         {
-            get;
-            private set;
+            get => turnLifecycle.LastCompletedVoluntaryTurnCycle;
         }
 
-        public TurnEndRecord LastEndedTurn { get; private set; }
+        public TurnEndRecord LastEndedTurn => turnLifecycle.LastEndedTurn;
 
-        public event Action<VoluntaryTurnCycleRecord> VoluntaryTurnCycleCompleted;
+        public event Action<VoluntaryTurnCycleRecord> VoluntaryTurnCycleCompleted
+        {
+            add => turnLifecycle.VoluntaryTurnCycleCompleted += value;
+            remove => turnLifecycle.VoluntaryTurnCycleCompleted -= value;
+        }
 
-        public event Action<TurnEndRecord> TurnEnded;
+        public event Action<TurnEndRecord> TurnEnded
+        {
+            add => turnLifecycle.TurnEnded += value;
+            remove => turnLifecycle.TurnEnded -= value;
+        }
 
         public event Action<EquipmentChangeRecord> EquipmentChanged;
 
-        public event Action<GameplayActiveActorChange> ActiveActorChanged;
+        public event Action<GameplayActiveActorChange> ActiveActorChanged
+        {
+            add => turnLifecycle.ActiveActorChanged += value;
+            remove => turnLifecycle.ActiveActorChanged -= value;
+        }
 
-        public event Action<GameplayModeChange> ModeChanged;
+        public event Action<GameplayModeChange> ModeChanged
+        {
+            add => turnLifecycle.ModeChanged += value;
+            remove => turnLifecycle.ModeChanged -= value;
+        }
 
         public event Action<string> ActorCapabilityChanged;
 
@@ -455,82 +580,13 @@ namespace GritGud.Application.Gameplay
             return TryEnterTurnMode(out _);
         }
 
-        public bool TryEnterTurnMode(out TurnModeEntryFailure failure)
-        {
-            if (Mode == GameplaySessionMode.TurnBased)
-            {
-                failure = TurnModeEntryFailure.AlreadyInTurnMode;
-                return false;
-            }
+        public bool TryEnterTurnMode(out TurnModeEntryFailure failure) =>
+            turnLifecycle.TryEnterTurnMode(out failure);
 
-            if (!EncounterActive && voluntaryTurnReentrySecondsRemaining > 0f)
-            {
-                failure = TurnModeEntryFailure.VoluntaryReentryLocked;
-                return false;
-            }
+        public void AdvanceContinuousTime(float elapsedSeconds) =>
+            turnLifecycle.AdvanceContinuousTime(elapsedSeconds);
 
-            if (!EncounterActive || activeActorId == null)
-            {
-                SetActiveActor(
-                    FindNextCapableActor(startingAfterIndex: -1)
-                        ?? initiativeOrder[0]);
-            }
-
-            GameplaySessionMode previousMode = Mode;
-            SetMode(GameplaySessionMode.TurnBased);
-            Operation = GameplaySessionOperation.None;
-            TurnContext = EncounterActive
-                ? TurnModeContext.InitiatedEncounter
-                : TurnModeContext.Voluntary;
-            Journal.RecordTurnModeChanged(
-                previousMode,
-                Mode,
-                TurnContext,
-                activeActorId);
-            failure = TurnModeEntryFailure.None;
-            return true;
-        }
-
-        public void AdvanceContinuousTime(float elapsedSeconds)
-        {
-            if (float.IsNaN(elapsedSeconds)
-                || float.IsInfinity(elapsedSeconds)
-                || elapsedSeconds < 0f)
-            {
-                throw new ArgumentOutOfRangeException(nameof(elapsedSeconds));
-            }
-
-            if (Mode != GameplaySessionMode.Exploration
-                || EncounterActive
-                || voluntaryTurnReentrySecondsRemaining <= 0f
-                || elapsedSeconds == 0f)
-            {
-                return;
-            }
-
-            voluntaryTurnReentrySecondsRemaining = Math.Max(
-                0f,
-                voluntaryTurnReentrySecondsRemaining - elapsedSeconds);
-        }
-
-        public bool BeginEncounter()
-        {
-            if (EncounterActive)
-            {
-                return false;
-            }
-
-            EncounterActive = true;
-            EncounterCompletionRequested = false;
-            Journal.RecordEncounterChanged(isActive: true);
-            if (Mode == GameplaySessionMode.Exploration)
-            {
-                return EnterTurnMode();
-            }
-
-            TurnContext = TurnModeContext.InitiatedEncounter;
-            return true;
-        }
+        public bool BeginEncounter() => turnLifecycle.BeginEncounter();
 
         public bool BeginEncounterFromAction(GameplayActionRecord action)
         {
@@ -546,262 +602,40 @@ namespace GritGud.Application.Gameplay
             return BeginEncounter();
         }
 
-        public bool CompleteEncounter()
-        {
-            if (!EncounterActive)
-            {
-                return false;
-            }
+        public bool CompleteEncounter() => turnLifecycle.CompleteEncounter();
 
-            EncounterActive = false;
-            EncounterCompletionRequested = false;
-            if (Mode == GameplaySessionMode.TurnBased)
-            {
-                TurnContext = TurnModeContext.Voluntary;
-            }
+        public bool RequestEncounterCompletionAtTurnEnd() =>
+            turnLifecycle.RequestEncounterCompletionAtTurnEnd();
 
-            Journal.RecordEncounterChanged(isActive: false);
+        public bool TryExitTurnMode(out TurnModeExitFailure failure) =>
+            turnLifecycle.TryExitTurnMode(out failure);
 
-            return true;
-        }
-
-        public bool RequestEncounterCompletionAtTurnEnd()
-        {
-            if (!EncounterActive || EncounterCompletionRequested)
-            {
-                return false;
-            }
-
-            EncounterCompletionRequested = true;
-            return true;
-        }
-
-        public bool TryExitTurnMode(out TurnModeExitFailure failure)
-        {
-            if (Mode != GameplaySessionMode.TurnBased)
-            {
-                failure = TurnModeExitFailure.NotInTurnMode;
-                return false;
-            }
-
-            if (Operation != GameplaySessionOperation.None)
-            {
-                failure = TurnModeExitFailure.OperationInProgress;
-                return false;
-            }
-
-            if (EncounterActive)
-            {
-                failure = TurnModeExitFailure.EncounterActive;
-                return false;
-            }
-
-            CompleteVoluntaryTurnCycleAndExit();
-            failure = TurnModeExitFailure.None;
-            return true;
-        }
-
-        public bool TryEndTurn(string actorId, out TurnEndFailure failure)
-        {
-            if (TurnPhase == GameplayTurnPhase.EmergencyReaction)
-            {
-                return TryEndEmergencyTurn(actorId, out _, out failure);
-            }
-            if (Mode != GameplaySessionMode.TurnBased)
-            {
-                failure = TurnEndFailure.NotInTurnMode;
-                return false;
-            }
-
-            if (Operation != GameplaySessionOperation.None)
-            {
-                failure = TurnEndFailure.OperationInProgress;
-                return false;
-            }
-
-            if (!string.Equals(activeActorId, actorId, StringComparison.Ordinal))
-            {
-                failure = TurnEndFailure.ActorNotActive;
-                return false;
-            }
-
-            string endingActorId = activeActorId;
-            if (!EncounterActive)
-            {
-                BeginVoluntaryWorldTurn();
-                RecordTurnEnd(endingActorId, activeActorId);
-                failure = TurnEndFailure.None;
-                return true;
-            }
-
-            int activeIndex = 0;
-            while (activeIndex < initiativeOrder.Count
-                && !string.Equals(
-                    initiativeOrder[activeIndex],
-                    activeActorId,
-                    StringComparison.Ordinal))
-            {
-                activeIndex++;
-            }
-
-            if (activeIndex >= initiativeOrder.Count)
-            {
-                throw new InvalidOperationException(
-                    "The active actor is missing from initiative order.");
-            }
-
-            if (EncounterCompletionRequested)
-            {
-                RecordTurnEnd(endingActorId, endingActorId);
-                CompleteEncounter();
-                CompleteVoluntaryTurnCycleAndExit();
-                failure = TurnEndFailure.None;
-                return true;
-            }
-
-            string nextActorId = FindNextCapableActor(activeIndex)
-                ?? endingActorId;
-            actors[nextActorId].RefreshTurnBudget();
-            SetActiveActor(nextActorId);
-            RecordTurnEnd(endingActorId, activeActorId);
-            failure = TurnEndFailure.None;
-            return true;
-        }
+        public bool TryEndTurn(string actorId, out TurnEndFailure failure) =>
+            turnLifecycle.TryEndTurn(actorId, out failure);
 
         public void BeginEmergencyReaction(
             string attackerId,
             IReadOnlyList<string> responderIds,
-            int actionPointAllowance)
-        {
-            if (Mode != GameplaySessionMode.TurnBased || !EncounterActive
-                || Operation != GameplaySessionOperation.None)
-            {
-                throw new InvalidOperationException("Emergency reactions require an idle encounter turn.");
-            }
-            if (TurnPhase != GameplayTurnPhase.Normal)
-            {
-                throw new InvalidOperationException("An emergency reaction is already active.");
-            }
-            if (responderIds == null || responderIds.Count == 0)
-            {
-                throw new ArgumentException(
-                    "Emergency reactions require responders.",
-                    nameof(responderIds));
-            }
-            if (actionPointAllowance <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(actionPointAllowance));
-            }
-            RequireActor(attackerId);
-            var responders = new List<string>(responderIds.Count);
-            var unique = new HashSet<string>(StringComparer.Ordinal);
-            foreach (string responderId in responderIds)
-            {
-                RequireActor(responderId);
-                if (string.Equals(attackerId, responderId, StringComparison.Ordinal)
-                    || !unique.Add(responderId))
-                {
-                    throw new ArgumentException(
-                        "Emergency responders must be unique and cannot include the attacker.",
-                        nameof(responderIds));
-                }
-                responders.Add(responderId);
-            }
-            emergencyResponders = responders.AsReadOnly();
-            emergencyResponderIndex = 0;
-            emergencyResumeActorId = attackerId;
-            TurnPhase = GameplayTurnPhase.EmergencyReaction;
-            string firstResponderId = emergencyResponders[0];
-            actors[firstResponderId].BeginEmergencyTurn(actionPointAllowance);
-            SetActiveActor(firstResponderId);
-        }
+            int actionPointAllowance) =>
+            turnLifecycle.BeginEmergencyReaction(
+                attackerId,
+                responderIds,
+                actionPointAllowance);
 
         public bool TryEndEmergencyTurn(
             string actorId,
             out bool responsePassCompleted,
-            out TurnEndFailure failure)
-        {
-            responsePassCompleted = false;
-            if (TurnPhase != GameplayTurnPhase.EmergencyReaction)
-            {
-                return TryEndTurn(actorId, out failure);
-            }
-            if (Operation != GameplaySessionOperation.None)
-            {
-                failure = TurnEndFailure.OperationInProgress;
-                return false;
-            }
-            if (!string.Equals(activeActorId, actorId, StringComparison.Ordinal))
-            {
-                failure = TurnEndFailure.ActorNotActive;
-                return false;
-            }
-            string endingActorId = activeActorId;
-            emergencyResponderIndex++;
-            responsePassCompleted =
-                emergencyResponderIndex >= emergencyResponders.Count;
-            if (!responsePassCompleted)
-            {
-                string nextResponderId =
-                    emergencyResponders[emergencyResponderIndex];
-                actors[nextResponderId].BeginEmergencyTurn(
-                    actors[endingActorId].EmergencyActionPointAllowance);
-                SetActiveActor(nextResponderId);
-            }
-            RecordTurnEnd(
-                endingActorId,
-                responsePassCompleted ? emergencyResumeActorId : activeActorId);
-            failure = TurnEndFailure.None;
-            return true;
-        }
+            out TurnEndFailure failure) =>
+            turnLifecycle.TryEndEmergencyTurn(
+                actorId,
+                out responsePassCompleted,
+                out failure);
 
-        public void CompleteEmergencyReaction(string resumeActorId)
-        {
-            if (TurnPhase != GameplayTurnPhase.EmergencyReaction)
-            {
-                throw new InvalidOperationException("No emergency reaction is active.");
-            }
-            if (!string.Equals(
-                    resumeActorId,
-                    emergencyResumeActorId,
-                    StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "Emergency reactions must resume their triggering attacker.");
-            }
-            ActorState actor = RequireActor(resumeActorId);
-            emergencyResponders = null;
-            emergencyResponderIndex = -1;
-            emergencyResumeActorId = null;
-            TurnPhase = GameplayTurnPhase.Normal;
-            actor.RefreshTurnBudget();
-            SetActiveActor(resumeActorId);
-        }
+        public void CompleteEmergencyReaction(string resumeActorId) =>
+            turnLifecycle.CompleteEmergencyReaction(resumeActorId);
 
-        public bool CompleteVoluntaryWorldTurn()
-        {
-            if (Mode != GameplaySessionMode.TurnBased
-                || EncounterActive
-                || Operation != GameplaySessionOperation.ResolvingWorldTurn
-                || pendingVoluntaryTurnCycle == null)
-            {
-                return false;
-            }
-
-            VoluntaryTurnCycleRecord completedCycle =
-                pendingVoluntaryTurnCycle;
-            pendingVoluntaryTurnCycle = null;
-            LastCompletedVoluntaryTurnCycle = completedCycle;
-            RefreshTurnBudgets();
-            SetActiveActor(
-                FindNextCapableActor(startingAfterIndex: -1)
-                    ?? initiativeOrder[0]);
-            Operation = GameplaySessionOperation.None;
-            TurnContext = TurnModeContext.Voluntary;
-            Journal.RecordVoluntaryTurnCycleCompleted(completedCycle);
-            VoluntaryTurnCycleCompleted?.Invoke(completedCycle);
-            return true;
-        }
+        public bool CompleteVoluntaryWorldTurn() =>
+            turnLifecycle.CompleteVoluntaryWorldTurn();
 
         public GameplayActorSnapshot GetActor(string actorId)
         {
@@ -846,6 +680,19 @@ namespace GritGud.Application.Gameplay
                     actionId);
             return action != null;
         }
+
+        public bool CanActorUseAction(
+            string actorId,
+            string actionId)
+        {
+            ActorState actor = RequireActor(actorId);
+            return actor.PinState == null
+                || IsPushOffAction(actorId, actionId);
+        }
+
+        private bool IsPushOffAction(string actorId, string actionId) =>
+            TryGetDisplacementAction(actorId, actionId, out var action)
+            && action.Intent == DisplacementActionKind.PushOff;
 
         public InventoryItemDefinition GetInventoryItem(
             string actorId,
@@ -917,12 +764,23 @@ namespace GritGud.Application.Gameplay
                     "Exploration poses cannot be changed while turn mode is active.");
             }
 
-            RequireActor(actorId).Pose = pose;
+            ActorState actor = RequireActor(actorId);
+            if (actor.PinState != null)
+            {
+                throw new InvalidOperationException(
+                    $"Pinned actor '{actorId}' cannot move in exploration.");
+            }
+            actor.Pose = pose;
         }
 
         public void SpendMovement(string actorId, float amount)
         {
             ActorState actor = RequireActiveActor(actorId);
+            if (actor.PinState != null)
+            {
+                throw new InvalidOperationException(
+                    $"Pinned actor '{actorId}' cannot spend movement.");
+            }
             TurnBudget previousBudget = actor.TurnBudget;
             actor.TurnBudget = actor.TurnBudget.SpendMovement(amount);
             Journal.RecordMovementBudgetSpent(
@@ -942,6 +800,11 @@ namespace GritGud.Application.Gameplay
             ActorState actor = Mode == GameplaySessionMode.TurnBased
                 ? RequireActiveActor(record.ActorId)
                 : RequireActor(record.ActorId);
+            if (actor.PinState != null)
+            {
+                throw new InvalidOperationException(
+                    $"Pinned actor '{record.ActorId}' cannot change stance.");
+            }
             if (!PosesMatch(actor.Pose, record.PreviousPose))
             {
                 throw new InvalidOperationException(
@@ -960,14 +823,32 @@ namespace GritGud.Application.Gameplay
             }
 
             ActorState actor = RequireActiveActor(route.ActorId);
+            if (actor.PinState != null)
+            {
+                throw new InvalidOperationException(
+                    $"Pinned actor '{route.ActorId}' cannot commit movement.");
+            }
             if (!PosesMatch(actor.Pose, route.OriginPose))
             {
                 throw new InvalidOperationException(
                     "The movement route no longer begins at the actor's authoritative pose.");
             }
 
-            TurnBudget updatedBudget =
-                actor.TurnBudget.SpendMovement(route.TotalCost);
+            if (route.HasFrozenBudget
+                && (actor.TurnBudget.ActionPoints
+                        != route.PreviousBudget.ActionPoints
+                    || actor.TurnBudget.MovementOpportunity
+                        != route.PreviousBudget.MovementOpportunity))
+            {
+                throw new InvalidOperationException(
+                    "The movement route was planned against a stale turn budget.");
+            }
+
+            TurnBudget updatedBudget = actor.TurnBudget.SpendAction(
+                new ActionCost(
+                    route.TotalActionPointCost,
+                    route.TotalCost,
+                    ActionMobility.Mobile));
             actor.TurnBudget = updatedBudget;
             pendingMovementRoute = route;
             Operation = GameplaySessionOperation.ResolvingMovement;
@@ -1002,6 +883,39 @@ namespace GritGud.Application.Gameplay
                 actor.Pose.Stance);
         }
 
+        internal void ValidatePinTransition(ActorPinTransition transition)
+        {
+            if (transition == null)
+                return;
+
+            ActorState actor = RequireActor(transition.ActorId);
+            if (!PosesMatch(actor.Pose, transition.PreviousPose)
+                || !PinStatesMatch(actor.PinState, transition.PreviousState))
+            {
+                throw new InvalidOperationException(
+                    "The pin transition no longer starts from authoritative actor state.");
+            }
+        }
+
+        internal void CommitPinTransition(
+            ActorPinTransition transition,
+            GameplayNotificationBatch notifications,
+            bool validatePrevious = true)
+        {
+            if (transition == null)
+                return;
+
+            if (notifications == null)
+                throw new ArgumentNullException(nameof(notifications));
+
+            if (validatePrevious)
+                ValidatePinTransition(transition);
+            ActorState actor = RequireActor(transition.ActorId);
+            actor.Pose = transition.ResultingPose;
+            actor.PinState = transition.ResultingState;
+            notifications.Add(ActorCapabilityChanged, transition.ActorId);
+        }
+
         public void CompleteMovementResolution()
         {
             if (Operation != GameplaySessionOperation.ResolvingMovement
@@ -1024,16 +938,38 @@ namespace GritGud.Application.Gameplay
 
         public void CommitAction(GameplayActionRecord record)
         {
+            var notifications = new GameplayNotificationBatch();
+            CommitAction(record, notifications);
+            notifications.Publish();
+        }
+
+        internal void CommitAction(
+            GameplayActionRecord record,
+            GameplayNotificationBatch notifications)
+        {
+            if (notifications == null)
+            {
+                throw new ArgumentNullException(nameof(notifications));
+            }
+
             ValidateActionCommit(record);
 
             ActorState actor = Mode == GameplaySessionMode.TurnBased
                 ? RequireActiveActor(record.Request.ActorId)
                 : RequireActor(record.Request.ActorId);
+            if (actor.PinState != null
+                && !IsPushOffAction(
+                    record.Request.ActorId,
+                    record.Request.ActionId))
+            {
+                throw new InvalidOperationException(
+                    $"Pinned actor '{record.Request.ActorId}' can only Push Off its pinning prop.");
+            }
             actor.TurnBudget = record.ResultingBudget;
             foreach (GameplayActionOutcome outcome in record.Outcomes)
             {
                 ApplyActionFacing(actor, outcome);
-                ApplyActionOutcome(outcome);
+                ApplyActionOutcome(outcome, notifications);
             }
 
             resolvedActions.Add(record);
@@ -1106,14 +1042,33 @@ namespace GritGud.Application.Gameplay
             ValidateActionOutcomes(record);
         }
 
-        private static int CompareInitiative(
-            ScenarioActorDefinition left,
-            ScenarioActorDefinition right)
+        private static GameplayInitiativeResult ResolveInitiative(
+            ScenarioActorDefinition actor,
+            int participantCount)
         {
-            int initiativeComparison = right.Initiative.CompareTo(left.Initiative);
+            int boundedDexterity = Math.Max(1, Math.Min(5, actor.Initiative));
+            int reactionAdvance = 1 + ((boundedDexterity - 1)
+                * (participantCount - 1) / 4);
+            return new GameplayInitiativeResult(
+                actor.Id,
+                actor.Initiative,
+                reactionAdvance,
+                participantCount);
+        }
+
+        private static int CompareInitiative(
+            GameplayInitiativeResult left,
+            GameplayInitiativeResult right)
+        {
+            int initiativeComparison = right.ReactionAdvance.CompareTo(
+                left.ReactionAdvance);
+            if (initiativeComparison == 0)
+            {
+                initiativeComparison = right.Dexterity.CompareTo(left.Dexterity);
+            }
             return initiativeComparison != 0
                 ? initiativeComparison
-                : StringComparer.Ordinal.Compare(left.Id, right.Id);
+                : StringComparer.Ordinal.Compare(left.ActorId, right.ActorId);
         }
 
         private static bool PosesMatch(
@@ -1126,6 +1081,12 @@ namespace GritGud.Application.Gameplay
                 && left.FacingDegrees == right.FacingDegrees
                 && left.Stance == right.Stance;
         }
+
+        private static bool PinStatesMatch(
+            ActorPinState left,
+            ActorPinState right) =>
+            ReferenceEquals(left, right)
+            || (left != null && left.HasSameState(right));
 
         private static bool TurnBudgetsMatch(
             TurnBudget left,
@@ -1207,7 +1168,9 @@ namespace GritGud.Application.Gameplay
             }
         }
 
-        private void ApplyActionOutcome(GameplayActionOutcome outcome)
+        private void ApplyActionOutcome(
+            GameplayActionOutcome outcome,
+            GameplayNotificationBatch notifications)
         {
             switch (outcome)
             {
@@ -1218,7 +1181,9 @@ namespace GritGud.Application.Gameplay
                 case AttackResolvedActionOutcome attackResolved:
                     RequireActor(attackResolved.TargetId).ApplyAttack(
                         attackResolved.Attack);
-                    ActorCapabilityChanged?.Invoke(attackResolved.TargetId);
+                    notifications.Add(
+                        ActorCapabilityChanged,
+                        attackResolved.TargetId);
                     break;
 
                 case WeaponDischargedActionOutcome _:
@@ -1240,7 +1205,7 @@ namespace GritGud.Application.Gameplay
                             : RequireActorDefinition(change.ActorId)
                                 .GetInventoryItem(change.ResultingEquippedItemId);
                     actor.ApplyEquipment(item);
-                    EquipmentChanged?.Invoke(change);
+                    notifications.Add(EquipmentChanged, change);
                     break;
 
                 case ThrownExplosiveActionOutcome thrownExplosive:
@@ -1611,8 +1576,28 @@ namespace GritGud.Application.Gameplay
             TargetRegionId? region,
             float woundMovementPenalty)
         {
+            var notifications = new GameplayNotificationBatch();
+            ApplyBlastInjury(
+                actorId,
+                region,
+                woundMovementPenalty,
+                notifications);
+            notifications.Publish();
+        }
+
+        internal void ApplyBlastInjury(
+            string actorId,
+            TargetRegionId? region,
+            float woundMovementPenalty,
+            GameplayNotificationBatch notifications)
+        {
+            if (notifications == null)
+            {
+                throw new ArgumentNullException(nameof(notifications));
+            }
+
             RequireActor(actorId).ApplyBlast(region, woundMovementPenalty);
-            ActorCapabilityChanged?.Invoke(actorId);
+            notifications.Add(ActorCapabilityChanged, actorId);
         }
 
         private void ValidateEquipmentChangeOutcome(
@@ -1775,88 +1760,48 @@ namespace GritGud.Application.Gameplay
                     == right.BlastIntegrityDamage;
         }
 
-        private void BeginVoluntaryWorldTurn()
+        GameplayJournal IGameplayTurnLifecycleHost.Journal => Journal;
+
+        GameplaySessionOperation IGameplayTurnLifecycleHost.Operation
         {
-            pendingVoluntaryTurnCycle = CreateVoluntaryTurnCycleRecord();
-            Operation = GameplaySessionOperation.ResolvingWorldTurn;
+            get => Operation;
+            set => Operation = value;
         }
 
-        private void CompleteVoluntaryTurnCycleAndExit()
-        {
-            VoluntaryTurnCycleRecord completedCycle =
-                CreateVoluntaryTurnCycleRecord();
-            LastCompletedVoluntaryTurnCycle = completedCycle;
-            RefreshTurnBudgets();
-            GameplaySessionMode previousMode = Mode;
-            SetMode(GameplaySessionMode.Exploration);
-            TurnContext = TurnModeContext.None;
-            voluntaryTurnReentrySecondsRemaining =
-                Scenario.Timing.MinimumVoluntaryTurnSeconds;
-            Journal.RecordVoluntaryTurnCycleCompleted(completedCycle);
-            Journal.RecordTurnModeChanged(
-                previousMode,
-                Mode,
-                TurnContext,
-                activeActorId);
-            VoluntaryTurnCycleCompleted?.Invoke(completedCycle);
-        }
+        IReadOnlyList<string> IGameplayTurnLifecycleHost.InitiativeOrder =>
+            initiativeOrder;
 
-        private void RecordTurnEnd(string endingActorId, string nextActorId)
-        {
-            var record = new TurnEndRecord(
-                LastEndedTurn == null ? 1 : LastEndedTurn.Sequence + 1,
-                endingActorId,
-                nextActorId);
-            LastEndedTurn = record;
-            Journal.RecordTurnEnded(record);
-            TurnEnded?.Invoke(record);
-        }
+        float IGameplayTurnLifecycleHost.MinimumVoluntaryTurnSeconds =>
+            Scenario.Timing.MinimumVoluntaryTurnSeconds;
 
-        private void SetActiveActor(string actorId)
-        {
-            if (string.Equals(activeActorId, actorId, StringComparison.Ordinal))
-                return;
+        void IGameplayTurnLifecycleHost.RequireActorForTurnLifecycle(
+            string actorId) => RequireActor(actorId);
 
-            string previousActorId = activeActorId;
-            activeActorId = actorId;
-            ActiveActorChanged?.Invoke(new GameplayActiveActorChange(
-                previousActorId,
-                activeActorId));
-        }
+        bool IGameplayTurnLifecycleHost.IsActorIncapacitatedForTurnLifecycle(
+            string actorId) => RequireActor(actorId).IsIncapacitated;
 
-        private void SetMode(GameplaySessionMode mode)
-        {
-            if (Mode == mode)
-                return;
+        void IGameplayTurnLifecycleHost.RefreshTurnBudgetForTurnLifecycle(
+            string actorId) => RequireActor(actorId).RefreshTurnBudget();
 
-            GameplaySessionMode previousMode = Mode;
-            Mode = mode;
-            ModeChanged?.Invoke(new GameplayModeChange(previousMode, Mode));
-        }
-
-        private void RefreshTurnBudgets()
+        void IGameplayTurnLifecycleHost.RefreshAllTurnBudgetsForTurnLifecycle()
         {
             foreach (string actorId in initiativeOrder)
-            {
                 actors[actorId].RefreshTurnBudget();
-            }
         }
 
-        private string FindNextCapableActor(int startingAfterIndex)
-        {
-            for (int offset = 1; offset <= initiativeOrder.Count; offset++)
-            {
-                int index = (startingAfterIndex + offset)
-                    % initiativeOrder.Count;
-                string candidateId = initiativeOrder[index];
-                if (!actors[candidateId].IsIncapacitated)
-                {
-                    return candidateId;
-                }
-            }
+        void IGameplayTurnLifecycleHost.BeginEmergencyTurnForTurnLifecycle(
+            string actorId,
+            int actionPointAllowance) =>
+            RequireActor(actorId).BeginEmergencyTurn(actionPointAllowance);
 
-            return null;
-        }
+        int IGameplayTurnLifecycleHost
+            .GetEmergencyActionPointAllowanceForTurnLifecycle(
+                string actorId) =>
+            RequireActor(actorId).EmergencyActionPointAllowance;
+
+        VoluntaryTurnCycleRecord IGameplayTurnLifecycleHost
+            .CreateVoluntaryTurnCycleRecordForTurnLifecycle() =>
+            CreateVoluntaryTurnCycleRecord();
 
         private ActorState RequireActiveActor(string actorId)
         {
@@ -1866,7 +1811,7 @@ namespace GritGud.Application.Gameplay
                     "Turn resources can only be used while turn mode is active.");
             }
 
-            if (!string.Equals(activeActorId, actorId, StringComparison.Ordinal))
+            if (!string.Equals(ActiveActorId, actorId, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
                     "Only the active actor can use turn resources.");
@@ -1930,14 +1875,27 @@ namespace GritGud.Application.Gameplay
             private readonly Dictionary<string, int> inventoryQuantities =
                 new Dictionary<string, int>(StringComparer.Ordinal);
 
-            public ActorState(ScenarioActorDefinition definition)
+            public ActorState(
+                ScenarioActorDefinition definition,
+                CharacterPersistenceSnapshot restoredCharacter = null)
             {
                 ActorId = definition.Id;
                 Pose = definition.StartingPose;
-                TurnBudget = definition.StartingTurnBudget;
-                Wounds = new ActorWoundSnapshot(definition.Id, 0, 0f);
                 MaximumWounds = definition.Combat.MaximumWounds;
-                EquippedItemId = definition.InitiallyEquippedItemId;
+                Wounds = restoredCharacter == null
+                    ? new ActorWoundSnapshot(definition.Id, 0, 0f)
+                    : RebindWounds(
+                        restoredCharacter.Wounds,
+                        definition.Id);
+                TurnBudget = new TurnBudget(
+                    definition.StartingTurnBudget.ActionPoints,
+                    Math.Max(
+                        0f,
+                        definition.StartingTurnBudget.MovementOpportunity
+                            - Wounds.MovementPenalty));
+                EquippedItemId = restoredCharacter != null
+                    ? restoredCharacter.EquippedItemId
+                    : definition.InitiallyEquippedItemId;
                 EquipmentEffects = definition.GetInventoryItem(
                         EquippedItemId)?.EquippedEffects
                     ?? EquipmentEffectSet.None;
@@ -1950,6 +1908,20 @@ namespace GritGud.Application.Gameplay
                 }
                 turnBudgetAllowance = definition.StartingTurnBudget;
             }
+
+            private static ActorWoundSnapshot RebindWounds(
+                ActorWoundSnapshot wounds,
+                string actorId) =>
+                new ActorWoundSnapshot(
+                    actorId,
+                    wounds.HeadWounds,
+                    wounds.TorsoWounds,
+                    wounds.LeftArmWounds,
+                    wounds.RightArmWounds,
+                    wounds.LeftLegWounds,
+                    wounds.RightLegWounds,
+                    wounds.UnlocalizedWounds,
+                    wounds.MovementPenalty);
 
             public string ActorId { get; }
 
@@ -1972,6 +1944,8 @@ namespace GritGud.Application.Gameplay
             public string EquippedItemId { get; private set; }
 
             public EquipmentEffectSet EquipmentEffects { get; private set; }
+
+            public ActorPinState PinState { get; set; }
 
             public void ApplyEquipment(InventoryItemDefinition item)
             {
@@ -2079,7 +2053,10 @@ namespace GritGud.Application.Gameplay
                     EquippedItemId,
                     EquipmentEffects,
                     MaximumWounds,
-                    new ActorInventorySnapshot(ActorId, quantities));
+                    new ActorInventorySnapshot(ActorId, quantities),
+                    turnBudgetAllowance.ActionPoints,
+                    turnBudgetAllowance.MovementOpportunity,
+                    PinState);
             }
 
             private float WoundedMovementAllowance => Math.Max(

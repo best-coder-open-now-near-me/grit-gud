@@ -7,14 +7,14 @@ namespace GritGud.Presentation.Gameplay
 {
     internal sealed class MovementRoutePlaybackPresenter
     {
-        private const float PlaybackSpeed = 4f;
         private readonly Transform actorTransform;
         private readonly ThirdPersonMotor motor;
         private readonly CharacterController characterController;
         private readonly ActorAnimationCoordinator animationCoordinator;
         private readonly ActorLocomotionAnimationPresenter locomotionPresenter;
         private MovementRouteRecord route;
-        private float distance;
+        private float elapsedSeconds;
+        private int presentedTraversalSegment = -1;
         private bool motorWasEnabled;
         private bool controllerWasEnabled;
         private bool locomotionWasEnabled;
@@ -50,7 +50,8 @@ namespace GritGud.Presentation.Gameplay
             }
 
             route = movementRoute;
-            distance = 0f;
+            elapsedSeconds = 0f;
+            presentedTraversalSegment = -1;
             motor.StopPlanarMovement();
             motorWasEnabled = motor.enabled;
             motor.enabled = false;
@@ -74,14 +75,17 @@ namespace GritGud.Presentation.Gameplay
                 return false;
             }
 
-            distance = Mathf.Min(
-                route.TotalCost,
-                distance + (PlaybackSpeed * Mathf.Max(0f, deltaTime)));
+            elapsedSeconds = Mathf.Min(
+                route.TotalPlaybackDurationSeconds,
+                elapsedSeconds + Mathf.Max(0f, deltaTime));
             MovementRouteSampling.TrySample(
-                route.Points,
-                distance,
+                route,
+                elapsedSeconds,
                 out Vector3 position,
-                out Vector3 direction);
+                out Vector3 direction,
+                out int segmentIndex,
+                out _);
+            MovementRouteSegmentRecord segment = route.Segments[segmentIndex];
             Vector3 planarDirection = Vector3.ProjectOnPlane(direction, Vector3.up);
             Quaternion rotation = actorTransform.rotation;
             if (planarDirection.sqrMagnitude > 0.0001f)
@@ -93,11 +97,18 @@ namespace GritGud.Presentation.Gameplay
             if (animationCoordinator != null &&
                 animationCoordinator.Profile != null)
             {
+                if (segment.IsTraversal
+                    && presentedTraversalSegment != segmentIndex)
+                {
+                    animationCoordinator.TryRequestAction(
+                        ActorAnimationAction.Jump);
+                    presentedTraversalSegment = segmentIndex;
+                }
                 ActorLocomotionAnimationState locomotion =
                     ActorLocomotionAnimationProjector.Project(
-                    planarDirection.normalized * PlaybackSpeed,
+                    planarDirection.normalized * 4f,
                     rotation,
-                    true,
+                    !segment.IsTraversal,
                     0f,
                     animationCoordinator.Profile.LocomotionReferenceSpeed,
                     animationCoordinator.Profile.TurnReferenceDegreesPerSecond);
@@ -108,7 +119,7 @@ namespace GritGud.Presentation.Gameplay
                     deltaTime);
             }
 
-            if (distance < route.TotalCost)
+            if (elapsedSeconds < route.TotalPlaybackDurationSeconds)
             {
                 return false;
             }
@@ -131,7 +142,8 @@ namespace GritGud.Presentation.Gameplay
         private void Finish()
         {
             route = null;
-            distance = 0f;
+            elapsedSeconds = 0f;
+            presentedTraversalSegment = -1;
             if (characterController != null)
             {
                 characterController.enabled = controllerWasEnabled;

@@ -1154,6 +1154,8 @@ namespace GritGud.Application.Gameplay
                 new GameplayCommandHintModel(GameplayControl.ToggleCameraView, "CAMERA"),
                 new GameplayCommandHintModel(GameplayControl.CameraZoom, "ZOOM"),
                 new GameplayCommandHintModel(GameplayControl.Move, "PLAN"),
+                new GameplayCommandHintModel(GameplayControl.UndoRoute, "RETRACT"),
+                new GameplayCommandHintModel(GameplayControl.CancelRoute, "CLEAR ROUTE"),
                 new GameplayCommandHintModel(GameplayControl.ConfirmRoute, "MOVE"),
             };
     }

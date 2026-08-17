@@ -4,6 +4,7 @@ using System.Linq;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Turns;
+using GritGud.Presentation.Actors;
 using GritGud.Presentation.Actors.Animation;
 using GritGud.Presentation.Gameplay;
 using GritGud.Presentation.Levels.Runtime;
@@ -66,8 +67,14 @@ namespace GritGud.Presentation.Tests
                 Is.EqualTo(WeaponAttackPresentationKind.ContactStrike));
             Assert.That(knife.MuzzleEffectPrefab, Is.Null);
             Assert.That(knife.InstantTracer, Is.False);
-            Assert.That(knife.ContactStrikeSeconds, Is.EqualTo(0.38f));
-            Assert.That(knife.ContactHandExtension, Is.EqualTo(0.34f));
+            Assert.That(
+                knife.ContactStrikeSeconds,
+                Is.EqualTo(GameplayCloseQuartersPresentationTiming
+                    .ContactStrikeSeconds));
+            Assert.That(
+                knife.ContactImpactNormalizedTime,
+                Is.EqualTo(GameplayCloseQuartersPresentationTiming
+                    .ContactImpactNormalizedTime));
         }
 
         [Test]
@@ -89,7 +96,7 @@ namespace GritGud.Presentation.Tests
                 int layerIndex = animator.GetLayerIndex("Weapon Upper Body");
                 Assert.That(
                     animator.GetCurrentAnimatorStateInfo(layerIndex).IsName(
-                        "Empty Hands"),
+                        ActorAnimationParameters.KnifeIdleStateName),
                     Is.True);
                 Assert.That(
                     animator.GetLayerWeight(layerIndex),
@@ -98,6 +105,46 @@ namespace GritGud.Presentation.Tests
                             ActorAnimationPoseIds.Melee)
                             .PoseLayerWeight)
                         .Within(0.001f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(player);
+            }
+        }
+
+        [Test]
+        public void EmptyHandsReleasesTheWeaponPoseLayer()
+        {
+            GameObject playerPrefab = Resources.Load<GameObject>(
+                "Actors/DefaultPlayerActor");
+            GameObject player = Object.Instantiate(playerPrefab);
+            try
+            {
+                ActorAnimationCoordinator presenter =
+                    player.GetComponent<ActorAnimationCoordinator>();
+                Animator animator = presenter.TargetAnimator;
+                animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                animator.Update(0f);
+
+                presenter.PresentWeaponPose(ActorAnimationPoseIds.Rifle);
+                animator.Update(0.25f);
+                int layerIndex = animator.GetLayerIndex(
+                    ActorAnimationParameters.WeaponLayerName);
+                Assert.That(
+                    animator.GetLayerWeight(layerIndex),
+                    Is.GreaterThan(0f));
+
+                presenter.PresentWeaponPose(ActorAnimationPoseIds.Empty);
+                animator.Update(0f);
+
+                Assert.That(
+                    presenter.CurrentWeaponAnimationSetId,
+                    Is.EqualTo(ActorAnimationPoseIds.Empty));
+                Assert.That(
+                    presenter.Profile.GetWeaponAnimationSet(
+                        ActorAnimationPoseIds.Empty).PoseLayerWeight,
+                    Is.Zero);
+                Assert.That(animator.GetLayerWeight(layerIndex), Is.Zero);
             }
             finally
             {
@@ -465,11 +512,90 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void ReplayEquipmentProjectionRestoresLiveHeldModel()
+        {
+            var host = new GameObject("Replay Weapon Presenter Host");
+            var actor = new GameObject("Replay Weapon Presenter Actor");
+            var riflePrefab = new GameObject("Replay Rifle");
+            var launcherPrefab = new GameObject("Replay Launcher");
+            var gripObject = new GameObject("Replay Weapon Grip");
+            LevelWorld world = null;
+            GameplayWorldRegistry registry = null;
+            WeaponPresentationCatalog catalog = null;
+            try
+            {
+                ConfigureTestRig(riflePrefab, supportHand: true);
+                ConfigureTestRig(launcherPrefab, supportHand: true);
+                actor.AddComponent<CharacterController>();
+                actor.AddComponent<ActorStancePresenter>();
+                gripObject.transform.SetParent(actor.transform, false);
+                world = new LevelWorld(
+                    new GameObject("Replay Weapon World"),
+                    new Dictionary<string, LevelEntityView>(),
+                    null);
+                registry = new GameplayWorldRegistry(world);
+                registry.RegisterActor(
+                    "player",
+                    "test",
+                    targetable: false,
+                    actor);
+                GameplaySession session = CreateSession();
+                catalog = WeaponPresentationCatalog.CreateRuntime(
+                    CreateDefinition(
+                        "rifle",
+                        riflePrefab,
+                        ActorAnimationPoseIds.Rifle),
+                    CreateDefinition(
+                        "launcher",
+                        launcherPrefab,
+                        ActorAnimationPoseIds.Launcher));
+                GameplayWeaponPresenter presenter =
+                    host.AddComponent<GameplayWeaponPresenter>();
+                presenter.Bind(
+                    session,
+                    registry,
+                    host.AddComponent<GameplayAttackController>(),
+                    host.AddComponent<GameplayProjectileController>(),
+                    CreateUnboundAnimationCoordinator(actor),
+                    "player",
+                    catalog,
+                    gripObject.transform);
+
+                presenter.BeginReplayPresentation();
+                presenter.PresentReplayEquipment("launcher");
+                Assert.That(presenter.CurrentItemId, Is.EqualTo("launcher"));
+                Assert.That(presenter.HeldWeapon.name,
+                    Is.EqualTo("Replay Launcher - Held"));
+
+                presenter.PresentReplayEquipment(null);
+                Assert.That(presenter.HeldWeapon, Is.Null);
+
+                presenter.EndReplayPresentation();
+                Assert.That(presenter.CurrentItemId, Is.EqualTo("rifle"));
+                Assert.That(presenter.HeldWeapon.name,
+                    Is.EqualTo("Replay Rifle - Held"));
+                Assert.That(session.GetActor("player").EquippedItemId,
+                    Is.EqualTo("rifle"));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                registry?.Dispose();
+                world?.Dispose();
+                Object.DestroyImmediate(riflePrefab);
+                Object.DestroyImmediate(launcherPrefab);
+                Object.DestroyImmediate(catalog);
+            }
+        }
+
+        [Test]
         public void CommittedContactAttackTriggersStrikeWithoutFirearmEffects()
         {
             var host = new GameObject("Contact Weapon Presenter Host");
-            var playerObject = new GameObject("Contact Weapon Player");
-            var targetObject = new GameObject("Contact Weapon Target");
+            GameObject actorPrefab = Resources.Load<GameObject>(
+                "Actors/DefaultPlayerActor");
+            GameObject playerObject = Object.Instantiate(actorPrefab);
+            GameObject targetObject = Object.Instantiate(actorPrefab);
             var knifePrefab = new GameObject("Test Knife");
             var gripObject = new GameObject("Contact Weapon Grip");
             LevelWorld world = null;
@@ -478,10 +604,6 @@ namespace GritGud.Presentation.Tests
             try
             {
                 ConfigureTestRig(knifePrefab, supportHand: false);
-                playerObject.AddComponent<CharacterController>();
-                playerObject.AddComponent<ActorStancePresenter>();
-                targetObject.AddComponent<CharacterController>();
-                targetObject.AddComponent<ActorStancePresenter>();
                 gripObject.transform.SetParent(playerObject.transform, false);
                 targetObject.transform.position = new Vector3(0f, 0f, 1.5f);
                 world = new LevelWorld(
@@ -522,10 +644,12 @@ namespace GritGud.Presentation.Tests
                         lineWidth: 0.02f,
                         attackPresentationKind:
                             WeaponAttackPresentationKind.ContactStrike,
-                        localContactSwingAxis: Vector3.up,
-                        localContactSwingDegrees: 75f,
                         contactDurationSeconds: 0.4f,
-                        handExtension: 0.3f));
+                        contactImpactTime: 0.4f));
+                ActorAnimationCoordinator playerAnimation = playerObject
+                    .GetComponent<ActorAnimationCoordinator>();
+                ActorAnimationCoordinator targetAnimation = targetObject
+                    .GetComponent<ActorAnimationCoordinator>();
                 GameplayWeaponPresenter presenter =
                     host.AddComponent<GameplayWeaponPresenter>();
                 presenter.Bind(
@@ -533,18 +657,145 @@ namespace GritGud.Presentation.Tests
                     registry,
                     attacks,
                     host.AddComponent<GameplayProjectileController>(),
-                    CreateUnboundAnimationCoordinator(playerObject),
+                    playerAnimation,
                     "player",
                     catalog,
                     gripObject.transform);
+                GameplayCombatReactionPresenter reactions =
+                    host.AddComponent<GameplayCombatReactionPresenter>();
+                reactions.Bind(session, registry, attacks, catalog);
 
                 Assert.That(attacks.TryAttack(CreateContactExposure()), Is.True);
                 Assert.That(presenter.ContactStrikeActive, Is.True);
                 Assert.That(presenter.TransientVisualCount, Is.Zero);
+                Assert.That(
+                    playerAnimation.LastRequestedAction,
+                    Is.EqualTo(ActorAnimationAction.ContactStrike));
+                Assert.That(targetAnimation.LastRequestedAction, Is.Null);
+                Assert.That(reactions.PendingReactionCount, Is.EqualTo(1));
+
+                playerAnimation.TargetAnimator.Update(0.1f);
+                int actionLayer = playerAnimation.TargetAnimator.GetLayerIndex(
+                    ActorAnimationParameters.ActionLayerName);
+                Assert.That(
+                    playerAnimation.TargetAnimator
+                        .GetCurrentAnimatorStateInfo(actionLayer)
+                        .IsName(ActorAnimationParameters.KnifeStrikeStateName),
+                    Is.True);
+
+                reactions.Tick(0.15f);
+                Assert.That(targetAnimation.LastRequestedAction, Is.Null);
+                reactions.Tick(0.02f);
+                Assert.That(
+                    targetAnimation.LastRequestedAction,
+                    Is.EqualTo(ActorAnimationAction.HitReaction));
+                Assert.That(reactions.PendingReactionCount, Is.Zero);
 
                 presenter.TickContactStrike(0.5f);
                 Assert.That(presenter.ContactStrikeActive, Is.False);
                 Assert.That(presenter.TransientVisualCount, Is.Zero);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                registry?.Dispose();
+                world?.Dispose();
+                Object.DestroyImmediate(playerObject);
+                Object.DestroyImmediate(targetObject);
+                Object.DestroyImmediate(knifePrefab);
+                Object.DestroyImmediate(catalog);
+            }
+        }
+
+        [Test]
+        public void IncapacitatingContactAttackArmsRagdollWithJournalEvidence()
+        {
+            var host = new GameObject("Contact Ragdoll Host");
+            GameObject actorPrefab = Resources.Load<GameObject>(
+                "Actors/DefaultPlayerActor");
+            GameObject playerObject = Object.Instantiate(actorPrefab);
+            GameObject targetObject = Object.Instantiate(actorPrefab);
+            var knifePrefab = new GameObject("Contact Ragdoll Knife");
+            LevelWorld world = null;
+            GameplayWorldRegistry registry = null;
+            WeaponPresentationCatalog catalog = null;
+            try
+            {
+                ConfigureTestRig(knifePrefab, supportHand: false);
+                targetObject.transform.position = new Vector3(0f, 0f, 1.5f);
+                world = new LevelWorld(
+                    new GameObject("Contact Ragdoll World"),
+                    new Dictionary<string, LevelEntityView>(),
+                    null);
+                registry = new GameplayWorldRegistry(world);
+                registry.RegisterActor(
+                    "player", "test", targetable: false, playerObject);
+                registry.RegisterActor(
+                    "target", "test", targetable: true, targetObject);
+                GameplaySession session = CreateContactSession(
+                    targetMaximumWounds: 1);
+                session.EnterTurnMode();
+                GameplayAttackController attacks =
+                    host.AddComponent<GameplayAttackController>();
+                attacks.Bind(
+                    session,
+                    host.AddComponent<TargetAcquisitionPresenter>(),
+                    new GameplayDialogueLog(),
+                    "player",
+                    scenarioSeed: 3u);
+                catalog = WeaponPresentationCatalog.CreateRuntime(
+                    new WeaponPresentationDefinition(
+                        "knife",
+                        knifePrefab,
+                        ActorAnimationPoseIds.Melee,
+                        null,
+                        drawsInstantTracer: false,
+                        effectSeconds: 0.1f,
+                        lineWidth: 0.02f,
+                        attackPresentationKind:
+                            WeaponAttackPresentationKind.ContactStrike,
+                        contactDurationSeconds: 0.4f,
+                        contactImpactTime: 0.4f));
+                GameplayCombatReactionPresenter reactions =
+                    host.AddComponent<GameplayCombatReactionPresenter>();
+                reactions.Bind(session, registry, attacks, catalog);
+                ActorAnimationCoordinator animation = targetObject
+                    .GetComponent<ActorAnimationCoordinator>();
+                ActorRagdollPresenter ragdoll = targetObject.GetComponent<
+                    ActorRagdollPresenter>();
+                animation.TargetAnimator.cullingMode =
+                    AnimatorCullingMode.AlwaysAnimate;
+                animation.TargetAnimator.Update(0f);
+
+                Assert.That(attacks.TryAttack(CreateContactExposure()), Is.True);
+                reactions.Tick(0.17f);
+
+                Assert.That(session.IsActorIncapacitated("target"), Is.True);
+                Assert.That(
+                    animation.LastRequestedAction,
+                    Is.EqualTo(ActorAnimationAction.IncapacitateShoulder));
+                Assert.That(ragdoll.HasPendingActivation, Is.True);
+                long journalSequence = session.Journal.Entries
+                    .OfType<ActionResolvedJournalEntry>()
+                    .Single().Sequence;
+                bool activated = false;
+                for (int index = 0; index < 120 && !activated; index++)
+                {
+                    animation.TargetAnimator.Update(0.05f);
+                    activated = ragdoll.TryActivateAtAuthoredHandoff();
+                }
+
+                Assert.That(activated, Is.True);
+                Assert.That(
+                    ragdoll.TryGetTrace(journalSequence, out var trace),
+                    Is.True);
+                Assert.That(
+                    trace.HandoffEventNormalizedTime,
+                    Is.EqualTo(Mathf.Lerp(
+                        0.4f,
+                        1f,
+                        ragdoll.Profile.HandoffNormalizedTime))
+                        .Within(0.001f));
             }
             finally
             {
@@ -1316,7 +1567,8 @@ namespace GritGud.Presentation.Tests
                 Array.Empty<ScenarioObjectiveDefinition>()));
         }
 
-        private static GameplaySession CreateContactSession()
+        private static GameplaySession CreateContactSession(
+            int targetMaximumWounds = int.MaxValue)
         {
             var knife = new InventoryItemDefinition(
                 "knife",
@@ -1346,7 +1598,11 @@ namespace GritGud.Presentation.Tests
                 new GameplayActorPose(
                     new GameplayPosition(0f, 0f, 1.5f),
                     0f),
-                new TurnBudget(0, 8f));
+                new TurnBudget(0, 8f),
+                combat: new ActorCombatDefinition(
+                    "neutral",
+                    Array.Empty<string>(),
+                    targetMaximumWounds));
             return new GameplaySession(new ScenarioDefinition(
                 "contact-presentation-test",
                 new ScenarioTimingDefinition(1f),

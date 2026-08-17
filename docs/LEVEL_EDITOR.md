@@ -1,8 +1,30 @@
 # Basic Level Editor
 
 The basic level editor is a runtime tool shared by Windows and WebGL builds.
-Open it from **Level Editor** on the start menu. **Play Main Level** opens the
-same portable main level through the gameplay-side loader with authoring locked.
+Choose a committed level on the start menu, then use **Edit Selected** or
+**Play Selected**. Both routes begin from detached snapshots of the same
+portable document.
+
+## First work session
+
+For a first production authoring session:
+
+1. Open **New Level**, switch to **Scenario**, give the level a useful display
+   name, and apply it. The stable ID is generated once and should not be edited.
+2. Block out terrain and geometry, set the atmosphere and practical fixtures in
+   **Env**, then configure actors and gameplay links.
+3. Use **Save Draft** early and after meaningful edits. The draft is local to
+   that browser profile or machine and is a recovery slot, not a portable file.
+4. Use **Test Play** before handoff. Publish validation must pass before the
+   isolated gameplay session can start.
+5. Use **Export** before leaving the machine. The resulting JSON is the portable
+   artifact to copy, commit, or move to another workstation.
+
+A new level begins as an **UNSAVED DRAFT**. Back, New, Reload Source, Load Draft,
+and Import ask for confirmation before replacing unsaved work. If a recovery
+draft references a scenario actor template that is not installed, the actor
+remains visible and editable as unavailable, while publish validation prevents
+an invalid export or test play.
 
 ## Source of truth
 
@@ -19,9 +41,15 @@ Portable JSON contains:
 - stable level and entity IDs;
 - stable archetype IDs rather than Unity paths or asset GUIDs;
 - world-space position and yaw;
-- explicit cover volumes and interaction points; and
-- optional initial destructible state and integrity; and
-- typed, quantized heightfield terrain surfaces.
+- interaction points plus legacy cover-volume compatibility data;
+- optional initial destructible state and integrity;
+- typed, quantized heightfield terrain surfaces with portable appearance;
+- portable atmosphere, fog, directional-key, fixture, and practical-light data;
+- stable practical-light IDs with cross-platform fixture limits;
+- portable surface decals, ambient-VFX placements, and spatial audio zones;
+- scenario actor instances, objectives, props, vehicles, and complete objective
+  action costs; and
+- named entity groups plus their portable locked and hidden authoring state.
 
 The loader validates the whole document before exposing a replacement world.
 An invalid import therefore leaves the currently loaded level untouched.
@@ -33,12 +61,14 @@ An invalid import therefore leaves the currently loaded level untouched.
 | `WASD` or arrow keys | Pan the camera |
 | `Q` / `E` | Rotate the camera |
 | Right-mouse drag | Orbit the camera and adjust its pitch |
-| Middle-mouse drag | Pan relative to the view |
+| Middle-mouse drag | Orbit the camera and adjust its pitch |
 | Mouse wheel | Zoom in responsive, distance-relative steps |
 | `Shift` while using movement keys | Pan the camera three times faster |
 | `F` | Frame the selected entity |
 | `Home` | Frame the authored level bounds |
-| Palette button, then left click | Place the selected archetype |
+| Viewport Perspective/Top/Front/Right menu | Switch camera projection; orbiting an orthographic view returns to perspective |
+| Objects → Place entry, then left click | Place the selected archetype |
+| Objects → Place ↺ / ↻ buttons | Rotate the active placement stamp left / right |
 | Left click | Select an entity |
 | `Ctrl` + left click | Add or remove an entity from the selection |
 | Left drag | Move the selected entity on its current elevation |
@@ -46,8 +76,8 @@ An invalid import therefore leaves the currently loaded level untouched.
 | `Delete` | Delete the selected entity |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
 | `Esc` | Cancel placement or clear selection |
-| Terrain Raise/Lower, then left click | Adjust height samples with the configured brush |
-| `Shift` while using the terrain brush | Temporarily lower terrain |
+| Terrain, then left drag | Raise, lower, smooth, or flatten with the configured brush |
+| `Shift` while using Raise | Temporarily lower terrain |
 
 A primary touch uses the same press, drag, and release lifecycle as a left
 mouse gesture. This supports selection, placement, and complete terrain-stroke
@@ -59,40 +89,138 @@ Snapping is optional. Structural pieces default to the Synty kit's 2.5-unit
 module and 90-degree rotation; props use finer position and angle increments.
 Snapping affects authoring only and does not introduce a gameplay grid.
 
+The Selection Inspector includes a **Rotation Pivot — Top View (X/Z)** picker.
+Its nine points place the pivot at the bottom corners, edge centers, or center of
+the object's visible bounds. The selected point remains fixed when the yaw
+buttons rotate the object, which supports both centered props and corner- or
+edge-pivoted modular pieces. **Asset Pivot** restores the prefab's authored
+origin. A blue marker identifies the active pivot in the viewport; pivot changes
+are portable, per entity, multi-selection aware, and undoable. This first slice
+is deliberately yaw-only; a future transform gizmo can extend the stored local
+pivot to unrestricted three-axis rotation.
+
 Hovering an entity in selection mode shows a yellow outline; the selected entity
 uses a blue outline, and additional selected entities use green outlines.
 Rotation and deletion apply to the complete selection as one undoable
 transaction. Entity-specific validation messages are buttons that select and
 frame the affected entity.
 
-The terrain palette exposes raise/lower modes plus brush radius and quantized
-strength. A green or red world-space footprint previews the raise or lower brush
-radius under the pointer. Press and drag to preview a continuous stroke; moving
-into a new terrain sample applies the brush once at that sample. Releasing the
-pointer commits the complete stroke as one reversible patch command and rebuilds
-only affected terrain chunks. `Esc` restores the authored terrain without adding
-history.
+**View → Level settings** owns the spatial-layout controls. **Level Bounds** edits
+the portable center and size through undo/redo. **Layout Grid** draws a local,
+non-exported line grid clipped to those bounds at a configurable spacing and
+elevation; its visibility and settings persist with camera preferences. Top,
+Front, and Right use true orthographic projection, while Perspective restores
+the prior orbit angle.
+
+**Entity Array** duplicates the current entity selection along X and Z. Counts
+include the original cell, preserve the relative arrangement of a
+multi-selection, allocate new stable IDs, enforce the entity limit, and commit
+up to 256 generated copies as one undo step. This is the fast path for floor modules,
+walls, repeated cover, and other blockout runs.
+
+**Objects → Select** includes the searchable hierarchy and **Organization** for larger levels. Groups are
+named, portable collections: select one or more world entities, create or choose
+a group, then assign the selection. Lock prevents scene and hierarchy selection;
+Hide removes the group from the authoring projection; Isolate temporarily shows
+only one group. Lock and Hide are saved in the level, while the active isolation
+and selection filters are local editor state and are not exported.
+
+Category and group filters limit what scene picking, hierarchy focus, and
+**Select Matching** can select. Use **All groups** and **All categories** to clear
+the filters. Hidden, locked, isolated-out, and filtered entities are removed from
+the current selection automatically. Deleting a group keeps its entities and
+makes them ungrouped; the complete operation is one undo step.
+
+The Terrain create mode exposes Raise, Lower, Smooth, and Flatten plus brush
+radius and quantized strength. The world-space footprint changes color with the
+active mode. Smooth moves samples toward their local neighborhood average;
+Flatten captures the quantized elevation beneath the pointer when the stroke
+begins and moves every visited sample toward that fixed height. Press and drag
+to preview a continuous stroke; moving into a new terrain sample applies the
+brush once at that sample. Releasing commits the complete stroke as one
+reversible patch command and rebuilds only affected terrain chunks. `Esc`
+restores the authored terrain without adding history.
+
+The same panel also supports regional material painting. Choose Slate, Grass,
+Sand, Snow, or Concrete, activate the material brush, and drag in the viewport.
+Changing the selected material leaves earlier strokes intact, every drag is one
+undoable edit, and **Surface** erases regional paint back to the surface-wide
+appearance.
 Use **Frame Terrain** in the terrain panel to fit every authored terrain surface
 in the camera view, including its minimum and maximum sampled elevations.
 
-The toolbar is split into navigation/history and persistence rows so controls do
-not run together on ordinary window sizes. The left panel begins with explicit
-Select, Raise, and Lower tools; the active tool is color-highlighted. Use the
-**Controls** toolbar button to show or hide the shortcut reference without
-leaving the editor.
+Terrain appearance is saved per surface and used by both the editor and
+gameplay. Slate, Grass, Sand, Snow, and Concrete presets provide fast starting
+points. Choosing a preset only stages it; **Apply Preset to Entire Surface** is
+required to commit, and the panel explicitly distinguishes this global theme
+from regional height sculpting. Base and steep-slope RGB, the slope blend range, smoothness, and specular
+response can then be entered directly; **Apply Custom Appearance** commits the
+complete change as one undo step. Appearance does not serialize Unity materials
+or asset paths.
+
+New levels begin with one flat `ground` surface covering their 50 × 50 meter
+authored bounds. The Terrain Surface section edits the selected surface's width,
+depth, and grid spacing; resizing keeps the surface centered, resamples existing
+height detail, rebuilds its projection, and participates in undo/redo. Width and
+depth must be whole multiples of the grid spacing. Imported legacy levels with
+no terrain expose **Add Flat Terrain** in the same panel.
+
+The editor uses one compact application bar. Frequent actions—library navigation,
+undo/redo, snapping, local save, Preview, and Test Play—stay visible. **File** owns
+new/reload, local and cloud drafts, import, and export; **Edit** owns selection
+duplication and deletion; **View** owns panel visibility, level settings, the layout
+grid, and shortcut help. Camera projection and framing live in a floating viewport
+control instead of an authoring panel.
+
+The left panel has five stable workspaces: **Objects**, **Terrain**, **Scenario**,
+**Environment**, and **Dressing**. Objects switches between a searchable hierarchy
+for selection and the placement library. Scenario owns player-start and actor
+management; selecting an actor opens its editable properties in the right Inspector.
+Selection and stamp outlines follow rendered prefab mesh geometry, not the potentially
+larger authored gameplay or cover bounds. Inspector rotation buttons leave stamp mode
+before rotating the selected object. The Inspector separates **Selection** transforms
+and physical defaults from **Gameplay** links such as objectives, props, vehicles, and
+actors. The **Level** tab owns document-wide validation, layout, playability,
+portable-file guidance, and recovery snapshots. Inspector sections use progressive
+disclosure and omit unsupported tools; for example, physics placement appears only for
+loose props. At narrow WebGL sizes, the Tools and Inspector panels become mutually
+exclusive drawers so the viewport retains most of the screen width. Use **View →
+Shortcut reference** to show or hide the input reference without leaving the editor.
+
+**Env** edits ambient sky/horizon/ground colors, fog, the directional key, and
+fixture presentation with invariant-culture numeric fields. Practical lights
+are queued from the panel, previewed under the pointer, and placed with a map
+click; existing lights can be queued again with **Move Light on Map** without
+changing their stable identity, mast height, or aim offset. They can then be
+selected from the list, aimed with a
+target position, edited, and deleted. Each apply is one undoable command. The
+portable environment is projected live in the editor and is the exact data used
+by Test Play; HDR color channels may be greater than `1`. Sky, horizon, and ground
+RGB values drive both trilight illumination and the visible gradient backdrop;
+Test Play no longer replaces that backdrop with a fixed camera clear color. The
+environment Apply button is anchored beneath the scrolling panel so it remains
+visible while editing any atmosphere, key-light, or fixture field. Environment
+fields are intentionally applied as one undoable batch rather than on every keystroke.
+
+**Dressing** separates surface decals, ambient VFX, and box-shaped audio zones
+into dedicated tabs. **Place** queues the active type, previews its approximate
+footprint under the pointer, and stamps it with a map click; placement remains
+armed for repeated dressing until canceled. Existing decals, effects, and audio
+zones expose matching **Move on Map** actions that reuse the placement preview
+and commit one undoable relocation without recreating the record.
+Decals provide grime, oil, hazard-stripe, and arrow
+styles with portable transform, size, color, and opacity. Ambient VFX select
+curated stable effect IDs rather than prefab paths. Audio zones select a stable
+procedural ambience, volume, bounds, and fade distance; blue boxes visualize
+the bounds only while editing. Audio preview is opt-in in Edit mode and always
+enabled in Level Preview and Test Play. Every add, apply, and delete is undoable.
 
 ## Archetype catalog
 
 `Assets/GritGud/Content/Resources/DefaultLevelArchetypeCatalog.asset` is the
 Unity-facing bridge between stable portable IDs and curated prefab references.
-The first palette contains six entries:
-
-- standard floor;
-- standard wall;
-- doorway wall;
-- stairs;
-- destructible crate; and
-- destructible metal barrel.
+The default palette includes structural modules, traversal pieces, cover,
+destructible props, vehicles, and larger environment props.
 
 The catalog owns stable definitions while exposing presentation, placement,
 capability, and gameplay-default profiles separately. Levels never refer
@@ -106,6 +234,13 @@ WebGL this uses Unity's browser-backed `PlayerPrefs` storage. Drafts have a
 750,000-character safety limit and should be treated as recoverable local
 working state, not as the version-controlled source of truth.
 
+While a document is dirty, the editor also writes a rolling recovery snapshot
+after 15 seconds without another edit. The three newest snapshots are available
+under **Portable Files → Recovery Autosaves**. Loading one intentionally keeps
+the document marked unsaved so it cannot be mistaken for a deliberate save.
+Recovery history is local to the browser profile or machine and never replaces
+the manually saved active draft.
+
 **Export** writes portable JSON:
 
 - WebGL starts a browser download through the committed `.jslib` bridge.
@@ -117,11 +252,32 @@ working state, not as the version-controlled source of truth.
 in the inspector first. Imported text is size-limited, deserialized, and fully
 validated before it can replace the active document.
 
-The runtime and editor start from the committed main level at
-`Assets/GritGud/Content/Resources/Levels/main-level.json`. The smaller
-`basic-construction.json` remains a focused automated-test fixture.
+The runtime and editor level chooser discovers committed JSON files directly
+under `Assets/GritGud/Content/Resources/Levels/Published/`. Uploading one
+exported JSON file to that folder is enough for the next build to validate it
+and add it to the menu; there is no separate manifest to maintain. The smaller
+`basic-construction.json` outside that folder remains a focused automated-test
+fixture and is not shown in the player-facing library.
 The main Depot Yard now includes a flat `depot-ground` heightfield covering its
 authored bounds, so terrain tools are immediately usable when the editor opens.
+
+## Playability check
+
+**View → Level settings → Playability** runs an on-demand, non-blocking review of the
+current document. It summarizes heightfield walkability using the gameplay
+actor's 50-degree slope and 0.35-meter step assumptions, connected terrain
+regions, scenario anchors without terrain beneath them, objectives disconnected
+from the player on the heightfield, below-terrain anchors, steep anchors, and
+overlapping actor starts. Entity-linked warnings can be clicked to frame the
+affected object.
+
+The report is marked **STALE** as soon as the level changes; use **Refresh Check**
+before handoff. The optional slope heatmap is transient: green is within the
+slope limit and red exceeds it. It updates from the projected terrain normals
+but is disabled in Level Preview and never enters JSON. This check deliberately
+does not claim to be a navigation bake—stairs, decks, bridges, and other
+structural routes may connect heightfield regions and should be verified in Test
+Play.
 
 ## Level Preview
 
@@ -132,19 +288,41 @@ destruction must continue using this boundary so runtime changes cannot leak
 into saved levels.
 
 **Test Play** launches the normal gameplay runtime from an isolated snapshot.
-It uses the authored player party with a bounds-center sandbox spawn and omits
-scenario-specific objectives, props, vehicles, and hostiles. Return to Editor
-discards gameplay state and resumes the same authoring workspace.
+It uses exactly the authored scenario party, actor starts, objectives, physics
+props, vehicles, hostiles, atmosphere, practical lights, decals, ambient VFX,
+and audio zones. Return to Editor discards gameplay state and
+resumes the same authoring workspace.
 
-## Deliberate v1 limits
+## Physics placement
 
-- Position and yaw are authored; arbitrary pitch, roll, and scaling are not.
+Selected loose props expose **Drop & Settle** in the Selection Inspector. One
+prop can be settled alone, or a multi-selection can be simulated together so
+the pieces collide and form a natural pile. The complete batch commits and
+undoes as one transaction. The
+author chooses a positive drop height and either free rotation or **Keep
+upright**. The editor temporarily simulates the projected object against level
+collision, waits for a stable pose (with a five-second safety timeout), and
+commits the resulting position plus X/Y/Z rotation as one undoable transform.
+Authored colliders are preferred; a visual-bounds box is used when an object has
+no safe dynamic collider. The live status reports authored colliders, bounds
+fallbacks, and skipped records. Placement surfaces, vehicles, and existing
+dynamic bodies are rejected. The
+simulation is an authoring aid only: velocity and intermediate physics state do
+not enter portable JSON or Test Play.
+
+## Current limits
+
+- Position and X/Y/Z rotation are authored; arbitrary scaling is not.
+- The Selection Inspector provides snapped pitch, yaw, and roll buttons around
+  the chosen per-entity rotation pivot. A free-drag viewport transform gizmo is
+  still future work.
 - Dragging preserves the entity's current elevation.
-- Cover and destructible metadata load and validate, but combat behavior is a
-  later roadmap phase.
-- No runtime navigation bake, terrain sculpting, arbitrary asset import, or
-  encounter scripting is included. Terrain's planned ownership and delivery
-  boundaries are documented in the
+- Legacy cover-volume data remains readable for file compatibility but has no
+  authoring surface. Destructible metadata is authored through entity capability
+controls.
+
+- No runtime navigation bake or arbitrary asset import is included. Terrain's
+  ownership and delivery boundaries are documented in the
   [terrain-editor architecture plan](TERRAIN_EDITOR_ARCHITECTURE.md).
 - The runtime UI is intentionally code-driven while the final visual language
   and broader gameplay UI remain unsettled.

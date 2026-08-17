@@ -190,6 +190,81 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(failure, Is.EqualTo(RoutePlanFailure.None));
         }
 
+        [Test]
+        public void TraversalSegmentFreezesIdentityCostsArcAndPlayback()
+        {
+            var planner = new MovementRoutePlanner(
+                CreateActorSnapshot(8f),
+                new TraversalValidator());
+
+            Assert.That(
+                planner.TryAppend(
+                    new GameplayPosition(0f, 0f, 0.25f),
+                    out RoutePlanFailure failure),
+                Is.True);
+            MovementRouteRecord route = planner.Confirm();
+            MovementRouteSegmentRecord segment = route.Segments[0];
+
+            Assert.That(failure, Is.EqualTo(RoutePlanFailure.None));
+            Assert.That(segment.Kind, Is.EqualTo(MovementRouteSegmentKind.Jump));
+            Assert.That(segment.TraversalLinkId, Is.EqualTo("jump.demo"));
+            Assert.That(segment.ActionId, Is.EqualTo("traversal.jump"));
+            Assert.That(route.TotalCost, Is.EqualTo(2.5f));
+            Assert.That(route.TotalActionPointCost, Is.EqualTo(1));
+            Assert.That(route.TotalPlaybackDurationSeconds, Is.EqualTo(0.8f));
+            Assert.That(route.PreviousBudget.ActionPoints, Is.EqualTo(4));
+            Assert.That(route.HasFrozenBudget, Is.True);
+            Assert.That(route.HasTraversal, Is.True);
+            Assert.That(segment.Sample(0.5f).Y, Is.EqualTo(1.25f));
+        }
+
+        [Test]
+        public void TraversalActionPointCostCannotExceedBudget()
+        {
+            GameplayActorSnapshot actor = new GameplayActorSnapshot(
+                "player",
+                new GameplayActorPose(
+                    new GameplayPosition(0f, 0f, 0f),
+                    0f),
+                new TurnBudget(0, 8f));
+            var planner = new MovementRoutePlanner(
+                actor,
+                new TraversalValidator());
+
+            Assert.That(
+                planner.TryAppend(
+                    new GameplayPosition(0f, 0f, 0.25f),
+                    out RoutePlanFailure failure),
+                Is.False);
+            Assert.That(
+                failure,
+                Is.EqualTo(RoutePlanFailure.ExceedsActionPointBudget));
+            Assert.That(planner.CanConfirm, Is.False);
+        }
+
+        [Test]
+        public void BudgetChangeMakesFrozenRouteStaleBeforeCommit()
+        {
+            GameplaySession session = CreateSession();
+            session.EnterTurnMode();
+            var planner = new MovementRoutePlanner(
+                session.GetActor("player"),
+                new AllowAllValidator());
+            planner.TryAppend(
+                new GameplayPosition(0f, 0f, 2f),
+                out RoutePlanFailure failure);
+            MovementRouteRecord route = planner.Confirm();
+            session.SpendMovement("player", 1f);
+
+            Assert.Throws<InvalidOperationException>(() =>
+                session.CommitMovementRoute(route));
+            Assert.That(session.Operation, Is.EqualTo(GameplaySessionOperation.None));
+            Assert.That(
+                session.GetActor("player").TurnBudget.MovementOpportunity,
+                Is.EqualTo(7f));
+            Assert.That(failure, Is.EqualTo(RoutePlanFailure.None));
+        }
+
         private static GameplayActorSnapshot CreateActorSnapshot(float movement)
         {
             return new GameplayActorSnapshot(
@@ -248,6 +323,27 @@ namespace GritGud.Domain.Tests.Gameplay
                         requestedDestination.X,
                         0f,
                         requestedDestination.Z));
+            }
+        }
+
+        private sealed class TraversalValidator : IMovementRouteSegmentValidator
+        {
+            public MovementRouteSegmentValidation Validate(
+                string actorId,
+                GameplayPosition from,
+                GameplayPosition requestedDestination)
+            {
+                return MovementRouteSegmentValidation.Accepted(
+                    new MovementRouteSegmentRecord(
+                        from,
+                        new GameplayPosition(0f, 0f, 2f),
+                        MovementRouteSegmentKind.Jump,
+                        "jump.demo",
+                        "traversal.jump",
+                        2.5f,
+                        1,
+                        1.25f,
+                        0.8f));
             }
         }
     }

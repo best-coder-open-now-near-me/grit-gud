@@ -11,7 +11,8 @@ namespace GritGud.Domain.Gameplay
             float viewAngleDegrees,
             float preferredEngagementRange,
             float movementSearchRadius,
-            int maximumAttacksPerTurn)
+            int maximumAttacksPerTurn,
+            int minimumAttackHitChancePercent = 25)
         {
             if (string.IsNullOrWhiteSpace(behaviorId))
                 throw new ArgumentException(
@@ -34,6 +35,10 @@ namespace GritGud.Domain.Gameplay
             if (maximumAttacksPerTurn <= 0)
                 throw new ArgumentOutOfRangeException(
                     nameof(maximumAttacksPerTurn));
+            if (minimumAttackHitChancePercent < 0
+                || minimumAttackHitChancePercent > 100)
+                throw new ArgumentOutOfRangeException(
+                    nameof(minimumAttackHitChancePercent));
 
             BehaviorId = behaviorId;
             PerceptionRange = perceptionRange;
@@ -41,6 +46,7 @@ namespace GritGud.Domain.Gameplay
             PreferredEngagementRange = preferredEngagementRange;
             MovementSearchRadius = movementSearchRadius;
             MaximumAttacksPerTurn = maximumAttacksPerTurn;
+            MinimumAttackHitChancePercent = minimumAttackHitChancePercent;
         }
 
         public string BehaviorId { get; }
@@ -54,6 +60,8 @@ namespace GritGud.Domain.Gameplay
         public float MovementSearchRadius { get; }
 
         public int MaximumAttacksPerTurn { get; }
+
+        public int MinimumAttackHitChancePercent { get; }
 
         private static void RequireFinitePositive(float value, string name)
         {
@@ -137,6 +145,7 @@ namespace GritGud.Domain.Gameplay
         Detect,
         Attack,
         Move,
+        PushOff,
         EndTurn,
     }
 

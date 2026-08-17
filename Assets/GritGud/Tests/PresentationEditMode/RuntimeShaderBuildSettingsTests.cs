@@ -16,6 +16,7 @@ namespace GritGud.Presentation.Tests
             "GritGud/RuntimeOutline",
             "GritGud/EmissiveSurface",
             "GritGud/TacticalWireframe",
+            "GritGud/Portable Gradient Skybox",
         };
 
         [Test]
@@ -63,6 +64,12 @@ namespace GritGud.Presentation.Tests
                 Is.GreaterThanOrEqualTo(0));
             Assert.That(
                 outline.FindPropertyIndex("_OutlineEnabled"),
+                Is.GreaterThanOrEqualTo(0));
+            Assert.That(
+                outline.FindPropertyIndex("_OutlineScreenSpace"),
+                Is.GreaterThanOrEqualTo(0));
+            Assert.That(
+                outline.FindPropertyIndex("_OutlineScreenWidth"),
                 Is.GreaterThanOrEqualTo(0));
         }
     }

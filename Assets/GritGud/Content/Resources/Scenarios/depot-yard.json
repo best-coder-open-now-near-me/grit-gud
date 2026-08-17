@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 12,
+  "schemaVersion": 15,
   "scenarioId": "depot-yard",
   "displayName": "Depot Yard",
   "levelId": "main-depot-yard-v1",
@@ -53,7 +53,7 @@
             "handRequirement": "none",
             "autoStowPolicy": "never",
             "contestPolicy": "close-quarters-control",
-            "allowedResults": []
+            "allowedResults": ["topple", "pin"]
           },
           {
             "id": "close-quarters.throw",
@@ -77,7 +77,26 @@
             "handRequirement": "both-hands-free",
             "autoStowPolicy": "allowed",
             "contestPolicy": "close-quarters-control",
-            "allowedResults": []
+            "allowedResults": ["topple", "pin"]
+          },
+          {
+            "id": "close-quarters.push-off",
+            "displayName": "Push Off",
+            "intent": "push-off",
+            "cost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "acceptedSubjectKinds": ["prop"],
+            "reach": 2.0,
+            "maximumDistance": 1.25,
+            "maximumSubjectMass": 40.0,
+            "maximumSubjectSize": "medium",
+            "handRequirement": "both-hands-free",
+            "autoStowPolicy": "allowed",
+            "contestPolicy": "none",
+            "allowedResults": ["release"]
           }
         ]
       },
@@ -97,16 +116,7 @@
           { "id": "skill.fieldcraft", "rating": 3 },
           { "id": "skill.close-quarters", "rating": 5 }
         ],
-        "talentIds": ["talent.steady-hands", "talent.combat-awareness", "talent.leverage"],
-        "startingProgressionPoints": 1,
-        "advancementOptions": [
-          {
-            "id": "advance.demolitions-drill",
-            "skillId": "skill.demolitions",
-            "pointCost": 1,
-            "maximumBonus": 1
-          }
-        ]
+        "talentIds": ["talent.steady-hands", "talent.combat-awareness", "talent.leverage"]
       },
       "initiallyEquippedItemId": "weapon.rifle",
       "inventory": [
@@ -135,6 +145,15 @@
             "accuracyDecay": {
               "halfLifeDistance": 60.0,
               "minimumAccuracyPercent": 5.0
+            },
+            "directFireDamage": {
+              "damageTypeId": "damage.ballistic.rifle",
+              "baseIntegrityDamage": 2.0,
+              "surfaceModifiers": [
+                { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+              ]
             }
           }
         },
@@ -311,7 +330,7 @@
             "handRequirement": "none",
             "autoStowPolicy": "never",
             "contestPolicy": "close-quarters-control",
-            "allowedResults": []
+            "allowedResults": ["topple", "pin"]
           },
           {
             "id": "close-quarters.throw",
@@ -335,7 +354,26 @@
             "handRequirement": "both-hands-free",
             "autoStowPolicy": "allowed",
             "contestPolicy": "close-quarters-control",
-            "allowedResults": []
+            "allowedResults": ["topple", "pin"]
+          },
+          {
+            "id": "close-quarters.push-off",
+            "displayName": "Push Off",
+            "intent": "push-off",
+            "cost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "acceptedSubjectKinds": ["prop"],
+            "reach": 2.0,
+            "maximumDistance": 1.25,
+            "maximumSubjectMass": 40.0,
+            "maximumSubjectSize": "medium",
+            "handRequirement": "both-hands-free",
+            "autoStowPolicy": "allowed",
+            "contestPolicy": "none",
+            "allowedResults": ["release"]
           }
         ]
       },
@@ -355,16 +393,7 @@
           { "id": "skill.fieldcraft", "rating": 5 },
           { "id": "skill.close-quarters", "rating": 3 }
         ],
-        "talentIds": ["talent.combat-awareness"],
-        "startingProgressionPoints": 1,
-        "advancementOptions": [
-          {
-            "id": "advance.fieldcraft-drill",
-            "skillId": "skill.fieldcraft",
-            "pointCost": 1,
-            "maximumBonus": 1
-          }
-        ]
+        "talentIds": ["talent.combat-awareness"]
       },
       "initiallyEquippedItemId": "weapon.rifle",
       "inventory": [
@@ -393,6 +422,15 @@
             "accuracyDecay": {
               "halfLifeDistance": 60.0,
               "minimumAccuracyPercent": 5.0
+            },
+            "directFireDamage": {
+              "damageTypeId": "damage.ballistic.rifle",
+              "baseIntegrityDamage": 2.0,
+              "surfaceModifiers": [
+                { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+              ]
             }
           }
         },
@@ -485,8 +523,35 @@
           "viewAngleDegrees": 120.0,
           "preferredEngagementRange": 14.0,
           "movementSearchRadius": 6.0,
-          "maximumAttacksPerTurn": 1
+          "maximumAttacksPerTurn": 1,
+          "minimumAttackHitChancePercent": 35
         }
+      },
+      "displacementAbility": {
+        "id": "ability.escape-pin",
+        "displayName": "Escape Pin",
+        "hotbarSlot": 4,
+        "actions": [
+          {
+            "id": "close-quarters.push-off",
+            "displayName": "Push Off",
+            "intent": "push-off",
+            "cost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "acceptedSubjectKinds": ["prop"],
+            "reach": 2.0,
+            "maximumDistance": 1.25,
+            "maximumSubjectMass": 40.0,
+            "maximumSubjectSize": "medium",
+            "handRequirement": "both-hands-free",
+            "autoStowPolicy": "allowed",
+            "contestPolicy": "none",
+            "allowedResults": ["release"]
+          }
+        ]
       },
       "characterProfile": {
         "identityId": "character.depot-rifleman",
@@ -502,9 +567,7 @@
           { "id": "skill.firearms", "rating": 3 },
           { "id": "skill.close-quarters", "rating": 4 }
         ],
-        "talentIds": [],
-        "startingProgressionPoints": 0,
-        "advancementOptions": []
+        "talentIds": []
       },
       "initiallyEquippedItemId": "weapon.rifle",
       "inventory": [
@@ -533,6 +596,15 @@
             "accuracyDecay": {
               "halfLifeDistance": 45.0,
               "minimumAccuracyPercent": 5.0
+            },
+            "directFireDamage": {
+              "damageTypeId": "damage.ballistic.rifle",
+              "baseIntegrityDamage": 2.0,
+              "surfaceModifiers": [
+                { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+              ]
             }
           }
         }
@@ -559,7 +631,79 @@
     {
       "entityId": "crate-exposure-demo",
       "mass": 35.0,
-      "sizeClass": "medium"
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 0.0,
+        "rollOffsetDegrees": 90.0,
+        "elevationOffset": 0.5
+      }
+    },
+    {
+      "entityId": "barrel-yard-01",
+      "mass": 28.0,
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 90.0,
+        "rollOffsetDegrees": 0.0,
+        "elevationOffset": 0.55
+      }
+    },
+    {
+      "entityId": "barrel-yard-02",
+      "mass": 28.0,
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 90.0,
+        "rollOffsetDegrees": 0.0,
+        "elevationOffset": 0.55
+      }
+    },
+    {
+      "entityId": "crate-yard-01",
+      "mass": 35.0,
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 0.0,
+        "rollOffsetDegrees": 90.0,
+        "elevationOffset": 0.5
+      }
+    },
+    {
+      "entityId": "crate-warehouse-01",
+      "mass": 35.0,
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 0.0,
+        "rollOffsetDegrees": 90.0,
+        "elevationOffset": 0.5
+      }
+    },
+    {
+      "entityId": "crate-warehouse-02",
+      "mass": 35.0,
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 0.0,
+        "rollOffsetDegrees": 90.0,
+        "elevationOffset": 0.5
+      }
+    },
+    {
+      "entityId": "crate-warehouse-03",
+      "mass": 35.0,
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 0.0,
+        "rollOffsetDegrees": 90.0,
+        "elevationOffset": 0.5
+      }
     }
   ],
   "vehicles": [

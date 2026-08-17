@@ -100,7 +100,18 @@ namespace GritGud.Domain.Tests
             Assert.That(push.AllowedResults,
                 Is.EqualTo(
                     DisplacementResultPolicies.Topple
+                    | DisplacementResultPolicies.Pin
                     | DisplacementResultPolicies.CollisionDamage));
+            DisplacementActionDefinition pushOff = result
+                .GetActorDefinition("actor.player")
+                .GetDisplacementAction("close-quarters.push-off");
+            Assert.That(pushOff, Is.Not.Null);
+            Assert.That(pushOff.Intent,
+                Is.EqualTo(DisplacementActionKind.PushOff));
+            Assert.That(pushOff.AcceptedSubjects,
+                Is.EqualTo(DisplacementSubjectKinds.Prop));
+            Assert.That(pushOff.AllowedResults,
+                Is.EqualTo(DisplacementResultPolicies.Release));
             Assert.That(
                 result.TryGetDisplacementSubject(
                     "actor.player",
@@ -117,6 +128,14 @@ namespace GritGud.Domain.Tests
             Assert.That(propSubject.Kind,
                 Is.EqualTo(DisplacementSubjectKind.Prop));
             Assert.That(propSubject.Mass, Is.EqualTo(35f));
+            Assert.That(propSubject.Toppling, Is.Not.Null);
+            Assert.That(propSubject.Toppling.RollOffsetDegrees, Is.EqualTo(90f));
+            Assert.That(propSubject.Toppling.ElevationOffset, Is.EqualTo(0.45f));
+            Assert.That(propSubject.Pinning, Is.Not.Null);
+            Assert.That(propSubject.Pinning.MaximumActorMass,
+                Is.EqualTo(90f));
+            Assert.That(propSubject.Pinning.MinimumContactDepth,
+                Is.EqualTo(0.05f));
             Assert.That(
                 result.TryGetVehicle(
                     "vehicle.one",
@@ -589,6 +608,7 @@ namespace GritGud.Domain.Tests
             ScenarioAttackCapabilityData attack =
                 content.actors[0].attackCapability;
             attack.accuracyDecay = new ScenarioAccuracyDecayData();
+            attack.directFireDamage = new ScenarioDirectFireDamageData();
             attack.projectile = new ScenarioProjectileCapabilityData
             {
                 enabled = true,
@@ -608,6 +628,7 @@ namespace GritGud.Domain.Tests
 
             Assert.That(definition.Projectile, Is.Not.Null);
             Assert.That(definition.AccuracyDecay, Is.Null);
+            Assert.That(definition.DirectFireDamage, Is.Null);
         }
 
         [Test]
@@ -793,6 +814,7 @@ namespace GritGud.Domain.Tests
                     preferredEngagementRange = 12f,
                     movementSearchRadius = 6f,
                     maximumAttacksPerTurn = 1,
+                    minimumAttackHitChancePercent = 40,
                 },
             };
             content.actors[1].attackCapability = content.actors[0]
@@ -811,6 +833,9 @@ namespace GritGud.Domain.Tests
                 Is.EqualTo(30f));
             Assert.That(enemy.Combat.EnemyBehavior.ViewAngleDegrees,
                 Is.EqualTo(120f));
+            Assert.That(
+                enemy.Combat.EnemyBehavior.MinimumAttackHitChancePercent,
+                Is.EqualTo(40));
         }
 
         private static ScenarioInventoryItemData CreateGrenadeItem(
@@ -937,6 +962,18 @@ namespace GritGud.Domain.Tests
                     {
                         entityId = "prop.one",
                         mass = 35f,
+                        toppling = new ScenarioPropTopplingData
+                        {
+                            enabled = true,
+                            rollOffsetDegrees = 90f,
+                            elevationOffset = 0.45f,
+                        },
+                        pinning = new ScenarioPropPinningData
+                        {
+                            enabled = true,
+                            maximumActorMass = 90f,
+                            minimumContactDepth = 0.05f,
+                        },
                     },
                 },
                 vehicles =
@@ -1048,7 +1085,36 @@ namespace GritGud.Domain.Tests
                                     new System.Collections.Generic.List<string>
                                     {
                                         "topple",
+                                        "pin",
                                         "collision-damage",
+                                    },
+                            },
+                            new ScenarioDisplacementActionData
+                            {
+                                id = "close-quarters.push-off",
+                                displayName = "Push Off",
+                                intent = "push-off",
+                                cost = new ScenarioActionCostData
+                                {
+                                    actionPoints = 2,
+                                    movementOpportunity = 0f,
+                                    mobility = "set",
+                                },
+                                acceptedSubjectKinds =
+                                    new System.Collections.Generic.List<string>
+                                    {
+                                        "prop",
+                                    },
+                                reach = 2f,
+                                maximumDistance = 1.25f,
+                                maximumSubjectMass = 40f,
+                                handRequirement = "both-hands-free",
+                                autoStowPolicy = "allowed",
+                                contestPolicy = "none",
+                                allowedResults =
+                                    new System.Collections.Generic.List<string>
+                                    {
+                                        "release",
                                     },
                             },
                         },
