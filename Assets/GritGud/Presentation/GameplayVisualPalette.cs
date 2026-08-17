@@ -45,8 +45,10 @@ namespace GritGud.Presentation
         internal static readonly Color HudTextSecondary = TextSecondary;
 
         // Pointer-targeting semantics shared by labels, outlines, and world
-        // previews. Blue confirms an actionable aim; orange explains rejection.
+        // previews. Blue confirms an actionable aim, green identifies a valid
+        // friendly target, and orange explains rejection.
         internal static readonly Color TargetingValid = SignalBlueBright;
+        internal static readonly Color TargetingFriendly = SignalGreen;
         internal static readonly Color TargetingInvalid = SignalOrangeGlow;
 
         // World-space tactical feedback.

@@ -594,6 +594,70 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void ValidPartyTargetUsesFriendlyGreenButInvalidRemainsOrange()
+        {
+            var host = new GameObject("Friendly Target Feedback Test");
+            var observer = CreateActorObject(
+                "Friendly Feedback Observer",
+                Vector3.zero,
+                withVisual: false);
+            GameObject friendly = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            LevelWorld world = null;
+            GameplayWorldRegistry registry = null;
+            try
+            {
+                friendly.name = "Friendly Feedback Target";
+                world = new LevelWorld(
+                    new GameObject("Friendly Feedback World"),
+                    new Dictionary<string, LevelEntityView>(),
+                    null);
+                registry = new GameplayWorldRegistry(world);
+                registry.RegisterActor(
+                    "observer",
+                    "test",
+                    targetable: false,
+                    observer);
+                TargetAcquisitionPresenter presenter =
+                    host.AddComponent<TargetAcquisitionPresenter>();
+                presenter.Bind(
+                    CreateSession(includePlayerParty: true),
+                    registry,
+                    "observer");
+                var feedbackOwner = new object();
+
+                presenter.PresentValidationFeedback(
+                    feedbackOwner,
+                    "target",
+                    friendly.transform,
+                    isValid: true,
+                    "VALID FRIENDLY TARGET");
+
+                AssertOutlineColor(
+                    friendly,
+                    TargetAcquisitionPresenter.FriendlyOutlineColor);
+
+                presenter.PresentValidationFeedback(
+                    feedbackOwner,
+                    "target",
+                    friendly.transform,
+                    isValid: false,
+                    "INVALID TARGET - OUT OF REACH");
+
+                AssertOutlineColor(
+                    friendly,
+                    TargetAcquisitionPresenter.InvalidOutlineColor);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                registry?.Dispose();
+                world?.Dispose();
+                Object.DestroyImmediate(observer);
+                Object.DestroyImmediate(friendly);
+            }
+        }
+
+        [Test]
         public void GeometricChanceRoundsVisibleRegionFraction()
         {
             var snapshot = new TargetExposureSnapshot(
@@ -681,7 +745,8 @@ namespace GritGud.Presentation.Tests
             }
         }
 
-        private static GameplaySession CreateSession()
+        private static GameplaySession CreateSession(
+            bool includePlayerParty = false)
         {
             var observer = new ScenarioActorDefinition(
                 "observer",
@@ -693,11 +758,17 @@ namespace GritGud.Presentation.Tests
                 initiative: 5,
                 new GameplayActorPose(new GameplayPosition(0f, 0f, 5f), 0f),
                 new TurnBudget(4, 8f));
+            PlayerPartyDefinition playerParty = includePlayerParty
+                ? new PlayerPartyDefinition(
+                    new[] { "observer", "target" },
+                    "observer")
+                : null;
             return new GameplaySession(new ScenarioDefinition(
                 "target-acquisition-test",
                 new ScenarioTimingDefinition(1.25f),
                 new[] { observer, target },
-                Array.Empty<ScenarioObjectiveDefinition>()));
+                Array.Empty<ScenarioObjectiveDefinition>(),
+                playerParty: playerParty));
         }
 
         private static GameObject CreateActorObject(

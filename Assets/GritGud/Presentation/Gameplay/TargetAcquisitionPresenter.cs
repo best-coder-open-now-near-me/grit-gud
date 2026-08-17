@@ -88,6 +88,9 @@ namespace GritGud.Presentation.Gameplay
         internal static readonly Color InvalidOutlineColor =
             TargetFeedbackPresenter.InvalidColor;
 
+        internal static readonly Color FriendlyOutlineColor =
+            TargetFeedbackPresenter.FriendlyColor;
+
         private readonly Dictionary<string, UnityTargetExposureQuery> exposureQueries =
             new Dictionary<string, UnityTargetExposureQuery>(StringComparer.Ordinal);
         private readonly HashSet<object> feedbackSuppressors =
@@ -907,7 +910,7 @@ namespace GritGud.Presentation.Gameplay
                         validationTargetRoot);
                     feedback.SetColor(
                         validationIsValid
-                            ? TargetFeedbackPresenter.ValidColor
+                            ? ResolveValidTargetColor(validationTargetId)
                             : TargetFeedbackPresenter.InvalidColor);
                 }
 
@@ -927,7 +930,7 @@ namespace GritGud.Presentation.Gameplay
                 feedback.SetTarget(currentTarget);
                 feedback.SetColor(
                     CurrentPreview.IsWithinReach
-                        ? TargetFeedbackPresenter.ValidColor
+                        ? ResolveValidTargetColor(CurrentPreview.TargetId)
                         : TargetFeedbackPresenter.InvalidColor);
             }
             else if (feedbackSuppressors.Count == 0
@@ -962,6 +965,19 @@ namespace GritGud.Presentation.Gameplay
                 session.ActiveActorId,
                 observerId,
                 StringComparison.Ordinal);
+
+        private Color ResolveValidTargetColor(string targetId) =>
+            IsFriendlyActorTarget(targetId)
+                ? TargetFeedbackPresenter.FriendlyColor
+                : TargetFeedbackPresenter.ValidColor;
+
+        private bool IsFriendlyActorTarget(string targetId)
+        {
+            PlayerPartyDefinition party = session?.Scenario?.PlayerParty;
+            return party != null
+                && party.Contains(observerId)
+                && party.Contains(targetId);
+        }
 
         private void OnDestroy()
         {

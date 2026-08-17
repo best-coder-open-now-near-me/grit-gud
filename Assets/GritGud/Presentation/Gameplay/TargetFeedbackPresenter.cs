@@ -34,6 +34,9 @@ namespace GritGud.Presentation.Gameplay
         public static readonly Color ValidColor =
             GameplayVisualPalette.TargetingValid;
 
+        public static readonly Color FriendlyColor =
+            GameplayVisualPalette.TargetingFriendly;
+
         public static readonly Color InvalidColor =
             GameplayVisualPalette.TargetingInvalid;
 

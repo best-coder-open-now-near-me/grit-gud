@@ -59,11 +59,14 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
-        public void TargetingUsesBlueForValidAndOrangeForInvalid()
+        public void TargetingUsesBlueForValidGreenForFriendlyAndOrangeForInvalid()
         {
             Assert.That(
                 GameplayVisualPalette.TargetingValid,
                 Is.EqualTo(GameplayVisualPalette.SignalBlueBright));
+            Assert.That(
+                GameplayVisualPalette.TargetingFriendly,
+                Is.EqualTo(GameplayVisualPalette.SignalGreen));
             Assert.That(
                 GameplayVisualPalette.TargetingInvalid,
                 Is.EqualTo(GameplayVisualPalette.SignalOrangeGlow));
