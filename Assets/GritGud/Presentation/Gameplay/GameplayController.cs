@@ -362,15 +362,44 @@ namespace GritGud.Presentation.Gameplay
             GameplayWorldStart worldStart)
         {
             string initiallySelectedActorId = worldStart.InitiallySelectedActorId;
-            uint attackRandomSeed = GameplayRandomStreams.DeriveSeed(
-                scenarioAssembly.RandomSeed,
-                GameplayRandomStreams.AttackResolution);
-            uint displacementRandomSeed = GameplayRandomStreams.DeriveSeed(
-                scenarioAssembly.RandomSeed,
-                GameplayRandomStreams.DisplacementControl);
-            uint thrownExplosiveRandomSeed = GameplayRandomStreams.DeriveSeed(
-                scenarioAssembly.RandomSeed,
-                GameplayRandomStreams.ThrownExplosiveUncertainty);
+            BindTargetingAndMovement(
+                session,
+                worldStart,
+                GameplayRandomStreams.DeriveSeed(
+                    scenarioAssembly.RandomSeed,
+                    GameplayRandomStreams.DisplacementControl));
+            BindActorActions(
+                session,
+                initiallySelectedActorId,
+                GameplayRandomStreams.DeriveSeed(
+                    scenarioAssembly.RandomSeed,
+                    GameplayRandomStreams.AttackResolution));
+            GameplayEmergencyCycleSession emergencyCycle =
+                BindProjectileAndConsumableDelivery(
+                    session,
+                    initiallySelectedActorId,
+                    GameplayRandomStreams.DeriveSeed(
+                        scenarioAssembly.RandomSeed,
+                        GameplayRandomStreams.ThrownExplosiveUncertainty));
+            BindHotbar(session, initiallySelectedActorId);
+            BindEncounterActors(
+                session,
+                emergencyCycle);
+            BindAimingPresentation(session, initiallySelectedActorId);
+            if (!string.IsNullOrWhiteSpace(scenarioAssembly.PrimaryObjectiveId))
+            {
+                objectivePresenter.Bind(
+                    session,
+                    scenarioAssembly.PrimaryObjectiveId);
+            }
+        }
+
+        private void BindTargetingAndMovement(
+            GameplaySession session,
+            GameplayWorldStart worldStart,
+            uint displacementRandomSeed)
+        {
+            string initiallySelectedActorId = worldStart.InitiallySelectedActorId;
             targetAcquisitionPresenter.Bind(
                 session,
                 worldRegistry,
@@ -396,6 +425,13 @@ namespace GritGud.Presentation.Gameplay
                 initiallySelectedActorId,
                 content.Level.traversalLinks);
             hud.BindTurnMovement(turnMovementController);
+        }
+
+        private void BindActorActions(
+            GameplaySession session,
+            string initiallySelectedActorId,
+            uint attackRandomSeed)
+        {
             ActorAnimationCoordinator animationCoordinator =
                 player.GetComponent<ActorAnimationCoordinator>();
             actionController.Bind(
@@ -422,6 +458,14 @@ namespace GritGud.Presentation.Gameplay
                 initiallySelectedActorId,
                 TryUseEquippedItemPower,
                 CanRequestHotbarPower);
+        }
+
+        private GameplayEmergencyCycleSession
+            BindProjectileAndConsumableDelivery(
+                GameplaySession session,
+                string initiallySelectedActorId,
+                uint thrownExplosiveRandomSeed)
+        {
             var blastWorldQuery = new UnityBlastWorldQuery(
                 worldRegistry,
                 () => session.Journal.LastEntry?.Sequence ?? 0L,
@@ -458,6 +502,13 @@ namespace GritGud.Presentation.Gameplay
             consumableController = new GameplayConsumableController(
                 session,
                 thrownExplosiveController);
+            return emergencyCycle;
+        }
+
+        private void BindHotbar(
+            GameplaySession session,
+            string initiallySelectedActorId)
+        {
             hotbarController.Bind(
                 session,
                 initiallySelectedActorId,
@@ -469,6 +520,12 @@ namespace GritGud.Presentation.Gameplay
                 TryActivateActorAbility,
                 CanActivateHotbarBinding,
                 CancelPendingHotbarActions);
+        }
+
+        private void BindEncounterActors(
+            GameplaySession session,
+            GameplayEmergencyCycleSession emergencyCycle)
+        {
             actionController.BindEmergencyCycle(emergencyCycle);
             actionController.RegisterTurnModeExitConstraint(
                 projectileController);
@@ -497,6 +554,12 @@ namespace GritGud.Presentation.Gameplay
                 session,
                 worldRegistry,
                 attackController);
+        }
+
+        private void BindAimingPresentation(
+            GameplaySession session,
+            string initiallySelectedActorId)
+        {
             targetAcquisitionPresenter.SetWeaponAimOriginProvider(
                 () => partyPresentation?.SelectedWeapon?.Muzzle != null
                     ? partyPresentation.SelectedWeapon.Muzzle.position
@@ -520,12 +583,6 @@ namespace GritGud.Presentation.Gameplay
             targetingCursorPresenter.Bind(
                 ShouldShowTargetingCursor,
                 ResolveTargetingCursorValidity);
-            if (!string.IsNullOrWhiteSpace(scenarioAssembly.PrimaryObjectiveId))
-            {
-                objectivePresenter.Bind(
-                    session,
-                    scenarioAssembly.PrimaryObjectiveId);
-            }
         }
 
         private void ShowGameplayInterface(GameplaySession session)
