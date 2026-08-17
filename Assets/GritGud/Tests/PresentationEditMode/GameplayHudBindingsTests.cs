@@ -29,6 +29,7 @@ namespace GritGud.Presentation.Tests
             int toggles = 0;
             bindings.BindTurnModeToggle(() => toggles++);
             bindings.BindInputSource(new StubInputSource());
+            var projector = new GameplayHudModelProjector(bindings);
 
             bindings.RequestTurnModeToggle();
 
@@ -36,6 +37,12 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 bindings.GetBindingDisplay(GameplayControl.EndTurn),
                 Is.EqualTo("BOUND EndTurn"));
+            Assert.That(
+                projector.FormatCommandHint(
+                    new GameplayCommandHintModel(
+                        GameplayControl.EndTurn,
+                        "END TURN")),
+                Is.EqualTo("BOUND EndTurn  END TURN"));
 
             bindings.UnbindTurnModeToggle();
             bindings.UnbindInputSource();
@@ -45,6 +52,12 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 bindings.GetBindingDisplay(GameplayControl.EndTurn),
                 Is.Empty);
+            Assert.That(
+                projector.FormatCommandHint(
+                    new GameplayCommandHintModel(
+                        GameplayControl.EndTurn,
+                        "END TURN")),
+                Is.EqualTo("END TURN"));
         }
 
         [Test]
