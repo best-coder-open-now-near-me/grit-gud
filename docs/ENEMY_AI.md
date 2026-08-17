@@ -44,6 +44,30 @@ can spend movement seeking a cleaner angle.
 - **Scenario content** owns perception, preferred range, search radius, attack
   limit, and minimum acceptable hit chance.
 
+## Next production goal: encounter onset and lifecycle
+
+The 2026-08-17 stabilization pass split Unity runtime registry, exploration
+coordination, combat-turn execution, and incapacitation/completion presentation
+without changing the current detection rule. The existing exploration
+coordinator is therefore an adapter seam, not a completed awareness system.
+
+The next slice adds first-class patrol and awareness before expanding combat
+heuristics:
+
+- Application owns patrol progress, suspicion/awareness, last-known evidence,
+  escalation/decay, detection decisions, scoped encounter participants, and
+  initiative entry/exit;
+- Unity supplies frozen line-of-sight and sound-world evidence, patrol route
+  reachability, and presentation only;
+- scenario content authors patrol routes, sight/hearing thresholds, response
+  policy, and reinforcement relationships; and
+- journals and diagnostics freeze every awareness and participant transition so
+  replay/debugging never re-query the world.
+
+Do not fold sound into a larger sight radius, start every authored actor in
+initiative, or store awareness only on a Unity controller. Patrol, sight, and
+sound must converge through one portable evidence-to-decision boundary.
+
 ## Next tactical slices
 
 The following are deliberately not hidden inside the rifleman heuristic:

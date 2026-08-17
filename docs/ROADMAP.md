@@ -13,6 +13,42 @@ not imply permanent full-match replay storage. The active character retains
 their normal gameplay camera throughout playback, and their previous-turn
 segment is optional context rather than part of the default playback range.
 
+## Pre-encounter stabilization checkpoint — 2026-08-17
+
+The repository-wide stabilization goal is complete on
+`codex/stabilize-runtime-architecture`. It hardened cloud/Supabase response
+boundaries and shared JSON import, added fork-safe CI plus collision-resistant
+preview identities, partitioned gameplay lifecycle characterization, and
+decomposed the enemy runtime, turn lifecycle, scenario combat assembly,
+control routing, HUD, level-editor GUI/lifecycle, and displacement transaction
+hotspots. The detailed ownership record is in
+[ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md).
+
+This checkpoint added no encounter features. The next goal is the encounter
+onset and lifecycle vertical slice, in this order:
+
+1. Define Application-owned awareness state and immutable sight/sound evidence
+   records. Unity performs line-of-sight, occlusion, distance, and sound-world
+   queries; it does not decide detection, suspicion, hostility, or initiative.
+2. Author patrol routes, sensing thresholds, investigation behavior, and
+   escalation/decay policy in scenario content. Add editor authoring only after
+   the portable schema and validation contracts are stable.
+3. Run patrol, suspicion, investigation, detection, loss-of-contact, and
+   re-acquisition through the extracted exploration coordinator. Every state
+   transition must be journaled and deterministic from frozen evidence.
+4. Replace whole-scenario encounter assumptions with Application-owned scoped
+   participants and explicit reinforcement/join/leave rules. Entering or
+   leaving tactical presentation must not replenish budgets or duplicate actor
+   state.
+5. Present awareness and encounter transitions in Unity and expose useful
+   validation/debug text without making the HUD or enemy controller a policy
+   owner. Add focused EditMode coverage and published-level PlayMode lifecycle
+   coverage before broadening enemy tactics.
+
+The deployable drone, incendiary consumables, and broader enemy action selection
+remain separate later goals. They should consume the encounter and simulation
+contracts rather than expanding this first slice.
+
 ## Current restart checkpoint — 2026-08-11
 
 The project has completed enough of the early tactical foundation that the

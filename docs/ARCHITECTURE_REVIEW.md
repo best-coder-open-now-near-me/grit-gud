@@ -102,6 +102,47 @@ destructible/toppling completion plus a published pile fixture. Knife/action
 animation completion and shared simulation groundwork follow before the drone;
 richer viewport transform tools can proceed alongside those gameplay slices.
 
+### 2026-08-17 pre-encounter stabilization checkpoint
+
+The stabilization goal prompted by the repository-wide follow-up review is
+complete. It deliberately preserved current encounter behavior while reducing
+the cost and risk of the next encounter slice:
+
+- successful cloud-draft mutations now retain their authoritative returned
+  identity, revision, and local state even when the best-effort list refresh
+  fails; refresh failure is a warning rather than a failed write;
+- Supabase authentication, document, draft, and RPC responses cross centralized
+  parsing and validation boundaries, and every request finishes through one
+  success, failure, or cancellation path;
+- browser and desktop JSON import share reusable text-transfer seams for both
+  level and character documents;
+- pull-request/default-branch CI separates fork-safe validation from jobs that
+  require licensed private assets, and preview publication, concurrency, and
+  deletion use one collision-resistant slug-plus-hash identifier;
+- gameplay characterization is partitioned by lifecycle, and runtime ownership
+  is divided among enemy registry, exploration evidence orchestration,
+  combat-turn execution, outcome presentation, application-owned turn
+  lifecycle, scenario validation/combat assembly, and an explicit control
+  router;
+- HUD ownership is divided among binding/input, model projection,
+  layout/hit-testing, rendering, and style resources while `GameplayHud`
+  remains the Unity-facing facade;
+- the level-editor GUI consumes six capability interfaces instead of one broad
+  action surface, and a tested session-lifecycle scope owns symmetrical event
+  release; and
+- `GameplayDisplacementSession` is now the atomic action/journal boundary.
+  Availability/target policy, destination and path evidence, prop and contest
+  resolution, pin transitions, and commit validation have focused Application
+  owners. Replay coverage freezes the exact toppled prop and pin state and
+  rejects duplicate authoritative sequences without rerolling or remutating.
+
+No patrol, suspicion/awareness, sound detection, new line-of-sight policy,
+scoped initiative, encounter authoring, or encounter UI was added in this
+checkpoint. Those belong to the next goal. Unity supplies spatial evidence and
+presentation; Application owns awareness, participant scope, initiative
+entry/exit, and recorded decisions; authored content owns sensing and patrol
+policy.
+
 
 ## Non-negotiable boundaries
 
@@ -673,7 +714,10 @@ turn. The full EditMode gate passes 429 tests.
     published destructible-pile verification fixture. **Implemented
     2026-08-16; full Unity runner and hands-on fixture acceptance remain.**
 11. Add first-class toppled-prop pinning, an authoritative pinned actor state,
-    and an atomic Push Off/escape action with exact replay restoration. **Next.**
+    and an atomic Push Off/escape action with exact replay restoration.
+    **Complete 2026-08-17:** pin establishment/release, directional Push Off,
+    destination evidence, atomic commit validation, and exact prop/pin replay
+    restoration are covered through focused Application collaborators.
 12. Finish knife, reaction, equipment, reload, grenade, pinned struggle,
     push-off, get-up, and turn presentation through gameplay-owned semantic
     animation states.
