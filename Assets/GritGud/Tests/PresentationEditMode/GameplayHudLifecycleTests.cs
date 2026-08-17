@@ -14,9 +14,15 @@ namespace GritGud.Presentation.Tests
             try
             {
                 GameplayHud hud = root.AddComponent<GameplayHud>();
-                var state = (GameplayHotbarChoiceState)typeof(GameplayHud)
-                    .GetField("hotbarChoice", BindingFlags.Instance | BindingFlags.NonPublic)
+                var renderer = (GameplayHudRenderer)typeof(GameplayHud)
+                    .GetField(
+                        "hudRenderer",
+                        BindingFlags.Instance | BindingFlags.NonPublic)
                     .GetValue(hud);
+                var state = (GameplayHotbarChoiceState)typeof(
+                        GameplayHudRenderer)
+                    .GetField("hotbarChoice", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .GetValue(renderer);
                 state.Open(3, new Rect(100f, 100f, 50f, 50f), 120f);
                 Assert.That(hud.IsHotbarChoiceOpen, Is.True);
 
