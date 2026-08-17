@@ -151,6 +151,7 @@ namespace GritGud.Application.Gameplay
         private readonly IDisplacementPathValidator pathValidator;
         private readonly ID20RollSource rollSource;
         private readonly DisplacementActionEvaluator actionEvaluator;
+        private readonly DisplacementPinTransitionResolver pinTransitionResolver;
         private readonly List<DisplacementRecord> records =
             new List<DisplacementRecord>();
         private readonly IReadOnlyList<DisplacementRecord> readOnlyRecords;
@@ -222,6 +223,9 @@ namespace GritGud.Application.Gameplay
                 destructibles,
                 subjects,
                 controlProfiles);
+            pinTransitionResolver = new DisplacementPinTransitionResolver(
+                gameplay,
+                subjects);
             readOnlyRecords = records.AsReadOnly();
         }
 
@@ -353,12 +357,13 @@ namespace GritGud.Application.Gameplay
                 out DisplacementResolutionFailure failure);
             if (valid
                 && prop.HasValue
-                && !TryResolvePinTransition(
+                && !pinTransitionResolver.TryResolve(
                     actorId,
                     target.Subject,
                     availability.Action,
                     prop.Value,
                     path,
+                    records.Count + 1L,
                     ref appliedResults,
                     out _,
                     out failure))
@@ -921,12 +926,13 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
-            if (!TryResolvePinTransition(
+            if (!pinTransitionResolver.TryResolve(
                     actorId,
                     subject,
                     definition,
                     prop,
                     path,
+                    records.Count + 1L,
                     ref appliedResults,
                     out ActorPinTransition pinTransition,
                     out failure))
@@ -942,109 +948,6 @@ namespace GritGud.Application.Gameplay
                 resultingState,
                 appliedResults,
                 pinTransition);
-            failure = DisplacementResolutionFailure.None;
-            return true;
-        }
-
-        private bool TryResolvePinTransition(
-            string actorId,
-            DisplacementSubjectDefinition propSubject,
-            DisplacementActionDefinition action,
-            DestructiblePropSnapshot prop,
-            DisplacementPathValidation path,
-            ref DisplacementResultPolicies appliedResults,
-            out ActorPinTransition transition,
-            out DisplacementResolutionFailure failure)
-        {
-            transition = null;
-            GameplayActorSnapshot actingActor = gameplay.GetActor(actorId);
-            if (action.Intent == DisplacementActionKind.PushOff)
-            {
-                if (actingActor.PinState == null)
-                {
-                    failure = DisplacementResolutionFailure.ActorNotPinned;
-                    return false;
-                }
-                if (!string.Equals(
-                        actingActor.PinState.PropId,
-                        prop.PropId,
-                        StringComparison.Ordinal))
-                {
-                    failure = DisplacementResolutionFailure.NotPinningActor;
-                    return false;
-                }
-                if (!action.AllowedResults.HasFlag(
-                        DisplacementResultPolicies.Release))
-                {
-                    failure = DisplacementResolutionFailure.ActionUnavailable;
-                    return false;
-                }
-                if (path.Contacts.Count > 0)
-                {
-                    failure = DisplacementResolutionFailure.DestinationBlocked;
-                    return false;
-                }
-
-                appliedResults |= DisplacementResultPolicies.Release;
-                transition = new ActorPinTransition(
-                    actorId,
-                    actingActor.Pose,
-                    FaceToward(actingActor.Pose, prop.Position),
-                    actingActor.PinState,
-                    resultingState: null);
-                failure = DisplacementResolutionFailure.None;
-                return true;
-            }
-
-            if (path.Contacts.Count == 0)
-            {
-                failure = DisplacementResolutionFailure.None;
-                return true;
-            }
-            if (!appliedResults.HasFlag(DisplacementResultPolicies.Topple)
-                || propSubject.Pinning == null
-                || !action.AllowedResults.HasFlag(
-                    DisplacementResultPolicies.Pin)
-                || path.Contacts.Count != 1)
-            {
-                failure = DisplacementResolutionFailure.DestinationBlocked;
-                return false;
-            }
-
-            DisplacementContactEvidence contact = path.Contacts[0];
-            if (!subjects.TryGetValue(
-                    contact.EntityId,
-                    out DisplacementSubjectDefinition contactedSubject)
-                || contactedSubject.Kind != DisplacementSubjectKind.Combatant
-                || string.Equals(
-                    contact.EntityId,
-                    actorId,
-                    StringComparison.Ordinal)
-                || !gameplay.TryGetActor(
-                    contact.EntityId,
-                    out GameplayActorSnapshot contactedActor)
-                || contactedActor.IsIncapacitated
-                || contactedActor.IsPinned
-                || !propSubject.Pinning.Accepts(
-                    contactedSubject.Mass,
-                    contact.OverlapDepth))
-            {
-                failure = DisplacementResolutionFailure.DestinationBlocked;
-                return false;
-            }
-
-            var resultingPin = new ActorPinState(
-                contactedActor.ActorId,
-                prop.PropId,
-                records.Count + 1L,
-                contact);
-            transition = new ActorPinTransition(
-                contactedActor.ActorId,
-                contactedActor.Pose,
-                contactedActor.Pose,
-                previousState: null,
-                resultingPin);
-            appliedResults |= DisplacementResultPolicies.Pin;
             failure = DisplacementResolutionFailure.None;
             return true;
         }
@@ -1196,23 +1099,6 @@ namespace GritGud.Application.Gameplay
 
             records.Add(record);
             gameplay.Journal.RecordDisplacementResolved(record);
-        }
-
-        private static GameplayActorPose FaceToward(
-            GameplayActorPose pose,
-            GameplayPosition target)
-        {
-            double deltaX = (double)target.X - pose.Position.X;
-            double deltaZ = (double)target.Z - pose.Position.Z;
-            if (Math.Abs(deltaX) <= 0.0001d
-                && Math.Abs(deltaZ) <= 0.0001d)
-                return pose;
-            float facing = (float)(
-                Math.Atan2(deltaX, deltaZ) * (180d / Math.PI));
-            return new GameplayActorPose(
-                pose.Position,
-                facing,
-                pose.Stance);
         }
 
         private void ValidateCommit(DisplacementRecord record)
