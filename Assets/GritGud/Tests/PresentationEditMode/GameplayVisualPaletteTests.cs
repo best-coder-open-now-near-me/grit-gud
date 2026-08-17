@@ -58,6 +58,23 @@ namespace GritGud.Presentation.Tests
                 Is.EqualTo(GameplayVisualPalette.TextPrimary));
         }
 
+        [Test]
+        public void TargetingUsesBlueForValidAndOrangeForInvalid()
+        {
+            Assert.That(
+                GameplayVisualPalette.TargetingValid,
+                Is.EqualTo(GameplayVisualPalette.SignalBlueBright));
+            Assert.That(
+                GameplayVisualPalette.TargetingInvalid,
+                Is.EqualTo(GameplayVisualPalette.SignalOrangeGlow));
+            Assert.That(
+                GameplayVisualPalette.DisplacementPreview,
+                Is.EqualTo(GameplayVisualPalette.TargetingValid));
+            Assert.That(
+                GameplayVisualPalette.DisplacementPreviewInvalid,
+                Is.EqualTo(GameplayVisualPalette.TargetingInvalid));
+        }
+
         private static void AssertBlueLeaning(Color color)
         {
             Assert.That(color.b, Is.GreaterThan(color.g));

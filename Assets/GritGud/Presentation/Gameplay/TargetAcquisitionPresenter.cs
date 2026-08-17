@@ -56,6 +56,26 @@ namespace GritGud.Presentation.Gameplay
         public int PreferredFractureChunkIndex { get; }
     }
 
+    internal readonly struct TargetingPointerFeedback
+    {
+        public TargetingPointerFeedback(string text, bool isValid)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                throw new ArgumentException(
+                    "Targeting feedback requires visible text.",
+                    nameof(text));
+            }
+
+            Text = text;
+            IsValid = isValid;
+        }
+
+        public string Text { get; }
+
+        public bool IsValid { get; }
+    }
+
     [DisallowMultipleComponent]
     public sealed class TargetAcquisitionPresenter : MonoBehaviour
     {
@@ -64,6 +84,9 @@ namespace GritGud.Presentation.Gameplay
 
         internal static readonly Color AcquisitionOutlineColor =
             TargetFeedbackPresenter.AcquisitionOutlineColor;
+
+        internal static readonly Color InvalidOutlineColor =
+            TargetFeedbackPresenter.InvalidColor;
 
         private readonly Dictionary<string, UnityTargetExposureQuery> exposureQueries =
             new Dictionary<string, UnityTargetExposureQuery>(StringComparer.Ordinal);
@@ -83,6 +106,11 @@ namespace GritGud.Presentation.Gameplay
         private Func<Vector2, bool> isPointerBlocked;
         private Func<Vector3?> getWeaponAimOrigin;
         private ISightObscuranceQuery sightObscurance;
+        private object validationFeedbackOwner;
+        private string validationTargetId;
+        private Transform validationTargetRoot;
+        private string validationText;
+        private bool validationIsValid;
 
         public bool IsBound => pointerQuery != null;
 
@@ -107,12 +135,22 @@ namespace GritGud.Presentation.Gameplay
         public TargetAcquisitionPreview CurrentPreview { get; private set; }
 
         internal bool ShouldPresentFeedback =>
-            CurrentPreview != null
-            && feedbackSuppressors.Count == 0;
+            validationFeedbackOwner != null
+                ? validationTargetRoot != null
+                : CurrentPreview != null
+                    && feedbackSuppressors.Count == 0;
 
         internal bool ShouldPresentHitChance =>
-            ShouldPresentFeedback
+            validationFeedbackOwner == null
+            && ShouldPresentFeedback
             && session?.GetEquippedAttack(observerId) != null;
+
+        internal bool HasValidationFeedback =>
+            validationFeedbackOwner != null;
+
+        internal string CurrentValidationText => validationText;
+
+        internal bool CurrentValidationIsValid => validationIsValid;
 
         internal void Bind(
             GameplaySession gameplaySession,
@@ -177,6 +215,11 @@ namespace GritGud.Presentation.Gameplay
             feedback = null;
             exposureQueries.Clear();
             feedbackSuppressors.Clear();
+            validationFeedbackOwner = null;
+            validationTargetId = null;
+            validationTargetRoot = null;
+            validationText = null;
+            validationIsValid = false;
             pointerQuery = null;
             observer = null;
             observerId = null;
@@ -207,6 +250,113 @@ namespace GritGud.Presentation.Gameplay
             ApplyFeedbackVisibility();
         }
 
+        internal void PresentValidationFeedback(
+            object owner,
+            string targetId,
+            Transform targetRoot,
+            bool isValid,
+            string text)
+        {
+            if (owner == null)
+            {
+                throw new ArgumentNullException(nameof(owner));
+            }
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                throw new ArgumentException(
+                    "Target validation feedback requires visible text.",
+                    nameof(text));
+            }
+            if (targetRoot != null && string.IsNullOrWhiteSpace(targetId))
+            {
+                throw new ArgumentException(
+                    "Highlighted validation targets require an identifier.",
+                    nameof(targetId));
+            }
+
+            validationFeedbackOwner = owner;
+            validationTargetId = string.IsNullOrWhiteSpace(targetId)
+                ? null
+                : targetId;
+            validationTargetRoot = targetRoot;
+            validationText = text;
+            validationIsValid = isValid;
+            ApplyFeedbackVisibility();
+        }
+
+        internal void ClearValidationFeedback(object owner)
+        {
+            if (owner == null)
+            {
+                throw new ArgumentNullException(nameof(owner));
+            }
+            if (!ReferenceEquals(validationFeedbackOwner, owner))
+            {
+                return;
+            }
+
+            validationFeedbackOwner = null;
+            validationTargetId = null;
+            validationTargetRoot = null;
+            validationText = null;
+            validationIsValid = false;
+            feedback?.ClearTarget();
+            ApplyFeedbackVisibility();
+        }
+
+        internal bool TryGetPointerFeedback(
+            out TargetingPointerFeedback pointerFeedback)
+        {
+            if (validationFeedbackOwner != null
+                && !string.IsNullOrWhiteSpace(validationText))
+            {
+                pointerFeedback = new TargetingPointerFeedback(
+                    validationText,
+                    validationIsValid);
+                return true;
+            }
+
+            AttackDefinition attack = session?.GetEquippedAttack(observerId);
+            if (feedbackSuppressors.Count > 0 || attack == null)
+            {
+                pointerFeedback = default;
+                return false;
+            }
+
+            if (CurrentPreview != null && ShouldPresentFeedback)
+            {
+                pointerFeedback = new TargetingPointerFeedback(
+                    CurrentPreview.IsWithinReach
+                        ? $"CHANCE TO HIT  {CurrentPreview.HitChancePercent}%"
+                        : $"OUT OF REACH  {CurrentPreview.Distance:0.#} / "
+                            + $"{CurrentPreview.MaximumReach:0.#} M",
+                    CurrentPreview.IsWithinReach);
+                return true;
+            }
+
+            if (!WeaponTargetingActive)
+            {
+                pointerFeedback = default;
+                return false;
+            }
+
+            if (attack.Contact != null)
+            {
+                pointerFeedback = new TargetingPointerFeedback(
+                    $"ACTOR TARGET REQUIRED  {attack.Contact.MaximumReach:0.#} M MAX",
+                    isValid: false);
+                return true;
+            }
+
+            bool validWorldAim = TryGetWeaponAim(out _);
+            pointerFeedback = new TargetingPointerFeedback(
+                validWorldAim
+                    ? "VALID AIM POINT"
+                    : "NO VALID AIM POINT",
+                validWorldAim);
+            return true;
+        }
+
         internal void SetPointerBlocker(Func<Vector2, bool> pointerBlocker)
         {
             isPointerBlocked = pointerBlocker;
@@ -215,6 +365,11 @@ namespace GritGud.Presentation.Gameplay
         internal void SetWeaponTargetingActive(bool active)
         {
             WeaponTargetingActive = active;
+            if (!active)
+            {
+                feedback?.ClearTarget();
+            }
+            ApplyFeedbackVisibility();
         }
 
         internal void SetWeaponAimOriginProvider(Func<Vector3?> originProvider)
@@ -323,7 +478,6 @@ namespace GritGud.Presentation.Gameplay
                 accuracyDecay,
                 distance,
                 attack?.Contact);
-            feedback.SetTarget(target);
             ApplyFeedbackVisibility();
         }
 
@@ -738,19 +892,76 @@ namespace GritGud.Presentation.Gameplay
 
         private void ApplyFeedbackVisibility()
         {
+            if (feedback == null)
+            {
+                return;
+            }
+
+            if (validationFeedbackOwner != null)
+            {
+                bool hasValidationTarget = validationTargetRoot != null;
+                if (hasValidationTarget)
+                {
+                    feedback.SetTarget(
+                        validationTargetId,
+                        validationTargetRoot);
+                    feedback.SetColor(
+                        validationIsValid
+                            ? TargetFeedbackPresenter.ValidColor
+                            : TargetFeedbackPresenter.InvalidColor);
+                }
+
+                feedback.SetVisible(
+                    hasValidationTarget,
+                    hasValidationTarget
+                        && validationIsValid
+                        && CanShowTurnHalo());
+                return;
+            }
+
             bool acquired = currentTarget != null
                 && CurrentPreview != null
                 && feedbackSuppressors.Count == 0;
-            bool showTurnHalo = acquired
-                && session != null
-                && session.Mode == GameplaySessionMode.TurnBased
-                && session.Operation == GameplaySessionOperation.None
-                && string.Equals(
-                    session.ActiveActorId,
-                    observerId,
-                    StringComparison.Ordinal);
-            feedback?.SetVisible(acquired, showTurnHalo);
+            if (acquired)
+            {
+                feedback.SetTarget(currentTarget);
+                feedback.SetColor(
+                    CurrentPreview.IsWithinReach
+                        ? TargetFeedbackPresenter.ValidColor
+                        : TargetFeedbackPresenter.InvalidColor);
+            }
+            else if (feedbackSuppressors.Count == 0
+                && WeaponTargetingActive
+                && TryGetWeaponAim(out GameplayWeaponAim worldAim)
+                && registry.TryGetLevelEntity(
+                    worldAim.TargetId,
+                    out LevelEntityView worldTarget))
+            {
+                feedback.SetTarget(
+                    worldAim.TargetId,
+                    worldTarget.transform);
+                feedback.SetColor(TargetFeedbackPresenter.ValidColor);
+                feedback.SetVisible(
+                    outlineVisible: true,
+                    turnHaloVisible: false);
+                return;
+            }
+
+            feedback.SetVisible(
+                acquired,
+                acquired
+                    && CurrentPreview.IsWithinReach
+                    && CanShowTurnHalo());
         }
+
+        private bool CanShowTurnHalo() =>
+            session != null
+            && session.Mode == GameplaySessionMode.TurnBased
+            && session.Operation == GameplaySessionOperation.None
+            && string.Equals(
+                session.ActiveActorId,
+                observerId,
+                StringComparison.Ordinal);
 
         private void OnDestroy()
         {

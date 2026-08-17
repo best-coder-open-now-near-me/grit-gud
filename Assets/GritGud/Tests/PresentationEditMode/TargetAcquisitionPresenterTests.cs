@@ -16,6 +16,38 @@ namespace GritGud.Presentation.Tests
     public sealed class TargetAcquisitionPresenterTests
     {
         [Test]
+        public void TargetingCursorTracksSharedValidationState()
+        {
+            var host = new GameObject("Targeting Cursor Validation Test");
+            try
+            {
+                bool visible = true;
+                bool? valid = false;
+                GameplayTargetingCursorPresenter cursor =
+                    host.AddComponent<GameplayTargetingCursorPresenter>();
+                cursor.Bind(() => visible, () => valid);
+
+                Assert.That(cursor.IsTargetingVisible, Is.True);
+                Assert.That(cursor.IsTargetingValid, Is.False);
+
+                valid = true;
+                cursor.RefreshNow();
+
+                Assert.That(cursor.IsTargetingVisible, Is.True);
+                Assert.That(cursor.IsTargetingValid, Is.True);
+
+                visible = false;
+                cursor.RefreshNow();
+
+                Assert.That(cursor.IsTargetingVisible, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
         public void CharacterSurfaceAimIgnoresCameraSideWallButKeepsForwardWall()
         {
             var host = new GameObject("Character Surface Aim Test");
@@ -144,6 +176,17 @@ namespace GritGud.Presentation.Tests
                     Is.True);
                 Assert.That(aim.TargetId, Is.EqualTo("alarm-panel"));
                 Assert.That(aim.Position.z, Is.EqualTo(4.9f).Within(0.02f));
+
+                presenter.SetWeaponTargetingActive(true);
+
+                Assert.That(presenter.TargetOutlineVisible, Is.True);
+                AssertOutlineColor(
+                    surface,
+                    TargetAcquisitionPresenter.AcquisitionOutlineColor);
+
+                presenter.SetWeaponTargetingActive(false);
+
+                Assert.That(presenter.TargetOutlineVisible, Is.False);
             }
             finally
             {
@@ -474,6 +517,83 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void ContextualValidationHighlightsGenericTargetsWithSemanticColor()
+        {
+            var host = new GameObject("Contextual Target Feedback Test");
+            var observer = CreateActorObject(
+                "Contextual Feedback Observer",
+                Vector3.zero,
+                withVisual: false);
+            GameObject prop = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            LevelWorld world = null;
+            GameplayWorldRegistry registry = null;
+            try
+            {
+                prop.name = "Contextual Feedback Prop";
+                world = new LevelWorld(
+                    new GameObject("Contextual Feedback World"),
+                    new Dictionary<string, LevelEntityView>(),
+                    null);
+                registry = new GameplayWorldRegistry(world);
+                registry.RegisterActor(
+                    "observer",
+                    "test",
+                    targetable: false,
+                    observer);
+                TargetAcquisitionPresenter presenter =
+                    host.AddComponent<TargetAcquisitionPresenter>();
+                presenter.Bind(CreateSession(), registry, "observer");
+                var feedbackOwner = new object();
+
+                presenter.PresentValidationFeedback(
+                    feedbackOwner,
+                    "crate",
+                    prop.transform,
+                    isValid: false,
+                    "INVALID TARGET - OUT OF REACH");
+
+                Assert.That(presenter.HasValidationFeedback, Is.True);
+                Assert.That(presenter.TargetOutlineVisible, Is.True);
+                Assert.That(presenter.CurrentValidationIsValid, Is.False);
+                Assert.That(
+                    presenter.TryGetPointerFeedback(
+                        out TargetingPointerFeedback pointerFeedback),
+                    Is.True);
+                Assert.That(pointerFeedback.Text,
+                    Is.EqualTo("INVALID TARGET - OUT OF REACH"));
+                Assert.That(pointerFeedback.IsValid, Is.False);
+                AssertOutlineColor(
+                    prop,
+                    TargetAcquisitionPresenter.InvalidOutlineColor);
+
+                presenter.PresentValidationFeedback(
+                    feedbackOwner,
+                    "crate",
+                    prop.transform,
+                    isValid: true,
+                    "VALID TARGET - PUSH");
+
+                Assert.That(presenter.CurrentValidationIsValid, Is.True);
+                AssertOutlineColor(
+                    prop,
+                    TargetAcquisitionPresenter.AcquisitionOutlineColor);
+
+                presenter.ClearValidationFeedback(feedbackOwner);
+
+                Assert.That(presenter.HasValidationFeedback, Is.False);
+                Assert.That(presenter.TargetOutlineVisible, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                registry?.Dispose();
+                world?.Dispose();
+                Object.DestroyImmediate(observer);
+                Object.DestroyImmediate(prop);
+            }
+        }
+
+        [Test]
         public void GeometricChanceRoundsVisibleRegionFraction()
         {
             var snapshot = new TargetExposureSnapshot(
@@ -604,6 +724,21 @@ namespace GritGud.Presentation.Tests
             }
 
             return actor;
+        }
+
+        private static void AssertOutlineColor(
+            GameObject target,
+            Color expected)
+        {
+            Material outline = target
+                .GetComponent<Renderer>()
+                .sharedMaterials
+                .Single(material =>
+                    material.shader.name == "GritGud/RuntimeOutline");
+            Color actual = outline.GetColor("_OutlineColor");
+            Assert.That(actual.r, Is.EqualTo(expected.r).Within(0.001f));
+            Assert.That(actual.g, Is.EqualTo(expected.g).Within(0.001f));
+            Assert.That(actual.b, Is.EqualTo(expected.b).Within(0.001f));
         }
 
         private static ScenarioActorDefinition CreateActorDefinition(

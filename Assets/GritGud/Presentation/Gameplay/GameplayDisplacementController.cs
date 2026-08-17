@@ -34,6 +34,7 @@ namespace GritGud.Presentation.Gameplay
         private TargetingPhase targetingPhase;
         private string pointerCandidateId;
         private DisplacementTargetEvaluation pointerEvaluation;
+        private bool pointerHasLineOfSight;
         private string lockedSubjectId;
         private Vector3 destination;
         private DisplacementDestinationEvaluation destinationEvaluation;
@@ -63,7 +64,7 @@ namespace GritGud.Presentation.Gameplay
                             + GetSelectedActionDisplayName().ToUpperInvariant()
                             + " AGAIN OR ESC TO CANCEL"
                     : IsPushOffAction()
-                        ? "AIM PUSH-OFF DIRECTION - GREEN PROP OUTLINE MARKS "
+                        ? "AIM PUSH-OFF DIRECTION - BLUE PROP OUTLINE MARKS "
                             + "VALID GET-UP COVER - CLICK TO CONFIRM - SELECT "
                             + GetSelectedActionDisplayName().ToUpperInvariant()
                             + " AGAIN OR ESC TO CANCEL"
@@ -73,21 +74,23 @@ namespace GritGud.Presentation.Gameplay
                 80);
 
         public bool IsPointerTargetValid =>
-            pointerEvaluation?.IsEligible == true;
+            pointerEvaluation?.IsEligible == true
+            && pointerHasLineOfSight;
 
         public string PointerCandidateId => pointerCandidateId;
 
         public string PointerTooltip => !IsTargeting
             ? string.Empty
+            : pointerEvaluation != null && !pointerHasLineOfSight
+                ? "INVALID TARGET - LINE OF SIGHT BLOCKED"
             : targetingPhase == TargetingPhase.Destination
-                ? destinationEvaluation?.IsEligible == true
-                    ? string.Empty
-                    : FormatDestinationFailure(destinationEvaluation)
+                ? FormatDestinationFailure(destinationEvaluation)
             : IsPointerTargetValid
                 ? UsesAutomaticIntentDestination()
                     && destinationEvaluation?.IsEligible != true
                         ? FormatDestinationFailure(destinationEvaluation)
-                        : string.Empty
+                        : "VALID TARGET - "
+                            + GetSelectedActionDisplayName().ToUpperInvariant()
                 : FormatTargetFailure(pointerEvaluation);
 
         public IReadOnlyList<DisplacementActionDefinition> AvailableActions =>
@@ -118,6 +121,7 @@ namespace GritGud.Presentation.Gameplay
 
             selectedActionId = actionId;
             targetAcquisition?.SetFeedbackSuppressed(this, true);
+            targetAcquisition?.ClearValidationFeedback(this);
             targetingPhase = TargetingPhase.Subject;
             lockedSubjectId = null;
             ClearDestinationPreview();
@@ -193,6 +197,7 @@ namespace GritGud.Presentation.Gameplay
         {
             if (!IsTargeting) return false;
             string actionName = GetSelectedActionDisplayName();
+            targetAcquisition?.ClearValidationFeedback(this);
             targetAcquisition?.SetFeedbackSuppressed(this, false);
             selectedActionId = null;
             lockedSubjectId = null;
@@ -315,7 +320,7 @@ namespace GritGud.Presentation.Gameplay
             {
                 if (!IsPointerTargetValid)
                 {
-                    StatusMessage = FormatTargetFailure(pointerEvaluation);
+                    StatusMessage = PointerTooltip;
                     return false;
                 }
 
@@ -422,6 +427,7 @@ namespace GritGud.Presentation.Gameplay
                 "displacement");
 
             SynchronizeAuthoritativeFacing();
+            targetAcquisition.ClearValidationFeedback(this);
             targetAcquisition.SetFeedbackSuppressed(this, false);
             selectedActionId = null;
             lockedSubjectId = null;
@@ -492,6 +498,8 @@ namespace GritGud.Presentation.Gameplay
         public void Unbind()
         {
             CancelTargeting();
+            targetAcquisition?.ClearValidationFeedback(this);
+            targetAcquisition?.SetFeedbackSuppressed(this, false);
             Session = null;
             gameplaySession = null;
             destructibles = null;
@@ -513,6 +521,7 @@ namespace GritGud.Presentation.Gameplay
         {
             if (!IsTargeting)
             {
+                targetAcquisition?.ClearValidationFeedback(this);
                 ClearPointerCandidate();
                 ClearDestinationPreview();
                 return;
@@ -550,14 +559,24 @@ namespace GritGud.Presentation.Gameplay
                 foreach (KeyValuePair<string, Transform> subject in subjectRoots)
                 {
                     if ((hit.transform == subject.Value
-                            || hit.transform.IsChildOf(subject.Value))
-                        && HasCharacterLineOfSight(hit.point, subject.Value))
+                            || hit.transform.IsChildOf(subject.Value)))
                     {
                         pointerCandidateId = subject.Key;
                         pointerEvaluation = Session.EvaluateTarget(
                             controlledActorId,
                             selectedActionId,
                             subject.Key);
+                        pointerHasLineOfSight = HasCharacterLineOfSight(
+                            hit.point,
+                            subject.Value);
+                        if (!pointerHasLineOfSight)
+                        {
+                            ClearDestinationPreview();
+                            PresentSubjectValidation(
+                                subject.Key,
+                                subject.Value);
+                            return;
+                        }
                         if (pointerEvaluation.IsEligible
                             && UsesAutomaticIntentDestination())
                         {
@@ -566,6 +585,9 @@ namespace GritGud.Presentation.Gameplay
                         else
                         {
                             ClearDestinationPreview();
+                            PresentSubjectValidation(
+                                subject.Key,
+                                subject.Value);
                         }
                         return;
                     }
@@ -573,6 +595,7 @@ namespace GritGud.Presentation.Gameplay
             }
 
             ClearDestinationPreview();
+            targetAcquisition.ClearValidationFeedback(this);
         }
 
         private void RefreshIntentDestination(
@@ -586,6 +609,7 @@ namespace GritGud.Presentation.Gameplay
                 || actorTransform == null)
             {
                 ClearDestinationPreview();
+                targetAcquisition?.ClearValidationFeedback(this);
                 return;
             }
 
@@ -606,6 +630,7 @@ namespace GritGud.Presentation.Gameplay
                     ToVector3(destinationEvaluation.Origin),
                     destination,
                     destinationEvaluation.IsEligible);
+                PresentSubjectValidation(subjectId, subjectRoot);
                 return;
             }
 
@@ -622,6 +647,7 @@ namespace GritGud.Presentation.Gameplay
                 ToVector3(destinationEvaluation.Origin),
                 destination,
                 destinationEvaluation.IsEligible);
+            PresentSubjectValidation(subjectId, subjectRoot);
         }
 
         private void AcquireDestination()
@@ -636,6 +662,7 @@ namespace GritGud.Presentation.Gameplay
                     out Transform subjectRoot)
                 || subjectRoot == null)
             {
+                targetAcquisition?.ClearValidationFeedback(this);
                 return;
             }
 
@@ -649,6 +676,12 @@ namespace GritGud.Presentation.Gameplay
                     acquisitionRange,
                     out Vector3 aimPoint))
             {
+                targetAcquisition.PresentValidationFeedback(
+                    this,
+                    lockedSubjectId,
+                    subjectRoot,
+                    isValid: false,
+                    "INVALID DESTINATION - AIM AT REACHABLE GROUND");
                 return;
             }
 
@@ -687,6 +720,40 @@ namespace GritGud.Presentation.Gameplay
                     destination,
                     destinationEvaluation.IsEligible);
             }
+
+            targetAcquisition.PresentValidationFeedback(
+                this,
+                lockedSubjectId,
+                subjectRoot,
+                destinationEvaluation.IsEligible,
+                FormatDestinationFailure(destinationEvaluation));
+        }
+
+        private void PresentSubjectValidation(
+            string subjectId,
+            Transform subjectRoot)
+        {
+            if (targetAcquisition == null
+                || pointerEvaluation == null
+                || subjectRoot == null)
+            {
+                targetAcquisition?.ClearValidationFeedback(this);
+                return;
+            }
+
+            bool valid = pointerEvaluation.IsEligible
+                && pointerHasLineOfSight
+                && (!UsesAutomaticIntentDestination()
+                    || destinationEvaluation?.IsEligible == true);
+            targetAcquisition.PresentValidationFeedback(
+                this,
+                subjectId,
+                subjectRoot,
+                valid,
+                valid
+                    ? "VALID TARGET - "
+                        + GetSelectedActionDisplayName().ToUpperInvariant()
+                    : PointerTooltip);
         }
 
         private bool HasCharacterLineOfSight(
@@ -731,6 +798,7 @@ namespace GritGud.Presentation.Gameplay
         {
             pointerCandidateId = null;
             pointerEvaluation = null;
+            pointerHasLineOfSight = false;
         }
 
         private void ClearDestinationPreview()

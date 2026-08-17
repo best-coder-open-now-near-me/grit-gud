@@ -44,13 +44,19 @@ namespace GritGud.Presentation
         internal static readonly Color HudTextPrimary = TextPrimary;
         internal static readonly Color HudTextSecondary = TextSecondary;
 
+        // Pointer-targeting semantics shared by labels, outlines, and world
+        // previews. Blue confirms an actionable aim; orange explains rejection.
+        internal static readonly Color TargetingValid = SignalBlueBright;
+        internal static readonly Color TargetingInvalid = SignalOrangeGlow;
+
         // World-space tactical feedback.
         internal static readonly Color EmissionBase = new Color(0.002f, 0.014f, 0.042f, 1f);
         internal static readonly Color RouteGhost = new Color(0.08f, 0.84f, 1f, 0.76f);
         internal static readonly Color RouteLine = new Color(0.2f, 0.84f, 1f, 0.98f);
         internal static readonly Color RouteFill = new Color(0.01f, 0.18f, 0.42f, 0.18f);
-        internal static readonly Color DisplacementPreview = new Color(1.5f, 0.48f, 0.02f, 1f);
-        internal static readonly Color DisplacementPreviewInvalid = new Color(1f, 0.2f, 0.025f, 0.72f);
+        internal static readonly Color DisplacementPreview = TargetingValid;
+        internal static readonly Color DisplacementPreviewInvalid =
+            TargetingInvalid;
         internal static readonly Color ProjectileGhost = new Color(1f, 0.38f, 0.01f, 0.82f);
         internal static readonly Color ProjectileGhostLine = new Color(1.6f, 0.5f, 0.015f, 1f);
         internal static readonly Color ProjectileGhostFill = new Color(0.72f, 0.13f, 0.005f, 0.16f);

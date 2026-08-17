@@ -126,6 +126,7 @@ namespace GritGud.Presentation.Gameplay
             StopAllCoroutines();
             ClearPlayback();
             CancelAim();
+            ClearAimFeedback();
             Session = null;
             throws = null;
             registry = null;
@@ -210,6 +211,7 @@ namespace GritGud.Presentation.Gameplay
                     aimedItemId = null;
                     aimedPresentation = null;
                     HideAimPreview();
+                    ClearAimFeedback();
                 }
                 return false;
             }
@@ -241,6 +243,7 @@ namespace GritGud.Presentation.Gameplay
             HideAimPreview();
             aimedItemId = null;
             aimedPresentation = null;
+            ClearAimFeedback();
             int exposedTargetCount = CountExposedTargets(
                 LastThrow.BlastEffects);
             StatusMessage = LastThrow.SmokeField != null
@@ -281,6 +284,7 @@ namespace GritGud.Presentation.Gameplay
             aimedItemId = null;
             aimedPresentation = null;
             HideAimPreview();
+            ClearAimFeedback();
             StatusMessage = "Throw canceled.";
             return true;
         }
@@ -304,6 +308,7 @@ namespace GritGud.Presentation.Gameplay
 
             aimedPresentation = presentationCatalog.GetThrownExplosive(itemId);
             aimedItemId = itemId;
+            acquisition.SetFeedbackSuppressed(this, true);
             EnsureAimPreview(aimedPresentation);
             PresentArmedProjectile(aimedPresentation);
             RefreshAimPreview();
@@ -314,15 +319,24 @@ namespace GritGud.Presentation.Gameplay
 
         private void RefreshAimPreview()
         {
+            InventoryItemDefinition item = Session.GetInventoryItem(
+                actorId,
+                aimedItemId);
+            var thrownExplosive =
+                (ThrownExplosiveDefinition)item.ConsumablePower;
             if (!TryGetAimPoint(out GameplayPosition aimPoint))
             {
                 HideAimPreview(clearArmedProjectile: false);
+                acquisition.PresentValidationFeedback(
+                    this,
+                    targetId: null,
+                    targetRoot: null,
+                    isValid: false,
+                    $"INVALID LANDING - AIM AT GROUND WITHIN "
+                        + $"{thrownExplosive.MaximumRange:0.#} M");
                 return;
             }
 
-            InventoryItemDefinition item = Session.GetInventoryItem(actorId, aimedItemId);
-            var thrownExplosive =
-                (ThrownExplosiveDefinition)item.ConsumablePower;
             if (!throws.TryPreview(
                     actorId,
                     thrownExplosive,
@@ -333,6 +347,14 @@ namespace GritGud.Presentation.Gameplay
                 LastFailure = failure;
                 HideAimPreview(clearArmedProjectile: false);
                 StatusMessage = "Throw unavailable: " + failure + ".";
+                acquisition.PresentValidationFeedback(
+                    this,
+                    targetId: null,
+                    targetRoot: null,
+                    isValid: false,
+                    FormatAimFailure(
+                        failure,
+                        thrownExplosive.MaximumRange));
                 return;
             }
 
@@ -353,6 +375,52 @@ namespace GritGud.Presentation.Gameplay
             blastCircle.enabled = true;
             trajectoryLine.enabled = true;
             LastFailure = ThrownExplosiveFailure.None;
+            float distance = Session.GetActor(actorId).Pose.Position
+                .DistanceTo(aimPoint);
+            acquisition.PresentValidationFeedback(
+                this,
+                targetId: null,
+                targetRoot: null,
+                isValid: true,
+                $"VALID LANDING  {distance:0.#} / "
+                    + $"{thrownExplosive.MaximumRange:0.#} M");
+        }
+
+        internal static string FormatAimFailure(
+            ThrownExplosiveFailure failure,
+            float maximumRange)
+        {
+            switch (failure)
+            {
+                case ThrownExplosiveFailure.OutOfRange:
+                    return $"OUT OF RANGE  {maximumRange:0.#} M MAX";
+                case ThrownExplosiveFailure.ActorNotActive:
+                    return "THROW UNAVAILABLE - NOT YOUR TURN";
+                case ThrownExplosiveFailure.ActorIncapacitated:
+                    return "THROW UNAVAILABLE - ACTOR INCAPACITATED";
+                case ThrownExplosiveFailure.ActorPinned:
+                    return "THROW UNAVAILABLE - ACTOR PINNED";
+                case ThrownExplosiveFailure.OperationInProgress:
+                    return "THROW UNAVAILABLE - ACTION IN PROGRESS";
+                case ThrownExplosiveFailure.Depleted:
+                    return "THROW UNAVAILABLE - ITEM DEPLETED";
+                case ThrownExplosiveFailure.InsufficientActionPoints:
+                    return "THROW UNAVAILABLE - INSUFFICIENT AP";
+                case ThrownExplosiveFailure.InsufficientMovementOpportunity:
+                    return "THROW UNAVAILABLE - INSUFFICIENT MOVEMENT";
+                case ThrownExplosiveFailure.TurnModeRequired:
+                    return "THROW UNAVAILABLE - ENTER TURN MODE";
+                case ThrownExplosiveFailure.None:
+                    return "VALID LANDING";
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(failure));
+            }
+        }
+
+        private void ClearAimFeedback()
+        {
+            acquisition?.ClearValidationFeedback(this);
+            acquisition?.SetFeedbackSuppressed(this, false);
         }
 
         private void EnsureAimPreview(

@@ -515,7 +515,9 @@ namespace GritGud.Presentation.Gameplay
                             active);
                     }
                 });
-            targetingCursorPresenter.Bind(ShouldShowTargetingCursor);
+            targetingCursorPresenter.Bind(
+                ShouldShowTargetingCursor,
+                ResolveTargetingCursorValidity);
             if (!string.IsNullOrWhiteSpace(scenarioAssembly.PrimaryObjectiveId))
             {
                 objectivePresenter.Bind(
@@ -1070,6 +1072,18 @@ namespace GritGud.Presentation.Gameplay
                 || weaponTargetingController?.IsTargeting == true
                 || displacementController?.IsTargeting == true
                 || consumableController?.IsPending == true;
+        }
+
+        private bool? ResolveTargetingCursorValidity()
+        {
+            if (targetAcquisitionPresenter != null
+                && targetAcquisitionPresenter.TryGetPointerFeedback(
+                    out TargetingPointerFeedback feedback))
+            {
+                return feedback.IsValid;
+            }
+
+            return null;
         }
 
         private bool CanHoverAttackPointerTarget() =>

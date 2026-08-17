@@ -15,6 +15,26 @@ namespace GritGud.Presentation.Tests
     public sealed class GameplayThrownExplosiveControllerTests
     {
         [Test]
+        public void AimFailuresUsePointerValidationLanguage()
+        {
+            Assert.That(
+                GameplayThrownExplosiveController.FormatAimFailure(
+                    ThrownExplosiveFailure.OutOfRange,
+                    12f),
+                Is.EqualTo("OUT OF RANGE  12 M MAX"));
+            Assert.That(
+                GameplayThrownExplosiveController.FormatAimFailure(
+                    ThrownExplosiveFailure.InsufficientActionPoints,
+                    12f),
+                Is.EqualTo("THROW UNAVAILABLE - INSUFFICIENT AP"));
+            Assert.That(
+                GameplayThrownExplosiveController.FormatAimFailure(
+                    ThrownExplosiveFailure.ActorPinned,
+                    12f),
+                Is.EqualTo("THROW UNAVAILABLE - ACTOR PINNED"));
+        }
+
+        [Test]
         public void DefaultCatalogAuthorsTheProductionGrenadeVisuals()
         {
             ConsumablePresentationCatalog catalog =
