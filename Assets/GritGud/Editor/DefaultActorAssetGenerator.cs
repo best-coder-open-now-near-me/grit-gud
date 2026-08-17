@@ -95,6 +95,10 @@ namespace GritGud.Editor
                 FallOverPath,
                 "Fall Over",
                 mustLoop: false);
+            AnimationClip push = LoadRequiredClip(
+                PushPath,
+                "Push",
+                mustLoop: false);
             AvatarMask upperBodyMask =
                 AssetDatabase.LoadAssetAtPath<AvatarMask>(UpperBodyMaskPath);
             if (upperBodyMask == null)
@@ -122,6 +126,7 @@ namespace GritGud.Editor
                 jumpClip,
                 knifeIdle,
                 knifeStrike,
+                push,
                 shoulderFall,
                 fallOver,
                 upperBodyMask);
@@ -205,7 +210,8 @@ namespace GritGud.Editor
                 LoadAnimationClip(KnifeIdlePath) != null &&
                 LoadAnimationClip(KnifeStrikePath) != null &&
                 LoadAnimationClip(ShoulderFallPath) != null &&
-                LoadAnimationClip(FallOverPath) != null;
+                LoadAnimationClip(FallOverPath) != null &&
+                LoadAnimationClip(PushPath) != null;
         }
 
         private static Dictionary<DefaultActorClipDefinition, AnimationClip>
@@ -292,6 +298,10 @@ namespace GritGud.Editor
                 additive: false);
             ConfigureHumanoidClip(
                 FallOverPath,
+                loop: false,
+                additive: false);
+            ConfigureHumanoidClip(
+                PushPath,
                 loop: false,
                 additive: false);
         }

@@ -73,14 +73,31 @@ namespace GritGud.Application.Gameplay
                 identityId ?? string.Empty,
                 out character);
 
-        public static GameplayPartySave Capture(
-            GameplayPartyProgressionSession progression)
+        public static GameplayPartySave Capture(GameplaySession gameplay)
         {
-            if (progression == null)
-                throw new ArgumentNullException(nameof(progression));
+            if (gameplay == null)
+                throw new ArgumentNullException(nameof(gameplay));
+            PlayerPartyDefinition party = gameplay.Scenario.PlayerParty
+                ?? throw new InvalidOperationException(
+                    "Party persistence requires an authored player party.");
+            var characters = new List<CharacterPersistenceSnapshot>(
+                party.ActorIds.Count);
+            foreach (string actorId in party.ActorIds)
+            {
+                ScenarioActorDefinition definition =
+                    gameplay.Scenario.GetActor(actorId);
+                CharacterProfileDefinition profile = definition.CharacterProfile
+                    ?? throw new InvalidOperationException(
+                        $"Party actor '{actorId}' has no character identity.");
+                GameplayActorSnapshot actor = gameplay.GetActor(actorId);
+                characters.Add(new CharacterPersistenceSnapshot(
+                    profile.IdentityId,
+                    actor.EquippedItemId,
+                    actor.Wounds));
+            }
             return new GameplayPartySave(
                 CurrentSchemaVersion,
-                progression.CapturePersistence());
+                characters);
         }
     }
 
@@ -124,7 +141,6 @@ namespace GritGud.Application.Gameplay
                         $"Party save is missing identity '{profile.IdentityId}'.");
                 }
 
-                ValidateProgression(profile, character.Progression);
                 if (character.EquippedItemId != null)
                 {
                     InventoryItemDefinition item = actor.GetInventoryItem(
@@ -139,94 +155,12 @@ namespace GritGud.Application.Gameplay
             }
         }
 
-        public static void ValidateProgression(
-            CharacterProfileDefinition profile,
-            CharacterProgressionSnapshot progression)
-        {
-            if (profile == null)
-                throw new ArgumentNullException(nameof(profile));
-            if (progression == null)
-                throw new ArgumentNullException(nameof(progression));
-            if (!string.Equals(
-                    profile.IdentityId,
-                    progression.IdentityId,
-                    StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "Saved progression belongs to a different character identity.");
-            }
-
-            var advancementSkills = new HashSet<string>(StringComparer.Ordinal);
-            foreach (CharacterAdvancementOption option in
-                profile.AdvancementOptions)
-            {
-                if (!advancementSkills.Add(option.SkillId))
-                {
-                    throw new InvalidOperationException(
-                        $"Skill '{option.SkillId}' has ambiguous advancement options.");
-                }
-            }
-
-            int spentPoints = 0;
-            foreach (KeyValuePair<string, int> bonus in progression.Bonuses)
-            {
-                CharacterAdvancementOption option = FindAdvancementForSkill(
-                    profile,
-                    bonus.Key);
-                if (option == null)
-                {
-                    throw new InvalidOperationException(
-                        $"Saved skill bonus '{bonus.Key}' has no authored advancement.");
-                }
-                if (bonus.Value > option.MaximumBonus)
-                {
-                    throw new InvalidOperationException(
-                        $"Saved skill bonus '{bonus.Key}' exceeds its authored cap.");
-                }
-                spentPoints = checked(
-                    spentPoints + (bonus.Value * option.PointCost));
-            }
-
-            if (checked(spentPoints + progression.UnspentPoints)
-                != profile.StartingProgressionPoints)
-            {
-                throw new InvalidOperationException(
-                    "Saved progression does not balance against the character's "
-                    + "authored point budget.");
-            }
-        }
-
-        private static CharacterAdvancementOption FindAdvancementForSkill(
-            CharacterProfileDefinition profile,
-            string skillId)
-        {
-            CharacterAdvancementOption found = null;
-            foreach (CharacterAdvancementOption option in
-                profile.AdvancementOptions)
-            {
-                if (!string.Equals(
-                        option.SkillId,
-                        skillId,
-                        StringComparison.Ordinal))
-                {
-                    continue;
-                }
-                if (found != null)
-                {
-                    throw new InvalidOperationException(
-                        $"Skill '{skillId}' has ambiguous advancement options.");
-                }
-                found = option;
-            }
-            return found;
-        }
     }
 
     public sealed class GameplayPartyPersistenceSession : IDisposable
     {
         private readonly IGameplayPartySaveStore store;
         private GameplaySession gameplay;
-        private GameplayPartyProgressionSession progression;
         private bool dirty;
         private bool disposed;
 
@@ -270,9 +204,7 @@ namespace GritGud.Application.Gameplay
             }
         }
 
-        public void Bind(
-            GameplaySession gameplaySession,
-            GameplayPartyProgressionSession progressionSession)
+        public void Bind(GameplaySession gameplaySession)
         {
             ThrowIfDisposed();
             if (gameplay != null)
@@ -280,33 +212,9 @@ namespace GritGud.Application.Gameplay
                     "Party persistence is already bound.");
             gameplay = gameplaySession
                 ?? throw new ArgumentNullException(nameof(gameplaySession));
-            progression = progressionSession
-                ?? throw new ArgumentNullException(nameof(progressionSession));
             gameplay.EquipmentChanged += HandleEquipmentChanged;
             gameplay.ActorCapabilityChanged += HandleActorCapabilityChanged;
             dirty = false;
-        }
-
-        public CharacterAdvancementAvailability EvaluateAdvancement(
-            string actorId,
-            string optionId)
-        {
-            RequireBound();
-            return progression.EvaluateAdvancement(actorId, optionId);
-        }
-
-        public bool TryAdvance(
-            string actorId,
-            string optionId,
-            out CharacterAdvancementFailure failure)
-        {
-            RequireBound();
-            if (!progression.TryAdvance(actorId, optionId, out failure))
-                return false;
-
-            dirty = true;
-            Flush();
-            return true;
         }
 
         public bool Flush()
@@ -317,9 +225,9 @@ namespace GritGud.Application.Gameplay
             RequireBound();
             try
             {
-                store.Save(GameplayPartySave.Capture(progression));
+                store.Save(GameplayPartySave.Capture(gameplay));
                 dirty = false;
-                Report("Saved party progression, equipment, and wounds.");
+                Report("Saved party equipment and wounds.");
                 return true;
             }
             catch (Exception exception)
@@ -340,7 +248,6 @@ namespace GritGud.Application.Gameplay
                 gameplay.ActorCapabilityChanged -= HandleActorCapabilityChanged;
             }
             gameplay = null;
-            progression = null;
             disposed = true;
         }
 
@@ -365,7 +272,7 @@ namespace GritGud.Application.Gameplay
         private void RequireBound()
         {
             ThrowIfDisposed();
-            if (gameplay == null || progression == null)
+            if (gameplay == null)
                 throw new InvalidOperationException(
                     "Party persistence is not bound to gameplay.");
         }

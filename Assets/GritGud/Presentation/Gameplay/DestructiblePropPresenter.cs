@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using UnityEngine;
 
@@ -14,10 +15,22 @@ namespace GritGud.Presentation.Gameplay
             new List<ComponentEnabledState<Renderer>>();
         private readonly List<GameObject> transientDebris =
             new List<GameObject>();
+        private readonly List<ComponentEnabledState<Renderer>>
+            displacementRendererStates =
+                new List<ComponentEnabledState<Renderer>>();
+        private readonly List<Mesh> displacementMeshes = new List<Mesh>();
         private DestructibleFractureProfile fractureProfile;
         private DestructibleFractureChunk[] fractureChunks =
             Array.Empty<DestructibleFractureChunk>();
         private GameObject fractureInstance;
+        private GameObject displacementVisual;
+        private Vector3 displacementStartPosition;
+        private Vector3 displacementTargetPosition;
+        private Quaternion displacementStartRotation;
+        private Quaternion displacementTargetRotation;
+        private DisplacementActionKind displacementActionKind;
+        private float displacementElapsed;
+        private float displacementDuration;
         private string propId;
 
         public bool IsBound => !string.IsNullOrEmpty(propId);
@@ -25,6 +38,13 @@ namespace GritGud.Presentation.Gameplay
         public DestructiblePropState State { get; private set; }
 
         internal int ActiveTransientDebrisCount => transientDebris.Count;
+
+        internal bool IsPresentingDisplacement => displacementVisual != null;
+
+        internal Vector3 DisplacementVisualPosition =>
+            displacementVisual == null
+                ? transform.position
+                : displacementVisual.transform.position;
 
         public void Bind(DestructiblePropSnapshot snapshot) =>
             Bind(snapshot, fracture: null);
@@ -71,6 +91,7 @@ namespace GritGud.Presentation.Gameplay
         public void Present(DestructiblePropSnapshot snapshot)
         {
             ValidateIdentity(snapshot);
+            CompleteDisplacementPresentation();
             transform.SetPositionAndRotation(
                 new Vector3(
                     snapshot.Pose.Position.X,
@@ -100,6 +121,99 @@ namespace GritGud.Presentation.Gameplay
             }
 
             State = snapshot.State;
+        }
+
+        internal void PresentDisplacement(
+            DisplacementRecord record,
+            float durationSeconds)
+        {
+            if (record == null)
+                throw new ArgumentNullException(nameof(record));
+            if (!record.Succeeded ||
+                record.Request.SubjectKind != DisplacementSubjectKind.Prop ||
+                record.PreviousPropState == null ||
+                record.ResultingPropState == null)
+            {
+                throw new ArgumentException(
+                    "Prop displacement presentation requires a successful "
+                    + "prop-state record.",
+                    nameof(record));
+            }
+            if (!string.Equals(
+                    propId,
+                    record.Request.SubjectId,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "A displacement record cannot be presented by another prop.",
+                    nameof(record));
+            }
+            if (float.IsNaN(durationSeconds) ||
+                float.IsInfinity(durationSeconds) ||
+                durationSeconds <= 0f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(durationSeconds));
+            }
+
+            Vector3 startPosition = IsPresentingDisplacement
+                ? displacementVisual.transform.position
+                : ToVector3(record.PreviousPropState.Pose.Position);
+            Quaternion startRotation = IsPresentingDisplacement
+                ? displacementVisual.transform.rotation
+                : ToQuaternion(record.PreviousPropState.Pose);
+            CompleteDisplacementPresentation();
+            CreateDisplacementVisual();
+
+            GameplayPropPose target = record.ResultingPropState.Pose;
+            transform.SetPositionAndRotation(
+                ToVector3(target.Position),
+                ToQuaternion(target));
+            displacementStartPosition = startPosition;
+            displacementTargetPosition = transform.position;
+            displacementStartRotation = startRotation;
+            displacementTargetRotation = transform.rotation;
+            displacementActionKind = record.Request.ActionKind;
+            displacementElapsed = 0f;
+            displacementDuration = durationSeconds;
+            if (displacementVisual != null)
+            {
+                displacementVisual.transform.SetPositionAndRotation(
+                    displacementStartPosition,
+                    displacementStartRotation);
+            }
+        }
+
+        internal void TickDisplacement(float deltaTime)
+        {
+            if (displacementVisual == null)
+                return;
+            if (float.IsNaN(deltaTime) || float.IsInfinity(deltaTime)
+                || deltaTime < 0f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(deltaTime));
+            }
+
+            displacementElapsed = Mathf.Min(
+                displacementDuration,
+                displacementElapsed + deltaTime);
+            float normalized = displacementDuration <= 0f
+                ? 1f
+                : displacementElapsed / displacementDuration;
+            float progress = GameplayDisplacementPresentationTiming
+                .EvaluateSubjectProgress(
+                    displacementActionKind,
+                    normalized);
+            displacementVisual.transform.SetPositionAndRotation(
+                Vector3.LerpUnclamped(
+                    displacementStartPosition,
+                    displacementTargetPosition,
+                    progress),
+                Quaternion.SlerpUnclamped(
+                    displacementStartRotation,
+                    displacementTargetRotation,
+                    progress));
+            if (displacementElapsed >= displacementDuration)
+                CompleteDisplacementPresentation();
         }
 
         internal void PresentDamage(
@@ -132,6 +246,7 @@ namespace GritGud.Presentation.Gameplay
 
         public void Unbind()
         {
+            CompleteDisplacementPresentation();
             ClearTransientDebris();
             SetOriginalEnabled(enabled: true);
             if (fractureInstance != null)
@@ -146,6 +261,111 @@ namespace GritGud.Presentation.Gameplay
             colliderStates.Clear();
             rendererStates.Clear();
         }
+
+        private void CreateDisplacementVisual()
+        {
+            displacementVisual = new GameObject(
+                propId + " [Displacement Visual]");
+            displacementVisual.layer = LayerMask.NameToLayer("Ignore Raycast");
+            displacementVisual.transform.SetPositionAndRotation(
+                transform.position,
+                transform.rotation);
+            displacementVisual.transform.localScale = transform.lossyScale;
+
+            foreach (Renderer source in GetComponentsInChildren<Renderer>(false))
+            {
+                if (source == null || !source.enabled ||
+                    !TryCloneRenderer(source, displacementVisual.transform))
+                {
+                    continue;
+                }
+
+                displacementRendererStates.Add(
+                    new ComponentEnabledState<Renderer>(source, true));
+                source.enabled = false;
+            }
+
+            if (displacementRendererStates.Count == 0)
+            {
+                displacementVisual.SetActive(false);
+                DestroyOwnedObject(displacementVisual);
+                displacementVisual = null;
+            }
+        }
+
+        private bool TryCloneRenderer(Renderer source, Transform visualRoot)
+        {
+            Mesh sharedMesh = null;
+            if (source is MeshRenderer)
+            {
+                MeshFilter sourceFilter = source.GetComponent<MeshFilter>();
+                sharedMesh = sourceFilter?.sharedMesh;
+            }
+            else if (source is SkinnedMeshRenderer skinned)
+            {
+                sharedMesh = new Mesh
+                {
+                    name = source.name + " Displacement Mesh",
+                };
+                skinned.BakeMesh(sharedMesh);
+                displacementMeshes.Add(sharedMesh);
+            }
+
+            if (sharedMesh == null)
+                return false;
+
+            var clone = new GameObject(source.name + " [Displacement]");
+            clone.layer = visualRoot.gameObject.layer;
+            clone.transform.SetPositionAndRotation(
+                source.transform.position,
+                source.transform.rotation);
+            clone.transform.localScale = source.transform.lossyScale;
+            clone.transform.SetParent(visualRoot, worldPositionStays: true);
+            clone.AddComponent<MeshFilter>().sharedMesh = sharedMesh;
+            MeshRenderer renderer = clone.AddComponent<MeshRenderer>();
+            renderer.sharedMaterials = source.sharedMaterials;
+            renderer.shadowCastingMode = source.shadowCastingMode;
+            renderer.receiveShadows = source.receiveShadows;
+            renderer.lightProbeUsage = source.lightProbeUsage;
+            renderer.reflectionProbeUsage = source.reflectionProbeUsage;
+            renderer.motionVectorGenerationMode =
+                source.motionVectorGenerationMode;
+            renderer.sortingLayerID = source.sortingLayerID;
+            renderer.sortingOrder = source.sortingOrder;
+            return true;
+        }
+
+        private void CompleteDisplacementPresentation()
+        {
+            foreach (ComponentEnabledState<Renderer> state in
+                displacementRendererStates)
+            {
+                if (state.Component != null)
+                    state.Component.enabled = state.Enabled;
+            }
+            displacementRendererStates.Clear();
+
+            if (displacementVisual != null)
+            {
+                displacementVisual.SetActive(false);
+                DestroyOwnedObject(displacementVisual);
+            }
+            displacementVisual = null;
+            foreach (Mesh mesh in displacementMeshes)
+                DestroyOwnedObject(mesh);
+            displacementMeshes.Clear();
+            displacementElapsed = 0f;
+            displacementDuration = 0f;
+        }
+
+        private static Vector3 ToVector3(GameplayPosition position) =>
+            new Vector3(position.X, position.Y, position.Z);
+
+        private static Quaternion ToQuaternion(GameplayPropPose pose) =>
+            Quaternion.Euler(
+                pose.PitchDegrees,
+                pose.YawDegrees,
+                pose.RollDegrees);
 
         private void SpawnTransientDebris(ulong detachedMask, long sequence)
         {

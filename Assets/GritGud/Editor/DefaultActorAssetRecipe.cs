@@ -63,6 +63,7 @@ namespace GritGud.Editor
         internal const string ShoulderFallPath =
             "Assets/Mixamo/Shoulder Hit And Fall.fbx";
         internal const string FallOverPath = "Assets/Mixamo/Fall Over.fbx";
+        internal const string PushPath = "Assets/Mixamo/Push.fbx";
         internal const string UpperBodyMaskPath =
             "Assets/Kevin Iglesias/Human Animations/Models/Avatar Masks/Human Body Upper Mask.mask";
         internal const string LowerBodyMaskPath =
@@ -114,6 +115,9 @@ namespace GritGud.Editor
             GritGud.Presentation.Gameplay
                 .GameplayCloseQuartersPresentationTiming
                 .ContactStrikeSeconds;
+        internal const float PushSeconds =
+            GritGud.Application.Gameplay
+                .GameplayDisplacementPresentationTiming.PushSeconds;
         internal const float HitReactionExitNormalizedTime = 0.3f;
         internal const string RagdollTraceSchemaId = "default-humanoid-v1";
         internal const int RagdollTraceSchemaVersion = 1;
@@ -133,7 +137,7 @@ namespace GritGud.Editor
 
         internal static readonly DefaultActorClipDefinition[] ClipDefinitions =
         {
-            new("Idle", "Idles/HumanM@Idle01.fbx", Vector2.zero),
+            new("Neutral Idle", "Idles/HumanM@Idle02.fbx", Vector2.zero),
             new("Walk Forward", "Movement/Walk/HumanM@Walk01_Forward.fbx", new Vector2(0f, 0.6f)),
             new("Walk Backward", "Movement/Walk/HumanM@Walk01_Backward.fbx", new Vector2(0f, -0.6f)),
             new("Walk Left", "Movement/Walk/HumanM@Walk01_Left.fbx", new Vector2(-0.6f, 0f)),

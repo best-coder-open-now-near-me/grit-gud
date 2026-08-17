@@ -4,6 +4,12 @@ using GritGud.Domain.Gameplay;
 
 namespace GritGud.Application.Gameplay
 {
+    public static class GameplayCoreActorAbilities
+    {
+        public const string StanceId = "ability.stance";
+        public const int StanceHotbarSlot = 7;
+    }
+
     public enum GameplayHotbarBindingKind
     {
         InventoryItem,

@@ -132,9 +132,12 @@ Primary character motion remains authored rather than synthesized from weapon
 mount transforms. The private Mixamo overlay supplies `Knife Idle`, `Stabbing`,
 `Push`, `Shoulder Hit And Fall`, and `Fall Over` with stable Unity `.meta`
 files. The project-owned controller and animation profile bind Knife Idle,
-Stabbing, Shoulder Hit And Fall, and Fall Over to melee pose, contact attack,
-hit reaction, and regional incapacitation semantics after Humanoid/in-place
-import validation. `Push` remains available for the authored Push Off pass.
+Stabbing, Push, Shoulder Hit And Fall, and Fall Over to melee pose, contact
+attack, displacement, hit reaction, and regional incapacitation semantics after
+Humanoid/in-place import validation. Push uses a dedicated full-body override
+layer synchronized to deterministic prop-displacement presentation timing;
+Push Off/get-up retains its existing interaction fallback until its own authored
+motion is selected.
 Procedural code remains limited to bounded aim, recoil, IK, and the explicitly
 bounded ragdoll handoff below.
 

@@ -264,6 +264,34 @@ namespace GritGud.PlayMode.Tests
                     Assert.That(view.ReplayActions.CurrentPinState, Is.Null);
                     Assert.That(animation.ReplayAction,
                         Is.EqualTo(ActorAnimationAction.Interact));
+
+                    replay.Present(
+                        new GameplayActorSnapshot(
+                            "player",
+                            new GameplayActorPose(
+                                new GameplayPosition(5f, 0f, 3f),
+                                90f,
+                                ActorStance.Crouched),
+                            new TurnBudget(0, 4f),
+                            new ActorWoundSnapshot(
+                                "player",
+                                headWounds: 0,
+                                torsoWounds: 1,
+                                leftArmWounds: 0,
+                                rightArmWounds: 0,
+                                leftLegWounds: 0,
+                                rightLegWounds: 0,
+                                movementPenalty: 1f)),
+                        new TurnReplayActorActionState(
+                            "player",
+                            TurnReplayActorActionKind.Push,
+                            journalSequence: 7,
+                            normalizedProgress: 0.4f));
+
+                    Assert.That(animation.ReplayAction,
+                        Is.EqualTo(ActorAnimationAction.Push));
+                    Assert.That(animation.ReplayActionProgress,
+                        Is.EqualTo(0.4f).Within(0.001f));
                 }
 
                 Assert.That(actor.transform.position,

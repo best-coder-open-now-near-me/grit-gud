@@ -3,8 +3,9 @@
 The character editor is a standalone runtime authoring surface for reusable
 character identities. Open it from **Character Editor** on the main menu. A
 character owns a recognizable baseline build and starting loadout alongside its
-appearance; live progression, wounds, consumed quantities, and current equipment
-state remain separate campaign/runtime state.
+appearance. It is a pre-level authoring tool, not a progression screen: the game
+has no XP, advancement points, or player-side rating spending. Wounds, consumed
+quantities, and current equipment state remain separate runtime state.
 
 ## Workflow
 
@@ -15,8 +16,8 @@ state remain separate campaign/runtime state.
 4. Drag the preview with either mouse button to orbit, use the mouse wheel to
    zoom, and press **F** to reset and frame the character. **View > Auto Rotate**
    remains available for checking clipping and silhouettes.
-5. Author the four core attributes, starting skills and talents, and constrained
-   progression points under **Attributes** and **Skills**.
+5. Author the four core attributes, starting skills, and talents under
+   **Attributes** and **Skills**.
 6. Add canonical equipment references, quantities, hotbar slots, and the
    initially equipped item under **Loadout**.
 7. Resolve every issue under **Review**, then use **Save Draft** for local work
@@ -117,7 +118,7 @@ dirty-change confirmation. The next UX investments should be:
    should collapse into drawers or tabs at narrow browser widths.
 4. **Catalog depth and rule metadata.** Move the initial skill, talent, and item
    choices into authored catalogs with descriptions, prerequisites, conflicts,
-   archetype packages, and constrained advancement-option editing.
+   and archetype packages for pre-level character authoring.
 5. **Comparison and inspection tools.** Before/after comparison, hide-all by
    slot, lighting/background presets, and head/torso/full-body framing would
    make clipping and silhouette review faster.

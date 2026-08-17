@@ -13,18 +13,16 @@ namespace GritGud.Presentation.Gameplay
         private const float HeaderHeight = 28f;
         private const float MemberHeight = 52f;
         private const float MemberGap = 6f;
-        private static readonly Color PanelColor = GameplayVisualPalette.Panel;
-        private static readonly Color BorderColor = GameplayVisualPalette.WithAlpha(
-            GameplayVisualPalette.Border,
-            0.34f);
+        private static readonly Color PanelColor = GameplayVisualPalette.HudPanel;
+        private static readonly Color BorderColor = GameplayVisualPalette.HudBorder;
         private static readonly Color SelectedColor =
-            GameplayVisualPalette.SignalOrangeGlow;
+            GameplayVisualPalette.HudSecondarySignal;
         private static readonly Color CommandColor =
-            GameplayVisualPalette.SignalBlueGlow;
+            GameplayVisualPalette.HudPrimarySignal;
         private static readonly Color PrimaryTextColor =
-            GameplayVisualPalette.TextPrimary;
+            GameplayVisualPalette.HudTextPrimary;
         private static readonly Color SecondaryTextColor =
-            GameplayVisualPalette.TextSecondary;
+            GameplayVisualPalette.HudTextSecondary;
 
         private GameplaySession gameplay;
         private GameplayPartyControlSession partyControl;
@@ -39,10 +37,10 @@ namespace GritGud.Presentation.Gameplay
         private Texture2D memberHoverTexture;
         private Texture2D memberActiveTexture;
         private Texture2D whiteTexture;
+        private GameplayHudTextureSet textureSet;
         private string status = string.Empty;
         private Func<bool> replayAvailable;
         private Action replayRequested;
-        private Action<string> advancementRequested;
 
         public bool IsVisible => enabled;
 
@@ -56,8 +54,7 @@ namespace GritGud.Presentation.Gameplay
             GameplayPartyControlSession control,
             IGameplayInputSource authoritativeInputSource,
             Func<bool> canOpenReplay = null,
-            Action openReplay = null,
-            Action<string> openAdvancement = null)
+            Action openReplay = null)
         {
             Unbind();
             gameplay = session ?? throw new ArgumentNullException(nameof(session));
@@ -66,7 +63,6 @@ namespace GritGud.Presentation.Gameplay
                 nameof(authoritativeInputSource));
             replayAvailable = canOpenReplay;
             replayRequested = openReplay;
-            advancementRequested = openAdvancement;
             status = string.Empty;
             partyControl.ControlChanged += HandleControlChanged;
             enabled = true;
@@ -82,7 +78,6 @@ namespace GritGud.Presentation.Gameplay
             inputSource = null;
             replayAvailable = null;
             replayRequested = null;
-            advancementRequested = null;
             status = string.Empty;
             enabled = false;
         }
@@ -96,9 +91,7 @@ namespace GritGud.Presentation.Gameplay
         internal bool ContainsInteractiveScreenPoint(Vector2 screenPoint)
         {
             GameplayPartyHudModel model = CurrentModel;
-            if (model == null
-                || (model.Members.Count <= 1
-                    && advancementRequested == null))
+            if (model == null)
                 return false;
 
             float uiScale = CalculateUiScale();
@@ -132,9 +125,7 @@ namespace GritGud.Presentation.Gameplay
         private void OnGUI()
         {
             GameplayPartyHudModel model = CurrentModel;
-            if (model == null
-                || (model.Members.Count <= 1
-                    && advancementRequested == null))
+            if (model == null)
                 return;
 
             EnsureStyles();
@@ -206,7 +197,7 @@ namespace GritGud.Presentation.Gameplay
         {
             bool hasReplay = member.Commanding
                 && replayAvailable?.Invoke() == true;
-            bool hasActionRail = advancementRequested != null || hasReplay;
+            bool hasActionRail = hasReplay;
             Rect selectionRectangle = hasActionRail
                 ? new Rect(
                     rectangle.x,
@@ -276,18 +267,6 @@ namespace GritGud.Presentation.Gameplay
             {
                 replayRequested?.Invoke();
             }
-            if (advancementRequested != null
-                && GUI.Button(
-                    new Rect(
-                        rectangle.xMax - 68f,
-                        rectangle.y + (hasReplay ? 29f : 17f),
-                        58f,
-                        18f),
-                    "ADVANCE",
-                    actionButtonStyle))
-            {
-                advancementRequested(member.ActorId);
-            }
         }
 
         private void HandleControlChanged(GameplayPartyControlSnapshot _)
@@ -297,13 +276,14 @@ namespace GritGud.Presentation.Gameplay
 
         private void EnsureStyles()
         {
-            if (whiteTexture != null)
+            if (textureSet != null)
                 return;
 
-            whiteTexture = Texture2D.whiteTexture;
-            memberNormalTexture = CreateTexture(GameplayVisualPalette.ButtonNormal);
-            memberHoverTexture = CreateTexture(GameplayVisualPalette.ButtonHover);
-            memberActiveTexture = CreateTexture(GameplayVisualPalette.ButtonActive);
+            textureSet = new GameplayHudTextureSet();
+            whiteTexture = textureSet.White;
+            memberNormalTexture = textureSet.ButtonNormal;
+            memberHoverTexture = textureSet.ButtonHover;
+            memberActiveTexture = textureSet.ButtonActive;
             headerStyle = new GUIStyle(GUI.skin.label)
             {
                 alignment = TextAnchor.MiddleLeft,
@@ -402,23 +382,15 @@ namespace GritGud.Presentation.Gameplay
             }
         }
 
-        private static Texture2D CreateTexture(Color color)
-        {
-            var texture = new Texture2D(1, 1)
-            {
-                hideFlags = HideFlags.HideAndDontSave,
-            };
-            texture.SetPixel(0, 0, color);
-            texture.Apply();
-            return texture;
-        }
-
         private void OnDestroy()
         {
             Unbind();
-            GameplayObjectLifecycle.Destroy(memberNormalTexture);
-            GameplayObjectLifecycle.Destroy(memberHoverTexture);
-            GameplayObjectLifecycle.Destroy(memberActiveTexture);
+            textureSet?.Dispose();
+            textureSet = null;
+            memberNormalTexture = null;
+            memberHoverTexture = null;
+            memberActiveTexture = null;
+            whiteTexture = null;
         }
     }
 }

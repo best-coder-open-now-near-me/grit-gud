@@ -77,6 +77,18 @@ namespace GritGud.Domain.Tests.Gameplay
                 Is.True);
             Assert.That(turn.CommandBar.Hints.Any(
                 hint => hint.Control == GameplayControl.Attack), Is.True);
+            Assert.That(
+                turn.CommandBar.Hints.Single(
+                    hint => hint.Control == GameplayControl.UndoRoute).Label,
+                Is.EqualTo("RETRACT"));
+            Assert.That(
+                turn.CommandBar.Hints.Single(
+                    hint => hint.Control == GameplayControl.CancelRoute).Label,
+                Is.EqualTo("CLEAR ROUTE"));
+            Assert.That(
+                turn.CommandBar.Hints.Single(
+                    hint => hint.Control == GameplayControl.ConfirmRoute).Label,
+                Is.EqualTo("MOVE"));
         }
 
         [Test]

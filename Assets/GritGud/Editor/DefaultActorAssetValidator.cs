@@ -26,6 +26,8 @@ namespace GritGud.Editor
                     controller) &&
                 DefaultActorControllerValidator.HasRequiredTraversalLayer(
                     controller) &&
+                DefaultActorControllerValidator.HasRequiredDisplacementLayer(
+                    controller) &&
                 DefaultActorControllerValidator.HasRequiredReactionLayer(
                     controller) &&
                 AssetDatabase.LoadAssetAtPath<AvatarMask>(

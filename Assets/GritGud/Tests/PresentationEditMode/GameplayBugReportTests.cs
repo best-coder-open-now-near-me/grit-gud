@@ -126,11 +126,10 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
-        public void FormatterCapturesPartyControlAndIdentityBoundProgression()
+        public void FormatterCapturesPartyControlWithoutProgressionState()
         {
             GameplaySession session = CreatePartySession();
             using var control = new GameplayPartyControlSession(session);
-            var progression = new GameplayPartyProgressionSession(session);
 
             Assert.That(control.TrySelectActor("vale", out _), Is.True);
             string report = GameplayBugReportFormatter.Format(
@@ -143,17 +142,14 @@ namespace GritGud.Presentation.Tests
                     "Select a party member."),
                 default(GameplayBugReportRouteState),
                 CreateRuntime(),
-                control.Snapshot,
-                progression);
+                control.Snapshot);
 
             Assert.That(report, Does.Contain("Player party: mara, vale"));
             Assert.That(report, Does.Contain("Selected party actor: vale"));
             Assert.That(report, Does.Contain("Command party actor: vale"));
             Assert.That(report, Does.Contain("Party defeated: no"));
-            Assert.That(report, Does.Contain(
-                "mara | identity=character.mara | unspent=0 | bonuses=<none>"));
-            Assert.That(report, Does.Contain(
-                "vale | identity=character.vale | unspent=0 | bonuses=<none>"));
+            Assert.That(report, Does.Not.Contain("progression"));
+            Assert.That(report, Does.Not.Contain("unspent"));
         }
 
         [Test]
@@ -345,9 +341,7 @@ namespace GritGud.Presentation.Tests
                         new CharacterRating(CoreAttributeIds.Charisma, 3),
                     },
                     Array.Empty<CharacterRating>(),
-                    Array.Empty<string>(),
-                    0,
-                    Array.Empty<CharacterAdvancementOption>());
+                    Array.Empty<string>());
             var mara = new ScenarioActorDefinition(
                 "mara",
                 10,

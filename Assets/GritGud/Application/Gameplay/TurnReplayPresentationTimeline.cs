@@ -140,6 +140,7 @@ namespace GritGud.Application.Gameplay
         Jump = 7,
         Vault = 8,
         Mantle = 9,
+        Push = 10,
     }
 
     public sealed class TurnReplayActorActionState
@@ -271,9 +272,7 @@ namespace GritGud.Application.Gameplay
                 Add(
                     states,
                     displaced.Displacement.Request.ActorId,
-                    pin != null && pin.ReleasesPin
-                        ? TurnReplayActorActionKind.GetUp
-                        : TurnReplayActorActionKind.Displacement,
+                    MapDisplacementKind(displaced.Displacement),
                     entry.Sequence,
                     progress);
                 if (displaced.Displacement.Succeeded
@@ -390,7 +389,7 @@ namespace GritGud.Application.Gameplay
                         displacement.Displacement.PinTransition;
                     primary = pin != null && pin.ReleasesPin
                         ? TurnReplayActorActionKind.GetUp
-                        : TurnReplayActorActionKind.Displacement;
+                        : MapDisplacementKind(displacement.Displacement);
                     if (displacement.Displacement.Succeeded
                         && displacement.Displacement.Request.SubjectKind
                             == DisplacementSubjectKind.Combatant)
@@ -446,6 +445,26 @@ namespace GritGud.Application.Gameplay
                     reaction.Value.ContactReaction,
                     reaction.Value.ResultingWoundCount,
                     reaction.Value.HitRegion));
+            }
+        }
+
+        private static TurnReplayActorActionKind MapDisplacementKind(
+            DisplacementRecord record)
+        {
+            if (record.PinTransition?.ReleasesPin == true ||
+                record.Request.ActionKind == DisplacementActionKind.PushOff)
+            {
+                return TurnReplayActorActionKind.GetUp;
+            }
+
+            switch (record.Request.ActionKind)
+            {
+                case DisplacementActionKind.Push:
+                    return TurnReplayActorActionKind.Push;
+                case DisplacementActionKind.Throw:
+                    return TurnReplayActorActionKind.Throw;
+                default:
+                    return TurnReplayActorActionKind.Displacement;
             }
         }
 

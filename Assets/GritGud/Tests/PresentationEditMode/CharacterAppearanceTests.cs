@@ -128,6 +128,31 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void CharacterDocumentsDoNotExposeRuntimeProgressionFields()
+        {
+            const string legacyWithMistakenProgression =
+                "{\"schemaVersion\":2,"
+                + "\"characterId\":\"character.no-progression\","
+                + "\"displayName\":\"No Progression\","
+                + "\"appearance\":{\"bodyId\":\"body.military-male-01\","
+                + "\"accessories\":[]},"
+                + "\"build\":{\"archetype\":\"field-operative\","
+                + "\"startingProgressionPoints\":7,"
+                + "\"advancementOptions\":[]}}";
+            var serializer = new UnityCharacterJsonSerializer();
+
+            CharacterDocument restored = serializer.Deserialize(
+                legacyWithMistakenProgression);
+            string normalized = serializer.Serialize(restored);
+
+            Assert.That(normalized, Does.Not.Contain("startingProgressionPoints"));
+            Assert.That(normalized, Does.Not.Contain("advancementOptions"));
+            Assert.That(
+                typeof(CharacterBuildData).GetField("startingProgressionPoints"),
+                Is.Null);
+        }
+
+        [Test]
         public void ProjectorSelectsBodyAndParentsAccessoriesToHumanoidSocket()
         {
             CharacterAppearanceCatalog catalog = CharacterAppearanceCatalog.LoadDefault();

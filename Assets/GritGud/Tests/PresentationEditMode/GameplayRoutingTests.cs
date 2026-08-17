@@ -270,6 +270,8 @@ namespace GritGud.Presentation.Tests
                 GameplayInputController inputController =
                     bootstrap.GetComponent<GameplayInputController>();
                 GameplayHud hud = bootstrap.GetComponent<GameplayHud>();
+                GameplayPartyHud partyHud =
+                    bootstrap.GetComponent<GameplayPartyHud>();
                 GameplayDialogueDrawer dialogueDrawer =
                     bootstrap.GetComponent<GameplayDialogueDrawer>();
                 GameplaySessionPresenter sessionPresenter =
@@ -282,6 +284,8 @@ namespace GritGud.Presentation.Tests
                     bootstrap.GetComponent<GameplayAttackController>();
                 GameplayEquipmentController equipment =
                     bootstrap.GetComponent<GameplayEquipmentController>();
+                GameplayHotbarController hotbar =
+                    bootstrap.GetComponent<GameplayHotbarController>();
                 GameplayProjectileController projectiles =
                     bootstrap.GetComponent<GameplayProjectileController>();
                 GameplayObjectivePresenter objectivePresenter =
@@ -319,6 +323,11 @@ namespace GritGud.Presentation.Tests
                     Is.EqualTo(ApplicationMode.Gameplay));
                 Assert.That(gameplay.IsRunning, Is.True);
                 Assert.That(hud, Is.Not.Null);
+                Assert.That(partyHud, Is.Not.Null);
+                Assert.That(
+                    bootstrap.GetComponents<MonoBehaviour>()
+                        .Select(component => component.GetType().Name),
+                    Does.Not.Contain("GameplayAdvancementHud"));
                 Assert.That(GameplayHud.HotbarSlotCount, Is.EqualTo(8));
                 Assert.That(hud.IsVisible, Is.True);
                 Assert.That(hud.IsCommandBarVisible, Is.True);
@@ -356,6 +365,29 @@ namespace GritGud.Presentation.Tests
                 Assert.That(actions, Is.Not.Null);
                 Assert.That(attacks, Is.Not.Null);
                 Assert.That(equipment, Is.Not.Null);
+                Assert.That(hotbar, Is.Not.Null);
+                Assert.That(
+                    hotbar.Bindings[GameplayCoreActorAbilities.StanceHotbarSlot],
+                    Is.EqualTo(new GameplayHotbarBinding(
+                        GameplayHotbarBindingKind.ActorAbility,
+                        GameplayCoreActorAbilities.StanceId)));
+                Assert.That(
+                    gameplay.Session.GetActor("player").Pose.Stance,
+                    Is.EqualTo(ActorStance.Standing));
+                Assert.That(
+                    hotbar.TryActivateSlot(
+                        GameplayCoreActorAbilities.StanceHotbarSlot),
+                    Is.True);
+                Assert.That(
+                    gameplay.Session.GetActor("player").Pose.Stance,
+                    Is.EqualTo(ActorStance.Crouched));
+                Assert.That(
+                    hotbar.TryActivateSlot(
+                        GameplayCoreActorAbilities.StanceHotbarSlot),
+                    Is.True);
+                Assert.That(
+                    gameplay.Session.GetActor("player").Pose.Stance,
+                    Is.EqualTo(ActorStance.Standing));
                 Assert.That(projectiles, Is.Not.Null);
                 Assert.That(actions.TurnModeExitConstraintCount,
                     Is.EqualTo(1));

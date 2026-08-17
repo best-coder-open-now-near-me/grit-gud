@@ -116,16 +116,7 @@
           { "id": "skill.fieldcraft", "rating": 3 },
           { "id": "skill.close-quarters", "rating": 5 }
         ],
-        "talentIds": ["talent.steady-hands", "talent.combat-awareness", "talent.leverage"],
-        "startingProgressionPoints": 1,
-        "advancementOptions": [
-          {
-            "id": "advance.demolitions-drill",
-            "skillId": "skill.demolitions",
-            "pointCost": 1,
-            "maximumBonus": 1
-          }
-        ]
+        "talentIds": ["talent.steady-hands", "talent.combat-awareness", "talent.leverage"]
       },
       "initiallyEquippedItemId": "weapon.rifle",
       "inventory": [
@@ -402,16 +393,7 @@
           { "id": "skill.fieldcraft", "rating": 5 },
           { "id": "skill.close-quarters", "rating": 3 }
         ],
-        "talentIds": ["talent.combat-awareness"],
-        "startingProgressionPoints": 1,
-        "advancementOptions": [
-          {
-            "id": "advance.fieldcraft-drill",
-            "skillId": "skill.fieldcraft",
-            "pointCost": 1,
-            "maximumBonus": 1
-          }
-        ]
+        "talentIds": ["talent.combat-awareness"]
       },
       "initiallyEquippedItemId": "weapon.rifle",
       "inventory": [
@@ -585,9 +567,7 @@
           { "id": "skill.firearms", "rating": 3 },
           { "id": "skill.close-quarters", "rating": 4 }
         ],
-        "talentIds": [],
-        "startingProgressionPoints": 0,
-        "advancementOptions": []
+        "talentIds": []
       },
       "initiallyEquippedItemId": "weapon.rifle",
       "inventory": [

@@ -114,23 +114,6 @@ namespace GritGud.Domain.Characters
     }
 
     [Serializable]
-    public sealed class CharacterAdvancementData
-    {
-        public string id = string.Empty;
-        public string skillId = string.Empty;
-        public int pointCost = 1;
-        public int maximumBonus = 1;
-
-        public CharacterAdvancementData DeepCopy() => new CharacterAdvancementData
-        {
-            id = id ?? string.Empty,
-            skillId = skillId ?? string.Empty,
-            pointCost = pointCost,
-            maximumBonus = maximumBonus,
-        };
-    }
-
-    [Serializable]
     public sealed class CharacterBuildData
     {
         public string archetype = "field-operative";
@@ -140,9 +123,6 @@ namespace GritGud.Domain.Characters
             new CharacterRatingData { id = CharacterSkillIds.CloseQuarters, rating = 1 },
         };
         public List<string> talentIds = new List<string>();
-        public int startingProgressionPoints;
-        public List<CharacterAdvancementData> advancementOptions =
-            new List<CharacterAdvancementData>();
 
         public static List<CharacterRatingData> CreateDefaultAttributes() =>
             new List<CharacterRatingData>
@@ -161,8 +141,6 @@ namespace GritGud.Domain.Characters
             talentIds = talentIds ?? new List<string>();
             for (int index = 0; index < talentIds.Count; index++)
                 talentIds[index] = talentIds[index]?.Trim() ?? string.Empty;
-            advancementOptions = advancementOptions
-                ?? new List<CharacterAdvancementData>();
         }
 
         public int GetRating(IReadOnlyList<CharacterRatingData> ratings, string id)
@@ -196,16 +174,11 @@ namespace GritGud.Domain.Characters
                 attributes = new List<CharacterRatingData>(),
                 skills = new List<CharacterRatingData>(),
                 talentIds = talentIds == null ? new List<string>() : new List<string>(talentIds),
-                startingProgressionPoints = startingProgressionPoints,
-                advancementOptions = new List<CharacterAdvancementData>(),
             };
             foreach (CharacterRatingData value in attributes ?? new List<CharacterRatingData>())
                 copy.attributes.Add(value?.DeepCopy());
             foreach (CharacterRatingData value in skills ?? new List<CharacterRatingData>())
                 copy.skills.Add(value?.DeepCopy());
-            foreach (CharacterAdvancementData value in advancementOptions
-                ?? new List<CharacterAdvancementData>())
-                copy.advancementOptions.Add(value?.DeepCopy());
             return copy;
         }
     }

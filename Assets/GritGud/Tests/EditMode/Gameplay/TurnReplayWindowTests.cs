@@ -309,9 +309,197 @@ namespace GritGud.Domain.Tests.Gameplay
 
             Assert.That(states, Has.Count.EqualTo(2));
             Assert.That(states.Single(value => value.ActorId == "mara").Kind,
-                Is.EqualTo(TurnReplayActorActionKind.Displacement));
+                Is.EqualTo(TurnReplayActorActionKind.Push));
             Assert.That(states.Single(value => value.ActorId == "raider").Kind,
                 Is.EqualTo(TurnReplayActorActionKind.Pinned));
+            Assert.That(
+                displaced.DurationSeconds,
+                Is.EqualTo(GameplayDisplacementPresentationTiming.PushSeconds));
+        }
+
+        [Test]
+        public void PushPresentationLivesOnTheDisplacementEvidenceOnly()
+        {
+            var request = new DisplacementRequest(
+                "mara",
+                "close-quarters.push",
+                "crate",
+                DisplacementSubjectKind.Prop,
+                35f,
+                new GameplayPosition(2f, 0f, 0f),
+                DisplacementActionKind.Push);
+            var record = new DisplacementRecord(
+                1,
+                request,
+                new PropDisplacementState(
+                    new GameplayPropPose(
+                        new GameplayPosition(0f, 0f, 0f),
+                        0f,
+                        0f,
+                        0f),
+                    DestructiblePropPosture.Upright),
+                new PropDisplacementState(
+                    new GameplayPropPose(
+                        new GameplayPosition(2f, 0f, 0f),
+                        0f,
+                        90f,
+                        0f),
+                    DestructiblePropPosture.Upright));
+            var budget = new TurnBudget(4, 8f);
+            var action = new GameplayActionRecord(
+                1,
+                new GameplayActionRequest(
+                    "mara",
+                    "close-quarters.push",
+                    "crate"),
+                new ActionCost(1, 0f, ActionMobility.Set),
+                budget,
+                new TurnBudget(3, 8f),
+                new GameplayActionOutcome[]
+                {
+                    new DisplacementActionOutcome(record),
+                });
+            var replay = new TurnReplayWindow(
+                "mara",
+                new[]
+                {
+                    new TurnReplaySegment(
+                        1,
+                        "mara",
+                        new GameplayJournalEntry[]
+                        {
+                            new ActionResolvedJournalEntry(1, action),
+                            new DisplacementResolvedJournalEntry(2, record),
+                        }),
+                });
+            var timeline = new TurnReplayEventTimeline(replay);
+
+            Assert.That(timeline.Events[0].DurationSeconds, Is.Zero);
+            Assert.That(
+                timeline.Events[1].DurationSeconds,
+                Is.EqualTo(GameplayDisplacementPresentationTiming.PushSeconds));
+            TurnReplayActorActionState state =
+                TurnReplayActorActionProjector.Project(
+                    timeline,
+                    timeline.Events[1].StartSeconds
+                        + (timeline.Events[1].DurationSeconds * 0.5f))
+                .Single();
+            Assert.That(state.Kind, Is.EqualTo(TurnReplayActorActionKind.Push));
+        }
+
+        [Test]
+        public void TimedWorldSamplerInterpolatesPushWithoutMutatingEndpoints()
+        {
+            GameplaySession session = CreateSession();
+            var previousPose = new GameplayPropPose(
+                new GameplayPosition(0f, 0f, 0f),
+                0f,
+                0f,
+                0f);
+            var resultingPose = new GameplayPropPose(
+                new GameplayPosition(2f, 0f, 0f),
+                0f,
+                90f,
+                0f);
+            var previous = new DestructiblePropSnapshot(
+                "crate",
+                DestructiblePropState.Intact,
+                10f,
+                10f,
+                previousPose,
+                DestructiblePropPosture.Upright);
+            var resulting = new DestructiblePropSnapshot(
+                "crate",
+                DestructiblePropState.Intact,
+                10f,
+                10f,
+                resultingPose,
+                DestructiblePropPosture.Upright);
+            GameplayCombatStateSnapshot startState =
+                GameplayCombatStateCapture.Capture(
+                    session,
+                    new DestructiblePropSession(new[]
+                    {
+                        new DestructiblePropDefinition(
+                            "crate",
+                            10f,
+                            DestructiblePropState.Intact,
+                            previousPose,
+                            DestructiblePropPosture.Upright),
+                    }));
+            var record = new DisplacementRecord(
+                1,
+                new DisplacementRequest(
+                    "mara",
+                    "push",
+                    "crate",
+                    DisplacementSubjectKind.Prop,
+                    30f,
+                    resultingPose.Position,
+                    DisplacementActionKind.Push),
+                new PropDisplacementState(
+                    previousPose,
+                    DestructiblePropPosture.Upright),
+                new PropDisplacementState(
+                    resultingPose,
+                    DestructiblePropPosture.Upright));
+            var replay = new TurnReplayWindow(
+                "mara",
+                new[]
+                {
+                    new TurnReplaySegment(
+                        1,
+                        "mara",
+                        new GameplayJournalEntry[]
+                        {
+                            new DisplacementResolvedJournalEntry(1, record),
+                        }),
+                });
+            GameplayCombatStateSnapshot endState = WithJournalSequence(
+                startState,
+                1,
+                new[] { resulting });
+            var states = new TurnReplayStateWindow(
+                replay,
+                new GameplayCombatStateCheckpoint(0, startState),
+                new[]
+                {
+                    new GameplayCombatStateCheckpoint(1, endState),
+                });
+            var timeline = new TurnReplayEventTimeline(replay);
+
+            TurnReplayWorldStateSample contact =
+                TurnReplayWorldStateSampler.SampleAtTime(
+                    states,
+                    timeline,
+                    GameplayDisplacementPresentationTiming.PushSeconds
+                        * GameplayDisplacementPresentationTiming
+                            .PushContactNormalizedTime);
+            TurnReplayWorldStateSample middle =
+                TurnReplayWorldStateSampler.SampleAtTime(
+                    states,
+                    timeline,
+                    GameplayDisplacementPresentationTiming.PushSeconds * 0.5f);
+            TurnReplayWorldStateSample end =
+                TurnReplayWorldStateSampler.SampleAtTime(
+                    states,
+                    timeline,
+                    GameplayDisplacementPresentationTiming.PushSeconds);
+
+            Assert.That(
+                contact.Destructibles.Single().Pose.Position.X,
+                Is.EqualTo(0f).Within(0.001f));
+            Assert.That(
+                middle.Destructibles.Single().Pose.Position.X,
+                Is.InRange(0.1f, 1.9f));
+            Assert.That(
+                middle.Destructibles.Single().Pose.YawDegrees,
+                Is.InRange(1f, 89f));
+            Assert.That(
+                end.Destructibles.Single().Pose.Position.X,
+                Is.EqualTo(2f).Within(0.001f));
+            Assert.That(previous.Pose.Position.X, Is.Zero);
+            Assert.That(resulting.Pose.Position.X, Is.EqualTo(2f));
         }
 
         [Test]
@@ -768,6 +956,38 @@ namespace GritGud.Domain.Tests.Gameplay
                     CreateActor("guard", 6),
                 },
                 System.Array.Empty<ScenarioObjectiveDefinition>()));
+        }
+
+        private static GameplayCombatStateSnapshot WithJournalSequence(
+            GameplayCombatStateSnapshot source,
+            long sequence,
+            IEnumerable<DestructiblePropSnapshot> destructibles)
+        {
+            GameplaySessionStateSnapshot state = source.Session;
+            var session = new GameplaySessionStateSnapshot(
+                state.ScenarioId,
+                state.Mode,
+                state.Operation,
+                state.TurnContext,
+                state.EncounterActive,
+                state.EncounterCompletionRequested,
+                state.ActiveActorId,
+                state.TurnPhase,
+                state.Actors,
+                state.InitiativeOrder,
+                state.Objectives,
+                state.EmergencyResponders,
+                state.EmergencyResponderIndex,
+                state.EmergencyResumeActorId,
+                state.LastActionSequence,
+                state.LastTurnSequence,
+                sequence);
+            return new GameplayCombatStateSnapshot(
+                session,
+                destructibles,
+                source.Vehicles,
+                source.Projectiles,
+                source.SmokeFields);
         }
 
         private static ScenarioActorDefinition CreateActor(

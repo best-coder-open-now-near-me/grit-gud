@@ -63,6 +63,7 @@ namespace GritGud.Editor
                 ActorAnimationParameters.EmptyHandsStateName,
                 string.Empty,
                 EmptyPoseValue,
+                poseLayerWeight: 0f,
                 recoilPlaybackSpeed: 1f,
                 recoilLayerWeight: 0f,
                 recoilKickDegrees: 0f,
@@ -73,6 +74,7 @@ namespace GritGud.Editor
                 ActorAnimationParameters.RifleAimStateName,
                 ActorAnimationParameters.RifleRecoilStateName,
                 RiflePoseValue,
+                poseLayerWeight: WeaponPoseLayerWeight,
                 recoilPlaybackSpeed: RifleRecoilPlaybackSpeed,
                 recoilLayerWeight: 0.8f,
                 recoilKickDegrees: 9f,
@@ -83,6 +85,7 @@ namespace GritGud.Editor
                 ActorAnimationParameters.LauncherAimStateName,
                 ActorAnimationParameters.LauncherRecoilStateName,
                 LauncherPoseValue,
+                poseLayerWeight: WeaponPoseLayerWeight,
                 recoilPlaybackSpeed: LauncherRecoilPlaybackSpeed,
                 recoilLayerWeight: 1f,
                 recoilKickDegrees: 14f,
@@ -93,13 +96,14 @@ namespace GritGud.Editor
                 ActorAnimationParameters.KnifeIdleStateName,
                 string.Empty,
                 MeleePoseValue,
+                poseLayerWeight: WeaponPoseLayerWeight,
                 recoilPlaybackSpeed: 1f,
                 recoilLayerWeight: 0f,
                 recoilKickDegrees: 0f,
                 recoilHoldSeconds: 0f,
                 recoilReturnSeconds: 0.18f);
 
-            if (profile.ActionBindings.Count != 7 ||
+            if (profile.ActionBindings.Count != 8 ||
                 !profile.TryGetActionBinding(
                     ActorAnimationAction.Interact,
                     out ActorAnimationActionBinding interaction) ||
@@ -149,7 +153,12 @@ namespace GritGud.Editor
                     profile,
                     ActorAnimationAction.IncapacitateShoulder,
                     ActorAnimationParameters.ReactionLayerName,
-                    ActorAnimationParameters.ShoulderFallStateName))
+                    ActorAnimationParameters.ShoulderFallStateName) ||
+                !IsStateBinding(
+                    profile,
+                    ActorAnimationAction.Push,
+                    ActorAnimationParameters.DisplacementLayerName,
+                    ActorAnimationParameters.PushStateName))
             {
                 throw new InvalidOperationException(
                     "The default animation profile requires its authored "
@@ -178,6 +187,7 @@ namespace GritGud.Editor
             string poseStateName,
             string recoilStateName,
             int animatorPoseValue,
+            float poseLayerWeight,
             float recoilPlaybackSpeed,
             float recoilLayerWeight,
             float recoilKickDegrees,
@@ -191,7 +201,7 @@ namespace GritGud.Editor
                     set.RecoilPlaybackSpeed - recoilPlaybackSpeed) > 0.001f ||
                 Mathf.Abs(
                     set.PoseLayerWeight -
-                    WeaponPoseLayerWeight) > 0.001f ||
+                    poseLayerWeight) > 0.001f ||
                 Mathf.Abs(
                     set.PoseTransitionSeconds -
                     WeaponPoseTransitionSeconds) > 0.001f ||

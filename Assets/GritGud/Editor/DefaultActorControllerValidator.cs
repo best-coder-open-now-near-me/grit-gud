@@ -48,6 +48,7 @@ namespace GritGud.Editor
             ValidateRecoilLayer(controller);
             ValidateActionLayer(controller);
             ValidateTraversalLayer(controller);
+            ValidateDisplacementLayer(controller);
             ValidateReactionLayer(controller);
         }
 
@@ -163,6 +164,25 @@ namespace GritGud.Editor
                 FindState(
                     layer.stateMachine,
                     ActorAnimationParameters.ShoulderFallStateName) != null;
+        }
+
+        internal static bool HasRequiredDisplacementLayer(
+            AnimatorController controller)
+        {
+            AnimatorControllerLayer layer = FindLayer(
+                controller,
+                ActorAnimationParameters.DisplacementLayerName);
+            return layer != null &&
+                layer.avatarMask == null &&
+                layer.blendingMode == AnimatorLayerBlendingMode.Override &&
+                !layer.iKPass &&
+                Mathf.Abs(layer.defaultWeight) <= 0.001f &&
+                HasActionLayerReleaseBehaviour(FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.NoDisplacementStateName)) &&
+                FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.PushStateName) != null;
         }
 
         private static void ValidateParameters(AnimatorController controller)
@@ -619,6 +639,44 @@ namespace GritGud.Editor
                 throw new InvalidOperationException(
                     "Actor reactions require a full-body override layer, "
                     + "a recovering hit reaction, and persistent authored falls.");
+            }
+        }
+
+        private static void ValidateDisplacementLayer(
+            AnimatorController controller)
+        {
+            AnimatorControllerLayer layer = FindLayer(
+                controller,
+                ActorAnimationParameters.DisplacementLayerName);
+            AnimatorState idle = layer != null
+                ? FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.NoDisplacementStateName)
+                : null;
+            AnimatorState push = layer != null
+                ? FindState(
+                    layer.stateMachine,
+                    ActorAnimationParameters.PushStateName)
+                : null;
+            AnimationClip pushClip = LoadAnimationClip(PushPath);
+            if (layer == null || layer.avatarMask != null ||
+                layer.blendingMode != AnimatorLayerBlendingMode.Override ||
+                layer.iKPass ||
+                Mathf.Abs(layer.defaultWeight) > 0.001f ||
+                idle == null || push == null || pushClip == null ||
+                layer.stateMachine.defaultState != idle ||
+                idle.motion != null ||
+                !HasActionLayerReleaseBehaviour(idle) ||
+                push.motion != pushClip ||
+                Mathf.Abs(push.speed - pushClip.length / PushSeconds) > 0.001f ||
+                !HasActionReturnTransition(
+                    push,
+                    idle,
+                    ActionExitNormalizedTime))
+            {
+                throw new InvalidOperationException(
+                    "Actor displacement requires a full-body override layer, "
+                    + "the authored Push motion, and a self-releasing return.");
             }
         }
 

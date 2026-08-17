@@ -21,6 +21,7 @@ namespace GritGud.Presentation.Gameplay
         private readonly Dictionary<string, Transform> subjectRoots =
             new Dictionary<string, Transform>(StringComparer.Ordinal);
         private GameplaySession gameplaySession;
+        private GameplayDestructibleController destructibles;
         private GameplayWorldRegistry registry;
         private GameplayDialogueLog dialogue;
         private GameplayScenarioAssembly scenario;
@@ -234,6 +235,7 @@ namespace GritGud.Presentation.Gameplay
 
             Unbind();
             gameplaySession = gameplay;
+            this.destructibles = destructibles;
             dialogue = dialogueLog ?? throw new ArgumentNullException(
                 nameof(dialogueLog));
             scenario = scenarioAssembly ??
@@ -492,6 +494,7 @@ namespace GritGud.Presentation.Gameplay
             CancelTargeting();
             Session = null;
             gameplaySession = null;
+            destructibles = null;
             registry = null;
             dialogue = null;
             scenario = null;
@@ -970,28 +973,35 @@ namespace GritGud.Presentation.Gameplay
                     $"Displacement subject '{record.Request.SubjectId}' has no presenter.");
             }
 
-            CharacterController characterController =
-                subject.GetComponent<CharacterController>();
-            bool controllerWasEnabled =
-                characterController != null && characterController.enabled;
-            if (controllerWasEnabled)
+            if (record.Request.ActionKind == DisplacementActionKind.Push
+                && registry.TryGetActor(
+                    record.Request.ActorId,
+                    out GameplayActorView pushingActor))
             {
-                characterController.enabled = false;
+                pushingActor.Root.GetComponent<ActorAnimationCoordinator>()
+                    ?.TryRequestAction(ActorAnimationAction.Push);
             }
 
-            GameplayPosition position = record.ResultingPosition;
-            subject.position = new Vector3(position.X, position.Y, position.Z);
-            if (record.ResultingPropState != null)
+            if (record.Request.SubjectKind == DisplacementSubjectKind.Prop)
             {
-                GameplayPropPose pose = record.ResultingPropState.Pose;
-                subject.rotation = Quaternion.Euler(
-                    pose.PitchDegrees,
-                    pose.YawDegrees,
-                    pose.RollDegrees);
+                destructibles.PresentDisplacement(record);
             }
-            if (controllerWasEnabled)
+            else
             {
-                characterController.enabled = true;
+                CharacterController characterController =
+                    subject.GetComponent<CharacterController>();
+                bool controllerWasEnabled =
+                    characterController != null && characterController.enabled;
+                if (controllerWasEnabled)
+                    characterController.enabled = false;
+
+                GameplayPosition position = record.ResultingPosition;
+                subject.position = new Vector3(
+                    position.X,
+                    position.Y,
+                    position.Z);
+                if (controllerWasEnabled)
+                    characterController.enabled = true;
             }
 
             Physics.SyncTransforms();

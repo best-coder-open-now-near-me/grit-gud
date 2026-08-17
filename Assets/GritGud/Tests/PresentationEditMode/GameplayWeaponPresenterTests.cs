@@ -113,6 +113,46 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void EmptyHandsReleasesTheWeaponPoseLayer()
+        {
+            GameObject playerPrefab = Resources.Load<GameObject>(
+                "Actors/DefaultPlayerActor");
+            GameObject player = Object.Instantiate(playerPrefab);
+            try
+            {
+                ActorAnimationCoordinator presenter =
+                    player.GetComponent<ActorAnimationCoordinator>();
+                Animator animator = presenter.TargetAnimator;
+                animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                animator.Update(0f);
+
+                presenter.PresentWeaponPose(ActorAnimationPoseIds.Rifle);
+                animator.Update(0.25f);
+                int layerIndex = animator.GetLayerIndex(
+                    ActorAnimationParameters.WeaponLayerName);
+                Assert.That(
+                    animator.GetLayerWeight(layerIndex),
+                    Is.GreaterThan(0f));
+
+                presenter.PresentWeaponPose(ActorAnimationPoseIds.Empty);
+                animator.Update(0f);
+
+                Assert.That(
+                    presenter.CurrentWeaponAnimationSetId,
+                    Is.EqualTo(ActorAnimationPoseIds.Empty));
+                Assert.That(
+                    presenter.Profile.GetWeaponAnimationSet(
+                        ActorAnimationPoseIds.Empty).PoseLayerWeight,
+                    Is.Zero);
+                Assert.That(animator.GetLayerWeight(layerIndex), Is.Zero);
+            }
+            finally
+            {
+                Object.DestroyImmediate(player);
+            }
+        }
+
+        [Test]
         public void WeaponPoseRecoilAndActionsUseSeparateOwnedLayers()
         {
             AnimatorController controller =

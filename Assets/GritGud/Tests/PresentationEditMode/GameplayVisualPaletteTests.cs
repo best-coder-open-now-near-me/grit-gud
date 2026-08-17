@@ -45,6 +45,19 @@ namespace GritGud.Presentation.Tests
             AssertBlueLeaning(GameplayVisualPalette.Vignette);
         }
 
+        [Test]
+        public void GameplayMenusShareOneHudColorLanguage()
+        {
+            Assert.That(GameplayVisualPalette.HudPanel,
+                Is.EqualTo(GameplayVisualPalette.Panel));
+            Assert.That(GameplayVisualPalette.HudPrimarySignal,
+                Is.EqualTo(GameplayVisualPalette.SignalBlue));
+            Assert.That(GameplayVisualPalette.HudSecondarySignal,
+                Is.EqualTo(GameplayVisualPalette.SignalOrangeGlow));
+            Assert.That(GameplayVisualPalette.HudTextPrimary,
+                Is.EqualTo(GameplayVisualPalette.TextPrimary));
+        }
+
         private static void AssertBlueLeaning(Color color)
         {
             Assert.That(color.b, Is.GreaterThan(color.g));

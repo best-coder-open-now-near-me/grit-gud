@@ -66,6 +66,7 @@ namespace GritGud.Editor
                 ActorAnimationParameters.EmptyHandsStateName,
                 string.Empty,
                 EmptyPoseValue,
+                poseLayerWeight: 0f,
                 recoilPlaybackSpeed: 1f,
                 recoilLayerWeight: 0f,
                 recoilKickDegrees: 0f,
@@ -77,6 +78,7 @@ namespace GritGud.Editor
                 ActorAnimationParameters.RifleAimStateName,
                 ActorAnimationParameters.RifleRecoilStateName,
                 RiflePoseValue,
+                poseLayerWeight: WeaponPoseLayerWeight,
                 recoilPlaybackSpeed: RifleRecoilPlaybackSpeed,
                 recoilLayerWeight: 0.8f,
                 recoilKickDegrees: 9f,
@@ -88,6 +90,7 @@ namespace GritGud.Editor
                 ActorAnimationParameters.LauncherAimStateName,
                 ActorAnimationParameters.LauncherRecoilStateName,
                 LauncherPoseValue,
+                poseLayerWeight: WeaponPoseLayerWeight,
                 recoilPlaybackSpeed: LauncherRecoilPlaybackSpeed,
                 recoilLayerWeight: 1f,
                 recoilKickDegrees: 14f,
@@ -99,6 +102,7 @@ namespace GritGud.Editor
                 ActorAnimationParameters.KnifeIdleStateName,
                 string.Empty,
                 MeleePoseValue,
+                poseLayerWeight: WeaponPoseLayerWeight,
                 recoilPlaybackSpeed: 1f,
                 recoilLayerWeight: 0f,
                 recoilKickDegrees: 0f,
@@ -112,6 +116,7 @@ namespace GritGud.Editor
             string poseStateName,
             string recoilStateName,
             int animatorPoseValue,
+            float poseLayerWeight,
             float recoilPlaybackSpeed,
             float recoilLayerWeight,
             float recoilKickDegrees,
@@ -128,7 +133,7 @@ namespace GritGud.Editor
             set.FindPropertyRelative("animatorPoseValue").intValue =
                 animatorPoseValue;
             set.FindPropertyRelative("poseLayerWeight").floatValue =
-                WeaponPoseLayerWeight;
+                poseLayerWeight;
             set.FindPropertyRelative("poseTransitionSeconds").floatValue =
                 WeaponPoseTransitionSeconds;
             set.FindPropertyRelative("recoilLayerWeight").floatValue =
@@ -168,7 +173,7 @@ namespace GritGud.Editor
         private static void ConfigureActionBindings(
             SerializedProperty bindings)
         {
-            bindings.arraySize = 7;
+            bindings.arraySize = 8;
             SerializedProperty interaction =
                 bindings.GetArrayElementAtIndex(0);
             interaction.FindPropertyRelative("action").enumValueIndex =
@@ -226,6 +231,11 @@ namespace GritGud.Editor
                 ActorAnimationAction.IncapacitateShoulder,
                 ActorAnimationParameters.ReactionLayerName,
                 ActorAnimationParameters.ShoulderFallStateName);
+            ConfigureStateBinding(
+                bindings.GetArrayElementAtIndex(7),
+                ActorAnimationAction.Push,
+                ActorAnimationParameters.DisplacementLayerName,
+                ActorAnimationParameters.PushStateName);
         }
 
         private static void ConfigureStateBinding(

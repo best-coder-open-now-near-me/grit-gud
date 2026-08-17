@@ -136,8 +136,7 @@ namespace GritGud.Presentation.Gameplay
             GameplayGuidanceEntry guidance,
             GameplayBugReportRouteState route,
             GameplayBugReportRuntime runtime,
-            GameplayPartyControlSnapshot? partyControl = null,
-            GameplayPartyProgressionSession partyProgression = null)
+            GameplayPartyControlSnapshot? partyControl = null)
         {
             if (session == null)
             {
@@ -201,7 +200,6 @@ namespace GritGud.Presentation.Gameplay
                     report,
                     "Party defeated",
                     FormatBool(IsPartyDefeated(session)));
-                AppendPartyProgression(report, partyProgression);
             }
             report.AppendLine("Actors:");
             foreach (string actorId in session.InitiativeOrder)
@@ -784,61 +782,12 @@ namespace GritGud.Presentation.Gameplay
                 .AppendLine(FormatFloat(actor.Wounds.MovementPenalty));
         }
 
-        private static void AppendPartyProgression(
-            StringBuilder report,
-            GameplayPartyProgressionSession progression)
-        {
-            report.AppendLine("Party progression:");
-            if (progression == null)
-            {
-                report.AppendLine("  <not bound>");
-                return;
-            }
-
-            foreach (string actorId in progression.ActorIds)
-            {
-                CharacterProgressionSnapshot snapshot =
-                    progression.GetSnapshot(actorId);
-                report.Append("  ")
-                    .Append(actorId)
-                    .Append(" | identity=")
-                    .Append(snapshot.IdentityId)
-                    .Append(" | unspent=")
-                    .Append(snapshot.UnspentPoints.ToString(
-                        CultureInfo.InvariantCulture))
-                    .Append(" | bonuses=")
-                    .AppendLine(FormatBonuses(snapshot.Bonuses));
-            }
-        }
-
         private static bool IsPartyDefeated(GameplaySession session)
         {
             foreach (string actorId in session.Scenario.PlayerParty.ActorIds)
                 if (!session.IsActorIncapacitated(actorId))
                     return false;
             return true;
-        }
-
-        private static string FormatBonuses(
-            System.Collections.Generic.IReadOnlyDictionary<string, int> bonuses)
-        {
-            if (bonuses.Count == 0)
-                return "<none>";
-
-            var keys = new string[bonuses.Count];
-            int keyIndex = 0;
-            foreach (string key in bonuses.Keys)
-                keys[keyIndex++] = key;
-            Array.Sort(keys, StringComparer.Ordinal);
-            var values = new string[keys.Length];
-            for (int index = 0; index < keys.Length; index++)
-            {
-                string key = keys[index];
-                values[index] = key + ":"
-                    + bonuses[key].ToString(CultureInfo.InvariantCulture);
-            }
-
-            return string.Join(",", values);
         }
 
         private static string FormatInventory(ActorInventorySnapshot inventory)
@@ -899,8 +848,7 @@ namespace GritGud.Presentation.Gameplay
             TurnMovementController turnMovement,
             GameplayGuidanceEntry guidance,
             string playerNote = null,
-            GameplayPartyControlSnapshot? partyControl = null,
-            GameplayPartyProgressionSession partyProgression = null)
+            GameplayPartyControlSnapshot? partyControl = null)
         {
             GameplayBugReportRuntime runtime =
                 GameplayBugReportRuntime.Capture();
@@ -909,8 +857,7 @@ namespace GritGud.Presentation.Gameplay
                 guidance,
                 GameplayBugReportRouteState.Capture(turnMovement),
                 runtime,
-                partyControl,
-                partyProgression);
+                partyControl);
             report = PrependPlayerNote(report, playerNote);
             string fileName = "grit-gud-bug-report-"
                 + runtime.GeneratedAtUtc.ToString(

@@ -16,7 +16,7 @@ segment is optional context rather than part of the default playback range.
 ## Current restart checkpoint — 2026-08-11
 
 The project has completed enough of the early tactical foundation that the
-roadmap is active again at **Phase 7: authored player party, progression, and
+roadmap is active again at **Phase 7: authored player party, character creation, and
 the close-quarters action family**. The authoritative close-quarters seams are
 in place, but their production verification, authored presentation, and shared
 simulation groundwork are not complete. The drone remains a late gameplay
@@ -102,11 +102,13 @@ Work resumes in this order:
    live animator, weapon, wound, and pose snapshot on exit.
    **The intervening wound-visibility checkpoint is also complete:** direct
    attacks preserve Head, Torso, left/right Arm, and left/right Leg wounds in
-   authoritative actor state. The player HUD renders the same six regions as
-   blue healthy or orange wounded tiles, with counts and diagnostic detail;
+   authoritative actor state. The player HUD renders the same six regions as a
+   proportioned body silhouette with a circular head and color-coded wound
+   state; counts and diagnostic detail remain available on hover rather than as
+   text embedded in the shapes;
    this does not introduce an HP pool or aimed body-part selection.
-8. Return to shared blast policy, finite consumable quantities, runtime
-   progression persistence, and only then the deployable drone. **Shared blast
+8. Return to shared blast policy, finite consumable quantities, durable party
+   equipment/wound persistence, and only then the deployable drone. **Shared blast
    policy is complete:** grenades and projectiles record the same distance,
    occlusion, falloff, exposure, subject-kind, and regional-injury evidence and
    resolve actor/prop consequences through one Application service. **Finite
@@ -122,13 +124,14 @@ Work resumes in this order:
    threshold; presentation data independently owns the thrown model, sparse
    lit cloud, fade, and calm camera-interior treatment. **The second-character
    checkpoint is complete:** Oren Vale is a separately authored party member
-   with distinct identity, attributes, progression, inventory, equipment, and
+   with distinct identity, attributes, starting build, inventory, equipment, and
    runtime state. A dedicated roster surface supports click or Tab selection
    during exploration and communicates initiative-owned control during combat.
-   **Runtime progression persistence is complete:** the versioned local party
-   save restores validated identity-bound progression, equipment, and regional
-   wounds, and the advancement drawer commits authored options during
-   exploration. These character-system prerequisites no longer make the drone
+   **Durable party persistence is complete and corrected:** the versioned local
+   save restores identity-bound equipment and regional wounds. Character
+   Creator defines appearance, attributes, skills, talents, and starting loadout
+   before a level; there is no runtime progression, point budget, or advancement
+   drawer. These character-system prerequisites no longer make the drone
    the next overall slice; existing combat, presentation, and verification work
    below takes priority.
 9. Complete a restrained visual-presentation pass without moving gameplay rules
@@ -168,22 +171,20 @@ Work resumes in this order:
    atomically for the initiator; and Unity retargets camera, input, HUD, hotbar,
    targeting, equipment, consumables, displacement, projectiles, and persistent
    held weapons together. Enemy detection, target selection, encounter
-   relevance, defeat, progression ownership, and bug-report diagnostics now
+   relevance, defeat, party-state ownership, and bug-report diagnostics now
    evaluate actual party members rather than a singleton `player` actor. Mara
    Vance and Oren Vale now exercise separate profiles, budgets, inventories,
-   equipment, hotbars, weapon presentation, and progression. The roster UI
+   equipment, hotbars, and weapon presentation. The roster UI
    supports click and Tab switching in exploration; combat follows Dexterity-
    derived friendly initiative and disables manual selection. Automated boot,
    selection, retargeting, and alternating-friendly-turn coverage is green.
    **The durable-party follow-up is complete:** schema 1 saves are keyed by
    stable character identity, require an exact authored roster, validate
-   equipment, advancement caps, and the complete point budget, and restore
-   equipment, regional wounds, and progression before gameplay systems bind.
+   equipment, and restore equipment and regional wounds before gameplay systems bind.
    PlayerPrefs supplies the browser/desktop adapter while Application owns the
-   versioned save contract and validation. Authoritative equipment, wound, and
-   advancement changes flush immediately. The roster opens a confirmation-based
-   advancement drawer that exposes effective ratings, costs, caps, remaining
-   points, and structured unavailability; spending is restricted to exploration.
+   versioned save contract and validation. Authoritative equipment and wound
+   changes flush immediately. Runtime progression and player-side spending are
+   explicitly outside the product model.
    **Next: complete the existing-system verification sequence below.**
 
 ## Current next production sequence — 2026-08-16
@@ -584,7 +585,7 @@ budget or inventory mutation. Depleted stacks remain visible at `x0`, are
 disabled by shared Application availability, and explain the requirement in
 their data-derived tooltip.
 
-## 7. Authored roster and progression slice
+## 7. Authored roster and character-persistence slice
 
 - Define one character with fixed baseline attributes, skills, and talents. **Complete:** depot yard now authors Mara Vance as a Field Operative with fixed ratings and talents.
 - Make core attributes authoritative rather than duplicating their outputs in
@@ -597,8 +598,14 @@ their data-derived tooltip.
   typed resistance/social modifiers without adding an HP system or placeholder
   social combat behavior.
 - Equip and replace an item without altering the character's authored identity. **Foundation complete:** equipment remains actor runtime state rather than character identity data.
-- Spend a progression point through a constrained advancement option. **Complete:** authored options target an existing skill, enforce point cost and cap, and appear in an exploration-only confirmation drawer with the baseline, current bonus, effective rating, and remaining points.
-- Persist progression, equipment, wounds, and fixed identity separately. **Complete:** a versioned Application-owned party save validates the exact identity roster and authored point/equipment constraints, while a PlayerPrefs adapter persists progression, equipped item, and regional wounds across launches without rewriting authored identity.
+- Keep Character Creator and runtime state separate. **Corrected 2026-08-17:**
+  appearance, attributes, skills, talents, and starting loadout are authored
+  before a level. No runtime XP, points, bonuses, advancement options, or
+  player-side spending UI exists.
+- Persist equipment, wounds, and fixed identity separately. **Complete:** a
+  versioned Application-owned party save validates the exact identity roster
+  and equipped-item ownership, while a PlayerPrefs adapter persists equipped
+  item and regional wounds across launches without rewriting authored identity.
 - Complete the close-quarters action family before companion deployment:
   - Replace `pushCost` and other verb-specific actor shortcuts with an authored
     displacement-action collection containing stable ID, intent, cost, accepted

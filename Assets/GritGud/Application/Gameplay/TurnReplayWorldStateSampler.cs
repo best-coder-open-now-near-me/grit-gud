@@ -99,10 +99,19 @@ namespace GritGud.Application.Gameplay
             var vehicles = IndexVehicles(window.Start.State.Vehicles);
             var projectiles = IndexProjectiles(window.Start.State.Projectiles);
             var smokeFields = IndexSmoke(window.Start.State.SmokeFields);
+            TurnReplayTimedEvent activeEvent = null;
 
             foreach (TurnReplayTimedEvent timedEvent in timeline.Events)
             {
-                if (timedEvent.EndSeconds > time) break;
+                if (timedEvent.EndSeconds > time)
+                {
+                    if (timedEvent.DurationSeconds > 0f &&
+                        timedEvent.StartSeconds <= time)
+                    {
+                        activeEvent = timedEvent;
+                    }
+                    break;
+                }
                 ApplyEntry(
                     timedEvent.Entry,
                     window,
@@ -111,6 +120,17 @@ namespace GritGud.Application.Gameplay
                     vehicles,
                     projectiles,
                     smokeFields);
+            }
+
+            if (activeEvent?.Entry is DisplacementResolvedJournalEntry active)
+            {
+                float normalized =
+                    (time - activeEvent.StartSeconds)
+                    / activeEvent.DurationSeconds;
+                ApplyInterpolatedDisplacement(
+                    active.Displacement,
+                    normalized,
+                    destructibles);
             }
 
             foreach (KeyValuePair<string, GameplayActorSnapshot> entry in
@@ -236,6 +256,54 @@ namespace GritGud.Application.Gameplay
                     record.ResultingPosition,
                     displaced.Pose.FacingDegrees,
                     displaced.Pose.Stance));
+        }
+
+        private static void ApplyInterpolatedDisplacement(
+            DisplacementRecord record,
+            float normalizedProgress,
+            IDictionary<string, DestructiblePropSnapshot> destructibles)
+        {
+            if (!record.Succeeded ||
+                record.Request.SubjectKind != DisplacementSubjectKind.Prop ||
+                record.PreviousPropState == null ||
+                record.ResultingPropState == null ||
+                !destructibles.TryGetValue(
+                    record.Request.SubjectId,
+                    out DestructiblePropSnapshot prop))
+            {
+                return;
+            }
+
+            float progress = GameplayDisplacementPresentationTiming
+                .EvaluateSubjectProgress(
+                    record.Request.ActionKind,
+                    normalizedProgress);
+            GameplayPropPose previous = record.PreviousPropState.Pose;
+            GameplayPropPose resulting = record.ResultingPropState.Pose;
+            var pose = new GameplayPropPose(
+                Lerp(previous.Position, resulting.Position, progress),
+                LerpAngle(
+                    previous.PitchDegrees,
+                    resulting.PitchDegrees,
+                    progress),
+                LerpAngle(
+                    previous.YawDegrees,
+                    resulting.YawDegrees,
+                    progress),
+                LerpAngle(
+                    previous.RollDegrees,
+                    resulting.RollDegrees,
+                    progress));
+            destructibles[record.Request.SubjectId] =
+                new DestructiblePropSnapshot(
+                    prop.PropId,
+                    prop.State,
+                    prop.MaximumIntegrity,
+                    prop.RemainingIntegrity,
+                    pose,
+                    record.PreviousPropState.Posture,
+                    prop.FractureChunkCount,
+                    prop.DetachedFractureChunks);
         }
 
         private static void ApplyAction(

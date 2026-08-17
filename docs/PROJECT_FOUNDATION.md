@@ -322,12 +322,12 @@ attack penalties, dropped weapons, and reduced movement. Explicit body-part
 selection is reserved for a future exceptional action if a concrete scenario
 needs it.
 
-## Authored characters and progression
+## Authored characters and starting builds
 
-Characters are authored identities rather than blank templates for a broad
-character creator. Their baseline attributes, starting skills, talents, and
-general capabilities come with the character. Starting identity should remain
-recognizable throughout progression.
+Characters are authored identities. Their baseline attributes, starting skills,
+talents, appearance, starting loadout, and general capabilities are selected in
+the pre-level Character Creator and remain fixed during play. There is no
+runtime XP, advancement-point, or player-side rating-spending system.
 
 Every character has exactly four core attributes rated from 1 to 5:
 
@@ -351,17 +351,15 @@ uses `d20 + Strength + control skill + talent modifier`.
 
 Customization comes primarily from:
 
+- Pre-level appearance, attribute, skill, talent, and starting-loadout choices.
 - Equipped weapons, armor, tools, and carried objects.
-- Level-progression points spent within deliberately constrained advancement
-  options.
 - Tactical consequences such as wounds, recovery, and changes in equipment or
   role.
 
 Skills are rated competencies used by shared resolution rules, including the
 opposed Close-Quarters Control check. Talents are authored capabilities or rule
-modifiers that distinguish characters and can provide specific counters. The
-size and structure of each character's advancement pool remain open, but it
-must not become an unrestricted build system that erases their starting role.
+modifiers that distinguish characters and can provide specific counters. Their
+values are authored before a level and do not expose an in-game spending path.
 
 ## In-game level editor
 
@@ -401,8 +399,8 @@ outcome.
 - Momentum parameters, vehicle controls, and which non-vehicle actions retain
   speed between turns.
 - Which attacks initiate impact cycles and how simultaneous projectiles behave.
-- Party and roster structure, skill taxonomy, talent pools, and progression
-  rates.
+- Party and roster structure, skill taxonomy, talent pools, and pre-level build
+  constraints.
 - Destructible-object granularity, material rules, and debris behavior.
 - Exact hit-roll formula and defensive statistics.
 - Vitality, wound severity, healing, recovery, and permanent-death rules.

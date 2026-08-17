@@ -21,17 +21,8 @@ namespace GritGud.Presentation.Persistence
         private sealed class CharacterDocument
         {
             public string identityId;
-            public int unspentPoints;
-            public List<BonusDocument> bonuses = new List<BonusDocument>();
             public string equippedItemId;
             public WoundDocument wounds = new WoundDocument();
-        }
-
-        [Serializable]
-        private sealed class BonusDocument
-        {
-            public string skillId;
-            public int value;
         }
 
         [Serializable]
@@ -89,27 +80,9 @@ namespace GritGud.Presentation.Persistence
                     throw new InvalidOperationException(
                         "The local party save contains an empty character.");
 
-                var bonuses = new Dictionary<string, int>(
-                    StringComparer.Ordinal);
-                foreach (BonusDocument bonus in character.bonuses
-                    ?? new List<BonusDocument>())
-                {
-                    if (bonus == null
-                        || string.IsNullOrWhiteSpace(bonus.skillId)
-                        || !bonuses.TryAdd(bonus.skillId, bonus.value))
-                    {
-                        throw new InvalidOperationException(
-                            "The local party save contains an invalid skill bonus.");
-                    }
-                }
-
                 WoundDocument wounds = character.wounds
                     ?? throw new InvalidOperationException(
                         "The local party save contains no wound state.");
-                var progression = new CharacterProgressionSnapshot(
-                    character.identityId,
-                    character.unspentPoints,
-                    bonuses);
                 var woundSnapshot = new ActorWoundSnapshot(
                     character.identityId,
                     wounds.head,
@@ -122,7 +95,6 @@ namespace GritGud.Presentation.Persistence
                     wounds.movementPenalty);
                 characters.Add(new CharacterPersistenceSnapshot(
                     character.identityId,
-                    progression,
                     NormalizeOptionalId(character.equippedItemId),
                     woundSnapshot));
             }
@@ -148,7 +120,6 @@ namespace GritGud.Presentation.Persistence
                 var serializedCharacter = new CharacterDocument
                 {
                     identityId = character.IdentityId,
-                    unspentPoints = character.Progression.UnspentPoints,
                     equippedItemId = character.EquippedItemId ?? string.Empty,
                     wounds = new WoundDocument
                     {
@@ -162,19 +133,6 @@ namespace GritGud.Presentation.Persistence
                         movementPenalty = character.Wounds.MovementPenalty,
                     },
                 };
-                var bonuses = new List<KeyValuePair<string, int>>(
-                    character.Progression.Bonuses);
-                bonuses.Sort((left, right) => StringComparer.Ordinal.Compare(
-                    left.Key,
-                    right.Key));
-                foreach (KeyValuePair<string, int> bonus in bonuses)
-                {
-                    serializedCharacter.bonuses.Add(new BonusDocument
-                    {
-                        skillId = bonus.Key,
-                        value = bonus.Value,
-                    });
-                }
                 document.characters.Add(serializedCharacter);
             }
 

@@ -1,8 +1,9 @@
 # Architecture and Separation-of-Concerns Review
 
-**Reviewed:** 2026-08-11; follow-up audits 2026-08-12, 2026-08-14, and 2026-08-15
+**Reviewed:** 2026-08-11; follow-up audits 2026-08-12, 2026-08-14, 2026-08-15,
+and 2026-08-17
 **Scope:** the repository as a whole, with additional attention on the recent
-emergency-reaction, projectile, explosive, progression, displacement, and HUD
+emergency-reaction, projectile, explosive, party-persistence, displacement, and HUD
 work.
 
 This review is the durable record of the architecture pass. It is intentionally
@@ -47,7 +48,7 @@ still centralizes actor state and outcome dispatch, `GameplayHud` still owns too
 many feature drawers, and `GameplayController` is still a large composition
 root. New behavior should continue moving behind focused Application services,
 HUD panels, and feature binders when those seams become stable. Durable
-cross-launch progression storage also remains explicitly deferred.
+cross-launch party-state storage also remains explicitly deferred.
 
 ### 2026-08-15 editor and terrain follow-up
 
@@ -79,7 +80,7 @@ The current risk profile is acceptable but not finished:
   material painting. Its stroke lifecycles are cohesive today, but the name and
   responsibility should become a generic terrain-brush coordinator or two
   focused tools if erosion, foliage, masks, or other brush families are added.
-- The next cross-launch party work must preserve the same ports-and-adapters
+- Cross-launch party work must preserve the same ports-and-adapters
   boundary: Application owns a versioned party-save use case and validation;
   Presentation supplies PlayerPrefs/browser and filesystem adapters. Gameplay
   controllers must not directly serialize authoritative party state.
@@ -89,7 +90,10 @@ The current risk profile is acceptable but not finished:
   gates.
 
 No architecture blocker requires reverting the current editor slice. Durable
-party save/load and the advancement UI are now complete, but the drone is not
+party equipment/wound save/load is complete. The earlier advancement UI and
+point model were removed on 2026-08-17 after product clarification: Character
+Creator authors the starting character before a level, and there is no runtime
+progression or player-side spending. The drone is not
 the next overall slice. Destructible toppling must first become a complete live
 action rather than only a record/replay capability: production displacement
 does not yet resolve `Topple`, prop eligibility is not authored, and the depot's
@@ -310,7 +314,7 @@ combat effect while social resolution is absent.
 **Priority: high, incremental**
 
 **Status: partially resolved 2026-08-14.** Blast, displacement, equipment,
-projectile, thrown-explosive, party, and progression behavior already has
+projectile, thrown-explosive, and party-persistence behavior already has
 focused sessions. Gameplay startup is now split into explicit bootstrap, world,
 session, binding, and interface stages with one teardown path. HUD choice state
 and generated texture ownership have moved into small lifecycle objects. The
@@ -360,23 +364,21 @@ quantity, charges, or a consumed-item record. The corrective requirement was
 authoritative stack state with before/after evidence in the same committed
 action while keeping preview and cancellation side-effect free.
 
-### A6 — Connect progression to runtime ownership and persistence
+### A6 — Connect authored party identity to runtime persistence
 
 **Priority: medium**
 
-**Status: resolved 2026-08-16.**
-`GameplayPartyProgressionSession` now composes one identity-bound progression
-aggregate for every authored player-party member and captures progression,
-equipment, and wounds without allowing one actor to be persisted through
-another character's identity. Bug reports project those per-character snapshots
-alongside selected and command authority. `GameplayPartySave` is a versioned,
-exact-roster Application contract that rejects unknown equipment, ambiguous or
-over-cap bonuses, and point-budget fabrication. `GameplaySession` rebinds saved
-wounds to the current scenario actor while preserving the stable character
-identity. The PlayerPrefs adapter supplies local browser/desktop durability;
-equipment, wound, and confirmed advancement changes flush immediately. A
-separate advancement drawer consumes Application availability and requires
-confirmation without owning costs, caps, or turn-mode policy.
+**Status: corrected 2026-08-17.** `GameplayPartySave` is a versioned,
+exact-roster Application contract keyed by the stable identities authored in the
+pre-level Character Creator. It validates equipped-item ownership and captures
+only mutable runtime equipment and wound state; `GameplaySession` rebinds saved
+wounds to the current scenario actor. The PlayerPrefs adapter supplies local
+browser/desktop durability, and equipment/wound changes flush immediately.
+The previously implemented points, bonuses, advancement options, progression
+session, save fields, diagnostics, and runtime drawer were based on a mistaken
+product assumption and have been removed. Authored attributes, skills, talents,
+appearance, and starting loadout remain creator-owned inputs, not spendable
+runtime state.
 
 ### A7 — Eliminate duplicate scenario assembly
 
@@ -664,8 +666,9 @@ turn. The full EditMode gate passes 429 tests.
 6. Add opposed combatant displacement.
 7. Add authored knife attacks.
 8. Generalize blast effects and consumable quantities. **Complete.**
-9. Integrate progression persistence. **Complete:** versioned identity-bound
-   storage and the confirmation-based advancement surface are live.
+9. Integrate party persistence. **Corrected and complete:** versioned,
+   identity-bound equipment/wound storage is live; runtime progression and its
+   advancement surface do not exist.
 10. Complete live toppling resolution, authored prop eligibility, and the
     published destructible-pile verification fixture. **Implemented
     2026-08-16; full Unity runner and hands-on fixture acceptance remain.**

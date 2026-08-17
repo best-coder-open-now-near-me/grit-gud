@@ -217,6 +217,22 @@ namespace GritGud.Presentation.Tests
                 Assert.That(regionRectangle.yMax,
                     Is.LessThanOrEqualTo(bodyStatus.yMax));
             }
+            Rect head = GameplayHud.CalculateBodyRegionRectangle(
+                bodyStatus,
+                TargetRegionId.Head);
+            Rect torso = GameplayHud.CalculateBodyRegionRectangle(
+                bodyStatus,
+                TargetRegionId.Torso);
+            Rect arm = GameplayHud.CalculateBodyRegionRectangle(
+                bodyStatus,
+                TargetRegionId.LeftArm);
+            Rect leg = GameplayHud.CalculateBodyRegionRectangle(
+                bodyStatus,
+                TargetRegionId.LeftLeg);
+            Assert.That(head.width, Is.EqualTo(head.height).Within(0.001f));
+            Assert.That(torso.width, Is.GreaterThan(arm.width));
+            Assert.That(torso.height, Is.GreaterThan(head.height));
+            Assert.That(leg.height, Is.GreaterThan(head.height));
         }
     }
 }

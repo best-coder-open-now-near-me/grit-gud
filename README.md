@@ -40,8 +40,9 @@ hostile turns, and replay-oriented diagnostics.
   effects.
 - Wounds can impair movement, perception, and attacks without requiring a
   separate health bar for every limb.
-- Characters have authored identities and starting capabilities; equipment and
-  constrained level progression provide most customization.
+- Characters have authored identities and starting capabilities; appearance,
+  starting build, loadout, and equipment provide customization. There is no
+  runtime XP, point-spending, or character-progression system.
 - Levels are portable, versioned data edited through an in-game level editor.
 
 ## Development targets

@@ -26,6 +26,7 @@ namespace GritGud.Editor
             AnimationClip jumpClip,
             AnimationClip knifeIdleClip,
             AnimationClip knifeStrikeClip,
+            AnimationClip pushClip,
             AnimationClip shoulderFallClip,
             AnimationClip fallOverClip,
             AvatarMask upperBodyMask)
@@ -97,6 +98,7 @@ namespace GritGud.Editor
                 knifeStrikeClip,
                 upperBodyMask);
             AddTraversalLayer(controller, jumpClip);
+            AddDisplacementLayer(controller, pushClip);
             AddReactionLayer(
                 controller,
                 shoulderFallClip,
@@ -463,6 +465,43 @@ namespace GritGud.Editor
                 new Vector3(300f, 280f));
             fallOver.motion = fallOverClip;
             fallOver.writeDefaultValues = false;
+            machine.defaultState = idle;
+            EditorUtility.SetDirty(machine);
+        }
+
+        private static void AddDisplacementLayer(
+            AnimatorController controller,
+            AnimationClip pushClip)
+        {
+            controller.AddLayer(
+                ActorAnimationParameters.DisplacementLayerName);
+            AnimatorControllerLayer[] layers = controller.layers;
+            int layerIndex = layers.Length - 1;
+            AnimatorControllerLayer layer = layers[layerIndex];
+            layer.avatarMask = null;
+            layer.blendingMode = AnimatorLayerBlendingMode.Override;
+            layer.defaultWeight = 0f;
+            layer.iKPass = false;
+            layers[layerIndex] = layer;
+            controller.layers = layers;
+
+            AnimatorStateMachine machine = layer.stateMachine;
+            machine.name = ActorAnimationParameters.DisplacementLayerName;
+            AnimatorState idle = machine.AddState(
+                ActorAnimationParameters.NoDisplacementStateName,
+                new Vector3(50f, 120f));
+            idle.writeDefaultValues = false;
+            idle.AddStateMachineBehaviour<ActorActionLayerReleaseBehaviour>();
+            AnimatorState push = machine.AddState(
+                ActorAnimationParameters.PushStateName,
+                new Vector3(300f, 120f));
+            push.motion = pushClip;
+            push.speed = Mathf.Max(0.01f, pushClip.length / PushSeconds);
+            push.writeDefaultValues = false;
+            AddActionReturnTransition(
+                push,
+                idle,
+                ActionExitNormalizedTime);
             machine.defaultState = idle;
             EditorUtility.SetDirty(machine);
         }

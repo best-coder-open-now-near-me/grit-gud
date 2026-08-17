@@ -19,22 +19,26 @@ namespace GritGud.Presentation.Gameplay
         internal const float PendingPowerPulseMinimumAlpha = 0.48f;
         internal const int HotbarSlotCount =
             GameplayCommandBarModel.HotbarSlotCount;
-        private static readonly Color PanelStrongColor = GameplayVisualPalette.Panel;
-        private static readonly Color BorderColor = GameplayVisualPalette.WithAlpha(
-            GameplayVisualPalette.Border,
-            0.24f);
-        private static readonly Color SignalColor = GameplayVisualPalette.SignalBlue;
+        private static readonly Color PanelStrongColor =
+            GameplayVisualPalette.HudPanel;
+        private static readonly Color BorderColor =
+            GameplayVisualPalette.HudBorder;
+        private static readonly Color SignalColor =
+            GameplayVisualPalette.HudPrimarySignal;
         private static readonly Color SignalSoftColor = GameplayVisualPalette.WithAlpha(
-            GameplayVisualPalette.SignalBlue,
+            GameplayVisualPalette.HudPrimarySignal,
             0.16f);
         private static readonly Color EquipmentSignalColor =
-            GameplayVisualPalette.SignalOrangeGlow;
+            GameplayVisualPalette.HudSecondarySignal;
         private static readonly Color ModeButtonEdgeColor = GameplayVisualPalette.WithAlpha(
-            GameplayVisualPalette.SignalBlue,
+            GameplayVisualPalette.HudPrimarySignal,
             0.48f);
-        private static readonly Color ModeButtonTextColor = GameplayVisualPalette.TextBright;
-        private static readonly Color PrimaryTextColor = GameplayVisualPalette.TextPrimary;
-        private static readonly Color SecondaryTextColor = GameplayVisualPalette.TextSecondary;
+        private static readonly Color ModeButtonTextColor =
+            GameplayVisualPalette.HudTextBright;
+        private static readonly Color PrimaryTextColor =
+            GameplayVisualPalette.HudTextPrimary;
+        private static readonly Color SecondaryTextColor =
+            GameplayVisualPalette.HudTextSecondary;
 
         private TurnMovementController turnMovement;
         private GameplayActionController actionController;
@@ -716,12 +720,39 @@ namespace GritGud.Presentation.Gameplay
         private IReadOnlyDictionary<string, GameplayActorAbilityHotbarState>
             BuildActorAbilityStates()
         {
+            if (Session == null)
+                return null;
+
+            GameplayActorSnapshot actor = Session.GetActor(playerActorId);
+            bool stanceEnabled = !actor.IsIncapacitated && !actor.IsPinned;
+            string stanceLabel = actor.Pose.Stance == ActorStance.Standing
+                ? "Crouch"
+                : "Stand";
+            var stanceDefinition = new GameplayActorAbilityHotbarDefinition(
+                GameplayCoreActorAbilities.StanceId,
+                stanceLabel,
+                GameplayCoreActorAbilities.StanceHotbarSlot);
+            var states = new Dictionary<
+                string,
+                GameplayActorAbilityHotbarState>(StringComparer.Ordinal)
+            {
+                {
+                    stanceDefinition.Id,
+                    new GameplayActorAbilityHotbarState(
+                        stanceDefinition,
+                        stanceEnabled,
+                        pending: false,
+                        stanceLabel.ToUpperInvariant()
+                            + "\nHOTKEY C")
+                },
+            };
+
             DisplacementAbilityDefinition ability = Session == null
                 ? null
                 : FindPlayerActorDefinition()?.DisplacementAbility;
             if (displacementController == null || ability == null)
             {
-                return null;
+                return states;
             }
 
             var definitions = new List<GameplayActorAbilityOptionDefinition>(
@@ -756,25 +787,19 @@ namespace GritGud.Presentation.Gameplay
                         + " AP"));
             }
 
-            var states = new Dictionary<
-                string,
-                GameplayActorAbilityHotbarState>(StringComparer.Ordinal)
-            {
-                {
-                    ability.Id,
-                    new GameplayActorAbilityHotbarState(
-                        new GameplayActorAbilityHotbarDefinition(
-                            ability.Id,
-                            ability.DisplayName,
-                            ability.HotbarSlot,
-                            definitions),
-                        enabled,
-                        pending,
-                        ability.DisplayName.ToUpperInvariant()
-                            + "\nSELECT A DISPLACEMENT INTENT",
-                        options)
-                },
-            };
+            states.Add(
+                ability.Id,
+                new GameplayActorAbilityHotbarState(
+                    new GameplayActorAbilityHotbarDefinition(
+                        ability.Id,
+                        ability.DisplayName,
+                        ability.HotbarSlot,
+                        definitions),
+                    enabled,
+                    pending,
+                    ability.DisplayName.ToUpperInvariant()
+                        + "\nSELECT A DISPLACEMENT INTENT",
+                    options));
             return states;
         }
 
@@ -973,54 +998,54 @@ namespace GritGud.Presentation.Gameplay
                 throw new ArgumentOutOfRangeException(nameof(region));
             }
 
-            const float gap = 4f;
-            float rowHeight = Mathf.Max(
+            const float silhouetteWidth = 68f;
+            const float silhouetteHeight = 95f;
+            float scale = Mathf.Max(
                 0f,
-                (bodyStatusRectangle.height - (gap * 2f)) / 3f);
-            float halfWidth = Mathf.Max(
-                0f,
-                (bodyStatusRectangle.width - gap) * 0.5f);
-            float thirdWidth = Mathf.Max(
-                0f,
-                (bodyStatusRectangle.width - (gap * 2f)) / 3f);
+                Mathf.Min(
+                    bodyStatusRectangle.width / silhouetteWidth,
+                    bodyStatusRectangle.height / silhouetteHeight));
+            float centerX = bodyStatusRectangle.center.x;
+            float top = bodyStatusRectangle.center.y
+                - ((silhouetteHeight * scale) * 0.5f);
             switch (region)
             {
                 case TargetRegionId.Head:
                     return new Rect(
-                        bodyStatusRectangle.center.x - (halfWidth * 0.5f),
-                        bodyStatusRectangle.y,
-                        halfWidth,
-                        rowHeight);
+                        centerX - (10f * scale),
+                        top,
+                        20f * scale,
+                        20f * scale);
                 case TargetRegionId.LeftArm:
                     return new Rect(
-                        bodyStatusRectangle.x,
-                        bodyStatusRectangle.y + rowHeight + gap,
-                        thirdWidth,
-                        rowHeight);
+                        centerX - (34f * scale),
+                        top + (25f * scale),
+                        13f * scale,
+                        31f * scale);
                 case TargetRegionId.Torso:
                     return new Rect(
-                        bodyStatusRectangle.x + thirdWidth + gap,
-                        bodyStatusRectangle.y + rowHeight + gap,
-                        thirdWidth,
-                        rowHeight);
+                        centerX - (18f * scale),
+                        top + (23f * scale),
+                        36f * scale,
+                        35f * scale);
                 case TargetRegionId.RightArm:
                     return new Rect(
-                        bodyStatusRectangle.x + ((thirdWidth + gap) * 2f),
-                        bodyStatusRectangle.y + rowHeight + gap,
-                        thirdWidth,
-                        rowHeight);
+                        centerX + (21f * scale),
+                        top + (25f * scale),
+                        13f * scale,
+                        31f * scale);
                 case TargetRegionId.LeftLeg:
                     return new Rect(
-                        bodyStatusRectangle.x,
-                        bodyStatusRectangle.y + ((rowHeight + gap) * 2f),
-                        halfWidth,
-                        rowHeight);
+                        centerX - (17f * scale),
+                        top + (61f * scale),
+                        15f * scale,
+                        34f * scale);
                 case TargetRegionId.RightLeg:
                     return new Rect(
-                        bodyStatusRectangle.x + halfWidth + gap,
-                        bodyStatusRectangle.y + ((rowHeight + gap) * 2f),
-                        halfWidth,
-                        rowHeight);
+                        centerX + (2f * scale),
+                        top + (61f * scale),
+                        15f * scale,
+                        34f * scale);
                 default:
                     throw new ArgumentOutOfRangeException(nameof(region));
             }
@@ -1101,27 +1126,79 @@ namespace GritGud.Presentation.Gameplay
                 Rect regionRectangle = CalculateBodyRegionRectangle(
                     rectangle,
                     region.Region);
-                string label = region.Label
-                    + (region.IsWounded ? "  " + region.WoundCount : string.Empty);
-                GUI.Label(
-                    regionRectangle,
-                    label,
-                    region.IsWounded
-                        ? woundedBodyRegionStyle
-                        : bodyRegionStyle);
-                DrawGlowFrame(
-                    regionRectangle,
-                    region.IsWounded
-                        ? EquipmentSignalColor
-                        : ModeButtonEdgeColor);
+                Color frameColor = region.IsWounded
+                    ? EquipmentSignalColor
+                    : ModeButtonEdgeColor;
+                if (region.Region == TargetRegionId.Head)
+                {
+                    DrawCircularBodyRegion(
+                        regionRectangle,
+                        region.IsWounded,
+                        frameColor);
+                }
+                else
+                {
+                    GUI.Label(
+                        regionRectangle,
+                        GUIContent.none,
+                        region.IsWounded
+                            ? woundedBodyRegionStyle
+                            : bodyRegionStyle);
+                    DrawGlowFrame(regionRectangle, frameColor);
+                }
 
-                if (regionRectangle.Contains(Event.current.mousePosition))
+                if (ContainsBodyRegionPoint(
+                        regionRectangle,
+                        region.Region,
+                        Event.current.mousePosition))
                 {
                     activeTooltip = BuildBodyRegionTooltip(
                         bodyStatus,
                         region);
                 }
             }
+        }
+
+        private void DrawCircularBodyRegion(
+            Rect rectangle,
+            bool wounded,
+            Color frameColor)
+        {
+            DrawTintedTexture(
+                rectangle,
+                textureSet.BodyRegionCircleMask,
+                frameColor);
+            float inset = Mathf.Max(1f, rectangle.width * 0.08f);
+            Rect fillRectangle = new Rect(
+                rectangle.x + inset,
+                rectangle.y + inset,
+                Mathf.Max(0f, rectangle.width - (inset * 2f)),
+                Mathf.Max(0f, rectangle.height - (inset * 2f)));
+            DrawTintedTexture(
+                fillRectangle,
+                textureSet.BodyRegionCircleMask,
+                wounded
+                    ? GameplayVisualPalette.WithAlpha(
+                        GameplayVisualPalette.SignalOrange,
+                        0.42f)
+                    : GameplayVisualPalette.ButtonNormal);
+        }
+
+        private static bool ContainsBodyRegionPoint(
+            Rect rectangle,
+            TargetRegionId region,
+            Vector2 point)
+        {
+            if (region != TargetRegionId.Head)
+                return rectangle.Contains(point);
+            if (rectangle.width <= 0f || rectangle.height <= 0f)
+                return false;
+            float normalizedX = (point.x - rectangle.center.x)
+                / (rectangle.width * 0.5f);
+            float normalizedY = (point.y - rectangle.center.y)
+                / (rectangle.height * 0.5f);
+            return (normalizedX * normalizedX)
+                + (normalizedY * normalizedY) <= 1f;
         }
 
         private static string BuildBodyRegionTooltip(
@@ -2111,9 +2188,11 @@ namespace GritGud.Presentation.Gameplay
             commandHintsStyle = new GUIStyle(controlsStyle)
             {
                 alignment = TextAnchor.MiddleLeft,
-                fontSize = 9,
+                fontSize = 11,
+                fontStyle = FontStyle.Normal,
                 clipping = TextClipping.Clip,
                 wordWrap = false,
+                normal = { textColor = PrimaryTextColor },
             };
             statusStyle = new GUIStyle(GUI.skin.label)
             {
@@ -2625,6 +2704,17 @@ namespace GritGud.Presentation.Gameplay
             Color previousColor = GUI.color;
             GUI.color = color;
             GUI.DrawTexture(rectangle, whiteTexture);
+            GUI.color = previousColor;
+        }
+
+        private static void DrawTintedTexture(
+            Rect rectangle,
+            Texture texture,
+            Color color)
+        {
+            Color previousColor = GUI.color;
+            GUI.color = color;
+            GUI.DrawTexture(rectangle, texture);
             GUI.color = previousColor;
         }
 

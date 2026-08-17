@@ -198,24 +198,6 @@ namespace GritGud.Domain.Characters
                 if (string.IsNullOrWhiteSpace(talentId) || !talentIds.Add(talentId))
                     issues.Add("Character talents contain an empty or duplicate ID.");
             }
-            if (build.startingProgressionPoints < 0)
-                issues.Add("Starting progression points cannot be negative.");
-
-            var advancementIds = new HashSet<string>(StringComparer.Ordinal);
-            foreach (CharacterAdvancementData option in build.advancementOptions
-                ?? new List<CharacterAdvancementData>())
-            {
-                if (option == null || string.IsNullOrWhiteSpace(option.id)
-                    || !advancementIds.Add(option.id))
-                {
-                    issues.Add("Advancement options contain an empty or duplicate ID.");
-                    continue;
-                }
-                if (!skillIds.Contains(option.skillId))
-                    issues.Add($"Advancement '{option.id}' targets an unavailable skill.");
-                if (option.pointCost <= 0 || option.maximumBonus <= 0)
-                    issues.Add($"Advancement '{option.id}' needs a positive cost and cap.");
-            }
         }
 
         private static void ValidateLoadout(

@@ -234,15 +234,6 @@ namespace GritGud.Domain.Gameplay
     }
 
     [Serializable]
-    public sealed class ScenarioAdvancementOptionData
-    {
-        public string id = string.Empty;
-        public string skillId = string.Empty;
-        public int pointCost;
-        public int maximumBonus;
-    }
-
-    [Serializable]
     public sealed class ScenarioCharacterProfileData
     {
         public string identityId = string.Empty;
@@ -251,8 +242,6 @@ namespace GritGud.Domain.Gameplay
         public List<ScenarioCharacterRatingData> attributes = new List<ScenarioCharacterRatingData>();
         public List<ScenarioCharacterRatingData> skills = new List<ScenarioCharacterRatingData>();
         public List<string> talentIds = new List<string>();
-        public int startingProgressionPoints;
-        public List<ScenarioAdvancementOptionData> advancementOptions = new List<ScenarioAdvancementOptionData>();
     }
 
     [Serializable]

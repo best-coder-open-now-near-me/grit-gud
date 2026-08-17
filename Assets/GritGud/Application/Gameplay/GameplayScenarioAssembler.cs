@@ -422,15 +422,9 @@ namespace GritGud.Application.Gameplay
             foreach (ScenarioCharacterRatingData value in
                 data.skills ?? new List<ScenarioCharacterRatingData>())
                 skills.Add(new CharacterRating(value.id, value.rating));
-            var options = new List<CharacterAdvancementOption>();
-            foreach (ScenarioAdvancementOptionData value in
-                data.advancementOptions ?? new List<ScenarioAdvancementOptionData>())
-                options.Add(new CharacterAdvancementOption(
-                    value.id, value.skillId, value.pointCost, value.maximumBonus));
             return new CharacterProfileDefinition(
                 data.identityId, data.displayName, data.archetype,
-                attributes, skills, data.talentIds ?? new List<string>(),
-                data.startingProgressionPoints, options);
+                attributes, skills, data.talentIds ?? new List<string>());
         }
 
         private static void ValidateCharacterProfile(ScenarioActorContentData actor)
@@ -442,8 +436,6 @@ namespace GritGud.Application.Gameplay
             RequireText(data.identityId, $"Actor '{actor.id}' character identity");
             RequireText(data.displayName, $"Actor '{actor.id}' character display name");
             RequireText(data.archetype, $"Actor '{actor.id}' archetype");
-            Require(data.startingProgressionPoints >= 0,
-                $"Actor '{actor.id}' progression points cannot be negative.");
             try
             {
                 _ = CreateCharacterProfile(data);
@@ -463,12 +455,9 @@ namespace GritGud.Application.Gameplay
             && (!string.IsNullOrWhiteSpace(data.identityId)
                 || !string.IsNullOrWhiteSpace(data.displayName)
                 || !string.IsNullOrWhiteSpace(data.archetype)
-                || data.startingProgressionPoints != 0
                 || (data.attributes != null && data.attributes.Count > 0)
                 || (data.skills != null && data.skills.Count > 0)
-                || (data.talentIds != null && data.talentIds.Count > 0)
-                || (data.advancementOptions != null
-                    && data.advancementOptions.Count > 0));
+                || (data.talentIds != null && data.talentIds.Count > 0));
 
         private static IReadOnlyList<InventoryItemDefinition>
             CreateInventoryDefinitions(ScenarioActorContentData actor)

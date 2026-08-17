@@ -106,9 +106,8 @@ namespace GritGud.Application.Gameplay
                     0.3f,
                     movement.Route.TotalPlaybackDurationSeconds);
             if (entry is DisplacementResolvedJournalEntry displacement)
-                return Math.Max(0.3f,
-                    displacement.Displacement.PreviousPosition.DistanceTo(
-                        displacement.Displacement.ResultingPosition) / 5f);
+                return GameplayDisplacementPresentationTiming
+                    .GetDurationSeconds(displacement.Displacement);
             if (entry is ProjectileAdvancedJournalEntry projectile)
                 return Math.Max(0.2f,
                     projectile.Advance.RequestedTurnTime * 0.65f);
@@ -129,11 +128,15 @@ namespace GritGud.Application.Gameplay
         {
             foreach (GameplayActionOutcome outcome in action.Outcomes)
             {
+                if (outcome is DisplacementActionOutcome)
+                    return 0f;
+            }
+            foreach (GameplayActionOutcome outcome in action.Outcomes)
+            {
                 if (outcome is ProjectileLaunchedActionOutcome) return 0.65f;
                 if (outcome is WeaponDischargedActionOutcome) return 0.65f;
                 if (outcome is AttackResolvedActionOutcome) return 0.8f;
                 if (outcome is ThrownExplosiveActionOutcome) return 0.8f;
-                if (outcome is DisplacementActionOutcome) return 0.75f;
                 if (outcome is EquipmentChangedActionOutcome) return 0.4f;
             }
             return 0.35f;

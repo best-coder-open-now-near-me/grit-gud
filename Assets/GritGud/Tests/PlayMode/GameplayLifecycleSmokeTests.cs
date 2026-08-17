@@ -4,6 +4,7 @@ using System.Linq;
 using GritGud.Application.Gameplay;
 using GritGud.Application.Levels;
 using GritGud.Domain.Gameplay;
+using GritGud.Presentation.Actors.Animation;
 using GritGud.Presentation.Bootstrap;
 using GritGud.Presentation.Gameplay;
 using NUnit.Framework;
@@ -30,20 +31,13 @@ namespace GritGud.PlayMode.Tests
                 bootstrap.GetComponent<GameplayController>();
             Assert.That(gameplay, Is.Not.Null);
             Assert.That(gameplay.IsRunning, Is.True);
-            GameplayAdvancementHud advancement =
-                bootstrap.GetComponent<GameplayAdvancementHud>();
             GameplayInputController input =
                 bootstrap.GetComponent<GameplayInputController>();
-            Assert.That(advancement, Is.Not.Null);
             Assert.That(input, Is.Not.Null);
-            Assert.That(advancement.IsOpen, Is.False);
-            advancement.Open(gameplay.PartyControl.Snapshot.SelectedActorId);
-            yield return null;
-            Assert.That(advancement.IsOpen, Is.True);
-            Assert.That(input.CameraOnly, Is.True);
-            advancement.Close();
-            Assert.That(advancement.IsOpen, Is.False);
-            Assert.That(input.CameraOnly, Is.False);
+            Assert.That(
+                bootstrap.GetComponents<MonoBehaviour>()
+                    .Select(component => component.GetType().Name),
+                Does.Not.Contain("GameplayAdvancementHud"));
 
             const int sustainedFrameCount = 180;
             for (int frame = 0; frame < sustainedFrameCount; frame++)
@@ -150,6 +144,10 @@ namespace GritGud.PlayMode.Tests
                 Is.EqualTo(DestructiblePropPosture.Toppled));
             Assert.That(destructibles.Session.GetProp(propId).Posture,
                 Is.EqualTo(DestructiblePropPosture.Toppled));
+            Assert.That(gameplay.WorldRegistry.GetActor(actingActorId)
+                    .Transform.GetComponent<ActorAnimationCoordinator>()
+                    .LastRequestedAction,
+                Is.EqualTo(ActorAnimationAction.Push));
             Vector3 expectedPosition = new Vector3(
                 record.ResultingPosition.X,
                 record.ResultingPosition.Y,

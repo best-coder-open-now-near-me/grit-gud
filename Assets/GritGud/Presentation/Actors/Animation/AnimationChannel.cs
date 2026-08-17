@@ -12,6 +12,7 @@ namespace GritGud.Presentation.Actors.Animation
         WeaponAim = 4,
         Actions = 5,
         Reactions = 6,
+        Displacements = 7,
     }
 
     public enum AnimationMotionSource
@@ -150,6 +151,16 @@ namespace GritGud.Presentation.Actors.Animation
             AnimationExecutionStage.Animator,
             ActorAnimationParameters.ReactionLayerName);
 
+        public static readonly AnimationChannelDefinition Displacements = new(
+            AnimationChannelId.Displacements,
+            AnimationMotionSource.AnimatorController,
+            BodyRegion.WholeBody,
+            AnimationChannelBlendMode.Override,
+            priority: 450,
+            AnimationWeightPolicy.ActionPulse,
+            AnimationExecutionStage.Animator,
+            ActorAnimationParameters.DisplacementLayerName);
+
         public static readonly AnimationChannelDefinition WeaponAim = new(
             AnimationChannelId.WeaponAim,
             AnimationMotionSource.PostAnimationSolver,
@@ -166,6 +177,7 @@ namespace GritGud.Presentation.Actors.Animation
             WeaponPose,
             Recoil,
             Actions,
+            Displacements,
             Reactions,
             WeaponAim,
         };

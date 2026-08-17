@@ -96,6 +96,31 @@ namespace GritGud.Presentation.Gameplay
                 Present(snapshot);
         }
 
+        internal void PresentDisplacement(DisplacementRecord record)
+        {
+            if (record == null)
+                throw new ArgumentNullException(nameof(record));
+            if (!record.Succeeded ||
+                record.Request.SubjectKind != DisplacementSubjectKind.Prop)
+            {
+                return;
+            }
+            if (!presenters.TryGetValue(
+                    record.Request.SubjectId,
+                    out DestructiblePropPresenter presenter))
+            {
+                throw new InvalidOperationException(
+                    $"Destructible prop '{record.Request.SubjectId}' has no "
+                    + "level presenter.");
+            }
+
+            presenter.PresentDisplacement(
+                record,
+                GameplayDisplacementPresentationTiming.GetDurationSeconds(
+                    record));
+            Physics.SyncTransforms();
+        }
+
         internal void RestoreAuthoritativePresentation()
         {
             if (Session == null) return;
@@ -158,6 +183,13 @@ namespace GritGud.Presentation.Gameplay
 
             presenter.PresentDamage(record, spawnTransientDebris: true);
             Physics.SyncTransforms();
+        }
+
+        private void Update()
+        {
+            float deltaTime = Time.deltaTime;
+            foreach (DestructiblePropPresenter presenter in presenters.Values)
+                presenter?.TickDisplacement(deltaTime);
         }
 
         private static int ResolveFractureChunkCount(

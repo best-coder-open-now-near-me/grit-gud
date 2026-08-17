@@ -34,6 +34,16 @@ namespace GritGud.Presentation
         internal static readonly Color TextPrimary = new Color(0.78f, 0.89f, 1f, 1f);
         internal static readonly Color TextSecondary = new Color(0.44f, 0.62f, 0.82f, 1f);
 
+        // Shared screen-space HUD semantics. Every gameplay menu uses these
+        // tokens so separate panels cannot drift into subtly different grades.
+        internal static readonly Color HudPanel = Panel;
+        internal static readonly Color HudBorder = WithAlpha(Border, 0.24f);
+        internal static readonly Color HudPrimarySignal = SignalBlue;
+        internal static readonly Color HudSecondarySignal = SignalOrangeGlow;
+        internal static readonly Color HudTextBright = TextBright;
+        internal static readonly Color HudTextPrimary = TextPrimary;
+        internal static readonly Color HudTextSecondary = TextSecondary;
+
         // World-space tactical feedback.
         internal static readonly Color EmissionBase = new Color(0.002f, 0.014f, 0.042f, 1f);
         internal static readonly Color RouteGhost = new Color(0.08f, 0.84f, 1f, 0.76f);

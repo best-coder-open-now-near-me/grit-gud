@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Presentation.Persistence;
@@ -33,13 +32,6 @@ namespace GritGud.Presentation.Tests
                 {
                     new CharacterPersistenceSnapshot(
                         "character.mara-vance",
-                        new CharacterProgressionSnapshot(
-                            "character.mara-vance",
-                            0,
-                            new Dictionary<string, int>
-                            {
-                                ["skill.demolitions"] = 1,
-                            }),
                         equippedItemId: null,
                         wounds: new ActorWoundSnapshot(
                             "mara",
@@ -63,8 +55,6 @@ namespace GritGud.Presentation.Tests
             Assert.That(character.IdentityId,
                 Is.EqualTo("character.mara-vance"));
             Assert.That(character.EquippedItemId, Is.Null);
-            Assert.That(character.Progression.Bonuses["skill.demolitions"],
-                Is.EqualTo(1));
             Assert.That(character.Wounds.TorsoWounds, Is.EqualTo(1));
             Assert.That(character.Wounds.MovementPenalty,
                 Is.EqualTo(1.25f));
@@ -81,6 +71,34 @@ namespace GritGud.Presentation.Tests
             store.Delete();
 
             Assert.That(store.TryLoad(out _), Is.False);
+        }
+
+        [Test]
+        public void LegacyPointFieldsAreIgnoredAndRemovedOnTheNextSave()
+        {
+            const string legacy =
+                "{\"schemaVersion\":1,\"characters\":[{"
+                + "\"identityId\":\"character.mara-vance\","
+                + "\"unspentPoints\":4,"
+                + "\"bonuses\":[{\"skillId\":\"skill.demolitions\","
+                + "\"value\":2}],\"equippedItemId\":\"\","
+                + "\"wounds\":{\"head\":0,\"torso\":1,"
+                + "\"leftArm\":0,\"rightArm\":0,\"leftLeg\":0,"
+                + "\"rightLeg\":0,\"unlocalized\":0,"
+                + "\"movementPenalty\":1.25}}]}";
+            PlayerPrefs.SetString(
+                PlayerPrefsGameplayPartySaveStore.StorageKey,
+                legacy);
+            var store = new PlayerPrefsGameplayPartySaveStore();
+
+            Assert.That(store.TryLoad(out GameplayPartySave restored), Is.True);
+            store.Save(restored);
+            string normalized = PlayerPrefs.GetString(
+                PlayerPrefsGameplayPartySaveStore.StorageKey);
+
+            Assert.That(normalized, Does.Not.Contain("unspentPoints"));
+            Assert.That(normalized, Does.Not.Contain("bonuses"));
+            Assert.That(restored.Characters[0].Wounds.TorsoWounds, Is.EqualTo(1));
         }
     }
 }

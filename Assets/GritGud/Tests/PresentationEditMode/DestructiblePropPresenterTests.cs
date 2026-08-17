@@ -1,3 +1,4 @@
+using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Presentation.Gameplay;
 using NUnit.Framework;
@@ -274,6 +275,91 @@ namespace GritGud.Presentation.Tests
                 Object.DestroyImmediate(prop);
                 Object.DestroyImmediate(target);
                 Object.DestroyImmediate(observer);
+            }
+        }
+
+        [Test]
+        public void PushMovesCollisionImmediatelyButInterpolatesVisibleProp()
+        {
+            var prop = new GameObject("Pushed Prop");
+            GameObject visual = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            try
+            {
+                visual.transform.SetParent(prop.transform, false);
+                var presenter = prop.AddComponent<DestructiblePropPresenter>();
+                var previousPose = new GameplayPropPose(
+                    new GameplayPosition(0f, 0f, 0f),
+                    0f,
+                    0f,
+                    0f);
+                var resultingPose = new GameplayPropPose(
+                    new GameplayPosition(2f, 0f, 0f),
+                    0f,
+                    90f,
+                    0f);
+                presenter.Bind(new DestructiblePropSnapshot(
+                    "crate",
+                    DestructiblePropState.Intact,
+                    10f,
+                    10f,
+                    previousPose,
+                    DestructiblePropPosture.Upright));
+                var record = new DisplacementRecord(
+                    1,
+                    new DisplacementRequest(
+                        "actor",
+                        "push",
+                        "crate",
+                        DisplacementSubjectKind.Prop,
+                        30f,
+                        resultingPose.Position,
+                        DisplacementActionKind.Push),
+                    new PropDisplacementState(
+                        previousPose,
+                        DestructiblePropPosture.Upright),
+                    new PropDisplacementState(
+                        resultingPose,
+                        DestructiblePropPosture.Upright));
+
+                presenter.PresentDisplacement(
+                    record,
+                    GameplayDisplacementPresentationTiming.PushSeconds);
+                Physics.SyncTransforms();
+
+                Assert.That(prop.transform.position.x, Is.EqualTo(2f));
+                Assert.That(
+                    visual.GetComponent<Collider>().bounds.center.x,
+                    Is.EqualTo(2f).Within(0.001f));
+                Assert.That(visual.GetComponent<Renderer>().enabled, Is.False);
+                Assert.That(presenter.IsPresentingDisplacement, Is.True);
+                Assert.That(
+                    presenter.DisplacementVisualPosition.x,
+                    Is.EqualTo(0f).Within(0.001f));
+
+                presenter.TickDisplacement(
+                    GameplayDisplacementPresentationTiming.PushSeconds
+                        * GameplayDisplacementPresentationTiming
+                            .PushContactNormalizedTime);
+                Assert.That(
+                    presenter.DisplacementVisualPosition.x,
+                    Is.EqualTo(0f).Within(0.001f));
+
+                presenter.TickDisplacement(
+                    GameplayDisplacementPresentationTiming.PushSeconds
+                        * 0.3f);
+                Assert.That(
+                    presenter.DisplacementVisualPosition.x,
+                    Is.InRange(0.1f, 1.9f));
+
+                presenter.TickDisplacement(
+                    GameplayDisplacementPresentationTiming.PushSeconds);
+                Assert.That(presenter.IsPresentingDisplacement, Is.False);
+                Assert.That(visual.GetComponent<Renderer>().enabled, Is.True);
+                Assert.That(prop.transform.position.x, Is.EqualTo(2f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(prop);
             }
         }
     }

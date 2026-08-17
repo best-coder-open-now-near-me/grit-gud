@@ -259,6 +259,9 @@ namespace GritGud.Presentation.Gameplay
                 case TurnReplayActorActionKind.GetUp:
                     action = ActorAnimationAction.Interact;
                     return;
+                case TurnReplayActorActionKind.Push:
+                    action = ActorAnimationAction.Push;
+                    return;
                 case TurnReplayActorActionKind.Jump:
                 case TurnReplayActorActionKind.Vault:
                 case TurnReplayActorActionKind.Mantle:

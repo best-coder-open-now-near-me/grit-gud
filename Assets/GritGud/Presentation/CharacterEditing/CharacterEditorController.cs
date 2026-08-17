@@ -520,17 +520,6 @@ namespace GritGud.Presentation.CharacterEditing
                     document.build.talentIds.Remove(id);
                 session.Apply("Change character talent", document);
             }
-            GUILayout.Space(12f);
-            GUILayout.Label("STARTING PROGRESSION POINTS", styles.SectionHeader);
-            DrawIntegerStepper(
-                document.build.startingProgressionPoints,
-                0,
-                20,
-                value =>
-                {
-                    document.build.startingProgressionPoints = value;
-                    session.Apply("Change starting progression", document);
-                });
         }
 
         private void DrawSkills(CharacterDocument document)
@@ -542,9 +531,6 @@ namespace GritGud.Presentation.CharacterEditing
                 GUILayout.Label(label, styles.SectionHeader);
                 DrawRatingStepper(document, document.build.skills, id, 0, 5);
             }
-            GUILayout.Space(12f);
-            GUILayout.Label("ADVANCEMENT", styles.SectionHeader);
-            GUILayout.Label("Constrained advancement options are preserved in the document. Detailed option authoring is the next catalog pass.", styles.MutedLabel);
         }
 
         private void DrawLoadoutLibrary(CharacterDocument document)

@@ -373,6 +373,13 @@ namespace GritGud.Presentation.Actors.Animation
             {
                 return ActorAnimationParameters.NoTraversalStateName;
             }
+            if (string.Equals(
+                    layerName,
+                    ActorAnimationParameters.DisplacementLayerName,
+                    StringComparison.Ordinal))
+            {
+                return ActorAnimationParameters.NoDisplacementStateName;
+            }
             return null;
         }
 
@@ -383,6 +390,7 @@ namespace GritGud.Presentation.Actors.Animation
             ResetLayerWeight(ActorAnimationParameters.ActionLayerName);
             ResetLayerWeight(ActorAnimationParameters.ReactionLayerName);
             ResetLayerWeight(ActorAnimationParameters.TraversalLayerName);
+            ResetLayerWeight(ActorAnimationParameters.DisplacementLayerName);
         }
 
         private void ResetReplayActionLayers()
@@ -427,6 +435,16 @@ namespace GritGud.Presentation.Actors.Animation
                         ActorAnimationParameters.NoTraversalStateName),
                     0f);
                 animatorDriver.SetLayerWeight(traversalLayer, 0f);
+            }
+            string displacementLayer =
+                ActorAnimationParameters.DisplacementLayerName;
+            if (animatorDriver.HasLayer(displacementLayer))
+            {
+                animatorDriver.PlayState(
+                    displacementLayer,
+                    ActorAnimationParameters.NoDisplacementState,
+                    0f);
+                animatorDriver.SetLayerWeight(displacementLayer, 0f);
             }
         }
 

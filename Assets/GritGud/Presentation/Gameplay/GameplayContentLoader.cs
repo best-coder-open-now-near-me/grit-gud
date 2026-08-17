@@ -361,7 +361,6 @@ namespace GritGud.Presentation.Gameplay
                 identityId = character.characterId,
                 displayName = character.displayName,
                 archetype = character.build.archetype,
-                startingProgressionPoints = character.build.startingProgressionPoints,
             };
             foreach (CharacterRatingData attribute in character.build.attributes)
             {
@@ -380,16 +379,6 @@ namespace GritGud.Presentation.Gameplay
                 });
             }
             result.talentIds.AddRange(character.build.talentIds);
-            foreach (CharacterAdvancementData option in character.build.advancementOptions)
-            {
-                result.advancementOptions.Add(new ScenarioAdvancementOptionData
-                {
-                    id = option.id,
-                    skillId = option.skillId,
-                    pointCost = option.pointCost,
-                    maximumBonus = option.maximumBonus,
-                });
-            }
             return result;
         }
 
