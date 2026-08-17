@@ -228,43 +228,43 @@ namespace GritGud.Presentation.LevelEditing.UI
                         () => RequestDocumentReplacement(
                             state,
                             "Create a new level and discard the current unsaved changes?",
-                            actions.CreateNewLevel)),
+                            fileActions.CreateNewLevel)),
                     new LevelEditorMenuItem(
                         "Reload source…",
                         canAuthor,
                         () => RequestDocumentReplacement(
                             state,
                             "Reload the source level and discard the current unsaved changes?",
-                            actions.ReloadSourceLevel)),
+                            fileActions.ReloadSourceLevel)),
                     LevelEditorMenuItem.Separator,
-                    new LevelEditorMenuItem("Save local draft", canAuthor, actions.SaveDraft, shortcut: "Ctrl+S"),
+                    new LevelEditorMenuItem("Save local draft", canAuthor, fileActions.SaveDraft, shortcut: "Ctrl+S"),
                     new LevelEditorMenuItem(
                         "Save cloud draft",
-                        canAuthor && !actions.CloudOperationRunning,
-                        actions.SaveToCloud),
+                        canAuthor && !fileActions.CloudOperationRunning,
+                        fileActions.SaveToCloud),
                     new LevelEditorMenuItem(
                         "Load local draft…",
-                        canAuthor && actions.HasDraft,
+                        canAuthor && fileActions.HasDraft,
                         () => RequestDocumentReplacement(
                             state,
                             "Load the saved draft and discard the current unsaved changes?",
-                            actions.LoadDraft)),
+                            fileActions.LoadDraft)),
                     new LevelEditorMenuItem(
                         "Load cloud draft…",
-                        canAuthor && actions.HasCloudDraftContext && !actions.CloudOperationRunning,
+                        canAuthor && fileActions.HasCloudDraftContext && !fileActions.CloudOperationRunning,
                         () => RequestDocumentReplacement(
                             state,
                             "Load the cloud draft and discard the current unsaved changes?",
-                            actions.LoadFromCloud)),
+                            fileActions.LoadFromCloud)),
                     LevelEditorMenuItem.Separator,
-                    new LevelEditorMenuItem("Export portable JSON", canAuthor, actions.Export),
+                    new LevelEditorMenuItem("Export portable JSON", canAuthor, fileActions.Export),
                     new LevelEditorMenuItem(
                         "Import portable JSON…",
                         canAuthor,
                         () => RequestDocumentReplacement(
                             state,
                             "Import another level and discard the current unsaved changes?",
-                            actions.RequestImport)),
+                            fileActions.RequestImport)),
                 });
         }
 
@@ -276,8 +276,8 @@ namespace GritGud.Presentation.LevelEditing.UI
                 LevelEditorMenuKind.Edit,
                 new[]
                 {
-                    new LevelEditorMenuItem("Undo", canAuthor && state.CanUndo, actions.Undo, shortcut: "Ctrl+Z"),
-                    new LevelEditorMenuItem("Redo", canAuthor && state.CanRedo, actions.Redo, shortcut: "Ctrl+Y"),
+                    new LevelEditorMenuItem("Undo", canAuthor && state.CanUndo, historyActions.Undo, shortcut: "Ctrl+Z"),
+                    new LevelEditorMenuItem("Redo", canAuthor && state.CanRedo, historyActions.Redo, shortcut: "Ctrl+Y"),
                     LevelEditorMenuItem.Separator,
                     new LevelEditorMenuItem(
                         "Duplicate selection",
@@ -348,8 +348,8 @@ namespace GritGud.Presentation.LevelEditing.UI
             items.Add(new LevelEditorMenuItem(
                 label,
                 true,
-                () => actions.SetCameraView(view),
-                selected: actions.CameraView == view));
+                () => selectionGroupActions.SetCameraView(view),
+                selected: selectionGroupActions.CameraView == view));
         }
 
         private void RequestDocumentReplacement(
@@ -363,7 +363,7 @@ namespace GritGud.Presentation.LevelEditing.UI
         private void ToggleLayoutGrid()
         {
             gridFields.visible = !gridFields.visible;
-            actions.ConfigureGrid(gridFields);
+            spatialPlacementActions.ConfigureGrid(gridFields);
         }
 
         private void ShowLevelSettings()
@@ -409,18 +409,18 @@ namespace GritGud.Presentation.LevelEditing.UI
                 && selection.Primary != null;
             Rect frameButton = new Rect(cameraButton.xMax + 4f, y, 72f, height);
             if (GUI.Button(frameButton, new GUIContent("FRAME", "Frame selection (F)")))
-                actions.FrameSelection();
+                selectionGroupActions.FrameSelection();
 
             GUI.enabled = !documentActionConfirmation.HasPendingAction;
             Rect allButton = new Rect(frameButton.xMax + 4f, y, 60f, height);
             if (GUI.Button(allButton, new GUIContent("ALL", "Frame level bounds (Home)")))
-                actions.FrameLevel();
+                selectionGroupActions.FrameLevel();
             GUI.enabled = true;
         }
 
         private string CameraViewLabel()
         {
-            switch (actions.CameraView)
+            switch (selectionGroupActions.CameraView)
             {
                 case LevelEditorCameraView.Top:
                     return "TOP";

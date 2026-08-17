@@ -68,7 +68,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawLabeledField("New", ref newGroupName);
             GUI.enabled = document.groups.Count < LevelDocument.MaximumEntityGroupCount;
             if (GUILayout.Button("+ CREATE GROUP", PanelButtonLayout()))
-                actions.CreateEntityGroup(newGroupName);
+                selectionGroupActions.CreateEntityGroup(newGroupName);
             GUI.enabled = true;
 
             LevelEntityGroupData selected = document.groups.FirstOrDefault(group => string.Equals(
@@ -79,38 +79,44 @@ namespace GritGud.Presentation.LevelEditing.UI
             {
                 DrawLabeledField("Name", ref selectedGroupName);
                 if (GUILayout.Button("RENAME GROUP", PanelApplyButtonLayout()))
-                    actions.RenameEntityGroup(selected.id, selectedGroupName);
+                    selectionGroupActions.RenameEntityGroup(
+                        selected.id,
+                        selectedGroupName);
                 bool locked = GUILayout.Toggle(selected.locked, "Locked (cannot select or edit)");
                 if (locked != selected.locked)
-                    actions.SetEntityGroupLocked(selected.id, locked);
+                    selectionGroupActions.SetEntityGroupLocked(
+                        selected.id,
+                        locked);
                 bool hidden = GUILayout.Toggle(selected.hidden, "Hidden in editor");
                 if (hidden != selected.hidden)
-                    actions.SetEntityGroupHidden(selected.id, hidden);
+                    selectionGroupActions.SetEntityGroupHidden(
+                        selected.id,
+                        hidden);
                 if (GUILayout.Button("ASSIGN SELECTION", PanelButtonLayout()))
-                    actions.AssignSelectionToGroup(selected.id);
+                    selectionGroupActions.AssignSelectionToGroup(selected.id);
                 if (string.Equals(
-                        actions.IsolatedGroupId,
+                        selectionGroupActions.IsolatedGroupId,
                         selected.id,
                         StringComparison.Ordinal))
                 {
                     if (GUILayout.Button("SHOW ALL GROUPS", PanelButtonLayout()))
-                        actions.IsolateEntityGroup(string.Empty);
+                        selectionGroupActions.IsolateEntityGroup(string.Empty);
                 }
                 else if (GUILayout.Button("ISOLATE GROUP", PanelButtonLayout()))
                 {
-                    actions.IsolateEntityGroup(selected.id);
+                    selectionGroupActions.IsolateEntityGroup(selected.id);
                 }
                 Color deleteColor = GUI.backgroundColor;
                 GUI.backgroundColor = LevelEditorTheme.Warning;
                 if (GUILayout.Button("DELETE GROUP", PanelButtonLayout()))
-                    actions.DeleteEntityGroup(selected.id);
+                    selectionGroupActions.DeleteEntityGroup(selected.id);
                 GUI.backgroundColor = deleteColor;
             }
 
             GUI.enabled = selection.Targets.Any(target =>
                 target.Kind == GritGud.Application.Levels.LevelSelectionKind.Entity);
             if (GUILayout.Button("UNGROUP SELECTION", PanelButtonLayout()))
-                actions.AssignSelectionToGroup(string.Empty);
+                selectionGroupActions.AssignSelectionToGroup(string.Empty);
             GUI.enabled = true;
 
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
@@ -121,15 +127,17 @@ namespace GritGud.Presentation.LevelEditing.UI
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(value => value, StringComparer.OrdinalIgnoreCase))
                 .ToArray();
-            int categoryIndex = string.IsNullOrEmpty(actions.SelectionCategoryFilter)
+            int categoryIndex = string.IsNullOrEmpty(
+                    selectionGroupActions.SelectionCategoryFilter)
                 ? 0
                 : Math.Max(0, Array.FindIndex(categories, category => string.Equals(
                     category,
-                    actions.SelectionCategoryFilter,
+                    selectionGroupActions.SelectionCategoryFilter,
                     StringComparison.OrdinalIgnoreCase)));
             int selectedCategory = GUILayout.SelectionGrid(categoryIndex, categories, 2);
             if (selectedCategory != categoryIndex)
-                actions.SetSelectionCategoryFilter(selectedCategory == 0
+                selectionGroupActions.SetSelectionCategoryFilter(
+                    selectedCategory == 0
                     ? string.Empty
                     : categories[selectedCategory]);
 
@@ -143,13 +151,14 @@ namespace GritGud.Presentation.LevelEditing.UI
                 .ToArray();
             int groupIndex = Math.Max(0, Array.FindIndex(groupIds, id => string.Equals(
                 id,
-                actions.SelectionGroupFilter,
+                selectionGroupActions.SelectionGroupFilter,
                 StringComparison.Ordinal)));
             int selectedFilterGroup = GUILayout.SelectionGrid(groupIndex, groupLabels, 2);
             if (selectedFilterGroup != groupIndex)
-                actions.SetSelectionGroupFilter(groupIds[selectedFilterGroup]);
+                selectionGroupActions.SetSelectionGroupFilter(
+                    groupIds[selectedFilterGroup]);
             if (GUILayout.Button("SELECT MATCHING", PanelPrimaryButtonLayout()))
-                actions.SelectMatchingEntities();
+                selectionGroupActions.SelectMatchingEntities();
         }
     }
 }

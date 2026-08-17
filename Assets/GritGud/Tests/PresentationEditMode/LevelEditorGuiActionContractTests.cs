@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using GritGud.Presentation.LevelEditing;
 using GritGud.Presentation.LevelEditing.UI;
 using NUnit.Framework;
@@ -58,6 +60,28 @@ namespace GritGud.Presentation.Tests
             {
                 Assert.That(capability.IsAssignableFrom(controller), Is.True);
             }
+        }
+
+        [Test]
+        public void GuiStoresNarrowCapabilitiesInsteadOfTheCompositeContract()
+        {
+            Type[] actionFieldTypes = typeof(LevelEditorGui)
+                .GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
+                .Select(field => field.FieldType)
+                .Where(type => typeof(ILevelEditorGuiActions)
+                    .IsAssignableFrom(type)
+                    || type.Name.StartsWith(
+                        "ILevelEditor",
+                        StringComparison.Ordinal))
+                .ToArray();
+
+            Assert.That(
+                actionFieldTypes,
+                Is.EquivalentTo(typeof(ILevelEditorGuiActions)
+                    .GetInterfaces()));
+            Assert.That(
+                actionFieldTypes,
+                Has.None.EqualTo(typeof(ILevelEditorGuiActions)));
         }
     }
 }

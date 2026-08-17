@@ -80,10 +80,14 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
             DrawSectionHeader("AUTHORING PREVIEW");
             bool previewAudio = GUILayout.Toggle(
-                actions.AudioZonePreviewEnabled,
+                environmentDressingActions.AudioZonePreviewEnabled,
                 "Preview ambient audio");
-            if (previewAudio != actions.AudioZonePreviewEnabled)
-                actions.SetAudioZonePreviewEnabled(previewAudio);
+            if (previewAudio
+                != environmentDressingActions.AudioZonePreviewEnabled)
+            {
+                environmentDressingActions.SetAudioZonePreviewEnabled(
+                    previewAudio);
+            }
             GUILayout.Label("Blue boxes show audio zones in Edit mode. They are hidden in Preview and Test Play.");
 
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
@@ -117,7 +121,8 @@ namespace GritGud.Presentation.LevelEditing.UI
                 DrawDressingItemButton(LevelDressingTargetKind.Decal, decal.id, decal.displayName);
             GUI.enabled = dressing.decals.Count < LevelDressingData.MaximumDecalCount;
             if (GUILayout.Button("PLACE DECAL", PanelButtonLayout()))
-                actions.QueueSpatialPlacement(LevelSpatialPlacementKind.Decal);
+                spatialPlacementActions.QueueSpatialPlacement(
+                    LevelSpatialPlacementKind.Decal);
             GUI.enabled = true;
 
             LevelDecalData selected = selectedDressingKind == LevelDressingTargetKind.Decal
@@ -140,10 +145,14 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawColorFields("Color RGB", decalFields.color);
             DrawLabeledField("Opacity", ref decalFields.alpha);
             if (GUILayout.Button("MOVE DECAL ON MAP", PanelButtonLayout()))
-                actions.QueueSpatialRelocation(LevelSpatialPlacementKind.Decal, selected.id);
+                spatialPlacementActions.QueueSpatialRelocation(
+                    LevelSpatialPlacementKind.Decal,
+                    selected.id);
             if (GUILayout.Button("APPLY DECAL", PanelApplyButtonLayout()))
-                actions.ApplyDecal(decalFields);
-            DrawDeleteButton("DELETE DECAL", () => actions.DeleteDecal(selected.id));
+                environmentDressingActions.ApplyDecal(decalFields);
+            DrawDeleteButton(
+                "DELETE DECAL",
+                () => environmentDressingActions.DeleteDecal(selected.id));
         }
 
         private void DrawAmbientVfxSection(LevelDressingData dressing)
@@ -156,7 +165,8 @@ namespace GritGud.Presentation.LevelEditing.UI
                 DrawDressingItemButton(LevelDressingTargetKind.AmbientVfx, effect.id, effect.displayName);
             GUI.enabled = dressing.ambientVfx.Count < LevelDressingData.MaximumAmbientVfxCount;
             if (GUILayout.Button("PLACE AMBIENT VFX", PanelButtonLayout()))
-                actions.QueueSpatialPlacement(LevelSpatialPlacementKind.AmbientVfx);
+                spatialPlacementActions.QueueSpatialPlacement(
+                    LevelSpatialPlacementKind.AmbientVfx);
             GUI.enabled = true;
 
             LevelAmbientVfxData selected = selectedDressingKind == LevelDressingTargetKind.AmbientVfx
@@ -174,12 +184,15 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawVectorFields("Rotation", ambientVfxFields.rotation);
             DrawVectorFields("Scale", ambientVfxFields.scale);
             if (GUILayout.Button("MOVE VFX ON MAP", PanelButtonLayout()))
-                actions.QueueSpatialRelocation(LevelSpatialPlacementKind.AmbientVfx, selected.id);
+                spatialPlacementActions.QueueSpatialRelocation(
+                    LevelSpatialPlacementKind.AmbientVfx,
+                    selected.id);
             if (GUILayout.Button("APPLY AMBIENT VFX", PanelApplyButtonLayout()))
-                actions.ApplyAmbientVfx(ambientVfxFields);
+                environmentDressingActions.ApplyAmbientVfx(ambientVfxFields);
             DrawDeleteButton(
                 "DELETE AMBIENT VFX",
-                () => actions.DeleteAmbientVfx(selected.id));
+                () => environmentDressingActions.DeleteAmbientVfx(
+                    selected.id));
         }
 
         private void DrawAudioZoneSection(LevelDressingData dressing)
@@ -192,7 +205,8 @@ namespace GritGud.Presentation.LevelEditing.UI
                 DrawDressingItemButton(LevelDressingTargetKind.AudioZone, zone.id, zone.displayName);
             GUI.enabled = dressing.audioZones.Count < LevelDressingData.MaximumAudioZoneCount;
             if (GUILayout.Button("PLACE AUDIO ZONE", PanelButtonLayout()))
-                actions.QueueSpatialPlacement(LevelSpatialPlacementKind.AudioZone);
+                spatialPlacementActions.QueueSpatialPlacement(
+                    LevelSpatialPlacementKind.AudioZone);
             GUI.enabled = true;
 
             LevelAudioZoneData selected = selectedDressingKind == LevelDressingTargetKind.AudioZone
@@ -214,12 +228,15 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawLabeledField("Volume 0-1", ref audioZoneFields.volume);
             DrawLabeledField("Fade distance", ref audioZoneFields.fadeDistance);
             if (GUILayout.Button("MOVE AUDIO ZONE ON MAP", PanelButtonLayout()))
-                actions.QueueSpatialRelocation(LevelSpatialPlacementKind.AudioZone, selected.id);
+                spatialPlacementActions.QueueSpatialRelocation(
+                    LevelSpatialPlacementKind.AudioZone,
+                    selected.id);
             if (GUILayout.Button("APPLY AUDIO ZONE", PanelApplyButtonLayout()))
-                actions.ApplyAudioZone(audioZoneFields);
+                environmentDressingActions.ApplyAudioZone(audioZoneFields);
             DrawDeleteButton(
                 "DELETE AUDIO ZONE",
-                () => actions.DeleteAudioZone(selected.id));
+                () => environmentDressingActions.DeleteAudioZone(
+                    selected.id));
         }
 
         private void DrawDressingItemButton(

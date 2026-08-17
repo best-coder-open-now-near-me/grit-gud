@@ -82,7 +82,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 DrawLabeledField("Yaw Y", ref yawText);
                 DrawLabeledField("Roll Z", ref rollText);
                 if (GUILayout.Button("APPLY TRANSFORM", PanelPrimaryButtonLayout()))
-                    actions.ApplyEntityTransform(
+                    spatialPlacementActions.ApplyEntityTransform(
                         xText,
                         yText,
                         zText,
@@ -116,14 +116,16 @@ namespace GritGud.Presentation.LevelEditing.UI
                         selection.Targets.Count > 1
                             ? $"Settles supported records from the {selection.Targets.Count}-object selection together."
                             : "Simulates this loose prop, then saves its settled transform.");
-                    if (actions.PhysicsPlacementRunning)
+                    if (spatialPlacementActions.PhysicsPlacementRunning)
                     {
                         if (GUILayout.Button("CANCEL SETTLE", PanelPrimaryButtonLayout()))
-                            actions.CancelPhysicsPlacement();
+                            spatialPlacementActions.CancelPhysicsPlacement();
                     }
                     else if (GUILayout.Button("DROP & SETTLE", PanelPrimaryButtonLayout()))
                     {
-                        actions.DropAndSettleSelection(physicsDropHeightText, physicsKeepUpright);
+                        spatialPlacementActions.DropAndSettleSelection(
+                            physicsDropHeightText,
+                            physicsKeepUpright);
                     }
                 }
             }
@@ -182,7 +184,9 @@ namespace GritGud.Presentation.LevelEditing.UI
                     if (selected)
                         GUI.backgroundColor = LevelEditorTheme.SelectionOutline;
                     if (GUILayout.Button(selected ? "●" : "○"))
-                        actions.SetEntityRotationPivot(normalizedX, normalizedZ);
+                        spatialPlacementActions.SetEntityRotationPivot(
+                            normalizedX,
+                            normalizedZ);
                     GUI.backgroundColor = previous;
                 }
                 GUILayout.EndHorizontal();
@@ -193,7 +197,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             if (usesAssetPivot)
                 GUI.backgroundColor = LevelEditorTheme.SelectionOutline;
             if (GUILayout.Button(usesAssetPivot ? "● ASSET PIVOT" : "○ ASSET PIVOT"))
-                actions.ResetEntityRotationPivot();
+                spatialPlacementActions.ResetEntityRotationPivot();
             GUI.backgroundColor = assetPrevious;
         }
 
@@ -293,7 +297,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                         }
                         else if (GUILayout.Button(issueText))
                         {
-                            actions.FocusEntity(issue.EntityId);
+                            selectionGroupActions.FocusEntity(issue.EntityId);
                         }
                     }
 
@@ -315,7 +319,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.Space(LevelEditorGuiMetrics.SpaceMajor);
             if (DrawSectionExpander("PORTABLE FILES", ref showPortableFiles))
             {
-                if (actions.UsesBrowserFileDialog)
+                if (fileActions.UsesBrowserFileDialog)
                 {
                     GUILayout.Label(
                         "Import opens the browser file picker. Export downloads a JSON file.");
@@ -323,7 +327,8 @@ namespace GritGud.Presentation.LevelEditing.UI
                 else
                 {
                     GUILayout.Label("Desktop import path:");
-                    actions.DesktopImportPath = GUILayout.TextField(actions.DesktopImportPath);
+                    fileActions.DesktopImportPath = GUILayout.TextField(
+                        fileActions.DesktopImportPath);
                     GUILayout.Label(
                         "Exports are written beneath the application's persistent-data folder.");
                 }
@@ -333,11 +338,11 @@ namespace GritGud.Presentation.LevelEditing.UI
                 GUILayout.Label(
                     "Unsaved work is retained in three rolling local snapshots after 15 seconds of inactivity.");
                 for (int generation = 0;
-                    generation < actions.RecoveryGenerationCount;
+                    generation < fileActions.RecoveryGenerationCount;
                     generation++)
                 {
                     int capturedGeneration = generation;
-                    GUI.enabled = actions.HasRecovery(capturedGeneration);
+                    GUI.enabled = fileActions.HasRecovery(capturedGeneration);
                     string age = capturedGeneration == 0
                         ? "NEWEST"
                         : $"OLDER {capturedGeneration}";
@@ -348,7 +353,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                         documentActionConfirmation.Request(
                             state.IsDirty,
                             "Load this recovery snapshot and discard the current unsaved changes?",
-                            () => actions.LoadRecovery(capturedGeneration));
+                            () => fileActions.LoadRecovery(capturedGeneration));
                     }
                 }
                 GUI.enabled = true;
@@ -375,14 +380,18 @@ namespace GritGud.Presentation.LevelEditing.UI
                     ?? actor.characterId + " (unavailable)";
             GUILayout.Label(characterName);
             if (GUILayout.Button("TEMPLATE DEFAULT", PanelCompactButtonLayout()))
-                actions.ApplyScenarioActorCharacter(actor.id, string.Empty);
+                spatialPlacementActions.ApplyScenarioActorCharacter(
+                    actor.id,
+                    string.Empty);
             foreach (PublishedCharacterEntry character in characterLibrary.Entries)
             {
                 Color characterColor = GUI.backgroundColor;
                 if (string.Equals(actor.characterId, character.CharacterId, StringComparison.Ordinal))
                     GUI.backgroundColor = LevelEditorTheme.Active;
                 if (GUILayout.Button(character.DisplayName, PanelCompactButtonLayout()))
-                    actions.ApplyScenarioActorCharacter(actor.id, character.CharacterId);
+                    spatialPlacementActions.ApplyScenarioActorCharacter(
+                        actor.id,
+                        character.CharacterId);
                 GUI.backgroundColor = characterColor;
             }
             DrawLabeledField("X", ref scenarioXText);
@@ -408,7 +417,7 @@ namespace GritGud.Presentation.LevelEditing.UI
 
             if (GUILayout.Button("APPLY", PanelApplyButtonLayout()))
             {
-                actions.ApplyScenarioActor(
+                spatialPlacementActions.ApplyScenarioActor(
                     actor.id,
                     scenarioXText,
                     scenarioYText,
@@ -420,12 +429,12 @@ namespace GritGud.Presentation.LevelEditing.UI
             }
 
             if (GUILayout.Button("PLACE AT VIEW", PanelButtonLayout()))
-                actions.PlaceScenarioActorAtView(actor.id);
+                spatialPlacementActions.PlaceScenarioActorAtView(actor.id);
 
             Color previous = GUI.backgroundColor;
             GUI.backgroundColor = LevelEditorTheme.Destructive;
             if (GUILayout.Button("REMOVE ACTOR", PanelButtonLayout()))
-                actions.DeleteScenarioActor(actor.id);
+                spatialPlacementActions.DeleteScenarioActor(actor.id);
             GUI.backgroundColor = previous;
         }
 
@@ -439,7 +448,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawLabeledField("Yaw", ref playerStartYawText);
             if (GUILayout.Button("SET START", PanelButtonLayout()))
             {
-                actions.ApplyPlayerStart(
+                spatialPlacementActions.ApplyPlayerStart(
                     playerStartXText,
                     playerStartYText,
                     playerStartZText,
@@ -477,7 +486,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                     DrawLabeledField("Radius", ref interactionRadiusText);
                     if (GUILayout.Button("APPLY POINT", PanelButtonLayout()))
                     {
-                        actions.ApplyInteractionPoint(
+                        spatialPlacementActions.ApplyInteractionPoint(
                             interactionType,
                             interactionXText,
                             interactionYText,
@@ -489,7 +498,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                     GUI.backgroundColor = LevelEditorTheme.Destructive;
                     if (GUILayout.Button("REMOVE POINT", PanelButtonLayout()))
                     {
-                        actions.DeleteInteractionPoint();
+                        spatialPlacementActions.DeleteInteractionPoint();
                     }
                     GUI.backgroundColor = previous;
                     return;
@@ -498,7 +507,7 @@ namespace GritGud.Presentation.LevelEditing.UI
 
             if (GUILayout.Button("+ POINT", PanelButtonLayout()))
             {
-                actions.AddInteractionPoint();
+                spatialPlacementActions.AddInteractionPoint();
             }
             GUILayout.Label("Select a pink world handle to edit an existing point.");
         }
@@ -542,7 +551,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawLabeledField("Integrity", ref destructibleIntegrity);
             if (GUILayout.Button("APPLY DAMAGE", PanelButtonLayout()))
             {
-                actions.ApplyDestructibleDefaults(
+                spatialPlacementActions.ApplyDestructibleDefaults(
                     destructibleEnabled ? "true" : "false",
                     destructibleState,
                     destructibleIntegrity);
@@ -643,7 +652,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUI.enabled = true;
             if (GUILayout.Button("APPLY PROP", PanelButtonLayout()))
             {
-                actions.ApplyScenarioProp(
+                spatialPlacementActions.ApplyScenarioProp(
                     entity.id,
                     scenarioPropEnabled,
                     scenarioPropMassText,
@@ -719,7 +728,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUI.enabled = true;
             if (GUILayout.Button("APPLY GOAL", PanelButtonLayout()))
             {
-                actions.ApplyScenarioObjective(
+                spatialPlacementActions.ApplyScenarioObjective(
                     entity.id,
                     point.id,
                     scenarioObjectiveEnabled,
@@ -794,7 +803,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUI.enabled = true;
             if (GUILayout.Button("APPLY VEHICLE", PanelButtonLayout()))
             {
-                actions.ApplyScenarioVehicle(
+                spatialPlacementActions.ApplyScenarioVehicle(
                     entity.id,
                     scenarioVehicleEnabled,
                     scenarioVehicleMaximumSpeedText,

@@ -62,7 +62,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawBoundVector("Size", ref boundsFields.sizeX, ref boundsFields.sizeY,
                 ref boundsFields.sizeZ);
             if (GUILayout.Button("APPLY BOUNDS", PanelApplyButtonLayout()))
-                actions.ApplyLevelBounds(boundsFields);
+                spatialPlacementActions.ApplyLevelBounds(boundsFields);
 
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);
             DrawSectionHeader("LAYOUT GRID");
@@ -70,7 +70,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawLabeledField("Spacing", ref gridFields.spacing);
             DrawLabeledField("Elevation", ref gridFields.elevation);
             if (GUILayout.Button("APPLY GRID", PanelApplyButtonLayout()))
-                actions.ConfigureGrid(gridFields);
+                spatialPlacementActions.ConfigureGrid(gridFields);
             GUILayout.Label("The grid is a local editor preference clipped to the authored bounds.");
         }
 
@@ -84,7 +84,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawLabeledField("Step Z", ref arrayFields.spacingZ);
             GUI.enabled = selection.Targets.Count > 0;
             if (GUILayout.Button("CREATE ARRAY", PanelPrimaryButtonLayout()))
-                actions.DuplicateArray(arrayFields);
+                selectionGroupActions.DuplicateArray(arrayFields);
             GUI.enabled = true;
         }
 

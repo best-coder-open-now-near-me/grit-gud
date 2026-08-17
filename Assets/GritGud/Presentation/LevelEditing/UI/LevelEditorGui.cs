@@ -31,7 +31,15 @@ namespace GritGud.Presentation.LevelEditing.UI
         private readonly SelectionLevelEditorTool selectionTool;
         private readonly LevelSnapSettings snapSettings;
         private readonly LevelEditorPresentationState presentationState;
-        private readonly ILevelEditorGuiActions actions;
+        private readonly ILevelEditorFileActions fileActions;
+        private readonly ILevelEditorHistoryActions historyActions;
+        private readonly ILevelEditorSelectionGroupActions
+            selectionGroupActions;
+        private readonly ILevelEditorEnvironmentDressingActions
+            environmentDressingActions;
+        private readonly ILevelEditorSpatialPlacementActions
+            spatialPlacementActions;
+        private readonly ILevelEditorPreviewTestActions previewTestActions;
         private readonly LevelEditorDocumentActionConfirmation documentActionConfirmation =
             new LevelEditorDocumentActionConfirmation();
         private Vector2 paletteScroll;
@@ -162,7 +170,14 @@ namespace GritGud.Presentation.LevelEditing.UI
             this.snapSettings = snapSettings ?? throw new ArgumentNullException(nameof(snapSettings));
             this.presentationState = presentationState
                 ?? throw new ArgumentNullException(nameof(presentationState));
-            this.actions = actions ?? throw new ArgumentNullException(nameof(actions));
+            if (actions == null)
+                throw new ArgumentNullException(nameof(actions));
+            fileActions = actions;
+            historyActions = actions;
+            selectionGroupActions = actions;
+            environmentDressingActions = actions;
+            spatialPlacementActions = actions;
+            previewTestActions = actions;
         }
 
         public void Draw(LevelEditorViewState state)
@@ -335,7 +350,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 documentActionConfirmation.Request(
                     state.IsDirty,
                     "Return to the main menu and discard this level's unsaved changes?",
-                    actions.ReturnToMenu);
+                    previewTestActions.ReturnToMenu);
             }
 
             GUI.enabled = interactionsEnabled;
@@ -346,13 +361,13 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUI.enabled = interactionsEnabled && state.CanUndo && !previewMode;
             if (GUILayout.Button(new GUIContent("UNDO", "Undo (Ctrl+Z)"), ToolbarButtonLayout(48f)))
             {
-                actions.Undo();
+                historyActions.Undo();
             }
 
             GUI.enabled = interactionsEnabled && state.CanRedo && !previewMode;
             if (GUILayout.Button(new GUIContent("REDO", "Redo (Ctrl+Y)"), ToolbarButtonLayout(48f)))
             {
-                actions.Redo();
+                historyActions.Redo();
             }
 
             GUI.enabled = interactionsEnabled;
@@ -371,7 +386,7 @@ namespace GritGud.Presentation.LevelEditing.UI
             if (GUILayout.Button(new GUIContent("SAVE", "Save the local recovery draft"),
                     ToolbarButtonLayout(68f)))
             {
-                actions.SaveDraft();
+                fileActions.SaveDraft();
             }
 
             GUI.enabled = interactionsEnabled;
@@ -379,14 +394,14 @@ namespace GritGud.Presentation.LevelEditing.UI
                     previewMode ? "EDIT MODE" : "PREVIEW",
                     ToolbarButtonLayout(92f)))
             {
-                actions.TogglePreview();
+                previewTestActions.TogglePreview();
             }
             GUI.enabled = interactionsEnabled && !previewMode;
             Color previous = GUI.backgroundColor;
             GUI.backgroundColor = LevelEditorTheme.PrimaryAction;
             if (GUILayout.Button("TEST PLAY", ToolbarButtonLayout(92f)))
             {
-                actions.StartTestPlay();
+                previewTestActions.StartTestPlay();
             }
             GUI.backgroundColor = previous;
 

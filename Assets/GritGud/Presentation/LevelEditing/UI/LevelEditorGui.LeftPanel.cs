@@ -436,7 +436,8 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUILayout.Label("Display name");
             levelDisplayNameText = GUILayout.TextField(levelDisplayNameText ?? string.Empty);
             if (GUILayout.Button("APPLY NAME", PanelApplyButtonLayout()))
-                actions.ApplyLevelDisplayName(levelDisplayNameText);
+                spatialPlacementActions.ApplyLevelDisplayName(
+                    levelDisplayNameText);
             GUILayout.Label($"Stable ID: {document.levelId}");
             GUILayout.Label("The name controls menus and export filenames; the ID stays stable.");
 
@@ -503,7 +504,8 @@ namespace GritGud.Presentation.LevelEditing.UI
                     }
 
                     if (GUILayout.Button($"+ {template.DisplayName}", PanelButtonLayout()))
-                        actions.AddScenarioActor(template.TemplateId);
+                        spatialPlacementActions.AddScenarioActor(
+                            template.TemplateId);
                 }
             }
 
@@ -624,7 +626,7 @@ namespace GritGud.Presentation.LevelEditing.UI
 
                 if (GUILayout.Button(EntityDisplayName(entity), PanelCompactButtonLayout()))
                 {
-                    actions.FocusEntity(entity.id);
+                    selectionGroupActions.FocusEntity(entity.id);
                 }
 
                 GUI.backgroundColor = previous;
@@ -655,7 +657,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 if (!MatchesOutlineSearch(displayName, entityId, label))
                     continue;
                 if (GUILayout.Button(displayName, PanelCompactButtonLayout()))
-                    actions.FocusEntity(entityId);
+                    selectionGroupActions.FocusEntity(entityId);
             }
         }
 

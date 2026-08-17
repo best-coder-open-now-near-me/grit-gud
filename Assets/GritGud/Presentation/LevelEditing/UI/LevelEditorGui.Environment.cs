@@ -108,7 +108,8 @@ namespace GritGud.Presentation.LevelEditing.UI
             GUI.enabled = document.environment.practicalLights.Count
                 < LevelEnvironmentData.MaximumPracticalLights;
             if (GUILayout.Button("PLACE PRACTICAL LIGHT", PanelButtonLayout()))
-                actions.QueueSpatialPlacement(LevelSpatialPlacementKind.PracticalLight);
+                spatialPlacementActions.QueueSpatialPlacement(
+                    LevelSpatialPlacementKind.PracticalLight);
             GUI.enabled = true;
 
             LevelPracticalLightData selected = document.environment.practicalLights
@@ -130,15 +131,17 @@ namespace GritGud.Presentation.LevelEditing.UI
             DrawLabeledField("Inner %", ref practicalLightFields.innerSpotFraction);
             DrawLabeledField("Mast base", ref practicalLightFields.baseHeight);
             if (GUILayout.Button("MOVE LIGHT ON MAP", PanelButtonLayout()))
-                actions.QueueSpatialRelocation(
+                spatialPlacementActions.QueueSpatialRelocation(
                     LevelSpatialPlacementKind.PracticalLight,
                     selected.id);
             if (GUILayout.Button("APPLY PRACTICAL LIGHT", PanelApplyButtonLayout()))
-                actions.ApplyPracticalLight(practicalLightFields);
+                environmentDressingActions.ApplyPracticalLight(
+                    practicalLightFields);
             Color deleteColor = GUI.backgroundColor;
             GUI.backgroundColor = LevelEditorTheme.Warning;
             if (GUILayout.Button("DELETE PRACTICAL LIGHT", PanelButtonLayout()))
-                actions.DeletePracticalLight(selectedPracticalLightId);
+                environmentDressingActions.DeletePracticalLight(
+                    selectedPracticalLightId);
             GUI.backgroundColor = deleteColor;
         }
 
@@ -151,7 +154,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                     "APPLY ENVIRONMENT SETTINGS",
                     PanelPrimaryButtonLayout()))
             {
-                actions.ApplyEnvironment(environmentFields);
+                environmentDressingActions.ApplyEnvironment(environmentFields);
             }
             GUI.backgroundColor = previous;
             GUILayout.Space(LevelEditorGuiMetrics.SpaceSection);

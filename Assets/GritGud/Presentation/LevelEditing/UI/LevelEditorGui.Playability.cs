@@ -9,16 +9,16 @@ namespace GritGud.Presentation.LevelEditing.UI
     {
         private void DrawPlayability()
         {
-            LevelPlayabilityReport report = actions.PlayabilityReport;
+            LevelPlayabilityReport report = previewTestActions.PlayabilityReport;
             string runLabel = report == null ? "RUN CHECK" : "REFRESH CHECK";
             if (GUILayout.Button(runLabel, PanelPrimaryButtonLayout()))
-                actions.RunPlayabilityDiagnostics();
+                previewTestActions.RunPlayabilityDiagnostics();
 
             bool overlay = GUILayout.Toggle(
-                actions.SlopeOverlayEnabled,
+                previewTestActions.SlopeOverlayEnabled,
                 "Slope heatmap (green walkable / red steep)");
-            if (overlay != actions.SlopeOverlayEnabled)
-                actions.SetSlopeOverlayEnabled(overlay);
+            if (overlay != previewTestActions.SlopeOverlayEnabled)
+                previewTestActions.SetSlopeOverlayEnabled(overlay);
 
             if (report == null)
             {
@@ -28,7 +28,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 return;
             }
 
-            if (actions.PlayabilityReportIsStale)
+            if (previewTestActions.PlayabilityReportIsStale)
                 GUILayout.Label("STALE — the level changed after this report.");
             GUILayout.Label(
                 $"Slope limit: {report.MaximumWalkableSlopeDegrees:0.#}°  •  "
@@ -59,7 +59,7 @@ namespace GritGud.Presentation.LevelEditing.UI
                 if (string.IsNullOrWhiteSpace(warning.EntityId))
                     GUILayout.Label(text);
                 else if (GUILayout.Button(text, PanelCompactButtonLayout()))
-                    actions.FocusEntity(warning.EntityId);
+                    selectionGroupActions.FocusEntity(warning.EntityId);
             }
             int remaining = report.WarningCount - warnings.Length;
             if (remaining > 0)
