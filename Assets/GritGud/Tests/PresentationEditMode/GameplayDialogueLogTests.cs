@@ -113,7 +113,6 @@ namespace GritGud.Presentation.Tests
                 1280f,
                 commandBar);
             Rect commandHints = GameplayHud.CalculateCommandHintsRectangle(
-                1280f,
                 commandBar);
             Rect bodyStatus = GameplayHud.CalculateBodyStatusRectangle(
                 commandBar);
@@ -149,26 +148,29 @@ namespace GritGud.Presentation.Tests
             Assert.That(commandBar.x - bodyStatus.xMax,
                 Is.EqualTo(GameplayHud.CommandBarMargin));
             Assert.That(bodyStatus.x, Is.EqualTo(GameplayHud.CommandBarMargin));
-            Assert.That(commandHints.x, Is.EqualTo(dialogueButton.x));
+            Assert.That(commandHints.x, Is.EqualTo(bodyStatus.x));
+            Assert.That(commandHints.width, Is.EqualTo(bodyStatus.width));
             Assert.That(
-                commandHints.y,
+                commandHints.y - bodyStatus.yMax,
                 Is.EqualTo(
-                    dialogueButton.yMax
-                    + GameplayHud.CommandHintPanelGap));
+                    GameplayHud.SideRailSectionGap));
             Assert.That(
                 commandBar.yMax - commandHints.yMax,
                 Is.EqualTo(GameplayHud.CommandBarMargin));
             Assert.That(
-                dialogueButton.y,
-                Is.EqualTo(
-                    commandHints.y
-                    - GameplayHud.CommandHintPanelGap
-                    - dialogueButton.height));
+                commandBar.yMax - dialogueButton.yMax,
+                Is.EqualTo(GameplayHud.CommandBarMargin));
+            Assert.That(dialogueButton.yMax, Is.EqualTo(commandHints.yMax));
             Assert.That(
                 commandBar.yMax - hotbar.yMax,
                 Is.EqualTo(GameplayHud.CommandBarMargin));
             Assert.That(commandBar.height, Is.EqualTo(118f));
             Assert.That(hotbar.height, Is.EqualTo(86f));
+            Assert.That(
+                GameplayHud.TurnResourceTop
+                    - (GameplayHud.TurnModeButtonTop
+                        + GameplayHud.TurnModeButtonHeight),
+                Is.EqualTo(20f));
             Assert.That(equipmentFlyout.x,
                 Is.EqualTo(GameplayHud.CommandBarMargin));
             Assert.That(equipmentFlyout.y,

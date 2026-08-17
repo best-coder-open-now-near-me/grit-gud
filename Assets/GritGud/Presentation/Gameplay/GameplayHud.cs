@@ -15,7 +15,10 @@ namespace GritGud.Presentation.Gameplay
         internal const int CommandHintRowCapacity = 10;
         internal const float CommandHintRowHeight = 16f;
         internal const float CommandHintRowGap = 3f;
-        internal const float CommandHintPanelGap = 5f;
+        internal const float SideRailSectionGap = 5f;
+        internal const float TurnModeButtonTop = 13f;
+        internal const float TurnModeButtonHeight = 31f;
+        internal const float TurnResourceTop = 64f;
         internal const float EquipmentFlyoutTop = 126f;
         internal const float WarningHintHeight = 16f;
         internal const float WarningHintGap = 5f;
@@ -74,7 +77,6 @@ namespace GritGud.Presentation.Gameplay
         private GUIStyle tabStyle;
         private GUIStyle resourceLabelStyle;
         private GUIStyle resourceValueStyle;
-        private GUIStyle turnMetaStyle;
         private GUIStyle hotbarNumberStyle;
         private GUIStyle hotbarItemStyle;
         private GUIStyle pendingPowerButtonStyle;
@@ -662,7 +664,6 @@ namespace GritGud.Presentation.Gameplay
                 model.CommandBar.BodyStatus);
             DrawCommandHints(
                 CalculateCommandHintsRectangle(
-                    canvasWidth,
                     commandBarRectangle),
                 model.CommandBar.Hints);
             DrawEquipmentConfirmationFlyout(
@@ -886,9 +887,6 @@ namespace GritGud.Presentation.Gameplay
                 buttonX,
                 commandBarRectangle.yMax
                     - CommandBarMargin
-                    - CalculateCommandHintContentHeight(
-                        CommandHintRowCapacity)
-                    - CommandHintPanelGap
                     - buttonHeight,
                 CommandBarSideRailWidth,
                 buttonHeight);
@@ -963,31 +961,40 @@ namespace GritGud.Presentation.Gameplay
         internal static Rect CalculateBodyStatusRectangle(
             Rect commandBarRectangle)
         {
+            float commandHintTop = commandBarRectangle.yMax
+                - CommandBarMargin
+                - CalculateCommandHintContentHeight(
+                    CommandHintRowCapacity);
+            float bottom = commandHintTop - SideRailSectionGap;
+            float desiredHeight = Mathf.Max(
+                0f,
+                commandBarRectangle.height - (CommandBarMargin * 2f));
+            float y = Mathf.Max(
+                CommandBarMargin,
+                bottom - desiredHeight);
             return new Rect(
                 Mathf.Max(
                     CommandBarMargin,
                     commandBarRectangle.x
                     - CommandBarMargin
                     - CommandBarSideRailWidth),
-                commandBarRectangle.y + CommandBarMargin,
+                y,
                 CommandBarSideRailWidth,
-                Mathf.Max(
-                    0f,
-                    commandBarRectangle.height - (CommandBarMargin * 2f)));
+                Mathf.Max(0f, bottom - y));
         }
 
         internal static Rect CalculateCommandHintsRectangle(
-            float canvasWidth,
             Rect commandBarRectangle)
         {
-            Rect dialogueButton = CalculateDialogueButtonRectangle(
-                canvasWidth,
+            Rect bodyStatus = CalculateBodyStatusRectangle(
                 commandBarRectangle);
-            float y = dialogueButton.yMax + CommandHintPanelGap;
             return new Rect(
-                dialogueButton.x,
-                y,
-                dialogueButton.width,
+                bodyStatus.x,
+                commandBarRectangle.yMax
+                    - CommandBarMargin
+                    - CalculateCommandHintContentHeight(
+                        CommandHintRowCapacity),
+                bodyStatus.width,
                 CalculateCommandHintContentHeight(
                     CommandHintRowCapacity));
         }
@@ -1118,18 +1125,17 @@ namespace GritGud.Presentation.Gameplay
                 SignalSoftColor);
             DrawTurnModeButtons(
                 turnAreaX,
-                rectangle.y + 13f,
+                rectangle.y + TurnModeButtonTop,
                 turnAreaWidth,
-                31f,
+                TurnModeButtonHeight,
                 model.PrimaryCommands);
             if (model.Resources != null)
             {
                 DrawTurnResources(
                     turnAreaX,
-                    rectangle.y + 49f,
+                    rectangle.y + TurnResourceTop,
                     turnAreaWidth,
-                    model.Resources,
-                    model.Status);
+                    model.Resources);
             }
         }
 
@@ -1283,8 +1289,7 @@ namespace GritGud.Presentation.Gameplay
             float x,
             float y,
             float width,
-            GameplayTurnResourceModel resources,
-            string routeStatus)
+            GameplayTurnResourceModel resources)
         {
             DrawResourceMeter(
                 x,
@@ -1307,13 +1312,6 @@ namespace GritGud.Presentation.Gameplay
                     ? resources.MovementOpportunity
                         / resources.MaximumMovementOpportunity
                     : 0f);
-            if (!string.IsNullOrEmpty(routeStatus))
-            {
-                GUI.Label(
-                    new Rect(x, y + 41f, width, 15f),
-                    routeStatus,
-                    turnMetaStyle);
-            }
         }
 
         private void DrawResourceMeter(
@@ -2277,14 +2275,6 @@ namespace GritGud.Presentation.Gameplay
                 fontStyle = FontStyle.Bold,
                 clipping = TextClipping.Clip,
                 normal = { textColor = PrimaryTextColor },
-            };
-            turnMetaStyle = new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.UpperLeft,
-                fontSize = 10,
-                fontStyle = FontStyle.Bold,
-                wordWrap = true,
-                normal = { textColor = SecondaryTextColor },
             };
             hotbarNumberStyle = new GUIStyle(GUI.skin.label)
             {
