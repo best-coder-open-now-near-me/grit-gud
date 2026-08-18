@@ -147,6 +147,13 @@ namespace GritGud.Application.Gameplay
                 case GameplaySemanticCapability.VehicleMove:
                     yield return "vehicle-path";
                     break;
+                case GameplaySemanticCapability.ObserveEncounter:
+                    yield return "encounter-sight";
+                    yield return "encounter-sound";
+                    break;
+                case GameplaySemanticCapability.Patrol:
+                    yield return "patrol-route";
+                    break;
             }
         }
     }
@@ -410,6 +417,8 @@ namespace GritGud.Application.Gameplay
             yield return GameplayCapabilityProfiles.ChangeEncounter(
                 "request-completion");
             yield return GameplayCapabilityProfiles.ChangeEncounter("complete");
+            yield return GameplayCapabilityProfiles.ObserveEncounter();
+            yield return GameplayCapabilityProfiles.Patrol();
         }
     }
 }

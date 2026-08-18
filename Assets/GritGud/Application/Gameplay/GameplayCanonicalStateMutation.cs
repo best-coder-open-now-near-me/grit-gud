@@ -35,6 +35,8 @@ namespace GritGud.Application.Gameplay
                 session.EncounterCompletionRequested;
             ActiveActorId = session.ActiveActorId;
             TurnPhase = session.TurnPhase;
+            InitiativeOrder = session.InitiativeOrder;
+            EncounterState = session.EncounterState;
             EmergencyResponders = session.EmergencyResponders;
             EmergencyResponderIndex = session.EmergencyResponderIndex;
             EmergencyResumeActorId = session.EmergencyResumeActorId;
@@ -58,6 +60,8 @@ namespace GritGud.Application.Gameplay
         public bool EncounterCompletionRequested { get; set; }
         public string ActiveActorId { get; set; }
         public GameplayTurnPhase TurnPhase { get; set; }
+        public IReadOnlyList<string> InitiativeOrder { get; set; }
+        public GameplayEncounterStateSnapshot EncounterState { get; set; }
         public IReadOnlyList<string> EmergencyResponders { get; set; }
         public int EmergencyResponderIndex { get; set; }
         public string EmergencyResumeActorId { get; set; }
@@ -161,7 +165,7 @@ namespace GritGud.Application.Gameplay
                 ActiveActorId,
                 TurnPhase,
                 actors,
-                original.InitiativeOrder,
+                InitiativeOrder,
                 objectives,
                 EmergencyResponders,
                 EmergencyResponderIndex,
@@ -175,7 +179,9 @@ namespace GritGud.Application.Gameplay
                 PendingMovementRoute,
                 PendingVoluntaryTurnCycle,
                 LastTransitionSequence,
-                LastVoluntaryTurnCycleSequence);
+                LastVoluntaryTurnCycleSequence,
+                EncounterState,
+                original.AllInitiativeOrder);
             return new GameplayCombatStateSnapshot(
                 session,
                 destructibles,

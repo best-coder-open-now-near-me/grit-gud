@@ -18,6 +18,7 @@ internal static class SimulationChecks
             VerifyAtomicLiveInstallation();
             VerifyAllCurrentContentCoverage();
             VerifyTacticalDestructibleSimulation();
+            VerifyEncounterAwarenessAndScopedInitiative();
             SimulationParityChecks.Verify();
             Console.WriteLine(
                 "Simulation checks passed: reducers, exact replay, atomic installation, and all-content capability coverage.");
@@ -230,6 +231,248 @@ internal static class SimulationChecks
             new[] { player, enemy },
             Array.Empty<ScenarioObjectiveDefinition>());
         return new GameplaySession(scenario, scenarioSeed: 0xC0FFEEu);
+    }
+
+    private static void VerifyEncounterAwarenessAndScopedInitiative()
+    {
+        GameplaySession live = CreateEncounterGameplay();
+        GameplayCombatStateSnapshot initial = GameplayCombatStateCapture.Capture(live);
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
+        var trajectory = new List<GameplaySemanticTransition>();
+        GameplayCombatStateSnapshot reduced = initial;
+        EnemyBehaviorDefinition behavior = live.Scenario.GetActor("enemy")
+            .Combat.EnemyBehavior;
+        GameplayActorSnapshot enemy = live.GetActor("enemy");
+        var patrolRoute = new MovementRouteRecord(
+            "enemy",
+            enemy.Pose,
+            new[] { behavior.PatrolRoute.GetWaypoint(1) });
+        PatrolAdvanceRecord patrol = live.PreparePatrolAdvance(
+            "enemy",
+            patrolRoute);
+        reduced = Reduce(
+            reducers,
+            reduced,
+            new GameplayPatrolTransitionPayload("enemy", behavior, patrol),
+            trajectory);
+        live.CommitPatrolAdvance(patrol);
+        live.RecordSemanticTransition(trajectory[trajectory.Count - 1].Identity);
+        Require(GameplayCombatStateDiffer.Compare(
+                reduced,
+                GameplayCombatStateCapture.Capture(live)).Count == 0,
+            "Live patrol advance diverged from its pure reducer.");
+
+        GameplayPosition playerPosition = live.GetActor("player").Pose.Position;
+        var soundObservation = new EncounterObservation(
+            "enemy",
+            sound: new EncounterSoundEvidence(
+                "player",
+                playerPosition,
+                audibility: 1f));
+        EnemyAwarenessTransitionRecord sound = live.PrepareAwarenessTransition(
+            "enemy",
+            soundObservation);
+        reduced = Reduce(
+            reducers,
+            reduced,
+            new GameplayEncounterObservationTransitionPayload(
+                "enemy",
+                behavior,
+                soundObservation),
+            trajectory);
+        live.CommitAwarenessTransition(sound);
+        live.RecordSemanticTransition(trajectory[trajectory.Count - 1].Identity);
+        Require(live.EncounterState.GetAwareness("enemy").State
+                == EncounterAwarenessState.Suspicious,
+            "Audible sound did not raise suspicion.");
+        Require(GameplayCombatStateDiffer.Compare(
+                reduced,
+                GameplayCombatStateCapture.Capture(live)).Count == 0,
+            "Live sound awareness diverged from its pure reducer.");
+
+        var sight = new TargetExposureSnapshot(
+            "enemy",
+            "player",
+            new[]
+            {
+                new TargetRegionExposure(TargetRegionId.Torso, 1, 1),
+            });
+        var sightObservation = new EncounterObservation(
+            "enemy",
+            sight,
+            playerPosition);
+        EnemyAwarenessTransitionRecord detection =
+            live.PrepareAwarenessTransition("enemy", sightObservation);
+        reduced = Reduce(
+            reducers,
+            reduced,
+            new GameplayEncounterObservationTransitionPayload(
+                "enemy",
+                behavior,
+                sightObservation),
+            trajectory);
+        live.CommitAwarenessTransition(detection);
+        live.RecordSemanticTransition(trajectory[trajectory.Count - 1].Identity);
+        Require(live.EncounterState.GetAwareness("enemy").State
+                == EncounterAwarenessState.Alert,
+            "Visible hostile did not escalate awareness to alert.");
+        Require(GameplayCombatStateDiffer.Compare(
+                reduced,
+                GameplayCombatStateCapture.Capture(live)).Count == 0,
+            "Live sight awareness diverged from its pure reducer.");
+
+        IReadOnlyList<string> scope = live.CreateEncounterScope("enemy", "player");
+        var begin = new GameplaySessionControlTransitionPayload(
+            "player",
+            GameplaySemanticCapability.ChangeEncounter,
+            "begin",
+            encounterParticipantIds: scope);
+        reduced = Reduce(reducers, reduced, begin, trajectory);
+        Require(live.BeginEncounter(scope), "Scoped encounter did not begin.");
+        live.RecordSemanticTransition(trajectory[trajectory.Count - 1].Identity);
+        GameplayCombatStateSnapshot liveState = GameplayCombatStateCapture.Capture(live);
+        Require(GameplayCombatStateDiffer.Compare(reduced, liveState).Count == 0,
+            "Live scoped encounter diverged from its pure reducer.");
+        Require(live.InitiativeOrder.Count == 2
+                && !ContainsActor(live.InitiativeOrder, "bystander"),
+            "Scoped encounter incorrectly included a nonparticipant.");
+
+        GameplayCombatStateSnapshot replay = initial;
+        foreach (GameplaySemanticTransition transition in trajectory)
+            replay = reducers.Reduce(replay, transition).Resulting;
+        Require(string.Equals(replay.CanonicalHash, reduced.CanonicalHash,
+                StringComparison.Ordinal),
+            "Encounter trajectory did not replay exactly.");
+        var branch = new GameplaySimulationBranch(
+            "encounter",
+            initial,
+            reducers);
+        foreach (GameplaySemanticTransition transition in trajectory)
+            branch.Apply(transition);
+        Require(GameplayExactReplay.Verify(initial, branch.Steps, reducers).IsExact,
+            "Headless encounter trajectory did not replay exactly.");
+    }
+
+    private static GameplaySession CreateEncounterGameplay()
+    {
+        AttackDefinition rifle = CreateRifle();
+        var playerProfile = new CharacterProfileDefinition(
+            "character.player",
+            "Player",
+            "Test Operative",
+            new[]
+            {
+                new CharacterRating(CoreAttributeIds.Strength, 3),
+                new CharacterRating(CoreAttributeIds.Dexterity, 3),
+                new CharacterRating(CoreAttributeIds.Grit, 3),
+                new CharacterRating(CoreAttributeIds.Charisma, 3),
+            },
+            Array.Empty<CharacterRating>(),
+            Array.Empty<string>());
+        var player = new ScenarioActorDefinition(
+            "player",
+            5,
+            new GameplayActorPose(new GameplayPosition(0f, 0f, 6f), 180f),
+            new TurnBudget(4, 8f),
+            rifle,
+            combat: new ActorCombatDefinition("player", new[] { "raider" }, 2),
+            characterProfile: playerProfile);
+        var behavior = new EnemyBehaviorDefinition(
+            "behavior.encounter-check",
+            perceptionRange: 20f,
+            viewAngleDegrees: 120f,
+            preferredEngagementRange: 12f,
+            movementSearchRadius: 6f,
+            maximumAttacksPerTurn: 1,
+            awarenessPolicy: new EncounterAwarenessPolicyDefinition(
+                hearingRange: 12f,
+                sightSuspicionGain: 100,
+                soundSuspicionGain: 60,
+                suspicionDecayPerTick: 10,
+                alertThreshold: 100),
+            patrolRoute: new PatrolRouteDefinition(
+                new[]
+                {
+                    new GameplayPosition(0f, 0f, 0f),
+                    new GameplayPosition(0f, 0f, 3f),
+                },
+                loops: true));
+        var enemy = new ScenarioActorDefinition(
+            "enemy",
+            3,
+            new GameplayActorPose(new GameplayPosition(0f, 0f, 0f), 0f),
+            new TurnBudget(4, 8f),
+            rifle,
+            combat: new ActorCombatDefinition(
+                "raider",
+                new[] { "player" },
+                2,
+                behavior));
+        var bystander = new ScenarioActorDefinition(
+            "bystander",
+            1,
+            new GameplayActorPose(new GameplayPosition(30f, 0f, 0f), 0f),
+            new TurnBudget(4, 8f),
+            rifle,
+            combat: new ActorCombatDefinition("neutral", new string[0], 1));
+        var scenario = new ScenarioDefinition(
+            "encounter-check",
+            new ScenarioTimingDefinition(1f),
+            new[] { player, enemy, bystander },
+            Array.Empty<ScenarioObjectiveDefinition>(),
+            playerParty: new PlayerPartyDefinition(
+                new[] { "player" },
+                "player"));
+        return new GameplaySession(scenario, scenarioSeed: 0xE11Cu);
+    }
+
+    private static GameplayCombatStateSnapshot CreateHeadlessEncounterState(
+        AttackDefinition rifle,
+        LevelDocument level)
+    {
+        var behavior = new EnemyBehaviorDefinition(
+            "behavior.headless-sight",
+            perceptionRange: 20f,
+            viewAngleDegrees: 120f,
+            preferredEngagementRange: 12f,
+            movementSearchRadius: 6f,
+            maximumAttacksPerTurn: 1,
+            awarenessPolicy: new EncounterAwarenessPolicyDefinition(
+                hearingRange: 12f,
+                sightSuspicionGain: 100,
+                soundSuspicionGain: 50,
+                suspicionDecayPerTick: 10,
+                alertThreshold: 100));
+        var observer = new ScenarioActorDefinition(
+            "observer",
+            2,
+            new GameplayActorPose(new GameplayPosition(-2f, 1f, 0f), 90f),
+            new TurnBudget(4, 8f),
+            rifle,
+            combat: new ActorCombatDefinition(
+                "raider",
+                new[] { "player" },
+                2,
+                behavior));
+        var target = new ScenarioActorDefinition(
+            "target",
+            1,
+            new GameplayActorPose(new GameplayPosition(2f, 1f, 0f), 270f),
+            new TurnBudget(4, 8f),
+            rifle,
+            combat: new ActorCombatDefinition(
+                "player",
+                new[] { "raider" },
+                2));
+        var gameplay = new GameplaySession(new ScenarioDefinition(
+            "headless-encounter-evidence",
+            new ScenarioTimingDefinition(1f),
+            new[] { observer, target },
+            Array.Empty<ScenarioObjectiveDefinition>()));
+        DestructiblePropSession destructibles =
+            DestructiblePropSession.FromLevel(level, gameplay.Journal);
+        return GameplayCombatStateCapture.Capture(gameplay, destructibles);
     }
 
     private static void VerifyCapabilityCoverageFailsClosed()
@@ -629,6 +872,33 @@ internal static class SimulationChecks
                 sightOrigin,
                 sightDestination),
             "Toppled cover retained its obsolete upright obstruction.");
+        GameplayCombatStateSnapshot sensingState =
+            CreateHeadlessEncounterState(rifle, level);
+        TargetExposureSnapshot blockedSight =
+            GameplayHeadlessEncounterEvidence.CaptureSight(
+                sensingState,
+                spatial,
+                "observer",
+                "target");
+        Require(blockedSight.VisibleSampleCount == 0,
+            "Headless encounter sight ignored intact tactical cover.");
+        TargetExposureSnapshot openedSight =
+            GameplayHeadlessEncounterEvidence.CaptureSight(
+                WithDestructible(sensingState, toppledProp),
+                spatial,
+                "observer",
+                "target");
+        Require(openedSight.VisibleSampleCount == 1,
+            "Headless encounter sight retained a toppled obstruction.");
+        EncounterSoundEvidence muffledSound =
+            GameplayHeadlessEncounterEvidence.CaptureSound(
+                sensingState,
+                spatial,
+                "observer",
+                "target",
+                loudness: 1f);
+        Require(muffledSound.Audibility == 0.5f,
+            "Headless encounter sound did not account for tactical obstruction.");
         var pitchedProp = new DestructiblePropSnapshot(
             "cover-wall",
             DestructiblePropState.Intact,
@@ -940,6 +1210,16 @@ internal static class SimulationChecks
         new ActionCost(1, 0f, ActionMobility.Set),
         woundMovementPenalty: 2f,
         accuracyDecay: AccuracyDecayDefinition.None);
+
+    private static bool ContainsActor(
+        IReadOnlyList<string> actorIds,
+        string actorId)
+    {
+        foreach (string candidate in actorIds)
+            if (string.Equals(candidate, actorId, StringComparison.Ordinal))
+                return true;
+        return false;
+    }
 
     private static void Require(bool condition, string message)
     {

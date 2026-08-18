@@ -427,7 +427,9 @@ namespace GritGud.Application.Gameplay
                 source.PendingMovementRoute,
                 source.PendingVoluntaryTurnCycle,
                 transitionSequence,
-                source.LastVoluntaryTurnCycleSequence);
+                source.LastVoluntaryTurnCycleSequence,
+                source.EncounterState,
+                source.AllInitiativeOrder);
 
         private static GameplayActorSnapshot CopyActor(
             GameplayActorSnapshot actor,

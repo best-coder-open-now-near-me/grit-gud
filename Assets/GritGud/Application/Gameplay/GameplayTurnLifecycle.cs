@@ -159,14 +159,17 @@ namespace GritGud.Application.Gameplay
             host.MarkStateChangedForTurnLifecycle();
         }
 
-        public bool BeginEncounter()
+        public bool BeginEncounter(
+            IEnumerable<string> participantIds = null)
         {
             if (EncounterActive)
                 return false;
 
             EncounterActive = true;
             EncounterCompletionRequested = false;
-            host.Journal.RecordEncounterChanged(isActive: true);
+            host.Journal.RecordEncounterChanged(
+                isActive: true,
+                participantIds: participantIds ?? host.InitiativeOrder);
             if (Mode == GameplaySessionMode.Exploration)
                 return TryEnterTurnMode(out _);
 
@@ -185,7 +188,9 @@ namespace GritGud.Application.Gameplay
             if (Mode == GameplaySessionMode.TurnBased)
                 TurnContext = TurnModeContext.Voluntary;
 
-            host.Journal.RecordEncounterChanged(isActive: false);
+            host.Journal.RecordEncounterChanged(
+                isActive: false,
+                participantIds: host.InitiativeOrder);
             host.MarkStateChangedForTurnLifecycle();
             return true;
         }

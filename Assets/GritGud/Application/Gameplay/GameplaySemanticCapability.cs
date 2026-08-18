@@ -22,6 +22,8 @@ namespace GritGud.Application.Gameplay
         VehicleMove,
         ChangeTurnMode,
         ChangeEncounter,
+        ObserveEncounter,
+        Patrol,
     }
 
     public enum GameplaySemanticSubjectKind
@@ -322,6 +324,19 @@ namespace GritGud.Application.Gameplay
             GameplaySemanticCapability.ChangeEncounter,
             Subject(GameplaySemanticSubjectKind.System),
                 Trait("mode", mode));
+
+        public static GameplayCapabilityProfile ObserveEncounter() =>
+            Profile(
+                GameplaySemanticCapability.ObserveEncounter,
+                Subject(GameplaySemanticSubjectKind.Actor),
+                Trait("evidence", "frozen-sight-and-sound"),
+                Trait("consequence", "awareness-transition"));
+
+        public static GameplayCapabilityProfile Patrol() => Profile(
+            GameplaySemanticCapability.Patrol,
+            Subject(GameplaySemanticSubjectKind.Actor),
+            Trait("path", "authored-patrol-route"),
+            Trait("consequence", "world-pose-advance"));
 
         private static GameplayCapabilityProfile Profile(
             GameplaySemanticCapability capability,

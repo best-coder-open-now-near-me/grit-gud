@@ -183,8 +183,11 @@ namespace GritGud.Domain.Gameplay
 
         public GameplayEncounterStateSnapshot(
             IEnumerable<EnemyAwarenessSnapshot> awarenessSnapshots = null,
-            IEnumerable<string> encounterParticipantIds = null)
+            IEnumerable<string> encounterParticipantIds = null,
+            long lastTransitionSequence = 0L)
         {
+            if (lastTransitionSequence < 0L)
+                throw new ArgumentOutOfRangeException(nameof(lastTransitionSequence));
             var awarenessCopy = new List<EnemyAwarenessSnapshot>(
                 awarenessSnapshots ?? Array.Empty<EnemyAwarenessSnapshot>());
             awarenessCopy.Sort((left, right) => StringComparer.Ordinal.Compare(
@@ -209,11 +212,14 @@ namespace GritGud.Domain.Gameplay
             }
             awareness = awarenessCopy.AsReadOnly();
             participantIds = CopyIds(encounterParticipantIds);
+            LastTransitionSequence = lastTransitionSequence;
         }
 
         public IReadOnlyList<EnemyAwarenessSnapshot> Awareness => awareness;
 
         public IReadOnlyList<string> ParticipantIds => participantIds;
+
+        public long LastTransitionSequence { get; }
 
         public EnemyAwarenessSnapshot GetAwareness(string actorId)
         {
@@ -244,13 +250,19 @@ namespace GritGud.Domain.Gameplay
         }
 
         public GameplayEncounterStateSnapshot WithAwareness(
-            EnemyAwarenessSnapshot replacement) =>
+            EnemyAwarenessSnapshot replacement,
+            long? lastTransitionSequence = null) =>
             new GameplayEncounterStateSnapshot(
-                ReplaceAwareness(replacement), participantIds);
+                ReplaceAwareness(replacement),
+                participantIds,
+                lastTransitionSequence ?? LastTransitionSequence);
 
         public GameplayEncounterStateSnapshot WithParticipants(
             IEnumerable<string> participants) =>
-            new GameplayEncounterStateSnapshot(awareness, participants);
+            new GameplayEncounterStateSnapshot(
+                awareness,
+                participants,
+                LastTransitionSequence);
 
         private IEnumerable<EnemyAwarenessSnapshot> ReplaceAwareness(
             EnemyAwarenessSnapshot replacement)
@@ -293,6 +305,274 @@ namespace GritGud.Domain.Gameplay
                 copy.Add(value);
             }
             return copy.AsReadOnly();
+        }
+    }
+
+    /// <summary>
+    /// Frozen sound-world evidence after Unity or a headless spatial query has
+    /// accounted for distance and occlusion. The reducer never queries Physics.
+    /// </summary>
+    public sealed class EncounterSoundEvidence
+    {
+        public EncounterSoundEvidence(
+            string sourceId,
+            GameplayPosition origin,
+            float audibility)
+        {
+            if (string.IsNullOrWhiteSpace(sourceId))
+                throw new ArgumentException(
+                    "Sound evidence requires a stable source identifier.",
+                    nameof(sourceId));
+            if (float.IsNaN(audibility) || float.IsInfinity(audibility)
+                || audibility < 0f || audibility > 1f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(audibility));
+            }
+            SourceId = sourceId;
+            Origin = origin;
+            Audibility = audibility;
+        }
+
+        public string SourceId { get; }
+
+        public GameplayPosition Origin { get; }
+
+        public float Audibility { get; }
+    }
+
+    /// <summary>
+    /// One portable perception sample for an enemy. Sight is an existing frozen
+    /// target-exposure sample; sound is a separately frozen world query.
+    /// </summary>
+    public sealed class EncounterObservation
+    {
+        public EncounterObservation(
+            string observerId,
+            TargetExposureSnapshot sight = null,
+            GameplayPosition? sightTargetPosition = null,
+            EncounterSoundEvidence sound = null)
+        {
+            if (string.IsNullOrWhiteSpace(observerId))
+                throw new ArgumentException(
+                    "Encounter observations require an observer.",
+                    nameof(observerId));
+            if (sight != null
+                && !string.Equals(sight.ObserverId, observerId,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Sight evidence must belong to the observing actor.",
+                    nameof(sight));
+            }
+            if ((sight == null) != !sightTargetPosition.HasValue)
+            {
+                throw new ArgumentException(
+                    "Sight target position must accompany sight evidence.",
+                    nameof(sightTargetPosition));
+            }
+
+            ObserverId = observerId;
+            Sight = sight;
+            SightTargetPosition = sightTargetPosition;
+            Sound = sound;
+        }
+
+        public string ObserverId { get; }
+
+        public TargetExposureSnapshot Sight { get; }
+
+        public GameplayPosition? SightTargetPosition { get; }
+
+        public EncounterSoundEvidence Sound { get; }
+
+        public bool HasVisibleSight => Sight != null
+            && Sight.VisibleSampleCount > 0;
+
+        public bool HasAudibleSound => Sound != null && Sound.Audibility > 0f;
+    }
+
+    public sealed class EnemyAwarenessTransitionRecord
+    {
+        public EnemyAwarenessTransitionRecord(
+            long sequence,
+            string actorId,
+            EnemyAwarenessSnapshot previous,
+            EnemyAwarenessSnapshot resulting,
+            EncounterObservation observation)
+        {
+            if (sequence <= 0L)
+                throw new ArgumentOutOfRangeException(nameof(sequence));
+            if (string.IsNullOrWhiteSpace(actorId))
+                throw new ArgumentException(
+                    "Awareness transitions require an actor.", nameof(actorId));
+            if (previous == null) throw new ArgumentNullException(nameof(previous));
+            if (resulting == null) throw new ArgumentNullException(nameof(resulting));
+            if (observation == null) throw new ArgumentNullException(nameof(observation));
+            if (!string.Equals(previous.ActorId, actorId, StringComparison.Ordinal)
+                || !string.Equals(resulting.ActorId, actorId,
+                    StringComparison.Ordinal)
+                || !string.Equals(observation.ObserverId, actorId,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Awareness transition identity must agree with its record.",
+                    nameof(actorId));
+            }
+
+            Sequence = sequence;
+            ActorId = actorId;
+            Previous = previous;
+            Resulting = resulting;
+            Observation = observation;
+        }
+
+        public long Sequence { get; }
+
+        public string ActorId { get; }
+
+        public EnemyAwarenessSnapshot Previous { get; }
+
+        public EnemyAwarenessSnapshot Resulting { get; }
+
+        public EncounterObservation Observation { get; }
+    }
+
+    public sealed class PatrolAdvanceRecord
+    {
+        public PatrolAdvanceRecord(
+            long sequence,
+            string actorId,
+            MovementRouteRecord route,
+            int previousWaypointIndex,
+            int resultingWaypointIndex)
+        {
+            if (sequence <= 0L)
+                throw new ArgumentOutOfRangeException(nameof(sequence));
+            if (string.IsNullOrWhiteSpace(actorId))
+                throw new ArgumentException(
+                    "Patrol advances require an actor.", nameof(actorId));
+            if (route == null) throw new ArgumentNullException(nameof(route));
+            if (!string.Equals(route.ActorId, actorId, StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Patrol routes must belong to their advancing actor.",
+                    nameof(route));
+            }
+            if (previousWaypointIndex < 0 || resultingWaypointIndex < 0)
+                throw new ArgumentOutOfRangeException(nameof(previousWaypointIndex));
+
+            Sequence = sequence;
+            ActorId = actorId;
+            Route = route;
+            PreviousWaypointIndex = previousWaypointIndex;
+            ResultingWaypointIndex = resultingWaypointIndex;
+        }
+
+        public long Sequence { get; }
+
+        public string ActorId { get; }
+
+        public MovementRouteRecord Route { get; }
+
+        public int PreviousWaypointIndex { get; }
+
+        public int ResultingWaypointIndex { get; }
+    }
+
+    public static class EncounterAwarenessRules
+    {
+        public static EnemyAwarenessSnapshot Evaluate(
+            EnemyBehaviorDefinition behavior,
+            GameplayActorPose observerPose,
+            EnemyAwarenessSnapshot previous,
+            EncounterObservation observation)
+        {
+            if (behavior == null) throw new ArgumentNullException(nameof(behavior));
+            if (previous == null) throw new ArgumentNullException(nameof(previous));
+            if (observation == null) throw new ArgumentNullException(nameof(observation));
+            if (!string.Equals(previous.ActorId, observation.ObserverId,
+                StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Observation must evaluate the matching awareness state.",
+                    nameof(observation));
+            }
+
+            int gain = 0;
+            string lastKnownId = previous.LastKnownHostileId;
+            GameplayPosition? lastKnownPosition = previous.LastKnownHostilePosition;
+            if (observation.HasVisibleSight)
+            {
+                float distance = observerPose.Position.DistanceTo(
+                    observation.SightTargetPosition.Value);
+                if (distance <= behavior.PerceptionRange + 0.0001f
+                    && CalculateViewAngle(
+                        observerPose,
+                        observation.SightTargetPosition.Value)
+                        <= (behavior.ViewAngleDegrees * 0.5f) + 0.0001f)
+                {
+                    gain = checked(gain + Scale(
+                        behavior.AwarenessPolicy.SightSuspicionGain,
+                        observation.Sight.VisibleFraction));
+                    lastKnownId = observation.Sight.TargetId;
+                    lastKnownPosition = observation.SightTargetPosition;
+                }
+            }
+            if (observation.HasAudibleSound)
+            {
+                float distance = observerPose.Position.DistanceTo(
+                    observation.Sound.Origin);
+                if (distance <= behavior.AwarenessPolicy.HearingRange + 0.0001f)
+                {
+                    gain = checked(gain + Scale(
+                        behavior.AwarenessPolicy.SoundSuspicionGain,
+                        observation.Sound.Audibility));
+                    if (string.IsNullOrEmpty(lastKnownId)
+                        || !observation.HasVisibleSight)
+                    {
+                        lastKnownId = observation.Sound.SourceId;
+                        lastKnownPosition = observation.Sound.Origin;
+                    }
+                }
+            }
+
+            int suspicion = gain == 0
+                ? Math.Max(0, previous.Suspicion
+                    - behavior.AwarenessPolicy.SuspicionDecayPerTick)
+                : Math.Min(100, checked(previous.Suspicion + gain));
+            EncounterAwarenessState state = suspicion >= behavior.AwarenessPolicy
+                .AlertThreshold
+                    ? EncounterAwarenessState.Alert
+                    : suspicion > 0
+                        ? EncounterAwarenessState.Suspicious
+                        : EncounterAwarenessState.Unaware;
+            return new EnemyAwarenessSnapshot(
+                previous.ActorId,
+                state,
+                suspicion,
+                lastKnownId,
+                lastKnownPosition,
+                previous.PatrolWaypointIndex);
+        }
+
+        private static int Scale(int value, float factor) =>
+            (int)Math.Round(
+                value * Math.Max(0f, Math.Min(1f, factor)),
+                MidpointRounding.AwayFromZero);
+
+        private static float CalculateViewAngle(
+            GameplayActorPose observer,
+            GameplayPosition target)
+        {
+            float deltaX = target.X - observer.Position.X;
+            float deltaZ = target.Z - observer.Position.Z;
+            if ((deltaX * deltaX) + (deltaZ * deltaZ) <= 0.000001f)
+                return 0f;
+            float bearing = (float)(Math.Atan2(deltaX, deltaZ)
+                * (180d / Math.PI));
+            float delta = ((bearing - observer.FacingDegrees + 540f) % 360f)
+                - 180f;
+            return Math.Abs(delta);
         }
     }
 }

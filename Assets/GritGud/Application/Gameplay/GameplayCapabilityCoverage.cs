@@ -406,6 +406,22 @@ namespace GritGud.Application.Gameplay
                 bool playerControlled = scenario.PlayerParty == null
                     || scenario.PlayerParty.Contains(actor.Id);
                 bool aiControlled = actor.Combat.EnemyBehavior != null;
+                if (aiControlled)
+                {
+                    string enemySource = "ai."
+                        + actor.Combat.EnemyBehavior.BehaviorId;
+                    Add(result, GameplayReachableInputKind.EnemyDecision,
+                        enemySource + ".observe-encounter",
+                        actor.Id,
+                        GameplayCapabilityProfiles.ObserveEncounter());
+                    if (actor.Combat.EnemyBehavior.PatrolRoute != null)
+                    {
+                        Add(result, GameplayReachableInputKind.EnemyDecision,
+                            enemySource + ".patrol",
+                            actor.Id,
+                            GameplayCapabilityProfiles.Patrol());
+                    }
+                }
                 if (playerControlled || aiControlled)
                 {
                     GameplayReachableInputKind controlKind = playerControlled

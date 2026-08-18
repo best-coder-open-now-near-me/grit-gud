@@ -20,7 +20,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplaySessionStateSnapshot
     {
-        public const int CurrentSchemaVersion = 3;
+        public const int CurrentSchemaVersion = 4;
 
         public GameplaySessionStateSnapshot(
             string scenarioId,
@@ -46,7 +46,9 @@ namespace GritGud.Application.Gameplay
             MovementRouteRecord pendingMovementRoute = null,
             VoluntaryTurnCycleRecord pendingVoluntaryTurnCycle = null,
             long lastTransitionSequence = 0L,
-            long lastVoluntaryTurnCycleSequence = 0L)
+            long lastVoluntaryTurnCycleSequence = 0L,
+            GameplayEncounterStateSnapshot encounterState = null,
+            IEnumerable<string> allInitiativeOrder = null)
         {
             if (!Enum.IsDefined(typeof(GameplaySessionMode), mode))
                 throw new ArgumentOutOfRangeException(nameof(mode));
@@ -82,6 +84,9 @@ namespace GritGud.Application.Gameplay
             TurnPhase = turnPhase;
             Actors = CopyActors(actors);
             InitiativeOrder = CopyIds(initiativeOrder, "initiative actor");
+            AllInitiativeOrder = CopyIds(
+                allInitiativeOrder ?? initiativeOrder,
+                "all-actor initiative");
             Objectives = CopyObjectives(objectives);
             EmergencyResponders = CopyIds(
                 emergencyResponders, "emergency responder", allowEmpty: true);
@@ -104,6 +109,8 @@ namespace GritGud.Application.Gameplay
             LastTransitionSequence = lastTransitionSequence;
             LastVoluntaryTurnCycleSequence =
                 lastVoluntaryTurnCycleSequence;
+            EncounterState = encounterState
+                ?? new GameplayEncounterStateSnapshot();
         }
 
         public int SchemaVersion { get; }
@@ -117,6 +124,7 @@ namespace GritGud.Application.Gameplay
         public GameplayTurnPhase TurnPhase { get; }
         public IReadOnlyList<GameplayActorSnapshot> Actors { get; }
         public IReadOnlyList<string> InitiativeOrder { get; }
+        public IReadOnlyList<string> AllInitiativeOrder { get; }
         public IReadOnlyList<GameplayObjectiveSnapshot> Objectives { get; }
         public IReadOnlyList<string> EmergencyResponders { get; }
         public int EmergencyResponderIndex { get; }
@@ -131,6 +139,7 @@ namespace GritGud.Application.Gameplay
         public VoluntaryTurnCycleRecord PendingVoluntaryTurnCycle { get; }
         public long LastTransitionSequence { get; }
         public long LastVoluntaryTurnCycleSequence { get; }
+        public GameplayEncounterStateSnapshot EncounterState { get; }
 
         public GameplayActorSnapshot GetActor(string actorId)
         {
@@ -196,7 +205,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplayCombatStateSnapshot
     {
-        public const int CurrentSchemaVersion = 3;
+        public const int CurrentSchemaVersion = 4;
 
         public GameplayCombatStateSnapshot(
             GameplaySessionStateSnapshot session,
@@ -280,7 +289,7 @@ namespace GritGud.Application.Gameplay
         {
             if (gameplay == null) throw new ArgumentNullException(nameof(gameplay));
             var actors = new List<GameplayActorSnapshot>();
-            foreach (string actorId in gameplay.InitiativeOrder)
+            foreach (string actorId in gameplay.AllActorIds)
                 actors.Add(gameplay.GetActor(actorId));
             var objectives = new List<GameplayObjectiveSnapshot>();
             foreach (ScenarioObjectiveDefinition definition in gameplay.Scenario.Objectives)
@@ -322,7 +331,9 @@ namespace GritGud.Application.Gameplay
                 gameplay.PendingMovementRoute,
                 gameplay.PendingVoluntaryTurnCycle,
                 gameplay.LastTransitionSequence,
-                gameplay.LastCompletedVoluntaryTurnCycle?.Sequence ?? 0L);
+                gameplay.LastCompletedVoluntaryTurnCycle?.Sequence ?? 0L,
+                gameplay.EncounterState,
+                gameplay.AllInitiativeOrder);
             GameplayCombatStateCoverage coverage =
                 GameplayCombatStateCoverage.Session;
             if (destructibles != null)
@@ -393,6 +404,35 @@ namespace GritGud.Application.Gameplay
                 session.PendingVoluntaryTurnCycle);
             for (int index = 0; index < session.InitiativeOrder.Count; index++)
                 Append(text, "initiative." + index, session.InitiativeOrder[index]);
+            for (int index = 0; index < session.AllInitiativeOrder.Count; index++)
+            {
+                Append(text, "allInitiative." + index,
+                    session.AllInitiativeOrder[index]);
+            }
+            for (int index = 0;
+                index < session.EncounterState.ParticipantIds.Count;
+                index++)
+            {
+                Append(text, "encounter.participant." + index,
+                    session.EncounterState.ParticipantIds[index]);
+            }
+            Append(text, "encounter.transition.sequence",
+                session.EncounterState.LastTransitionSequence);
+            foreach (EnemyAwarenessSnapshot awareness in
+                session.EncounterState.Awareness)
+            {
+                string root = "awareness." + awareness.ActorId;
+                Append(text, root + ".state", (int)awareness.State);
+                Append(text, root + ".suspicion", awareness.Suspicion);
+                Append(text, root + ".lastKnown.id",
+                    awareness.LastKnownHostileId);
+                Append(text, root + ".lastKnown.position",
+                    awareness.LastKnownHostilePosition.HasValue
+                        ? (object)awareness.LastKnownHostilePosition.Value
+                        : string.Empty);
+                Append(text, root + ".patrol.index",
+                    awareness.PatrolWaypointIndex);
+            }
             Append(text, "emergency.index", session.EmergencyResponderIndex);
             Append(text, "emergency.resume", session.EmergencyResumeActorId);
             for (int index = 0; index < session.EmergencyResponders.Count; index++)
@@ -751,18 +791,55 @@ namespace GritGud.Application.Gameplay
                             "inventory.negative", path + ".inventory." + quantity.ItemId,
                             "Inventory quantity cannot be negative."));
             }
-            if (state.Session.InitiativeOrder.Count != actorIds.Count)
+            if (state.Session.AllInitiativeOrder.Count != actorIds.Count)
                 violations.Add(new GameplayInvariantViolation(
                     "initiative.cardinality", "session.initiative",
-                    "Initiative must contain every actor exactly once."));
-            foreach (string actorId in state.Session.InitiativeOrder)
+                    "All-actor initiative must contain every actor exactly once."));
+            foreach (string actorId in state.Session.AllInitiativeOrder)
                 if (!actorIds.Contains(actorId))
                     violations.Add(new GameplayInvariantViolation(
                         "initiative.unknown-actor", "session.initiative." + actorId,
                         "Initiative cannot reference an unknown actor."));
+            foreach (string actorId in state.Session.InitiativeOrder)
+                if (!actorIds.Contains(actorId))
+                    violations.Add(new GameplayInvariantViolation(
+                        "initiative.unknown-scoped-actor",
+                        "session.initiative." + actorId,
+                        "Scoped initiative cannot reference an unknown actor."));
+            foreach (EnemyAwarenessSnapshot awareness in
+                state.Session.EncounterState.Awareness)
+                if (!actorIds.Contains(awareness.ActorId))
+                    violations.Add(new GameplayInvariantViolation(
+                        "awareness.unknown-actor",
+                        "session.awareness." + awareness.ActorId,
+                        "Awareness cannot reference an unknown actor."));
+            bool scopedEncounter = state.Session.EncounterActive;
+            IReadOnlyList<string> participants = state.Session.EncounterState
+                .ParticipantIds;
+            if (scopedEncounter != (participants.Count > 0))
+                violations.Add(new GameplayInvariantViolation(
+                    "encounter.scope",
+                    "session.encounter.participants",
+                    "Active encounters require a non-empty scope and inactive encounters require none."));
+            if (scopedEncounter
+                && !SameIds(participants, state.Session.InitiativeOrder))
+                violations.Add(new GameplayInvariantViolation(
+                    "encounter.initiative-scope",
+                    "session.encounter.participants",
+                    "Encounter participants and scoped initiative must agree."));
+            if (!scopedEncounter
+                && !SameIds(
+                    state.Session.InitiativeOrder,
+                    state.Session.AllInitiativeOrder))
+                violations.Add(new GameplayInvariantViolation(
+                    "initiative.non-encounter-scope",
+                    "session.initiative",
+                    "Outside an encounter, initiative must include every actor."));
             if (state.Session.Mode == GameplaySessionMode.TurnBased
                 && (string.IsNullOrWhiteSpace(state.Session.ActiveActorId)
-                    || !actorIds.Contains(state.Session.ActiveActorId)))
+                    || !Contains(
+                        state.Session.InitiativeOrder,
+                        state.Session.ActiveActorId)))
                 violations.Add(new GameplayInvariantViolation(
                     "turn.active-actor", "session.activeActor",
                     "Turn mode requires a known active actor."));
@@ -783,6 +860,27 @@ namespace GritGud.Application.Gameplay
                         "session.emergency." + responderId,
                         "Emergency responders must be known actors."));
             return violations.AsReadOnly();
+        }
+
+        private static bool SameIds(
+            IReadOnlyList<string> left,
+            IReadOnlyList<string> right)
+        {
+            if (left.Count != right.Count) return false;
+            for (int index = 0; index < left.Count; index++)
+                if (!string.Equals(left[index], right[index],
+                    StringComparison.Ordinal)) return false;
+            return true;
+        }
+
+        private static bool Contains(
+            IReadOnlyList<string> values,
+            string value)
+        {
+            foreach (string candidate in values)
+                if (string.Equals(candidate, value,
+                    StringComparison.Ordinal)) return true;
+            return false;
         }
     }
 }

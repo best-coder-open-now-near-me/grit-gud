@@ -91,7 +91,8 @@ namespace GritGud.Application.Gameplay
             string actorId,
             GameplaySemanticCapability capability,
             string mode,
-            float minimumVoluntaryTurnSeconds = 0f)
+            float minimumVoluntaryTurnSeconds = 0f,
+            IEnumerable<string> encounterParticipantIds = null)
             : base(
                 CreateProfile(capability, mode),
                 actorId,
@@ -105,10 +106,32 @@ namespace GritGud.Application.Gameplay
                     nameof(minimumVoluntaryTurnSeconds));
             Mode = GameplayContentIdentity.RequireText(mode, nameof(mode));
             MinimumVoluntaryTurnSeconds = minimumVoluntaryTurnSeconds;
+            EncounterParticipantIds = CopyIds(encounterParticipantIds);
         }
 
         public string Mode { get; }
         public float MinimumVoluntaryTurnSeconds { get; }
+
+        public IReadOnlyList<string> EncounterParticipantIds { get; }
+
+        private static IReadOnlyList<string> CopyIds(IEnumerable<string> values)
+        {
+            var result = new List<string>();
+            var unique = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string value in values ?? Array.Empty<string>())
+            {
+                string id = GameplayContentIdentity.RequireText(
+                    value, nameof(values));
+                if (!unique.Add(id))
+                {
+                    throw new ArgumentException(
+                        "Encounter participants must be unique.",
+                        nameof(values));
+                }
+                result.Add(id);
+            }
+            return result.AsReadOnly();
+        }
 
         private static GameplayCapabilityProfile CreateProfile(
             GameplaySemanticCapability capability,
@@ -264,8 +287,14 @@ namespace GritGud.Application.Gameplay
                 if (session.EncounterActive)
                     throw new InvalidOperationException(
                         "Encounter is already active.");
+                IReadOnlyList<string> scope = ResolveScope(
+                    session,
+                    payload.EncounterParticipantIds);
                 mutation.EncounterActive = true;
                 mutation.EncounterCompletionRequested = false;
+                mutation.InitiativeOrder = scope;
+                mutation.EncounterState = session.EncounterState
+                    .WithParticipants(scope);
                 mutation.JournalSequence = checked(
                     mutation.JournalSequence + 1L);
                 if (session.Mode == GameplaySessionMode.Exploration)
@@ -274,7 +303,7 @@ namespace GritGud.Application.Gameplay
                     mutation.Operation = GameplaySessionOperation.None;
                     mutation.TurnContext = TurnModeContext.InitiatedEncounter;
                     if (string.IsNullOrWhiteSpace(session.ActiveActorId))
-                        mutation.ActiveActorId = FirstCapable(session);
+                        mutation.ActiveActorId = FirstCapable(session, scope);
                     mutation.JournalSequence = checked(
                         mutation.JournalSequence + 1L);
                 }
@@ -292,6 +321,9 @@ namespace GritGud.Application.Gameplay
                         "No encounter is active.");
                 mutation.EncounterActive = false;
                 mutation.EncounterCompletionRequested = false;
+                mutation.InitiativeOrder = session.AllInitiativeOrder;
+                mutation.EncounterState = session.EncounterState
+                    .WithParticipants(Array.Empty<string>());
                 if (session.Mode == GameplaySessionMode.TurnBased)
                     mutation.TurnContext = TurnModeContext.Voluntary;
                 mutation.JournalSequence = checked(
@@ -455,13 +487,41 @@ namespace GritGud.Application.Gameplay
                             - actor.Wounds.MovementPenalty))));
         }
 
-        private static string FirstCapable(
-            GameplaySessionStateSnapshot session)
+        private static IReadOnlyList<string> ResolveScope(
+            GameplaySessionStateSnapshot session,
+            IReadOnlyList<string> requested)
         {
-            foreach (string actorId in session.InitiativeOrder)
+            var selected = new HashSet<string>(
+                requested ?? Array.Empty<string>(),
+                StringComparer.Ordinal);
+            if (selected.Count == 0)
+            {
+                foreach (string actorId in session.AllInitiativeOrder)
+                    selected.Add(actorId);
+            }
+            var result = new List<string>();
+            foreach (string actorId in session.AllInitiativeOrder)
+            {
+                if (selected.Remove(actorId))
+                    result.Add(actorId);
+            }
+            if (selected.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    "Encounter scope references an actor absent from initiative.");
+            }
+            return result.AsReadOnly();
+        }
+
+        private static string FirstCapable(
+            GameplaySessionStateSnapshot session,
+            IReadOnlyList<string> scope = null)
+        {
+            foreach (string actorId in scope ?? session.InitiativeOrder)
                 if (!session.GetActor(actorId).IsIncapacitated)
                     return actorId;
-            return session.InitiativeOrder[0];
+            IReadOnlyList<string> fallback = scope ?? session.InitiativeOrder;
+            return fallback[0];
         }
     }
 }

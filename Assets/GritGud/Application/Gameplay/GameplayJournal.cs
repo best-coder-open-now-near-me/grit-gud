@@ -22,6 +22,8 @@ namespace GritGud.Application.Gameplay
         VoluntaryTurnCycleCompleted,
         EmergencyReactionChanged,
         EnemyDecisionCommitted,
+        EnemyAwarenessChanged,
+        PatrolAdvanced,
     }
 
     public sealed class EnemyDecisionCommittedJournalEntry :
@@ -37,6 +39,32 @@ namespace GritGud.Application.Gameplay
         }
 
         public EnemyTacticalDecisionRecord Decision { get; }
+    }
+
+    public sealed class EnemyAwarenessChangedJournalEntry :
+        GameplayJournalEntry
+    {
+        public EnemyAwarenessChangedJournalEntry(
+            long sequence,
+            EnemyAwarenessTransitionRecord transition)
+            : base(sequence, GameplayJournalEntryKind.EnemyAwarenessChanged)
+        {
+            Transition = transition ?? throw new ArgumentNullException(
+                nameof(transition));
+        }
+
+        public EnemyAwarenessTransitionRecord Transition { get; }
+    }
+
+    public sealed class PatrolAdvancedJournalEntry : GameplayJournalEntry
+    {
+        public PatrolAdvancedJournalEntry(long sequence, PatrolAdvanceRecord advance)
+            : base(sequence, GameplayJournalEntryKind.PatrolAdvanced)
+        {
+            Advance = advance ?? throw new ArgumentNullException(nameof(advance));
+        }
+
+        public PatrolAdvanceRecord Advance { get; }
     }
 
     public sealed class EmergencyReactionChangedJournalEntry : GameplayJournalEntry
@@ -105,12 +133,37 @@ namespace GritGud.Application.Gameplay
     public sealed class EncounterChangedJournalEntry : GameplayJournalEntry
     {
         public EncounterChangedJournalEntry(long sequence, bool isActive)
+            : this(sequence, isActive, Array.Empty<string>())
+        {
+        }
+
+        public EncounterChangedJournalEntry(
+            long sequence,
+            bool isActive,
+            IEnumerable<string> participantIds)
             : base(sequence, GameplayJournalEntryKind.EncounterChanged)
         {
             IsActive = isActive;
+            var copy = new List<string>();
+            var unique = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string participantId in participantIds
+                ?? Array.Empty<string>())
+            {
+                if (string.IsNullOrWhiteSpace(participantId)
+                    || !unique.Add(participantId))
+                {
+                    throw new ArgumentException(
+                        "Encounter participant IDs must be unique and non-empty.",
+                        nameof(participantIds));
+                }
+                copy.Add(participantId);
+            }
+            ParticipantIds = copy.AsReadOnly();
         }
 
         public bool IsActive { get; }
+
+        public IReadOnlyList<string> ParticipantIds { get; }
     }
 
     public sealed class MovementBudgetSpentJournalEntry : GameplayJournalEntry
@@ -305,8 +358,13 @@ namespace GritGud.Application.Gameplay
                 context,
                 activeActorId));
 
-        internal void RecordEncounterChanged(bool isActive) =>
-            Append(new EncounterChangedJournalEntry(NextSequence, isActive));
+        internal void RecordEncounterChanged(
+            bool isActive,
+            IEnumerable<string> participantIds = null) =>
+            Append(new EncounterChangedJournalEntry(
+                NextSequence,
+                isActive,
+                participantIds));
 
         internal void RecordMovementBudgetSpent(
             string actorId,
@@ -361,6 +419,15 @@ namespace GritGud.Application.Gameplay
             Append(new EnemyDecisionCommittedJournalEntry(
                 NextSequence,
                 decision));
+
+        internal void RecordEnemyAwareness(
+            EnemyAwarenessTransitionRecord transition) =>
+            Append(new EnemyAwarenessChangedJournalEntry(
+                NextSequence,
+                transition));
+
+        internal void RecordPatrolAdvance(PatrolAdvanceRecord advance) =>
+            Append(new PatrolAdvancedJournalEntry(NextSequence, advance));
 
         private long NextSequence => entries.Count + 1L;
 

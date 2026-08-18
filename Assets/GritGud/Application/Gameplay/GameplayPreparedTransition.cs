@@ -165,7 +165,9 @@ namespace GritGud.Application.Gameplay
                 session.PendingMovementRoute,
                 session.PendingVoluntaryTurnCycle,
                 session.LastTransitionSequence,
-                session.LastVoluntaryTurnCycleSequence);
+                session.LastVoluntaryTurnCycleSequence,
+                session.EncounterState,
+                session.AllInitiativeOrder);
             var projectiles = new List<ProjectileFlightSnapshot>(
                 previous.Projectiles);
             if (action.Outcomes[0] is ProjectileLaunchedActionOutcome launched)

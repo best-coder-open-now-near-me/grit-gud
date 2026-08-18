@@ -102,7 +102,9 @@ namespace GritGud.Application.Gameplay
                 session.PendingMovementRoute,
                 session.PendingVoluntaryTurnCycle,
                 session.LastTransitionSequence,
-                session.LastVoluntaryTurnCycleSequence);
+                session.LastVoluntaryTurnCycleSequence,
+                session.EncounterState,
+                session.AllInitiativeOrder);
             return new GameplayCombatStateSnapshot(
                 resultingSession,
                 destructibles,
