@@ -69,7 +69,7 @@ namespace GritGud.Presentation.Tests
 
             Assert.That(
                 weapons.Get("weapon.rifle").ImpactEffectScaleMultiplier,
-                Is.EqualTo(0.05f));
+                Is.EqualTo(0.2f));
             Assert.That(
                 weapons.Get("weapon.rocket-launcher")
                     .ImpactEffectScaleMultiplier,
@@ -97,7 +97,7 @@ namespace GritGud.Presentation.Tests
                 Vector3 expectedScale =
                     surface.ImpactEffectPrefab.transform.localScale
                     * surface.ImpactScale
-                    * 0.05f;
+                    * 0.2f;
                 Assert.That(
                     Vector3.Distance(effect.transform.localScale, expectedScale),
                     Is.LessThan(0.000001f));
