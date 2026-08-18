@@ -217,6 +217,37 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void PinnedActorKeepsDownedPoseAfterNonIncapacitatingWound()
+        {
+            GameObject prefab = Resources.Load<GameObject>(
+                "Actors/DefaultPlayerActor");
+            GameObject actor = UnityEngine.Object.Instantiate(prefab);
+            try
+            {
+                ActorAnimationCoordinator animation =
+                    actor.GetComponent<ActorAnimationCoordinator>();
+                Assert.That(
+                    animation.TryRequestAction(
+                        ActorAnimationAction.Incapacitate),
+                    Is.True);
+
+                Assert.That(
+                    animation.PresentWoundReaction(
+                        TargetRegionId.Torso,
+                        incapacitated: false,
+                        pinned: true),
+                    Is.False);
+                Assert.That(
+                    animation.LastRequestedAction,
+                    Is.EqualTo(ActorAnimationAction.Incapacitate));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(actor);
+            }
+        }
+
+        [Test]
         public void KnifeActionCanBeInterruptedBackToTheOwnedIdleState()
         {
             GameObject prefab = Resources.Load<GameObject>(

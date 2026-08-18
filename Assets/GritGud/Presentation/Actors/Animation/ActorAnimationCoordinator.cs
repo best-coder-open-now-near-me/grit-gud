@@ -275,8 +275,11 @@ namespace GritGud.Presentation.Actors.Animation
 
         internal bool PresentWoundReaction(
             TargetRegionId region,
-            bool incapacitated)
+            bool incapacitated,
+            bool pinned = false)
         {
+            if (pinned && !incapacitated)
+                return false;
             if (incapacitated)
                 incapacitationPresentationDeferred = false;
             ActorAnimationAction action = incapacitated
