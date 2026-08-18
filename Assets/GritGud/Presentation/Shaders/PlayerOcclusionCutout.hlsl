@@ -30,6 +30,9 @@ void ClipPlayerOcclusionAtScreenUV(
         return;
     }
 
+    // The player is the cone apex. Widening toward the camera prevents walls
+    // beside the player from qualifying merely because they are near the
+    // previous player-wide end of the corridor.
     float3 corridor = _GritGudPlayerCutoutRayEnd
         - _GritGudPlayerCutoutRayStart;
     float corridorLengthSquared = dot(corridor, corridor);

@@ -10,10 +10,10 @@ namespace GritGud.Presentation.Gameplay
         public const float HorizontalViewportRadius = 0.12f;
         public const float VerticalViewportRadius = 0.3f;
         public const float LeftViewportExtension = 0.04f;
-        public const float CameraCorridorHalfWidth = 0.04f;
-        public const float TargetCorridorHalfWidth = 0.42f;
-        public const float CameraCorridorHalfHeight = 0.04f;
-        public const float TargetCorridorHalfHeight = 1f;
+        public const float PlayerConeApexHalfWidth = 0.015f;
+        public const float CameraConeBaseHalfWidth = 0.42f;
+        public const float PlayerConeApexHalfHeight = 0.015f;
+        public const float CameraConeBaseHalfHeight = 1f;
 
         private const float DefaultPivotHeight = 1.3f;
         private static readonly int PlayerCutout =
@@ -142,8 +142,10 @@ namespace GritGud.Presentation.Gameplay
                 CurrentVerticalRadius);
             Shader.SetGlobalVector(
                 PlayerCutoutRayStart,
+                focus);
+            Shader.SetGlobalVector(
+                PlayerCutoutRayEnd,
                 gameplayCamera.transform.position);
-            Shader.SetGlobalVector(PlayerCutoutRayEnd, focus);
             Shader.SetGlobalVector(
                 PlayerCutoutCameraRight,
                 gameplayCamera.transform.right);
@@ -153,10 +155,10 @@ namespace GritGud.Presentation.Gameplay
             Shader.SetGlobalVector(
                 PlayerCutoutCorridorWidths,
                 new Vector4(
-                    CameraCorridorHalfWidth,
-                    TargetCorridorHalfWidth,
-                    CameraCorridorHalfHeight,
-                    TargetCorridorHalfHeight));
+                    PlayerConeApexHalfWidth,
+                    CameraConeBaseHalfWidth,
+                    PlayerConeApexHalfHeight,
+                    CameraConeBaseHalfHeight));
         }
 
         private void OnPreCull()
