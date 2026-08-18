@@ -1,10 +1,10 @@
 using System;
-using System.Collections.Generic;
-using GritGud.Presentation.Levels.Runtime;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 
 namespace GritGud.Presentation.Gameplay
 {
+    [DefaultExecutionOrder(1000)]
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Camera))]
     public sealed class GameplayPlayerCutoutPresenter : MonoBehaviour
@@ -12,39 +12,28 @@ namespace GritGud.Presentation.Gameplay
         public const float HorizontalViewportRadius = 0.12f;
         public const float VerticalViewportRadius = 0.3f;
         public const float LeftViewportExtension = 0.04f;
+        public const string SilhouetteCameraName =
+            "Gameplay Player Silhouette Camera";
 
         private const float DefaultPivotHeight = 1.3f;
-        private const float DefaultEyeHeight = 1.62f;
-        private const int RaycastBufferSize = 64;
-        private const int VisibilityMaskWidth = 12;
-        private const int VisibilityMaskHeight = 20;
-        private const float SurfaceSeparation = 0.03f;
-        private static readonly int PlayerCutoutEnabled =
-            Shader.PropertyToID("_PlayerCutoutEnabled");
+        private const int MaximumMaskDimension = 320;
+        private const int MinimumMaskDimension = 64;
         private static readonly int PlayerCutout =
             Shader.PropertyToID("_GritGudPlayerCutout");
         private static readonly int PlayerCutoutLeftExtension =
             Shader.PropertyToID("_GritGudPlayerCutoutLeftExtension");
         private static readonly int PlayerCutoutVerticalRadius =
             Shader.PropertyToID("_GritGudPlayerCutoutVerticalRadius");
-        private static readonly int PlayerCutoutVisibilityMask =
-            Shader.PropertyToID("_GritGudPlayerCutoutVisibilityMask");
-        private static readonly int PlayerCutoutVisibilityRect =
-            Shader.PropertyToID("_GritGudPlayerCutoutVisibilityRect");
+        private static readonly int PlayerSilhouetteMask =
+            Shader.PropertyToID("_GritGudPlayerSilhouetteMask");
+        private static readonly int PlayerSilhouetteMaskTexelSize =
+            Shader.PropertyToID("_GritGudPlayerSilhouetteMask_TexelSize");
 
         private Camera gameplayCamera;
+        private Camera silhouetteCamera;
+        private RenderTexture silhouetteMask;
         private Transform target;
         private ActorStancePresenter stancePresenter;
-        private readonly RaycastHit[] raycastBuffer =
-            new RaycastHit[RaycastBufferSize];
-        private readonly Dictionary<LevelEntityView, List<Renderer>>
-            renderersByEntity =
-                new Dictionary<LevelEntityView, List<Renderer>>();
-        private HashSet<Renderer> activeOccluders = new HashSet<Renderer>();
-        private HashSet<Renderer> nextOccluders = new HashSet<Renderer>();
-        private MaterialPropertyBlock propertyBlock;
-        private Texture2D visibilityMask;
-        private byte[] visibilityMaskPixels;
 
         public bool IsBound => target != null;
 
@@ -58,33 +47,15 @@ namespace GritGud.Presentation.Gameplay
 
         public float CurrentVerticalRadius { get; private set; }
 
-        public int ActiveOccluderCount => activeOccluders.Count;
-
-        private void Awake()
-        {
-            propertyBlock = new MaterialPropertyBlock();
-            visibilityMask = new Texture2D(
-                VisibilityMaskWidth,
-                VisibilityMaskHeight,
-                TextureFormat.R8,
-                mipChain: false,
-                linear: true)
-            {
-                name = "Player POV Visibility Mask",
-                filterMode = FilterMode.Bilinear,
-                wrapMode = TextureWrapMode.Clamp,
-                hideFlags = HideFlags.HideAndDontSave,
-            };
-            visibilityMaskPixels = new byte[
-                VisibilityMaskWidth * VisibilityMaskHeight];
-        }
+        public bool HasSilhouetteMask =>
+            silhouetteCamera != null && silhouetteMask != null;
 
         public void Bind(
             Camera camera,
             Transform followTarget,
-            ActorStancePresenter actorStancePresenter,
-            IReadOnlyList<Renderer> playerCutoutRenderers)
+            ActorStancePresenter actorStancePresenter = null)
         {
+            ReleaseSilhouetteResources();
             gameplayCamera = camera != null
                 ? camera
                 : throw new ArgumentNullException(nameof(camera));
@@ -92,7 +63,7 @@ namespace GritGud.Presentation.Gameplay
                 ? followTarget
                 : throw new ArgumentNullException(nameof(followTarget));
             stancePresenter = actorStancePresenter;
-            RegisterCutoutRenderers(playerCutoutRenderers);
+            CreateSilhouetteCamera();
             PresentationEnabled = true;
             enabled = true;
             RefreshNow();
@@ -118,14 +89,13 @@ namespace GritGud.Presentation.Gameplay
 
         public void Unbind()
         {
-            ClearOccludingRenderers();
-            renderersByEntity.Clear();
             target = null;
             stancePresenter = null;
             gameplayCamera = null;
             PresentationEnabled = false;
             enabled = false;
             ClearShaderData();
+            ReleaseSilhouetteResources();
         }
 
         public void SetPresentationEnabled(bool presentationEnabled)
@@ -145,7 +115,6 @@ namespace GritGud.Presentation.Gameplay
         {
             if (!PresentationEnabled || gameplayCamera == null || target == null)
             {
-                ClearOccludingRenderers();
                 ClearShaderData();
                 return;
             }
@@ -157,16 +126,11 @@ namespace GritGud.Presentation.Gameplay
             Vector3 viewport = gameplayCamera.WorldToViewportPoint(focus);
             if (viewport.z <= gameplayCamera.nearClipPlane)
             {
-                ClearOccludingRenderers();
                 ClearShaderData();
                 return;
             }
 
-            RefreshOccludingRenderers(
-                gameplayCamera.transform.position,
-                focus,
-                viewport);
-
+            EnsureSilhouetteMask();
             CurrentShaderData = new Vector4(
                 viewport.x,
                 viewport.y,
@@ -181,6 +145,13 @@ namespace GritGud.Presentation.Gameplay
             Shader.SetGlobalFloat(
                 PlayerCutoutVerticalRadius,
                 CurrentVerticalRadius);
+            SetSilhouetteMaskGlobal();
+        }
+
+        private void LateUpdate()
+        {
+            RefreshNow();
+            RenderSilhouetteMask();
         }
 
         private void OnPreCull()
@@ -190,327 +161,169 @@ namespace GritGud.Presentation.Gameplay
 
         private void OnDisable()
         {
-            ClearOccludingRenderers();
             ClearShaderData();
         }
 
         private void OnDestroy()
         {
-            ClearOccludingRenderers();
             ClearShaderData();
-            GameplayObjectLifecycle.Destroy(visibilityMask);
-            visibilityMask = null;
-            visibilityMaskPixels = null;
+            ReleaseSilhouetteResources();
         }
 
-        private void RegisterCutoutRenderers(
-            IReadOnlyList<Renderer> playerCutoutRenderers)
+        private void CreateSilhouetteCamera()
         {
-            ClearOccludingRenderers();
-            renderersByEntity.Clear();
-            if (playerCutoutRenderers == null)
+            int playerLayer = LayerMask.NameToLayer(
+                GameplayCameraController.LocalPlayerLayerName);
+            if (playerLayer < 0)
+            {
+                throw new InvalidOperationException(
+                    $"Player cutout requires the " +
+                    $"'{GameplayCameraController.LocalPlayerLayerName}' " +
+                    "project layer.");
+            }
+
+            var cameraObject = new GameObject(SilhouetteCameraName)
+            {
+                hideFlags = HideFlags.HideAndDontSave,
+            };
+            cameraObject.transform.SetParent(
+                gameplayCamera.transform,
+                worldPositionStays: false);
+            silhouetteCamera = cameraObject.AddComponent<Camera>();
+            silhouetteCamera.CopyFrom(gameplayCamera);
+            silhouetteCamera.enabled = false;
+            silhouetteCamera.cullingMask = 1 << playerLayer;
+            silhouetteCamera.clearFlags = CameraClearFlags.SolidColor;
+            silhouetteCamera.backgroundColor = Color.clear;
+            silhouetteCamera.allowHDR = false;
+            silhouetteCamera.allowMSAA = false;
+            silhouetteCamera.depthTextureMode = DepthTextureMode.None;
+            silhouetteCamera.useOcclusionCulling = false;
+            silhouetteCamera.rect = new Rect(0f, 0f, 1f, 1f);
+
+            UniversalAdditionalCameraData cameraData =
+                silhouetteCamera.GetUniversalAdditionalCameraData();
+            cameraData.renderPostProcessing = false;
+            cameraData.antialiasing = AntialiasingMode.None;
+            EnsureSilhouetteMask();
+        }
+
+        private void EnsureSilhouetteMask()
+        {
+            if (gameplayCamera == null || silhouetteCamera == null)
             {
                 return;
             }
 
-            for (int index = 0; index < playerCutoutRenderers.Count; index++)
+            Vector2Int size = CalculateMaskSize(gameplayCamera);
+            if (silhouetteMask != null
+                && silhouetteMask.width == size.x
+                && silhouetteMask.height == size.y)
             {
-                Renderer renderer = playerCutoutRenderers[index];
-                if (renderer == null)
-                {
-                    continue;
-                }
+                return;
+            }
 
-                SetCutoutEnabled(renderer, false);
-                LevelEntityView entity =
-                    renderer.GetComponentInParent<LevelEntityView>();
-                if (entity == null)
-                {
-                    continue;
-                }
+            ReleaseSilhouetteMask();
+            silhouetteMask = new RenderTexture(
+                size.x,
+                size.y,
+                16,
+                RenderTextureFormat.ARGB32,
+                RenderTextureReadWrite.Linear)
+            {
+                name = "Gameplay Player Silhouette Mask",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                antiAliasing = 1,
+                useMipMap = false,
+                autoGenerateMips = false,
+                hideFlags = HideFlags.HideAndDontSave,
+            };
+            silhouetteMask.Create();
+            silhouetteCamera.targetTexture = silhouetteMask;
 
-                if (!renderersByEntity.TryGetValue(
-                    entity,
-                    out List<Renderer> entityRenderers))
-                {
-                    entityRenderers = new List<Renderer>();
-                    renderersByEntity.Add(entity, entityRenderers);
-                }
+            RenderTexture previous = RenderTexture.active;
+            RenderTexture.active = silhouetteMask;
+            GL.Clear(true, true, Color.clear);
+            RenderTexture.active = previous;
+            SetSilhouetteMaskGlobal();
+        }
 
-                entityRenderers.Add(renderer);
+        private void RenderSilhouetteMask()
+        {
+            if (!PresentationEnabled
+                || gameplayCamera == null
+                || silhouetteCamera == null
+                || silhouetteMask == null)
+            {
+                return;
+            }
+
+            Transform gameplayTransform = gameplayCamera.transform;
+            silhouetteCamera.transform.SetPositionAndRotation(
+                gameplayTransform.position,
+                gameplayTransform.rotation);
+            silhouetteCamera.worldToCameraMatrix =
+                gameplayCamera.worldToCameraMatrix;
+            silhouetteCamera.projectionMatrix = gameplayCamera.projectionMatrix;
+            silhouetteCamera.nearClipPlane = gameplayCamera.nearClipPlane;
+            silhouetteCamera.farClipPlane = gameplayCamera.farClipPlane;
+            silhouetteCamera.Render();
+            SetSilhouetteMaskGlobal();
+        }
+
+        private static Vector2Int CalculateMaskSize(Camera camera)
+        {
+            int sourceWidth = Mathf.Max(1, camera.pixelWidth);
+            int sourceHeight = Mathf.Max(1, camera.pixelHeight);
+            float scale = Mathf.Min(
+                1f,
+                MaximumMaskDimension
+                    / (float)Mathf.Max(sourceWidth, sourceHeight));
+            return new Vector2Int(
+                Mathf.Max(
+                    MinimumMaskDimension,
+                    Mathf.RoundToInt(sourceWidth * scale)),
+                Mathf.Max(
+                    MinimumMaskDimension,
+                    Mathf.RoundToInt(sourceHeight * scale)));
+        }
+
+        private void ReleaseSilhouetteResources()
+        {
+            ReleaseSilhouetteMask();
+            if (silhouetteCamera != null)
+            {
+                GameObject cameraObject = silhouetteCamera.gameObject;
+                silhouetteCamera = null;
+                cameraObject.transform.SetParent(null);
+                GameplayObjectLifecycle.Destroy(cameraObject);
             }
         }
 
-        private void RefreshOccludingRenderers(
-            Vector3 cameraPosition,
-            Vector3 focus,
-            Vector3 focusViewport)
+        private void ReleaseSilhouetteMask()
         {
-            nextOccluders.Clear();
-            Array.Clear(
-                visibilityMaskPixels,
-                0,
-                visibilityMaskPixels.Length);
-            var visibilityRect = new Rect(
-                focusViewport.x - HorizontalViewportRadius
-                    - LeftViewportExtension,
-                focusViewport.y - VerticalViewportRadius,
-                (HorizontalViewportRadius * 2f) + LeftViewportExtension,
-                VerticalViewportRadius * 2f);
-            Vector3 playerEye = stancePresenter != null
-                ? stancePresenter.FirstPersonEyePosition
-                : target.position + (Vector3.up * DefaultEyeHeight);
-            float maximumWallDistance =
-                Vector3.Distance(cameraPosition, focus) + 0.5f;
-            for (int row = 0; row < VisibilityMaskHeight; row++)
+            if (silhouetteCamera != null)
             {
-                float viewportY = visibilityRect.yMin
-                    + (((row + 0.5f) / VisibilityMaskHeight)
-                        * visibilityRect.height);
-                for (int column = 0; column < VisibilityMaskWidth; column++)
-                {
-                    float viewportX = visibilityRect.xMin
-                        + (((column + 0.5f) / VisibilityMaskWidth)
-                            * visibilityRect.width);
-                    Ray ray = gameplayCamera.ViewportPointToRay(
-                        new Vector3(viewportX, viewportY));
-                    if (!TryFindVisibleCameraOccluder(
-                        ray,
-                        maximumWallDistance,
-                        playerEye,
-                        out LevelEntityView occludingEntity))
-                    {
-                        continue;
-                    }
-
-                    visibilityMaskPixels[
-                        (row * VisibilityMaskWidth) + column] = byte.MaxValue;
-                    AddOccludingEntity(occludingEntity);
-                }
+                silhouetteCamera.targetTexture = null;
             }
 
-            visibilityMask.LoadRawTextureData(visibilityMaskPixels);
-            visibilityMask.Apply(updateMipmaps: false, makeNoLongerReadable: false);
-            Shader.SetGlobalTexture(PlayerCutoutVisibilityMask, visibilityMask);
+            GameplayObjectLifecycle.Destroy(silhouetteMask);
+            silhouetteMask = null;
+        }
+
+        private void SetSilhouetteMaskGlobal()
+        {
+            Shader.SetGlobalTexture(PlayerSilhouetteMask, silhouetteMask);
             Shader.SetGlobalVector(
-                PlayerCutoutVisibilityRect,
-                new Vector4(
-                    visibilityRect.xMin,
-                    visibilityRect.yMin,
-                    visibilityRect.width,
-                    visibilityRect.height));
-
-            foreach (Renderer renderer in activeOccluders)
-            {
-                if (!nextOccluders.Contains(renderer))
-                {
-                    SetCutoutEnabled(renderer, false);
-                }
-            }
-
-            foreach (Renderer renderer in nextOccluders)
-            {
-                if (!activeOccluders.Contains(renderer))
-                {
-                    SetCutoutEnabled(renderer, true);
-                }
-            }
-
-            HashSet<Renderer> previous = activeOccluders;
-            activeOccluders = nextOccluders;
-            nextOccluders = previous;
-        }
-
-        private bool TryFindVisibleCameraOccluder(
-            Ray cameraRay,
-            float maximumWallDistance,
-            Vector3 playerEye,
-            out LevelEntityView occludingEntity)
-        {
-            occludingEntity = null;
-            RaycastHit[] hits = GetRayHits(
-                cameraRay,
-                gameplayCamera.farClipPlane,
-                out int hitCount);
-            float nearestWallDistance = float.PositiveInfinity;
-            for (int index = 0; index < hitCount; index++)
-            {
-                RaycastHit hit = hits[index];
-                LevelEntityView entity = hit.collider != null
-                    ? hit.collider.GetComponentInParent<LevelEntityView>()
-                    : null;
-                if (hit.distance >= nearestWallDistance
-                    || hit.distance > maximumWallDistance
-                    || entity == null
-                    || !GameplayCameraOcclusionRules.UsesPlayerCutout(
-                        entity.ArchetypeId)
-                    || !renderersByEntity.ContainsKey(entity))
-                {
-                    continue;
-                }
-
-                nearestWallDistance = hit.distance;
-                occludingEntity = entity;
-            }
-
-            if (occludingEntity == null)
-            {
-                return false;
-            }
-
-            float nearestRevealedDistance = float.PositiveInfinity;
-            Collider revealedCollider = null;
-            Vector3 revealedPoint = cameraRay.GetPoint(
-                gameplayCamera.farClipPlane * 0.95f);
-            for (int index = 0; index < hitCount; index++)
-            {
-                RaycastHit hit = hits[index];
-                if (hit.distance <= nearestWallDistance + SurfaceSeparation
-                    || hit.distance >= nearestRevealedDistance)
-                {
-                    continue;
-                }
-
-                LevelEntityView entity = hit.collider != null
-                    ? hit.collider.GetComponentInParent<LevelEntityView>()
-                    : null;
-                if (entity == occludingEntity)
-                {
-                    continue;
-                }
-
-                nearestRevealedDistance = hit.distance;
-                revealedCollider = hit.collider;
-                revealedPoint = hit.point;
-            }
-
-            if (IsPlayerCollider(revealedCollider))
-            {
-                return true;
-            }
-
-            return HasPlayerLineOfSight(
-                playerEye,
-                revealedPoint,
-                revealedCollider);
-        }
-
-        private RaycastHit[] GetRayHits(
-            Ray ray,
-            float distance,
-            out int hitCount)
-        {
-            hitCount = Physics.RaycastNonAlloc(
-                ray,
-                raycastBuffer,
-                distance,
-                Physics.DefaultRaycastLayers,
-                QueryTriggerInteraction.Ignore);
-            if (hitCount < raycastBuffer.Length)
-            {
-                return raycastBuffer;
-            }
-
-            RaycastHit[] overflowHits = Physics.RaycastAll(
-                ray,
-                distance,
-                Physics.DefaultRaycastLayers,
-                QueryTriggerInteraction.Ignore);
-            hitCount = overflowHits.Length;
-            return overflowHits;
-        }
-
-        private bool HasPlayerLineOfSight(
-            Vector3 playerEye,
-            Vector3 revealedPoint,
-            Collider revealedCollider)
-        {
-            Vector3 offset = revealedPoint - playerEye;
-            float distance = offset.magnitude;
-            if (distance <= SurfaceSeparation)
-            {
-                return true;
-            }
-
-            RaycastHit[] hits = GetRayHits(
-                new Ray(playerEye, offset / distance),
-                distance,
-                out int hitCount);
-            for (int index = 0; index < hitCount; index++)
-            {
-                RaycastHit hit = hits[index];
-                if (IsPlayerCollider(hit.collider)
-                    || (hit.collider == revealedCollider
-                        && hit.distance >= distance - SurfaceSeparation))
-                {
-                    continue;
-                }
-
-                if (hit.distance < distance - SurfaceSeparation)
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private bool IsPlayerCollider(Collider collider)
-        {
-            Transform source = collider != null ? collider.transform : null;
-            return source != null
-                && (source == target || source.IsChildOf(target));
-        }
-
-        private void AddOccludingEntity(LevelEntityView entity)
-        {
-            if (entity == null
-                || !renderersByEntity.TryGetValue(
-                    entity,
-                    out List<Renderer> entityRenderers))
-            {
-                return;
-            }
-
-            for (int index = 0; index < entityRenderers.Count; index++)
-            {
-                Renderer renderer = entityRenderers[index];
-                if (renderer != null)
-                {
-                    nextOccluders.Add(renderer);
-                }
-            }
-        }
-
-        private void ClearOccludingRenderers()
-        {
-            foreach (Renderer renderer in activeOccluders)
-            {
-                SetCutoutEnabled(renderer, false);
-            }
-
-            activeOccluders.Clear();
-            nextOccluders.Clear();
-        }
-
-        private void SetCutoutEnabled(Renderer renderer, bool cutoutEnabled)
-        {
-            if (renderer == null)
-            {
-                return;
-            }
-
-            if (propertyBlock == null)
-            {
-                propertyBlock = new MaterialPropertyBlock();
-            }
-
-            renderer.GetPropertyBlock(propertyBlock);
-            propertyBlock.SetFloat(
-                PlayerCutoutEnabled,
-                cutoutEnabled ? 1f : 0f);
-            renderer.SetPropertyBlock(propertyBlock);
-            propertyBlock.Clear();
+                PlayerSilhouetteMaskTexelSize,
+                silhouetteMask != null
+                    ? new Vector4(
+                        1f / silhouetteMask.width,
+                        1f / silhouetteMask.height,
+                        silhouetteMask.width,
+                        silhouetteMask.height)
+                    : Vector4.zero);
         }
 
         private void ClearShaderData()
@@ -522,9 +335,11 @@ namespace GritGud.Presentation.Gameplay
             Shader.SetGlobalFloat(PlayerCutoutLeftExtension, 0f);
             Shader.SetGlobalFloat(PlayerCutoutVerticalRadius, 0f);
             Shader.SetGlobalTexture(
-                PlayerCutoutVisibilityMask,
+                PlayerSilhouetteMask,
                 Texture2D.blackTexture);
-            Shader.SetGlobalVector(PlayerCutoutVisibilityRect, Vector4.zero);
+            Shader.SetGlobalVector(
+                PlayerSilhouetteMaskTexelSize,
+                Vector4.zero);
         }
     }
 }
