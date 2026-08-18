@@ -51,6 +51,10 @@ gameplay foundations. Neither is an AI-only scoring shortcut: live play,
 deterministic reduction, replay, and headless branches must consume the same
 records.
 
+The file-level execution order, migration policy, parity checks, commit gates,
+and Codex 5.3 handoff instructions are maintained in
+[PRE_TRAINING_SIMULATION_IMPLEMENTATION_PLAN.md](PRE_TRAINING_SIMULATION_IMPLEMENTATION_PLAN.md).
+
 ### 1. Portable tactical context
 
 Introduce an immutable pre-action context snapshot assembled from canonical
