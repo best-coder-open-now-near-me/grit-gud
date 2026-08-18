@@ -116,6 +116,30 @@ namespace GritGud.Domain.Tests
         }
 
         [Test]
+        public void ThrowingControlObserverCannotInterruptLaterObserversOrTurnAdvance()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            using var control = new GameplayPartyControlSession(gameplay);
+            Assert.That(gameplay.BeginEncounter(), Is.True);
+            GameplayPartyControlSnapshot? observed = null;
+            control.ControlChanged += _ => throw new InvalidOperationException(
+                "control projection failed");
+            control.ControlChanged += snapshot => observed = snapshot;
+
+            InvalidOperationException exception =
+                Assert.Throws<InvalidOperationException>(() =>
+                    gameplay.TryEndTurn("mara", out _));
+
+            Assert.That(
+                exception.Message,
+                Is.EqualTo("control projection failed"));
+            Assert.That(gameplay.Mode, Is.EqualTo(GameplaySessionMode.TurnBased));
+            Assert.That(gameplay.ActiveActorId, Is.EqualTo("raider"));
+            Assert.That(observed.HasValue, Is.True);
+            Assert.That(observed.Value.CommandActorId, Is.Null);
+        }
+
+        [Test]
         public void ExplorationSelectionIsRejectedDuringTurnMode()
         {
             GameplaySession gameplay = CreateGameplay();

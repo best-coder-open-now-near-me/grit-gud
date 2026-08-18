@@ -239,7 +239,11 @@ namespace GritGud.Application.Gameplay
             selectedActorId = nextSelectedActorId;
             commandActorId = nextCommandActorId;
             if (changed && notify)
-                ControlChanged?.Invoke(Snapshot);
+            {
+                var notifications = new GameplayNotificationBatch();
+                notifications.Add(ControlChanged, Snapshot);
+                notifications.Publish();
+            }
         }
 
         private string FindFirstCapableActor()

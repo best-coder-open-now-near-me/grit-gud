@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using GritGud.Application;
 using GritGud.Domain.Levels;
 
 namespace GritGud.Application.Levels
@@ -86,7 +87,7 @@ namespace GritGud.Application.Levels
             history.Add(command);
             historyPosition++;
             revision++;
-            Changed?.Invoke(this, new LevelSessionChangedEventArgs(
+            PublishChanged(new LevelSessionChangedEventArgs(
                 LevelSessionChangeKind.Execute,
                 revision,
                 command));
@@ -108,7 +109,7 @@ namespace GritGud.Application.Levels
             command.Revert(document);
             historyPosition--;
             revision++;
-            Changed?.Invoke(this, new LevelSessionChangedEventArgs(
+            PublishChanged(new LevelSessionChangedEventArgs(
                 LevelSessionChangeKind.Undo,
                 revision,
                 command));
@@ -126,7 +127,7 @@ namespace GritGud.Application.Levels
             command.Apply(document);
             historyPosition++;
             revision++;
-            Changed?.Invoke(this, new LevelSessionChangedEventArgs(
+            PublishChanged(new LevelSessionChangedEventArgs(
                 LevelSessionChangeKind.Redo,
                 revision,
                 command));
@@ -140,9 +141,17 @@ namespace GritGud.Application.Levels
             historyPosition = 0;
             savedHistoryPosition = isSaved ? 0 : -1;
             revision++;
-            Changed?.Invoke(this, new LevelSessionChangedEventArgs(
+            PublishChanged(new LevelSessionChangedEventArgs(
                 LevelSessionChangeKind.ReplaceDocument,
                 revision));
+        }
+
+        private void PublishChanged(LevelSessionChangedEventArgs args)
+        {
+            var notifications = new PostCommitNotificationBatch();
+            notifications.Add(Changed, this, args);
+            notifications.Publish(
+                "One or more level-session observers failed after the authoritative edit committed.");
         }
 
         public void MarkSaved()

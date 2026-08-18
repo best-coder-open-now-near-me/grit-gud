@@ -1,3 +1,4 @@
+using System;
 using GritGud.Application.Levels;
 using GritGud.Domain.Levels;
 using NUnit.Framework;
@@ -129,6 +130,37 @@ namespace GritGud.Domain.Tests.Levels
             Assert.That(observed, Is.Not.Null);
             Assert.That(observed.SessionChange.AffectedEntityIds, Is.EquivalentTo(new[] { "entity-1" }));
             Assert.That(LevelValidator.HasErrors(observed.ValidationIssues), Is.False);
+        }
+
+        [Test]
+        public void ThrowingWorkspaceObserverCannotInterruptLaterProjections()
+        {
+            using var workspace = new LevelEditorWorkspace(
+                LevelDocumentFactory.CreateEmpty());
+            bool laterObserverRan = false;
+            EventHandler<LevelEditorWorkspaceChangedEventArgs> failingObserver =
+                (_, __) => throw new InvalidOperationException(
+                    "workspace projection failed");
+            workspace.Changed += failingObserver;
+            workspace.Changed += (_, __) => laterObserverRan = true;
+
+            InvalidOperationException exception =
+                Assert.Throws<InvalidOperationException>(() =>
+                    workspace.Execute(new AddEntityCommand(new LevelEntity
+                    {
+                        id = "entity-1",
+                        archetypeId = "prop.crate.standard",
+                    })));
+
+            Assert.That(
+                exception.Message,
+                Is.EqualTo("workspace projection failed"));
+            Assert.That(workspace.FindEntitySnapshot("entity-1"), Is.Not.Null);
+            Assert.That(workspace.Revision, Is.EqualTo(1));
+            Assert.That(laterObserverRan, Is.True);
+            workspace.Changed -= failingObserver;
+            Assert.That(workspace.Undo(), Is.True);
+            Assert.That(workspace.FindEntitySnapshot("entity-1"), Is.Null);
         }
 
         [Test]

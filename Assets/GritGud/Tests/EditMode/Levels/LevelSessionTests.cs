@@ -1,3 +1,4 @@
+using System;
 using GritGud.Application.Levels;
 using GritGud.Domain.Levels;
 using NUnit.Framework;
@@ -292,6 +293,41 @@ namespace GritGud.Domain.Tests.Levels
             Assert.That(observed.Kind, Is.EqualTo(LevelSessionChangeKind.Execute));
             Assert.That(observed.AffectedEntityIds, Is.EquivalentTo(new[] { "entity-1" }));
             Assert.That(observed.RequiresFullProjection, Is.False);
+        }
+
+        [Test]
+        public void ThrowingObserverCannotInterruptCommittedEditOrLaterObservers()
+        {
+            var session = new LevelSession(LevelDocumentFactory.CreateEmpty());
+            bool laterObserverRan = false;
+            LevelSessionChangedEventArgs laterArgs = null;
+            EventHandler<LevelSessionChangedEventArgs> failingObserver =
+                (_, __) => throw new InvalidOperationException(
+                    "projection failed");
+            session.Changed += failingObserver;
+            session.Changed += (_, args) =>
+            {
+                laterObserverRan = true;
+                laterArgs = args;
+            };
+
+            InvalidOperationException exception =
+                Assert.Throws<InvalidOperationException>(() =>
+                    session.Execute(new AddEntityCommand(new LevelEntity
+                    {
+                        id = "entity-1",
+                        archetypeId = "prop.crate.standard",
+                    })));
+
+            Assert.That(exception.Message, Is.EqualTo("projection failed"));
+            Assert.That(session.FindEntitySnapshot("entity-1"), Is.Not.Null);
+            Assert.That(session.Revision, Is.EqualTo(1));
+            Assert.That(session.CanUndo, Is.True);
+            Assert.That(laterObserverRan, Is.True);
+            Assert.That(laterArgs.Revision, Is.EqualTo(1));
+            session.Changed -= failingObserver;
+            Assert.That(session.Undo(), Is.True);
+            Assert.That(session.FindEntitySnapshot("entity-1"), Is.Null);
         }
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Turns;
@@ -214,6 +215,75 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(observed.Value.CurrentActorId, Is.EqualTo("target"));
             Assert.That(observedBudget.ActionPoints, Is.EqualTo(4));
             Assert.That(observedBudget.MovementOpportunity, Is.EqualTo(8f));
+        }
+
+        [Test]
+        public void TurnModeObserversSeeTheCommittedContextAndJournal()
+        {
+            GameplaySession session = CreateSession(
+                CreateActor("player", 10));
+            TurnModeContext observedContext = TurnModeContext.None;
+            GameplaySessionOperation observedOperation =
+                GameplaySessionOperation.ResolvingWorldTurn;
+            TurnModeChangedJournalEntry observedJournal = null;
+            session.ModeChanged += _ =>
+            {
+                observedContext = session.TurnContext;
+                observedOperation = session.Operation;
+                observedJournal = session.Journal.Entries
+                    .OfType<TurnModeChangedJournalEntry>()
+                    .LastOrDefault();
+            };
+
+            Assert.That(session.EnterTurnMode(), Is.True);
+
+            Assert.That(observedContext, Is.EqualTo(TurnModeContext.Voluntary));
+            Assert.That(
+                observedOperation,
+                Is.EqualTo(GameplaySessionOperation.None));
+            Assert.That(observedJournal, Is.Not.Null);
+            Assert.That(
+                observedJournal.ResultingMode,
+                Is.EqualTo(GameplaySessionMode.TurnBased));
+            Assert.That(observedJournal.Context, Is.EqualTo(observedContext));
+            Assert.That(observedJournal.ActiveActorId, Is.EqualTo("player"));
+        }
+
+        [Test]
+        public void ThrowingTurnObserverCannotInterruptCommitOrLaterObservers()
+        {
+            GameplaySession session = CreateSession(
+                CreateActor("player", 10),
+                CreateActor("target", 0));
+            Assert.That(session.BeginEncounter(), Is.True);
+            TurnEndRecord observedCommittedTurn = null;
+            TurnEndRecord observedJournalTurn = null;
+            bool laterActorObserverRan = false;
+            bool turnObserverRan = false;
+            session.ActiveActorChanged += _ =>
+            {
+                observedCommittedTurn = session.LastEndedTurn;
+                observedJournalTurn = session.Journal.Entries
+                    .OfType<TurnEndedJournalEntry>()
+                    .LastOrDefault()
+                    ?.Turn;
+                throw new InvalidOperationException("projection failed");
+            };
+            session.ActiveActorChanged += _ => laterActorObserverRan = true;
+            session.TurnEnded += _ => turnObserverRan = true;
+
+            InvalidOperationException exception =
+                Assert.Throws<InvalidOperationException>(() =>
+                    session.TryEndTurn("player", out _));
+
+            Assert.That(exception.Message, Is.EqualTo("projection failed"));
+            Assert.That(session.ActiveActorId, Is.EqualTo("target"));
+            Assert.That(observedCommittedTurn, Is.SameAs(session.LastEndedTurn));
+            Assert.That(observedJournalTurn, Is.SameAs(session.LastEndedTurn));
+            Assert.That(session.LastEndedTurn.EndingActorId, Is.EqualTo("player"));
+            Assert.That(session.LastEndedTurn.NextActorId, Is.EqualTo("target"));
+            Assert.That(laterActorObserverRan, Is.True);
+            Assert.That(turnObserverRan, Is.True);
         }
 
         [Test]

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using GritGud.Application;
 using GritGud.Domain.Levels;
 
 namespace GritGud.Application.Levels
@@ -132,9 +133,15 @@ namespace GritGud.Application.Levels
         private void HandleSessionChanged(object sender, LevelSessionChangedEventArgs args)
         {
             validationIssues = Validate(LevelValidationProfile.Authoring);
-            Changed?.Invoke(
+            var notifications = new PostCommitNotificationBatch();
+            notifications.Add(
+                Changed,
                 this,
-                new LevelEditorWorkspaceChangedEventArgs(args, validationIssues));
+                new LevelEditorWorkspaceChangedEventArgs(
+                    args,
+                    validationIssues));
+            notifications.Publish(
+                "One or more level-workspace observers failed after the authoritative edit committed.");
         }
 
         private void ThrowIfDisposed()

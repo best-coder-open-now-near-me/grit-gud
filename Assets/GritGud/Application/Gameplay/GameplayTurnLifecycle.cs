@@ -108,15 +108,18 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
+            var notifications = new GameplayNotificationBatch();
+
             if (!EncounterActive || activeActorId == null)
             {
                 SetActiveActor(
                     FindNextCapableActor(startingAfterIndex: -1)
-                        ?? host.InitiativeOrder[0]);
+                        ?? host.InitiativeOrder[0],
+                    notifications);
             }
 
             GameplaySessionMode previousMode = Mode;
-            SetMode(GameplaySessionMode.TurnBased);
+            SetMode(GameplaySessionMode.TurnBased, notifications);
             host.Operation = GameplaySessionOperation.None;
             TurnContext = EncounterActive
                 ? TurnModeContext.InitiatedEncounter
@@ -127,6 +130,7 @@ namespace GritGud.Application.Gameplay
                 TurnContext,
                 activeActorId);
             failure = TurnModeEntryFailure.None;
+            notifications.Publish();
             return true;
         }
 
@@ -210,8 +214,10 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
-            CompleteVoluntaryTurnCycleAndExit();
+            var notifications = new GameplayNotificationBatch();
+            CompleteVoluntaryTurnCycleAndExit(notifications);
             failure = TurnModeExitFailure.None;
+            notifications.Publish();
             return true;
         }
 
@@ -237,12 +243,17 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
+            var notifications = new GameplayNotificationBatch();
             string endingActorId = activeActorId;
             if (!EncounterActive)
             {
                 BeginVoluntaryWorldTurn();
-                RecordTurnEnd(endingActorId, activeActorId);
+                RecordTurnEnd(
+                    endingActorId,
+                    activeActorId,
+                    notifications);
                 failure = TurnEndFailure.None;
+                notifications.Publish();
                 return true;
             }
 
@@ -264,19 +275,27 @@ namespace GritGud.Application.Gameplay
 
             if (EncounterCompletionRequested)
             {
-                RecordTurnEnd(endingActorId, endingActorId);
+                RecordTurnEnd(
+                    endingActorId,
+                    endingActorId,
+                    notifications);
                 CompleteEncounter();
-                CompleteVoluntaryTurnCycleAndExit();
+                CompleteVoluntaryTurnCycleAndExit(notifications);
                 failure = TurnEndFailure.None;
+                notifications.Publish();
                 return true;
             }
 
             string nextActorId = FindNextCapableActor(activeIndex)
                 ?? endingActorId;
             host.RefreshTurnBudgetForTurnLifecycle(nextActorId);
-            SetActiveActor(nextActorId);
-            RecordTurnEnd(endingActorId, activeActorId);
+            SetActiveActor(nextActorId, notifications);
+            RecordTurnEnd(
+                endingActorId,
+                activeActorId,
+                notifications);
             failure = TurnEndFailure.None;
+            notifications.Publish();
             return true;
         }
 
@@ -323,6 +342,8 @@ namespace GritGud.Application.Gameplay
                 }
                 responders.Add(responderId);
             }
+
+            var notifications = new GameplayNotificationBatch();
             emergencyResponders = responders.AsReadOnly();
             emergencyResponderIndex = 0;
             emergencyResumeActorId = attackerId;
@@ -331,7 +352,8 @@ namespace GritGud.Application.Gameplay
             host.BeginEmergencyTurnForTurnLifecycle(
                 firstResponderId,
                 actionPointAllowance);
-            SetActiveActor(firstResponderId);
+            SetActiveActor(firstResponderId, notifications);
+            notifications.Publish();
         }
 
         public bool TryEndEmergencyTurn(
@@ -352,6 +374,8 @@ namespace GritGud.Application.Gameplay
                 failure = TurnEndFailure.ActorNotActive;
                 return false;
             }
+
+            var notifications = new GameplayNotificationBatch();
             string endingActorId = activeActorId;
             emergencyResponderIndex++;
             responsePassCompleted =
@@ -364,14 +388,16 @@ namespace GritGud.Application.Gameplay
                     nextResponderId,
                     host.GetEmergencyActionPointAllowanceForTurnLifecycle(
                         endingActorId));
-                SetActiveActor(nextResponderId);
+                SetActiveActor(nextResponderId, notifications);
             }
             RecordTurnEnd(
                 endingActorId,
                 responsePassCompleted ? emergencyResumeActorId : activeActorId,
+                notifications,
                 GameplayTurnKind.EmergencyReaction,
                 emergencyResumeActorId);
             failure = TurnEndFailure.None;
+            notifications.Publish();
             return true;
         }
 
@@ -391,12 +417,14 @@ namespace GritGud.Application.Gameplay
                     "Emergency reactions must resume their triggering attacker.");
             }
             host.RequireActorForTurnLifecycle(resumeActorId);
+            var notifications = new GameplayNotificationBatch();
             emergencyResponders = null;
             emergencyResponderIndex = -1;
             emergencyResumeActorId = null;
             TurnPhase = GameplayTurnPhase.Normal;
             host.RefreshTurnBudgetForTurnLifecycle(resumeActorId);
-            SetActiveActor(resumeActorId);
+            SetActiveActor(resumeActorId, notifications);
+            notifications.Publish();
         }
 
         public bool CompleteVoluntaryWorldTurn()
@@ -412,16 +440,19 @@ namespace GritGud.Application.Gameplay
 
             VoluntaryTurnCycleRecord completedCycle =
                 pendingVoluntaryTurnCycle;
+            var notifications = new GameplayNotificationBatch();
             pendingVoluntaryTurnCycle = null;
             LastCompletedVoluntaryTurnCycle = completedCycle;
             host.RefreshAllTurnBudgetsForTurnLifecycle();
             SetActiveActor(
                 FindNextCapableActor(startingAfterIndex: -1)
-                    ?? host.InitiativeOrder[0]);
+                    ?? host.InitiativeOrder[0],
+                notifications);
             host.Operation = GameplaySessionOperation.None;
             TurnContext = TurnModeContext.Voluntary;
             host.Journal.RecordVoluntaryTurnCycleCompleted(completedCycle);
-            VoluntaryTurnCycleCompleted?.Invoke(completedCycle);
+            notifications.Add(VoluntaryTurnCycleCompleted, completedCycle);
+            notifications.Publish();
             return true;
         }
 
@@ -432,14 +463,15 @@ namespace GritGud.Application.Gameplay
             host.Operation = GameplaySessionOperation.ResolvingWorldTurn;
         }
 
-        private void CompleteVoluntaryTurnCycleAndExit()
+        private void CompleteVoluntaryTurnCycleAndExit(
+            GameplayNotificationBatch notifications)
         {
             VoluntaryTurnCycleRecord completedCycle =
                 host.CreateVoluntaryTurnCycleRecordForTurnLifecycle();
             LastCompletedVoluntaryTurnCycle = completedCycle;
             host.RefreshAllTurnBudgetsForTurnLifecycle();
             GameplaySessionMode previousMode = Mode;
-            SetMode(GameplaySessionMode.Exploration);
+            SetMode(GameplaySessionMode.Exploration, notifications);
             TurnContext = TurnModeContext.None;
             voluntaryTurnReentrySecondsRemaining =
                 host.MinimumVoluntaryTurnSeconds;
@@ -449,12 +481,13 @@ namespace GritGud.Application.Gameplay
                 Mode,
                 TurnContext,
                 activeActorId);
-            VoluntaryTurnCycleCompleted?.Invoke(completedCycle);
+            notifications.Add(VoluntaryTurnCycleCompleted, completedCycle);
         }
 
         private void RecordTurnEnd(
             string endingActorId,
             string nextActorId,
+            GameplayNotificationBatch notifications,
             GameplayTurnKind kind = GameplayTurnKind.Normal,
             string interruptedActorId = null)
         {
@@ -466,29 +499,37 @@ namespace GritGud.Application.Gameplay
                 interruptedActorId);
             LastEndedTurn = record;
             host.Journal.RecordTurnEnded(record);
-            TurnEnded?.Invoke(record);
+            notifications.Add(TurnEnded, record);
         }
 
-        private void SetActiveActor(string actorId)
+        private void SetActiveActor(
+            string actorId,
+            GameplayNotificationBatch notifications)
         {
             if (string.Equals(activeActorId, actorId, StringComparison.Ordinal))
                 return;
 
             string previousActorId = activeActorId;
             activeActorId = actorId;
-            ActiveActorChanged?.Invoke(new GameplayActiveActorChange(
-                previousActorId,
-                activeActorId));
+            notifications.Add(
+                ActiveActorChanged,
+                new GameplayActiveActorChange(
+                    previousActorId,
+                    activeActorId));
         }
 
-        private void SetMode(GameplaySessionMode mode)
+        private void SetMode(
+            GameplaySessionMode mode,
+            GameplayNotificationBatch notifications)
         {
             if (Mode == mode)
                 return;
 
             GameplaySessionMode previousMode = Mode;
             Mode = mode;
-            ModeChanged?.Invoke(new GameplayModeChange(previousMode, Mode));
+            notifications.Add(
+                ModeChanged,
+                new GameplayModeChange(previousMode, Mode));
         }
 
         private string FindNextCapableActor(int startingAfterIndex)
