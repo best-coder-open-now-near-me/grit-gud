@@ -321,7 +321,12 @@ namespace GritGud.Presentation.Gameplay
             partyPersistence.Bind(session);
             smokeFieldSession = new GameplaySmokeFieldSession(session);
             smokeFieldController.Bind(smokeFieldSession);
-            tacticalTransitionPresenter.Bind(session, visualTheme);
+            tacticalTransitionPresenter.Bind(
+                session,
+                visualTheme,
+                inputController,
+                hud,
+                partyHud);
             characterGroundingPresenter.Bind(
                 worldRegistry,
                 visualTheme,
@@ -452,6 +457,7 @@ namespace GritGud.Presentation.Gameplay
                     smokeFieldSession,
                     content.Level.traversalLinks,
                     combatReactionPresenter,
+                    tacticalTransitionPresenter,
                     installed => partyPresentation = installed),
                 new GameplayAimingFeatureInstaller(
                     session,

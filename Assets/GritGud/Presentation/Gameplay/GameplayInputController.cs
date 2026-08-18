@@ -40,6 +40,15 @@ namespace GritGud.Presentation.Gameplay
 
         public bool CameraOnly { get; private set; }
 
+        public bool Suppressed { get; private set; }
+
+        public void SetSuppressed(bool suppressed)
+        {
+            Suppressed = suppressed;
+            if (suppressed)
+                CurrentFrame = default;
+        }
+
         public void SetCameraOnly(bool cameraOnly)
         {
             CameraOnly = cameraOnly;
@@ -104,6 +113,7 @@ namespace GritGud.Presentation.Gameplay
             CurrentFrame = default;
             commandRequested = null;
             CameraOnly = false;
+            Suppressed = false;
             if (inputActions != null)
             {
                 inputActions.Disable();
@@ -153,6 +163,12 @@ namespace GritGud.Presentation.Gameplay
         {
             ReleaseCursor();
             if (inputActions == null)
+            {
+                CurrentFrame = default;
+                return;
+            }
+
+            if (Suppressed)
             {
                 CurrentFrame = default;
                 return;

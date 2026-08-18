@@ -6,6 +6,7 @@ using GritGud.Domain.Levels;
 using GritGud.Presentation.Gameplay;
 using GritGud.Presentation.Levels;
 using NUnit.Framework;
+using UnityEngine;
 
 namespace GritGud.Presentation.Tests
 {
@@ -160,6 +161,69 @@ namespace GritGud.Presentation.Tests
                     Is.EqualTo(EncounterAwarenessState.Unaware),
                     $"{partyActorId} begins inside the rifleman's view cone.");
                 Assert.That(observation.Resulting.Suspicion, Is.Zero);
+            }
+        }
+
+        [Test]
+        public void DetectionScopeIncludesOnlyTheDetectedPartyMember()
+        {
+            CommittedLevelLibrary library =
+                UnityCommittedLevelLibrary.LoadDefault();
+            GameplayContentPackage content = GameplayContentLoader.LoadCommitted(
+                library.OpenForPlay(
+                    UnityCommittedLevelLibrary.DefaultResourceKey));
+            var gameplay = new GameplaySession(content.Assembly.Scenario);
+
+            var scope = gameplay.CreateDetectionEncounterScope(
+                "depot-rifleman",
+                "player");
+
+            Assert.That(scope, Does.Contain("depot-rifleman"));
+            Assert.That(scope, Does.Contain("player"));
+            Assert.That(scope, Does.Not.Contain("oren-vale"));
+            Assert.That(scope, Has.Count.EqualTo(2));
+        }
+
+        [Test]
+        public void CombatEntryPresentationLocksAndRestoresPlayerInput()
+        {
+            CommittedLevelLibrary library =
+                UnityCommittedLevelLibrary.LoadDefault();
+            GameplayContentPackage content = GameplayContentLoader.LoadCommitted(
+                library.OpenForPlay(
+                    UnityCommittedLevelLibrary.DefaultResourceKey));
+            var gameplay = new GameplaySession(content.Assembly.Scenario);
+            var host = new GameObject("Combat Entry Presentation Test");
+            try
+            {
+                GameplayInputController input =
+                    host.AddComponent<GameplayInputController>();
+                GameplayHud hud = host.AddComponent<GameplayHud>();
+                GameplayPartyHud partyHud = host.AddComponent<GameplayPartyHud>();
+                GameplayTacticalTransitionPresenter transition =
+                    host.AddComponent<GameplayTacticalTransitionPresenter>();
+                transition.Bind(
+                    gameplay,
+                    GameplayVisualTheme.LoadDefault(),
+                    input,
+                    hud,
+                    partyHud);
+
+                transition.BeginCombatEntry("depot-rifleman", "player");
+
+                Assert.That(input.Suppressed, Is.True);
+                Assert.That(hud.enabled, Is.False);
+                Assert.That(partyHud.enabled, Is.False);
+
+                transition.CompleteCombatEntry();
+
+                Assert.That(input.Suppressed, Is.False);
+                Assert.That(hud.enabled, Is.True);
+                Assert.That(partyHud.enabled, Is.True);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
             }
         }
     }

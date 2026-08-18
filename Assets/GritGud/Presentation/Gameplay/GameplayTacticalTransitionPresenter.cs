@@ -8,12 +8,24 @@ namespace GritGud.Presentation.Gameplay
     internal sealed class GameplayTacticalTransitionPresenter : MonoBehaviour
     {
         private GameplaySession session;
+        private GameplayInputController input;
+        private GameplayHud hud;
+        private GameplayPartyHud partyHud;
         private TacticalTransitionPresentationDefinition definition;
         private GameplaySessionMode observedMode;
         private float remainingSeconds;
         private Texture2D whiteTexture;
+        private bool combatEntryActive;
+        private string combatEntryMessage = string.Empty;
+        private bool hudWasEnabled;
+        private bool partyHudWasEnabled;
 
-        public void Bind(GameplaySession gameplaySession, GameplayVisualTheme theme)
+        public void Bind(
+            GameplaySession gameplaySession,
+            GameplayVisualTheme theme,
+            GameplayInputController gameplayInput,
+            GameplayHud gameplayHud,
+            GameplayPartyHud gameplayPartyHud)
         {
             if (gameplaySession == null)
             {
@@ -26,6 +38,12 @@ namespace GritGud.Presentation.Gameplay
 
             Unbind();
             session = gameplaySession;
+            input = gameplayInput ?? throw new ArgumentNullException(
+                nameof(gameplayInput));
+            hud = gameplayHud ?? throw new ArgumentNullException(
+                nameof(gameplayHud));
+            partyHud = gameplayPartyHud ?? throw new ArgumentNullException(
+                nameof(gameplayPartyHud));
             definition = theme.TacticalTransition;
             observedMode = session.Mode;
             whiteTexture = Texture2D.whiteTexture;
@@ -34,11 +52,56 @@ namespace GritGud.Presentation.Gameplay
 
         public void Unbind()
         {
+            input?.SetSuppressed(false);
+            RestoreInterfaceState();
             session = null;
+            input = null;
+            hud = null;
+            partyHud = null;
             definition = null;
             remainingSeconds = 0f;
             whiteTexture = null;
+            combatEntryActive = false;
+            combatEntryMessage = string.Empty;
             enabled = false;
+        }
+
+        public bool CombatEntryReady =>
+            combatEntryActive && remainingSeconds <= 0f;
+
+        public void BeginCombatEntry(string observerId, string detectedActorId)
+        {
+            if (session == null || definition == null || input == null)
+                throw new InvalidOperationException(
+                    "Bind the tactical transition presenter before use.");
+            combatEntryActive = true;
+            remainingSeconds = definition.CombatEntryDelaySeconds;
+            combatEntryMessage = "CONTACT\n" + detectedActorId.ToUpperInvariant()
+                + " DETECTED";
+            input.SetSuppressed(true);
+            hudWasEnabled = hud.enabled;
+            partyHudWasEnabled = partyHud.enabled;
+            hud.enabled = false;
+            partyHud.enabled = false;
+        }
+
+        public void CompleteCombatEntry()
+        {
+            RestoreInterfaceState();
+            combatEntryActive = false;
+            remainingSeconds = 0f;
+            combatEntryMessage = string.Empty;
+            input?.SetSuppressed(false);
+        }
+
+        private void RestoreInterfaceState()
+        {
+            if (!combatEntryActive)
+                return;
+            if (hud != null)
+                hud.enabled = hudWasEnabled;
+            if (partyHud != null)
+                partyHud.enabled = partyHudWasEnabled;
         }
 
         private void Update()
@@ -48,7 +111,7 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            if (session.Mode != observedMode)
+            if (!combatEntryActive && session.Mode != observedMode)
             {
                 observedMode = session.Mode;
                 remainingSeconds = definition.DurationSeconds;
@@ -66,7 +129,10 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            float progress = 1f - (remainingSeconds / definition.DurationSeconds);
+            float duration = combatEntryActive
+                ? definition.CombatEntryDelaySeconds
+                : definition.DurationSeconds;
+            float progress = 1f - (remainingSeconds / duration);
             float eased = 1f - Mathf.Pow(1f - Mathf.Clamp01(progress), 3f);
             float fade = Mathf.Sin(Mathf.Clamp01(progress) * Mathf.PI);
             Color signal = observedMode == GameplaySessionMode.TurnBased
@@ -120,6 +186,25 @@ namespace GritGud.Presentation.Gameplay
                     Screen.width * eased,
                     1f),
                 edgeColor);
+
+            if (combatEntryActive)
+            {
+                var banner = new Rect(
+                    Screen.width * 0.5f - 180f,
+                    Screen.height * 0.22f,
+                    360f,
+                    74f);
+                DrawRect(banner, new Color(0.015f, 0.025f, 0.04f, 0.94f));
+                DrawRect(new Rect(banner.x, banner.y, banner.width, 3f), signal);
+                var style = new GUIStyle(GUI.skin.label)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontStyle = FontStyle.Bold,
+                    fontSize = 18,
+                };
+                style.normal.textColor = Color.white;
+                GUI.Label(banner, combatEntryMessage, style);
+            }
         }
 
         private void DrawRect(Rect rectangle, Color color)

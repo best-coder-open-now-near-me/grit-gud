@@ -14,8 +14,11 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplayPartyControlSession partyControl;
         private readonly GameplayExplorationSoundLedger sounds;
         private readonly Func<IReadOnlyList<string>, bool> beginEncounter;
+        private readonly GameplayTacticalTransitionPresenter tacticalTransition;
         private readonly float detectionIntervalSeconds;
         private float detectionDelaySeconds;
+        private IReadOnlyList<string> pendingEncounterScope;
+        private string pendingEncounterMessage = string.Empty;
 
         public GameplayEnemyExplorationCoordinator(
             GameplaySession session,
@@ -25,6 +28,7 @@ namespace GritGud.Presentation.Gameplay
             GameplayPartyControlSession partyControl,
             GameplayExplorationSoundLedger soundLedger,
             Func<IReadOnlyList<string>, bool> beginEncounter,
+            GameplayTacticalTransitionPresenter tacticalTransition,
             float detectionIntervalSeconds)
         {
             this.session = session ?? throw new ArgumentNullException(
@@ -41,11 +45,30 @@ namespace GritGud.Presentation.Gameplay
                 nameof(soundLedger));
             this.beginEncounter = beginEncounter
                 ?? throw new ArgumentNullException(nameof(beginEncounter));
+            this.tacticalTransition = tacticalTransition
+                ?? throw new ArgumentNullException(nameof(tacticalTransition));
             this.detectionIntervalSeconds = detectionIntervalSeconds;
         }
 
         public void Tick(float unscaledDeltaTime)
         {
+            if (tacticalTransition.CombatEntryReady)
+            {
+                IReadOnlyList<string> scope = pendingEncounterScope;
+                pendingEncounterScope = null;
+                if (scope != null && beginEncounter(scope))
+                {
+                    actionController.PresentExternalStatus(
+                        pendingEncounterMessage + " Combat initiated.");
+                    sessionPresenter.RefreshModePresentation();
+                }
+                pendingEncounterMessage = string.Empty;
+                tacticalTransition.CompleteCombatEntry();
+                return;
+            }
+            if (pendingEncounterScope != null)
+                return;
+
             sounds.Advance(unscaledDeltaTime);
             if (TickPatrolPlayback(unscaledDeltaTime))
                 return;
@@ -68,16 +91,14 @@ namespace GritGud.Presentation.Gameplay
 
                 if (transition.Resulting.State == EncounterAwarenessState.Alert)
                 {
-                    IReadOnlyList<string> scope = session.CreateEncounterScope(
+                    pendingEncounterScope = session.CreateDetectionEncounterScope(
                         enemy.Definition.Id,
                         transition.Resulting.LastKnownHostileId);
-                    if (beginEncounter(scope))
-                    {
-                        actionController.PresentExternalStatus(
-                            $"{enemy.Definition.Id} detected "
-                            + $"{transition.Resulting.LastKnownHostileId}. Combat initiated.");
-                        sessionPresenter.RefreshModePresentation();
-                    }
+                    pendingEncounterMessage = $"{enemy.Definition.Id} detected "
+                        + $"{transition.Resulting.LastKnownHostileId}.";
+                    tacticalTransition.BeginCombatEntry(
+                        enemy.Definition.Id,
+                        transition.Resulting.LastKnownHostileId);
                     return;
                 }
 

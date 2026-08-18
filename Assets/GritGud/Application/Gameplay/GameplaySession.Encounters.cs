@@ -98,6 +98,33 @@ namespace GritGud.Application.Gameplay
             return OrderByInitiative(scope);
         }
 
+        public IReadOnlyList<string> CreateDetectionEncounterScope(
+            string observerActorId,
+            string detectedActorId)
+        {
+            RequireActor(observerActorId);
+            RequireActor(detectedActorId);
+            var scope = new HashSet<string>(StringComparer.Ordinal)
+            {
+                observerActorId,
+                detectedActorId,
+            };
+            var pending = new Queue<string>(scope);
+            while (pending.Count > 0)
+            {
+                EnemyBehaviorDefinition behavior = Scenario.GetActor(
+                    pending.Dequeue()).Combat.EnemyBehavior;
+                if (behavior == null)
+                    continue;
+                foreach (string reinforcementId in behavior.ReinforcementActorIds)
+                {
+                    if (scope.Add(reinforcementId))
+                        pending.Enqueue(reinforcementId);
+                }
+            }
+            return OrderByInitiative(scope);
+        }
+
         public EnemyAwarenessTransitionRecord PrepareAwarenessTransition(
             string actorId,
             EncounterObservation observation)

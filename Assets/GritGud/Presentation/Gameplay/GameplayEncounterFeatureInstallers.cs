@@ -26,6 +26,7 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplaySmokeFieldSession smokeFields;
         private readonly IEnumerable<LevelTraversalLinkData> traversalLinks;
         private readonly GameplayCombatReactionPresenter combatReactions;
+        private readonly GameplayTacticalTransitionPresenter tacticalTransition;
         private readonly Action<GameplayPartyPresentationSession>
             capturePartyPresentation;
 
@@ -46,6 +47,7 @@ namespace GritGud.Presentation.Gameplay
             GameplaySmokeFieldSession smokeFields,
             IEnumerable<LevelTraversalLinkData> traversalLinks,
             GameplayCombatReactionPresenter combatReactions,
+            GameplayTacticalTransitionPresenter tacticalTransition,
             Action<GameplayPartyPresentationSession> capturePartyPresentation)
         {
             this.session = session ?? throw new ArgumentNullException(nameof(session));
@@ -72,6 +74,8 @@ namespace GritGud.Presentation.Gameplay
             this.traversalLinks = traversalLinks;
             this.combatReactions = combatReactions
                 ?? throw new ArgumentNullException(nameof(combatReactions));
+            this.tacticalTransition = tacticalTransition
+                ?? throw new ArgumentNullException(nameof(tacticalTransition));
             this.capturePartyPresentation = capturePartyPresentation
                 ?? throw new ArgumentNullException(nameof(capturePartyPresentation));
         }
@@ -105,6 +109,7 @@ namespace GritGud.Presentation.Gameplay
                 partyControl,
                 dialogue,
                 sessionPresenter.TryBeginEncounter,
+                tacticalTransition,
                 obscuranceQuery: smokeFields,
                 traversalLinks: traversalLinks);
             combatReactions.Bind(session, worldRegistry, attacks);

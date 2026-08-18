@@ -20,6 +20,9 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 theme.TacticalTransition.DurationSeconds,
                 Is.GreaterThan(0f));
+            Assert.That(
+                theme.TacticalTransition.CombatEntryDelaySeconds,
+                Is.EqualTo(2f));
         }
 
         [Test]

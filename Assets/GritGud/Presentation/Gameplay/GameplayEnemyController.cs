@@ -31,6 +31,7 @@ namespace GritGud.Presentation.Gameplay
             GameplayPartyControlSession controlledParty,
             GameplayDialogueLog dialogueLog,
             Func<IReadOnlyList<string>, bool> onEncounterStartRequested,
+            GameplayTacticalTransitionPresenter tacticalTransition,
             EnemyPresentationCatalog enemyPresentationCatalog = null,
             ISightObscuranceQuery obscuranceQuery = null,
             IEnumerable<LevelTraversalLinkData> traversalLinks = null)
@@ -83,6 +84,7 @@ namespace GritGud.Presentation.Gameplay
                 partyControl,
                 explorationSounds,
                 beginEncounter,
+                tacticalTransition,
                 presentationCatalog.DetectionIntervalSeconds);
             combatTurns = new GameplayEnemyCombatTurnExecutor(
                 session,
