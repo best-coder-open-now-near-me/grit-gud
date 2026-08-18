@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using GritGud.Domain.Turns;
 
 namespace GritGud.Domain.Levels
 {
@@ -526,7 +527,7 @@ namespace GritGud.Domain.Levels
         public string completedHudText = string.Empty;
         public int actionPointCost = 1;
         public float movementOpportunityCost;
-        public string mobility = "set";
+        public string mobility = ActionMobilityCodec.SetValue;
 
         public void Normalize()
         {

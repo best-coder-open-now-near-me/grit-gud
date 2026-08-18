@@ -7,20 +7,9 @@ namespace GritGud.Application.Gameplay
     {
         public static ActionMobility ParseMobility(string value)
         {
-            if (string.Equals(
-                    value,
-                    "mobile",
-                    StringComparison.OrdinalIgnoreCase))
+            if (ActionMobilityCodec.TryParse(value, out ActionMobility mobility))
             {
-                return ActionMobility.Mobile;
-            }
-
-            if (string.Equals(
-                    value,
-                    "set",
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                return ActionMobility.Set;
+                return mobility;
             }
 
             throw new InvalidOperationException(

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using GritGud.Domain.Gameplay;
+using GritGud.Domain.Turns;
 
 namespace GritGud.Domain.Levels
 {
@@ -599,12 +601,12 @@ namespace GritGud.Domain.Levels
                 return;
             }
 
-            if (!LevelValidationMath.IsFinite(scenario.minimumVoluntaryTurnSeconds)
-                || scenario.minimumVoluntaryTurnSeconds < 0f)
+            if (!ScenarioTimingDefinition.IsValidMinimumVoluntaryTurnSeconds(
+                    scenario.minimumVoluntaryTurnSeconds))
             {
                 context.Error(
                     "scenario.timing.invalid",
-                    "The scenario minimum turn duration must be finite and non-negative.");
+                    "The scenario minimum turn duration must be finite and greater than zero.");
             }
 
             var actorIds = new HashSet<string>(StringComparer.Ordinal);
@@ -931,23 +933,18 @@ namespace GritGud.Domain.Levels
                         vehicle.entityId);
                 }
 
-                if (!LevelValidationMath.IsFinite(vehicle.maximumSpeed)
-                    || !LevelValidationMath.IsFinite(vehicle.accelerationPerTurn)
-                    || !LevelValidationMath.IsFinite(vehicle.brakingPerTurn)
-                    || !LevelValidationMath.IsFinite(vehicle.lowSpeedTurnDegrees)
-                    || !LevelValidationMath.IsFinite(vehicle.highSpeedTurnDegrees)
-                    || !LevelValidationMath.IsFinite(vehicle.baseTurningRadius)
-                    || !LevelValidationMath.IsFinite(vehicle.speedTurningRadiusFactor)
-                    || !LevelValidationMath.IsFinite(vehicle.startingSpeed)
-                    || vehicle.maximumSpeed <= 0f
-                    || vehicle.accelerationPerTurn < 0f
-                    || vehicle.brakingPerTurn < 0f
-                    || vehicle.lowSpeedTurnDegrees < 0f
-                    || vehicle.highSpeedTurnDegrees < 0f
-                    || vehicle.baseTurningRadius <= 0f
-                    || vehicle.speedTurningRadiusFactor < 0f
-                    || vehicle.startingSpeed < 0f
-                    || vehicle.startingSpeed > vehicle.maximumSpeed)
+                if (!VehicleMomentumProfile.TryValidate(
+                        vehicle.maximumSpeed,
+                        vehicle.accelerationPerTurn,
+                        vehicle.brakingPerTurn,
+                        vehicle.lowSpeedTurnDegrees,
+                        vehicle.highSpeedTurnDegrees,
+                        vehicle.baseTurningRadius,
+                        vehicle.speedTurningRadiusFactor,
+                        out _)
+                    || !VehicleMomentumProfile.IsValidSpeed(
+                        vehicle.startingSpeed,
+                        vehicle.maximumSpeed))
                 {
                     context.Error(
                         "scenario.vehicle.motion",
@@ -1009,11 +1006,13 @@ namespace GritGud.Domain.Levels
                         objective.entityId);
                 }
                 if (string.IsNullOrWhiteSpace(objective.actionId)
-                    || string.IsNullOrWhiteSpace(objective.displayName))
+                    || string.IsNullOrWhiteSpace(objective.displayName)
+                    || string.IsNullOrWhiteSpace(objective.activeHudText)
+                    || string.IsNullOrWhiteSpace(objective.completedHudText))
                 {
                     context.Error(
                         "scenario.objective.presentation",
-                        $"Objective '{objective.id}' needs an action and display name.",
+                        $"Objective '{objective.id}' needs an action, display name, and active and completed HUD text.",
                         objective.entityId);
                 }
             }
@@ -1029,9 +1028,7 @@ namespace GritGud.Domain.Levels
 
         private static bool IsSupportedMobility(string value)
         {
-            return string.Equals(value, "mobile", StringComparison.Ordinal)
-                || string.Equals(value, "momentum", StringComparison.Ordinal)
-                || string.Equals(value, "set", StringComparison.Ordinal);
+            return ActionMobilityCodec.TryParse(value, out _);
         }
     }
 

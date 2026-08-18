@@ -2,6 +2,7 @@ using System;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Levels;
+using GritGud.Domain.Turns;
 using NUnit.Framework;
 
 namespace GritGud.Domain.Tests
@@ -795,6 +796,39 @@ namespace GritGud.Domain.Tests
 
             Assert.That(exception.Message,
                 Does.Contain("Minimum voluntary turn duration"));
+        }
+
+        [TestCase(ActionMobilityCodec.MobileValue, ActionMobility.Mobile)]
+        [TestCase(ActionMobilityCodec.MomentumValue, ActionMobility.Momentum)]
+        [TestCase(ActionMobilityCodec.SetValue, ActionMobility.Set)]
+        public void EverySerializedMobilityAssembles(
+            string serialized,
+            ActionMobility expected)
+        {
+            ScenarioContentDocument content = CreateContent();
+            content.objectives[0].turnCost.mobility = serialized;
+
+            GameplayScenarioAssembly assembly =
+                new GameplayScenarioAssembler().Assemble(
+                    content,
+                    CreateLevel());
+
+            Assert.That(
+                assembly.Scenario.Objectives[0].Interaction.TurnCost.Mobility,
+                Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void VehicleStartingSpeedCannotExceedItsProfileMaximum()
+        {
+            ScenarioContentDocument content = CreateContent();
+            content.vehicles[0].startingSpeed =
+                content.vehicles[0].maximumSpeed + 1f;
+
+            Assert.Throws<ArgumentOutOfRangeException>(() =>
+                new GameplayScenarioAssembler().Assemble(
+                    content,
+                    CreateLevel()));
         }
 
         [Test]

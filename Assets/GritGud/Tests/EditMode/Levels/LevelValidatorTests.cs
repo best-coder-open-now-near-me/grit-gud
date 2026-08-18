@@ -236,6 +236,77 @@ namespace GritGud.Domain.Tests.Levels
         }
 
         [Test]
+        public void ScenarioTimingUsesTheRuntimePositiveDurationContract()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            document.scenario.minimumVoluntaryTurnSeconds = 0f;
+
+            IReadOnlyList<LevelValidationIssue> issues =
+                LevelValidator.Validate(document);
+
+            Assert.That(
+                issues,
+                Has.Some.Matches<LevelValidationIssue>(issue =>
+                    issue.Code == "scenario.timing.invalid"));
+        }
+
+        [Test]
+        public void ScenarioVehicleUsesTheRuntimeMomentumProfileContract()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            document.entities.Add(CreateEntity("vehicle"));
+            document.scenario.vehicles.Add(new LevelScenarioVehicleData
+            {
+                entityId = "vehicle",
+                maximumSpeed = 10f,
+                accelerationPerTurn = 0f,
+                brakingPerTurn = 2f,
+                lowSpeedTurnDegrees = 45f,
+                highSpeedTurnDegrees = 90f,
+                baseTurningRadius = 1f,
+            });
+
+            IReadOnlyList<LevelValidationIssue> issues =
+                LevelValidator.Validate(document);
+
+            Assert.That(
+                issues,
+                Has.Some.Matches<LevelValidationIssue>(issue =>
+                    issue.Code == "scenario.vehicle.motion"));
+        }
+
+        [Test]
+        public void ScenarioObjectiveRequiresEveryRuntimePresentationField()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            LevelEntity entity = CreateEntity("objective");
+            entity.interactionPoints.Add(new InteractionPointData
+            {
+                id = "activate",
+                type = "objective",
+            });
+            document.entities.Add(entity);
+            document.scenario.objectives.Add(new LevelScenarioObjectiveData
+            {
+                id = "objective.activate",
+                entityId = entity.id,
+                interactionPointId = "activate",
+                actionId = "activate",
+                displayName = "Activate",
+                activeHudText = string.Empty,
+                completedHudText = string.Empty,
+            });
+
+            IReadOnlyList<LevelValidationIssue> issues =
+                LevelValidator.Validate(document);
+
+            Assert.That(
+                issues,
+                Has.Some.Matches<LevelValidationIssue>(issue =>
+                    issue.Code == "scenario.objective.presentation"));
+        }
+
+        [Test]
         public void EnabledPropTopplingRequiresRotationAndValidElevation()
         {
             LevelDocument document = LevelDocumentFactory.CreateEmpty();

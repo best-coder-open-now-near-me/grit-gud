@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using GritGud.Application.Levels;
+using GritGud.Domain.Gameplay;
 using GritGud.Domain.Levels;
+using GritGud.Domain.Turns;
 using GritGud.Presentation.LevelEditing.Core;
 using UnityEngine;
 
@@ -379,18 +381,19 @@ namespace GritGud.Presentation.LevelEditing
                     Report("Objective movement cost must be a non-negative finite number.");
                     return;
                 }
-                string normalizedMobility = mobility?.Trim().ToLowerInvariant()
-                    ?? string.Empty;
-                if (!string.Equals(normalizedMobility, "mobile", StringComparison.Ordinal)
-                    && !string.Equals(normalizedMobility, "momentum", StringComparison.Ordinal)
-                    && !string.Equals(normalizedMobility, "set", StringComparison.Ordinal))
+                if (!ActionMobilityCodec.TryParse(
+                        mobility?.Trim(),
+                        out ActionMobility parsedMobility))
                 {
                     Report("Objective mobility must be Mobile, Momentum, or Set.");
                     return;
                 }
-                if (string.IsNullOrWhiteSpace(displayName))
+                if (string.IsNullOrWhiteSpace(displayName)
+                    || string.IsNullOrWhiteSpace(activeText)
+                    || string.IsNullOrWhiteSpace(completedText))
                 {
-                    Report("An enabled objective needs a display name.");
+                    Report(
+                        "An enabled objective needs a display name and active and completed HUD text.");
                     return;
                 }
                 after.objectives.Add(new LevelScenarioObjectiveData
@@ -404,7 +407,7 @@ namespace GritGud.Presentation.LevelEditing
                     completedHudText = completedText?.Trim() ?? string.Empty,
                     actionPointCost = actionPointCost,
                     movementOpportunityCost = movementOpportunityCost,
-                    mobility = normalizedMobility,
+                    mobility = ActionMobilityCodec.Format(parsedMobility),
                 });
             }
             workspace.Execute(new SetScenarioConfigurationCommand(
@@ -445,12 +448,21 @@ namespace GritGud.Presentation.LevelEditing
                     || !TryParse(baseRadiusText, out float baseRadius)
                     || !TryParse(radiusFactorText, out float radiusFactor)
                     || !TryParse(startingSpeedText, out float startingSpeed)
-                    || maximumSpeed <= 0f || acceleration < 0f || braking < 0f
-                    || lowTurn < 0f || highTurn < 0f || baseRadius <= 0f
-                    || radiusFactor < 0f || startingSpeed < 0f
-                    || startingSpeed > maximumSpeed)
+                    || !VehicleMomentumProfile.TryValidate(
+                        maximumSpeed,
+                        acceleration,
+                        braking,
+                        lowTurn,
+                        highTurn,
+                        baseRadius,
+                        radiusFactor,
+                        out _)
+                    || !VehicleMomentumProfile.IsValidSpeed(
+                        startingSpeed,
+                        maximumSpeed))
                 {
-                    Report("Vehicle values must be finite and non-negative; start speed cannot exceed max speed.");
+                    Report(
+                        "Vehicle speed, acceleration, braking, steering, and turning radius must form a valid momentum profile; start speed cannot exceed max speed.");
                     return;
                 }
                 string occupant = occupantActorId?.Trim() ?? string.Empty;

@@ -249,5 +249,41 @@ namespace GritGud.Presentation.Tests
             Assert.That(objective.movementOpportunityCost, Is.EqualTo(1.5f));
             Assert.That(objective.mobility, Is.EqualTo("momentum"));
         }
+
+        [Test]
+        public void InvalidVehicleMomentumProfileDoesNotEnterHistory()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            document.entities.Add(new LevelEntity
+            {
+                id = "vehicle",
+                archetypeId = "vehicle.buggy.standard",
+            });
+            using var workspace = new LevelEditorWorkspace(document);
+            var coordinator = new ScenarioAuthoringCoordinator(
+                workspace,
+                ScenarioAuthoringCatalog.LoadDefault(),
+                () => new LevelEditorCameraState());
+            string status = string.Empty;
+            coordinator.StatusChanged += message => status = message;
+
+            coordinator.ApplyVehicle(
+                "vehicle",
+                true,
+                "10",
+                "0",
+                "2",
+                "45",
+                "90",
+                "1",
+                "0.1",
+                "0",
+                string.Empty,
+                false);
+
+            Assert.That(workspace.CreateSnapshot().scenario.vehicles, Is.Empty);
+            Assert.That(workspace.CanUndo, Is.False);
+            Assert.That(status, Does.Contain("valid momentum profile"));
+        }
     }
 }

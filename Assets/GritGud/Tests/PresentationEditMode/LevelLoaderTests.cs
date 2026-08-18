@@ -1,7 +1,9 @@
 using System.Linq;
+using GritGud.Application.Gameplay;
 using GritGud.Application.Levels;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Levels;
+using GritGud.Domain.Turns;
 using GritGud.Presentation.Gameplay;
 using GritGud.Presentation.LevelEditing;
 using GritGud.Presentation.Levels;
@@ -261,6 +263,78 @@ namespace GritGud.Presentation.Tests
                 Is.True);
             Assert.That(package.Scenario.objectives, Is.Empty);
             Assert.That(package.Scenario.vehicles, Is.Empty);
+        }
+
+        [Test]
+        public void PublishValidAuthoredContractsAssembleThroughTheSandboxLoader()
+        {
+            LevelDocument source = LevelDocumentFactory.CreateEmpty(
+                "Scenario Contract");
+            source.levelId = "scenario-contract";
+            source.scenario.minimumVoluntaryTurnSeconds = 1.5f;
+            source.entities.Add(new LevelEntity
+            {
+                id = "objective-terminal",
+                archetypeId = "prop.crate.standard",
+                interactionPoints =
+                {
+                    new InteractionPointData
+                    {
+                        id = "activate",
+                        type = "objective",
+                    },
+                },
+            });
+            source.entities.Add(new LevelEntity
+            {
+                id = "vehicle",
+                archetypeId = "vehicle.buggy.standard",
+            });
+            source.scenario.objectives.Add(new LevelScenarioObjectiveData
+            {
+                id = "objective.activate",
+                entityId = "objective-terminal",
+                interactionPointId = "activate",
+                actionId = "activate",
+                displayName = "Activate terminal",
+                activeHudText = "ACTIVATE THE TERMINAL",
+                completedHudText = "TERMINAL ACTIVE",
+                actionPointCost = 1,
+                movementOpportunityCost = 1f,
+                mobility = ActionMobilityCodec.MomentumValue,
+            });
+            source.scenario.vehicles.Add(new LevelScenarioVehicleData
+            {
+                entityId = "vehicle",
+                maximumSpeed = 10f,
+                accelerationPerTurn = 3f,
+                brakingPerTurn = 2f,
+                lowSpeedTurnDegrees = 60f,
+                highSpeedTurnDegrees = 30f,
+                baseTurningRadius = 1f,
+                speedTurningRadiusFactor = 0.1f,
+                startingSpeed = 4f,
+            });
+            GameplayContentPackage defaults = GameplayContentLoader.LoadDefault();
+
+            var publishIssues = LevelValidator.Validate(
+                source,
+                defaults.ValidationContent,
+                LevelValidationProfile.Publish);
+            GameplayContentPackage package =
+                GameplayContentLoader.LoadSandbox(source);
+
+            Assert.That(LevelValidator.HasErrors(publishIssues), Is.False);
+            Assert.That(
+                package.Assembly.Scenario.Objectives[0]
+                    .Interaction.TurnCost.Mobility,
+                Is.EqualTo(ActionMobility.Momentum));
+            Assert.That(
+                package.Assembly.TryGetVehicle(
+                    "vehicle",
+                    out ScenarioVehicleRuntimeDefinition vehicle),
+                Is.True);
+            Assert.That(vehicle.StartingSpeed, Is.EqualTo(4f));
         }
 
         [Test]

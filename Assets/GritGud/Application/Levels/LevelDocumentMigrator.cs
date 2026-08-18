@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using GritGud.Domain.Levels;
+using GritGud.Domain.Turns;
 
 namespace GritGud.Application.Levels
 {
@@ -213,7 +214,7 @@ namespace GritGud.Application.Levels
             {
                 if (objective != null && string.IsNullOrWhiteSpace(objective.mobility))
                 {
-                    objective.mobility = "set";
+                    objective.mobility = ActionMobilityCodec.SetValue;
                 }
             }
 

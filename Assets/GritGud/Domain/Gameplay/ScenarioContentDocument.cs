@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using GritGud.Domain.Levels;
+using GritGud.Domain.Turns;
 
 namespace GritGud.Domain.Gameplay
 {
@@ -249,7 +250,7 @@ namespace GritGud.Domain.Gameplay
     {
         public int actionPoints;
         public float movementOpportunity;
-        public string mobility = "set";
+        public string mobility = ActionMobilityCodec.SetValue;
     }
 
     [Serializable]

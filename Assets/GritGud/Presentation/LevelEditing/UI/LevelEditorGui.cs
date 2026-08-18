@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using GritGud.Application.Levels;
 using GritGud.Domain.Levels;
+using GritGud.Domain.Turns;
 using GritGud.Presentation.LevelEditing.Core;
 using GritGud.Presentation.LevelEditing.Persistence;
 using GritGud.Presentation.LevelEditing.Tools;
@@ -18,7 +19,11 @@ namespace GritGud.Presentation.LevelEditing.UI
         private static readonly string[] ObjectiveMobilityLabels =
             { "MOBILE", "MOMENTUM", "SET" };
         private static readonly string[] ObjectiveMobilityValues =
-            { "mobile", "momentum", "set" };
+        {
+            ActionMobilityCodec.MobileValue,
+            ActionMobilityCodec.MomentumValue,
+            ActionMobilityCodec.SetValue,
+        };
 
         private readonly LevelSelectionModel selection;
         private readonly LevelArchetypeCatalog catalog;
@@ -99,7 +104,8 @@ namespace GritGud.Presentation.LevelEditing.UI
         private string scenarioObjectiveCompletedText = "Objective complete";
         private string scenarioObjectiveCostText = "1";
         private string scenarioObjectiveMovementCostText = "0";
-        private string scenarioObjectiveMobility = "set";
+        private string scenarioObjectiveMobility =
+            ActionMobilityCodec.SetValue;
         private string lastScenarioVehicleEntityId = string.Empty;
         private bool scenarioVehicleEnabled;
         private string scenarioVehicleMaximumSpeedText = "12";

@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using GritGud.Application.Levels;
 using GritGud.Domain.Levels;
+using GritGud.Domain.Turns;
 using GritGud.Presentation.Levels.Runtime;
 using GritGud.Presentation.Characters;
 using UnityEngine;
@@ -696,7 +697,8 @@ namespace GritGud.Presentation.LevelEditing.UI
                 scenarioObjectiveMovementCostText =
                     (configured?.movementOpportunityCost ?? 0f).ToString(
                         CultureInfo.InvariantCulture);
-                scenarioObjectiveMobility = configured?.mobility ?? "set";
+                scenarioObjectiveMobility = configured?.mobility
+                    ?? ActionMobilityCodec.SetValue;
             }
 
             GUILayout.Space(LevelEditorGuiMetrics.SpaceInspectorSection);

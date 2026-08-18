@@ -99,6 +99,11 @@ namespace GritGud.Application.Gameplay
                 : entityId;
             MomentumProfile = momentumProfile
                 ?? throw new ArgumentNullException(nameof(momentumProfile));
+            if (!momentumProfile.IsValidSpeed(startingSpeed))
+            {
+                throw new ArgumentOutOfRangeException(nameof(startingSpeed));
+            }
+
             StartingSpeed = startingSpeed;
             StartingOccupantActorId = string.IsNullOrWhiteSpace(
                 startingOccupantActorId)

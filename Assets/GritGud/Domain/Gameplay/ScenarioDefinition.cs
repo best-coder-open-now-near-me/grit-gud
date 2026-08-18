@@ -8,9 +8,8 @@ namespace GritGud.Domain.Gameplay
     {
         public ScenarioTimingDefinition(float minimumVoluntaryTurnSeconds)
         {
-            if (float.IsNaN(minimumVoluntaryTurnSeconds)
-                || float.IsInfinity(minimumVoluntaryTurnSeconds)
-                || minimumVoluntaryTurnSeconds <= 0f)
+            if (!IsValidMinimumVoluntaryTurnSeconds(
+                    minimumVoluntaryTurnSeconds))
             {
                 throw new ArgumentOutOfRangeException(
                     nameof(minimumVoluntaryTurnSeconds));
@@ -20,6 +19,11 @@ namespace GritGud.Domain.Gameplay
         }
 
         public float MinimumVoluntaryTurnSeconds { get; }
+
+        public static bool IsValidMinimumVoluntaryTurnSeconds(float value) =>
+            !float.IsNaN(value)
+            && !float.IsInfinity(value)
+            && value > 0f;
     }
 
     public sealed class ScenarioActorDefinition
