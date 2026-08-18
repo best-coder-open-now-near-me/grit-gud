@@ -15,12 +15,14 @@ namespace GritGud.Application.Gameplay
                 return false;
             try
             {
-                return Enum.TryParse(
+                DisplacementSubjectKinds subjects =
+                    DisplacementSubjectKinds.None;
+                bool valid = Enum.TryParse(
                         profile.GetTrait("intent"),
                         out DisplacementActionKind _)
                     && Enum.TryParse(
                         profile.GetTrait("subjects"),
-                        out DisplacementSubjectKinds _)
+                        out subjects)
                     && Enum.TryParse(
                         profile.GetTrait("contest"),
                         out DisplacementContestPolicy _)
@@ -35,6 +37,13 @@ namespace GritGud.Application.Gameplay
                         out DisplacementAutoStowPolicy _)
                     && (profile.GetTrait("distance") == "fixed"
                         || profile.GetTrait("distance") == "mass-decay");
+                if (!valid) return false;
+                GameplaySemanticSubjectKind subject =
+                    GameplayCapabilityProfiles.GetSubjectKind(profile);
+                return subject == GameplaySemanticSubjectKind.Actor
+                    ? (subjects & DisplacementSubjectKinds.Combatant) != 0
+                    : subject == GameplaySemanticSubjectKind.DestructibleProp
+                        && (subjects & DisplacementSubjectKinds.Prop) != 0;
             }
             catch (KeyNotFoundException)
             {

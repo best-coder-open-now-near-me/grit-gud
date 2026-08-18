@@ -112,7 +112,9 @@ Run `dotnet restore tools/simulation/GritGud.SimulationChecks.csproj
 --configfile tools/simulation/NuGet.Config`, then `dotnet run --project
 tools/simulation/GritGud.SimulationChecks.csproj -c Release --no-restore` for
 executable engine-free checks of the semantic transition spine, exact replay,
-and fail-closed capability coverage.
+atomic state installation, exact capability-and-subject coverage across every
+current scenario, tactical destructible candidates, and destructible-aware
+headless spatial invalidation.
 Run `tools/validate-supabase-contracts.py` to verify ordered migrations, RPC
 parameters/return rows, permissions, and the matching C# adapter. Run
 `node tools/preview-id.test.mjs` to verify preview identity/workflow routing and

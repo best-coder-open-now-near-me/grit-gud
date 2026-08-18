@@ -47,7 +47,8 @@ namespace GritGud.Application.Gameplay
             GameplayReachableInputKind kind,
             string sourceId,
             string actorId,
-            GameplayCapabilityProfile profile)
+            GameplayCapabilityProfile profile,
+            string subjectIdHint = null)
         {
             if (!Enum.IsDefined(typeof(GameplayReachableInputKind), kind))
                 throw new ArgumentOutOfRangeException(nameof(kind));
@@ -59,12 +60,18 @@ namespace GritGud.Application.Gameplay
                 actorId,
                 nameof(actorId));
             Profile = profile ?? throw new ArgumentNullException(nameof(profile));
+            SubjectKind = GameplayCapabilityProfiles.GetSubjectKind(profile);
+            SubjectIdHint = string.IsNullOrWhiteSpace(subjectIdHint)
+                ? null
+                : subjectIdHint.Trim();
         }
 
         public GameplayReachableInputKind Kind { get; }
         public string SourceId { get; }
         public string ActorId { get; }
         public GameplayCapabilityProfile Profile { get; }
+        public GameplaySemanticSubjectKind SubjectKind { get; }
+        public string SubjectIdHint { get; }
     }
 
     public sealed class GameplayCapabilityRegistration
@@ -359,7 +366,10 @@ namespace GritGud.Application.Gameplay
             if (assembly == null)
                 throw new ArgumentNullException(nameof(assembly));
             var result = new List<GameplayReachableInput>(
-                Enumerate(assembly.Scenario, level));
+                Enumerate(
+                    assembly.Scenario,
+                    level,
+                    assembly.Vehicles.Count > 0));
             foreach (ScenarioVehicleRuntimeDefinition vehicle in
                 assembly.Vehicles)
             {
@@ -367,7 +377,8 @@ namespace GritGud.Application.Gameplay
                 Add(result, GameplayReachableInputKind.ContextualInteraction,
                     vehicle.EntityId + ".move",
                     vehicle.StartingOccupantActorId,
-                    GameplayCapabilityProfiles.VehicleMove());
+                    GameplayCapabilityProfiles.VehicleMove(),
+                    vehicle.EntityId);
             }
             return result.AsReadOnly();
         }
@@ -375,6 +386,12 @@ namespace GritGud.Application.Gameplay
         public static IReadOnlyList<GameplayReachableInput> Enumerate(
             ScenarioDefinition scenario,
             LevelDocument level)
+            => Enumerate(scenario, level, hasVehicles: false);
+
+        private static IReadOnlyList<GameplayReachableInput> Enumerate(
+            ScenarioDefinition scenario,
+            LevelDocument level,
+            bool hasVehicles)
         {
             if (scenario == null) throw new ArgumentNullException(nameof(scenario));
             if (level == null) throw new ArgumentNullException(nameof(level));
@@ -383,6 +400,7 @@ namespace GritGud.Application.Gameplay
                 && level.traversalLinks.Count > 0;
             bool hasEmergency = HasEmergencyProjectile(scenario);
             bool hasProjectile = HasProjectile(scenario);
+            bool hasDestructibles = HasTacticalDestructible(level);
             foreach (ScenarioActorDefinition actor in scenario.Actors)
             {
                 bool playerControlled = scenario.PlayerParty == null
@@ -425,7 +443,9 @@ namespace GritGud.Application.Gameplay
                         GameplayReachableInputKind.EquippedAttack,
                         actor.Attack.ActionId,
                         playerControlled,
-                        aiControlled);
+                        aiControlled,
+                        hasDestructibles,
+                        hasVehicles);
                 foreach (InventoryItemDefinition item in actor.Inventory)
                 {
                     if (item.IsEquippable)
@@ -434,7 +454,8 @@ namespace GritGud.Application.Gameplay
                             Add(result,
                                 GameplayReachableInputKind.InventoryWeapon,
                                 item.Id + ".equip", actor.Id,
-                                GameplayCapabilityProfiles.Equip());
+                                GameplayCapabilityProfiles.Equip(),
+                                item.Id);
                         AddAttack(result, actor, item.Attack,
                             GameplayReachableInputKind.InventoryWeapon,
                             item.Id + ".power",
@@ -442,7 +463,9 @@ namespace GritGud.Application.Gameplay
                             aiControlled && string.Equals(
                                 item.Id,
                                 actor.InitiallyEquippedItemId,
-                                StringComparison.Ordinal));
+                                StringComparison.Ordinal),
+                            hasDestructibles,
+                            hasVehicles);
                     }
                     else if (playerControlled && item.ConsumablePower
                         is ThrownExplosiveDefinition explosive)
@@ -462,16 +485,28 @@ namespace GritGud.Application.Gameplay
                 if (playerControlled || aiControlled)
                     foreach (DisplacementActionDefinition action in
                         actor.DisplacementActions)
-                        Add(result,
-                            playerControlled
-                                ? GameplayReachableInputKind.CharacterAbility
-                                : GameplayReachableInputKind.EnemyDecision,
-                            playerControlled
-                                ? action.Id
-                                : "ai." + actor.Combat.EnemyBehavior.BehaviorId
-                                    + "." + action.Id,
-                            actor.Id,
-                            GameplayCapabilityProfiles.Displace(action));
+                    {
+                        GameplayReachableInputKind kind = playerControlled
+                            ? GameplayReachableInputKind.CharacterAbility
+                            : GameplayReachableInputKind.EnemyDecision;
+                        string source = playerControlled
+                            ? action.Id
+                            : "ai." + actor.Combat.EnemyBehavior.BehaviorId
+                                + "." + action.Id;
+                        if (action.Accepts(DisplacementSubjectKind.Combatant))
+                            Add(result, kind, source + "->Actor", actor.Id,
+                                GameplayCapabilityProfiles.Displace(
+                                    action,
+                                    GameplaySemanticSubjectKind.Actor));
+                        if (hasDestructibles
+                            && action.Accepts(DisplacementSubjectKind.Prop))
+                            Add(result, kind,
+                                source + "->DestructibleProp", actor.Id,
+                                GameplayCapabilityProfiles.Displace(
+                                    action,
+                                    GameplaySemanticSubjectKind
+                                        .DestructibleProp));
+                    }
             }
             IEnumerable<string> interactionActors = scenario.PlayerParty == null
                 ? ActorIds(scenario.Actors)
@@ -482,7 +517,8 @@ namespace GritGud.Application.Gameplay
                         GameplayReachableInputKind.ContextualInteraction,
                         objective.Interaction.Id,
                         actorId,
-                        GameplayCapabilityProfiles.Interact());
+                        GameplayCapabilityProfiles.Interact(),
+                        objective.Id);
             string systemActorId = scenario.Actors[0].Id;
             Add(result, GameplayReachableInputKind.SessionControl,
                 "control.turn-mode.enter", systemActorId,
@@ -529,16 +565,74 @@ namespace GritGud.Application.Gameplay
             GameplayReachableInputKind kind,
             string sourceId,
             bool playerControlled,
-            bool aiControlled)
+            bool aiControlled,
+            bool hasDestructibles,
+            bool hasVehicles)
         {
+            AddAttackSubject(
+                result,
+                actor,
+                attack,
+                kind,
+                sourceId,
+                playerControlled,
+                aiControlled,
+                GameplaySemanticSubjectKind.Actor);
+            if (attack.Contact != null) return;
+            AddAttackSubject(
+                result,
+                actor,
+                attack,
+                kind,
+                sourceId,
+                playerControlled,
+                aiControlled,
+                GameplaySemanticSubjectKind.WorldPosition);
+            if (hasDestructibles
+                && (attack.Projectile != null
+                    || attack.DirectFireDamage != null))
+                AddAttackSubject(
+                    result,
+                    actor,
+                    attack,
+                    kind,
+                    sourceId,
+                    playerControlled,
+                    aiControlled,
+                    GameplaySemanticSubjectKind.DestructibleProp);
+            if (hasVehicles)
+                AddAttackSubject(
+                    result,
+                    actor,
+                    attack,
+                    kind,
+                    sourceId,
+                    playerControlled,
+                    aiControlled,
+                    GameplaySemanticSubjectKind.Vehicle);
+        }
+
+        private static void AddAttackSubject(
+            ICollection<GameplayReachableInput> result,
+            ScenarioActorDefinition actor,
+            AttackDefinition attack,
+            GameplayReachableInputKind kind,
+            string sourceId,
+            bool playerControlled,
+            bool aiControlled,
+            GameplaySemanticSubjectKind subjectKind)
+        {
+            string suffix = "->" + subjectKind;
+            GameplayCapabilityProfile profile = GameplayCapabilityProfiles
+                .Attack(attack, subjectKind);
             if (playerControlled)
-                Add(result, kind, sourceId, actor.Id,
-                    GameplayCapabilityProfiles.Attack(attack));
+                Add(result, kind, sourceId + suffix, actor.Id, profile);
             if (aiControlled)
                 Add(result, GameplayReachableInputKind.EnemyDecision,
-                    "ai." + actor.Combat.EnemyBehavior.BehaviorId + "." + sourceId,
+                    "ai." + actor.Combat.EnemyBehavior.BehaviorId + "."
+                        + sourceId + suffix,
                     actor.Id,
-                    GameplayCapabilityProfiles.Attack(attack));
+                    profile);
         }
 
         private static bool HasEmergencyProjectile(ScenarioDefinition scenario)
@@ -566,6 +660,13 @@ namespace GritGud.Application.Gameplay
             return false;
         }
 
+        private static bool HasTacticalDestructible(LevelDocument level)
+        {
+            foreach (LevelEntity entity in level.entities)
+                if (entity?.destructible?.enabled == true) return true;
+            return false;
+        }
+
         private static IEnumerable<string> ActorIds(
             IEnumerable<ScenarioActorDefinition> actors)
         {
@@ -578,7 +679,13 @@ namespace GritGud.Application.Gameplay
             GameplayReachableInputKind kind,
             string sourceId,
             string actorId,
-            GameplayCapabilityProfile profile) => result.Add(
-                new GameplayReachableInput(kind, sourceId, actorId, profile));
+            GameplayCapabilityProfile profile,
+            string subjectIdHint = null) => result.Add(
+                new GameplayReachableInput(
+                    kind,
+                    sourceId,
+                    actorId,
+                    profile,
+                    subjectIdHint));
     }
 }

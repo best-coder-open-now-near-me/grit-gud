@@ -3,6 +3,33 @@ using System.Collections.Generic;
 
 namespace GritGud.Application.Gameplay
 {
+    public readonly struct GameplaySubjectReference : IEquatable<
+        GameplaySubjectReference>
+    {
+        public GameplaySubjectReference(
+            GameplaySemanticSubjectKind kind,
+            string id)
+        {
+            if (!Enum.IsDefined(typeof(GameplaySemanticSubjectKind), kind))
+                throw new ArgumentOutOfRangeException(nameof(kind));
+            Kind = kind;
+            Id = GameplayContentIdentity.RequireText(id, nameof(id));
+        }
+
+        public GameplaySemanticSubjectKind Kind { get; }
+        public string Id { get; }
+
+        public bool Equals(GameplaySubjectReference other) =>
+            Kind == other.Kind
+            && string.Equals(Id, other.Id, StringComparison.Ordinal);
+
+        public override bool Equals(object obj) =>
+            obj is GameplaySubjectReference other && Equals(other);
+
+        public override int GetHashCode() => unchecked(
+            ((int)Kind * 397) ^ StringComparer.Ordinal.GetHashCode(Id));
+    }
+
     public sealed class GameplayEvidenceRecord
     {
         public GameplayEvidenceRecord(
@@ -40,11 +67,13 @@ namespace GritGud.Application.Gameplay
             SubjectId = GameplayContentIdentity.RequireText(
                 subjectId,
                 nameof(subjectId));
+            SubjectKind = GameplayCapabilityProfiles.GetSubjectKind(profile);
         }
 
         public GameplayCapabilityProfile Profile { get; }
         public string ActorId { get; }
         public string SubjectId { get; }
+        public GameplaySemanticSubjectKind SubjectKind { get; }
     }
 
     public sealed class GameplaySemanticTransition
@@ -127,6 +156,20 @@ namespace GritGud.Application.Gameplay
             string candidateId,
             GameplayCapabilityProfile profile,
             string actorId,
+            GameplaySubjectReference subject,
+            object intent)
+            : this(candidateId, profile, actorId, subject.Id, intent)
+        {
+            if (SubjectKind != subject.Kind)
+                throw new ArgumentException(
+                    "Candidate subjects must match the capability profile.",
+                    nameof(subject));
+        }
+
+        public GameplayCandidate(
+            string candidateId,
+            GameplayCapabilityProfile profile,
+            string actorId,
             string subjectId,
             object intent)
         {
@@ -141,12 +184,17 @@ namespace GritGud.Application.Gameplay
                 subjectId,
                 nameof(subjectId));
             Intent = intent ?? throw new ArgumentNullException(nameof(intent));
+            SubjectKind = GameplayCapabilityProfiles.GetSubjectKind(profile);
         }
 
         public string CandidateId { get; }
         public GameplayCapabilityProfile Profile { get; }
         public string ActorId { get; }
         public string SubjectId { get; }
+        public GameplaySemanticSubjectKind SubjectKind { get; }
+        public GameplaySubjectReference Subject => new GameplaySubjectReference(
+            SubjectKind,
+            SubjectId);
         public object Intent { get; }
     }
 

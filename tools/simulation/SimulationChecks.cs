@@ -17,6 +17,7 @@ internal static class SimulationChecks
             VerifyCapabilityCoverageFailsClosed();
             VerifyAtomicLiveInstallation();
             VerifyAllCurrentContentCoverage();
+            VerifyTacticalDestructibleSimulation();
             Console.WriteLine(
                 "Simulation checks passed: reducers, exact replay, atomic installation, and all-content capability coverage.");
             return 0;
@@ -429,6 +430,227 @@ internal static class SimulationChecks
             $"Capability coverage: {scenarioCount} scenario(s), "
             + $"{allInputs.Count} reachable inputs, "
             + $"{unreachable} implemented-but-unreachable profile(s).");
+    }
+
+    private static void VerifyTacticalDestructibleSimulation()
+    {
+        LevelDocument level = CreateTacticalDestructibleLevel();
+        AttackDefinition rifle = new AttackDefinition(
+            "attack.cover-breaker",
+            "Cover breaker",
+            new ActionCost(1, 0f, ActionMobility.Set),
+            woundMovementPenalty: 2f,
+            accuracyDecay: AccuracyDecayDefinition.None,
+            directFireDamage: new DirectFireDamageDefinition(
+                "damage.ballistic.cover-breaker",
+                baseIntegrityDamage: 2f));
+        GameplaySession gameplay = CreateGameplay(rifle);
+        Require(gameplay.BeginEncounter(), "Encounter did not begin.");
+        DestructiblePropSession destructibles =
+            DestructiblePropSession.FromLevel(level, gameplay.Journal);
+        GameplayCombatStateSnapshot initial =
+            GameplayCombatStateCapture.Capture(gameplay, destructibles);
+        GameplayCapabilityProfile actorRoute =
+            GameplayCapabilityProfiles.Attack(
+                rifle,
+                GameplaySemanticSubjectKind.Actor);
+        GameplayCapabilityProfile propRoute =
+            GameplayCapabilityProfiles.Attack(
+                rifle,
+                GameplaySemanticSubjectKind.DestructibleProp);
+        Require(!actorRoute.Equals(propRoute),
+            "Attack routes do not distinguish actor and destructible subjects.");
+
+        var actorInput = new GameplayReachableInput(
+            GameplayReachableInputKind.InventoryWeapon,
+            "weapon.cover-breaker->Actor",
+            "player",
+            actorRoute);
+        var propInput = new GameplayReachableInput(
+            GameplayReachableInputKind.InventoryWeapon,
+            "weapon.cover-breaker->DestructibleProp",
+            "player",
+            propRoute);
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
+        var incomplete = new GameplayCapabilityRegistry(reducers);
+        RegisterComplete(incomplete, actorRoute, "checks.actor-only");
+        GameplayCapabilityCoverageReport missingSubject =
+            GameplayCapabilityCoverageValidator.Validate(
+                new[] { actorInput, propInput },
+                incomplete);
+        Require(!missingSubject.IsComplete
+            && HasMissingProfile(missingSubject, propRoute.Signature),
+            "Coverage did not fail when destructible targeting was omitted.");
+
+        GameplayCapabilityRegistry capabilities =
+            GameplayCurrentCapabilityCatalog.Create(
+                reducers,
+                new[] { actorInput, propInput });
+        IReadOnlyList<GameplayCandidate> tactical =
+            new GameplayTacticalCandidateBuilder(capabilities).Build(
+                initial,
+                new[] { propInput });
+        Require(tactical.Count == 1
+            && tactical[0].SubjectKind
+                == GameplaySemanticSubjectKind.DestructibleProp
+            && string.Equals(
+                tactical[0].SubjectId,
+                "cover-wall",
+                StringComparison.Ordinal),
+            "Registered tactical destructible did not become an attack candidate.");
+
+        var spatialIdentity = new SpatialContentIdentity(
+            level.levelId,
+            level.schemaVersion,
+            evidenceAlgorithmVersion: 1,
+            new string('a', 64));
+        var spatial = new GameplayHeadlessSpatialEvidence(
+            level,
+            spatialIdentity);
+        var sightOrigin = new GameplayPosition(-2f, 1f, 0f);
+        var sightDestination = new GameplayPosition(2f, 1f, 0f);
+        Require(spatial.BlocksLineOfSight(
+                initial,
+                sightOrigin,
+                sightDestination),
+            "Intact cover did not block headless line of sight.");
+        GameplayEvidenceRecord beforeEvidence = spatial.CaptureEvidence(
+            "line-of-sight",
+            initial,
+            sightOrigin,
+            sightDestination);
+
+        Require(destructibles.TryPrepareDamage(
+                "cover-wall",
+                requestedDamage: 2f,
+                out DestructibleDamageRecord damage),
+            "Destructible damage was not prepared.");
+        GameplayActorSnapshot player = initial.Session.GetActor("player");
+        var impact = new DirectFireImpactRecord(
+            "cover-wall",
+            "surface.wood",
+            new GameplayPosition(0f, 1f, 0f),
+            normalX: -1f,
+            normalY: 0f,
+            normalZ: 0f,
+            initial.Session.Revision);
+        var discharge = new WeaponDischargeRecord(
+            sequence: 1L,
+            attackerId: "player",
+            actionId: rifle.ActionId,
+            targetId: "cover-wall",
+            origin: player.Pose.Position,
+            aimPoint: impact.Point,
+            impact,
+            damage);
+        var action = new GameplayActionRecord(
+            sequence: 1L,
+            new GameplayActionRequest(
+                "player",
+                rifle.ActionId,
+                "cover-wall"),
+            rifle.TurnCost,
+            player.TurnBudget,
+            player.TurnBudget.SpendAction(rifle.TurnCost),
+            new GameplayActionOutcome[]
+            {
+                new WeaponDischargedActionOutcome(discharge),
+            });
+        var payload = new GameplayWeaponTransitionPayload(propRoute, action);
+        var transition = new GameplaySemanticTransition(
+            new GameplayTransitionIdentity(
+                1L,
+                GameplaySemanticCapability.DirectAttack.ToString(),
+                "player",
+                "cover-wall"),
+            initial.CanonicalHash,
+            payload,
+            new[] { beforeEvidence });
+        GameplayCombatStateSnapshot resulting = reducers.Reduce(
+            initial,
+            transition).Resulting;
+        Require(resulting.Destructibles[0].State
+                == DestructiblePropState.Destroyed,
+            "Shooting cover did not reduce its canonical destructible state.");
+        Require(!spatial.BlocksLineOfSight(
+                resulting,
+                sightOrigin,
+                sightDestination),
+            "Destroyed cover remained in headless line-of-sight evidence.");
+        GameplayEvidenceRecord afterEvidence = spatial.CaptureEvidence(
+            "line-of-sight",
+            resulting,
+            sightOrigin,
+            sightDestination);
+        Require(!string.Equals(
+                beforeEvidence.EvidenceDigest,
+                afterEvidence.EvidenceDigest,
+                StringComparison.Ordinal),
+            "Destructible reduction did not invalidate spatial evidence.");
+    }
+
+    private static LevelDocument CreateTacticalDestructibleLevel()
+    {
+        var level = new LevelDocument
+        {
+            levelId = "tactical-prop-check",
+            displayName = "Tactical prop check",
+        };
+        var wall = new LevelEntity
+        {
+            id = "cover-wall",
+            archetypeId = "cover.wall",
+            transform = new LevelTransformData(
+                new Float3Data(0f, 0f, 0f),
+                yawDegrees: 0f),
+            destructible = new DestructibleInstanceData
+            {
+                enabled = true,
+                initialState = "intact",
+                integrity = 2f,
+            },
+        };
+        wall.coverVolumes.Add(new CoverVolumeData
+        {
+            id = "cover-wall.volume",
+            localCenter = new Float3Data(0f, 1f, 0f),
+            size = new Float3Data(1f, 2f, 1f),
+        });
+        level.entities.Add(wall);
+        level.Normalize();
+        return level;
+    }
+
+    private static void RegisterComplete(
+        GameplayCapabilityRegistry registry,
+        GameplayCapabilityProfile profile,
+        string prefix)
+    {
+        foreach (GameplayCapabilitySupportStage stage in new[]
+        {
+            GameplayCapabilitySupportStage.CandidateConstruction,
+            GameplayCapabilitySupportStage.LegalityAndEvidence,
+            GameplayCapabilitySupportStage.PureStateReduction,
+            GameplayCapabilitySupportStage.DomainEventProduction,
+            GameplayCapabilitySupportStage.ReplayEncodingAndReduction,
+            GameplayCapabilitySupportStage.HeadlessExecution,
+            GameplayCapabilitySupportStage.LiveInstallation,
+        })
+            registry.RegisterStage(profile, stage, prefix + "." + stage);
+    }
+
+    private static bool HasMissingProfile(
+        GameplayCapabilityCoverageReport report,
+        string signature)
+    {
+        foreach (GameplayCapabilityCoverageIssue issue in report.Issues)
+            if (issue.IsBlocking && string.Equals(
+                issue.ProfileSignature,
+                signature,
+                StringComparison.Ordinal))
+                return true;
+        return false;
     }
 
     private static T ReadJson<T>(

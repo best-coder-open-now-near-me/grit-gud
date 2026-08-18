@@ -308,13 +308,14 @@ namespace GritGud.Application.Gameplay
                 string targeting = profile.GetTrait("targeting");
                 string resource = profile.GetTrait("resource");
                 string consequence = profile.GetTrait("consequence");
+                GameplaySemanticSubjectKind subject =
+                    GameplayCapabilityProfiles.GetSubjectKind(profile);
                 return (delivery == "immediate-ranged" || delivery == "contact")
-                    && (targeting == "actor-or-world-point"
-                        || targeting == "actor")
+                    && targeting == "semantic-subject"
                     && resource == "equipped-weapon"
-                    && (consequence == "actor-wound"
-                        || consequence
-                            == "actor-wound-or-destructible-damage");
+                    && DirectConsequenceMatches(subject, consequence)
+                    && (delivery != "contact"
+                        || subject == GameplaySemanticSubjectKind.Actor);
             }
             catch (KeyNotFoundException)
             {
@@ -328,10 +329,17 @@ namespace GritGud.Application.Gameplay
             try
             {
                 string consequence = profile.GetTrait("consequence");
+                GameplaySemanticSubjectKind subject =
+                    GameplayCapabilityProfiles.GetSubjectKind(profile);
                 return profile.GetTrait("delivery") == "turn-flight"
                     && profile.GetTrait("targeting")
-                        == "actor-or-world-point"
+                        == "semantic-subject"
                     && profile.GetTrait("resource") == "equipped-weapon"
+                    && (subject == GameplaySemanticSubjectKind.Actor
+                        || subject
+                            == GameplaySemanticSubjectKind.DestructibleProp
+                        || subject == GameplaySemanticSubjectKind.Vehicle
+                        || subject == GameplaySemanticSubjectKind.WorldPosition)
                     && (consequence == "impact"
                         || consequence == "blast-actor-and-destructible")
                     && (profile.GetTrait("emergency") == "opens"
@@ -340,6 +348,24 @@ namespace GritGud.Application.Gameplay
             catch (KeyNotFoundException)
             {
                 return false;
+            }
+        }
+
+        private static bool DirectConsequenceMatches(
+            GameplaySemanticSubjectKind subject,
+            string consequence)
+        {
+            switch (subject)
+            {
+                case GameplaySemanticSubjectKind.Actor:
+                    return consequence == "actor-wound";
+                case GameplaySemanticSubjectKind.DestructibleProp:
+                    return consequence == "destructible-damage";
+                case GameplaySemanticSubjectKind.Vehicle:
+                case GameplaySemanticSubjectKind.WorldPosition:
+                    return consequence == "discharge-only";
+                default:
+                    return false;
             }
         }
 

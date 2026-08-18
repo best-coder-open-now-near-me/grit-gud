@@ -65,7 +65,11 @@ vehicles, objectives, and encounter lifecycle.
 ## Reachable capability coverage gate
 
 Every player or AI input reachable from assembled content maps to an exact
-semantic capability profile. Profiles include traits that change behavioral
+semantic capability-and-subject profile. Subject kinds are explicit and include
+actors, tactical destructible props, vehicles, objectives, world positions,
+inventory items, projectiles, and system state. A route for `DirectAttack ->
+Actor` does not satisfy `DirectAttack -> DestructibleProp`. Profiles include
+traits that change behavioral
 architecture, such as immediate versus turn-flight delivery, targeting mode,
 inventory consumption, blast or smoke consequences, emergency windows, and
 displacement policies. Numeric data such as range, damage, accuracy, and action
@@ -91,6 +95,23 @@ tests.
 Ordinary weapon, item, and ability additions remain data-only when they use an
 existing profile. Content that introduces new semantics cannot load until the
 new profile has a complete route.
+
+## Tactical subjects and spatial evidence
+
+Candidate APIs use generic semantic subject references rather than enemy-only
+target IDs. Canonical actors, incomplete objectives, vehicles, and registered
+authoritative destructibles advertise tactical affordances. Destroyed props are
+removed from tactical discovery. Decorative level objects never enter this
+catalog merely because they have a collider or presentation object.
+
+Headless spatial evidence is stamped by the static spatial identity plus a
+dynamic fingerprint derived from actor poses, destructible state and pose,
+vehicles, and smoke. The engine-free destructible evidence adapter projects
+authored cover volumes from the resulting canonical prop state for line of
+sight, route obstruction, and blast occlusion. Damage or displacement therefore
+invalidates later evidence; destroying a cover object removes its obstruction
+from the next branch evaluation. Unity evidence parity remains a promotion gate
+before hands-on playtesting.
 
 ## Extension rule
 

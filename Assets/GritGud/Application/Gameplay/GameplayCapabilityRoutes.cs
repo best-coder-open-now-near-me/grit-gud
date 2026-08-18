@@ -25,14 +25,34 @@ namespace GritGud.Application.Gameplay
         }
 
         public GameplayCandidate Build(GameplayReachableInput input)
+            => Build(
+                input,
+                new GameplaySubjectReference(
+                    input.SubjectKind,
+                    input.SubjectIdHint
+                        ?? (input.SubjectKind
+                                == GameplaySemanticSubjectKind.Actor
+                            ? input.ActorId
+                            : input.SourceId)),
+                new GameplayReachableIntent(input));
+
+        public GameplayCandidate Build(
+            GameplayReachableInput input,
+            GameplaySubjectReference subject,
+            object intent)
         {
             if (input == null) throw new ArgumentNullException(nameof(input));
+            if (subject.Kind != input.SubjectKind)
+                throw new ArgumentException(
+                    "Candidate subjects must match their reachable input route.",
+                    nameof(subject));
             var candidate = new GameplayCandidate(
-                "reachable." + input.ActorId + "." + input.SourceId,
+                "reachable." + input.ActorId + "." + input.SourceId + "."
+                    + subject.Id,
                 input.Profile,
                 input.ActorId,
-                input.ActorId,
-                new GameplayReachableIntent(input));
+                subject,
+                intent ?? throw new ArgumentNullException(nameof(intent)));
             capabilities.RequireCandidateRoute(candidate);
             return candidate;
         }
