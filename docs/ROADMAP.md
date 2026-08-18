@@ -34,15 +34,106 @@ initiative without refreshing budgets. The capability gate treats observation
 and patrol as reachable AI inputs, while engine-free checks prove live/pure
 parity, exact replay, headless branching, and destructible-aware sight/sound.
 
-The next gate is playable encounter validation. Investigation movement, dynamic
-join/leave after an encounter begins, richer awareness UI, and editor-facing
-encounter authoring remain later tactical work. Generator regeneration tests
-remain deferred.
+Playable encounter validation passed on 2026-08-18. Investigation movement,
+dynamic join/leave after an encounter begins, richer awareness UI, and
+editor-facing encounter authoring remain later tactical work. Generator
+regeneration tests remain deferred.
 
 Pinned actors now use one authoritative pinned-down target profile for player
 acquisition, live/headless exposure, replay projection, and prone presentation.
 Push Off restores the current stance profile and explicitly releases the held
 fall layer. Movement collision is no longer accepted as an aiming silhouette.
+
+## Pre-training tactical context and action economy — next goal
+
+Before broad AI training or optimizer campaigns, finish two authoritative
+gameplay foundations. Neither is an AI-only scoring shortcut: live play,
+deterministic reduction, replay, and headless branches must consume the same
+records.
+
+### 1. Portable tactical context
+
+Introduce an immutable pre-action context snapshot assembled from canonical
+state plus the action's already-required spatial evidence. The initial feature
+vocabulary covers target awareness, mutual visibility, cover/exposure, range
+band, stance, target isolation, nearby allies and threats, suppression or
+displacement state, sound signature, resource pressure, and relevant tactical
+environment subjects. Features must use stable identities and quantized or
+enumerated values where continuous measurements are not required.
+
+Contextual gameplay rules are declarative ordered definitions. Each rule has a
+stable ID, explicit applicable capability/subject traits, predicates over the
+frozen context, and authoritative consequences such as accuracy, damage,
+reaction availability, action cost, or sound changes. AI valuation weights are
+separate consumers of the resolved outcome features and cannot alter gameplay
+resolution.
+
+The first vertical proof is `Ambush`: an attacker unseen by an Unaware target
+can receive authored direct-attack consequences. Preparing the attack freezes
+the qualifying context; resolving it applies and records the exact rule IDs,
+inputs, and resulting modifiers before attack sound updates awareness. Replay
+uses the recorded applied context and consequences rather than reevaluating
+LOS or awareness. Headless branches evaluate the same preparation and reducer
+path.
+
+This slice is complete only when:
+
+- the context vocabulary and rule schema validate at content load;
+- direct-attack preparation freezes context before any attack consequence or
+  sound-driven awareness transition;
+- the pure reducer validates and applies the recorded modifiers fail-closed;
+- the action record, journal, replay projection, diagnostics, and headless
+  trace preserve the same applied rule IDs and outcome features;
+- tactical candidate scoring can read resolved outcome features without
+  owning authoritative modifiers;
+- capability coverage includes contextual preparation, reduction, replay,
+  headless execution, and live installation for every reachable contextual
+  profile; and
+- parity tests cover qualifying and non-qualifying attacks, stale evidence,
+  sound alert after resolution, replay seeks, and equivalent live/headless
+  results.
+
+Additional metas—flanking, crossfire, suppression, cover destruction, noise
+diversion, isolation, and resource denial—extend the same feature and rule
+registries after Ambush proves the route. They do not receive bespoke action
+pipelines.
+
+### 2. Banked personal-turn action points
+
+Author scenario action-point economy as starting AP, personal-turn income, and
+maximum held AP. The first balance profile is `start 4 / income 4 / cap 6`.
+On the canonical transition into an actor's normal personal turn:
+
+`resulting AP = min(maximum held AP, previous AP + personal-turn income)`
+
+Movement opportunity continues to refresh from its existing allowance and
+wound rules; emergency reactions retain their separately authored allowance.
+Entering or leaving encounter scope, toggling voluntary turn mode, changing
+selection, replaying, restoring a save, or reinstalling presentation must not
+replenish AP. Encounter completion therefore stops refreshing every actor.
+
+The turn record must preserve previous AP, granted AP, cap waste, and resulting
+AP so replay and headless traces never infer the economy from UI state. Scenario
+validation rejects negative values, starting AP above the cap, income above the
+supported integer range, and actors without a complete economy definition.
+Migration supplies the explicit legacy equivalent for older content before the
+published scenario switches to 4/4/6.
+
+This slice is complete only when reducer parity covers ordinary initiative,
+skipped incapacitated actors, encounter onset/completion, voluntary world
+turns, emergency reactions, save restoration, replay, and headless branching.
+AI outcome features expose AP preserved, AP spent, and cap waste so patience is
+valuable only while patrols, awareness, opponents, objectives, and hazards
+continue to advance through authoritative world or personal turns.
+
+### Delivery and playtest gate
+
+Deliver the generic context model plus Ambush proof first, then the banked AP
+economy. Each is a separate validated commit and hosted preview. After both are
+green, run a focused player test for detection timing, attack qualification,
+post-shot awareness, saved-AP carryover, cap behavior, and attempts to gain AP
+through encounter or UI transitions. Broader tactical metas and training begin
+only after that mandatory gate passes.
 
 ## Pre-encounter stabilization checkpoint — 2026-08-17
 
