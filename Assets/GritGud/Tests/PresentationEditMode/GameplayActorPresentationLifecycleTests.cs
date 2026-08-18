@@ -269,6 +269,14 @@ namespace GritGud.Presentation.Tests
                 corridorWidths.y,
                 Is.EqualTo(
                     GameplayPlayerCutoutPresenter.TargetCorridorHalfWidth));
+            Assert.That(
+                corridorWidths.z,
+                Is.EqualTo(
+                    GameplayPlayerCutoutPresenter.CameraCorridorHalfHeight));
+            Assert.That(
+                corridorWidths.w,
+                Is.EqualTo(
+                    GameplayPlayerCutoutPresenter.TargetCorridorHalfHeight));
             Assert.That(playerCutout.PresentationEnabled, Is.True);
             Assert.That(
                 Vector3.Distance(

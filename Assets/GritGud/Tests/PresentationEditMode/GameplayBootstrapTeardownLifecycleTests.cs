@@ -69,6 +69,9 @@ namespace GritGud.Presentation.Tests
                 Shader.GetGlobalVector("_GritGudPlayerCutoutCameraRight"),
                 Is.EqualTo(Vector4.zero));
             Assert.That(
+                Shader.GetGlobalVector("_GritGudPlayerCutoutCameraUp"),
+                Is.EqualTo(Vector4.zero));
+            Assert.That(
                 Shader.GetGlobalVector(
                     "_GritGudPlayerCutoutCorridorWidths"),
                 Is.EqualTo(Vector4.zero));

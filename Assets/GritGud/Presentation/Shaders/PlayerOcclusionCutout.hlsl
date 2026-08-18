@@ -7,7 +7,8 @@ float _GritGudPlayerCutoutVerticalRadius;
 float3 _GritGudPlayerCutoutRayStart;
 float3 _GritGudPlayerCutoutRayEnd;
 float3 _GritGudPlayerCutoutCameraRight;
-float2 _GritGudPlayerCutoutCorridorWidths;
+float3 _GritGudPlayerCutoutCameraUp;
+float4 _GritGudPlayerCutoutCorridorWidths;
 
 float PlayerCutoutNoise(float2 pixelPosition)
 {
@@ -50,6 +51,18 @@ void ClipPlayerOcclusionAtScreenUV(
         _GritGudPlayerCutoutCorridorWidths.y,
         corridorProgress);
     if (lateralDistance >= corridorHalfWidth)
+    {
+        return;
+    }
+
+    float verticalDistance = abs(dot(
+        positionWS - corridorCenter,
+        _GritGudPlayerCutoutCameraUp));
+    float corridorHalfHeight = lerp(
+        _GritGudPlayerCutoutCorridorWidths.z,
+        _GritGudPlayerCutoutCorridorWidths.w,
+        corridorProgress);
+    if (verticalDistance >= corridorHalfHeight)
     {
         return;
     }

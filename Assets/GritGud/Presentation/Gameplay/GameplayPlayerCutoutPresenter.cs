@@ -12,6 +12,8 @@ namespace GritGud.Presentation.Gameplay
         public const float LeftViewportExtension = 0.04f;
         public const float CameraCorridorHalfWidth = 0.04f;
         public const float TargetCorridorHalfWidth = 0.42f;
+        public const float CameraCorridorHalfHeight = 0.04f;
+        public const float TargetCorridorHalfHeight = 1f;
 
         private const float DefaultPivotHeight = 1.3f;
         private static readonly int PlayerCutout =
@@ -26,6 +28,8 @@ namespace GritGud.Presentation.Gameplay
             Shader.PropertyToID("_GritGudPlayerCutoutRayEnd");
         private static readonly int PlayerCutoutCameraRight =
             Shader.PropertyToID("_GritGudPlayerCutoutCameraRight");
+        private static readonly int PlayerCutoutCameraUp =
+            Shader.PropertyToID("_GritGudPlayerCutoutCameraUp");
         private static readonly int PlayerCutoutCorridorWidths =
             Shader.PropertyToID("_GritGudPlayerCutoutCorridorWidths");
 
@@ -144,10 +148,15 @@ namespace GritGud.Presentation.Gameplay
                 PlayerCutoutCameraRight,
                 gameplayCamera.transform.right);
             Shader.SetGlobalVector(
+                PlayerCutoutCameraUp,
+                gameplayCamera.transform.up);
+            Shader.SetGlobalVector(
                 PlayerCutoutCorridorWidths,
                 new Vector4(
                     CameraCorridorHalfWidth,
-                    TargetCorridorHalfWidth));
+                    TargetCorridorHalfWidth,
+                    CameraCorridorHalfHeight,
+                    TargetCorridorHalfHeight));
         }
 
         private void OnPreCull()
@@ -176,6 +185,7 @@ namespace GritGud.Presentation.Gameplay
             Shader.SetGlobalVector(PlayerCutoutRayStart, Vector4.zero);
             Shader.SetGlobalVector(PlayerCutoutRayEnd, Vector4.zero);
             Shader.SetGlobalVector(PlayerCutoutCameraRight, Vector4.zero);
+            Shader.SetGlobalVector(PlayerCutoutCameraUp, Vector4.zero);
             Shader.SetGlobalVector(PlayerCutoutCorridorWidths, Vector4.zero);
         }
     }
