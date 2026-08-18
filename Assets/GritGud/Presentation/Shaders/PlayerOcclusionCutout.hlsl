@@ -10,8 +10,9 @@ float PlayerCutoutNoise(float2 pixelPosition)
     return frac(52.9829189 * frac(dot(pixelPosition, float2(0.06711056, 0.00583715))));
 }
 
-void ClipPlayerOcclusion(
-    float4 positionHCS,
+void ClipPlayerOcclusionAtScreenUV(
+    float2 screenUV,
+    float2 pixelPosition,
     float viewDepth,
     half cutoutEnabled)
 {
@@ -23,7 +24,6 @@ void ClipPlayerOcclusion(
         return;
     }
 
-    float2 screenUV = GetNormalizedScreenSpaceUV(positionHCS);
     float2 offset = screenUV - _GritGudPlayerCutout.xy;
     // Keep the reveal close to the character silhouette. The former large,
     // circular screen-space mask could reach sideways through unrelated walls
@@ -40,7 +40,19 @@ void ClipPlayerOcclusion(
         1.0 - feather,
         1.0,
         distanceFromPlayer);
-    clip(coverage - PlayerCutoutNoise(positionHCS.xy));
+    clip(coverage - PlayerCutoutNoise(pixelPosition));
+}
+
+void ClipPlayerOcclusion(
+    float4 positionHCS,
+    float viewDepth,
+    half cutoutEnabled)
+{
+    ClipPlayerOcclusionAtScreenUV(
+        GetNormalizedScreenSpaceUV(positionHCS),
+        positionHCS.xy,
+        viewDepth,
+        cutoutEnabled);
 }
 
 #endif
