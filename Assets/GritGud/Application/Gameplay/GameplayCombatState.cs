@@ -20,7 +20,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplaySessionStateSnapshot
     {
-        public const int CurrentSchemaVersion = 2;
+        public const int CurrentSchemaVersion = 3;
 
         public GameplaySessionStateSnapshot(
             string scenarioId,
@@ -45,7 +45,8 @@ namespace GritGud.Application.Gameplay
             float voluntaryTurnReentrySecondsRemaining = 0f,
             MovementRouteRecord pendingMovementRoute = null,
             VoluntaryTurnCycleRecord pendingVoluntaryTurnCycle = null,
-            long lastTransitionSequence = 0L)
+            long lastTransitionSequence = 0L,
+            long lastVoluntaryTurnCycleSequence = 0L)
         {
             if (!Enum.IsDefined(typeof(GameplaySessionMode), mode))
                 throw new ArgumentOutOfRangeException(nameof(mode));
@@ -57,7 +58,8 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentOutOfRangeException(nameof(turnPhase));
             if (lastActionSequence < 0 || lastTurnSequence < 0
                 || journalSequence < 0 || revision < 0
-                || lastTransitionSequence < 0)
+                || lastTransitionSequence < 0
+                || lastVoluntaryTurnCycleSequence < 0)
                 throw new ArgumentOutOfRangeException(nameof(journalSequence));
             GameplayNumericPolicy.RequireFinite(
                 voluntaryTurnReentrySecondsRemaining,
@@ -100,6 +102,8 @@ namespace GritGud.Application.Gameplay
             PendingMovementRoute = pendingMovementRoute;
             PendingVoluntaryTurnCycle = pendingVoluntaryTurnCycle;
             LastTransitionSequence = lastTransitionSequence;
+            LastVoluntaryTurnCycleSequence =
+                lastVoluntaryTurnCycleSequence;
         }
 
         public int SchemaVersion { get; }
@@ -126,6 +130,7 @@ namespace GritGud.Application.Gameplay
         public MovementRouteRecord PendingMovementRoute { get; }
         public VoluntaryTurnCycleRecord PendingVoluntaryTurnCycle { get; }
         public long LastTransitionSequence { get; }
+        public long LastVoluntaryTurnCycleSequence { get; }
 
         public GameplayActorSnapshot GetActor(string actorId)
         {
@@ -191,7 +196,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplayCombatStateSnapshot
     {
-        public const int CurrentSchemaVersion = 2;
+        public const int CurrentSchemaVersion = 3;
 
         public GameplayCombatStateSnapshot(
             GameplaySessionStateSnapshot session,
@@ -316,7 +321,8 @@ namespace GritGud.Application.Gameplay
                 gameplay.VoluntaryTurnReentrySecondsRemaining,
                 gameplay.PendingMovementRoute,
                 gameplay.PendingVoluntaryTurnCycle,
-                gameplay.LastTransitionSequence);
+                gameplay.LastTransitionSequence,
+                gameplay.LastCompletedVoluntaryTurnCycle?.Sequence ?? 0L);
             GameplayCombatStateCoverage coverage =
                 GameplayCombatStateCoverage.Session;
             if (destructibles != null)
@@ -377,6 +383,8 @@ namespace GritGud.Application.Gameplay
             Append(text, "turn.sequence", session.LastTurnSequence);
             Append(text, "journal.sequence", session.JournalSequence);
             Append(text, "transition.sequence", session.LastTransitionSequence);
+            Append(text, "voluntary.lastSequence",
+                session.LastVoluntaryTurnCycleSequence);
             Append(text, "voluntary.reentrySeconds",
                 session.VoluntaryTurnReentrySecondsRemaining);
             AppendPendingMovement(text, session.PendingMovementRoute);

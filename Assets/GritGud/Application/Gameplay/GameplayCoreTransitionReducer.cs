@@ -69,16 +69,27 @@ namespace GritGud.Application.Gameplay
     {
         public const string Subject = "turn";
 
-        public GameplayEndTurnTransitionPayload(string actorId, bool emergency)
+        public GameplayEndTurnTransitionPayload(
+            string actorId,
+            bool emergency,
+            float minimumVoluntaryTurnSeconds = 0f)
             : base(
                 GameplayCapabilityProfiles.EndTurn(emergency),
                 actorId,
                 Subject)
         {
+            GameplayNumericPolicy.RequireFinite(
+                minimumVoluntaryTurnSeconds,
+                nameof(minimumVoluntaryTurnSeconds));
+            if (minimumVoluntaryTurnSeconds < 0f)
+                throw new ArgumentOutOfRangeException(
+                    nameof(minimumVoluntaryTurnSeconds));
             Emergency = emergency;
+            MinimumVoluntaryTurnSeconds = minimumVoluntaryTurnSeconds;
         }
 
         public bool Emergency { get; }
+        public float MinimumVoluntaryTurnSeconds { get; }
     }
 
     public sealed class GameplayCoreTransitionReducer :
@@ -98,9 +109,8 @@ namespace GritGud.Application.Gameplay
                         GameplayCapabilityProfiles.ChangeStance());
                 case GameplaySemanticCapability.DirectAttack:
                     return IsSupportedDirectAttack(profile);
-                case GameplaySemanticCapability.EndTurn:
-                    return profile.Equals(
-                        GameplayCapabilityProfiles.EndTurn(emergency: false));
+                case GameplaySemanticCapability.LaunchProjectile:
+                    return IsSupportedProjectileAttack(profile);
                 default:
                     return false;
             }
@@ -312,6 +322,27 @@ namespace GritGud.Application.Gameplay
             }
         }
 
+        private static bool IsSupportedProjectileAttack(
+            GameplayCapabilityProfile profile)
+        {
+            try
+            {
+                string consequence = profile.GetTrait("consequence");
+                return profile.GetTrait("delivery") == "turn-flight"
+                    && profile.GetTrait("targeting")
+                        == "actor-or-world-point"
+                    && profile.GetTrait("resource") == "equipped-weapon"
+                    && (consequence == "impact"
+                        || consequence == "blast-actor-and-destructible")
+                    && (profile.GetTrait("emergency") == "opens"
+                        || profile.GetTrait("emergency") == "none");
+            }
+            catch (KeyNotFoundException)
+            {
+                return false;
+            }
+        }
+
         private static GameplayReductionResult Result(
             GameplayCombatStateSnapshot previous,
             GameplayCombatStateSnapshot resulting,
@@ -369,7 +400,8 @@ namespace GritGud.Application.Gameplay
                 source.VoluntaryTurnReentrySecondsRemaining,
                 source.PendingMovementRoute,
                 source.PendingVoluntaryTurnCycle,
-                transitionSequence);
+                transitionSequence,
+                source.LastVoluntaryTurnCycleSequence);
 
         private static GameplayActorSnapshot CopyActor(
             GameplayActorSnapshot actor,

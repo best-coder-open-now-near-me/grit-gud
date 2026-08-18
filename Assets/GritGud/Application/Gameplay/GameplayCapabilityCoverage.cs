@@ -229,6 +229,20 @@ namespace GritGud.Application.Gameplay
     public static class GameplayCapabilityCoverageValidator
     {
         public static GameplayCapabilityCoverageReport Validate(
+            GameplayScenarioAssembly assembly,
+            LevelDocument level,
+            GameplayCapabilityRegistry registry)
+        {
+            if (assembly == null)
+                throw new ArgumentNullException(nameof(assembly));
+            if (level == null) throw new ArgumentNullException(nameof(level));
+            if (registry == null) throw new ArgumentNullException(nameof(registry));
+            return ValidateInputs(
+                GameplayReachableInputEnumerator.Enumerate(assembly, level),
+                registry);
+        }
+
+        public static GameplayCapabilityCoverageReport Validate(
             ScenarioDefinition scenario,
             LevelDocument level,
             GameplayCapabilityRegistry registry)
@@ -236,8 +250,15 @@ namespace GritGud.Application.Gameplay
             if (scenario == null) throw new ArgumentNullException(nameof(scenario));
             if (level == null) throw new ArgumentNullException(nameof(level));
             if (registry == null) throw new ArgumentNullException(nameof(registry));
-            IReadOnlyList<GameplayReachableInput> inputs =
-                GameplayReachableInputEnumerator.Enumerate(scenario, level);
+            return ValidateInputs(
+                GameplayReachableInputEnumerator.Enumerate(scenario, level),
+                registry);
+        }
+
+        private static GameplayCapabilityCoverageReport ValidateInputs(
+            IReadOnlyList<GameplayReachableInput> inputs,
+            GameplayCapabilityRegistry registry)
+        {
             var issues = new List<GameplayCapabilityCoverageIssue>();
             var reachableProfiles = new HashSet<string>(StringComparer.Ordinal);
             foreach (GameplayReachableInput input in inputs)
@@ -280,6 +301,26 @@ namespace GritGud.Application.Gameplay
 
     public static class GameplayReachableInputEnumerator
     {
+        public static IReadOnlyList<GameplayReachableInput> Enumerate(
+            GameplayScenarioAssembly assembly,
+            LevelDocument level)
+        {
+            if (assembly == null)
+                throw new ArgumentNullException(nameof(assembly));
+            var result = new List<GameplayReachableInput>(
+                Enumerate(assembly.Scenario, level));
+            foreach (ScenarioVehicleRuntimeDefinition vehicle in
+                assembly.Vehicles)
+            {
+                if (vehicle.StartingOccupantActorId == null) continue;
+                Add(result, GameplayReachableInputKind.ContextualInteraction,
+                    vehicle.EntityId + ".move",
+                    vehicle.StartingOccupantActorId,
+                    GameplayCapabilityProfiles.VehicleMove());
+            }
+            return result.AsReadOnly();
+        }
+
         public static IReadOnlyList<GameplayReachableInput> Enumerate(
             ScenarioDefinition scenario,
             LevelDocument level)

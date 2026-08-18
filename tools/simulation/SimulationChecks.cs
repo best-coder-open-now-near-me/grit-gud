@@ -31,8 +31,8 @@ internal static class SimulationChecks
         Require(gameplay.BeginEncounter(), "Encounter did not begin.");
         GameplayCombatStateSnapshot initial =
             GameplayCombatStateCapture.Capture(gameplay);
-        var registry = new GameplayTransitionReducerRegistry();
-        registry.Register(new GameplayCoreTransitionReducer());
+        GameplayTransitionReducerRegistry registry =
+            GameplaySimulationReducers.CreateCurrent();
         var transitions = new List<GameplaySemanticTransition>();
 
         GameplayCombatStateSnapshot state = initial;
@@ -155,6 +155,32 @@ internal static class SimulationChecks
         Require(
             GameplayCombatStateDiffer.Compare(state, replay).Count == 0,
             "Exact replay has structured state differences.");
+
+        var branch = new GameplaySimulationBranch(
+            "walking-source",
+            initial,
+            registry);
+        foreach (GameplaySemanticTransition transition in transitions)
+            branch.Apply(transition);
+        GameplayExactReplayResult verified = GameplayExactReplay.Verify(
+            initial,
+            branch.Steps,
+            registry);
+        Require(verified.IsExact,
+            "Recorded headless trajectory did not replay exactly.");
+        Require(string.Equals(
+                verified.FinalState.CanonicalHash,
+                state.CanonicalHash,
+                StringComparison.Ordinal),
+            "Recorded trajectory ended at the wrong state.");
+        GameplaySimulationBranch fork = branch.Fork("walking-branch");
+        Require(string.Equals(
+                fork.CurrentState.CanonicalHash,
+                branch.CurrentState.CanonicalHash,
+                StringComparison.Ordinal),
+            "Detached fork did not begin from its parent state.");
+        Require(fork.Steps.Count == 0,
+            "Detached fork inherited parent trajectory mutations.");
     }
 
     private static GameplayCombatStateSnapshot Reduce(
@@ -204,8 +230,8 @@ internal static class SimulationChecks
     {
         AttackDefinition rifle = CreateRifle();
         GameplaySession gameplay = CreateGameplay(rifle);
-        var reducers = new GameplayTransitionReducerRegistry();
-        reducers.Register(new GameplayCoreTransitionReducer());
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
         var capabilities = new GameplayCapabilityRegistry(reducers);
         GameplayCapabilityProfile movement =
             GameplayCapabilityProfiles.GroundedMove();

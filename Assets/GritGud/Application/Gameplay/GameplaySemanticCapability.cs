@@ -19,6 +19,9 @@ namespace GritGud.Application.Gameplay
         AdvanceProjectile,
         AdvanceWorld,
         EmergencyReaction,
+        VehicleMove,
+        ChangeTurnMode,
+        ChangeEncounter,
     }
 
     public readonly struct GameplayCapabilityTrait
@@ -208,6 +211,36 @@ namespace GritGud.Application.Gameplay
             Profile(
                 GameplaySemanticCapability.EndTurn,
                 Trait("turn", emergency ? "emergency" : "normal"));
+
+        public static GameplayCapabilityProfile AdvanceProjectile() => Profile(
+            GameplaySemanticCapability.AdvanceProjectile,
+            Trait("evidence", "segment-query"),
+            Trait("consequence", "impact-or-blast"));
+
+        public static GameplayCapabilityProfile VehicleMove() => Profile(
+            GameplaySemanticCapability.VehicleMove,
+            Trait("path", "momentum-envelope"),
+            Trait("constraint", "speed-and-curvature"));
+
+        public static GameplayCapabilityProfile AdvanceWorld(string mode) =>
+            Profile(
+                GameplaySemanticCapability.AdvanceWorld,
+                Trait("mode", mode));
+
+        public static GameplayCapabilityProfile EmergencyReaction(
+            string phase) => Profile(
+                GameplaySemanticCapability.EmergencyReaction,
+                Trait("phase", phase));
+
+        public static GameplayCapabilityProfile ChangeTurnMode(string mode) =>
+            Profile(
+                GameplaySemanticCapability.ChangeTurnMode,
+                Trait("mode", mode));
+
+        public static GameplayCapabilityProfile ChangeEncounter(string mode) =>
+            Profile(
+                GameplaySemanticCapability.ChangeEncounter,
+                Trait("mode", mode));
 
         private static GameplayCapabilityProfile Profile(
             GameplaySemanticCapability capability,
