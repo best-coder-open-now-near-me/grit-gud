@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
 {
-    internal sealed class GameplayHudRenderer : IDisposable
+    internal sealed partial class GameplayHudRenderer : IDisposable
     {
         internal const float CommandBarMargin =
             GameplayHudLayout.CommandBarMargin;
@@ -113,21 +113,12 @@ namespace GritGud.Presentation.Gameplay
         private float flyoutReveal;
         private float equipmentFlyoutReveal;
         private float warningHintReveal;
-        private float actorAbilityFlyoutReveal;
         private string revealingEquipmentItemId;
         private string revealingWarningSignature;
         private string cachedEquipmentFlyoutText = string.Empty;
         private string activeTooltip = string.Empty;
-        private readonly GameplayHotbarChoiceState hotbarChoice =
-            new GameplayHotbarChoiceState();
-        private Rect actorAbilityFlyoutRectangle;
-        private int cachedActorAbilitySlotNumber;
-        private string cachedActorAbilityId;
-        private string cachedActorAbilityLabel;
-        private IReadOnlyList<GameplayHotbarAbilityOptionModel>
-            cachedActorAbilityOptions =
-                Array.Empty<GameplayHotbarAbilityOptionModel>();
-        private Vector2 tipsScrollPosition;
+        private readonly GameplayHudHotbarDrawer hotbarDrawer;
+        private readonly GameplayHudGuidanceDrawer guidanceDrawer;
         private string playerActorId => bindings.PlayerActorId;
         private bool visible = true;
 
@@ -153,7 +144,13 @@ namespace GritGud.Presentation.Gameplay
 
         internal bool IsBugReportNoteOpen => bugReportNoteOpen;
 
-        internal bool IsHotbarChoiceOpen => hotbarChoice.IsOpen;
+        internal bool IsHotbarChoiceOpen => hotbarDrawer.IsChoiceOpen;
+
+        internal void OpenHotbarChoiceForTesting(
+            int slotNumber,
+            Rect slotRectangle,
+            float height) =>
+            hotbarDrawer.OpenChoice(slotNumber, slotRectangle, height);
 
         internal bool IsCommandBarVisible => Session != null;
 
@@ -163,10 +160,10 @@ namespace GritGud.Presentation.Gameplay
                 Screen.width,
                 Screen.height,
                 bugReportNoteOpen,
-                hotbarChoice.IsOpen,
-                hotbarChoice.Rectangle,
-                actorAbilityFlyoutReveal,
-                actorAbilityFlyoutRectangle,
+                hotbarDrawer.IsChoiceOpen,
+                hotbarDrawer.ChoiceRectangle,
+                hotbarDrawer.ActorAbilityReveal,
+                hotbarDrawer.ActorAbilityRectangle,
                 flyoutExpanded);
 
         internal bool AreTurnResourcesVisible =>
@@ -198,6 +195,8 @@ namespace GritGud.Presentation.Gameplay
 
         public GameplayHudRenderer()
         {
+            hotbarDrawer = new GameplayHudHotbarDrawer(this);
+            guidanceDrawer = new GameplayHudGuidanceDrawer(this);
             guidanceCatalog = GameplayGuidanceCatalog.LoadDefault();
             tipCatalog = GameplayTipCatalog.LoadDefault();
             flyoutMotion = GameplayFlyoutMotionProfile.LoadDefault();
@@ -221,12 +220,10 @@ namespace GritGud.Presentation.Gameplay
             flyoutReveal = 0f;
             equipmentFlyoutReveal = 0f;
             warningHintReveal = 0f;
-            actorAbilityFlyoutReveal = 0f;
             revealingEquipmentItemId = null;
             revealingWarningSignature = null;
             cachedEquipmentFlyoutText = string.Empty;
-            hotbarChoice.Close();
-            ClearCachedActorAbilityFlyout();
+            hotbarDrawer.Reset();
         }
 
         internal void ToggleFlyout()
@@ -297,15 +294,7 @@ namespace GritGud.Presentation.Gameplay
                 revealingWarningSignature = null;
             }
 
-            actorAbilityFlyoutReveal = flyoutMotion.Advance(
-                actorAbilityFlyoutReveal,
-                hotbarController?.HasExpandedActorAbility == true,
-                unscaledDeltaTime);
-            if (actorAbilityFlyoutReveal <= 0f
-                && hotbarController?.HasExpandedActorAbility != true)
-            {
-                ClearCachedActorAbilityFlyout();
-            }
+            hotbarDrawer.Advance(unscaledDeltaTime);
 
         }
 
@@ -349,7 +338,9 @@ namespace GritGud.Presentation.Gameplay
 
                 if (bugReportNoteOpen)
                 {
-                    DrawBugReportNoteModal(canvasWidth, canvasHeight);
+                    guidanceDrawer.DrawBugReportNoteModal(
+                        canvasWidth,
+                        canvasHeight);
                     return;
                 }
 
@@ -360,10 +351,10 @@ namespace GritGud.Presentation.Gameplay
                 DrawCommandBar(
                     commandBarRectangle,
                     model.CommandBar);
-                DrawActorAbilityFlyout(
+                hotbarDrawer.DrawActorAbilityFlyout(
                     commandBarRectangle,
                     model.CommandBar.HotbarSlots);
-                DrawHotbarChoiceMenu(canvasWidth, canvasHeight);
+                hotbarDrawer.DrawChoiceMenu(canvasWidth, canvasHeight);
                 DrawBodyStatus(
                     CalculateBodyStatusRectangle(
                         canvasWidth,
@@ -380,13 +371,13 @@ namespace GritGud.Presentation.Gameplay
                 DrawWarningHint(
                     commandBarRectangle,
                     model.CommandBar.WarningHint);
-                DrawAnimatedFlyout(
+                guidanceDrawer.DrawAnimatedFlyout(
                     canvasWidth,
                     canvasHeight,
                     model.ScenarioDisplayName,
                     model.ModeLabel,
                     model.ObjectiveSummary);
-                DrawInteractionPrompt(
+                guidanceDrawer.DrawInteractionPrompt(
                     canvasWidth * 0.5f,
                     canvasHeight * 0.5f,
                     model.InteractionAvailable);
@@ -481,7 +472,7 @@ namespace GritGud.Presentation.Gameplay
             float separatorX = hotbarRectangle.xMax + separatorSpacing;
             float turnAreaX = separatorX + separatorSpacing;
 
-            DrawHotbar(hotbarRectangle, model.HotbarSlots);
+            hotbarDrawer.DrawHotbar(hotbarRectangle, model.HotbarSlots);
             DrawGlowLine(
                 new Rect(
                     separatorX,
@@ -729,279 +720,6 @@ namespace GritGud.Presentation.Gameplay
             }
         }
 
-        private void DrawHotbar(
-            Rect rectangle,
-            IReadOnlyList<GameplayHotbarSlotModel> slots)
-        {
-            const float gap = 5f;
-            float availableWidth = rectangle.width - (gap * (slots.Count - 1));
-            float slotWidth = availableWidth / slots.Count;
-            for (int index = 0; index < slots.Count; index++)
-            {
-                GameplayHotbarSlotModel slot = slots[index];
-                var slotRectangle = new Rect(
-                    rectangle.x + ((slotWidth + gap) * index),
-                    rectangle.y,
-                    slotWidth,
-                    rectangle.height);
-                bool hasEquipmentButton = !string.IsNullOrWhiteSpace(
-                    slot.EquipmentLabel);
-                const float equipmentHeight = 22f;
-                const float innerGap = 4f;
-                var itemRectangle = new Rect(
-                    slotRectangle.x,
-                    slotRectangle.y,
-                    slotRectangle.width,
-                    hasEquipmentButton
-                        ? slotRectangle.height - equipmentHeight - innerGap
-                        : slotRectangle.height);
-                Event current = Event.current;
-                if (IsHotbarChoiceRequest(current, itemRectangle))
-                {
-                    OpenHotbarChoiceMenu(slot.SlotNumber, itemRectangle);
-                    current.Use();
-                }
-                bool previousEnabled = GUI.enabled;
-                GUI.enabled = slot.Enabled;
-                bool powerClicked = GUI.Button(
-                    itemRectangle,
-                    new GUIContent(slot.Label, slot.PowerTooltip),
-                    slot.IsPowerPending
-                        ? pendingPowerButtonStyle
-                        : hotbarItemStyle);
-                if (itemRectangle.Contains(Event.current.mousePosition))
-                {
-                    activeTooltip = slot.PowerTooltip;
-                }
-                GUI.enabled = previousEnabled;
-                GUI.Label(
-                    new Rect(
-                        itemRectangle.x + 7f,
-                        itemRectangle.y + 5f,
-                        itemRectangle.width - 14f,
-                        16f),
-                    slot.SlotNumber.ToString(),
-                    hotbarNumberStyle);
-                Color itemEdge = slot.IsPowerPending
-                    ? GameplayVisualPalette.WithAlpha(
-                        EquipmentSignalColor,
-                        CalculatePendingPowerPulse(Time.unscaledTime))
-                    : slot.IsEquipped
-                        ? EquipmentSignalColor
-                        : ModeButtonEdgeColor;
-                DrawGlowFrame(itemRectangle, itemEdge);
-                if (powerClicked && slot.PrimaryClickRequestsPower)
-                {
-                    hotbarController?.TryActivateSlot(slot.SlotNumber);
-                }
-
-                if (!hasEquipmentButton)
-                {
-                    continue;
-                }
-
-                var equipmentRectangle = new Rect(
-                    slotRectangle.x,
-                    itemRectangle.yMax + innerGap,
-                    slotRectangle.width,
-                    equipmentHeight);
-                GUIStyle equipmentStyle = slot.AwaitingConfirmation
-                    ? equipmentConfirmationStyle
-                    : slot.IsEquipped
-                        ? equippedButtonStyle
-                        : equipmentButtonStyle;
-                GUI.enabled = slot.EquipmentEnabled;
-                bool equipmentClicked = GUI.Button(
-                    equipmentRectangle,
-                    new GUIContent(
-                        slot.EquipmentLabel,
-                        slot.EquipmentTooltip),
-                    equipmentStyle);
-                if (equipmentRectangle.Contains(Event.current.mousePosition))
-                {
-                    activeTooltip = slot.EquipmentTooltip;
-                }
-                GUI.enabled = previousEnabled;
-                Color equipmentEdge = slot.AwaitingConfirmation
-                    ? EquipmentSignalColor
-                    : slot.IsEquipped
-                        ? SignalColor
-                        : ModeButtonEdgeColor;
-                DrawGlowFrame(equipmentRectangle, equipmentEdge);
-                if (slot.IsEquipped && !slot.AwaitingConfirmation)
-                {
-                    DrawRectangle(
-                        new Rect(
-                            equipmentRectangle.x + 1f,
-                            equipmentRectangle.y + 1f,
-                            equipmentRectangle.width - 2f,
-                            1f),
-                        GameplayVisualPalette.WithAlpha(
-                            GameplayVisualPalette.Border,
-                            0.5f));
-                    DrawGlowLine(
-                        new Rect(
-                            equipmentRectangle.x + 1f,
-                            equipmentRectangle.yMax - 2f,
-                            equipmentRectangle.width - 2f,
-                            1f),
-                        SignalColor);
-                }
-
-                if (equipmentClicked)
-                {
-                    hotbarController?.ClearStatus();
-                    equipmentController?.TryToggleEquipment(
-                        slot.ContentId,
-                        slot.SlotNumber);
-                }
-            }
-        }
-
-        private void DrawActorAbilityFlyout(
-            Rect commandBarRectangle,
-            IReadOnlyList<GameplayHotbarSlotModel> slots)
-        {
-            GameplayHotbarSlotModel expanded = null;
-            string expandedId = hotbarController?.ExpandedActorAbilityId;
-            if (expandedId != null)
-            {
-                foreach (GameplayHotbarSlotModel slot in slots)
-                {
-                    if (slot.BindingKind
-                            == GameplayHotbarBindingKind.ActorAbility
-                        && string.Equals(
-                            slot.ContentId,
-                            expandedId,
-                            StringComparison.Ordinal))
-                    {
-                        expanded = slot;
-                        break;
-                    }
-                }
-            }
-
-            if (expanded != null)
-            {
-                cachedActorAbilitySlotNumber = expanded.SlotNumber;
-                cachedActorAbilityId = expanded.ContentId;
-                cachedActorAbilityLabel = expanded.Label;
-                cachedActorAbilityOptions = expanded.AbilityOptions;
-            }
-
-            if (cachedActorAbilitySlotNumber == 0
-                || cachedActorAbilityOptions.Count == 0
-                || (expanded == null && actorAbilityFlyoutReveal <= 0f))
-            {
-                return;
-            }
-
-            Rect slotRectangle = CalculateHotbarSlotRectangle(
-                commandBarRectangle,
-                cachedActorAbilitySlotNumber);
-            actorAbilityFlyoutRectangle =
-                CalculateActorAbilityFlyoutRectangle(
-                    slotRectangle,
-                    cachedActorAbilityOptions.Count);
-            float revealHeight = actorAbilityFlyoutRectangle.height
-                * EvaluateFlyoutReveal(actorAbilityFlyoutReveal);
-            float revealTop = actorAbilityFlyoutRectangle.yMax - revealHeight;
-            var clipRectangle = new Rect(
-                actorAbilityFlyoutRectangle.x,
-                revealTop,
-                actorAbilityFlyoutRectangle.width,
-                revealHeight);
-            GUI.BeginClip(clipRectangle);
-            var panelRectangle = new Rect(
-                0f,
-                actorAbilityFlyoutRectangle.y - clipRectangle.y,
-                actorAbilityFlyoutRectangle.width,
-                actorAbilityFlyoutRectangle.height);
-            DrawFramedPanel(panelRectangle, PanelStrongColor);
-            DrawGlowLine(
-                new Rect(
-                    panelRectangle.x,
-                    panelRectangle.yMax - 2f,
-                    panelRectangle.width,
-                    2f),
-                SignalColor);
-
-            const float padding = 8f;
-            const float headingHeight = 28f;
-            const float optionHeight = 31f;
-            const float optionGap = 5f;
-            GUI.Label(
-                new Rect(
-                    padding,
-                    panelRectangle.y + padding,
-                    panelRectangle.width - (padding * 2f),
-                    headingHeight),
-                cachedActorAbilityLabel + " OPTIONS",
-                choiceHeaderStyle);
-
-            bool previousEnabled = GUI.enabled;
-            for (int index = 0;
-                index < cachedActorAbilityOptions.Count;
-                index++)
-            {
-                GameplayHotbarAbilityOptionModel option =
-                    cachedActorAbilityOptions[index];
-                var optionRectangle = new Rect(
-                    padding,
-                    panelRectangle.y + padding + headingHeight
-                        + ((optionHeight + optionGap) * index),
-                    panelRectangle.width - (padding * 2f),
-                    optionHeight);
-                if (optionRectangle.Contains(Event.current.mousePosition))
-                {
-                    activeTooltip = option.Tooltip;
-                }
-
-                GUI.enabled = expanded != null && option.Enabled;
-                bool clicked = GUI.Button(
-                    optionRectangle,
-                    FormatActorAbilityOptionLabel(
-                        cachedActorAbilitySlotNumber,
-                        index,
-                        option.Label),
-                    option.Pending
-                        ? pendingPowerButtonStyle
-                        : hotbarItemStyle);
-                GUI.enabled = previousEnabled;
-                DrawGlowFrame(
-                    optionRectangle,
-                    option.Pending
-                        ? EquipmentSignalColor
-                        : ModeButtonEdgeColor);
-                if (clicked)
-                {
-                    hotbarController?.TryActivateActorAbilityOption(
-                        cachedActorAbilityId,
-                        option.Id);
-                }
-            }
-
-            GUI.EndClip();
-            DrawHorizontalLaserReveal(
-                actorAbilityFlyoutRectangle.x,
-                revealTop,
-                actorAbilityFlyoutRectangle.width,
-                EquipmentSignalColor,
-                actorAbilityFlyoutReveal);
-
-            Event current = Event.current;
-            if (expanded != null
-                && current.type == EventType.MouseDown
-                && current.button == 0
-                && !slotRectangle.Contains(current.mousePosition)
-                && !actorAbilityFlyoutRectangle.Contains(
-                    current.mousePosition))
-            {
-                hotbarController.CloseActorAbilityFlyout();
-                current.Use();
-            }
-        }
-
         internal static Rect CalculateHotbarSlotRectangle(
             Rect commandBarRectangle,
             int slotNumber) =>
@@ -1025,16 +743,6 @@ namespace GritGud.Presentation.Gameplay
                 slotRectangle,
                 optionCount);
 
-        private void ClearCachedActorAbilityFlyout()
-        {
-            cachedActorAbilitySlotNumber = 0;
-            cachedActorAbilityId = null;
-            cachedActorAbilityLabel = null;
-            cachedActorAbilityOptions =
-                Array.Empty<GameplayHotbarAbilityOptionModel>();
-            actorAbilityFlyoutRectangle = default;
-        }
-
         internal static bool IsHotbarChoiceRequest(
             Event current,
             Rect itemRectangle) =>
@@ -1051,143 +759,6 @@ namespace GritGud.Presentation.Gameplay
                 * PendingPowerPulseCyclesPerSecond));
             return Mathf.Lerp(PendingPowerPulseMinimumAlpha, 1f, phase);
         }
-
-        private void OpenHotbarChoiceMenu(int slotNumber, Rect slotRectangle)
-        {
-            hotbarController?.CloseActorAbilityFlyout();
-            float height = CalculateHotbarChoiceHeight();
-            hotbarChoice.Open(slotNumber, slotRectangle, height);
-        }
-
-        private float CalculateHotbarChoiceHeight()
-        {
-            int abilities = hotbarController?.ActorAbilities.Count ?? 0;
-            int items = 0;
-            int equipment = 0;
-            foreach (InventoryItemDefinition item in Session.GetInventory(playerActorId))
-            {
-                if (item.IsEquippable)
-                {
-                    equipment++;
-                }
-                else
-                {
-                    items++;
-                }
-            }
-            return 18f
-                + (3f * 25f)
-                + ((abilities + items + equipment) * 27f)
-                + 10f;
-        }
-
-        private void DrawHotbarChoiceMenu(float canvasWidth, float canvasHeight)
-        {
-            if (!hotbarChoice.IsOpen)
-            {
-                return;
-            }
-
-            hotbarChoice.ClampToCanvas(canvasWidth, canvasHeight);
-            Rect hotbarChoiceRectangle = hotbarChoice.Rectangle;
-            DrawFramedPanel(hotbarChoiceRectangle, PanelStrongColor);
-            DrawGlowLine(new Rect(
-                hotbarChoiceRectangle.x,
-                hotbarChoiceRectangle.y,
-                hotbarChoiceRectangle.width,
-                2f), SignalColor);
-            float x = hotbarChoiceRectangle.x + 9f;
-            float y = hotbarChoiceRectangle.y + 8f;
-            float width = hotbarChoiceRectangle.width - 18f;
-            GUI.Label(new Rect(x, y, width, 20f),
-                "ABILITIES", choiceHeaderStyle);
-            y += 24f;
-            IReadOnlyList<GameplayActorAbilityHotbarDefinition> abilities =
-                hotbarController?.ActorAbilities;
-            if (abilities != null)
-            {
-                foreach (GameplayActorAbilityHotbarDefinition ability in abilities)
-                {
-                    if (GUI.Button(new Rect(x, y, width, 23f),
-                        ability.DisplayName.ToUpperInvariant(), hotbarItemStyle))
-                    {
-                        hotbarController?.TryBindSlot(
-                            hotbarChoice.SlotNumber,
-                            new GameplayHotbarBinding(
-                                GameplayHotbarBindingKind.ActorAbility,
-                                ability.Id));
-                        hotbarChoice.Close();
-                    }
-                    y += 27f;
-                }
-            }
-
-            GUI.Label(new Rect(x, y, width, 20f), "ITEMS", choiceHeaderStyle);
-            y += 24f;
-            foreach (InventoryItemDefinition item in Session.GetInventory(playerActorId))
-            {
-                if (item.IsEquippable)
-                {
-                    continue;
-                }
-
-                string quantity = item.ConsumablePower == null
-                    ? string.Empty
-                    : "  x" + Session.GetInventoryQuantity(
-                        playerActorId,
-                        item.Id);
-                if (GUI.Button(new Rect(x, y, width, 23f),
-                    item.DisplayName.ToUpperInvariant() + quantity,
-                    hotbarItemStyle))
-                {
-                    hotbarController?.TryBindSlot(
-                        hotbarChoice.SlotNumber,
-                        new GameplayHotbarBinding(
-                            GameplayHotbarBindingKind.InventoryItem,
-                            item.Id));
-                    hotbarChoice.Close();
-                }
-                y += 27f;
-            }
-
-            GUI.Label(
-                new Rect(x, y, width, 20f),
-                "EQUIPMENT",
-                choiceHeaderStyle);
-            y += 24f;
-            foreach (InventoryItemDefinition item in Session.GetInventory(playerActorId))
-            {
-                if (!item.IsEquippable)
-                {
-                    continue;
-                }
-                string suffix = string.Equals(
-                    Session.GetActor(playerActorId).EquippedItemId,
-                    item.Id,
-                    StringComparison.Ordinal) ? "  [EQUIPPED]" : string.Empty;
-                if (GUI.Button(new Rect(x, y, width, 23f),
-                    item.DisplayName.ToUpperInvariant() + suffix, hotbarItemStyle))
-                {
-                    hotbarController?.TryBindSlot(
-                        hotbarChoice.SlotNumber,
-                        new GameplayHotbarBinding(
-                            GameplayHotbarBindingKind.InventoryItem,
-                            item.Id));
-                    hotbarChoice.Close();
-                }
-                y += 27f;
-            }
-
-            Event current = Event.current;
-            if (current.type == EventType.MouseDown
-                && current.button == 0
-                && !hotbarChoiceRectangle.Contains(current.mousePosition))
-            {
-                hotbarChoice.Close();
-                current.Use();
-            }
-        }
-
         private void DrawTurnModeButtons(
             float x,
             float y,
@@ -1221,290 +792,6 @@ namespace GritGud.Presentation.Gameplay
                     RequestControl(command.Control);
                 }
             }
-        }
-
-        private void DrawAnimatedFlyout(
-            float canvasWidth,
-            float canvasHeight,
-            string scenarioDisplayName,
-            string mode,
-            string resources)
-        {
-            if (!flyoutExpanded && flyoutReveal <= 0f)
-            {
-                DrawFlyout(
-                    canvasWidth,
-                    canvasHeight,
-                    scenarioDisplayName,
-                    mode,
-                    resources,
-                    expanded: false);
-                return;
-            }
-
-            float width = Mathf.Min(470f, canvasWidth - 58f);
-            float eased = EvaluateFlyoutReveal(flyoutReveal);
-            const float expandedTabWidth = 38f;
-            float revealEdge = (width + expandedTabWidth) * eased;
-            GUI.BeginClip(new Rect(0f, 0f, revealEdge, canvasHeight));
-            DrawFlyout(
-                canvasWidth,
-                canvasHeight,
-                scenarioDisplayName,
-                mode,
-                resources,
-                expanded: true);
-            GUI.EndClip();
-            DrawLaserReveal(
-                revealEdge,
-                18f,
-                canvasHeight - 36f,
-                SignalColor,
-                flyoutReveal);
-        }
-
-        private void DrawFlyout(
-            float canvasWidth,
-            float canvasHeight,
-            string scenarioDisplayName,
-            string mode,
-            string resources,
-            bool expanded)
-        {
-            float width = Mathf.Min(470f, canvasWidth - 58f);
-            if (!expanded)
-            {
-                DrawFlyoutTab(new Rect(0f, 36f, 42f, 82f), expanded: false);
-                return;
-            }
-
-            var rectangle = new Rect(0f, 18f, width, canvasHeight - 36f);
-            DrawFramedPanel(rectangle, PanelStrongColor);
-            DrawGlowLine(
-                new Rect(rectangle.xMax - 2f, rectangle.y, 2f, rectangle.height),
-                SignalColor);
-
-            var tabRectangle = new Rect(rectangle.xMax, rectangle.y + 18f, 38f, 72f);
-            DrawFlyoutTab(tabRectangle, expanded: true);
-
-            float x = rectangle.x + 18f;
-            float innerWidth = rectangle.width - 38f;
-            float y = rectangle.y + 17f;
-            GUI.Label(
-                new Rect(x, y, innerWidth, 22f),
-                $"{scenarioDisplayName.ToUpperInvariant()} - {mode}",
-                headerStyle);
-            y += 30f;
-            DrawSectionRule(x, y, innerWidth);
-            y += 10f;
-
-            float resourceHeight = Mathf.Max(
-                42f,
-                bodyStyle.CalcHeight(new GUIContent(resources), innerWidth));
-            GUI.Label(
-                new Rect(x, y, innerWidth, resourceHeight),
-                resources,
-                bodyStyle);
-            y += resourceHeight + 10f;
-            DrawSectionRule(x, y, innerWidth);
-            y += 10f;
-
-            float guidanceHeight = DrawGuidance(x, y, innerWidth);
-            y += guidanceHeight + 12f;
-            float tipsBottom = rectangle.yMax - 58f;
-            if (tipsBottom > y + 72f)
-            {
-                DrawTips(x, y, innerWidth, tipsBottom - y);
-            }
-
-            DrawBugReportExport(x, rectangle.yMax - 48f, innerWidth);
-        }
-
-        private void DrawFlyoutTab(Rect rectangle, bool expanded)
-        {
-            DrawRectangle(rectangle, BorderColor);
-            var buttonRectangle = new Rect(
-                rectangle.x + 1f,
-                rectangle.y + 1f,
-                rectangle.width - 2f,
-                rectangle.height - 2f);
-            string label = expanded ? "<<" : ">>";
-            if (GUI.Button(buttonRectangle, label, tabStyle))
-            {
-                ToggleFlyout();
-            }
-        }
-
-        private float DrawGuidance(float x, float y, float width)
-        {
-            string guidanceId = CurrentGuidanceId;
-            if (guidanceId == null || guidanceCatalog == null)
-            {
-                return 0f;
-            }
-
-            GameplayGuidanceEntry guidance = guidanceCatalog.Require(guidanceId);
-            string text = $"EXPECTED  {guidance.ExpectedBehavior}\n" +
-                $"WHY  {guidance.Rationale}\n" +
-                $"TIP  {guidance.PlayerTip}";
-            float contentHeight = guidanceStyle.CalcHeight(
-                new GUIContent(text),
-                width);
-            float height = contentHeight + 31f;
-            GUI.Label(
-                new Rect(x, y, width, 21f),
-                $"FIELD GUIDE - {guidance.Title.ToUpperInvariant()}",
-                headerStyle);
-            GUI.Label(
-                new Rect(x, y + 28f, width, contentHeight),
-                new GUIContent(text, guidance.PlayerTip),
-                guidanceStyle);
-            return height;
-        }
-
-        private void DrawTips(float x, float y, float width, float height)
-        {
-            const float headerHeight = 24f;
-            GUI.Label(
-                new Rect(x, y, width, headerHeight),
-                "TIPS - ALWAYS AVAILABLE",
-                headerStyle);
-            DrawGlowLine(
-                new Rect(x, y + headerHeight - 2f, width, 1f),
-                SignalSoftColor);
-
-            Rect viewport = new Rect(
-                x,
-                y + headerHeight + 3f,
-                width,
-                Mathf.Max(36f, height - headerHeight - 3f));
-            float contentWidth = Mathf.Max(60f, viewport.width - 22f);
-            float contentHeight = CalculateTipsContentHeight(contentWidth);
-            var content = new Rect(0f, 0f, contentWidth, contentHeight);
-            tipsScrollPosition = GUI.BeginScrollView(
-                viewport,
-                tipsScrollPosition,
-                content,
-                alwaysShowHorizontal: false,
-                alwaysShowVertical: true);
-            float contentY = 3f;
-            if (tipCatalog != null)
-            {
-                foreach (GameplayTipEntry tip in tipCatalog.Entries)
-                {
-                    GUI.Label(
-                        new Rect(2f, contentY, contentWidth - 4f, 18f),
-                        tip.Category + " / " + tip.Title.ToUpperInvariant(),
-                        tipTitleStyle);
-                    contentY += 20f;
-                    float bodyHeight = tipBodyStyle.CalcHeight(
-                        new GUIContent(tip.Text),
-                        contentWidth - 4f);
-                    GUI.Label(
-                        new Rect(2f, contentY, contentWidth - 4f, bodyHeight),
-                        tip.Text,
-                        tipBodyStyle);
-                    contentY += bodyHeight + 11f;
-                }
-            }
-            GUI.EndScrollView();
-        }
-
-        private float CalculateTipsContentHeight(float width)
-        {
-            float height = 6f;
-            if (tipCatalog == null || tipBodyStyle == null)
-            {
-                return height;
-            }
-            foreach (GameplayTipEntry tip in tipCatalog.Entries)
-            {
-                height += 31f + tipBodyStyle.CalcHeight(
-                    new GUIContent(tip.Text),
-                    width - 4f);
-            }
-            return height;
-        }
-
-        private void DrawBugReportExport(float x, float y, float width)
-        {
-            const float buttonWidth = 224f;
-            string exportBinding = GetBindingDisplay(
-                GameplayControl.ExportBugReport);
-            if (GUI.Button(
-                new Rect(x, y, buttonWidth, 30f),
-                "EXPORT BUG REPORT - " + exportBinding,
-                buttonStyle))
-            {
-                bindings.OpenBugReportNote();
-            }
-
-            if (!string.IsNullOrWhiteSpace(bugReportStatus))
-            {
-                GUI.Label(
-                    new Rect(
-                        x + buttonWidth + 10f,
-                        y + 2f,
-                        width - buttonWidth - 10f,
-                        28f),
-                    bugReportStatus.ToUpperInvariant(),
-                    statusStyle);
-            }
-        }
-
-        private void DrawBugReportNoteModal(float canvasWidth, float canvasHeight)
-        {
-            const float width = 560f;
-            const float height = 310f;
-            var rectangle = new Rect((canvasWidth - width) * 0.5f,
-                (canvasHeight - height) * 0.5f, width, height);
-            DrawRectangle(new Rect(0f, 0f, canvasWidth, canvasHeight),
-                new Color(0f, 0f, 0f, 0.72f));
-            DrawFramedPanel(rectangle, PanelStrongColor);
-            GUI.Label(new Rect(rectangle.x + 20f, rectangle.y + 18f,
-                width - 40f, 26f), "EXPORT BUG REPORT", headerStyle);
-            GUI.Label(new Rect(rectangle.x + 20f, rectangle.y + 50f,
-                width - 40f, 42f),
-                "Add what you observed, what you expected, and steps to reproduce. "
-                + "This note is prepended to the diagnostic report.", bodyStyle);
-            bugReportNote = GUI.TextArea(new Rect(rectangle.x + 20f,
-                rectangle.y + 98f, width - 40f, 142f),
-                bugReportNote ?? string.Empty, 2000);
-            if (GUI.Button(new Rect(rectangle.x + 20f, rectangle.yMax - 50f,
-                    140f, 30f), "CANCEL", buttonStyle))
-            {
-                bindings.CancelBugReportNote();
-            }
-            if (GUI.Button(new Rect(rectangle.xMax - 210f, rectangle.yMax - 50f,
-                    190f, 30f), "EXPORT REPORT", buttonStyle))
-            {
-                bindings.SubmitBugReportNote(bugReportNote);
-            }
-        }
-
-        private void DrawSectionRule(float x, float y, float width)
-        {
-            DrawGlowLine(new Rect(x, y, 54f, 1f), SignalColor);
-            DrawGlowLine(new Rect(x + 58f, y, width - 58f, 1f), SignalSoftColor);
-        }
-
-        private void DrawInteractionPrompt(
-            float centerX,
-            float centerY,
-            bool interactionAvailable)
-        {
-            if (!interactionAvailable)
-            {
-                return;
-            }
-
-            const float width = 280f;
-            string binding = GetBindingDisplay(GameplayControl.Interact);
-            GUI.Label(
-                new Rect(centerX - (width * 0.5f), centerY + 34f, width, 30f),
-                binding + "  "
-                    + actionController.InteractionDisplayName.ToUpperInvariant(),
-                modeButtonStyle);
         }
 
         private void EnsureStyles()

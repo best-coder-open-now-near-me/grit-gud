@@ -23,17 +23,19 @@ namespace GritGud.Presentation.Tests
                         "hudRenderer",
                         BindingFlags.Instance | BindingFlags.NonPublic)
                     .GetValue(hud);
-                var state = (GameplayHotbarChoiceState)typeof(
-                        GameplayHudRenderer)
-                    .GetField("hotbarChoice", BindingFlags.Instance | BindingFlags.NonPublic)
-                    .GetValue(renderer);
-                state.Open(3, new Rect(100f, 100f, 50f, 50f), 120f);
+                renderer.OpenHotbarChoiceForTesting(
+                    3,
+                    new Rect(100f, 100f, 50f, 50f),
+                    120f);
                 Assert.That(hud.IsHotbarChoiceOpen, Is.True);
 
                 hud.Hide();
                 Assert.That(hud.IsHotbarChoiceOpen, Is.False);
 
-                state.Open(4, new Rect(100f, 100f, 50f, 50f), 120f);
+                renderer.OpenHotbarChoiceForTesting(
+                    4,
+                    new Rect(100f, 100f, 50f, 50f),
+                    120f);
                 hud.Show();
                 Assert.That(hud.IsHotbarChoiceOpen, Is.False);
             }
@@ -92,6 +94,41 @@ namespace GritGud.Presentation.Tests
             Assert.That(state.IsOpen, Is.False);
             Assert.That(state.SlotNumber, Is.Zero);
             Assert.That(state.Rectangle, Is.EqualTo(default(Rect)));
+        }
+
+        [Test]
+        public void FeatureDrawersOwnTheirTransientRenderState()
+        {
+            System.Type renderer = typeof(GameplayHudRenderer);
+            System.Type hotbarDrawer = renderer.GetNestedType(
+                "GameplayHudHotbarDrawer",
+                BindingFlags.NonPublic);
+            System.Type guidanceDrawer = renderer.GetNestedType(
+                "GameplayHudGuidanceDrawer",
+                BindingFlags.NonPublic);
+
+            Assert.That(hotbarDrawer, Is.Not.Null);
+            Assert.That(guidanceDrawer, Is.Not.Null);
+            Assert.That(
+                renderer.GetField(
+                    "hotbarChoice",
+                    BindingFlags.Instance | BindingFlags.NonPublic),
+                Is.Null);
+            Assert.That(
+                renderer.GetField(
+                    "tipsScrollPosition",
+                    BindingFlags.Instance | BindingFlags.NonPublic),
+                Is.Null);
+            Assert.That(
+                hotbarDrawer.GetField(
+                    "hotbarChoice",
+                    BindingFlags.Instance | BindingFlags.NonPublic),
+                Is.Not.Null);
+            Assert.That(
+                guidanceDrawer.GetField(
+                    "tipsScrollPosition",
+                    BindingFlags.Instance | BindingFlags.NonPublic),
+                Is.Not.Null);
         }
 
         [Test]
