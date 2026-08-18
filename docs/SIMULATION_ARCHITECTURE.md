@@ -36,6 +36,8 @@ tolerance applies only to physical evidence and float state comparisons.
 
 Randomness is addressed by scenario seed, random-schema version, exact
 transition sequence and kind, actor and subject IDs, purpose, and sample index.
+The canonical session owns the run identity; action sessions and presentation
+adapters consume that identity directly and cannot inject a second seed.
 Preview, candidate evaluation, cancellation, failed preparation, and branch
 visitation never advance mutable random state. Candidate scoring sees expected
 consequences; only the selected exact transition receives resolved hidden

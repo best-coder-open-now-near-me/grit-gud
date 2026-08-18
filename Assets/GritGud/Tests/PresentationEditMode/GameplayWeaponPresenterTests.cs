@@ -631,8 +631,7 @@ namespace GritGud.Presentation.Tests
                     session,
                     acquisition,
                     new GameplayDialogueLog(),
-                    "player",
-                    scenarioSeed: 3u);
+                    "player");
                 catalog = WeaponPresentationCatalog.CreateRuntime(
                     new WeaponPresentationDefinition(
                         "knife",
@@ -741,8 +740,7 @@ namespace GritGud.Presentation.Tests
                     session,
                     host.AddComponent<TargetAcquisitionPresenter>(),
                     new GameplayDialogueLog(),
-                    "player",
-                    scenarioSeed: 3u);
+                    "player");
                 catalog = WeaponPresentationCatalog.CreateRuntime(
                     new WeaponPresentationDefinition(
                         "knife",

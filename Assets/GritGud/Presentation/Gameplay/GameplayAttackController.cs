@@ -35,7 +35,6 @@ namespace GritGud.Presentation.Gameplay
             TargetAcquisitionPresenter targetAcquisition,
             GameplayDialogueLog dialogueLog,
             string authoritativeActorId,
-            uint scenarioSeed,
             Func<GameplayActionRecord, bool> onEncounterStartRequested = null,
             DestructiblePropSession destructibleSession = null)
         {
@@ -56,7 +55,6 @@ namespace GritGud.Presentation.Gameplay
                 ?? Session.BeginEncounterFromAction;
             attacks = new GameplayAttackSession(
                 Session,
-                scenarioSeed,
                 destructibleSession);
             LastFailure = AttackResolutionFailure.None;
             LastResolvedAction = null;

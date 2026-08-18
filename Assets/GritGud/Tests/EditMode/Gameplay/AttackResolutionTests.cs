@@ -52,7 +52,7 @@ namespace GritGud.Domain.Tests.Gameplay
         {
             GameplaySession source = CreateSession();
             source.EnterTurnMode();
-            var sourceAttacks = new GameplayAttackSession(source, 3u);
+            var sourceAttacks = new GameplayAttackSession(source);
 
             Assert.That(sourceAttacks.TryResolve(
                 "player",
@@ -63,7 +63,7 @@ namespace GritGud.Domain.Tests.Gameplay
 
             GameplaySession replay = CreateSession();
             replay.EnterTurnMode();
-            var replayAttacks = new GameplayAttackSession(replay, 3u);
+            var replayAttacks = new GameplayAttackSession(replay);
             replayAttacks.Commit(recordedAction);
 
             GameplayActorSnapshot sourceTarget = source.GetActor("target");
@@ -75,8 +75,10 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(
                 replayTarget.Wounds.HasSameState(sourceTarget.Wounds),
                 Is.True);
+            Assert.That(replayTarget.TurnBudget.ActionPoints,
+                Is.EqualTo(sourceTarget.TurnBudget.ActionPoints));
             Assert.That(replayTarget.TurnBudget.MovementOpportunity,
-                Is.EqualTo(6f));
+                Is.EqualTo(sourceTarget.TurnBudget.MovementOpportunity));
             Assert.That(replay.GetActor("player").TurnBudget.ActionPoints,
                 Is.EqualTo(3));
             Assert.That(replayAttacks.Records.Single().Exposure,
@@ -90,7 +92,7 @@ namespace GritGud.Domain.Tests.Gameplay
         {
             GameplaySession session = CreateSession();
             session.EnterTurnMode();
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
 
             Assert.That(attacks.TryPrepareResolve(
                 "player",
@@ -119,7 +121,7 @@ namespace GritGud.Domain.Tests.Gameplay
         {
             GameplaySession session = CreateSession();
             session.EnterTurnMode();
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
             Assert.That(attacks.TryPrepareResolve(
                 "player",
                 CreateExposure(torsoVisible: 5, legsVisible: 5),
@@ -139,7 +141,7 @@ namespace GritGud.Domain.Tests.Gameplay
         {
             GameplaySession session = CreateSession();
             session.EnterTurnMode();
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
             int successfulObservers = 0;
             session.ActorCapabilityChanged += _ =>
                 throw new InvalidOperationException("observer failed");
@@ -183,7 +185,7 @@ namespace GritGud.Domain.Tests.Gameplay
         {
             GameplaySession session = CreateSession();
             session.EnterTurnMode();
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
 
             Assert.That(attacks.TryResolve(
                 "player",
@@ -214,7 +216,7 @@ namespace GritGud.Domain.Tests.Gameplay
             GameplaySession session = CreateSession(
                 new GameplayPosition(5f, 0f, 0f));
             session.EnterTurnMode();
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
 
             Assert.That(attacks.TryResolve(
                 "player",
@@ -232,7 +234,7 @@ namespace GritGud.Domain.Tests.Gameplay
         {
             GameplaySession session = CreateSession();
             session.EnterTurnMode();
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
 
             Assert.That(attacks.TryDischarge(
                 "player",
@@ -266,7 +268,7 @@ namespace GritGud.Domain.Tests.Gameplay
         {
             GameplaySession session = CreateSession();
             session.EnterTurnMode();
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
 
             Assert.That(attacks.TryPrepareDischarge(
                 "player",
@@ -288,7 +290,7 @@ namespace GritGud.Domain.Tests.Gameplay
         public void ExplorationDischargeRecordsStableTargetAtZeroCost()
         {
             GameplaySession session = CreateSession();
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
 
             Assert.That(attacks.TryDischarge(
                 "player",
@@ -315,7 +317,7 @@ namespace GritGud.Domain.Tests.Gameplay
         public void ExplorationAttackResolvesAgainstInertActorAtZeroCost()
         {
             GameplaySession session = CreateSession();
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
 
             Assert.That(attacks.TryResolve(
                 "player",
@@ -336,7 +338,7 @@ namespace GritGud.Domain.Tests.Gameplay
         {
             GameplaySession source = CreateSession();
             source.EnterTurnMode();
-            var sourceAttacks = new GameplayAttackSession(source, 3u);
+            var sourceAttacks = new GameplayAttackSession(source);
             sourceAttacks.TryDischarge(
                 "player",
                 new GameplayPosition(5f, 0f, 0f),
@@ -345,7 +347,7 @@ namespace GritGud.Domain.Tests.Gameplay
 
             GameplaySession replay = CreateSession();
             replay.EnterTurnMode();
-            var replayAttacks = new GameplayAttackSession(replay, 3u);
+            var replayAttacks = new GameplayAttackSession(replay);
             replayAttacks.Commit(action);
 
             Assert.That(replayAttacks.Discharges, Has.Count.EqualTo(1));
@@ -356,11 +358,11 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
-        public void CombatDiagnosticsIncludeFormulaSeedRollsAndOutcome()
+        public void CombatDiagnosticsReflectResolvedRollsAndOutcome()
         {
             GameplaySession session = CreateSession();
             session.EnterTurnMode();
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
             attacks.TryResolve(
                 "player",
                 CreateExposure(torsoVisible: 5, legsVisible: 5),
@@ -383,9 +385,10 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(diagnostic, Does.Contain(
                 "HIT CHANCE - 33% geometric x 100% accuracy = 33%"));
             Assert.That(diagnostic, Does.Contain("HIT ROLL - d100"));
-            Assert.That(diagnostic, Does.Contain("REGION ROLL - d10"));
-            Assert.That(diagnostic, Does.Contain("WOUND - count 0 + 1 = 1"));
-            Assert.That(diagnostic, Does.Contain("OUTCOME - HIT"));
+            Assert.That(diagnostic,
+                Does.Contain("REGION ROLL - NOT ROLLED ON MISS"));
+            Assert.That(diagnostic,
+                Does.Contain("OUTCOME - MISS - NO WOUND"));
         }
 
         [Test]
@@ -429,7 +432,7 @@ namespace GritGud.Domain.Tests.Gameplay
             GameplaySession session = CreateContactSession(
                 new GameplayPosition(0f, 0f, 2.5f));
             session.EnterTurnMode();
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
 
             AttackResolutionFailure readiness = attacks.EvaluateResolve(
                 "player",
@@ -458,7 +461,7 @@ namespace GritGud.Domain.Tests.Gameplay
             GameplaySession session = CreateContactSession(
                 new GameplayPosition(0f, 0f, 1.5f));
             session.EnterTurnMode();
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
 
             Assert.That(attacks.TryDischarge(
                 "player",

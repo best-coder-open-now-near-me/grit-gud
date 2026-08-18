@@ -58,7 +58,6 @@ namespace GritGud.Domain.Tests.Gameplay
             gameplay.EnterTurnMode();
             var attacks = new GameplayAttackSession(
                 gameplay,
-                19u,
                 destructibles);
             DirectFireImpactRecord impact = CreateImpact(
                 gameplay,
@@ -122,7 +121,7 @@ namespace GritGud.Domain.Tests.Gameplay
                 },
                 gameplay.Journal);
             gameplay.EnterTurnMode();
-            var attacks = new GameplayAttackSession(gameplay, 19u, destructibles);
+            var attacks = new GameplayAttackSession(gameplay, destructibles);
             var stale = new DirectFireImpactRecord(
                 "crate",
                 "surface.wood",

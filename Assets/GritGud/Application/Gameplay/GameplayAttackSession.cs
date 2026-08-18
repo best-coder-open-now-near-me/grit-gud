@@ -39,17 +39,10 @@ namespace GritGud.Application.Gameplay
 
         public GameplayAttackSession(
             GameplaySession gameplaySession,
-            uint authoredScenarioSeed,
             DestructiblePropSession destructibleSession = null)
         {
             gameplay = gameplaySession ??
                 throw new ArgumentNullException(nameof(gameplaySession));
-            if (gameplay.RunIdentity.ScenarioSeed != authoredScenarioSeed)
-            {
-                throw new ArgumentException(
-                    "Attack randomness must use the gameplay run seed.",
-                    nameof(authoredScenarioSeed));
-            }
             runIdentity = gameplay.RunIdentity;
             destructibles = destructibleSession;
             if (destructibles != null

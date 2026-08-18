@@ -420,7 +420,6 @@ namespace GritGud.Presentation.Gameplay
                     equipmentController,
                     actorId,
                     scenarioAssembly.PrimaryObjectiveId,
-                    scenarioAssembly.RandomSeed,
                     TryUseEquippedItemPower,
                     CanRequestHotbarPower),
                 deliveryInstaller,

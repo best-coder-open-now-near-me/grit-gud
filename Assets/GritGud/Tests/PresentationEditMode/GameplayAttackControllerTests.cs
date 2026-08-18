@@ -27,8 +27,7 @@ namespace GritGud.Presentation.Tests
                     session,
                     acquisition,
                     dialogue,
-                    "player",
-                    scenarioSeed: 3u);
+                    "player");
 
                 bool resolved = controller.TryAttack(CreateExposure());
 
@@ -72,8 +71,7 @@ namespace GritGud.Presentation.Tests
                     session,
                     host.AddComponent<TargetAcquisitionPresenter>(),
                     new GameplayDialogueLog(),
-                    "player",
-                    scenarioSeed: 3u);
+                    "player");
 
                 Assert.That(controller.TryAttack(), Is.False);
                 Assert.That(controller.LastFailure,
@@ -100,7 +98,6 @@ namespace GritGud.Presentation.Tests
                     host.AddComponent<TargetAcquisitionPresenter>(),
                     new GameplayDialogueLog(),
                     "player",
-                    scenarioSeed: 3u,
                     onEncounterStartRequested:
                         session.BeginEncounterFromAction);
 
@@ -137,7 +134,6 @@ namespace GritGud.Presentation.Tests
                     host.AddComponent<TargetAcquisitionPresenter>(),
                     new GameplayDialogueLog(),
                     "player",
-                    scenarioSeed: 3u,
                     onEncounterStartRequested:
                         session.BeginEncounterFromAction);
 
@@ -170,7 +166,6 @@ namespace GritGud.Presentation.Tests
                     host.AddComponent<TargetAcquisitionPresenter>(),
                     new GameplayDialogueLog(),
                     "player",
-                    scenarioSeed: 3u,
                     onEncounterStartRequested:
                         session.BeginEncounterFromAction);
                 GameplayActionRecord published = null;
@@ -215,7 +210,6 @@ namespace GritGud.Presentation.Tests
                     host.AddComponent<TargetAcquisitionPresenter>(),
                     new GameplayDialogueLog(),
                     "player",
-                    scenarioSeed: 3u,
                     onEncounterStartRequested:
                         session.BeginEncounterFromAction);
 
@@ -252,7 +246,6 @@ namespace GritGud.Presentation.Tests
                     host.AddComponent<TargetAcquisitionPresenter>(),
                     new GameplayDialogueLog(),
                     "player",
-                    scenarioSeed: 3u,
                     onEncounterStartRequested:
                         session.BeginEncounterFromAction);
 
@@ -288,7 +281,6 @@ namespace GritGud.Presentation.Tests
                     host.AddComponent<TargetAcquisitionPresenter>(),
                     new GameplayDialogueLog(),
                     "player",
-                    scenarioSeed: 3u,
                     onEncounterStartRequested:
                         session.BeginEncounterFromAction);
 
@@ -437,7 +429,6 @@ namespace GritGud.Presentation.Tests
                     host.AddComponent<TargetAcquisitionPresenter>(),
                     new GameplayDialogueLog(),
                     "player",
-                    scenarioSeed: 3u,
                     onEncounterStartRequested:
                         session.BeginEncounterFromAction);
 

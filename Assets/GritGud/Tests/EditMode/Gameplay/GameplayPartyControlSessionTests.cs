@@ -281,8 +281,7 @@ namespace GritGud.Domain.Tests
                         totalSampleCount: 1),
                 });
             var attacks = new GameplayAttackSession(
-                gameplay,
-                authoredScenarioSeed: 1u);
+                gameplay);
             Assert.That(attacks.TryResolve(
                 attackerId,
                 exposure,

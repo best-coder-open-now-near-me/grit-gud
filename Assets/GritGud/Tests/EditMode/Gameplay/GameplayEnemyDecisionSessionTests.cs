@@ -387,7 +387,7 @@ namespace GritGud.Domain.Tests.Gameplay
                 enemyInitiative: 0,
                 enemyMaximumWounds: 1);
             Assert.That(gameplay.BeginEncounter(), Is.True);
-            var attacks = new GameplayAttackSession(gameplay, 3u);
+            var attacks = new GameplayAttackSession(gameplay);
             TargetExposureSnapshot exposure = CreateExposure(
                 observerId: "player",
                 targetId: "enemy",

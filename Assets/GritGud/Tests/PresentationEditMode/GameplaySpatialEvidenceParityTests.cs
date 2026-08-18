@@ -204,6 +204,7 @@ namespace GritGud.Presentation.Tests
                     centers,
                     impulse: 1f,
                     lifetime: 1f);
+                fracturePrefab.SetActive(false);
 
                 var profiles = new Dictionary<
                     string,

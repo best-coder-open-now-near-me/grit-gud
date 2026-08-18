@@ -26,7 +26,6 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplayEquipmentController equipment;
         private readonly string actorId;
         private readonly string objectiveId;
-        private readonly uint attackRandomSeed;
         private readonly Action<string> requestItemPower;
         private readonly Func<string, bool> canRequestItemPower;
 
@@ -46,7 +45,6 @@ namespace GritGud.Presentation.Gameplay
             GameplayEquipmentController equipment,
             string actorId,
             string objectiveId,
-            uint attackRandomSeed,
             Action<string> requestItemPower,
             Func<string, bool> canRequestItemPower)
         {
@@ -69,7 +67,6 @@ namespace GritGud.Presentation.Gameplay
             this.equipment = equipment ?? throw new ArgumentNullException(nameof(equipment));
             this.actorId = actorId;
             this.objectiveId = objectiveId;
-            this.attackRandomSeed = attackRandomSeed;
             this.requestItemPower = requestItemPower
                 ?? throw new ArgumentNullException(nameof(requestItemPower));
             this.canRequestItemPower = canRequestItemPower
@@ -93,7 +90,6 @@ namespace GritGud.Presentation.Gameplay
                 targets,
                 dialogue,
                 actorId,
-                attackRandomSeed,
                 sessionPresenter.TryBeginEncounterFromAction,
                 destructibles.Session);
             surfaceImpacts.Bind(

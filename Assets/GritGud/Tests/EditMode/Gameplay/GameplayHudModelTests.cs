@@ -129,7 +129,7 @@ namespace GritGud.Domain.Tests.Gameplay
                 new ScenarioObjectiveDefinition[0]),
                 scenarioSeed: 3u);
             Assert.That(session.BeginEncounter(), Is.True);
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
             Assert.That(attacks.TryResolve(
                 "enemy",
                 new TargetExposureSnapshot(

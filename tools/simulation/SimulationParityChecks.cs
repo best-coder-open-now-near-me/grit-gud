@@ -61,8 +61,7 @@ internal static class SimulationParityChecks
         GameplaySession gameplay = CreateGameplay(rifle);
         Require(gameplay.BeginEncounter(), "Encounter did not begin.");
         var live = new GameplayAttackSession(
-            gameplay,
-            gameplay.RunIdentity.ScenarioSeed);
+            gameplay);
         var exposure = new TargetExposureSnapshot(
             "player",
             "enemy",
@@ -118,7 +117,6 @@ internal static class SimulationParityChecks
             gameplay.Journal);
         var live = new GameplayAttackSession(
             gameplay,
-            gameplay.RunIdentity.ScenarioSeed,
             destructibles);
         var impact = new DirectFireImpactRecord(
             "cover-wall",

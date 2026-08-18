@@ -115,8 +115,7 @@ namespace GritGud.Presentation.Tests
                         new TargetRegionExposure(TargetRegionId.Torso, 5, 5),
                     });
                 var attacks = new GameplayAttackSession(
-                    session,
-                    authoredScenarioSeed: 3u);
+                    session);
                 Assert.That(
                     attacks.TryResolve(
                         "player",
