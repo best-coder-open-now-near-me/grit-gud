@@ -161,6 +161,7 @@ Shader "GritGud/CelSurface"
                 float viewDepth = -TransformWorldToView(input.positionWS).z;
                 ClipPlayerOcclusion(
                     input.positionHCS,
+                    input.positionWS,
                     viewDepth,
                     _PlayerCutoutEnabled);
                 half3 normalWS = normalize(input.normalWS);
@@ -264,6 +265,7 @@ Shader "GritGud/CelSurface"
             {
                 float4 positionHCS : SV_POSITION;
                 float viewDepth : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
             };
 
             CBUFFER_START(UnityPerMaterial)
@@ -300,6 +302,7 @@ Shader "GritGud/CelSurface"
                     GetVertexPositionInputs(input.positionOS.xyz);
                 output.positionHCS = positionInputs.positionCS;
                 output.viewDepth = -positionInputs.positionVS.z;
+                output.positionWS = positionInputs.positionWS;
                 return output;
             }
 
@@ -307,6 +310,7 @@ Shader "GritGud/CelSurface"
             {
                 ClipPlayerOcclusion(
                     input.positionHCS,
+                    input.positionWS,
                     input.viewDepth,
                     _PlayerCutoutEnabled);
                 return input.positionHCS.z;
@@ -339,6 +343,7 @@ Shader "GritGud/CelSurface"
                 float4 positionHCS : SV_POSITION;
                 half3 normalWS : TEXCOORD0;
                 float viewDepth : TEXCOORD1;
+                float3 positionWS : TEXCOORD2;
             };
 
             CBUFFER_START(UnityPerMaterial)
@@ -375,6 +380,7 @@ Shader "GritGud/CelSurface"
                     GetVertexPositionInputs(input.positionOS.xyz);
                 output.positionHCS = positionInputs.positionCS;
                 output.viewDepth = -positionInputs.positionVS.z;
+                output.positionWS = positionInputs.positionWS;
                 output.normalWS = TransformObjectToWorldNormal(input.normalOS);
                 return output;
             }
@@ -383,6 +389,7 @@ Shader "GritGud/CelSurface"
             {
                 ClipPlayerOcclusion(
                     input.positionHCS,
+                    input.positionWS,
                     input.viewDepth,
                     _PlayerCutoutEnabled);
 #if defined(_GBUFFER_NORMALS_OCT)

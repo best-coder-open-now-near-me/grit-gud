@@ -45,6 +45,7 @@ Shader "GritGud/RuntimeOutline"
                 half fogFactor : TEXCOORD0;
                 float viewDepth : TEXCOORD1;
                 float4 cutoutScreenPosition : TEXCOORD2;
+                float3 positionWS : TEXCOORD3;
             };
 
             CBUFFER_START(UnityPerMaterial)
@@ -91,6 +92,7 @@ Shader "GritGud/RuntimeOutline"
                     output.positionHCS.z);
                 output.viewDepth = -basePosition.positionVS.z;
                 output.cutoutScreenPosition = basePosition.positionNDC;
+                output.positionWS = basePosition.positionWS;
                 return output;
             }
 
@@ -101,6 +103,7 @@ Shader "GritGud/RuntimeOutline"
                     input.cutoutScreenPosition.xy
                         / input.cutoutScreenPosition.w,
                     input.positionHCS.xy,
+                    input.positionWS,
                     input.viewDepth,
                     _PlayerCutoutEnabled);
                 half3 foggedColor = MixFog(

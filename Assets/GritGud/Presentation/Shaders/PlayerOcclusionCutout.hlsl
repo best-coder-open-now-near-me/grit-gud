@@ -4,6 +4,10 @@
 float4 _GritGudPlayerCutout;
 float _GritGudPlayerCutoutLeftExtension;
 float _GritGudPlayerCutoutVerticalRadius;
+float3 _GritGudPlayerCutoutRayStart;
+float3 _GritGudPlayerCutoutRayEnd;
+float3 _GritGudPlayerCutoutCameraRight;
+float2 _GritGudPlayerCutoutCorridorWidths;
 
 float PlayerCutoutNoise(float2 pixelPosition)
 {
@@ -13,6 +17,7 @@ float PlayerCutoutNoise(float2 pixelPosition)
 void ClipPlayerOcclusionAtScreenUV(
     float2 screenUV,
     float2 pixelPosition,
+    float3 positionWS,
     float viewDepth,
     half cutoutEnabled)
 {
@@ -20,6 +25,31 @@ void ClipPlayerOcclusionAtScreenUV(
         || _GritGudPlayerCutout.z <= 0.0
         || _GritGudPlayerCutoutVerticalRadius <= 0.0
         || viewDepth >= _GritGudPlayerCutout.w - 0.04)
+    {
+        return;
+    }
+
+    float3 corridor = _GritGudPlayerCutoutRayEnd
+        - _GritGudPlayerCutoutRayStart;
+    float corridorLengthSquared = dot(corridor, corridor);
+    float corridorProgress = dot(
+        positionWS - _GritGudPlayerCutoutRayStart,
+        corridor) / max(corridorLengthSquared, 0.0001);
+    if (corridorProgress <= 0.0 || corridorProgress >= 1.0)
+    {
+        return;
+    }
+
+    float3 corridorCenter = _GritGudPlayerCutoutRayStart
+        + corridor * corridorProgress;
+    float lateralDistance = abs(dot(
+        positionWS - corridorCenter,
+        _GritGudPlayerCutoutCameraRight));
+    float corridorHalfWidth = lerp(
+        _GritGudPlayerCutoutCorridorWidths.x,
+        _GritGudPlayerCutoutCorridorWidths.y,
+        corridorProgress);
+    if (lateralDistance >= corridorHalfWidth)
     {
         return;
     }
@@ -45,12 +75,14 @@ void ClipPlayerOcclusionAtScreenUV(
 
 void ClipPlayerOcclusion(
     float4 positionHCS,
+    float3 positionWS,
     float viewDepth,
     half cutoutEnabled)
 {
     ClipPlayerOcclusionAtScreenUV(
         GetNormalizedScreenSpaceUV(positionHCS),
         positionHCS.xy,
+        positionWS,
         viewDepth,
         cutoutEnabled);
 }

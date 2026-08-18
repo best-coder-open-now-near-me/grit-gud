@@ -59,6 +59,19 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 Shader.GetGlobalFloat("_GritGudPlayerCutoutVerticalRadius"),
                 Is.Zero);
+            Assert.That(
+                Shader.GetGlobalVector("_GritGudPlayerCutoutRayStart"),
+                Is.EqualTo(Vector4.zero));
+            Assert.That(
+                Shader.GetGlobalVector("_GritGudPlayerCutoutRayEnd"),
+                Is.EqualTo(Vector4.zero));
+            Assert.That(
+                Shader.GetGlobalVector("_GritGudPlayerCutoutCameraRight"),
+                Is.EqualTo(Vector4.zero));
+            Assert.That(
+                Shader.GetGlobalVector(
+                    "_GritGudPlayerCutoutCorridorWidths"),
+                Is.EqualTo(Vector4.zero));
         }
     }
 }
