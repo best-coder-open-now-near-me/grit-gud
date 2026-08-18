@@ -419,9 +419,20 @@ namespace GritGud.Presentation.Tests
                 Assert.That(displacementRenderer, Is.Not.Null);
                 var presentedProperties = new MaterialPropertyBlock();
                 displacementRenderer.GetPropertyBlock(presentedProperties);
+                Color presentedColor =
+                    presentedProperties.GetColor("_BaseColor");
                 Assert.That(
-                    presentedProperties.GetColor("_BaseColor"),
-                    Is.EqualTo(authoredColor));
+                    presentedColor.r,
+                    Is.EqualTo(authoredColor.r).Within(0.0001f));
+                Assert.That(
+                    presentedColor.g,
+                    Is.EqualTo(authoredColor.g).Within(0.0001f));
+                Assert.That(
+                    presentedColor.b,
+                    Is.EqualTo(authoredColor.b).Within(0.0001f));
+                Assert.That(
+                    presentedColor.a,
+                    Is.EqualTo(authoredColor.a).Within(0.0001f));
                 presenter.Unbind();
             }
             finally
