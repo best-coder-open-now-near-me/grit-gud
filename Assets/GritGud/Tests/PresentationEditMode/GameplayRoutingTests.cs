@@ -229,6 +229,57 @@ namespace GritGud.Presentation.Tests
                 Is.EqualTo("[2]  PUSH"));
         }
 
+        [Test]
+        public void HotbarClassificationExcludesAdjacentControls()
+        {
+            foreach (GameplayControl control in System.Enum.GetValues(
+                typeof(GameplayControl)))
+            {
+                bool expected = control == GameplayControl.Hotbar1
+                    || control == GameplayControl.Hotbar2
+                    || control == GameplayControl.Hotbar3
+                    || control == GameplayControl.Hotbar4
+                    || control == GameplayControl.Hotbar5
+                    || control == GameplayControl.Hotbar6
+                    || control == GameplayControl.Hotbar7
+                    || control == GameplayControl.Hotbar8;
+                Assert.That(
+                    GameplayControlRouter.IsHotbarControl(control),
+                    Is.EqualTo(expected),
+                    control.ToString());
+            }
+
+            Assert.That(
+                GameplayControlRouter.IsHotbarControl(
+                    GameplayControl.CancelPendingAction),
+                Is.False);
+        }
+
+        [TestCase(GameplayControl.Hotbar1, 1)]
+        [TestCase(GameplayControl.Hotbar2, 2)]
+        [TestCase(GameplayControl.Hotbar3, 3)]
+        [TestCase(GameplayControl.Hotbar4, 4)]
+        [TestCase(GameplayControl.Hotbar5, 5)]
+        [TestCase(GameplayControl.Hotbar6, 6)]
+        [TestCase(GameplayControl.Hotbar7, 7)]
+        [TestCase(GameplayControl.Hotbar8, 8)]
+        public void HotbarNumbersUseExplicitControlMapping(
+            GameplayControl control,
+            int expectedNumber)
+        {
+            Assert.That(
+                GameplayControlRouter.ResolveHotbarNumber(control),
+                Is.EqualTo(expectedNumber));
+        }
+
+        [Test]
+        public void NonHotbarControlHasNoSlotNumber()
+        {
+            Assert.Throws<System.ArgumentOutOfRangeException>(() =>
+                GameplayControlRouter.ResolveHotbarNumber(
+                    GameplayControl.CancelPendingAction));
+        }
+
         private sealed class EmptyGameplayInputSource : IGameplayInputSource
         {
             public GameplayInputFrame CurrentFrame => default;

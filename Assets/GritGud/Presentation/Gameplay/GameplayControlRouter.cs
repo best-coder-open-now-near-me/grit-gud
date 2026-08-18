@@ -94,8 +94,7 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            bool hotbarControl = control >= GameplayControl.Hotbar1
-                && control <= GameplayControl.CancelPendingAction;
+            bool hotbarControl = IsHotbarControl(control);
             if (!hotbarControl)
             {
                 equipmentController.ClearStatus();
@@ -181,8 +180,7 @@ namespace GritGud.Presentation.Gameplay
 
         private void HandleHotbar(GameplayControl control)
         {
-            int hotbarNumber =
-                ((int)control - (int)GameplayControl.Hotbar1) + 1;
+            int hotbarNumber = ResolveHotbarNumber(control);
             if (hotbarController.HasExpandedActorAbility)
             {
                 hotbarController.TryHandleExpandedActorAbilityHotkey(
@@ -192,6 +190,37 @@ namespace GritGud.Presentation.Gameplay
 
             hotbarController.TryActivateSlot(hotbarNumber);
         }
+
+        internal static bool IsHotbarControl(GameplayControl control) =>
+            control switch
+            {
+                GameplayControl.Hotbar1 => true,
+                GameplayControl.Hotbar2 => true,
+                GameplayControl.Hotbar3 => true,
+                GameplayControl.Hotbar4 => true,
+                GameplayControl.Hotbar5 => true,
+                GameplayControl.Hotbar6 => true,
+                GameplayControl.Hotbar7 => true,
+                GameplayControl.Hotbar8 => true,
+                _ => false,
+            };
+
+        internal static int ResolveHotbarNumber(GameplayControl control) =>
+            control switch
+            {
+                GameplayControl.Hotbar1 => 1,
+                GameplayControl.Hotbar2 => 2,
+                GameplayControl.Hotbar3 => 3,
+                GameplayControl.Hotbar4 => 4,
+                GameplayControl.Hotbar5 => 5,
+                GameplayControl.Hotbar6 => 6,
+                GameplayControl.Hotbar7 => 7,
+                GameplayControl.Hotbar8 => 8,
+                _ => throw new ArgumentOutOfRangeException(
+                    nameof(control),
+                    control,
+                    "The control is not a hotbar slot."),
+            };
 
         private void CancelPendingAction()
         {

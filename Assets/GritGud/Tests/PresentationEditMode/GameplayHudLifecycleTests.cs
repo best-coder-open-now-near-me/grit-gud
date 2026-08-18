@@ -112,5 +112,29 @@ namespace GritGud.Presentation.Tests
             Assert.That(textures.ButtonNormal, Is.Null);
             Assert.That(textures.EquipmentConfirmation, Is.Null);
         }
+
+        [Test]
+        public void GuiMatrixScopeRestoresStateWhenDrawingThrows()
+        {
+            Matrix4x4 original = GUI.matrix;
+            var temporary = Matrix4x4.Scale(new Vector3(1.75f, 1.75f, 1f));
+            try
+            {
+                Assert.Throws<System.InvalidOperationException>(() =>
+                {
+                    using (new GameplayGuiMatrixScope(temporary))
+                    {
+                        Assert.That(GUI.matrix, Is.EqualTo(temporary));
+                        throw new System.InvalidOperationException("draw failed");
+                    }
+                });
+
+                Assert.That(GUI.matrix, Is.EqualTo(original));
+            }
+            finally
+            {
+                GUI.matrix = original;
+            }
+        }
     }
 }

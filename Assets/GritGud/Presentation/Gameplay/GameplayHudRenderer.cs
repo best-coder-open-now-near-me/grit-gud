@@ -340,63 +340,58 @@ namespace GritGud.Presentation.Gameplay
             float uiScale = GameplayHudLayout.CalculateUiScale(Screen.height);
             float canvasWidth = Screen.width / uiScale;
             float canvasHeight = Screen.height / uiScale;
-            Matrix4x4 previousMatrix = GUI.matrix;
-            GUI.matrix = Matrix4x4.Scale(new Vector3(uiScale, uiScale, 1f));
-
-            GameplayHudModel model = CurrentModel;
-            if (model == null)
+            using (new GameplayGuiMatrixScope(
+                Matrix4x4.Scale(new Vector3(uiScale, uiScale, 1f))))
             {
-                GUI.matrix = previousMatrix;
-                return;
-            }
+                GameplayHudModel model = CurrentModel;
+                if (model == null)
+                    return;
 
-            if (bugReportNoteOpen)
-            {
-                DrawBugReportNoteModal(canvasWidth, canvasHeight);
-                GUI.matrix = previousMatrix;
-                return;
-            }
+                if (bugReportNoteOpen)
+                {
+                    DrawBugReportNoteModal(canvasWidth, canvasHeight);
+                    return;
+                }
 
-            activeTooltip = string.Empty;
-            Rect commandBarRectangle = CalculateCommandBarRectangle(
-                canvasWidth,
-                canvasHeight);
-            DrawCommandBar(
-                commandBarRectangle,
-                model.CommandBar);
-            DrawActorAbilityFlyout(
-                commandBarRectangle,
-                model.CommandBar.HotbarSlots);
-            DrawHotbarChoiceMenu(canvasWidth, canvasHeight);
-            DrawBodyStatus(
-                CalculateBodyStatusRectangle(
+                activeTooltip = string.Empty;
+                Rect commandBarRectangle = CalculateCommandBarRectangle(
                     canvasWidth,
-                    commandBarRectangle),
-                model.CommandBar.BodyStatus);
-            DrawCommandHints(
-                CalculateCommandHintsRectangle(
-                    commandBarRectangle),
-                model.CommandBar.Hints);
-            DrawEquipmentConfirmationFlyout(
-                commandBarRectangle,
-                model.CommandBar.HotbarSlots,
-                canvasWidth);
-            DrawWarningHint(
-                commandBarRectangle,
-                model.CommandBar.WarningHint);
-            DrawAnimatedFlyout(
-                canvasWidth,
-                canvasHeight,
-                model.ScenarioDisplayName,
-                model.ModeLabel,
-                model.ObjectiveSummary);
-            DrawInteractionPrompt(
-                canvasWidth * 0.5f,
-                canvasHeight * 0.5f,
-                model.InteractionAvailable);
-            DrawTooltip(canvasWidth, canvasHeight);
-
-            GUI.matrix = previousMatrix;
+                    canvasHeight);
+                DrawCommandBar(
+                    commandBarRectangle,
+                    model.CommandBar);
+                DrawActorAbilityFlyout(
+                    commandBarRectangle,
+                    model.CommandBar.HotbarSlots);
+                DrawHotbarChoiceMenu(canvasWidth, canvasHeight);
+                DrawBodyStatus(
+                    CalculateBodyStatusRectangle(
+                        canvasWidth,
+                        commandBarRectangle),
+                    model.CommandBar.BodyStatus);
+                DrawCommandHints(
+                    CalculateCommandHintsRectangle(
+                        commandBarRectangle),
+                    model.CommandBar.Hints);
+                DrawEquipmentConfirmationFlyout(
+                    commandBarRectangle,
+                    model.CommandBar.HotbarSlots,
+                    canvasWidth);
+                DrawWarningHint(
+                    commandBarRectangle,
+                    model.CommandBar.WarningHint);
+                DrawAnimatedFlyout(
+                    canvasWidth,
+                    canvasHeight,
+                    model.ScenarioDisplayName,
+                    model.ModeLabel,
+                    model.ObjectiveSummary);
+                DrawInteractionPrompt(
+                    canvasWidth * 0.5f,
+                    canvasHeight * 0.5f,
+                    model.InteractionAvailable);
+                DrawTooltip(canvasWidth, canvasHeight);
+            }
         }
 
         internal static Rect CalculateCommandBarRectangle(
