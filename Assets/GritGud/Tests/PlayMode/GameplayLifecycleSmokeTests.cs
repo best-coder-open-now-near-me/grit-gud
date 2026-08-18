@@ -217,6 +217,14 @@ namespace GritGud.PlayMode.Tests
             Assert.That(pinRecord.PinTransition.EstablishesPin, Is.True);
             Assert.That(pinRecord.PinTransition.ActorId, Is.EqualTo(actorId));
             Assert.That(gameplay.Session.GetActor(actorId).IsPinned, Is.True);
+            ActorAnimationCoordinator pinnedAnimation = gameplay.WorldRegistry
+                .GetActor(actorId)
+                .Root
+                .GetComponent<ActorAnimationCoordinator>();
+            Assert.That(pinnedAnimation, Is.Not.Null);
+            Assert.That(
+                pinnedAnimation.LastRequestedAction,
+                Is.EqualTo(ActorAnimationAction.Incapacitate));
 
             displacement.SetActor(actorId);
             Assert.That(displacement.TryToggleTargeting(

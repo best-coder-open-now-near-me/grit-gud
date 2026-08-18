@@ -1084,7 +1084,7 @@ namespace GritGud.Presentation.Gameplay
                     pinnedActor.Root.GetComponent<ActorAnimationCoordinator>();
                 animation?.TryRequestAction(
                     record.PinTransition.EstablishesPin
-                        ? ActorAnimationAction.HitReaction
+                        ? ActorAnimationAction.Incapacitate
                         : ActorAnimationAction.Interact);
             }
         }
