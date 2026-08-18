@@ -314,7 +314,7 @@
         "id": "player",
         "templateId": "player",
         "transform": {
-          "position": { "x": 1.25, "y": 2.0, "z": -8.75 },
+          "position": { "x": -7.5, "y": 2.0, "z": 3.0 },
           "yawDegrees": 0.0
         },
         "playerControlled": true,
@@ -325,7 +325,7 @@
         "id": "oren-vale",
         "templateId": "oren-vale",
         "transform": {
-          "position": { "x": -1.0, "y": 2.0, "z": -8.75 },
+          "position": { "x": -10.5, "y": 2.0, "z": 3.5 },
           "yawDegrees": 0.0
         },
         "playerControlled": true,

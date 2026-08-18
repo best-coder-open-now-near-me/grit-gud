@@ -1,4 +1,5 @@
 using System.Linq;
+using GritGud.Application.Gameplay;
 using GritGud.Application.Levels;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Levels;
@@ -119,6 +120,47 @@ namespace GritGud.Presentation.Tests
                     .GetDisplacementAction("close-quarters.push-off")
                     .AllowedResults,
                 Is.EqualTo(DisplacementResultPolicies.Release));
+        }
+
+        [Test]
+        public void DepotPartyBeginsOutsideRiflemanViewCone()
+        {
+            CommittedLevelLibrary library =
+                UnityCommittedLevelLibrary.LoadDefault();
+            GameplayContentPackage content = GameplayContentLoader.LoadCommitted(
+                library.OpenForPlay(
+                    UnityCommittedLevelLibrary.DefaultResourceKey));
+            var gameplay = new GameplaySession(content.Assembly.Scenario);
+            const string observerId = "depot-rifleman";
+
+            foreach (string partyActorId in content.Assembly.PlayerParty.ActorIds)
+            {
+                GameplayActorSnapshot partyActor = gameplay.GetActor(
+                    partyActorId);
+                var fullyExposed = new TargetExposureSnapshot(
+                    observerId,
+                    partyActorId,
+                    new[]
+                    {
+                        new TargetRegionExposure(
+                            TargetRegionId.Torso,
+                            visibleSampleCount: 1,
+                            totalSampleCount: 1),
+                    });
+                EnemyAwarenessTransitionRecord observation = gameplay
+                    .PrepareAwarenessTransition(
+                        observerId,
+                        new EncounterObservation(
+                            observerId,
+                            fullyExposed,
+                            partyActor.Pose.Position));
+
+                Assert.That(
+                    observation.Resulting.State,
+                    Is.EqualTo(EncounterAwarenessState.Unaware),
+                    $"{partyActorId} begins inside the rifleman's view cone.");
+                Assert.That(observation.Resulting.Suspicion, Is.Zero);
+            }
         }
     }
 }
