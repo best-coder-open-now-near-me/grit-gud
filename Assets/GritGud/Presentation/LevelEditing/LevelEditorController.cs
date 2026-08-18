@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -55,6 +54,7 @@ namespace GritGud.Presentation.LevelEditing
         private LevelEditorOrganizationModel organizationModel;
         private LevelEditorOrganizationCoordinator organizationAuthoring;
         private LevelEditorPlayabilityCoordinator playabilityAuthoring;
+        private LevelEditorPhysicsPlacementCoordinator physicsPlacement;
         private LevelDressingAuthoringCoordinator dressingAuthoring;
         private GameplayEnvironmentLighting environmentLighting;
         private LevelDressingProjector dressingProjector;
@@ -65,8 +65,6 @@ namespace GritGud.Presentation.LevelEditing
         private bool previewMode;
         private bool suspended;
         private bool audioZonePreviewEnabled;
-        private bool physicsPlacementRunning;
-        private bool cancelPhysicsPlacement;
         private LevelDocument sourceDocument;
         private bool sourceDocumentIsSaved;
         private string sourceLabel = string.Empty;
@@ -223,6 +221,14 @@ namespace GritGud.Presentation.LevelEditing
             toolManager.Register(spatialPlacementTool);
             toolManager.Register(terrainTool);
             toolManager.ActivateDefault();
+            physicsPlacement = new LevelEditorPhysicsPlacementCoordinator(
+                this,
+                workspace,
+                selection,
+                projector,
+                toolManager.ActivateDefault,
+                SetStatus,
+                SyncInspectorFields);
             terrainAuthoring = new TerrainAuthoringCoordinator(workspace);
             sessionLifecycle.Subscribe(
                 () => terrainAuthoring.StatusChanged += SetStatus,
@@ -356,6 +362,7 @@ namespace GritGud.Presentation.LevelEditing
             sessionReady = false;
             enabled = false;
             SaveLocalPreferences();
+            physicsPlacement?.Dispose();
             sessionLifecycle?.Dispose();
             sessionLifecycle = null;
             persistence?.Dispose();
@@ -382,6 +389,7 @@ namespace GritGud.Presentation.LevelEditing
             terrainTool = null;
             terrainAuthoring = null;
             playabilityAuthoring = null;
+            physicsPlacement = null;
             environmentAuthoring = null;
             dressingAuthoring = null;
             layoutAuthoring = null;
@@ -626,8 +634,8 @@ namespace GritGud.Presentation.LevelEditing
 
             if (input.CancelPressed)
             {
-                if (physicsPlacementRunning)
-                    cancelPhysicsPlacement = true;
+                if (physicsPlacement?.IsRunning == true)
+                    physicsPlacement.Cancel();
                 else
                     toolManager.CancelActive();
             }
@@ -815,183 +823,11 @@ namespace GritGud.Presentation.LevelEditing
         }
 
         private void DropAndSettleSelection(string dropHeightText, bool keepUpright)
-        {
-            if (physicsPlacementRunning)
-            {
-                SetStatus("A physics placement is already settling.");
-                return;
-            }
-            if (!TryParse(dropHeightText, out float dropHeight)
-                || dropHeight <= 0f
-                || dropHeight > 25f)
-            {
-                SetStatus("Drop height must be greater than 0 and no more than 25 meters.");
-                return;
-            }
-
-            var candidates = new List<PhysicsPlacementBody>();
-            int unsupportedCount = 0;
-            foreach (string entityId in selection.Targets
-                .Select(target => target.EntityId)
-                .Distinct(StringComparer.Ordinal))
-            {
-                LevelEntity entity = workspace.FindEntitySnapshot(entityId);
-                if (entity == null
-                    || !projector.TryGetEntity(entity.id, out LevelEntityView view))
-                {
-                    unsupportedCount++;
-                    continue;
-                }
-                LevelArchetypeCapabilities blocked = LevelArchetypeCapabilities.PlacementSurface
-                    | LevelArchetypeCapabilities.Vehicle;
-                if ((view.Archetype.Capabilities & blocked) != 0
-                    || view.GetComponent<Rigidbody>() != null)
-                {
-                    unsupportedCount++;
-                    continue;
-                }
-                candidates.Add(new PhysicsPlacementBody(entity, view));
-            }
-            if (candidates.Count == 0)
-            {
-                SetStatus("Select one or more loose world props to drop; structures and vehicles are unsupported.");
-                return;
-            }
-
-            toolManager.ActivateDefault();
-            StartCoroutine(SettleEntities(
-                candidates,
-                dropHeight,
-                keepUpright,
-                unsupportedCount));
-        }
-
-        private IEnumerator SettleEntities(
-            IReadOnlyList<PhysicsPlacementBody> placements,
-            float dropHeight,
-            bool keepUpright,
-            int unsupportedCount)
-        {
-            physicsPlacementRunning = true;
-            cancelPhysicsPlacement = false;
-            int fallbackCount = 0;
-            foreach (PhysicsPlacementBody placement in placements)
-            {
-                Collider[] colliders = placement.View.GetComponentsInChildren<Collider>(true);
-                placement.UsesFallback = RequiresPhysicsBoundsFallback(colliders);
-                if (placement.UsesFallback)
-                {
-                    fallbackCount++;
-                    foreach (Collider collider in colliders)
-                    {
-                        if (!collider.enabled)
-                            continue;
-                        collider.enabled = false;
-                        placement.DisabledColliders.Add(collider);
-                    }
-                    Bounds bounds = LevelEntityView.CalculateVisualLocalBounds(
-                        placement.View.Archetype.Presentation.Prefab,
-                        placement.View.Archetype.Presentation.LocalBounds);
-                    placement.Fallback = placement.View.gameObject.AddComponent<BoxCollider>();
-                    placement.Fallback.center = bounds.center;
-                    placement.Fallback.size = bounds.size;
-                }
-
-                placement.Body = placement.View.gameObject.AddComponent<Rigidbody>();
-                placement.Body.mass = 1f;
-                placement.Body.collisionDetectionMode =
-                    CollisionDetectionMode.ContinuousSpeculative;
-                placement.Body.constraints = keepUpright
-                    ? RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ
-                    : RigidbodyConstraints.None;
-                placement.View.transform.position += Vector3.up * dropHeight;
-                placement.Body.position = placement.View.transform.position;
-                placement.Body.rotation = placement.View.transform.rotation;
-            }
-
-            SetStatus(
-                $"Settling {placements.Count} prop(s): "
-                + $"{placements.Count - fallbackCount} authored collider(s), "
-                + $"{fallbackCount} bounds fallback(s), {unsupportedCount} skipped.");
-
-            int stableSteps = 0;
-            float elapsed = 0f;
-            while (!cancelPhysicsPlacement && elapsed < 5f && stableSteps < 12)
-            {
-                yield return new WaitForFixedUpdate();
-                elapsed += Time.fixedDeltaTime;
-                bool stable = placements.All(placement =>
-                    placement.Body.linearVelocity.sqrMagnitude < 0.0025f
-                    && placement.Body.angularVelocity.sqrMagnitude < 0.0025f);
-                stableSteps = stable ? stableSteps + 1 : 0;
-            }
-
-            foreach (PhysicsPlacementBody placement in placements)
-            {
-                placement.After = placement.View.ReadTransform();
-                placement.Body.isKinematic = true;
-                Destroy(placement.Body);
-                if (placement.Fallback != null)
-                    Destroy(placement.Fallback);
-                foreach (Collider collider in placement.DisabledColliders)
-                    collider.enabled = true;
-            }
-            physicsPlacementRunning = false;
-
-            if (cancelPhysicsPlacement)
-            {
-                cancelPhysicsPlacement = false;
-                foreach (PhysicsPlacementBody placement in placements)
-                    placement.View.ApplyTransform(placement.Before);
-                SyncInspectorFields(placements[0].Before);
-                SetStatus("Canceled physics placement and restored all previous transforms.");
-                yield break;
-            }
-
-            ILevelEditCommand[] commands = placements
-                .Select(placement => (ILevelEditCommand)new SetEntityTransformCommand(
-                    placement.Entity.id,
-                    placement.Before,
-                    placement.After))
-                .ToArray();
-            if (commands.Length == 1)
-                workspace.Execute(commands[0]);
-            else
-                workspace.ExecuteTransaction("Drop and settle props", commands);
-            SyncInspectorFields(placements[0].After);
-            SetStatus(stableSteps >= 12
-                ? $"Dropped and settled {placements.Count} prop(s) as one undoable operation."
-                : $"Physics placement timed out and saved {placements.Count} final pose(s). Undo restores the batch.");
-        }
-
-        private sealed class PhysicsPlacementBody
-        {
-            public PhysicsPlacementBody(LevelEntity entity, LevelEntityView view)
-            {
-                Entity = entity;
-                View = view;
-                Before = entity.transform;
-            }
-
-            public LevelEntity Entity { get; }
-            public LevelEntityView View { get; }
-            public LevelTransformData Before { get; }
-            public LevelTransformData After { get; set; }
-            public Rigidbody Body { get; set; }
-            public BoxCollider Fallback { get; set; }
-            public bool UsesFallback { get; set; }
-            public List<Collider> DisabledColliders { get; } = new List<Collider>();
-        }
+            => physicsPlacement?.Start(dropHeightText, keepUpright);
 
         internal static bool RequiresPhysicsBoundsFallback(IEnumerable<Collider> colliders)
-        {
-            Collider[] values = colliders?.Where(collider => collider != null).ToArray()
-                ?? Array.Empty<Collider>();
-            return !values.Any(collider => collider.enabled && !collider.isTrigger)
-                || values.Any(collider => collider.enabled
-                    && collider is MeshCollider mesh
-                    && !mesh.convex);
-        }
+            => LevelEditorPhysicsPlacementCoordinator.RequiresBoundsFallback(
+                colliders);
 
         private void ResetEntityRotationPivot()
         {
@@ -1561,7 +1397,7 @@ namespace GritGud.Presentation.LevelEditing
             audioZonePreviewEnabled;
 
         bool ILevelEditorSpatialPlacementActions.PhysicsPlacementRunning =>
-            physicsPlacementRunning;
+            physicsPlacement?.IsRunning == true;
 
         void ILevelEditorHistoryActions.Undo() => workspace.Undo();
 
@@ -1843,7 +1679,7 @@ namespace GritGud.Presentation.LevelEditing
             bool keepUpright) => DropAndSettleSelection(dropHeight, keepUpright);
 
         void ILevelEditorSpatialPlacementActions.CancelPhysicsPlacement() =>
-            cancelPhysicsPlacement = true;
+            physicsPlacement?.Cancel();
 
         void ILevelEditorSpatialPlacementActions.SetEntityRotationPivot(
             float normalizedX,

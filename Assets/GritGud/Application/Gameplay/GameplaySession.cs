@@ -413,10 +413,10 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplaySession : IGameplayTurnLifecycleHost
     {
-        private readonly Dictionary<string, ActorState> actors =
-            new Dictionary<string, ActorState>(StringComparer.Ordinal);
-        private readonly Dictionary<string, ObjectiveState> objectives =
-            new Dictionary<string, ObjectiveState>(StringComparer.Ordinal);
+        private readonly Dictionary<string, GameplayActorState> actors =
+            new Dictionary<string, GameplayActorState>(StringComparer.Ordinal);
+        private readonly Dictionary<string, GameplayObjectiveState> objectives =
+            new Dictionary<string, GameplayObjectiveState>(StringComparer.Ordinal);
         private readonly List<GameplayActionRecord> resolvedActions =
             new List<GameplayActionRecord>();
         private readonly IReadOnlyList<string> initiativeOrder;
@@ -448,7 +448,9 @@ namespace GritGud.Application.Gameplay
                         actor.CharacterProfile.IdentityId,
                         out restoredCharacter);
                 }
-                actors.Add(actor.Id, new ActorState(actor, restoredCharacter));
+                actors.Add(
+                    actor.Id,
+                    new GameplayActorState(actor, restoredCharacter));
                 initiative.Add(ResolveInitiative(actor, participantCount));
             }
             initiative.Sort(CompareInitiative);
@@ -458,7 +460,9 @@ namespace GritGud.Application.Gameplay
 
             foreach (ScenarioObjectiveDefinition objective in scenario.Objectives)
             {
-                objectives.Add(objective.Id, new ObjectiveState(objective));
+                objectives.Add(
+                    objective.Id,
+                    new GameplayObjectiveState(objective));
             }
 
             initiativeOrder = order.AsReadOnly();
@@ -710,7 +714,7 @@ namespace GritGud.Application.Gameplay
             out GameplayActorSnapshot actor)
         {
             if (!string.IsNullOrWhiteSpace(actorId)
-                && actors.TryGetValue(actorId, out ActorState state))
+                && actors.TryGetValue(actorId, out GameplayActorState state))
             {
                 actor = state.CreateSnapshot();
                 return true;
@@ -725,7 +729,7 @@ namespace GritGud.Application.Gameplay
             out GameplayActorStateSnapshot actor)
         {
             if (!string.IsNullOrWhiteSpace(actorId)
-                && actors.TryGetValue(actorId, out ActorState state))
+                && actors.TryGetValue(actorId, out GameplayActorState state))
             {
                 actor = state.CreateStateSnapshot();
                 return true;
@@ -758,7 +762,7 @@ namespace GritGud.Application.Gameplay
             string actorId,
             string actionId)
         {
-            ActorState actor = RequireActor(actorId);
+            GameplayActorState actor = RequireActor(actorId);
             return actor.PinState == null
                 || IsPushOffAction(actorId, actionId);
         }
@@ -786,7 +790,7 @@ namespace GritGud.Application.Gameplay
 
         public InventoryItemDefinition GetEquippedItem(string actorId)
         {
-            ActorState actor = RequireActor(actorId);
+            GameplayActorState actor = RequireActor(actorId);
             return actor.EquippedItemId == null
                 ? null
                 : RequireActorDefinition(actorId).GetInventoryItem(
@@ -817,7 +821,9 @@ namespace GritGud.Application.Gameplay
             out GameplayObjectiveSnapshot objective)
         {
             if (!string.IsNullOrWhiteSpace(objectiveId)
-                && objectives.TryGetValue(objectiveId, out ObjectiveState state))
+                && objectives.TryGetValue(
+                    objectiveId,
+                    out GameplayObjectiveState state))
             {
                 objective = state.CreateSnapshot();
                 return true;
@@ -837,7 +843,7 @@ namespace GritGud.Application.Gameplay
                     "Exploration poses cannot be changed while turn mode is active.");
             }
 
-            ActorState actor = RequireActor(actorId);
+            GameplayActorState actor = RequireActor(actorId);
             if (actor.PinState != null)
             {
                 throw new InvalidOperationException(
@@ -849,7 +855,7 @@ namespace GritGud.Application.Gameplay
 
         public void SpendMovement(string actorId, float amount)
         {
-            ActorState actor = RequireActiveActor(actorId);
+            GameplayActorState actor = RequireActiveActor(actorId);
             if (actor.PinState != null)
             {
                 throw new InvalidOperationException(
@@ -872,7 +878,7 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(record));
             }
 
-            ActorState actor = Mode == GameplaySessionMode.TurnBased
+            GameplayActorState actor = Mode == GameplaySessionMode.TurnBased
                 ? RequireActiveActor(record.ActorId)
                 : RequireActor(record.ActorId);
             if (actor.PinState != null)
@@ -898,7 +904,7 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(route));
             }
 
-            ActorState actor = RequireActiveActor(route.ActorId);
+            GameplayActorState actor = RequireActiveActor(route.ActorId);
             if (actor.PinState != null)
             {
                 throw new InvalidOperationException(
@@ -947,7 +953,7 @@ namespace GritGud.Application.Gameplay
                     nameof(record));
             }
 
-            ActorState actor = RequireActor(record.Request.SubjectId);
+            GameplayActorState actor = RequireActor(record.Request.SubjectId);
             if (actor.Pose.Position.DistanceTo(record.PreviousPosition) > 0f)
             {
                 throw new InvalidOperationException(
@@ -966,7 +972,7 @@ namespace GritGud.Application.Gameplay
             if (transition == null)
                 return;
 
-            ActorState actor = RequireActor(transition.ActorId);
+            GameplayActorState actor = RequireActor(transition.ActorId);
             if (!PosesMatch(actor.Pose, transition.PreviousPose)
                 || !PinStatesMatch(actor.PinState, transition.PreviousState))
             {
@@ -988,7 +994,7 @@ namespace GritGud.Application.Gameplay
 
             if (validatePrevious)
                 ValidatePinTransition(transition);
-            ActorState actor = RequireActor(transition.ActorId);
+            GameplayActorState actor = RequireActor(transition.ActorId);
             actor.Pose = transition.ResultingPose;
             actor.PinState = transition.ResultingState;
             notifications.Add(ActorCapabilityChanged, transition.ActorId);
@@ -1005,7 +1011,7 @@ namespace GritGud.Application.Gameplay
             }
 
             MovementRouteRecord completedRoute = pendingMovementRoute;
-            ActorState actor = RequireActor(completedRoute.ActorId);
+            GameplayActorState actor = RequireActor(completedRoute.ActorId);
             actor.Pose = new GameplayActorPose(
                 completedRoute.Destination,
                 completedRoute.FinalFacingDegrees,
@@ -1034,7 +1040,7 @@ namespace GritGud.Application.Gameplay
 
             ValidateActionCommit(record);
 
-            ActorState actor = Mode == GameplaySessionMode.TurnBased
+            GameplayActorState actor = Mode == GameplaySessionMode.TurnBased
                 ? RequireActiveActor(record.Request.ActorId)
                 : RequireActor(record.Request.ActorId);
             if (actor.PinState != null
@@ -1058,7 +1064,7 @@ namespace GritGud.Application.Gameplay
         }
 
         private void ApplyActionFacing(
-            ActorState actor,
+            GameplayActorState actor,
             GameplayActionOutcome outcome)
         {
             switch (outcome)
@@ -1095,7 +1101,7 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(record));
             }
 
-            ActorState actor = Mode == GameplaySessionMode.TurnBased
+            GameplayActorState actor = Mode == GameplaySessionMode.TurnBased
                 ? RequireActiveActor(record.Request.ActorId)
                 : RequireActor(record.Request.ActorId);
             long expectedSequence = resolvedActions.Count == 0
@@ -1194,7 +1200,7 @@ namespace GritGud.Application.Gameplay
                 switch (outcome)
                 {
                     case ObjectiveCompletedActionOutcome objectiveCompleted:
-                        ObjectiveState objective = RequireObjective(
+                        GameplayObjectiveState objective = RequireObjective(
                             objectiveCompleted.ObjectiveId);
                         if (objective.IsCompleted)
                         {
@@ -1279,7 +1285,7 @@ namespace GritGud.Application.Gameplay
 
                 case EquipmentChangedActionOutcome equipmentChanged:
                     EquipmentChangeRecord change = equipmentChanged.Change;
-                    ActorState actor = RequireActor(change.ActorId);
+                    GameplayActorState actor = RequireActor(change.ActorId);
                     InventoryItemDefinition item = change.ResultingEquippedItemId
                         == null
                             ? null
@@ -1368,8 +1374,8 @@ namespace GritGud.Application.Gameplay
                     "The actor does not own the recorded attack action.");
             }
 
-            ActorState target = RequireActor(attack.TargetId);
-            ActorState attacker = RequireActor(attack.AttackerId);
+            GameplayActorState target = RequireActor(attack.TargetId);
+            GameplayActorState attacker = RequireActor(attack.AttackerId);
             if (attacker.Pose.Position.DistanceTo(target.Pose.Position)
                 != attack.Distance)
             {
@@ -1408,7 +1414,7 @@ namespace GritGud.Application.Gameplay
 
             AttackDefinition equippedAttack = GetEquippedAttack(
                 discharge.AttackerId);
-            ActorState attacker = RequireActor(discharge.AttackerId);
+            GameplayActorState attacker = RequireActor(discharge.AttackerId);
             if (equippedAttack == null
                 || equippedAttack.Projectile != null
                 || !ActionCostsMatch(
@@ -1445,7 +1451,7 @@ namespace GritGud.Application.Gameplay
                         thrown.Definition,
                         action)))
                 throw new InvalidOperationException("The thrown explosive does not match its action request.");
-            ActorState actor = RequireActor(thrown.ThrowerId);
+            GameplayActorState actor = RequireActor(thrown.ThrowerId);
             InventoryItemDefinition item = RequireActorDefinition(thrown.ThrowerId)
                 .GetInventoryItem(thrown.Definition.Id);
             if (!ThrownExplosiveDefinitionsMatch(
@@ -1494,7 +1500,7 @@ namespace GritGud.Application.Gameplay
 
             InventoryItemDefinition item = RequireActorDefinition(
                 change.ActorId).GetInventoryItem(change.ItemId);
-            ActorState actor = RequireActor(change.ActorId);
+            GameplayActorState actor = RequireActor(change.ActorId);
             int pairedThrowCount = 0;
             foreach (GameplayActionOutcome outcome in action.Outcomes)
             {
@@ -1638,7 +1644,7 @@ namespace GritGud.Application.Gameplay
                     "The actor does not own the recorded projectile weapon.");
             }
 
-            ActorState attacker = RequireActor(launch.AttackerId);
+            GameplayActorState attacker = RequireActor(launch.AttackerId);
             GameplayPosition expectedOrigin = weapon.Projectile.GetLaunchOrigin(
                 attacker.Pose);
             if (expectedOrigin.DistanceTo(launch.Origin) > 0f)
@@ -1710,7 +1716,7 @@ namespace GritGud.Application.Gameplay
                     "The equipment change does not match its action request.");
             }
 
-            ActorState actor = RequireActor(change.ActorId);
+            GameplayActorState actor = RequireActor(change.ActorId);
             ScenarioActorDefinition definition = RequireActorDefinition(
                 change.ActorId);
             InventoryItemDefinition item = definition.GetInventoryItem(
@@ -1893,7 +1899,7 @@ namespace GritGud.Application.Gameplay
             Revision++;
         }
 
-        private ActorState RequireActiveActor(string actorId)
+        private GameplayActorState RequireActiveActor(string actorId)
         {
             if (Mode != GameplaySessionMode.TurnBased)
             {
@@ -1913,7 +1919,7 @@ namespace GritGud.Application.Gameplay
                     "Turn commands cannot begin while another operation is resolving.");
             }
 
-            ActorState actor = RequireActor(actorId);
+            GameplayActorState actor = RequireActor(actorId);
             if (actor.IsIncapacitated)
             {
                 throw new InvalidOperationException(
@@ -1923,7 +1929,7 @@ namespace GritGud.Application.Gameplay
             return actor;
         }
 
-        private ActorState RequireActor(string actorId)
+        private GameplayActorState RequireActor(string actorId)
         {
             if (string.IsNullOrWhiteSpace(actorId))
             {
@@ -1932,7 +1938,7 @@ namespace GritGud.Application.Gameplay
                     nameof(actorId));
             }
 
-            if (!actors.TryGetValue(actorId, out ActorState actor))
+            if (!actors.TryGetValue(actorId, out GameplayActorState actor))
             {
                 throw new KeyNotFoundException(
                     $"Actor '{actorId}' does not belong to scenario '{Scenario.Id}'.");
@@ -1941,7 +1947,7 @@ namespace GritGud.Application.Gameplay
             return actor;
         }
 
-        private ObjectiveState RequireObjective(string objectiveId)
+        private GameplayObjectiveState RequireObjective(string objectiveId)
         {
             if (string.IsNullOrWhiteSpace(objectiveId))
             {
@@ -1950,7 +1956,9 @@ namespace GritGud.Application.Gameplay
                     nameof(objectiveId));
             }
 
-            if (!objectives.TryGetValue(objectiveId, out ObjectiveState objective))
+            if (!objectives.TryGetValue(
+                    objectiveId,
+                    out GameplayObjectiveState objective))
             {
                 throw new KeyNotFoundException(
                     $"Objective '{objectiveId}' does not belong to scenario '{Scenario.Id}'.");
@@ -1959,294 +1967,5 @@ namespace GritGud.Application.Gameplay
             return objective;
         }
 
-        private sealed class ActorState
-        {
-            private readonly TurnBudget turnBudgetAllowance;
-            private readonly Dictionary<string, int> inventoryQuantities =
-                new Dictionary<string, int>(StringComparer.Ordinal);
-            private GameplayActorPose pose;
-            private TurnBudget turnBudget;
-            private ActorWoundSnapshot wounds;
-            private ActorPinState pinState;
-            private ActorInventorySnapshot cachedInventory;
-            private GameplayActorSnapshot cachedSnapshot;
-            private bool inventorySnapshotDirty = true;
-            private bool actorSnapshotDirty = true;
-
-            public ActorState(
-                ScenarioActorDefinition definition,
-                CharacterPersistenceSnapshot restoredCharacter = null)
-            {
-                ActorId = definition.Id;
-                pose = definition.StartingPose;
-                MaximumWounds = definition.Combat.MaximumWounds;
-                wounds = restoredCharacter == null
-                    ? new ActorWoundSnapshot(definition.Id, 0, 0f)
-                    : RebindWounds(
-                        restoredCharacter.Wounds,
-                        definition.Id);
-                turnBudget = new TurnBudget(
-                    definition.StartingTurnBudget.ActionPoints,
-                    Math.Max(
-                        0f,
-                        definition.StartingTurnBudget.MovementOpportunity
-                            - wounds.MovementPenalty));
-                EquippedItemId = restoredCharacter != null
-                    ? restoredCharacter.EquippedItemId
-                    : definition.InitiallyEquippedItemId;
-                EquipmentEffects = definition.GetInventoryItem(
-                        EquippedItemId)?.EquippedEffects
-                    ?? EquipmentEffectSet.None;
-                foreach (InventoryItemDefinition item in definition.Inventory)
-                {
-                    if (item.Kind == InventoryItemKind.Consumable)
-                    {
-                        inventoryQuantities.Add(item.Id, item.InitialQuantity);
-                    }
-                }
-                turnBudgetAllowance = definition.StartingTurnBudget;
-            }
-
-            private static ActorWoundSnapshot RebindWounds(
-                ActorWoundSnapshot wounds,
-                string actorId) =>
-                new ActorWoundSnapshot(
-                    actorId,
-                    wounds.HeadWounds,
-                    wounds.TorsoWounds,
-                    wounds.LeftArmWounds,
-                    wounds.RightArmWounds,
-                    wounds.LeftLegWounds,
-                    wounds.RightLegWounds,
-                    wounds.UnlocalizedWounds,
-                    wounds.MovementPenalty);
-
-            public string ActorId { get; }
-
-            public GameplayActorPose Pose
-            {
-                get => pose;
-                set
-                {
-                    pose = value;
-                    actorSnapshotDirty = true;
-                }
-            }
-
-            public TurnBudget TurnBudget
-            {
-                get => turnBudget;
-                set
-                {
-                    turnBudget = value;
-                    actorSnapshotDirty = true;
-                }
-            }
-
-            public int EmergencyActionPointAllowance { get; private set; }
-
-            public int TurnActionPointAllowance =>
-                turnBudgetAllowance.ActionPoints;
-
-            public ActorWoundSnapshot Wounds => wounds;
-
-            public int MaximumWounds { get; }
-
-            public bool IsIncapacitated =>
-                Wounds.WoundCount >= MaximumWounds;
-
-            public string EquippedItemId { get; private set; }
-
-            public EquipmentEffectSet EquipmentEffects { get; private set; }
-
-            public ActorPinState PinState
-            {
-                get => pinState;
-                set
-                {
-                    pinState = value;
-                    actorSnapshotDirty = true;
-                }
-            }
-
-            public void ApplyEquipment(InventoryItemDefinition item)
-            {
-                EquippedItemId = item?.Id;
-                EquipmentEffects = item?.EquippedEffects
-                    ?? EquipmentEffectSet.None;
-                actorSnapshotDirty = true;
-            }
-
-            public int GetInventoryQuantity(string itemId)
-            {
-                if (inventoryQuantities.TryGetValue(itemId, out int quantity))
-                {
-                    return quantity;
-                }
-
-                throw new KeyNotFoundException(
-                    $"Consumable quantity '{itemId}' is not part of actor '{ActorId}'.");
-            }
-
-            public void ApplyInventoryQuantity(
-                InventoryQuantityChangeRecord change)
-            {
-                inventoryQuantities[change.ItemId] = change.ResultingQuantity;
-                inventorySnapshotDirty = true;
-                actorSnapshotDirty = true;
-            }
-
-            public void RefreshTurnBudget()
-            {
-                TurnBudget = new TurnBudget(
-                    turnBudgetAllowance.ActionPoints,
-                    WoundedMovementAllowance);
-            }
-
-            public void BeginEmergencyTurn(int actionPoints)
-            {
-                EmergencyActionPointAllowance = actionPoints;
-                TurnBudget = new TurnBudget(
-                    actionPoints,
-                    WoundedMovementAllowance);
-            }
-
-            public void ApplyAttack(AttackResolutionRecord attack)
-            {
-                if (!attack.Hit)
-                {
-                    return;
-                }
-
-                wounds = attack.TargetWoundsAfter;
-                TurnBudget = new TurnBudget(
-                    TurnBudget.ActionPoints,
-                    Math.Min(
-                        TurnBudget.MovementOpportunity,
-                        WoundedMovementAllowance));
-            }
-
-            public void ApplyBlast(
-                TargetRegionId? region,
-                float movementPenalty)
-            {
-                if (movementPenalty <= 0f) return;
-                wounds = region.HasValue
-                    ? wounds.AddWound(region.Value, movementPenalty)
-                    : wounds.AddUnlocalizedWound(movementPenalty);
-                TurnBudget = new TurnBudget(
-                    TurnBudget.ActionPoints,
-                    Math.Min(TurnBudget.MovementOpportunity, WoundedMovementAllowance));
-            }
-
-            public void FaceToward(GameplayPosition target)
-            {
-                double deltaX = (double)target.X - Pose.Position.X;
-                double deltaZ = (double)target.Z - Pose.Position.Z;
-                if (Math.Abs(deltaX) <= 0.0001
-                    && Math.Abs(deltaZ) <= 0.0001)
-                {
-                    return;
-                }
-
-                float facingDegrees = (float)(
-                    Math.Atan2(deltaX, deltaZ) * (180d / Math.PI));
-                Pose = new GameplayActorPose(
-                    Pose.Position,
-                    facingDegrees,
-                    Pose.Stance);
-            }
-
-            public GameplayActorSnapshot CreateSnapshot()
-            {
-                if (!actorSnapshotDirty)
-                    return cachedSnapshot;
-
-                if (inventorySnapshotDirty)
-                {
-                    var quantities = new List<InventoryQuantitySnapshot>(
-                        inventoryQuantities.Count);
-                    foreach (KeyValuePair<string, int> entry in
-                        inventoryQuantities)
-                    {
-                        quantities.Add(new InventoryQuantitySnapshot(
-                            entry.Key,
-                            entry.Value));
-                    }
-                    quantities.Sort((left, right) =>
-                        StringComparer.Ordinal.Compare(
-                            left.ItemId,
-                            right.ItemId));
-                    cachedInventory = new ActorInventorySnapshot(
-                        ActorId,
-                        quantities);
-                    inventorySnapshotDirty = false;
-                }
-
-                cachedSnapshot = new GameplayActorSnapshot(
-                    ActorId,
-                    Pose,
-                    TurnBudget,
-                    Wounds,
-                    EquippedItemId,
-                    EquipmentEffects,
-                    MaximumWounds,
-                    cachedInventory,
-                    turnBudgetAllowance.ActionPoints,
-                    turnBudgetAllowance.MovementOpportunity,
-                    PinState);
-                actorSnapshotDirty = false;
-                return cachedSnapshot;
-            }
-
-            public GameplayActorStateSnapshot CreateStateSnapshot() =>
-                new GameplayActorStateSnapshot(
-                    ActorId,
-                    Pose,
-                    TurnBudget,
-                    Wounds,
-                    EquippedItemId,
-                    EquipmentEffects,
-                    MaximumWounds,
-                    turnBudgetAllowance.ActionPoints,
-                    turnBudgetAllowance.MovementOpportunity,
-                    PinState);
-
-            private float WoundedMovementAllowance => Math.Max(
-                0f,
-                turnBudgetAllowance.MovementOpportunity
-                    - Wounds.MovementPenalty);
-        }
-
-        private sealed class ObjectiveState
-        {
-            public ObjectiveState(ScenarioObjectiveDefinition definition)
-            {
-                ObjectiveId = definition.Id;
-                Position = definition.Position;
-                InteractionRadius = definition.InteractionRadius;
-                Interaction = definition.Interaction;
-            }
-
-            public string ObjectiveId { get; }
-
-            public GameplayPosition Position { get; }
-
-            public float InteractionRadius { get; }
-
-            public GameplayInteractionDefinition Interaction { get; }
-
-            public bool IsCompleted { get; set; }
-
-            public GameplayObjectiveSnapshot CreateSnapshot()
-            {
-                return new GameplayObjectiveSnapshot(
-                    ObjectiveId,
-                    Position,
-                    InteractionRadius,
-                    Interaction,
-                    IsCompleted);
-            }
-        }
     }
 }
