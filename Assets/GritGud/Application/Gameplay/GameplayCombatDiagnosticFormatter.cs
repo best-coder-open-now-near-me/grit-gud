@@ -285,6 +285,8 @@ namespace GritGud.Application.Gameplay
 
                 case TurnModeChangedJournalEntry _:
                 case EncounterChangedJournalEntry _:
+                case EnemyAwarenessChangedJournalEntry _:
+                case PatrolAdvancedJournalEntry _:
                 case MovementBudgetSpentJournalEntry _:
                 case StanceChangedJournalEntry _:
                 case MovementRouteCommittedJournalEntry _:
@@ -340,6 +342,8 @@ namespace GritGud.Application.Gameplay
 
                 case GameplayJournalEntryKind.TurnModeChanged:
                 case GameplayJournalEntryKind.EncounterChanged:
+                case GameplayJournalEntryKind.EnemyAwarenessChanged:
+                case GameplayJournalEntryKind.PatrolAdvanced:
                 case GameplayJournalEntryKind.MovementBudgetSpent:
                 case GameplayJournalEntryKind.StanceChanged:
                 case GameplayJournalEntryKind.MovementRouteCommitted:

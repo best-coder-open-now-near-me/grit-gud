@@ -186,6 +186,7 @@ namespace GritGud.Domain.Tests.Gameplay
             ScenarioRunIdentity runIdentity,
             float voluntaryTurnReentrySecondsRemaining)
         {
+            IEnumerable<string> actorIds = ActorIds(actors);
             var session = new GameplaySessionStateSnapshot(
                 "combat-state-test",
                 GameplaySessionMode.TurnBased,
@@ -196,7 +197,7 @@ namespace GritGud.Domain.Tests.Gameplay
                 activeActorId: "alpha",
                 turnPhase: GameplayTurnPhase.Normal,
                 actors: actors,
-                initiativeOrder: ActorIds(actors),
+                initiativeOrder: actorIds,
                 objectives: Array.Empty<GameplayObjectiveSnapshot>(),
                 emergencyResponders: Array.Empty<string>(),
                 emergencyResponderIndex: -1,
@@ -206,7 +207,9 @@ namespace GritGud.Domain.Tests.Gameplay
                 journalSequence: 0,
                 runIdentity: runIdentity,
                 voluntaryTurnReentrySecondsRemaining:
-                    voluntaryTurnReentrySecondsRemaining);
+                    voluntaryTurnReentrySecondsRemaining,
+                encounterState: new GameplayEncounterStateSnapshot(
+                    encounterParticipantIds: actorIds));
             return new GameplayCombatStateSnapshot(session);
         }
 

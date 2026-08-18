@@ -316,6 +316,7 @@ namespace GritGud.Domain.Tests
                     preferredEngagementRange = 12f,
                     movementSearchRadius = 6f,
                     maximumAttacksPerTurn = 1,
+                    awareness = CreateEncounterAwareness(),
                 },
             };
             content.actors[1].attackCapability = content.actors[0]
@@ -431,6 +432,38 @@ namespace GritGud.Domain.Tests
 
             Assert.That(exception.Message,
                 Does.Contain("perception range"));
+        }
+
+        [Test]
+        public void EnemyBehaviorWithoutAwarenessPolicyIsRejected()
+        {
+            ScenarioContentDocument content = CreateContent();
+            content.actors[1].combat = new ScenarioActorCombatData
+            {
+                allegianceId = "raider",
+                hostileAllegianceIds = { "player" },
+                maximumWounds = 2,
+                enemyBehavior = new ScenarioEnemyBehaviorData
+                {
+                    behaviorId = "behavior.rifleman",
+                    perceptionRange = 30f,
+                    viewAngleDegrees = 120f,
+                    preferredEngagementRange = 12f,
+                    movementSearchRadius = 6f,
+                    maximumAttacksPerTurn = 1,
+                },
+            };
+            content.actors[1].attackCapability = content.actors[0]
+                .attackCapability;
+
+            InvalidOperationException exception =
+                Assert.Throws<InvalidOperationException>(() =>
+                    new GameplayScenarioAssembler().Assemble(
+                        content,
+                        CreateLevel()));
+
+            Assert.That(exception.Message,
+                Does.Contain("requires an awareness policy"));
         }
 
         [Test]
@@ -912,6 +945,7 @@ namespace GritGud.Domain.Tests
                     movementSearchRadius = 6f,
                     maximumAttacksPerTurn = 1,
                     minimumAttackHitChancePercent = 40,
+                    awareness = CreateEncounterAwareness(),
                 },
             };
             content.actors[1].attackCapability = content.actors[0]
@@ -933,7 +967,19 @@ namespace GritGud.Domain.Tests
             Assert.That(
                 enemy.Combat.EnemyBehavior.MinimumAttackHitChancePercent,
                 Is.EqualTo(40));
+            Assert.That(enemy.Combat.EnemyBehavior.AwarenessPolicy.HearingRange,
+                Is.EqualTo(18f));
         }
+
+        private static ScenarioEncounterAwarenessData
+            CreateEncounterAwareness() => new ScenarioEncounterAwarenessData
+            {
+                hearingRange = 18f,
+                sightSuspicionGain = 100,
+                soundSuspicionGain = 50,
+                suspicionDecayPerTick = 10,
+                alertThreshold = 100,
+            };
 
         private static ScenarioInventoryItemData CreateGrenadeItem(
             int quantity) =>
