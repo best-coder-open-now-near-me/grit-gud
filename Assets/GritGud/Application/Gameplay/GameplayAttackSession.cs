@@ -28,7 +28,7 @@ namespace GritGud.Application.Gameplay
     {
         private readonly GameplaySession gameplay;
         private readonly DestructiblePropSession destructibles;
-        private readonly uint scenarioSeed;
+        private readonly ScenarioRunIdentity runIdentity;
         private readonly List<AttackResolutionRecord> records =
             new List<AttackResolutionRecord>();
         private readonly IReadOnlyList<AttackResolutionRecord> readOnlyRecords;
@@ -44,7 +44,13 @@ namespace GritGud.Application.Gameplay
         {
             gameplay = gameplaySession ??
                 throw new ArgumentNullException(nameof(gameplaySession));
-            scenarioSeed = authoredScenarioSeed;
+            if (gameplay.RunIdentity.ScenarioSeed != authoredScenarioSeed)
+            {
+                throw new ArgumentException(
+                    "Attack randomness must use the gameplay run seed.",
+                    nameof(authoredScenarioSeed));
+            }
+            runIdentity = gameplay.RunIdentity;
             destructibles = destructibleSession;
             if (destructibles != null
                 && !ReferenceEquals(gameplay.Journal, destructibles.Journal))
@@ -142,9 +148,16 @@ namespace GritGud.Application.Gameplay
 
             GameplayCombatStateSnapshot previous = CaptureCombatState();
             long attackSequence = records.Count + 1L;
-            uint resolutionSeed = AttackResolutionRules.DeriveResolutionSeed(
-                scenarioSeed,
-                attackSequence);
+            long actionSequence = gameplay.NextActionSequence;
+            var transition = new GameplayTransitionIdentity(
+                actionSequence,
+                "direct-attack",
+                actorId,
+                target.ActorId);
+            uint resolutionSeed = GameplayAddressedRandom.SampleUInt32(
+                runIdentity,
+                transition,
+                "resolution");
             AttackResolutionRecord resolution = AttackResolutionRules.Resolve(
                 attackSequence,
                 resolutionSeed,
@@ -155,9 +168,6 @@ namespace GritGud.Application.Gameplay
                 attack.WoundMovementPenalty,
                 attack.Contact);
             TurnBudget resultingBudget = actor.TurnBudget.SpendAction(cost);
-            long actionSequence = gameplay.LastResolvedAction == null
-                ? 1L
-                : gameplay.LastResolvedAction.Sequence + 1L;
             var action = new GameplayActionRecord(
                 actionSequence,
                 new GameplayActionRequest(
@@ -339,9 +349,14 @@ namespace GritGud.Application.Gameplay
                     "The attack is not the next authoritative attack sequence.");
             }
 
-            uint expectedSeed = AttackResolutionRules.DeriveResolutionSeed(
-                scenarioSeed,
-                expectedSequence);
+            uint expectedSeed = GameplayAddressedRandom.SampleUInt32(
+                runIdentity,
+                new GameplayTransitionIdentity(
+                    action.Sequence,
+                    "direct-attack",
+                    action.Request.ActorId,
+                    action.Request.TargetId),
+                "resolution");
             if (attack.ResolutionSeed != expectedSeed)
             {
                 throw new InvalidOperationException(

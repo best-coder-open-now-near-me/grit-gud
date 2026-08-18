@@ -2034,12 +2034,16 @@ namespace GritGud.Domain.Tests.Gameplay
                 rolls = new Queue<int>(values);
             }
 
-            public int RollD20() => rolls.Dequeue();
+            public int RollD20(
+                GameplayTransitionIdentity transition,
+                string purpose) => rolls.Dequeue();
         }
 
         private sealed class ThrowIfRolled : ID20RollSource
         {
-            public int RollD20()
+            public int RollD20(
+                GameplayTransitionIdentity transition,
+                string purpose)
             {
                 throw new AssertionException("Replay or rejection must not reroll.");
             }

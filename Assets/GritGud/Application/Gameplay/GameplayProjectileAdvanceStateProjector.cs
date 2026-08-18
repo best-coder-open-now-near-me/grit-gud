@@ -33,6 +33,7 @@ namespace GritGud.Application.Gameplay
             var destructibles = new List<DestructiblePropSnapshot>(
                 previous.Destructibles);
             int destructibleJournalEntries = 0;
+            long gameplayRevisionIncrement = 0L;
             foreach (BlastEffectRecord effect in effects)
             {
                 if (effect.Exposure <= 0f) continue;
@@ -40,7 +41,10 @@ namespace GritGud.Application.Gameplay
                 {
                     case BlastSubjectKind.Actor:
                         if (woundPenalty > 0f)
+                        {
                             ApplyActorEffect(actors, effect, woundPenalty);
+                            gameplayRevisionIncrement++;
+                        }
                         break;
                     case BlastSubjectKind.DestructibleProp:
                         if (integrityDamage > 0f
@@ -91,13 +95,19 @@ namespace GritGud.Application.Gameplay
                 session.EmergencyResumeActorId,
                 session.LastActionSequence,
                 session.LastTurnSequence,
-                checked(session.JournalSequence + journalIncrement));
+                checked(session.JournalSequence + journalIncrement),
+                session.RunIdentity,
+                checked(session.Revision + gameplayRevisionIncrement),
+                session.VoluntaryTurnReentrySecondsRemaining,
+                session.PendingMovementRoute,
+                session.PendingVoluntaryTurnCycle);
             return new GameplayCombatStateSnapshot(
                 resultingSession,
                 destructibles,
                 previous.Vehicles,
                 projectiles,
-                previous.SmokeFields);
+                previous.SmokeFields,
+                previous.Coverage);
         }
 
         private static void ApplyActorEffect(
@@ -171,7 +181,8 @@ namespace GritGud.Application.Gameplay
                 actor.Inventory,
                 actor.TurnActionPointAllowance,
                 actor.TurnMovementAllowance,
-                actor.PinState);
+                actor.PinState,
+                actor.EmergencyActionPointAllowance);
 
         private static int FindActorIndex(
             IList<GameplayActorSnapshot> actors,

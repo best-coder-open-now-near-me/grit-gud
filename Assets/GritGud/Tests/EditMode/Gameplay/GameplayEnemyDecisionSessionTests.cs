@@ -455,7 +455,8 @@ namespace GritGud.Domain.Tests.Gameplay
                 "enemy-decision-test",
                 new ScenarioTimingDefinition(1.25f),
                 new[] { player, enemy },
-                Array.Empty<ScenarioObjectiveDefinition>()));
+                Array.Empty<ScenarioObjectiveDefinition>()),
+                scenarioSeed: 3u);
         }
 
         private static GameplaySession CreateMultiTargetSession()

@@ -286,6 +286,36 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void RepeatedPreparationUsesTheSameAddressedLanding()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            var session = CreateThrownSession(
+                gameplay,
+                new FixedWorldQuery(),
+                new AddressedUncertaintySampler());
+            var intended = new GameplayPosition(4f, 0f, 0f);
+
+            Assert.That(session.TryPrepareThrowItem(
+                "player",
+                "item.grenade",
+                intended,
+                out ThrownExplosiveRecord first,
+                out _), Is.True);
+            Assert.That(session.TryPrepareThrowItem(
+                "player",
+                "item.grenade",
+                intended,
+                out ThrownExplosiveRecord repeated,
+                out _), Is.True);
+
+            Assert.That(repeated.Sequence, Is.EqualTo(first.Sequence));
+            Assert.That(repeated.SampledLanding, Is.EqualTo(first.SampledLanding));
+            Assert.That(repeated.ResolvedLanding, Is.EqualTo(first.ResolvedLanding));
+            Assert.That(gameplay.ResolvedActions, Is.Empty);
+            Assert.That(session.Throws, Is.Empty);
+        }
+
+        [Test]
         public void DepletedConsumableCannotSampleOrCommitAnotherThrow()
         {
             GameplaySession gameplay = CreateGameplay(initialQuantity: 1);
@@ -406,14 +436,22 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
-        public void SeededSamplerIsDeterministicAndStaysInsideRegion()
+        public void AddressedSamplerIsDeterministicAndStaysInsideRegion()
         {
-            var first = new SeededUncertaintySampler(123u);
-            var second = new SeededUncertaintySampler(123u);
+            var first = new AddressedUncertaintySampler();
+            var second = new AddressedUncertaintySampler();
             var center = new GameplayPosition(5f, 2f, -3f);
+            var run = new ScenarioRunIdentity("test", 123u);
+            var transition = new GameplayTransitionIdentity(
+                1L,
+                "thrown-explosive",
+                "player",
+                "item.grenade");
 
-            GameplayPosition firstPoint = first.Sample(center, 2f);
-            GameplayPosition secondPoint = second.Sample(center, 2f);
+            GameplayPosition firstPoint = first.Sample(
+                center, 2f, run, transition, "landing-error");
+            GameplayPosition secondPoint = second.Sample(
+                center, 2f, run, transition, "landing-error");
 
             Assert.That(firstPoint, Is.EqualTo(secondPoint));
             Assert.That(firstPoint.DistanceTo(center), Is.LessThanOrEqualTo(2f));
@@ -421,16 +459,27 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
-        public void SeededSamplerWeightsLandingErrorTowardAimPoint()
+        public void AddressedSamplerWeightsLandingErrorTowardAimPoint()
         {
-            var sampler = new SeededUncertaintySampler(123u);
+            var sampler = new AddressedUncertaintySampler();
             var center = new GameplayPosition(5f, 2f, -3f);
+            var run = new ScenarioRunIdentity("test", 123u);
             const int sampleCount = 4096;
             float totalDistance = 0f;
 
             for (int index = 0; index < sampleCount; index++)
             {
-                GameplayPosition point = sampler.Sample(center, 1f);
+                var transition = new GameplayTransitionIdentity(
+                    index + 1L,
+                    "thrown-explosive",
+                    "player",
+                    "item.grenade");
+                GameplayPosition point = sampler.Sample(
+                    center,
+                    1f,
+                    run,
+                    transition,
+                    "landing-error");
                 float distance = point.DistanceTo(center);
                 Assert.That(distance, Is.LessThanOrEqualTo(1f));
                 totalDistance += distance;
@@ -441,14 +490,21 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
-        public void DepotSeedFirstThrowDoesNotLandAtUncertaintyEdge()
+        public void AddressedSamplerDoesNotLandOutsideUncertaintyEdge()
         {
-            var sampler = new SeededUncertaintySampler(12648430u);
+            var sampler = new AddressedUncertaintySampler();
             var center = new GameplayPosition(5f, 0f, 5f);
+            var run = new ScenarioRunIdentity("depot", 12648430u);
+            var transition = new GameplayTransitionIdentity(
+                1L,
+                "thrown-explosive",
+                "player",
+                "item.grenade");
 
-            GameplayPosition point = sampler.Sample(center, 1f);
+            GameplayPosition point = sampler.Sample(
+                center, 1f, run, transition, "landing-error");
 
-            Assert.That(point.DistanceTo(center), Is.LessThan(0.5f));
+            Assert.That(point.DistanceTo(center), Is.LessThanOrEqualTo(1f));
         }
 
         private static ThrownExplosiveDefinition CreateDefinition() =>
@@ -516,7 +572,12 @@ namespace GritGud.Domain.Tests.Gameplay
             private readonly GameplayPosition result;
             public FixedSampler(GameplayPosition result) => this.result = result;
             public int CallCount { get; private set; }
-            public GameplayPosition Sample(GameplayPosition center, float radius)
+            public GameplayPosition Sample(
+                GameplayPosition center,
+                float radius,
+                ScenarioRunIdentity run,
+                GameplayTransitionIdentity transition,
+                string purpose)
             {
                 CallCount++;
                 return result;

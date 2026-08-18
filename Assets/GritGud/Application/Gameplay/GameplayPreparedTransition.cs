@@ -158,7 +158,12 @@ namespace GritGud.Application.Gameplay
                 action.Sequence,
                 session.LastTurnSequence,
                 checked(session.JournalSequence
-                    + (directFireDamage == null ? 1L : 2L)));
+                    + (directFireDamage == null ? 1L : 2L)),
+                session.RunIdentity,
+                checked(session.Revision + 1L),
+                session.VoluntaryTurnReentrySecondsRemaining,
+                session.PendingMovementRoute,
+                session.PendingVoluntaryTurnCycle);
             var projectiles = new List<ProjectileFlightSnapshot>(
                 previous.Projectiles);
             if (action.Outcomes[0] is ProjectileLaunchedActionOutcome launched)
@@ -200,7 +205,8 @@ namespace GritGud.Application.Gameplay
                 destructibles,
                 previous.Vehicles,
                 projectiles,
-                previous.SmokeFields);
+                previous.SmokeFields,
+                previous.Coverage);
         }
 
         private static GameplayActorSnapshot ProjectActor(
@@ -259,7 +265,8 @@ namespace GritGud.Application.Gameplay
                 actor.Inventory,
                 actor.TurnActionPointAllowance,
                 actor.TurnMovementAllowance,
-                actor.PinState);
+                actor.PinState,
+                actor.EmergencyActionPointAllowance);
         }
 
         private static GameplayActorPose FaceToward(

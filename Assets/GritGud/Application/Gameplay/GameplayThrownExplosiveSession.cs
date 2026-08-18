@@ -117,7 +117,17 @@ namespace GritGud.Application.Gameplay
 
             float distance = actor.Pose.Position.DistanceTo(intendedLanding);
             float radius = definition.GetUncertaintyRadius(distance);
-            GameplayPosition sampled = uncertainty.Sample(intendedLanding, radius);
+            var transition = new GameplayTransitionIdentity(
+                gameplay.NextActionSequence,
+                "thrown-explosive",
+                actorId,
+                definition.Id);
+            GameplayPosition sampled = uncertainty.Sample(
+                intendedLanding,
+                radius,
+                gameplay.RunIdentity,
+                transition,
+                "landing-error");
             if (sampled.DistanceTo(intendedLanding) > radius + 0.0001f)
                 throw new InvalidOperationException(
                     "Uncertainty samplers must return a point inside the previewed region.");

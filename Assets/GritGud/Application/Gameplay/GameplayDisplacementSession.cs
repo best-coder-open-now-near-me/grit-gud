@@ -106,25 +106,27 @@ namespace GritGud.Application.Gameplay
 
     public interface ID20RollSource
     {
-        int RollD20();
+        int RollD20(
+            GameplayTransitionIdentity transition,
+            string purpose);
     }
 
-    public sealed class SeededD20RollSource : ID20RollSource
+    public sealed class AddressedD20RollSource : ID20RollSource
     {
-        private uint state;
+        private readonly ScenarioRunIdentity run;
 
-        public SeededD20RollSource(uint seed)
+        public AddressedD20RollSource(ScenarioRunIdentity runIdentity)
         {
-            state = seed != 0u ? seed : 0x6D2B79F5u;
+            run = runIdentity ?? throw new ArgumentNullException(
+                nameof(runIdentity));
         }
 
-        public int RollD20()
-        {
-            state ^= state << 13;
-            state ^= state >> 17;
-            state ^= state << 5;
-            return (int)(state % 20u) + 1;
-        }
+        public int RollD20(
+            GameplayTransitionIdentity transition,
+            string purpose) => GameplayAddressedRandom.RollD20(
+                run,
+                transition,
+                purpose);
     }
 
     public sealed class GameplayDisplacementSession

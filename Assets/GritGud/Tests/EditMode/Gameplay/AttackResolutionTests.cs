@@ -540,7 +540,8 @@ namespace GritGud.Domain.Tests.Gameplay
                 "attack-test",
                 new ScenarioTimingDefinition(1.25f),
                 new[] { player, target },
-                Array.Empty<ScenarioObjectiveDefinition>()));
+                Array.Empty<ScenarioObjectiveDefinition>()),
+                scenarioSeed: 3u);
         }
 
         private static GameplaySession CreateContactSession(
@@ -569,7 +570,8 @@ namespace GritGud.Domain.Tests.Gameplay
                 "contact-attack-test",
                 new ScenarioTimingDefinition(1.25f),
                 new[] { player, target },
-                Array.Empty<ScenarioObjectiveDefinition>()));
+                Array.Empty<ScenarioObjectiveDefinition>()),
+                scenarioSeed: 3u);
         }
 
         private static TargetExposureSnapshot CreateExposure(

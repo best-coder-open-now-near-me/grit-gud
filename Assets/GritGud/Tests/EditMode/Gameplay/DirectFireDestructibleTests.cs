@@ -181,7 +181,8 @@ namespace GritGud.Domain.Tests.Gameplay
                 "direct-fire-test",
                 new ScenarioTimingDefinition(1.25f),
                 new[] { player },
-                Array.Empty<ScenarioObjectiveDefinition>()));
+                Array.Empty<ScenarioObjectiveDefinition>()),
+                scenarioSeed: 19u);
         }
 
         private static DirectFireImpactRecord CreateImpact(

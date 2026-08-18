@@ -375,9 +375,7 @@ namespace GritGud.Presentation.Gameplay
                     thrownExplosiveController,
                     smokeFieldSession,
                     actorId,
-                    GameplayRandomStreams.DeriveSeed(
-                        scenarioAssembly.RandomSeed,
-                        GameplayRandomStreams.ThrownExplosiveUncertainty),
+                    scenarioAssembly.RandomSeed,
                     (installedEmergencyCycle, installedConsumables) =>
                     {
                         emergencyCycle = installedEmergencyCycle;
@@ -404,9 +402,7 @@ namespace GritGud.Presentation.Gameplay
                     hud,
                     actorId,
                     content.Level.traversalLinks,
-                    GameplayRandomStreams.DeriveSeed(
-                        scenarioAssembly.RandomSeed,
-                        GameplayRandomStreams.DisplacementControl),
+                    scenarioAssembly.RandomSeed,
                     IsPointerOverGameplayInterface),
                 new GameplayActorActionsFeatureInstaller(
                     session,
@@ -424,9 +420,7 @@ namespace GritGud.Presentation.Gameplay
                     equipmentController,
                     actorId,
                     scenarioAssembly.PrimaryObjectiveId,
-                    GameplayRandomStreams.DeriveSeed(
-                        scenarioAssembly.RandomSeed,
-                        GameplayRandomStreams.AttackResolution),
+                    scenarioAssembly.RandomSeed,
                     TryUseEquippedItemPower,
                     CanRequestHotbarPower),
                 deliveryInstaller,

@@ -72,6 +72,42 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void CanonicalHashIncludesRunAndHiddenTurnState()
+        {
+            GameplayActorSnapshot actor = CreateActor("alpha", 1f, 4);
+            GameplayCombatStateSnapshot baseline = CreateState(actor);
+            GameplayCombatStateSnapshot changedRun = CreateState(
+                actor,
+                runIdentity: new ScenarioRunIdentity("another-run", 7u));
+            GameplayCombatStateSnapshot changedReentry = CreateState(
+                actor,
+                voluntaryTurnReentrySecondsRemaining: 0.5f);
+
+            Assert.That(changedRun.CanonicalHash,
+                Is.Not.EqualTo(baseline.CanonicalHash));
+            Assert.That(changedReentry.CanonicalHash,
+                Is.Not.EqualTo(baseline.CanonicalHash));
+        }
+
+        [Test]
+        public void CanonicalCoverageDistinguishesAbsentFromPresentButEmpty()
+        {
+            GameplayCombatStateSnapshot absent = CreateState(
+                CreateActor("alpha", 1f, 4));
+            GameplayCombatStateSnapshot present = new GameplayCombatStateSnapshot(
+                absent.Session,
+                destructibles: Array.Empty<DestructiblePropSnapshot>(),
+                coverage: GameplayCombatStateCoverage.Session
+                    | GameplayCombatStateCoverage.Destructibles);
+
+            Assert.That(present.CanonicalHash, Is.Not.EqualTo(absent.CanonicalHash));
+            Assert.That(present.Covers(
+                GameplayCombatStateCoverage.Destructibles), Is.True);
+            Assert.Throws<InvalidOperationException>(() => absent.RequireCoverage(
+                GameplayCombatStateCoverage.Destructibles));
+        }
+
+        [Test]
         public void CommitRejectsStalePreparedStateBeforeMutation()
         {
             GameplayCombatStateSnapshot previous = CreateState(
@@ -133,7 +169,22 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         private static GameplayCombatStateSnapshot CreateState(
-            params GameplayActorSnapshot[] actors)
+            GameplayActorSnapshot actor,
+            ScenarioRunIdentity runIdentity = null,
+            float voluntaryTurnReentrySecondsRemaining = 0f) =>
+            CreateState(
+                new[] { actor },
+                runIdentity,
+                voluntaryTurnReentrySecondsRemaining);
+
+        private static GameplayCombatStateSnapshot CreateState(
+            params GameplayActorSnapshot[] actors) =>
+            CreateState(actors, null, 0f);
+
+        private static GameplayCombatStateSnapshot CreateState(
+            GameplayActorSnapshot[] actors,
+            ScenarioRunIdentity runIdentity,
+            float voluntaryTurnReentrySecondsRemaining)
         {
             var session = new GameplaySessionStateSnapshot(
                 "combat-state-test",
@@ -152,7 +203,10 @@ namespace GritGud.Domain.Tests.Gameplay
                 emergencyResumeActorId: string.Empty,
                 lastActionSequence: 0,
                 lastTurnSequence: 0,
-                journalSequence: 0);
+                journalSequence: 0,
+                runIdentity: runIdentity,
+                voluntaryTurnReentrySecondsRemaining:
+                    voluntaryTurnReentrySecondsRemaining);
             return new GameplayCombatStateSnapshot(session);
         }
 

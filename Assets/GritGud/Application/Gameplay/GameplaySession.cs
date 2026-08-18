@@ -130,7 +130,8 @@ namespace GritGud.Application.Gameplay
             ActorInventorySnapshot inventory = null,
             int turnActionPointAllowance = -1,
             float turnMovementAllowance = -1f,
-            ActorPinState pinState = null)
+            ActorPinState pinState = null,
+            int emergencyActionPointAllowance = 0)
         {
             if (!string.Equals(actorId, wounds.ActorId, StringComparison.Ordinal))
             {
@@ -140,6 +141,9 @@ namespace GritGud.Application.Gameplay
             }
             if (maximumWounds <= 0)
                 throw new ArgumentOutOfRangeException(nameof(maximumWounds));
+            if (emergencyActionPointAllowance < 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(emergencyActionPointAllowance));
             ActorInventorySnapshot resolvedInventory = inventory
                 ?? new ActorInventorySnapshot(
                     actorId,
@@ -179,6 +183,7 @@ namespace GritGud.Application.Gameplay
                 ? turnBudget.MovementOpportunity + wounds.MovementPenalty
                 : turnMovementAllowance;
             PinState = pinState;
+            EmergencyActionPointAllowance = emergencyActionPointAllowance;
             if (float.IsNaN(TurnMovementAllowance)
                 || float.IsInfinity(TurnMovementAllowance)
                 || TurnActionPointAllowance < turnBudget.ActionPoints
@@ -209,6 +214,8 @@ namespace GritGud.Application.Gameplay
         public float TurnMovementAllowance { get; }
 
         public ActorPinState PinState { get; }
+
+        public int EmergencyActionPointAllowance { get; }
 
         public bool IsPinned => PinState != null;
 
@@ -433,8 +440,26 @@ namespace GritGud.Application.Gameplay
             GameplayJournal journal = null,
             uint scenarioSeed = 0u,
             GameplayPartySave restoredParty = null)
+            : this(
+                scenario,
+                new ScenarioRunIdentity(
+                    (scenario ?? throw new ArgumentNullException(nameof(scenario))).Id
+                        + ".run",
+                    scenarioSeed),
+                journal,
+                restoredParty)
+        {
+        }
+
+        public GameplaySession(
+            ScenarioDefinition scenario,
+            ScenarioRunIdentity runIdentity,
+            GameplayJournal journal = null,
+            GameplayPartySave restoredParty = null)
         {
             Scenario = scenario ?? throw new ArgumentNullException(nameof(scenario));
+            RunIdentity = runIdentity ?? throw new ArgumentNullException(
+                nameof(runIdentity));
             Journal = journal ?? new GameplayJournal();
             if (restoredParty != null)
                 GameplayPartySaveValidator.Validate(restoredParty, scenario);
@@ -476,6 +501,8 @@ namespace GritGud.Application.Gameplay
         }
 
         public ScenarioDefinition Scenario { get; }
+
+        public ScenarioRunIdentity RunIdentity { get; }
 
         public GameplayJournal Journal { get; }
 

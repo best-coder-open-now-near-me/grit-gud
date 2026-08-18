@@ -90,7 +90,7 @@ namespace GritGud.Presentation.Gameplay
                     nameof(blastWorldQuery)),
                 consequenceResolver ?? throw new ArgumentNullException(
                     nameof(consequenceResolver)),
-                new SeededUncertaintySampler(randomSeed),
+                new AddressedUncertaintySampler(),
                 smokeFieldSession);
             enabled = true;
             SetActor(authoritativeActorId);

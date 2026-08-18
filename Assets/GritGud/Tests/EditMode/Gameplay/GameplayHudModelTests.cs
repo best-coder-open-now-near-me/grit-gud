@@ -126,7 +126,8 @@ namespace GritGud.Domain.Tests.Gameplay
                 "regional-wound-hud-test",
                 new ScenarioTimingDefinition(1f),
                 new[] { player, enemy },
-                new ScenarioObjectiveDefinition[0]));
+                new ScenarioObjectiveDefinition[0]),
+                scenarioSeed: 3u);
             Assert.That(session.BeginEncounter(), Is.True);
             var attacks = new GameplayAttackSession(session, 3u);
             Assert.That(attacks.TryResolve(

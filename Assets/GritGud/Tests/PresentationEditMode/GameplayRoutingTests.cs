@@ -88,7 +88,8 @@ namespace GritGud.Presentation.Tests
                     "post-rifle-movement-refresh",
                     new ScenarioTimingDefinition(1.25f),
                     new[] { player, target },
-                    System.Array.Empty<ScenarioObjectiveDefinition>()));
+                    System.Array.Empty<ScenarioObjectiveDefinition>()),
+                    scenarioSeed: 3u);
                 Assert.That(session.EnterTurnMode(), Is.True);
 
                 ExplorationMovementInput movementInput =

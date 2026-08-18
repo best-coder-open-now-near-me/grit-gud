@@ -7,9 +7,20 @@ using GritGud.Domain.Gameplay;
 
 namespace GritGud.Application.Gameplay
 {
+    [Flags]
+    public enum GameplayCombatStateCoverage
+    {
+        None = 0,
+        Session = 1 << 0,
+        Destructibles = 1 << 1,
+        Vehicles = 1 << 2,
+        Projectiles = 1 << 3,
+        SmokeFields = 1 << 4,
+    }
+
     public sealed class GameplaySessionStateSnapshot
     {
-        public const int CurrentSchemaVersion = 1;
+        public const int CurrentSchemaVersion = 2;
 
         public GameplaySessionStateSnapshot(
             string scenarioId,
@@ -28,7 +39,12 @@ namespace GritGud.Application.Gameplay
             string emergencyResumeActorId,
             long lastActionSequence,
             long lastTurnSequence,
-            long journalSequence)
+            long journalSequence,
+            ScenarioRunIdentity runIdentity = null,
+            long revision = 0L,
+            float voluntaryTurnReentrySecondsRemaining = 0f,
+            MovementRouteRecord pendingMovementRoute = null,
+            VoluntaryTurnCycleRecord pendingVoluntaryTurnCycle = null)
         {
             if (!Enum.IsDefined(typeof(GameplaySessionMode), mode))
                 throw new ArgumentOutOfRangeException(nameof(mode));
@@ -39,8 +55,14 @@ namespace GritGud.Application.Gameplay
             if (!Enum.IsDefined(typeof(GameplayTurnPhase), turnPhase))
                 throw new ArgumentOutOfRangeException(nameof(turnPhase));
             if (lastActionSequence < 0 || lastTurnSequence < 0
-                || journalSequence < 0)
+                || journalSequence < 0 || revision < 0)
                 throw new ArgumentOutOfRangeException(nameof(journalSequence));
+            GameplayNumericPolicy.RequireFinite(
+                voluntaryTurnReentrySecondsRemaining,
+                nameof(voluntaryTurnReentrySecondsRemaining));
+            if (voluntaryTurnReentrySecondsRemaining < 0f)
+                throw new ArgumentOutOfRangeException(
+                    nameof(voluntaryTurnReentrySecondsRemaining));
 
             if (string.IsNullOrWhiteSpace(scenarioId))
                 throw new ArgumentException("Combat state requires a scenario ID.",
@@ -67,6 +89,14 @@ namespace GritGud.Application.Gameplay
             LastActionSequence = lastActionSequence;
             LastTurnSequence = lastTurnSequence;
             JournalSequence = journalSequence;
+            RunIdentity = runIdentity ?? new ScenarioRunIdentity(
+                scenarioId + ".run",
+                scenarioSeed: 0u);
+            Revision = revision;
+            VoluntaryTurnReentrySecondsRemaining =
+                voluntaryTurnReentrySecondsRemaining;
+            PendingMovementRoute = pendingMovementRoute;
+            PendingVoluntaryTurnCycle = pendingVoluntaryTurnCycle;
         }
 
         public int SchemaVersion { get; }
@@ -87,6 +117,11 @@ namespace GritGud.Application.Gameplay
         public long LastActionSequence { get; }
         public long LastTurnSequence { get; }
         public long JournalSequence { get; }
+        public ScenarioRunIdentity RunIdentity { get; }
+        public long Revision { get; }
+        public float VoluntaryTurnReentrySecondsRemaining { get; }
+        public MovementRouteRecord PendingMovementRoute { get; }
+        public VoluntaryTurnCycleRecord PendingVoluntaryTurnCycle { get; }
 
         public GameplayActorSnapshot GetActor(string actorId)
         {
@@ -152,16 +187,22 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplayCombatStateSnapshot
     {
-        public const int CurrentSchemaVersion = 1;
+        public const int CurrentSchemaVersion = 2;
 
         public GameplayCombatStateSnapshot(
             GameplaySessionStateSnapshot session,
             IEnumerable<DestructiblePropSnapshot> destructibles = null,
             IEnumerable<VehicleMomentumState> vehicles = null,
             IEnumerable<ProjectileFlightSnapshot> projectiles = null,
-            IEnumerable<SmokeFieldSnapshot> smokeFields = null)
+            IEnumerable<SmokeFieldSnapshot> smokeFields = null,
+            GameplayCombatStateCoverage coverage =
+                GameplayCombatStateCoverage.Session)
         {
             Session = session ?? throw new ArgumentNullException(nameof(session));
+            if ((coverage & GameplayCombatStateCoverage.Session) == 0
+                || (coverage & ~AllCoverage) != 0)
+                throw new ArgumentOutOfRangeException(nameof(coverage));
+            Coverage = coverage;
             Destructibles = CopyAndSort(
                 destructibles, value => value.PropId, "destructible");
             Vehicles = CopyAndSort(
@@ -174,12 +215,29 @@ namespace GritGud.Application.Gameplay
         }
 
         public int SchemaVersion => CurrentSchemaVersion;
+        public static GameplayCombatStateCoverage AllCoverage =>
+            GameplayCombatStateCoverage.Session
+            | GameplayCombatStateCoverage.Destructibles
+            | GameplayCombatStateCoverage.Vehicles
+            | GameplayCombatStateCoverage.Projectiles
+            | GameplayCombatStateCoverage.SmokeFields;
         public GameplaySessionStateSnapshot Session { get; }
+        public GameplayCombatStateCoverage Coverage { get; }
         public IReadOnlyList<DestructiblePropSnapshot> Destructibles { get; }
         public IReadOnlyList<VehicleMomentumState> Vehicles { get; }
         public IReadOnlyList<ProjectileFlightSnapshot> Projectiles { get; }
         public IReadOnlyList<SmokeFieldSnapshot> SmokeFields { get; }
         public string CanonicalHash { get; }
+
+        public bool Covers(GameplayCombatStateCoverage required) =>
+            (Coverage & required) == required;
+
+        public void RequireCoverage(GameplayCombatStateCoverage required)
+        {
+            if (!Covers(required))
+                throw new InvalidOperationException(
+                    $"Canonical state does not cover required components '{required}'.");
+        }
 
         private static IReadOnlyList<T> CopyAndSort<T>(
             IEnumerable<T> values,
@@ -248,13 +306,29 @@ namespace GritGud.Application.Gameplay
                 gameplay.EmergencyResumeActorId,
                 gameplay.LastResolvedAction?.Sequence ?? 0L,
                 gameplay.LastEndedTurn?.Sequence ?? 0L,
-                gameplay.Journal.LastEntry?.Sequence ?? 0L);
+                gameplay.Journal.LastEntry?.Sequence ?? 0L,
+                gameplay.RunIdentity,
+                gameplay.Revision,
+                gameplay.VoluntaryTurnReentrySecondsRemaining,
+                gameplay.PendingMovementRoute,
+                gameplay.PendingVoluntaryTurnCycle);
+            GameplayCombatStateCoverage coverage =
+                GameplayCombatStateCoverage.Session;
+            if (destructibles != null)
+                coverage |= GameplayCombatStateCoverage.Destructibles;
+            if (vehicles != null)
+                coverage |= GameplayCombatStateCoverage.Vehicles;
+            if (projectiles != null)
+                coverage |= GameplayCombatStateCoverage.Projectiles;
+            if (smokeFields != null)
+                coverage |= GameplayCombatStateCoverage.SmokeFields;
             return new GameplayCombatStateSnapshot(
                 session,
                 propStates,
                 vehicleStates,
                 projectileStates,
-                smokeFields?.CaptureActiveFields());
+                smokeFields?.CaptureActiveFields(),
+                coverage);
         }
     }
 
@@ -278,8 +352,15 @@ namespace GritGud.Application.Gameplay
             var text = new StringBuilder();
             GameplaySessionStateSnapshot session = state.Session;
             Append(text, "schema", state.SchemaVersion);
+            Append(text, "coverage", (int)state.Coverage);
             Append(text, "session.schema", session.SchemaVersion);
             Append(text, "scenario", session.ScenarioId);
+            Append(text, "run.schema", session.RunIdentity.SchemaVersion);
+            Append(text, "run.id", session.RunIdentity.RunId);
+            Append(text, "run.seed", session.RunIdentity.ScenarioSeed);
+            Append(text, "run.randomSchema",
+                session.RunIdentity.RandomSchemaVersion);
+            Append(text, "revision", session.Revision);
             Append(text, "mode", (int)session.Mode);
             Append(text, "operation", (int)session.Operation);
             Append(text, "context", (int)session.TurnContext);
@@ -290,6 +371,12 @@ namespace GritGud.Application.Gameplay
             Append(text, "action.sequence", session.LastActionSequence);
             Append(text, "turn.sequence", session.LastTurnSequence);
             Append(text, "journal.sequence", session.JournalSequence);
+            Append(text, "voluntary.reentrySeconds",
+                session.VoluntaryTurnReentrySecondsRemaining);
+            AppendPendingMovement(text, session.PendingMovementRoute);
+            AppendPendingVoluntaryCycle(
+                text,
+                session.PendingVoluntaryTurnCycle);
             for (int index = 0; index < session.InitiativeOrder.Count; index++)
                 Append(text, "initiative." + index, session.InitiativeOrder[index]);
             Append(text, "emergency.index", session.EmergencyResponderIndex);
@@ -417,9 +504,54 @@ namespace GritGud.Application.Gameplay
             return text.ToString();
         }
 
-        private static void AppendActor(StringBuilder text, GameplayActorSnapshot actor)
+        private static void AppendPendingMovement(
+            StringBuilder text,
+            MovementRouteRecord route)
         {
-            string root = "actor." + actor.ActorId;
+            Append(text, "movement.pending", route != null);
+            if (route == null) return;
+            Append(text, "movement.actor", route.ActorId);
+            Append(text, "movement.origin.position", route.OriginPose.Position);
+            Append(text, "movement.origin.facing", route.OriginPose.FacingDegrees);
+            Append(text, "movement.origin.stance", (int)route.OriginPose.Stance);
+            Append(text, "movement.previous.ap", route.PreviousBudget.ActionPoints);
+            Append(text, "movement.previous.move",
+                route.PreviousBudget.MovementOpportunity);
+            Append(text, "movement.frozenBudget", route.HasFrozenBudget);
+            for (int index = 0; index < route.Segments.Count; index++)
+            {
+                MovementRouteSegmentRecord segment = route.Segments[index];
+                string root = "movement.segment." + index;
+                Append(text, root + ".from", segment.From);
+                Append(text, root + ".to", segment.To);
+                Append(text, root + ".kind", (int)segment.Kind);
+                Append(text, root + ".link", segment.TraversalLinkId);
+                Append(text, root + ".action", segment.ActionId);
+                Append(text, root + ".moveCost", segment.MovementCost);
+                Append(text, root + ".apCost", segment.ActionPointCost);
+                Append(text, root + ".arcHeight", segment.ArcHeight);
+                Append(text, root + ".duration",
+                    segment.PlaybackDurationSeconds);
+            }
+        }
+
+        private static void AppendPendingVoluntaryCycle(
+            StringBuilder text,
+            VoluntaryTurnCycleRecord cycle)
+        {
+            Append(text, "voluntary.pending", cycle != null);
+            if (cycle == null) return;
+            Append(text, "voluntary.sequence", cycle.Sequence);
+            foreach (GameplayActorSnapshot actor in cycle.Actors)
+                AppendActor(text, actor, "voluntary.actor.");
+        }
+
+        private static void AppendActor(
+            StringBuilder text,
+            GameplayActorSnapshot actor,
+            string prefix = "actor.")
+        {
+            string root = prefix + actor.ActorId;
             Append(text, root + ".position", actor.Pose.Position);
             Append(text, root + ".facing", actor.Pose.FacingDegrees);
             Append(text, root + ".stance", (int)actor.Pose.Stance);
@@ -427,6 +559,8 @@ namespace GritGud.Application.Gameplay
             Append(text, root + ".move", actor.TurnBudget.MovementOpportunity);
             Append(text, root + ".allowance.ap", actor.TurnActionPointAllowance);
             Append(text, root + ".allowance.move", actor.TurnMovementAllowance);
+            Append(text, root + ".allowance.emergencyAp",
+                actor.EmergencyActionPointAllowance);
             Append(text, root + ".equipped", actor.EquippedItemId ?? string.Empty);
             Append(text, root + ".equipment.movementMultiplier",
                 actor.EquipmentEffects.MovementSpeedMultiplier);

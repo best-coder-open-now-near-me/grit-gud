@@ -80,10 +80,15 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
+            var transition = new GameplayTransitionIdentity(
+                gameplay.NextActionSequence,
+                "displacement",
+                actorId,
+                targetActorId);
             var contest = new CloseQuartersControlRecord(
-                rollSource.RollD20(),
+                rollSource.RollD20(transition, "attacker-roll"),
                 attacker,
-                rollSource.RollD20(),
+                rollSource.RollD20(transition, "defender-roll"),
                 defender);
             GameplayPosition result = contest.AttackerSucceeded
                 ? destination

@@ -271,7 +271,7 @@ namespace GritGud.Presentation.Gameplay
                 destructibles.Session,
                 scenario.DisplacementSubjects,
                 new UnityDisplacementPathValidator(subjectRoots),
-                new SeededD20RollSource(randomSeed),
+                new AddressedD20RollSource(gameplay.RunIdentity),
                 CreateControlProfiles(scenario));
             preview = new DisplacementPreviewPresenter(transform);
             StatusMessage = string.Empty;

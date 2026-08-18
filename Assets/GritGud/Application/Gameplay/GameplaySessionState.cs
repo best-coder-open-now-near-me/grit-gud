@@ -220,7 +220,8 @@ namespace GritGud.Application.Gameplay
                 cachedInventory,
                 turnBudgetAllowance.ActionPoints,
                 turnBudgetAllowance.MovementOpportunity,
-                PinState);
+                PinState,
+                EmergencyActionPointAllowance);
             actorSnapshotDirty = false;
             return cachedSnapshot;
         }

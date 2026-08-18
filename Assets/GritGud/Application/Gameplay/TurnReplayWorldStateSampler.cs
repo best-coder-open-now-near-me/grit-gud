@@ -607,7 +607,8 @@ namespace GritGud.Application.Gameplay
                 inventory ?? actor.Inventory,
                 actor.TurnActionPointAllowance,
                 actor.TurnMovementAllowance,
-                replacePin ? pinState : actor.PinState);
+                replacePin ? pinState : actor.PinState,
+                actor.EmergencyActionPointAllowance);
 
         private static GameplayPosition Lerp(
             GameplayPosition from,

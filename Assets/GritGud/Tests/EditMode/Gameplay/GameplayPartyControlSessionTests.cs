@@ -221,7 +221,7 @@ namespace GritGud.Domain.Tests
                 new[] { mara, raider, vale },
                 Array.Empty<ScenarioObjectiveDefinition>(),
                 playerParty: party);
-            return new GameplaySession(scenario);
+            return new GameplaySession(scenario, scenarioSeed: 1u);
         }
 
         private static ScenarioActorDefinition CreateActor(
