@@ -127,10 +127,11 @@ namespace GritGud.Application.Gameplay
             if (action.Sequence != session.LastActionSequence + 1L)
                 throw new InvalidOperationException(
                     "Explosive action is not the next action sequence.");
-            if (!string.Equals(
-                session.ActiveActorId,
-                action.Request.ActorId,
-                StringComparison.Ordinal))
+            if (session.Mode == GameplaySessionMode.TurnBased
+                && !string.Equals(
+                    session.ActiveActorId,
+                    action.Request.ActorId,
+                    StringComparison.Ordinal))
                 throw new InvalidOperationException(
                     "Explosive action actor is not active.");
             GameplayActorSnapshot actor = session.GetActor(

@@ -18,6 +18,7 @@ internal static class SimulationChecks
             VerifyAtomicLiveInstallation();
             VerifyAllCurrentContentCoverage();
             VerifyTacticalDestructibleSimulation();
+            SimulationParityChecks.Verify();
             Console.WriteLine(
                 "Simulation checks passed: reducers, exact replay, atomic installation, and all-content capability coverage.");
             return 0;

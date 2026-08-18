@@ -515,7 +515,16 @@ namespace GritGud.Application.Gameplay
 
         public long LastTransitionSequence { get; private set; }
 
-        internal void RecordSemanticTransition(long sequence)
+        public void RecordSemanticTransition(
+            GameplayTransitionIdentity identity)
+        {
+            if (!actors.ContainsKey(identity.ActorId))
+                throw new InvalidOperationException(
+                    "Semantic transition actors must belong to the session.");
+            RecordSemanticTransition(identity.Sequence);
+        }
+
+        private void RecordSemanticTransition(long sequence)
         {
             if (sequence != LastTransitionSequence + 1L)
                 throw new InvalidOperationException(

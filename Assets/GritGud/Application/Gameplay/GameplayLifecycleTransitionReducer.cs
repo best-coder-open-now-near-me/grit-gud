@@ -44,7 +44,7 @@ namespace GritGud.Application.Gameplay
                 actorId)
         {
             Phase = GameplayContentIdentity.RequireText(phase, nameof(phase));
-            Responders = CopyIds(responderIds);
+            Responders = CopyIds(actorId, responderIds);
             if (phase == "begin" && actionPointAllowance <= 0)
                 throw new ArgumentOutOfRangeException(
                     nameof(actionPointAllowance));
@@ -56,13 +56,28 @@ namespace GritGud.Application.Gameplay
         public int ActionPointAllowance { get; }
 
         private static IReadOnlyList<string> CopyIds(
+            string attackerId,
             IEnumerable<string> responderIds)
         {
             var result = new List<string>();
+            var unique = new HashSet<string>(StringComparer.Ordinal);
             foreach (string id in responderIds ?? Array.Empty<string>())
-                result.Add(GameplayContentIdentity.RequireText(
+            {
+                string responderId = GameplayContentIdentity.RequireText(
                     id,
-                    nameof(responderIds)));
+                    nameof(responderIds));
+                if (string.Equals(
+                        responderId,
+                        attackerId,
+                        StringComparison.Ordinal)
+                    || !unique.Add(responderId))
+                {
+                    throw new ArgumentException(
+                        "Emergency responders must be unique and cannot include the attacker.",
+                        nameof(responderIds));
+                }
+                result.Add(responderId);
+            }
             return result.AsReadOnly();
         }
     }
