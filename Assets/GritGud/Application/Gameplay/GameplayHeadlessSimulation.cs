@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace GritGud.Application.Gameplay
 {
@@ -104,6 +105,14 @@ namespace GritGud.Application.Gameplay
                 CurrentState,
                 reducers,
                 Array.Empty<GameplayTrajectoryStep>());
+
+        public GameplayReproBundle CreateRepro(
+            GameplayExecutionIdentity executionIdentity,
+            string label) => new GameplayReproBundle(
+                executionIdentity,
+                InitialState,
+                steps,
+                label);
     }
 
     public sealed class GameplayExactReplayResult
@@ -113,7 +122,8 @@ namespace GritGud.Application.Gameplay
             int verifiedStepCount,
             int divergentStepIndex,
             string expectedHash,
-            string actualHash)
+            string actualHash,
+            string divergenceReason = "")
         {
             FinalState = finalState ?? throw new ArgumentNullException(
                 nameof(finalState));
@@ -121,6 +131,7 @@ namespace GritGud.Application.Gameplay
             DivergentStepIndex = divergentStepIndex;
             ExpectedHash = expectedHash ?? string.Empty;
             ActualHash = actualHash ?? string.Empty;
+            DivergenceReason = divergenceReason ?? string.Empty;
         }
 
         public GameplayCombatStateSnapshot FinalState { get; }
@@ -128,6 +139,7 @@ namespace GritGud.Application.Gameplay
         public int DivergentStepIndex { get; }
         public string ExpectedHash { get; }
         public string ActualHash { get; }
+        public string DivergenceReason { get; }
         public bool IsExact => DivergentStepIndex < 0;
     }
 
@@ -164,7 +176,23 @@ namespace GritGud.Application.Gameplay
                         index,
                         index,
                         step.ResultingStateHash,
-                        state.CanonicalHash);
+                        state.CanonicalHash,
+                        "state-hash");
+                string expectedEvents = Join(step.DomainEventTypes);
+                string actualEvents = Join(reduction.DomainEvents);
+                if (!string.Equals(
+                        expectedEvents,
+                        actualEvents,
+                        StringComparison.Ordinal))
+                {
+                    return new GameplayExactReplayResult(
+                        state,
+                        index,
+                        index,
+                        expectedEvents,
+                        actualEvents,
+                        "domain-events");
+                }
                 index++;
             }
             return new GameplayExactReplayResult(
@@ -172,12 +200,38 @@ namespace GritGud.Application.Gameplay
                 index,
                 divergentStepIndex: -1,
                 expectedHash: state.CanonicalHash,
-                actualHash: state.CanonicalHash);
+                actualHash: state.CanonicalHash,
+                divergenceReason: string.Empty);
+        }
+
+        private static string Join(IEnumerable<string> eventTypes)
+        {
+            var text = new StringBuilder();
+            foreach (string eventType in eventTypes)
+            {
+                if (text.Length > 0) text.Append('|');
+                text.Append(eventType);
+            }
+            return text.ToString();
+        }
+
+        private static string Join(
+            IEnumerable<GameplayDomainEvent> domainEvents)
+        {
+            var text = new StringBuilder();
+            foreach (GameplayDomainEvent domainEvent in domainEvents)
+            {
+                if (text.Length > 0) text.Append('|');
+                text.Append(domainEvent.EventType);
+            }
+            return text.ToString();
         }
     }
 
     public sealed class GameplayReproBundle
     {
+        public const int CurrentSchemaVersion = 1;
+
         public GameplayReproBundle(
             GameplayExecutionIdentity executionIdentity,
             GameplayCombatStateSnapshot initialState,
@@ -188,21 +242,62 @@ namespace GritGud.Application.Gameplay
                 nameof(executionIdentity));
             InitialState = initialState ?? throw new ArgumentNullException(
                 nameof(initialState));
-            Trajectory = new List<GameplayTrajectoryStep>(
+            var steps = new List<GameplayTrajectoryStep>(
                 trajectory ?? throw new ArgumentNullException(
-                    nameof(trajectory))).AsReadOnly();
+                    nameof(trajectory)));
             Label = label?.Trim() ?? string.Empty;
             if (!executionIdentity.Run.HasSameIdentity(
                 initialState.Session.RunIdentity))
                 throw new ArgumentException(
                     "Repro execution and canonical state run identities differ.",
                     nameof(executionIdentity));
+            ValidateTrajectory(initialState, steps);
+            SchemaVersion = CurrentSchemaVersion;
+            NumericPolicyVersion = GameplayNumericPolicy.CurrentVersion;
+            Trajectory = steps.AsReadOnly();
+            FinalStateHash = steps.Count == 0
+                ? initialState.CanonicalHash
+                : steps[steps.Count - 1].ResultingStateHash;
         }
 
+        public int SchemaVersion { get; }
+        public int NumericPolicyVersion { get; }
         public GameplayExecutionIdentity ExecutionIdentity { get; }
         public GameplayCombatStateSnapshot InitialState { get; }
         public IReadOnlyList<GameplayTrajectoryStep> Trajectory { get; }
         public string Label { get; }
+        public string FinalStateHash { get; }
+
+        public string ToPortableJson() =>
+            GameplayReproBundleFormatter.Format(this);
+
+        private static void ValidateTrajectory(
+            GameplayCombatStateSnapshot initialState,
+            IReadOnlyList<GameplayTrajectoryStep> steps)
+        {
+            string previousHash = initialState.CanonicalHash;
+            long sequence = initialState.Session.LastTransitionSequence;
+            for (int index = 0; index < steps.Count; index++)
+            {
+                GameplayTrajectoryStep step = steps[index]
+                    ?? throw new ArgumentException(
+                        "Repro trajectories cannot contain null steps.",
+                        nameof(steps));
+                if (!string.Equals(
+                        step.Transition.PreviousStateHash,
+                        previousHash,
+                        StringComparison.Ordinal))
+                    throw new ArgumentException(
+                        $"Repro step {index} does not continue the prior state hash.",
+                        nameof(steps));
+                sequence = checked(sequence + 1L);
+                if (step.Transition.Identity.Sequence != sequence)
+                    throw new ArgumentException(
+                        $"Repro step {index} has a non-contiguous transition sequence.",
+                        nameof(steps));
+                previousHash = step.ResultingStateHash;
+            }
+        }
     }
 
     public static class GameplaySimulationReducers

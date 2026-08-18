@@ -233,6 +233,13 @@ namespace GritGud.Application.Gameplay
 
         public void Install(GameplayReductionResult reduction)
         {
+            Install(reduction, afterRootSwap: null);
+        }
+
+        internal void Install(
+            GameplayReductionResult reduction,
+            Action<GameplayReductionResult> afterRootSwap)
+        {
             if (reduction == null)
                 throw new ArgumentNullException(nameof(reduction));
             if (!string.Equals(
@@ -244,6 +251,7 @@ namespace GritGud.Application.Gameplay
             RequireValid(reduction.Resulting);
 
             current = reduction.Resulting;
+            afterRootSwap?.Invoke(reduction);
             PublishAll(reduction.DomainEvents);
         }
 

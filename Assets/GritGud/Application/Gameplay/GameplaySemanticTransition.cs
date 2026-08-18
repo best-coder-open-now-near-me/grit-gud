@@ -225,7 +225,10 @@ namespace GritGud.Application.Gameplay
             GameplayTransitionIdentity transition,
             string subjectId,
             object semanticRecord)
-            : base(transition, "transition-reduced", subjectId)
+            : base(
+                transition,
+                "transition-reduced." + transition.Kind,
+                subjectId)
         {
             SemanticRecord = semanticRecord ?? throw new ArgumentNullException(
                 nameof(semanticRecord));

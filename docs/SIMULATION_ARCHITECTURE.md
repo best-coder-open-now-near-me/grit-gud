@@ -57,6 +57,20 @@ The permanent flow is:
 8. record the semantic step for exact replay, diagnostics, and promotion into
    Unity verification.
 
+`GameplaySimulationRuntime` owns the live immutable root. It verifies the
+exact capability route, reduces without mutating the installed state, validates
+the complete result, swaps the root once, records the trajectory step, and only
+then publishes domain events. A presentation listener failure cannot roll back
+or orphan the authoritative state or its trajectory. Detached branches begin
+from an immutable root and never inherit mutable trajectory storage.
+
+Repro bundles validate a contiguous pre-state/transition/post-state chain and
+carry gameplay, spatial, run, random, numeric, evidence, and schema identities.
+Their dependency-free portable JSON representation includes the complete
+canonical initial state and resolved semantic payload graph; it is a cold-path
+bug-report artifact, not a hot-loop serialization format. Exact replay verifies
+both every canonical endpoint and the ordered domain-event types.
+
 The first vertical proof is one complete direct-rifleman turn. The same spine
 then expands across movement, stance, equipment, displacement, pins,
 projectiles, emergency reactions, blasts, destructibles, consumables, smoke,

@@ -350,6 +350,100 @@ internal static class SimulationChecks
             "Live installation did not swap the authoritative root.");
         Require(eventObservedInstalledState,
             "Domain events were published before authoritative installation.");
+
+        var executionIdentity = new GameplayExecutionIdentity(
+            new GameplayContentIdentity(
+                initial.Session.ScenarioId,
+                scenarioSchemaVersion: 1,
+                rulesSchemaVersion: 1,
+                new string('a', 64)),
+            new SpatialContentIdentity(
+                "simulation-check-level",
+                levelSchemaVersion: 1,
+                evidenceAlgorithmVersion: 1,
+                new string('b', 64)),
+            initial.Session.RunIdentity);
+        var runtime = new GameplaySimulationRuntime(
+            executionIdentity,
+            initial,
+            reducers,
+            capabilities);
+        bool runtimeEventSawInstalledTrajectory = false;
+        runtime.DomainEventPublished += domainEvent =>
+            runtimeEventSawInstalledTrajectory = runtime.CurrentState.Session
+                    .LastTransitionSequence == 1L
+                && runtime.Trajectory.Count == 1
+                && string.Equals(
+                    domainEvent.EventType,
+                    "transition-reduced.Move",
+                    StringComparison.Ordinal);
+        runtime.Execute(transition);
+        Require(runtimeEventSawInstalledTrajectory,
+            "Live runtime published before state and trajectory installation.");
+        GameplayReproBundle repro = runtime.CreateRepro(
+            "atomic movement check");
+        Require(repro.Trajectory.Count == 1
+            && string.Equals(
+                repro.FinalStateHash,
+                runtime.CurrentState.CanonicalHash,
+                StringComparison.Ordinal),
+            "Live runtime did not create a contiguous semantic repro bundle.");
+        string portable = repro.ToPortableJson();
+        using (JsonDocument document = JsonDocument.Parse(portable))
+        {
+            Require(string.Equals(
+                    document.RootElement.GetProperty("format").GetString(),
+                    "grit-gud-semantic-repro",
+                    StringComparison.Ordinal),
+                "Portable repro document has the wrong format marker.");
+        }
+        Require(portable.Contains(initial.CanonicalHash)
+            && portable.Contains(runtime.CurrentState.CanonicalHash)
+            && portable.Contains(typeof(GameplayMoveTransitionPayload).FullName),
+            "Portable repro omitted canonical endpoints or semantic payload data.");
+        GameplayExactReplayResult runtimeReplay = GameplayExactReplay.Verify(
+            initial,
+            runtime.Trajectory,
+            reducers);
+        Require(runtimeReplay.IsExact,
+            "Live runtime trajectory did not replay exactly.");
+
+        var wrongEvents = new GameplayTrajectoryStep(
+            transition,
+            runtime.CurrentState.CanonicalHash,
+            new[] { "wrong-event" });
+        GameplayExactReplayResult eventDivergence = GameplayExactReplay.Verify(
+            initial,
+            new[] { wrongEvents },
+            reducers);
+        Require(!eventDivergence.IsExact
+            && string.Equals(
+                eventDivergence.DivergenceReason,
+                "domain-events",
+                StringComparison.Ordinal),
+            "Exact replay did not detect domain-event divergence.");
+
+        var failingPresentationRuntime = new GameplaySimulationRuntime(
+            executionIdentity,
+            initial,
+            reducers,
+            capabilities);
+        failingPresentationRuntime.DomainEventPublished += _ =>
+            throw new InvalidOperationException("presentation check failure");
+        bool presentationFailed = false;
+        try
+        {
+            failingPresentationRuntime.Execute(transition);
+        }
+        catch (AggregateException)
+        {
+            presentationFailed = true;
+        }
+        Require(presentationFailed
+            && failingPresentationRuntime.CurrentState.Session
+                .LastTransitionSequence == 1L
+            && failingPresentationRuntime.Trajectory.Count == 1,
+            "Presentation failure rolled back or orphaned authoritative installation.");
     }
 
     private static void VerifyAllCurrentContentCoverage()
