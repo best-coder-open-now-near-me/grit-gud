@@ -37,6 +37,8 @@ namespace GritGud.Application.Gameplay
         EndTurnControl,
         EmergencyControl,
         EnemyDecision,
+        SessionControl,
+        SystemContinuation,
     }
 
     public sealed class GameplayReachableInput
@@ -173,6 +175,17 @@ namespace GritGud.Application.Gameplay
                 throw new NotSupportedException(
                     $"Candidate '{candidate.CandidateId}' has no complete fail-closed simulation route for '{candidate.Profile.Signature}'.");
         }
+
+        public void RequireCompleteRoute(GameplayCapabilityProfile profile)
+        {
+            if (profile == null) throw new ArgumentNullException(nameof(profile));
+            if (!TryGet(profile, out GameplayCapabilityRegistration route)
+                || (route.Stages & GameplayCapabilitySupportStage.Complete)
+                    != GameplayCapabilitySupportStage.Complete
+                || !reducers.Supports(profile))
+                throw new NotSupportedException(
+                    $"Capability '{profile.Signature}' has no complete simulation route.");
+        }
     }
 
     public sealed class GameplayCapabilityCoverageIssue
@@ -195,6 +208,11 @@ namespace GritGud.Application.Gameplay
         public string SourceId { get; }
         public string ProfileSignature { get; }
         public GameplayCapabilitySupportStage MissingStages { get; }
+
+        public bool IsBlocking => !string.Equals(
+            Code,
+            "capability.unreachable-implementation",
+            StringComparison.Ordinal);
     }
 
     public sealed class GameplayCapabilityCoverageReport
@@ -211,15 +229,36 @@ namespace GritGud.Application.Gameplay
 
         public IReadOnlyList<GameplayReachableInput> ReachableInputs { get; }
         public IReadOnlyList<GameplayCapabilityCoverageIssue> Issues { get; }
-        public bool IsComplete => Issues.Count == 0;
+        public bool IsComplete
+        {
+            get
+            {
+                foreach (GameplayCapabilityCoverageIssue issue in Issues)
+                    if (issue.IsBlocking) return false;
+                return true;
+            }
+        }
+
+        public bool HasUnreachableImplementations
+        {
+            get
+            {
+                foreach (GameplayCapabilityCoverageIssue issue in Issues)
+                    if (!issue.IsBlocking) return true;
+                return false;
+            }
+        }
 
         public void RequireComplete(string scenarioId)
         {
             if (IsComplete) return;
             var details = new List<string>();
             foreach (GameplayCapabilityCoverageIssue issue in Issues)
+            {
+                if (!issue.IsBlocking) continue;
                 details.Add(
                     $"{issue.Code}: {issue.SourceId} -> {issue.ProfileSignature} missing {issue.MissingStages}");
+            }
             throw new InvalidOperationException(
                 $"Scenario '{scenarioId}' has incomplete simulation capability coverage: "
                 + string.Join(" | ", details));
@@ -252,6 +291,18 @@ namespace GritGud.Application.Gameplay
             if (registry == null) throw new ArgumentNullException(nameof(registry));
             return ValidateInputs(
                 GameplayReachableInputEnumerator.Enumerate(scenario, level),
+                registry);
+        }
+
+        public static GameplayCapabilityCoverageReport Validate(
+            IEnumerable<GameplayReachableInput> reachableInputs,
+            GameplayCapabilityRegistry registry)
+        {
+            if (reachableInputs == null)
+                throw new ArgumentNullException(nameof(reachableInputs));
+            if (registry == null) throw new ArgumentNullException(nameof(registry));
+            return ValidateInputs(
+                new List<GameplayReachableInput>(reachableInputs).AsReadOnly(),
                 registry);
         }
 
@@ -331,6 +382,7 @@ namespace GritGud.Application.Gameplay
             bool hasTraversal = level.traversalLinks != null
                 && level.traversalLinks.Count > 0;
             bool hasEmergency = HasEmergencyProjectile(scenario);
+            bool hasProjectile = HasProjectile(scenario);
             foreach (ScenarioActorDefinition actor in scenario.Actors)
             {
                 bool playerControlled = scenario.PlayerParty == null
@@ -407,12 +459,18 @@ namespace GritGud.Application.Gameplay
                             $"Consumable power '{item.ConsumablePower?.PowerTypeId}' has no semantic capability profile.");
                     }
                 }
-                if (playerControlled)
+                if (playerControlled || aiControlled)
                     foreach (DisplacementActionDefinition action in
                         actor.DisplacementActions)
                         Add(result,
-                            GameplayReachableInputKind.CharacterAbility,
-                            action.Id, actor.Id,
+                            playerControlled
+                                ? GameplayReachableInputKind.CharacterAbility
+                                : GameplayReachableInputKind.EnemyDecision,
+                            playerControlled
+                                ? action.Id
+                                : "ai." + actor.Combat.EnemyBehavior.BehaviorId
+                                    + "." + action.Id,
+                            actor.Id,
                             GameplayCapabilityProfiles.Displace(action));
             }
             IEnumerable<string> interactionActors = scenario.PlayerParty == null
@@ -425,6 +483,42 @@ namespace GritGud.Application.Gameplay
                         objective.Interaction.Id,
                         actorId,
                         GameplayCapabilityProfiles.Interact());
+            string systemActorId = scenario.Actors[0].Id;
+            Add(result, GameplayReachableInputKind.SessionControl,
+                "control.turn-mode.enter", systemActorId,
+                GameplayCapabilityProfiles.ChangeTurnMode("enter"));
+            Add(result, GameplayReachableInputKind.SessionControl,
+                "control.turn-mode.exit", systemActorId,
+                GameplayCapabilityProfiles.ChangeTurnMode("exit"));
+            Add(result, GameplayReachableInputKind.SystemContinuation,
+                "system.world.continuous-time", systemActorId,
+                GameplayCapabilityProfiles.AdvanceWorld("continuous-time"));
+            Add(result, GameplayReachableInputKind.SystemContinuation,
+                "system.world.voluntary-cycle", systemActorId,
+                GameplayCapabilityProfiles.AdvanceWorld("voluntary-cycle"));
+            Add(result, GameplayReachableInputKind.SystemContinuation,
+                "system.encounter.begin", systemActorId,
+                GameplayCapabilityProfiles.ChangeEncounter("begin"));
+            Add(result, GameplayReachableInputKind.SystemContinuation,
+                "system.encounter.request-completion", systemActorId,
+                GameplayCapabilityProfiles.ChangeEncounter(
+                    "request-completion"));
+            Add(result, GameplayReachableInputKind.SystemContinuation,
+                "system.encounter.complete", systemActorId,
+                GameplayCapabilityProfiles.ChangeEncounter("complete"));
+            if (hasProjectile)
+                Add(result, GameplayReachableInputKind.SystemContinuation,
+                    "system.projectile.advance", systemActorId,
+                    GameplayCapabilityProfiles.AdvanceProjectile());
+            if (hasEmergency)
+            {
+                Add(result, GameplayReachableInputKind.SystemContinuation,
+                    "system.emergency.begin", systemActorId,
+                    GameplayCapabilityProfiles.EmergencyReaction("begin"));
+                Add(result, GameplayReachableInputKind.SystemContinuation,
+                    "system.emergency.complete", systemActorId,
+                    GameplayCapabilityProfiles.EmergencyReaction("complete"));
+            }
             return result.AsReadOnly();
         }
 
@@ -457,6 +551,17 @@ namespace GritGud.Application.Gameplay
                     if (item.Attack?.Projectile
                         ?.OpensEmergencyReactionWindow == true)
                         return true;
+            }
+            return false;
+        }
+
+        private static bool HasProjectile(ScenarioDefinition scenario)
+        {
+            foreach (ScenarioActorDefinition actor in scenario.Actors)
+            {
+                if (actor.Attack?.Projectile != null) return true;
+                foreach (InventoryItemDefinition item in actor.Inventory)
+                    if (item.Attack?.Projectile != null) return true;
             }
             return false;
         }

@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Text.Json;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Levels;
@@ -13,8 +15,10 @@ internal static class SimulationChecks
         {
             VerifyWalkingSliceAndExactReplay();
             VerifyCapabilityCoverageFailsClosed();
+            VerifyAtomicLiveInstallation();
+            VerifyAllCurrentContentCoverage();
             Console.WriteLine(
-                "Simulation checks passed: walking slice, exact replay, and fail-closed capability coverage.");
+                "Simulation checks passed: reducers, exact replay, atomic installation, and all-content capability coverage.");
             return 0;
         }
         catch (Exception exception)
@@ -281,6 +285,180 @@ internal static class SimulationChecks
         }
         Require(rejected,
             "Candidate generation did not fail closed on an incomplete route.");
+    }
+
+    private static void VerifyAtomicLiveInstallation()
+    {
+        AttackDefinition rifle = CreateRifle();
+        GameplaySession gameplay = CreateGameplay(rifle);
+        Require(gameplay.BeginEncounter(), "Encounter did not begin.");
+        GameplayCombatStateSnapshot initial =
+            GameplayCombatStateCapture.Capture(gameplay);
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
+        var input = new GameplayReachableInput(
+            GameplayReachableInputKind.MovementControl,
+            "control.move",
+            "player",
+            GameplayCapabilityProfiles.GroundedMove());
+        GameplayCapabilityRegistry capabilities =
+            GameplayCurrentCapabilityCatalog.Create(
+                reducers,
+                new[] { input });
+        GameplayCandidate candidate = new GameplayReachableCandidateBuilder(
+            capabilities).Build(input);
+        Require(candidate.Profile.Equals(input.Profile),
+            "Reachable input did not build its exact capability candidate.");
+
+        GameplayActorSnapshot player = initial.Session.GetActor("player");
+        var route = new MovementRouteRecord(
+            player.ActorId,
+            player.Pose,
+            player.TurnBudget,
+            new[]
+            {
+                new MovementRouteSegmentRecord(
+                    player.Pose.Position,
+                    new GameplayPosition(1f, 0f, 0f),
+                    movementCost: 1f,
+                    playbackDurationSeconds: 0.25f),
+            });
+        var payload = new GameplayMoveTransitionPayload(
+            GameplayCapabilityProfiles.GroundedMove(),
+            route);
+        var transition = new GameplaySemanticTransition(
+            new GameplayTransitionIdentity(
+                1L,
+                GameplaySemanticCapability.Move.ToString(),
+                payload.ActorId,
+                payload.SubjectId),
+            initial.CanonicalHash,
+            payload);
+        var store = new GameplayAtomicCombatStateStore(initial);
+        bool eventObservedInstalledState = false;
+        store.DomainEventPublished += _ =>
+            eventObservedInstalledState = store.Current.Session
+                .LastTransitionSequence == 1L;
+        var pipeline = new GameplaySemanticExecutionPipeline(
+            reducers,
+            capabilities,
+            store);
+        GameplayReductionResult result = pipeline.Execute(transition);
+        Require(ReferenceEquals(store.Current, result.Resulting),
+            "Live installation did not swap the authoritative root.");
+        Require(eventObservedInstalledState,
+            "Domain events were published before authoritative installation.");
+    }
+
+    private static void VerifyAllCurrentContentCoverage()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        string contentRoot = Path.Combine(
+            repositoryRoot,
+            "Assets",
+            "GritGud",
+            "Content",
+            "Resources");
+        JsonSerializerOptions json = new JsonSerializerOptions
+        {
+            IncludeFields = true,
+            PropertyNameCaseInsensitive = true,
+        };
+        var levels = new Dictionary<string, LevelDocument>(
+            StringComparer.Ordinal);
+        foreach (string path in Directory.GetFiles(
+            Path.Combine(contentRoot, "Levels"),
+            "*.json",
+            SearchOption.AllDirectories))
+        {
+            LevelDocument level = ReadJson<LevelDocument>(path, json);
+            level.Normalize();
+            if (string.IsNullOrWhiteSpace(level.levelId)) continue;
+            if (!levels.TryAdd(level.levelId, level))
+                throw new InvalidOperationException(
+                    $"Current content defines level '{level.levelId}' more than once.");
+        }
+
+        var allInputs = new List<GameplayReachableInput>();
+        int scenarioCount = 0;
+        foreach (string path in Directory.GetFiles(
+            Path.Combine(contentRoot, "Scenarios"),
+            "*.json",
+            SearchOption.AllDirectories))
+        {
+            ScenarioContentDocument scenario =
+                ReadJson<ScenarioContentDocument>(path, json);
+            scenario.Normalize();
+            if (!levels.TryGetValue(
+                scenario.levelId ?? string.Empty,
+                out LevelDocument level))
+                throw new InvalidOperationException(
+                    $"Scenario '{scenario.scenarioId}' references missing level '{scenario.levelId}'.");
+            GameplayScenarioAssembly assembly =
+                new GameplayScenarioAssembler().Assemble(scenario, level);
+            GameplayCapabilityCoverageReport report =
+                GameplayCapabilityCoverageGate.ValidateCurrent(assembly, level);
+            report.RequireComplete(assembly.Scenario.Id);
+            allInputs.AddRange(
+                GameplayReachableInputEnumerator.Enumerate(assembly, level));
+            scenarioCount++;
+        }
+        Require(scenarioCount > 0,
+            "The all-content coverage gate found no scenarios.");
+
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
+        GameplayCapabilityRegistry capabilities =
+            GameplayCurrentCapabilityCatalog.Create(reducers, allInputs);
+        GameplayCapabilityCoverageReport aggregate =
+            GameplayCapabilityCoverageValidator.Validate(
+                allInputs,
+                capabilities);
+        Require(aggregate.IsComplete,
+            "Current content contains an incomplete semantic capability route.");
+        IReadOnlyList<GameplayCandidate> candidates =
+            new GameplayReachableCandidateBuilder(capabilities).BuildAll(
+                allInputs);
+        Require(candidates.Count == allInputs.Count,
+            "Reachable candidate construction omitted current content inputs.");
+
+        int unreachable = 0;
+        foreach (GameplayCapabilityCoverageIssue issue in aggregate.Issues)
+            if (!issue.IsBlocking) unreachable++;
+        Console.WriteLine(
+            $"Capability coverage: {scenarioCount} scenario(s), "
+            + $"{allInputs.Count} reachable inputs, "
+            + $"{unreachable} implemented-but-unreachable profile(s).");
+    }
+
+    private static T ReadJson<T>(
+        string path,
+        JsonSerializerOptions options)
+    {
+        T value = JsonSerializer.Deserialize<T>(
+            File.ReadAllText(path),
+            options);
+        return value == null
+            ? throw new InvalidOperationException(
+                $"Content file '{path}' did not deserialize.")
+            : value;
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo directory = new DirectoryInfo(
+            Directory.GetCurrentDirectory());
+        while (directory != null)
+        {
+            if (File.Exists(Path.Combine(
+                directory.FullName,
+                "ProjectSettings",
+                "ProjectVersion.txt")))
+                return directory.FullName;
+            directory = directory.Parent;
+        }
+        throw new InvalidOperationException(
+            "The simulation checks could not locate the repository root.");
     }
 
     private static bool HasIssue(

@@ -123,7 +123,7 @@ namespace GritGud.Application.Gameplay
                     content.props,
                     content.vehicles),
                 playerParty);
-            return new GameplayScenarioAssembly(
+            var assembly = new GameplayScenarioAssembly(
                 content.displayName,
                 content.primaryTargetActorId,
                 content.primaryObjectiveId,
@@ -135,6 +135,8 @@ namespace GritGud.Application.Gameplay
                 GameplayDisplacementAssembler.CreateSubjects(
                     actorIndex,
                     propIndex));
+            GameplayCapabilityCoverageGate.RequireCurrent(assembly, level);
+            return assembly;
         }
 
         private static void RequireText(string value, string label) =>
