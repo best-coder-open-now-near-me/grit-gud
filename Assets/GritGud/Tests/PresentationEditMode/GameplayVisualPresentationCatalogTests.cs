@@ -62,7 +62,7 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
-        public void RifleUsesACompactSurfaceImpactEffect()
+        public void RifleUsesACompactWideSurfaceImpactEffect()
         {
             WeaponPresentationCatalog weapons =
                 WeaponPresentationCatalog.LoadDefault();
@@ -71,13 +71,20 @@ namespace GritGud.Presentation.Tests
                 weapons.Get("weapon.rifle").ImpactEffectScaleMultiplier,
                 Is.EqualTo(0.2f));
             Assert.That(
+                weapons.Get("weapon.rifle").ImpactEffectWidthMultiplier,
+                Is.EqualTo(4f));
+            Assert.That(
                 weapons.Get("weapon.rocket-launcher")
                     .ImpactEffectScaleMultiplier,
+                Is.EqualTo(1f));
+            Assert.That(
+                weapons.Get("weapon.rocket-launcher")
+                    .ImpactEffectWidthMultiplier,
                 Is.EqualTo(1f));
         }
 
         [Test]
-        public void InstantiatedRifleImpactClearsAwakeParticlesBeforeScaling()
+        public void InstantiatedRifleImpactAppliesWidthAfterClearingParticles()
         {
             SurfacePresentationDefinition surface =
                 SurfacePresentationCatalog.LoadDefault().Get("surface.concrete");
@@ -92,12 +99,16 @@ namespace GritGud.Presentation.Tests
                     Vector3.zero,
                     Quaternion.identity,
                     root.transform,
-                    rifle.ImpactEffectScaleMultiplier);
+                    rifle.ImpactEffectScaleMultiplier,
+                    rifle.ImpactEffectWidthMultiplier);
 
-                Vector3 expectedScale =
+                Vector3 uniformScale =
                     surface.ImpactEffectPrefab.transform.localScale
                     * surface.ImpactScale
                     * 0.2f;
+                Vector3 expectedScale = Vector3.Scale(
+                    uniformScale,
+                    new Vector3(4f, 4f, 1f));
                 Assert.That(
                     Vector3.Distance(effect.transform.localScale, expectedScale),
                     Is.LessThan(0.000001f));

@@ -91,12 +91,16 @@ namespace GritGud.Presentation.Gameplay
                 ? attacker.Transform.position + Vector3.up
                 : position - Vector3.forward;
             Vector3 normal = (attackerPosition - position).normalized;
+            float scale = ResolveImpactScaleMultiplier(
+                resolution.AttackerId,
+                out float width);
             PresentImpact(
                 SurfacePresentationCatalog.ActorSurfaceId,
                 position,
                 normal.sqrMagnitude > 0.0001f ? normal : Vector3.up,
                 createDecal: false,
-                ResolveImpactScaleMultiplier(resolution.AttackerId));
+                scale,
+                width);
         }
 
         private void HandleWeaponDischarged(GameplayActionRecord action)
@@ -142,12 +146,16 @@ namespace GritGud.Presentation.Gameplay
                 }
             }
 
+            float scale = ResolveImpactScaleMultiplier(
+                discharge.AttackerId,
+                out float width);
             PresentImpact(
                 surfaceId,
                 position,
                 normal,
                 createDecal: true,
-                ResolveImpactScaleMultiplier(discharge.AttackerId));
+                scale,
+                width);
         }
 
         private string ResolveSurfaceId(string targetId)
@@ -162,7 +170,8 @@ namespace GritGud.Presentation.Gameplay
             Vector3 position,
             Vector3 normal,
             bool createDecal,
-            float scaleMultiplier)
+            float scaleMultiplier,
+            float widthMultiplier)
         {
             SurfacePresentationDefinition definition = catalog.Get(surfaceId);
             if (definition.ImpactEffectPrefab != null)
@@ -174,7 +183,8 @@ namespace GritGud.Presentation.Gameplay
                     position + (normal * 0.012f),
                     orientation,
                     root.transform,
-                    scaleMultiplier);
+                    scaleMultiplier,
+                    widthMultiplier);
                 Destroy(effect, definition.ImpactLifetimeSeconds);
             }
 
@@ -189,7 +199,8 @@ namespace GritGud.Presentation.Gameplay
             Vector3 position,
             Quaternion orientation,
             Transform parent,
-            float scaleMultiplier)
+            float scaleMultiplier,
+            float widthMultiplier)
         {
             if (definition == null)
                 throw new ArgumentNullException(nameof(definition));
@@ -216,26 +227,38 @@ namespace GritGud.Presentation.Gameplay
                 main.playOnAwake = false;
                 main.scalingMode = ParticleSystemScalingMode.Hierarchy;
             }
-            effect.transform.localScale =
+            Vector3 uniformScale =
                 definition.ImpactEffectPrefab.transform.localScale
                 * definition.ImpactScale
                 * Mathf.Max(0f, scaleMultiplier);
+            effect.transform.localScale = Vector3.Scale(
+                uniformScale,
+                new Vector3(
+                    Mathf.Max(0f, widthMultiplier),
+                    Mathf.Max(0f, widthMultiplier),
+                    1f));
             foreach (ParticleSystem particles in systems)
                 particles.Play(withChildren: false);
             return effect;
         }
 
-        private float ResolveImpactScaleMultiplier(string attackerId)
+        private float ResolveImpactScaleMultiplier(
+            string attackerId,
+            out float widthMultiplier)
         {
             string equippedItemId = attacks?.Session?.GetActor(attackerId)
                 .EquippedItemId;
-            return equippedItemId != null
+            if (equippedItemId != null
                 && weapons != null
                 && weapons.TryGet(
                     equippedItemId,
-                    out WeaponPresentationDefinition weapon)
-                ? weapon.ImpactEffectScaleMultiplier
-                : 1f;
+                    out WeaponPresentationDefinition weapon))
+            {
+                widthMultiplier = weapon.ImpactEffectWidthMultiplier;
+                return weapon.ImpactEffectScaleMultiplier;
+            }
+            widthMultiplier = 1f;
+            return 1f;
         }
 
         private void CreateDecal(

@@ -61,6 +61,9 @@ namespace GritGud.Presentation.Gameplay
         [SerializeField, Min(0f)]
         private float impactEffectScaleMultiplier = 1f;
 
+        [SerializeField, Min(0f)]
+        private float impactEffectWidthMultiplier = 1f;
+
         [SerializeField, Range(1f, 90f)]
         private float maximumAimCorrectionDegrees = 55f;
 
@@ -94,7 +97,8 @@ namespace GritGud.Presentation.Gameplay
             float contactImpactTime =
                 GameplayCloseQuartersPresentationTiming
                     .ContactImpactNormalizedTime,
-            float impactScaleMultiplier = 1f)
+            float impactScaleMultiplier = 1f,
+            float impactWidthMultiplier = 1f)
         {
             itemId = inventoryItemId ?? string.Empty;
             prefab = weaponRigPrefab;
@@ -113,6 +117,7 @@ namespace GritGud.Presentation.Gameplay
             muzzleLightRange = Mathf.Max(0.01f, shotLightRange);
             muzzleLightSeconds = Mathf.Max(0.01f, shotLightSeconds);
             impactEffectScaleMultiplier = Mathf.Max(0f, impactScaleMultiplier);
+            impactEffectWidthMultiplier = Mathf.Max(0f, impactWidthMultiplier);
         }
 
         public string ItemId => itemId;
@@ -143,6 +148,9 @@ namespace GritGud.Presentation.Gameplay
 
         public float ImpactEffectScaleMultiplier =>
             Mathf.Max(0f, impactEffectScaleMultiplier);
+
+        public float ImpactEffectWidthMultiplier =>
+            Mathf.Max(0f, impactEffectWidthMultiplier);
 
         public float MaximumAimCorrectionDegrees =>
             Mathf.Clamp(maximumAimCorrectionDegrees, 1f, 90f);
