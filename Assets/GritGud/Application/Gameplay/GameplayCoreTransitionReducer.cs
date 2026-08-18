@@ -180,7 +180,7 @@ namespace GritGud.Application.Gameplay
                 session.LastActionSequence,
                 session.LastTurnSequence,
                 checked(session.JournalSequence + 2L),
-                checked(session.Revision + 1L),
+                checked(session.Revision + 2L),
                 transition.Identity.Sequence);
             GameplayCombatStateSnapshot resulting = CopyCombatState(
                 state,

@@ -16,7 +16,10 @@ internal static class SimulationParityChecks
         VerifyThrownSmokeAndWorldTime();
         VerifyProjectileLifecycle();
         VerifyVehicleMovement();
+        VerifyMovementRoute();
+        VerifyCombatantDisplacement();
         VerifyPropDisplacement();
+        VerifyPinAndRelease();
         VerifyNormalTurnEnd();
         VerifyTurnEndedSmokeDecay();
         VerifyVoluntaryTurnLifecycle();
@@ -427,7 +430,10 @@ internal static class SimulationParityChecks
             radius: 0.1f,
             maximumRange: 12f,
             standingLaunchHeight: 1f,
-            crouchedLaunchHeight: 0.7f);
+            crouchedLaunchHeight: 0.7f,
+            blastRadius: 2f,
+            blastWoundMovementPenalty: 1f,
+            blastIntegrityDamage: 1f);
         var launcher = new AttackDefinition(
             "attack.launcher",
             "Launch",
@@ -437,11 +443,18 @@ internal static class SimulationParityChecks
         GameplaySession gameplay = CreateGameplay(launcher);
         Require(gameplay.BeginEncounter(), "Encounter did not begin.");
         var destructibles = new DestructiblePropSession(
-            Array.Empty<DestructiblePropDefinition>(),
+            new[]
+            {
+                new DestructiblePropDefinition(
+                    "impact-crate",
+                    maximumIntegrity: 1f,
+                    DestructiblePropState.Intact,
+                    new GameplayPosition(1f, 0f, 5f)),
+            },
             gameplay.Journal);
         var live = new GameplayProjectileSession(
             gameplay,
-            new ClearProjectileQuery(),
+            new ClearThenImpactProjectileQuery(),
             new GameplayBlastConsequenceResolver(gameplay, destructibles));
         GameplayCombatStateSnapshot launchPrevious =
             GameplayCombatStateCapture.Capture(
@@ -498,6 +511,27 @@ internal static class SimulationParityChecks
                 gameplay,
                 destructibles,
                 projectiles: live));
+
+        GameplayPreparedTransition<ProjectileAdvanceRecord> impact =
+            live.PrepareAdvance(projectileId, turnTime: 1f);
+        GameplaySemanticTransition impactTransition = CreateTransition(
+            impact.Previous,
+            new GameplayProjectileAdvanceTransitionPayload(
+                "player",
+                impact.Record,
+                destructiblesShareGameplayJournal: true));
+        GameplayCombatStateSnapshot reducedImpact = Reduce(
+            impact.Previous,
+            impactTransition);
+        live.CommitPreparedAdvance(impact);
+        gameplay.RecordSemanticTransition(impactTransition.Identity);
+        RequireExact(
+            "projectile blast impact",
+            reducedImpact,
+            GameplayCombatStateCapture.Capture(
+                gameplay,
+                destructibles,
+                projectiles: live));
     }
 
     private static void VerifyVehicleMovement()
@@ -544,6 +578,134 @@ internal static class SimulationParityChecks
             GameplayCombatStateCapture.Capture(
                 gameplay,
                 vehicles: new[] { live }));
+    }
+
+    private static void VerifyMovementRoute()
+    {
+        GameplaySession gameplay = CreateGameplay(CreateRifle());
+        Require(gameplay.BeginEncounter(), "Encounter did not begin.");
+        GameplayActorSnapshot player = gameplay.GetActor("player");
+        var route = new MovementRouteRecord(
+            player.ActorId,
+            player.Pose,
+            player.TurnBudget,
+            new[]
+            {
+                new MovementRouteSegmentRecord(
+                    player.Pose.Position,
+                    new GameplayPosition(1f, 0f, 0f),
+                    movementCost: 1f,
+                    playbackDurationSeconds: 0.25f),
+            });
+        GameplayCombatStateSnapshot previous =
+            GameplayCombatStateCapture.Capture(gameplay);
+        gameplay.CommitMovementRoute(route);
+        gameplay.CompleteMovementResolution();
+        GameplaySemanticTransition transition = CreateTransition(
+            previous,
+            new GameplayMoveTransitionPayload(
+                GameplayCapabilityProfiles.GroundedMove(),
+                route));
+        GameplayCombatStateSnapshot reduced = Reduce(previous, transition);
+        gameplay.RecordSemanticTransition(transition.Identity);
+        RequireExact(
+            "movement route",
+            reduced,
+            GameplayCombatStateCapture.Capture(gameplay));
+    }
+
+    private static void VerifyCombatantDisplacement()
+    {
+        var push = new DisplacementActionDefinition(
+            "close-quarters.push-combatant",
+            "Push",
+            DisplacementActionKind.Push,
+            new ActionCost(1, 0f, ActionMobility.Mobile),
+            DisplacementSubjectKinds.Combatant,
+            reach: 3f,
+            maximumDistance: 3f,
+            maximumSubjectMass: 100f,
+            DisplacementHandRequirement.None,
+            DisplacementAutoStowPolicy.Never,
+            DisplacementContestPolicy.CloseQuartersControl,
+            DisplacementResultPolicies.None);
+        var ability = new DisplacementAbilityDefinition(
+            "ability.displace",
+            "Displace",
+            hotbarSlot: 4,
+            new[] { push });
+        var player = new ScenarioActorDefinition(
+            "player",
+            10,
+            new GameplayActorPose(new GameplayPosition(0f, 0f, 0f), 0f),
+            new TurnBudget(4, 8f),
+            attack: null,
+            displacementAbility: ability);
+        var target = new ScenarioActorDefinition(
+            "enemy",
+            0,
+            new GameplayActorPose(new GameplayPosition(1f, 0f, 0f), 180f),
+            new TurnBudget(4, 8f));
+        GameplaySession gameplay = CreateSession(
+            new[] { player, target },
+            Array.Empty<ScenarioObjectiveDefinition>());
+        Require(gameplay.BeginEncounter(), "Encounter did not begin.");
+        var destructibles = new DestructiblePropSession(
+            Array.Empty<DestructiblePropDefinition>(),
+            gameplay.Journal);
+        var control = new System.Collections.Generic.Dictionary<
+            string,
+            CloseQuartersControlProfile>(StringComparer.Ordinal)
+        {
+            ["player"] = new CloseQuartersControlProfile(
+                3,
+                5,
+                "talent.leverage",
+                2),
+            ["enemy"] = new CloseQuartersControlProfile(3, 4),
+        };
+        var live = new GameplayDisplacementSession(
+            gameplay,
+            destructibles,
+            new[]
+            {
+                new DisplacementSubjectDefinition(
+                    "player",
+                    DisplacementSubjectKind.Combatant,
+                    mass: 80f),
+                new DisplacementSubjectDefinition(
+                    "enemy",
+                    DisplacementSubjectKind.Combatant,
+                    mass: 80f),
+            },
+            new AllowDisplacementPaths(),
+            new QueueD20RollSource(8, 10),
+            control);
+        GameplayCombatStateSnapshot previous =
+            GameplayCombatStateCapture.Capture(gameplay, destructibles);
+        Require(live.TryDisplaceAction(
+                "player",
+                push.Id,
+                "enemy",
+                new GameplayPosition(2f, 0f, 0f),
+                out GameplayActionRecord action,
+                out _,
+                out DisplacementResolutionFailure failure),
+            "Combatant displacement failed: " + failure);
+        var payload = new GameplayResolvedActionTransitionPayload(
+            GameplayCapabilityProfiles.Displace(
+                push,
+                GameplaySemanticSubjectKind.Actor),
+            action);
+        GameplaySemanticTransition transition = CreateTransition(
+            previous,
+            payload);
+        GameplayCombatStateSnapshot reduced = Reduce(previous, transition);
+        gameplay.RecordSemanticTransition(transition.Identity);
+        RequireExact(
+            "combatant displacement",
+            reduced,
+            GameplayCombatStateCapture.Capture(gameplay, destructibles));
     }
 
     private static void VerifyPropDisplacement()
@@ -636,6 +798,173 @@ internal static class SimulationParityChecks
         RequireExact(
             "prop displacement",
             reduced,
+            GameplayCombatStateCapture.Capture(gameplay, destructibles));
+    }
+
+    private static void VerifyPinAndRelease()
+    {
+        var pin = new DisplacementActionDefinition(
+            "close-quarters.pinning-push",
+            "Pinning Push",
+            DisplacementActionKind.Push,
+            new ActionCost(1, 0f, ActionMobility.Mobile),
+            DisplacementSubjectKinds.Prop,
+            reach: 3f,
+            maximumDistance: 3f,
+            maximumSubjectMass: 100f,
+            DisplacementHandRequirement.None,
+            DisplacementAutoStowPolicy.Never,
+            DisplacementContestPolicy.None,
+            DisplacementResultPolicies.Topple
+                | DisplacementResultPolicies.Pin);
+        var release = new DisplacementActionDefinition(
+            "close-quarters.push-off",
+            "Push Off",
+            DisplacementActionKind.PushOff,
+            new ActionCost(1, 0f, ActionMobility.Mobile),
+            DisplacementSubjectKinds.Prop,
+            reach: 3f,
+            maximumDistance: 3f,
+            maximumSubjectMass: 100f,
+            DisplacementHandRequirement.None,
+            DisplacementAutoStowPolicy.Never,
+            DisplacementContestPolicy.None,
+            DisplacementResultPolicies.Release);
+        var player = new ScenarioActorDefinition(
+            "player",
+            10,
+            new GameplayActorPose(new GameplayPosition(0f, 0f, 0f), 0f),
+            new TurnBudget(4, 8f),
+            attack: null,
+            displacementAbility: new DisplacementAbilityDefinition(
+                "ability.player-displace",
+                "Displace",
+                hotbarSlot: 4,
+                new[] { pin }));
+        var target = new ScenarioActorDefinition(
+            "enemy",
+            0,
+            new GameplayActorPose(new GameplayPosition(1f, 0f, 0f), 180f),
+            new TurnBudget(4, 8f),
+            attack: null,
+            displacementAbility: new DisplacementAbilityDefinition(
+                "ability.enemy-displace",
+                "Displace",
+                hotbarSlot: 4,
+                new[] { release }));
+        GameplaySession gameplay = CreateSession(
+            new[] { player, target },
+            Array.Empty<ScenarioObjectiveDefinition>());
+        Require(gameplay.BeginEncounter(), "Encounter did not begin.");
+        var destructibles = new DestructiblePropSession(
+            new[]
+            {
+                new DestructiblePropDefinition(
+                    "crate",
+                    maximumIntegrity: 10f,
+                    DestructiblePropState.Intact,
+                    new GameplayPosition(0f, 0f, 1f)),
+            },
+            gameplay.Journal);
+        var live = new GameplayDisplacementSession(
+            gameplay,
+            destructibles,
+            new[]
+            {
+                new DisplacementSubjectDefinition(
+                    "player",
+                    DisplacementSubjectKind.Combatant,
+                    mass: 80f),
+                new DisplacementSubjectDefinition(
+                    "enemy",
+                    DisplacementSubjectKind.Combatant,
+                    mass: 80f),
+                new DisplacementSubjectDefinition(
+                    "crate",
+                    DisplacementSubjectKind.Prop,
+                    mass: 35f,
+                    toppling: new PropTopplingDefinition(0f, 90f, 0.5f),
+                    pinning: new PropPinningDefinition(90f)),
+            },
+            new PinThenReleaseDisplacementPaths(),
+            new ConstantD20RollSource());
+        GameplayCombatStateSnapshot beforePin =
+            GameplayCombatStateCapture.Capture(gameplay, destructibles);
+        Require(live.TryDisplaceAction(
+                "player",
+                pin.Id,
+                "crate",
+                new GameplayPosition(0f, 0f, 2f),
+                out GameplayActionRecord pinAction,
+                out _,
+                out DisplacementResolutionFailure pinFailure),
+            "Pinning displacement failed: " + pinFailure);
+        GameplaySemanticTransition pinTransition = CreateTransition(
+            beforePin,
+            new GameplayResolvedActionTransitionPayload(
+                GameplayCapabilityProfiles.Displace(
+                    pin,
+                    GameplaySemanticSubjectKind.DestructibleProp),
+                pinAction));
+        Require(string.Equals(
+                pinAction.Request.ActorId,
+                "player",
+                StringComparison.Ordinal),
+            "Pinning action changed its acting actor.");
+        Require(beforePin.Session.GetActor("enemy").Pose.FacingDegrees == 180f,
+            "Pre-pin canonical target pose was already changed.");
+        GameplayCombatStateSnapshot reducedPin = Reduce(
+            beforePin,
+            pinTransition);
+        gameplay.RecordSemanticTransition(pinTransition.Identity);
+        RequireExact(
+            "pin establishment",
+            reducedPin,
+            GameplayCombatStateCapture.Capture(gameplay, destructibles));
+
+        GameplayCombatStateSnapshot beforeTurn =
+            GameplayCombatStateCapture.Capture(gameplay, destructibles);
+        Require(gameplay.TryEndTurn(
+                "player",
+                out TurnEndFailure turnFailure),
+            "Turn handoff before Push Off failed: " + turnFailure);
+        GameplaySemanticTransition turn = CreateTransition(
+            beforeTurn,
+            new GameplayEndTurnTransitionPayload(
+                "player",
+                emergency: false));
+        GameplayCombatStateSnapshot reducedTurn = Reduce(beforeTurn, turn);
+        gameplay.RecordSemanticTransition(turn.Identity);
+        RequireExact(
+            "pin turn handoff",
+            reducedTurn,
+            GameplayCombatStateCapture.Capture(gameplay, destructibles));
+
+        GameplayCombatStateSnapshot beforeRelease =
+            GameplayCombatStateCapture.Capture(gameplay, destructibles);
+        Require(live.TryDisplaceAction(
+                "enemy",
+                release.Id,
+                "crate",
+                new GameplayPosition(0f, 0.5f, 3f),
+                out GameplayActionRecord releaseAction,
+                out _,
+                out DisplacementResolutionFailure releaseFailure),
+            "Push Off failed: " + releaseFailure);
+        GameplaySemanticTransition releaseTransition = CreateTransition(
+            beforeRelease,
+            new GameplayResolvedActionTransitionPayload(
+                GameplayCapabilityProfiles.Displace(
+                    release,
+                    GameplaySemanticSubjectKind.DestructibleProp),
+                releaseAction));
+        GameplayCombatStateSnapshot reducedRelease = Reduce(
+            beforeRelease,
+            releaseTransition);
+        gameplay.RecordSemanticTransition(releaseTransition.Identity);
+        RequireExact(
+            "pin release",
+            reducedRelease,
             GameplayCombatStateCapture.Capture(gameplay, destructibles));
     }
 
@@ -1115,11 +1444,39 @@ internal static class SimulationParityChecks
             string purpose) => center;
     }
 
-    private sealed class ClearProjectileQuery : IProjectileSegmentQuery
+    private sealed class ClearThenImpactProjectileQuery :
+        IProjectileSegmentQuery
     {
+        private int queryCount;
+
         public ProjectileSegmentQueryResult Query(
-            ProjectileSegmentQuery query) =>
-            ProjectileSegmentQueryResult.Clear(worldStateRevision: 0L);
+            ProjectileSegmentQuery query)
+        {
+            queryCount++;
+            if (queryCount == 1)
+                return ProjectileSegmentQueryResult.Clear(
+                    worldStateRevision: 0L);
+            return ProjectileSegmentQueryResult.Collision(
+                worldStateRevision: 0L,
+                hitEntityId: "enemy",
+                collisionFraction: 0.25f,
+                blastEffects: new[]
+                {
+                    new BlastEffectRecord(
+                        "enemy",
+                        BlastSubjectKind.Actor,
+                        distance: 0f,
+                        occlusionExposure: 1f,
+                        distanceFalloff: 1f,
+                        TargetRegionId.Torso),
+                    new BlastEffectRecord(
+                        "impact-crate",
+                        BlastSubjectKind.DestructibleProp,
+                        distance: 0.5f,
+                        occlusionExposure: 1f,
+                        distanceFalloff: 1f),
+                });
+        }
     }
 
     private sealed class AllowDisplacementPaths :
@@ -1132,10 +1489,43 @@ internal static class SimulationParityChecks
             DisplacementPathValidation.Allowed();
     }
 
+    private sealed class PinThenReleaseDisplacementPaths :
+        IDisplacementPathValidator
+    {
+        public DisplacementPathValidation Validate(
+            DisplacementRequest request,
+            GameplayPosition origin,
+            PropDisplacementState resultingPropState) =>
+            request.ActionKind == DisplacementActionKind.PushOff
+                ? DisplacementPathValidation.Allowed()
+                : DisplacementPathValidation.Allowed(new[]
+                {
+                    new DisplacementContactEvidence(
+                        "enemy",
+                        new GameplayPosition(0.5f, 0.5f, 1.75f),
+                        new GameplayPosition(0f, 1f, 0f),
+                        0.1f),
+                });
+    }
+
     private sealed class ConstantD20RollSource : ID20RollSource
     {
         public int RollD20(
             GameplayTransitionIdentity transition,
             string purpose) => 10;
+    }
+
+    private sealed class QueueD20RollSource : ID20RollSource
+    {
+        private readonly System.Collections.Generic.Queue<int> rolls;
+
+        public QueueD20RollSource(params int[] values)
+        {
+            rolls = new System.Collections.Generic.Queue<int>(values);
+        }
+
+        public int RollD20(
+            GameplayTransitionIdentity transition,
+            string purpose) => rolls.Dequeue();
     }
 }

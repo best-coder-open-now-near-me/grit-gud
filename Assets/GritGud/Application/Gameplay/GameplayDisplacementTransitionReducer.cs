@@ -75,9 +75,16 @@ namespace GritGud.Application.Gameplay
             var mutation = new GameplayCanonicalStateMutation(state);
             GameplayActorSnapshot acting = mutation.GetActor(
                 action.Request.ActorId);
+            bool pinTransitionOwnsActingPose = record.PinTransition != null
+                && string.Equals(
+                    record.PinTransition.ActorId,
+                    acting.ActorId,
+                    StringComparison.Ordinal);
             mutation.ReplaceActor(GameplayCanonicalStateMutation.CopyActor(
                 acting,
-                pose: FaceToward(acting.Pose, record.PreviousPosition),
+                pose: pinTransitionOwnsActingPose
+                    ? acting.Pose
+                    : FaceToward(acting.Pose, record.PreviousPosition),
                 budget: action.ResultingBudget));
             if (equipment != null)
                 ApplyEquipment(mutation, equipment.Change);
@@ -188,7 +195,13 @@ namespace GritGud.Application.Gameplay
             if (!PosesMatch(actor.Pose, pin.PreviousPose)
                 || !PinMatches(actor.PinState, pin.PreviousState))
                 throw new InvalidOperationException(
-                    "Pin transition starts from stale actor state.");
+                    $"Pin transition for '{pin.ActorId}' starts from stale actor state: "
+                    + $"canonical pose ({actor.Pose.Position.X}, {actor.Pose.Position.Y}, "
+                    + $"{actor.Pose.Position.Z})/{actor.Pose.FacingDegrees}/"
+                    + $"{actor.Pose.Stance}, recorded pose "
+                    + $"({pin.PreviousPose.Position.X}, {pin.PreviousPose.Position.Y}, "
+                    + $"{pin.PreviousPose.Position.Z})/{pin.PreviousPose.FacingDegrees}/"
+                    + $"{pin.PreviousPose.Stance}.");
             mutation.ReplaceActor(GameplayCanonicalStateMutation.CopyActor(
                 actor,
                 pose: pin.ResultingPose,
