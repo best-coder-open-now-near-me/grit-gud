@@ -119,7 +119,7 @@ namespace GritGud.Application.Gameplay
             float radius = definition.GetUncertaintyRadius(distance);
             var transition = new GameplayTransitionIdentity(
                 gameplay.NextActionSequence,
-                "thrown-explosive",
+                GameplaySemanticCapability.ThrowExplosive.ToString(),
                 actorId,
                 definition.Id);
             GameplayPosition sampled = uncertainty.Sample(

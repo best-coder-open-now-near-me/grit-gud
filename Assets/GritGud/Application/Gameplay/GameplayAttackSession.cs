@@ -151,7 +151,7 @@ namespace GritGud.Application.Gameplay
             long actionSequence = gameplay.NextActionSequence;
             var transition = new GameplayTransitionIdentity(
                 actionSequence,
-                "direct-attack",
+                GameplaySemanticCapability.DirectAttack.ToString(),
                 actorId,
                 target.ActorId);
             uint resolutionSeed = GameplayAddressedRandom.SampleUInt32(
@@ -353,7 +353,7 @@ namespace GritGud.Application.Gameplay
                 runIdentity,
                 new GameplayTransitionIdentity(
                     action.Sequence,
-                    "direct-attack",
+                    GameplaySemanticCapability.DirectAttack.ToString(),
                     action.Request.ActorId,
                     action.Request.TargetId),
                 "resolution");

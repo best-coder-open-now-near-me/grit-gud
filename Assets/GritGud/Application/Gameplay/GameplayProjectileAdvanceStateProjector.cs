@@ -100,7 +100,8 @@ namespace GritGud.Application.Gameplay
                 checked(session.Revision + gameplayRevisionIncrement),
                 session.VoluntaryTurnReentrySecondsRemaining,
                 session.PendingMovementRoute,
-                session.PendingVoluntaryTurnCycle);
+                session.PendingVoluntaryTurnCycle,
+                session.LastTransitionSequence);
             return new GameplayCombatStateSnapshot(
                 resultingSession,
                 destructibles,

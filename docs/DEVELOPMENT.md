@@ -108,6 +108,11 @@ Run `dotnet build tools/simulation/GritGud.Application.csproj -c Release
 compile of the exact Domain and Application sources. The two hand-authored SDK
 projects under `tools/simulation` link the production source trees; they do not
 contain or generate a parallel gameplay implementation.
+Run `dotnet restore tools/simulation/GritGud.SimulationChecks.csproj
+--configfile tools/simulation/NuGet.Config`, then `dotnet run --project
+tools/simulation/GritGud.SimulationChecks.csproj -c Release --no-restore` for
+executable engine-free checks of the semantic transition spine, exact replay,
+and fail-closed capability coverage.
 Run `tools/validate-supabase-contracts.py` to verify ordered migrations, RPC
 parameters/return rows, permissions, and the matching C# adapter. Run
 `node tools/preview-id.test.mjs` to verify preview identity/workflow routing and

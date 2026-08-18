@@ -25,6 +25,16 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Run engine-free simulation contracts
+        run: |
+          dotnet restore tools/simulation/GritGud.SimulationChecks.csproj --configfile tools/simulation/NuGet.Config
+          dotnet run --project tools/simulation/GritGud.SimulationChecks.csproj -c Release --no-restore
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:

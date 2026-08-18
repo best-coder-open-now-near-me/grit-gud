@@ -82,7 +82,7 @@ namespace GritGud.Application.Gameplay
 
             var transition = new GameplayTransitionIdentity(
                 gameplay.NextActionSequence,
-                "displacement",
+                GameplaySemanticCapability.Displace.ToString(),
                 actorId,
                 targetActorId);
             var contest = new CloseQuartersControlRecord(

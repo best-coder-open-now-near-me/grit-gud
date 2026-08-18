@@ -62,6 +62,36 @@ then expands across movement, stance, equipment, displacement, pins,
 projectiles, emergency reactions, blasts, destructibles, consumables, smoke,
 vehicles, objectives, and encounter lifecycle.
 
+## Reachable capability coverage gate
+
+Every player or AI input reachable from assembled content maps to an exact
+semantic capability profile. Profiles include traits that change behavioral
+architecture, such as immediate versus turn-flight delivery, targeting mode,
+inventory consumption, blast or smoke consequences, emergency windows, and
+displacement policies. Numeric data such as range, damage, accuracy, and action
+cost remains definition data and does not create a new route.
+
+The capability registry records these stages independently:
+
+1. candidate construction;
+2. legality and frozen-world evidence;
+3. pure state reduction;
+4. domain-event production;
+5. replay encoding and reduction;
+6. headless execution; and
+7. live installation.
+
+Scenario assembly rejects reachable profiles missing any stage. The same
+validator reports registered profiles that no assembled input can reach.
+Candidate output is fail-closed: a candidate cannot leave generation unless
+its exact profile has legality, reducer, event, and headless support. CI
+assembles every committed scenario and runs this contract before licensed Unity
+tests.
+
+Ordinary weapon, item, and ability additions remain data-only when they use an
+existing profile. Content that introduces new semantics cannot load until the
+new profile has a complete route.
+
 ## Extension rule
 
 New weapons and abilities reuse existing typed state, candidate, transition,

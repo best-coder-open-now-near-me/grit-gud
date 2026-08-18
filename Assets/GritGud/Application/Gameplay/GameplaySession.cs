@@ -513,6 +513,16 @@ namespace GritGud.Application.Gameplay
 
         public long Revision { get; private set; }
 
+        public long LastTransitionSequence { get; private set; }
+
+        internal void RecordSemanticTransition(long sequence)
+        {
+            if (sequence != LastTransitionSequence + 1L)
+                throw new InvalidOperationException(
+                    "Semantic transitions must commit in sequence.");
+            LastTransitionSequence = sequence;
+        }
+
         public TurnModeContext TurnContext => turnLifecycle.TurnContext;
 
         public bool EncounterActive => turnLifecycle.EncounterActive;
