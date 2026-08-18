@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Levels;
@@ -9,6 +10,37 @@ namespace GritGud.Domain.Tests
 {
     public sealed class GameplayScenarioAssemblerTests
     {
+        [Test]
+        public void AssemblerKeepsPolicyDetailsInFocusedCollaborators()
+        {
+            MethodInfo[] methods = typeof(GameplayScenarioAssembler).GetMethods(
+                BindingFlags.Instance
+                | BindingFlags.Static
+                | BindingFlags.Public
+                | BindingFlags.NonPublic
+                | BindingFlags.DeclaredOnly);
+
+            foreach (MethodInfo method in methods)
+            {
+                if (method.Name == nameof(GameplayScenarioAssembler.Assemble))
+                    continue;
+
+                Assert.That(
+                    ReferencesScenarioPolicy(method.ReturnType),
+                    Is.False,
+                    $"Coordinator method '{method.Name}' owns scenario policy "
+                    + "through its return type.");
+                foreach (ParameterInfo parameter in method.GetParameters())
+                {
+                    Assert.That(
+                        ReferencesScenarioPolicy(parameter.ParameterType),
+                        Is.False,
+                        $"Coordinator method '{method.Name}' owns scenario policy "
+                        + $"through parameter '{parameter.Name}'.");
+                }
+            }
+        }
+
         [Test]
         public void AssemblerBuildsScenarioFromContentAndLevelBinding()
         {
@@ -145,6 +177,37 @@ namespace GritGud.Domain.Tests
             Assert.That(vehicle.EntityId, Is.EqualTo("vehicle.one"));
             Assert.That(vehicle.MomentumProfile.MaximumSpeed, Is.EqualTo(10f));
             Assert.That(vehicle.StartingSpeed, Is.EqualTo(4f));
+        }
+
+        private static bool ReferencesScenarioPolicy(Type type)
+        {
+            if (type == typeof(ScenarioActorContentData)
+                || type == typeof(ScenarioInventoryItemData)
+                || type == typeof(ScenarioDisplacementAbilityData)
+                || type == typeof(ScenarioDisplacementActionData)
+                || type == typeof(ScenarioObjectiveContentData)
+                || type == typeof(ScenarioPropContentData)
+                || type == typeof(ScenarioVehicleContentData)
+                || type == typeof(ScenarioAttackResponseData))
+            {
+                return true;
+            }
+
+            if (type.HasElementType)
+            {
+                return ReferencesScenarioPolicy(type.GetElementType());
+            }
+
+            if (!type.IsGenericType)
+                return false;
+
+            foreach (Type argument in type.GetGenericArguments())
+            {
+                if (ReferencesScenarioPolicy(argument))
+                    return true;
+            }
+
+            return false;
         }
 
         [Test]
