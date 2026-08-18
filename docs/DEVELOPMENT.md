@@ -101,6 +101,8 @@ tracked source for unresolved conflict markers, parses every tracked JSON
 document, freezes runtime and test assembly direction, verifies Unity
 source/meta pairing and GUID uniqueness, and prevents known production hotspots
 from growing past their explicit file budgets without another cohesive split.
+It also rejects Presentation `async void` command internals and requires each
+concrete level-validation rule to live in its matching source file.
 Run `tools/validate-supabase-contracts.py` to verify ordered migrations, RPC
 parameters/return rows, permissions, and the matching C# adapter. Run
 `node tools/preview-id.test.mjs` to verify preview identity/workflow routing and

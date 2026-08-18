@@ -21,7 +21,11 @@ boundaries and shared JSON import, added fork-safe CI plus collision-resistant
 preview identities, partitioned gameplay lifecycle characterization, and
 decomposed the enemy runtime, turn lifecycle, scenario combat assembly,
 control routing, HUD, level-editor GUI/lifecycle, and displacement transaction
-hotspots. The detailed ownership record is in
+hotspots. The final follow-up also extracted gameplay outcome validators and
+appliers, Task-based cloud commands, ordered gameplay installers, HUD feature
+drawers, scenario policy-family assemblers, and one-file-per-rule level
+validation. Tight coordinator budgets and source gates prevent those boundaries
+from silently regressing. The detailed ownership record is in
 [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md).
 
 This checkpoint added no encounter features. The next goal is the encounter
@@ -359,9 +363,9 @@ timing, and wound-driven reactions can be tested now.
 The 2026-08-12 review follow-up is complete: silhouette exposure is cached,
 displacement and blast rules use canonical Application paths, scenario content
 is assembled once, availability/diagnostics are authoritative projections, and
-EditMode plus sustained-frame PlayMode gates run before WebGL. Future splits of
-`GameplaySession`, `GameplayHud`, and `GameplayController` remain bounded to the
-feature seams being touched rather than a broad rewrite.
+EditMode plus sustained-frame PlayMode gates run before WebGL. The reviewed
+`GameplaySession`, HUD, controller, editor, scenario-assembly, and validation
+splits are complete and protected by focused tests and repository budgets.
 
 ## 0. Repository and engine scaffold
 

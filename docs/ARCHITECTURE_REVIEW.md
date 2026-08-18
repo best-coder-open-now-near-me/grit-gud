@@ -17,11 +17,12 @@ Domain is platform-neutral, Application depends on Domain, and Presentation is
 the Unity adapter. Authoritative actions generally freeze their inputs and
 outcomes for replay instead of attempting to reproduce Unity physics.
 
-The primary risk is no longer a missing foundation. It is **boundary erosion as
-features accumulate**. A few composition and presentation classes are becoming
-secondary rules engines, while the central gameplay session and content
-assembler are becoming change hotspots. Close-quarters displacement is the
-right feature family to correct those trends before adding the drone.
+The primary risk is no longer a missing foundation. It is **regression of the
+focused boundaries as features accumulate**. The reviewed composition,
+presentation, session, scenario-import, and validation hotspots now delegate to
+explicit collaborators, and the repository gate freezes their coordinator
+budgets. New work must extend those owners instead of rebuilding central rules
+engines.
 
 ### 2026-08-14 follow-up
 
@@ -43,12 +44,12 @@ without attempting a destabilizing rewrite:
   streams from the scenario seed instead of starting correlated generators from
   the same value.
 
-The remaining hotspots are deliberate incremental work. `GameplaySession`
-still centralizes actor state and outcome dispatch, `GameplayHud` still owns too
-many feature drawers, and `GameplayController` is still a large composition
-root. New behavior should continue moving behind focused Application services,
-HUD panels, and feature binders when those seams become stable. Durable
-cross-launch party-state storage also remains explicitly deferred.
+The reviewed hotspots were subsequently decomposed on 2026-08-18.
+`GameplaySession` retains authoritative ordering while delegating
+outcome-specific validation and application; HUD feature drawers and gameplay
+installers have focused owners; and editor commands, scenario policy families,
+and level-validation rules no longer accumulate in their former coordinators.
+Durable cross-launch party-state storage remains explicitly deferred.
 
 ### 2026-08-15 editor and terrain follow-up
 
@@ -65,12 +66,14 @@ This follow-up also turns the most important separation rule into a fast gate:
 contracts and rejects Unity or Presentation references in either neutral source
 tree. Architecture review is therefore no longer dependent only on convention.
 
-The current risk profile is acceptable but not finished:
+The current risk profile is bounded and executable:
 
-- `GameplayHud` (2,641 lines), `GameplaySession` (2,219),
-  `LevelEditorController` (1,815), and `GameplayScenarioAssembler` (1,554)
-  remain the largest production change hotspots. Split only along stable feature
-  seams; do not introduce a framework or broad rewrite.
+- The reviewed coordinators now measure `GameplaySession` (1,315 lines),
+  `LevelEditorController` (1,447), `GameplayController` (949),
+  `GameplayHudRenderer` (1,071), `GameplayScenarioAssembler` (151), and
+  `LevelValidator` (183). The repository gate assigns each a tighter growth
+  budget so future behavior must extend focused collaborators rather than
+  silently regrow a god file.
 - The initial terrain-paint implementation coupled serialized numeric values to
   UI ordering and mesh-color projection. This follow-up resolves that risk with
   the explicitly numbered Domain-owned `TerrainMaterialKind` contract; UI
@@ -170,14 +173,32 @@ put explicit invalidation around the highest-frequency read paths:
   and a bounded production-file growth budget. WebGL publication validates the
   generated browser artifact before it can replace a branch preview.
 
-The remaining large files are known incremental seams, not permission for a
-broad rewrite. `GameplaySession` still owns action validation/outcome dispatch;
-`GameplayHudRenderer` still owns multiple feature drawers;
-`LevelEditorController` still exposes a large GUI action adapter; and
-`GameplayScenarioAssembler`, `LevelValidator`, and `LevelEditCommands` remain
-large. The validator is mostly one cohesive rule catalog, whereas the session,
-renderer, editor controller, assembler, and command catalog should continue to
-split when a stable behavior owner emerges.
+### 2026-08-18 reviewed-hotspot closure
+
+Every verified finding from the repository-wide god-object and separation pass
+has a concrete owner and a regression gate:
+
+- `GameplaySession` delegates action-outcome validation and application while
+  preserving one authoritative mutation and journal-order boundary;
+- `LevelEditorController` exposes focused GUI capability adapters, while cloud
+  commands and navigation return `Task` and carry cancellation/generation race
+  protection;
+- `GameplayController` binds through an ordered installer pipeline with
+  rollback, order, and failure coverage;
+- `GameplayHudRenderer` retains top-level render state and layout while hotbar,
+  guidance, status, and modal feature drawers own their presentation branches;
+- `GameplayScenarioAssembler` is a thin coordinator over actor, inventory,
+  displacement, objective, prop, vehicle, combat, and attack-response policy
+  assemblers;
+- `LevelValidator` retains the public service/facade, with every concrete rule
+  in its own file and a completeness test for default registration; and
+- HUD matrix restoration, control routing without enum ordinals, controller
+  binding order, router status clearing, cloud cancellation/races, and
+  Presentation `async void` absence have focused tests or source gates.
+
+The remaining large files are authoritative aggregates or composition roots,
+not catch-all feature owners. Repository budgets, one-rule-per-file validation,
+and the Presentation `async void` gate make that distinction enforceable.
 
 The Unity EditMode/PlayMode suites and player builds remain licensed-host or
 CI-owned. A licensed Windows host passed both complete suites plus WebGL and
@@ -398,34 +419,28 @@ combat effect while social resolution is absent.
 
 **Priority: high, incremental**
 
-**Status: partially resolved; updated 2026-08-18.** Blast, displacement, equipment,
-projectile, thrown-explosive, and party-persistence behavior already has
-focused sessions. Gameplay startup is now split into explicit bootstrap, world,
-session, binding, and interface stages with one teardown path. HUD choice state
-and generated texture ownership have moved into small lifecycle objects. The
-central session outcome switch and the remaining HUD feature drawers should be
-extracted only along proven behavior seams.
+**Status: resolved for the reviewed hotspot set on 2026-08-18; continuous.**
+Blast, displacement, equipment, projectile, thrown-explosive, and
+party-persistence behavior have focused sessions. `GameplaySession` remains the
+authoritative aggregate for actor state, mutation order, and journaling, while
+outcome-specific validators and appliers own feature policy.
 
-Mutable actor/objective state and snapshot invalidation now have focused
-Application owners. Physics-assisted editor settling, cancellation, fallback
-colliders, and teardown restoration now have one disposable Presentation owner
-rather than living in `LevelEditorController`. The central action-validation
-and outcome switch, HUD feature drawers, and broad editor GUI adapter remain the
-next proven seams.
+Mutable actor/objective state and snapshot invalidation have focused
+Application owners. Physics-assisted editor settling owns cleanup in a
+disposable Presentation coordinator. The level-editor GUI is divided across six
+capability adapters, and cloud commands expose `Task`-returning services with
+race and cancellation coverage.
 
-`GameplaySession` is the authoritative aggregate and should remain the owner of
-actor state and journal ordering, but outcome-specific validation and
-application should move behind focused internal collaborators. Start with
-displacement and blast consequences; do not perform a broad rewrite.
+Gameplay startup is an ordered installer pipeline with one teardown path and
+rollback tests. The HUD retains top-level layout and interaction state while
+focused drawers own its feature branches. Scenario import is a 151-line
+coordinator over focused policy-family assemblers, and the 183-line level
+validator facade composes one concrete rule per file.
 
-`GameplayScenarioAssembler` should be split into schema validation, definition
-factories, and assembly orchestration. Runtime presentation must consume the
-assembled definitions rather than call assembler factory methods.
-
-`GameplayHud` should retain top-level layout and interaction state while
-feature drawers own displacement, hotbar assignment, guidance, dialogue, and
-bug-report panels. `GameplayController` remains the scene composition root, but
-feature binding should move into small installers as dependencies stabilize.
+The repository gate now enforces tighter budgets for each reviewed coordinator,
+rejects Presentation `async void`, and enforces one level-validation rule per
+matching source file. A future split should still follow proven behavior seams;
+this status is not permission for a broad framework rewrite.
 
 ### A4 — Unify blast policy and broaden blast subjects
 
@@ -658,10 +673,11 @@ unrelated content.
 **Priority: continuous**
 
 **Status: current gate updated 2026-08-18.** The listed regressions have
-focused tests. The local gate passes 536 EditMode tests. PlayMode sustains the
-default gameplay session for 180 frames and separately boots and tears down
-every playable committed level. CI runs both suites before the WebGL build.
-This remains a continuous requirement for future gameplay slices.
+focused tests. The local gate passes 854 EditMode tests and 10 PlayMode tests.
+PlayMode sustains the default gameplay session for 180 frames and separately
+boots and tears down every playable committed level. CI runs both suites before
+the WebGL build. This remains a continuous requirement for future gameplay
+slices.
 
 The latest additions cover the complete authoring-to-runtime scenario
 contract, committed-state visibility under throwing observers, actor snapshot
@@ -755,7 +771,7 @@ blocks manual selection when initiative owns control, and displays each member's
 budget and wounds without caching gameplay state. Oren's higher Dexterity gives
 him the first friendly turn, followed by Mara, and the routing smoke verifies
 that control transactions retarget between both characters before the enemy
-turn. The full EditMode gate passes 429 tests.
+turn. The current full EditMode gate passes 854 tests.
 
 ## Execution sequence
 
