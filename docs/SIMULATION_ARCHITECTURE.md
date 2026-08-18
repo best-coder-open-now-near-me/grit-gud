@@ -78,6 +78,27 @@ then expands across movement, stance, equipment, displacement, pins,
 projectiles, emergency reactions, blasts, destructibles, consumables, smoke,
 vehicles, objectives, and encounter lifecycle.
 
+## Encounter observations and scope
+
+Encounter sight and sound are immutable observations, not Unity-side enemy
+state. An observation is evaluated against an authored awareness policy and
+produces one canonical awareness transition (`Unaware`, `Suspicious`, or
+`Alert`) with last-known evidence. Patrol advances likewise carry the exact
+presentation-validated route and can proceed only from the authored next
+waypoint while the actor remains unaware in exploration.
+
+An alert begins a scoped encounter. Canonical state retains both the complete
+exploration initiative order and the active encounter subset, and state
+invariants require that the active subset exactly match tactical initiative.
+Initial scope contains the player party, the initiating actor, trigger subject,
+and transitive authored reinforcements. Completing the encounter restores the
+complete order without refreshing any actor budget.
+
+Headless encounter evidence uses the destructible-aware spatial adapter. Thus a
+branch that topples, moves, fractures, or destroys cover changes subsequent
+sight and sound evidence before awareness is evaluated; the trainer cannot
+learn from geometry the live/replay system ignores.
+
 ## Reachable capability coverage gate
 
 Every player or AI input reachable from assembled content maps to an exact

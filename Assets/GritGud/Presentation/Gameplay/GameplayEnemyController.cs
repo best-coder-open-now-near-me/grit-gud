@@ -12,6 +12,7 @@ namespace GritGud.Presentation.Gameplay
         private GameplaySession session;
         private GameplayPartyControlSession partyControl;
         private GameplayEnemyRuntimeRegistry enemies;
+        private GameplayExplorationSoundLedger explorationSounds;
         private GameplayEnemyExplorationCoordinator exploration;
         private GameplayEnemyCombatTurnExecutor combatTurns;
         private GameplayEnemyOutcomePresenter outcomes;
@@ -29,7 +30,7 @@ namespace GritGud.Presentation.Gameplay
             GameplayEmergencyCycleSession cycle,
             GameplayPartyControlSession controlledParty,
             GameplayDialogueLog dialogueLog,
-            Func<bool> onEncounterStartRequested,
+            Func<IReadOnlyList<string>, bool> onEncounterStartRequested,
             EnemyPresentationCatalog enemyPresentationCatalog = null,
             ISightObscuranceQuery obscuranceQuery = null,
             IEnumerable<LevelTraversalLinkData> traversalLinks = null)
@@ -56,7 +57,8 @@ namespace GritGud.Presentation.Gameplay
                 nameof(controlledParty));
             GameplayDialogueLog dialogue = dialogueLog
                 ?? throw new ArgumentNullException(nameof(dialogueLog));
-            Func<bool> beginEncounter = onEncounterStartRequested
+            Func<IReadOnlyList<string>, bool> beginEncounter =
+                onEncounterStartRequested
                 ?? throw new ArgumentNullException(
                     nameof(onEncounterStartRequested));
             EnemyPresentationCatalog presentationCatalog =
@@ -72,14 +74,14 @@ namespace GritGud.Presentation.Gameplay
                 presentationCatalog,
                 obscuranceQuery,
                 traversalLinks);
+            explorationSounds = new GameplayExplorationSoundLedger(session);
             exploration = new GameplayEnemyExplorationCoordinator(
                 session,
                 enemies,
                 sessionPresenter,
                 actionController,
                 partyControl,
-                decisions,
-                dialogue,
+                explorationSounds,
                 beginEncounter,
                 presentationCatalog.DetectionIntervalSeconds);
             combatTurns = new GameplayEnemyCombatTurnExecutor(
@@ -105,10 +107,12 @@ namespace GritGud.Presentation.Gameplay
 
         internal void Unbind()
         {
+            explorationSounds?.Dispose();
             enemies?.Dispose();
             outcomes = null;
             combatTurns = null;
             exploration = null;
+            explorationSounds = null;
             enemies = null;
             partyControl = null;
             session = null;

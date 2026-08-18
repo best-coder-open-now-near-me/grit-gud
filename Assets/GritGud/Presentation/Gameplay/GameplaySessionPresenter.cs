@@ -136,13 +136,19 @@ namespace GritGud.Presentation.Gameplay
 
         public bool TryBeginEncounter()
         {
+            return TryBeginEncounter(Session?.AllInitiativeOrder);
+        }
+
+        public bool TryBeginEncounter(
+            System.Collections.Generic.IEnumerable<string> participantIds)
+        {
             if (Session == null || Session.EncounterActive)
             {
                 return false;
             }
 
             SynchronizeExplorationPose();
-            if (!Session.BeginEncounter())
+            if (!Session.BeginEncounter(participantIds))
             {
                 return false;
             }

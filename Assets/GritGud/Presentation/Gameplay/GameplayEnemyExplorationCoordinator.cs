@@ -11,9 +11,8 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplaySessionPresenter sessionPresenter;
         private readonly GameplayActionController actionController;
         private readonly GameplayPartyControlSession partyControl;
-        private readonly GameplayEnemyDecisionSession decisions;
-        private readonly GameplayDialogueLog dialogue;
-        private readonly Func<bool> beginEncounter;
+        private readonly GameplayExplorationSoundLedger sounds;
+        private readonly Func<IReadOnlyList<string>, bool> beginEncounter;
         private readonly float detectionIntervalSeconds;
         private float detectionDelaySeconds;
 
@@ -23,9 +22,8 @@ namespace GritGud.Presentation.Gameplay
             GameplaySessionPresenter sessionPresenter,
             GameplayActionController actionController,
             GameplayPartyControlSession partyControl,
-            GameplayEnemyDecisionSession decisions,
-            GameplayDialogueLog dialogue,
-            Func<bool> beginEncounter,
+            GameplayExplorationSoundLedger soundLedger,
+            Func<IReadOnlyList<string>, bool> beginEncounter,
             float detectionIntervalSeconds)
         {
             this.session = session ?? throw new ArgumentNullException(
@@ -38,10 +36,8 @@ namespace GritGud.Presentation.Gameplay
                 ?? throw new ArgumentNullException(nameof(actionController));
             this.partyControl = partyControl ?? throw new ArgumentNullException(
                 nameof(partyControl));
-            this.decisions = decisions ?? throw new ArgumentNullException(
-                nameof(decisions));
-            this.dialogue = dialogue ?? throw new ArgumentNullException(
-                nameof(dialogue));
+            sounds = soundLedger ?? throw new ArgumentNullException(
+                nameof(soundLedger));
             this.beginEncounter = beginEncounter
                 ?? throw new ArgumentNullException(nameof(beginEncounter));
             this.detectionIntervalSeconds = detectionIntervalSeconds;
@@ -49,6 +45,10 @@ namespace GritGud.Presentation.Gameplay
 
         public void Tick(float unscaledDeltaTime)
         {
+            sounds.Advance(unscaledDeltaTime);
+            if (TickPatrolPlayback(unscaledDeltaTime))
+                return;
+
             detectionDelaySeconds -= unscaledDeltaTime;
             if (detectionDelaySeconds > 0f)
                 return;
@@ -59,26 +59,148 @@ namespace GritGud.Presentation.Gameplay
             {
                 if (session.IsActorIncapacitated(enemy.Definition.Id))
                     continue;
-                EnemyTacticalDecisionRecord detection =
-                    decisions.EvaluateBestDetection(
-                        enemy.Definition.Id,
-                        partyControl.ActorIds,
-                        enemy.TacticalQuery.CaptureExposure);
-                if (detection == null)
-                    continue;
+                EncounterObservation observation = CaptureObservation(enemy);
+                EnemyAwarenessTransitionRecord transition = session
+                    .PrepareAwarenessTransition(enemy.Definition.Id, observation);
+                if (HasAwarenessChanged(transition))
+                    session.CommitAwarenessTransition(transition);
 
-                decisions.Commit(detection);
-                dialogue.AppendCombatDiagnostic(
-                    GameplayCombatDiagnosticFormatter.FormatEnemyDecision(
-                        detection));
-                if (beginEncounter())
+                if (transition.Resulting.State == EncounterAwarenessState.Alert)
                 {
-                    actionController.PresentExternalStatus(
-                        $"{enemy.Definition.Id} detected {detection.TargetId}. Combat initiated.");
-                    sessionPresenter.RefreshModePresentation();
+                    IReadOnlyList<string> scope = session.CreateEncounterScope(
+                        enemy.Definition.Id,
+                        transition.Resulting.LastKnownHostileId);
+                    if (beginEncounter(scope))
+                    {
+                        actionController.PresentExternalStatus(
+                            $"{enemy.Definition.Id} detected "
+                            + $"{transition.Resulting.LastKnownHostileId}. Combat initiated.");
+                        sessionPresenter.RefreshModePresentation();
+                    }
+                    return;
                 }
+
+                TryStartPatrol(enemy, transition.Resulting, observation);
+            }
+        }
+
+        private bool TickPatrolPlayback(float deltaTime)
+        {
+            foreach (GameplayEnemyRuntimeRegistry.Entry enemy in
+                enemies.OrderedEntries)
+            {
+                if (!enemy.Playback.IsPlaying)
+                    continue;
+                if (!enemy.Playback.Tick(deltaTime))
+                    return true;
+
+                PatrolAdvanceRecord completed = enemy.PendingPatrolAdvance
+                    ?? throw new InvalidOperationException(
+                        "A patrol playback completed without its canonical advance.");
+                enemy.PendingPatrolAdvance = null;
+                session.CommitPatrolAdvance(completed);
+                return true;
+            }
+
+            return false;
+        }
+
+        private EncounterObservation CaptureObservation(
+            GameplayEnemyRuntimeRegistry.Entry enemy)
+        {
+            TargetExposureSnapshot sight = null;
+            GameplayPosition? targetPosition = null;
+            foreach (string targetId in partyControl.ActorIds)
+            {
+                if (session.IsActorIncapacitated(targetId)
+                    || !session.IsHostile(enemy.Definition.Id, targetId))
+                {
+                    continue;
+                }
+
+                TargetExposureSnapshot candidate = enemy.TacticalQuery
+                    .CaptureExposure(targetId);
+                if (candidate.VisibleSampleCount == 0
+                    || (sight != null
+                        && candidate.VisibleFraction
+                            <= sight.VisibleFraction))
+                {
+                    continue;
+                }
+
+                sight = candidate;
+                targetPosition = session.GetActor(targetId).Pose.Position;
+            }
+
+            EncounterSoundEvidence sound = null;
+            if (sounds.TryConsume(
+                    enemy.Definition.Id,
+                    out string sourceId,
+                    out GameplayPosition origin,
+                    out float loudness))
+            {
+                sound = enemy.TacticalQuery.CaptureSound(
+                    sourceId,
+                    origin,
+                    loudness);
+            }
+
+            return new EncounterObservation(
+                enemy.Definition.Id,
+                sight,
+                targetPosition,
+                sound);
+        }
+
+        private void TryStartPatrol(
+            GameplayEnemyRuntimeRegistry.Entry enemy,
+            EnemyAwarenessSnapshot awareness,
+            EncounterObservation observation)
+        {
+            if (awareness.State != EncounterAwarenessState.Unaware
+                || observation.HasVisibleSight
+                || observation.HasAudibleSound
+                || enemy.Playback.IsPlaying
+                || enemy.PendingPatrolAdvance != null)
+            {
                 return;
             }
+
+            PatrolRouteDefinition route = enemy.Definition.Combat
+                .EnemyBehavior.PatrolRoute;
+            if (route == null)
+                return;
+            int nextIndex = route.GetNextWaypointIndex(
+                awareness.PatrolWaypointIndex);
+            if (nextIndex == awareness.PatrolWaypointIndex
+                || !enemy.TacticalQuery.TryBuildPatrolRoute(
+                    route.GetWaypoint(nextIndex),
+                    out MovementRouteRecord movementRoute))
+            {
+                return;
+            }
+
+            enemy.PendingPatrolAdvance = session.PreparePatrolAdvance(
+                enemy.Definition.Id,
+                movementRoute);
+            enemy.Playback.Begin(movementRoute);
+        }
+
+        private static bool HasAwarenessChanged(
+            EnemyAwarenessTransitionRecord transition)
+        {
+            EnemyAwarenessSnapshot previous = transition.Previous;
+            EnemyAwarenessSnapshot resulting = transition.Resulting;
+            return previous.State != resulting.State
+                || previous.Suspicion != resulting.Suspicion
+                || !string.Equals(
+                    previous.LastKnownHostileId,
+                    resulting.LastKnownHostileId,
+                    StringComparison.Ordinal)
+                || !Nullable.Equals(
+                    previous.LastKnownHostilePosition,
+                    resulting.LastKnownHostilePosition)
+                || previous.PatrolWaypointIndex != resulting.PatrolWaypointIndex;
         }
     }
 }

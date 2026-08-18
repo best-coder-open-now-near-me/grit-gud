@@ -34,6 +34,8 @@ namespace GritGud.Presentation.Gameplay
                 Presentation.Playback;
 
             public int AttacksCommittedThisTurn { get; set; }
+
+            public PatrolAdvanceRecord PendingPatrolAdvance { get; set; }
         }
 
         private readonly Dictionary<string, Entry> enemies =
@@ -107,7 +109,10 @@ namespace GritGud.Presentation.Gameplay
         public void Dispose()
         {
             foreach (Entry enemy in enemies.Values)
+            {
+                enemy.PendingPatrolAdvance = null;
                 enemy.Presentation.Dispose();
+            }
             enemies.Clear();
             orderedEnemyIds.Clear();
         }

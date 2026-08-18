@@ -173,8 +173,18 @@ namespace GritGud.Application.Gameplay
             if (Mode == GameplaySessionMode.Exploration)
                 return TryEnterTurnMode(out _);
 
+            var notifications = new GameplayNotificationBatch();
+            if (string.IsNullOrWhiteSpace(activeActorId)
+                || !Contains(host.InitiativeOrder, activeActorId))
+            {
+                SetActiveActor(
+                    FindNextCapableActor(startingAfterIndex: -1)
+                        ?? host.InitiativeOrder[0],
+                    notifications);
+            }
             TurnContext = TurnModeContext.InitiatedEncounter;
             host.MarkStateChangedForTurnLifecycle();
+            notifications.Publish();
             return true;
         }
 
@@ -547,6 +557,16 @@ namespace GritGud.Application.Gameplay
             notifications.Add(
                 ModeChanged,
                 new GameplayModeChange(previousMode, Mode));
+        }
+
+        private static bool Contains(
+            IReadOnlyList<string> values,
+            string value)
+        {
+            foreach (string candidate in values)
+                if (string.Equals(candidate, value,
+                    StringComparison.Ordinal)) return true;
+            return false;
         }
 
         private string FindNextCapableActor(int startingAfterIndex)

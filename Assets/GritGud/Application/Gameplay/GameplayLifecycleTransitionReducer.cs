@@ -310,6 +310,11 @@ namespace GritGud.Application.Gameplay
                 else
                 {
                     mutation.TurnContext = TurnModeContext.InitiatedEncounter;
+                    if (string.IsNullOrWhiteSpace(session.ActiveActorId)
+                        || !Contains(scope, session.ActiveActorId))
+                    {
+                        mutation.ActiveActorId = FirstCapable(session, scope);
+                    }
                 }
                 mutation.Revision = checked(mutation.Revision + 1L);
                 return payload;
@@ -522,6 +527,16 @@ namespace GritGud.Application.Gameplay
                     return actorId;
             IReadOnlyList<string> fallback = scope ?? session.InitiativeOrder;
             return fallback[0];
+        }
+
+        private static bool Contains(
+            IReadOnlyList<string> values,
+            string value)
+        {
+            foreach (string candidate in values)
+                if (string.Equals(candidate, value,
+                    StringComparison.Ordinal)) return true;
+            return false;
         }
     }
 }

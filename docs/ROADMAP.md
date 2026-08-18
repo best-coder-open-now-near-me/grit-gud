@@ -13,6 +13,32 @@ not imply permanent full-match replay storage. The active character retains
 their normal gameplay camera throughout playback, and their previous-turn
 segment is optional context rather than part of the default playback range.
 
+## Encounter foundation — 2026-08-18
+
+The encounter foundation now has one authoritative route from authored content
+through live play, deterministic reduction, replay, and headless branching.
+Enemy behavior content declares hearing range, sight and sound suspicion gains,
+decay, alert threshold, optional patrol waypoints, and initial reinforcement
+relationships; scenario assembly rejects incomplete sensing policy.
+
+Application owns immutable awareness (`Unaware`, `Suspicious`, and `Alert`),
+last-known evidence, patrol progress, participant scope, and sequenced journal
+records. Unity supplies silhouette exposure, sound occlusion/distance evidence,
+and traversable patrol routes, then plays a route before its prepared canonical
+advance commits. It does not decide awareness or initiative.
+
+Alert begins a scoped encounter containing the player party, alerting actor,
+trigger subject, and transitive authored reinforcements. Unrelated actors stay
+outside tactical initiative. Completing the encounter restores full exploration
+initiative without refreshing budgets. The capability gate treats observation
+and patrol as reachable AI inputs, while engine-free checks prove live/pure
+parity, exact replay, headless branching, and destructible-aware sight/sound.
+
+The next gate is playable encounter validation. Investigation movement, dynamic
+join/leave after an encounter begins, richer awareness UI, and editor-facing
+encounter authoring remain later tactical work. Generator regeneration tests
+remain deferred.
+
 ## Pre-encounter stabilization checkpoint — 2026-08-17
 
 The repository-wide stabilization goal is complete on
@@ -28,25 +54,19 @@ validation. Tight coordinator budgets and source gates prevent those boundaries
 from silently regressing. The detailed ownership record is in
 [ARCHITECTURE_REVIEW.md](ARCHITECTURE_REVIEW.md).
 
-This checkpoint added no encounter features. The next goal is the encounter
-onset and lifecycle vertical slice, in this order:
+This checkpoint added no encounter features. The planned encounter-onset and
+lifecycle vertical slice is now the foundation above. The remaining follow-up
+work is:
 
 1. Define Application-owned awareness state and immutable sight/sound evidence
    records. Unity performs line-of-sight, occlusion, distance, and sound-world
    queries; it does not decide detection, suspicion, hostility, or initiative.
-2. Author patrol routes, sensing thresholds, investigation behavior, and
-   escalation/decay policy in scenario content. Add editor authoring only after
-   the portable schema and validation contracts are stable.
-3. Run patrol, suspicion, investigation, detection, loss-of-contact, and
-   re-acquisition through the extracted exploration coordinator. Every state
-   transition must be journaled and deterministic from frozen evidence.
-4. Replace whole-scenario encounter assumptions with Application-owned scoped
-   participants and explicit reinforcement/join/leave rules. Entering or
-   leaving tactical presentation must not replenish budgets or duplicate actor
-   state.
-5. Present awareness and encounter transitions in Unity and expose useful
-   validation/debug text without making the HUD or enemy controller a policy
-   owner. Add focused EditMode coverage and published-level PlayMode lifecycle
+2. Add investigation and loss-of-contact behavior, then editor authoring only
+   after those portable policy contracts stabilize.
+3. Add dynamic join/leave rules for reinforcements that arrive after the
+   initial scope. Those transitions must not replenish budgets or duplicate
+   actor state.
+4. Add richer awareness UI/debugging and published-level PlayMode lifecycle
    coverage before broadening enemy tactics.
 
 The deployable drone, incendiary consumables, and broader enemy action selection

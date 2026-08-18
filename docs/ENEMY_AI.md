@@ -8,26 +8,35 @@ presents the committed result.
 
 ## Current rifleman decision cycle
 
-1. During exploration, authored perception range, view cone, hostility, and
-   frozen exposure snapshots determine whether the enemy detects the party. The
-   full capable party is evaluated before the enemy chooses the most exposed
-   detected member, with distance and stable party order resolving ties.
-2. During an enemy turn, every capable hostile party member is evaluated. The
+1. During exploration, the coordinator captures the best frozen exposure among
+   capable hostile party members plus one-time authoritative action sound.
+   Unity supplies the world evidence only; range, view cone, sound attenuation,
+   hostility, suspicion gain/decay, and escalation are canonical rules.
+2. `Unaware` enemies follow only their next authored patrol waypoint. A sound
+   can produce `Suspicious`; qualifying sight can produce `Alert`. Each actual
+   awareness or patrol change has a sequenced journal record containing the
+   frozen evidence or exact route.
+3. Alert creates a scoped encounter containing the player party, alerting
+   enemy, observed subject, and transitive authored reinforcements. The scoped
+   initiative order replaces the exploration order, so unrelated actors cannot
+   receive a tactical turn.
+4. During an enemy turn, every capable hostile party member is evaluated. The
    enemy selects the highest-chance shot, then prefers a more wounded target and
    shorter distance for deterministic ties. This prevents a nearby concealed
    actor from hiding a clearly exposed threat farther away.
-3. The equipped attack, current exposure, accuracy decay, distance, action
+5. The equipped attack, current exposure, accuracy decay, distance, action
    budget, reach, and authored per-turn attack limit determine whether a shot is
    available.
-4. A shot below the behavior's authored minimum hit chance triggers a bounded
+6. A shot below the behavior's authored minimum hit chance triggers a bounded
    movement search. The enemy moves only when a candidate produces a strictly
    better hit chance; route cost, preferred range, and visibility break ties.
-5. If no route improves a legal low-confidence shot, the enemy takes the best
+7. If no route improves a legal low-confidence shot, the enemy takes the best
    available shot instead of wasting its turn. If neither attack nor movement is
    legal, it records an end-turn decision with an explicit rationale.
-6. Detection, movement, attack, and end-turn decisions are immutable journal
-   records. Replay and diagnostics consume their frozen target, exposure, route,
-   and rationale rather than repeating Unity queries.
+8. Combat decisions, awareness transitions, patrol advances, and scoped
+   encounter changes are immutable records. Replay and diagnostics consume
+   frozen target, exposure, sound, route, and rationale rather than repeating
+   Unity queries.
 
 The depot rifleman's minimum attack hit chance is 35%. The value is authored per
 behavior so a reckless suppressive unit can accept poor shots while a marksman
@@ -35,38 +44,27 @@ can spend movement seeking a cleaner angle.
 
 ## Ownership boundaries
 
-- **Domain** validates behavior policy and owns immutable exposure, route, and
-  decision records.
-- **Application** owns target scoring, attack confidence, movement-option
-  scoring, attack limits, and decision journaling.
-- **Presentation** supplies exposure/route candidates and plays committed
-  movement, weapon, effect, and incapacitation presentation.
-- **Scenario content** owns perception, preferred range, search radius, attack
-  limit, and minimum acceptable hit chance.
+- **Domain** validates behavior policy and owns immutable exposure, sound,
+  awareness, patrol, and decision records.
+- **Application** owns awareness evaluation, participant scope, patrol/action
+  reduction, target scoring, attack confidence, movement-option scoring, attack
+  limits, and journal ordering.
+- **Presentation** supplies sight/sound/route evidence and plays committed
+  patrol, movement, weapon, effect, and incapacitation presentation.
+- **Scenario content** owns sensing policy, patrol routes, reinforcements,
+  perception, preferred range, search radius, attack limit, and minimum
+  acceptable hit chance.
 
-## Next production goal: encounter onset and lifecycle
+## Encounter follow-up
 
-The 2026-08-17 stabilization pass split Unity runtime registry, exploration
-coordination, combat-turn execution, and incapacitation/completion presentation
-without changing the current detection rule. The existing exploration
-coordinator is therefore an adapter seam, not a completed awareness system.
+The foundation is ready for playable validation. Do not fold sound into a
+larger sight radius, start every authored actor in initiative, or store
+awareness only on a Unity controller. Patrol, sight, and sound converge through
+one portable evidence-to-transition boundary.
 
-The next slice adds first-class patrol and awareness before expanding combat
-heuristics:
-
-- Application owns patrol progress, suspicion/awareness, last-known evidence,
-  escalation/decay, detection decisions, scoped encounter participants, and
-  initiative entry/exit;
-- Unity supplies frozen line-of-sight and sound-world evidence, patrol route
-  reachability, and presentation only;
-- scenario content authors patrol routes, sight/hearing thresholds, response
-  policy, and reinforcement relationships; and
-- journals and diagnostics freeze every awareness and participant transition so
-  replay/debugging never re-query the world.
-
-Do not fold sound into a larger sight radius, start every authored actor in
-initiative, or store awareness only on a Unity controller. Patrol, sight, and
-sound must converge through one portable evidence-to-decision boundary.
+Dynamic reinforcements joining an already active encounter, explicit departure,
+investigation movement from last-known positions, and an awareness overlay are
+separate additions. They must reuse the current scope and observation records.
 
 ## Next tactical slices
 
