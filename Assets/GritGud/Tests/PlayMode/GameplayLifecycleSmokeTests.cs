@@ -110,12 +110,16 @@ namespace GritGud.PlayMode.Tests
             GameplayDestructibleController destructibles =
                 bootstrap.GetComponent<GameplayDestructibleController>();
             const string propId = "barrel-yard-01";
+            string actingActorId =
+                gameplay.PartyControl.Snapshot.SelectedActorId;
+            ArrangeActorPose(
+                gameplay,
+                actingActorId,
+                new Vector3(1.25f, 2f, -8.75f));
             DestructiblePropSnapshot before =
                 destructibles.Session.GetProp(propId);
             Transform prop = gameplay.WorldRegistry
                 .GetLevelEntity(propId).transform;
-            string actingActorId =
-                gameplay.PartyControl.Snapshot.SelectedActorId;
             DisplacementDestinationEvaluation destination =
                 displacement.Session.EvaluateIntentDestination(
                     actingActorId,
@@ -190,6 +194,14 @@ namespace GritGud.PlayMode.Tests
                 bootstrap.GetComponent<GameplayDisplacementController>();
             const string actorId = "oren-vale";
             const string propId = "barrel-yard-01";
+            ArrangeActorPose(
+                gameplay,
+                "player",
+                new Vector3(1.25f, 2f, -8.75f));
+            ArrangeActorPose(
+                gameplay,
+                actorId,
+                new Vector3(-1f, 2f, -8.75f));
             Transform prop = gameplay.WorldRegistry.GetLevelEntity(propId)
                 .transform;
             DisplacementDestinationEvaluation pinDestination =
@@ -292,6 +304,23 @@ namespace GritGud.PlayMode.Tests
 
             bootstrap.ReturnToMenu();
             yield return null;
+        }
+
+        private static void ArrangeActorPose(
+            GameplayController gameplay,
+            string actorId,
+            Vector3 position)
+        {
+            GameplayActorView view = gameplay.WorldRegistry.GetActor(actorId);
+            view.Transform.position = position;
+            GameplayActorSnapshot actor = gameplay.Session.GetActor(actorId);
+            gameplay.Session.UpdateExplorationPose(
+                actorId,
+                new GameplayActorPose(
+                    new GameplayPosition(position.x, position.y, position.z),
+                    view.Transform.eulerAngles.y,
+                    actor.Pose.Stance));
+            Physics.SyncTransforms();
         }
 
         [UnityTest]
