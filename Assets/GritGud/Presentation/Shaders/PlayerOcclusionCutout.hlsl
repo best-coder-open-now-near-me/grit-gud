@@ -4,21 +4,14 @@
 float4 _GritGudPlayerCutout;
 float _GritGudPlayerCutoutLeftExtension;
 float _GritGudPlayerCutoutVerticalRadius;
-float3 _GritGudPlayerCutoutRayStart;
-float3 _GritGudPlayerCutoutRayEnd;
-float3 _GritGudPlayerCutoutCameraRight;
-float3 _GritGudPlayerCutoutCameraUp;
-float4 _GritGudPlayerCutoutCorridorWidths;
 
 float PlayerCutoutNoise(float2 pixelPosition)
 {
     return frac(52.9829189 * frac(dot(pixelPosition, float2(0.06711056, 0.00583715))));
 }
 
-void ClipPlayerOcclusionAtScreenUV(
-    float2 screenUV,
-    float2 pixelPosition,
-    float3 positionWS,
+void ClipPlayerOcclusion(
+    float4 positionHCS,
     float viewDepth,
     half cutoutEnabled)
 {
@@ -30,46 +23,7 @@ void ClipPlayerOcclusionAtScreenUV(
         return;
     }
 
-    // The player is the cone apex. Widening toward the camera prevents walls
-    // beside the player from qualifying merely because they are near the
-    // previous player-wide end of the corridor.
-    float3 corridor = _GritGudPlayerCutoutRayEnd
-        - _GritGudPlayerCutoutRayStart;
-    float corridorLengthSquared = dot(corridor, corridor);
-    float corridorProgress = dot(
-        positionWS - _GritGudPlayerCutoutRayStart,
-        corridor) / max(corridorLengthSquared, 0.0001);
-    if (corridorProgress <= 0.0 || corridorProgress >= 1.0)
-    {
-        return;
-    }
-
-    float3 corridorCenter = _GritGudPlayerCutoutRayStart
-        + corridor * corridorProgress;
-    float lateralDistance = abs(dot(
-        positionWS - corridorCenter,
-        _GritGudPlayerCutoutCameraRight));
-    float corridorHalfWidth = lerp(
-        _GritGudPlayerCutoutCorridorWidths.x,
-        _GritGudPlayerCutoutCorridorWidths.y,
-        corridorProgress);
-    if (lateralDistance >= corridorHalfWidth)
-    {
-        return;
-    }
-
-    float verticalDistance = abs(dot(
-        positionWS - corridorCenter,
-        _GritGudPlayerCutoutCameraUp));
-    float corridorHalfHeight = lerp(
-        _GritGudPlayerCutoutCorridorWidths.z,
-        _GritGudPlayerCutoutCorridorWidths.w,
-        corridorProgress);
-    if (verticalDistance >= corridorHalfHeight)
-    {
-        return;
-    }
-
+    float2 screenUV = GetNormalizedScreenSpaceUV(positionHCS);
     float2 offset = screenUV - _GritGudPlayerCutout.xy;
     // Keep the reveal close to the character silhouette. The former large,
     // circular screen-space mask could reach sideways through unrelated walls
@@ -86,21 +40,7 @@ void ClipPlayerOcclusionAtScreenUV(
         1.0 - feather,
         1.0,
         distanceFromPlayer);
-    clip(coverage - PlayerCutoutNoise(pixelPosition));
-}
-
-void ClipPlayerOcclusion(
-    float4 positionHCS,
-    float3 positionWS,
-    float viewDepth,
-    half cutoutEnabled)
-{
-    ClipPlayerOcclusionAtScreenUV(
-        GetNormalizedScreenSpaceUV(positionHCS),
-        positionHCS.xy,
-        positionWS,
-        viewDepth,
-        cutoutEnabled);
+    clip(coverage - PlayerCutoutNoise(positionHCS.xy));
 }
 
 #endif

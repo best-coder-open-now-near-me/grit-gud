@@ -254,29 +254,6 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 playerCutout.CurrentLeftExtension,
                 Is.EqualTo(GameplayPlayerCutoutPresenter.LeftViewportExtension));
-            Assert.That(
-                (Vector3)Shader.GetGlobalVector(
-                    "_GritGudPlayerCutoutRayEnd"),
-                Is.EqualTo(gameplayCamera.transform.position)
-                    .Using(Vector3ComparerWithEqualsOperator.Instance));
-            Vector4 corridorWidths = Shader.GetGlobalVector(
-                "_GritGudPlayerCutoutCorridorWidths");
-            Assert.That(
-                corridorWidths.x,
-                Is.EqualTo(
-                    GameplayPlayerCutoutPresenter.PlayerConeApexHalfWidth));
-            Assert.That(
-                corridorWidths.y,
-                Is.EqualTo(
-                    GameplayPlayerCutoutPresenter.CameraConeBaseHalfWidth));
-            Assert.That(
-                corridorWidths.z,
-                Is.EqualTo(
-                    GameplayPlayerCutoutPresenter.PlayerConeApexHalfHeight));
-            Assert.That(
-                corridorWidths.w,
-                Is.EqualTo(
-                    GameplayPlayerCutoutPresenter.CameraConeBaseHalfHeight));
             Assert.That(playerCutout.PresentationEnabled, Is.True);
             Assert.That(
                 Vector3.Distance(
