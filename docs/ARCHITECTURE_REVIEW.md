@@ -179,11 +179,13 @@ large. The validator is mostly one cohesive rule catalog, whereas the session,
 renderer, editor controller, assembler, and command catalog should continue to
 split when a stable behavior owner emerges.
 
-The licensed Unity EditMode/PlayMode suites and WebGL build remain CI-owned.
-The browser-artifact smoke catches missing/empty loader, data, framework,
-WebAssembly, canvas, startup, and static-reference failures; it does not replace
-an eventual automated deployed-browser interaction pass for pointer input,
-storage, import/export, and responsive editor layout.
+The Unity EditMode/PlayMode suites and player builds remain licensed-host or
+CI-owned. A licensed Windows host passed both complete suites plus WebGL and
+Windows builds on 2026-08-18. The browser-artifact smoke then validated the
+actual Unity 6 `.unityweb` output. It catches missing/empty loader, data,
+framework, WebAssembly, canvas, startup, and static-reference failures; it does
+not replace an eventual automated deployed-browser interaction pass for pointer
+input, storage, import/export, and responsive editor layout.
 
 
 ## Non-negotiable boundaries

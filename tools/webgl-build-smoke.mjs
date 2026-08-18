@@ -4,9 +4,9 @@ import { pathToFileURL } from "node:url";
 
 const REQUIRED_ARTIFACTS = [
   ["Unity loader", /\.loader\.js$/],
-  ["game data", /\.data(?:\.br|\.gz)?$/],
-  ["JavaScript framework", /\.framework\.js(?:\.br|\.gz)?$/],
-  ["WebAssembly player", /\.wasm(?:\.br|\.gz)?$/],
+  ["game data", /\.data(?:\.(?:br|gz|unityweb))?$/],
+  ["JavaScript framework", /\.framework\.js(?:\.(?:br|gz|unityweb))?$/],
+  ["WebAssembly player", /\.wasm(?:\.(?:br|gz|unityweb))?$/],
 ];
 
 async function listFiles(root, directory = root) {

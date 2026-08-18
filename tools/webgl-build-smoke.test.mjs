@@ -23,20 +23,20 @@ try {
   );
   await write("TemplateData/style.css", "canvas { display: block; }");
   await write("Build/game.loader.js");
-  await write("Build/game.data.br");
-  await write("Build/game.framework.js.br");
-  await write("Build/game.wasm.br");
+  await write("Build/game.data.unityweb");
+  await write("Build/game.framework.js.unityweb");
+  await write("Build/game.wasm.unityweb");
 
   const result = await validateWebGlBuild(root);
   assert.equal(result.fileCount, 6);
 
-  await rm(join(root, "Build/game.wasm.br"));
+  await rm(join(root, "Build/game.wasm.unityweb"));
   await assert.rejects(
     validateWebGlBuild(root),
     /exactly one WebAssembly player artifact; found 0/,
   );
 
-  await write("Build/game.wasm.br");
+  await write("Build/game.wasm.unityweb");
   await write(
     "index.html",
     `<canvas id="unity-canvas"></canvas>

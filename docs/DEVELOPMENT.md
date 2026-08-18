@@ -111,12 +111,13 @@ so failures remain inspectable. PlayMode coverage includes both a sustained
 default-session smoke and startup/teardown for every committed level whose
 library entry is playable.
 
-An unlicensed sandbox can run the Python/Node gates and can compile against an
-already imported Unity workspace, but it cannot produce a trustworthy Unity
-Test Runner result or player build. Use a licensed local Editor or the trusted
-CI job for the complete EditMode/PlayMode suites and WebGL/Windows builds; do
-not treat a license failure as a test failure. After a WebGL build, run
-`node tools/webgl-build-smoke.mjs Builds/Web` before serving or publishing it.
+A restricted execution context can run the Python/Node gates and compile against
+an already imported Unity workspace. If that context cannot reach the host
+licensing service, use approved host execution, a licensed local Editor, or the
+trusted CI job for the complete EditMode/PlayMode suites and WebGL/Windows
+builds; do not treat a license-access failure as a test failure. After a WebGL
+build, run `node tools/webgl-build-smoke.mjs Builds/Web` before serving or
+publishing it.
 
 Runtime-generated terrain, outlines, and brush previews use the committed
 `GritGud/RuntimeColor` shader. It is explicitly listed in Graphics Settings so
@@ -154,8 +155,9 @@ Invoke either with Unity's `-batchmode -projectPath <path> -executeMethod <name>
 arguments. Outputs are written beneath the ignored `Builds` directory. The Web
 entry point fails immediately with a clear message when its build-support module
 is absent. Web previews use Brotli compression with Unity's JavaScript
-decompression fallback, so the same release player works on GitHub Pages and on
-plain local HTTP servers that do not attach `Content-Encoding: br` headers.
+decompression fallback and `.unityweb` artifact suffixes, so the same release
+player works on GitHub Pages and on plain local HTTP servers that do not attach
+`Content-Encoding: br` headers.
 
 ## Continuous integration
 
