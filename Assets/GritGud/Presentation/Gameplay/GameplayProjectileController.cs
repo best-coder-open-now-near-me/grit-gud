@@ -515,7 +515,7 @@ namespace GritGud.Presentation.Gameplay
             }
 
             IReadOnlyList<ActorTargetRegionSample> regions =
-                target.Stance.GetTargetRegionSamples();
+                target.TargetProfile.GetTargetRegionSamples();
             foreach (ActorTargetRegionSample region in regions)
             {
                 if (region.Id == TargetRegionId.Torso)

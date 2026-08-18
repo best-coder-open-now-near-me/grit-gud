@@ -104,8 +104,11 @@ Inert walls and unconfigured scenery remain ordinary surface discharges.
   on frame rate.
 - Line of sight and cover are sampled against stable target regions rather than
   exact animated mesh triangles.
-- Standing and crouched stances move those stable regions. Physical geometry
-  determines occlusion; stance does not grant an intrinsic cover bonus.
+- Standing, crouched, and pinned-down profiles move those stable regions.
+  The same profile supplies player acquisition bounds and live/headless
+  exposure; the upright movement collider is never an aiming bound. Physical
+  geometry determines occlusion; stance does not grant an intrinsic cover
+  bonus.
 - Non-physical concealment such as smoke or darkness attenuates perception and
   attack confidence without automatically blocking projectile travel.
 - Small, documented tolerances handle boundary cases such as grazing cover or
@@ -207,7 +210,10 @@ qualify. The pinned state identifies the responsible prop, restricts movement
 and incompatible actions, and is cleared only by a committed escape result.
 The character's Push Off action must atomically record the released prop pose,
 cleared actor state, cost, and get-up transition; animation cannot decide any
-of those outcomes. These close-quarters interactions precede deployable
+of those outcomes. Entering the canonical pinned-down profile holds its prone
+pose and horizontal aiming silhouette; leaving it restores the actor's current
+stance silhouette and explicitly releases the held fall layer. These
+close-quarters interactions precede deployable
 companions on the implementation roadmap.
 
 Displacement targeting is action-first rather than pointer-gated. The player

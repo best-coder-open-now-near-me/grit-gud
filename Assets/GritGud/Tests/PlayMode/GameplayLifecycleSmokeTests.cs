@@ -217,14 +217,17 @@ namespace GritGud.PlayMode.Tests
             Assert.That(pinRecord.PinTransition.EstablishesPin, Is.True);
             Assert.That(pinRecord.PinTransition.ActorId, Is.EqualTo(actorId));
             Assert.That(gameplay.Session.GetActor(actorId).IsPinned, Is.True);
-            ActorAnimationCoordinator pinnedAnimation = gameplay.WorldRegistry
-                .GetActor(actorId)
-                .Root
+            GameplayActorView pinnedView = gameplay.WorldRegistry
+                .GetActor(actorId);
+            ActorAnimationCoordinator pinnedAnimation = pinnedView.Root
                 .GetComponent<ActorAnimationCoordinator>();
             Assert.That(pinnedAnimation, Is.Not.Null);
             Assert.That(
                 pinnedAnimation.LastRequestedAction,
                 Is.EqualTo(ActorAnimationAction.Incapacitate));
+            Assert.That(
+                pinnedView.TargetProfile.ProfileKind,
+                Is.EqualTo(ActorTargetProfileKind.PinnedDown));
 
             displacement.SetActor(actorId);
             Assert.That(displacement.TryToggleTargeting(
@@ -263,9 +266,25 @@ namespace GritGud.PlayMode.Tests
                 Is.True,
                 releaseFailure.ToString());
             yield return null;
+            yield return new WaitForSeconds(0.2f);
 
             Assert.That(releaseRecord.PinTransition.ReleasesPin, Is.True);
             Assert.That(gameplay.Session.GetActor(actorId).IsPinned, Is.False);
+            Assert.That(
+                pinnedView.TargetProfile.ProfileKind,
+                Is.EqualTo(ActorTargetProfileCatalog.Resolve(
+                    pinnedView.Stance.Stance,
+                    pinned: false).Kind));
+            int reactionLayer = pinnedAnimation.TargetAnimator.GetLayerIndex(
+                ActorAnimationParameters.ReactionLayerName);
+            Assert.That(
+                pinnedAnimation.TargetAnimator
+                    .GetCurrentAnimatorStateInfo(reactionLayer)
+                    .IsName(ActorAnimationParameters.NoReactionStateName),
+                Is.True);
+            Assert.That(
+                pinnedAnimation.TargetAnimator.GetLayerWeight(reactionLayer),
+                Is.Zero);
             Assert.That(prop.position.x,
                 Is.EqualTo(choice.Destination.X).Within(0.001f));
             Assert.That(prop.position.z,

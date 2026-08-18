@@ -332,8 +332,10 @@ full pin-and-escape flow can be exercised without editing the level.
    collider-backed cover pose, not an animation estimate.
 4. Confirm a green heading. Oren must become unpinned, the crate must remain at
    the previewed pose as usable collision/cover, and the action must spend its
-   authored cost exactly once. Canceling or clicking while red must spend
-   nothing and leave the pin intact.
+   authored cost exactly once. His pinned target silhouette and held fall pose
+   must return to his current stance; the old upright movement collider must
+   never remain the only aimable area. Canceling or clicking while red must
+   spend nothing and leave the pin intact.
 5. Open replay and scrub across the Push Off. Replay must reproduce the exact
    chosen prop and actor state; exiting replay must restore the live pose,
    equipment, wounds, and animation presentation.
@@ -395,7 +397,9 @@ also complete through Knife Idle/Stabbing equipment poses, contact-timed wound
 reactions, persistent regional fall variants, IK suppression, equipment
 interruption, seekable replay, and exact live restoration. Directional Push Off
 freezes a player-chosen cover placement and validates the actor's get-up space;
-its lying, struggle, push, and authored get-up work remains presentation polish.
+its authoritative pinned-down target profile, prone hold, and release to the
+current stance are complete. A bespoke struggle loop and authored get-up motion
+remain presentation polish.
 The bounded attack-incapacitation-to-ragdoll experiment is complete through
 authored handoff, static-world collision, settle/freeze, quantized pose traces,
 seekable replay, and exact live restoration. The next production slice is the

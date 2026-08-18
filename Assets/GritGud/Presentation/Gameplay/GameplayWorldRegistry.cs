@@ -37,6 +37,9 @@ namespace GritGud.Presentation.Gameplay
             ReplayActions = root.GetComponent<
                     GameplayTurnReplayActorStateHooks>()
                 ?? root.AddComponent<GameplayTurnReplayActorStateHooks>();
+            TargetProfile = root.GetComponent<ActorTargetProfilePresenter>()
+                ?? root.AddComponent<ActorTargetProfilePresenter>();
+            TargetProfile.Bind(Stance, ReplayActions);
         }
 
         public string ActorId { get; }
@@ -60,6 +63,8 @@ namespace GritGud.Presentation.Gameplay
         public GameplayTurnReplayTransientHooks ReplayTransients { get; }
 
         public GameplayTurnReplayActorStateHooks ReplayActions { get; }
+
+        public ActorTargetProfilePresenter TargetProfile { get; }
     }
 
     internal sealed class GameplayWorldRegistry : IDisposable

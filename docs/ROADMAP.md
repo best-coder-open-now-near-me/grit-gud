@@ -39,6 +39,11 @@ join/leave after an encounter begins, richer awareness UI, and editor-facing
 encounter authoring remain later tactical work. Generator regeneration tests
 remain deferred.
 
+Pinned actors now use one authoritative pinned-down target profile for player
+acquisition, live/headless exposure, replay projection, and prone presentation.
+Push Off restores the current stance profile and explicitly releases the held
+fall layer. Movement collision is no longer accepted as an aiming silhouette.
+
 ## Pre-encounter stabilization checkpoint — 2026-08-17
 
 The repository-wide stabilization goal is complete on

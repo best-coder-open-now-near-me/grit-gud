@@ -283,7 +283,10 @@ namespace GritGud.Presentation.Tests
             ActorStancePresenter observer,
             ActorStancePresenter target)
         {
-            TargetRegionSample[] regions = target.GetTargetRegionSamples()
+            ActorTargetProfilePresenter targetProfile = target.GetComponent<
+                ActorTargetProfilePresenter>();
+            TargetRegionSample[] regions = targetProfile
+                .GetTargetRegionSamples()
                 .Select(region => new TargetRegionSample(
                     region.Id,
                     new GameplayPosition(
@@ -308,7 +311,13 @@ namespace GritGud.Presentation.Tests
             controller.height = 1.8f;
             controller.center = new Vector3(0f, 0.9f, 0f);
             controller.radius = 0.35f;
-            actor.AddComponent<ActorStancePresenter>();
+            ActorStancePresenter stance =
+                actor.AddComponent<ActorStancePresenter>();
+            var pinState = actor.AddComponent<
+                GameplayTurnReplayActorStateHooks>();
+            ActorTargetProfilePresenter targetProfile = actor.AddComponent<
+                ActorTargetProfilePresenter>();
+            targetProfile.Bind(stance, pinState);
             createdObjects.Add(actor);
             return actor;
         }

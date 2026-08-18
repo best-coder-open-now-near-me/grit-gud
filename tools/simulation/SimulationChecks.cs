@@ -447,7 +447,7 @@ internal static class SimulationChecks
         var observer = new ScenarioActorDefinition(
             "observer",
             2,
-            new GameplayActorPose(new GameplayPosition(-2f, 1f, 0f), 90f),
+            new GameplayActorPose(new GameplayPosition(-2f, 0f, 0f), 90f),
             new TurnBudget(4, 8f),
             rifle,
             combat: new ActorCombatDefinition(
@@ -458,7 +458,7 @@ internal static class SimulationChecks
         var target = new ScenarioActorDefinition(
             "target",
             1,
-            new GameplayActorPose(new GameplayPosition(2f, 1f, 0f), 270f),
+            new GameplayActorPose(new GameplayPosition(2f, 0f, 0f), 270f),
             new TurnBudget(4, 8f),
             rifle,
             combat: new ActorCombatDefinition(
@@ -888,7 +888,8 @@ internal static class SimulationChecks
                 spatial,
                 "observer",
                 "target");
-        Require(openedSight.VisibleSampleCount == 1,
+        Require(openedSight.VisibleSampleCount == openedSight.TotalSampleCount
+            && openedSight.TotalSampleCount == 6,
             "Headless encounter sight retained a toppled obstruction.");
         EncounterSoundEvidence muffledSound =
             GameplayHeadlessEncounterEvidence.CaptureSound(

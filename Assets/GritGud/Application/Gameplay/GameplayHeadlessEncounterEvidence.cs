@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using GritGud.Domain.Gameplay;
 
 namespace GritGud.Application.Gameplay
@@ -21,20 +22,29 @@ namespace GritGud.Application.Gameplay
             if (spatial == null) throw new ArgumentNullException(nameof(spatial));
             GameplayActorSnapshot observer = state.Session.GetActor(observerId);
             GameplayActorSnapshot target = state.Session.GetActor(targetId);
-            bool blocked = spatial.BlocksLineOfSight(
-                state,
-                observer.Pose.Position,
-                target.Pose.Position);
+            TargetRegionSample observerHead = GetRegionSample(
+                observer,
+                TargetRegionId.Head);
+            IReadOnlyList<TargetRegionSample> targetSamples =
+                ActorTargetProfileCatalog.CreateWorldSamples(
+                    target.Pose,
+                    target.IsPinned);
+            var regions = new List<TargetRegionExposure>(targetSamples.Count);
+            foreach (TargetRegionSample sample in targetSamples)
+            {
+                bool blocked = spatial.BlocksLineOfSight(
+                    state,
+                    observerHead.Center,
+                    sample.Center);
+                regions.Add(new TargetRegionExposure(
+                    sample.Id,
+                    blocked ? 0 : 1,
+                    totalSampleCount: 1));
+            }
             return new TargetExposureSnapshot(
                 observerId,
                 targetId,
-                new[]
-                {
-                    new TargetRegionExposure(
-                        TargetRegionId.Torso,
-                        blocked ? 0 : 1,
-                        totalSampleCount: 1),
-                });
+                regions);
         }
 
         public static EncounterSoundEvidence CaptureSound(
@@ -91,6 +101,22 @@ namespace GritGud.Application.Gameplay
                 sight,
                 state.Session.GetActor(targetId).Pose.Position,
                 sound);
+        }
+
+        private static TargetRegionSample GetRegionSample(
+            GameplayActorSnapshot actor,
+            TargetRegionId regionId)
+        {
+            foreach (TargetRegionSample sample in
+                ActorTargetProfileCatalog.CreateWorldSamples(
+                    actor.Pose,
+                    actor.IsPinned))
+            {
+                if (sample.Id == regionId)
+                    return sample;
+            }
+            throw new InvalidOperationException(
+                $"Actor target profile does not contain region '{regionId}'.");
         }
     }
 }

@@ -35,14 +35,14 @@ namespace GritGud.Presentation.Gameplay
                 hitBuffer,
                 MaximumAimDistance,
                 layerMask,
-                QueryTriggerInteraction.Ignore);
+                QueryTriggerInteraction.Collide);
             if (hitCount == hitBuffer.Length)
             {
                 RaycastHit[] allHits = Physics.RaycastAll(
                     ray,
                     MaximumAimDistance,
                     layerMask,
-                    QueryTriggerInteraction.Ignore);
+                    QueryTriggerInteraction.Collide);
                 return TryResolveNearestTarget(
                     allHits,
                     allHits.Length,
@@ -63,6 +63,8 @@ namespace GritGud.Presentation.Gameplay
             {
                 RaycastHit hit = hits[index];
                 if (hit.collider == null
+                    || !ActorTargetProfilePresenter.IsAcquisitionCollider(
+                        hit.collider)
                     || BelongsTo(hit.collider.transform, observer)
                     || hit.distance >= nearestDistance
                     || !registry.TryGetActorContaining(

@@ -67,7 +67,7 @@ namespace GritGud.Presentation.Gameplay
             GameplayActorView actor)
         {
             IReadOnlyList<ActorTargetRegionSample> regions =
-                actor.Stance.GetTargetRegionSamples();
+                actor.TargetProfile.GetTargetRegionSamples();
             ActorTargetRegionSample nearest = default;
             float nearestDistance = float.PositiveInfinity;
             bool foundCandidate = false;

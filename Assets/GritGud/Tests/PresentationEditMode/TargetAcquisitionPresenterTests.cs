@@ -963,6 +963,84 @@ namespace GritGud.Presentation.Tests
             }
         }
 
+        [Test]
+        public void PinnedBodyIsAcquiredAwayFromFeetButMovementColliderIsNotAimable()
+        {
+            var observer = CreateActorObject(
+                "Pinned Target Observer",
+                new Vector3(0f, 0f, -4f),
+                withVisual: false);
+            var target = CreateActorObject(
+                "Pinned Target",
+                Vector3.zero,
+                withVisual: true);
+            LevelWorld world = null;
+            GameplayWorldRegistry registry = null;
+            try
+            {
+                world = new LevelWorld(
+                    new GameObject("Pinned Target World"),
+                    new Dictionary<string, LevelEntityView>(),
+                    null);
+                registry = new GameplayWorldRegistry(world);
+                registry.RegisterActor(
+                    "observer",
+                    "test",
+                    targetable: false,
+                    observer);
+                registry.RegisterActor(
+                    "target",
+                    "test",
+                    targetable: true,
+                    target);
+                GameplayActorView targetView = registry.GetActor("target");
+                targetView.ReplayActions.PresentPinState(new ActorPinState(
+                    "target",
+                    "prop",
+                    displacementSequence: 1,
+                    new DisplacementContactEvidence(
+                        "target",
+                        new GameplayPosition(0f, 0f, 0f),
+                        new GameplayPosition(0f, 1f, 0f),
+                        overlapDepth: 0.2f)));
+                Physics.SyncTransforms();
+                var query = new UnityPointerTargetQuery(
+                    observer.transform,
+                    registry);
+
+                Assert.That(
+                    query.TryAcquire(
+                        new Ray(
+                            new Vector3(0f, 0.3f, -4f),
+                            Vector3.forward),
+                        out GameplayActorView acquired),
+                    Is.True);
+                Assert.That(acquired.ActorId, Is.EqualTo("target"));
+                Assert.That(
+                    targetView.TargetProfile.ProfileKind,
+                    Is.EqualTo(ActorTargetProfileKind.PinnedDown));
+
+                Assert.That(
+                    query.TryAcquire(
+                        new Ray(
+                            new Vector3(0f, 1.2f, -4f),
+                            Vector3.forward),
+                        out _),
+                    Is.False,
+                    "The upright movement collider must not remain an aiming bound.");
+            }
+            finally
+            {
+                registry?.Dispose();
+                world?.Dispose();
+                if (registry == null)
+                {
+                    Object.DestroyImmediate(observer);
+                    Object.DestroyImmediate(target);
+                }
+            }
+        }
+
         private static GameplaySession CreateSession(
             bool includePlayerParty = false,
             bool includeRangedAttack = false)

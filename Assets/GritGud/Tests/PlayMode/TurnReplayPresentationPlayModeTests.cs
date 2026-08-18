@@ -161,6 +161,9 @@ namespace GritGud.PlayMode.Tests
                         Is.SameAs(replayPin));
                     Assert.That(animation.ReplayAction,
                         Is.EqualTo(ActorAnimationAction.Incapacitate));
+                    Assert.That(
+                        view.TargetProfile.ProfileKind,
+                        Is.EqualTo(ActorTargetProfileKind.PinnedDown));
 
                     GameplayActorSnapshot contactSnapshot =
                         new GameplayActorSnapshot(
@@ -264,6 +267,9 @@ namespace GritGud.PlayMode.Tests
                     Assert.That(view.ReplayActions.CurrentPinState, Is.Null);
                     Assert.That(animation.ReplayAction,
                         Is.EqualTo(ActorAnimationAction.Interact));
+                    Assert.That(
+                        view.TargetProfile.ProfileKind,
+                        Is.EqualTo(ActorTargetProfileKind.Crouched));
 
                     replay.Present(
                         new GameplayActorSnapshot(
@@ -308,6 +314,9 @@ namespace GritGud.PlayMode.Tests
                 Assert.That(view.ReplayActions.CurrentState, Is.Null);
                 Assert.That(view.ReplayActions.CurrentPinState,
                     Is.SameAs(livePin));
+                Assert.That(
+                    view.TargetProfile.ProfileKind,
+                    Is.EqualTo(ActorTargetProfileKind.PinnedDown));
                 Assert.That(actor.GetComponent<
                     ActorLocomotionAnimationPresenter>().enabled,
                     Is.EqualTo(locomotionEnabled));

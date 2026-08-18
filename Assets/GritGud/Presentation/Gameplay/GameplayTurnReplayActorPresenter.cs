@@ -217,7 +217,8 @@ namespace GritGud.Presentation.Gameplay
             {
                 action = snapshot.IsIncapacitated
                     ? ActorAnimationAction.Incapacitate
-                    : snapshot.IsPinned
+                    : view.TargetProfile.ProfileKind
+                        == ActorTargetProfileKind.PinnedDown
                         ? ActorAnimationAction.Incapacitate
                         : (ActorAnimationAction?)null;
                 return;

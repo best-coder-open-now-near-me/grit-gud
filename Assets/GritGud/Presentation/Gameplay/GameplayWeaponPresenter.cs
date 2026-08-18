@@ -490,7 +490,7 @@ namespace GritGud.Presentation.Gameplay
             TargetRegionId preferredRegion = resolution.HitRegion
                 ?? TargetRegionId.Torso;
             IReadOnlyList<ActorTargetRegionSample> samples =
-                target.Stance.GetTargetRegionSamples();
+                target.TargetProfile.GetTargetRegionSamples();
             foreach (ActorTargetRegionSample sample in samples)
             {
                 if (sample.Id == preferredRegion)

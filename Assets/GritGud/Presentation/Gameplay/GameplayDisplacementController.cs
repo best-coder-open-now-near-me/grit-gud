@@ -1080,12 +1080,6 @@ namespace GritGud.Presentation.Gameplay
             {
                 pinnedActor.ReplayActions.PresentPinState(
                     record.PinTransition.ResultingState);
-                ActorAnimationCoordinator animation =
-                    pinnedActor.Root.GetComponent<ActorAnimationCoordinator>();
-                animation?.TryRequestAction(
-                    record.PinTransition.EstablishesPin
-                        ? ActorAnimationAction.Incapacitate
-                        : ActorAnimationAction.Interact);
             }
         }
 

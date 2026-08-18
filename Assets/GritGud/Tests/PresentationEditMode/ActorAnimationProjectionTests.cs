@@ -1,6 +1,7 @@
 using System;
 using GritGud.Domain.Gameplay;
 using GritGud.Presentation.Actors.Animation;
+using GritGud.Presentation.Gameplay;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -280,6 +281,68 @@ namespace GritGud.Presentation.Tests
                     Is.True);
                 Assert.That(animator.GetLayerWeight(layer), Is.Zero);
                 Assert.That(animation.ActionSequence, Is.EqualTo(1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(actor);
+            }
+        }
+
+        [Test]
+        public void ClearingPinnedProfileReleasesHeldFallPoseAndRestoresStanceTargeting()
+        {
+            GameObject prefab = Resources.Load<GameObject>(
+                "Actors/DefaultPlayerActor");
+            GameObject actor = UnityEngine.Object.Instantiate(prefab);
+            try
+            {
+                ActorAnimationCoordinator animation =
+                    actor.GetComponent<ActorAnimationCoordinator>();
+                Animator animator = animation.TargetAnimator;
+                animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                var hooks = actor.AddComponent<
+                    GameplayTurnReplayActorStateHooks>();
+                var targets = actor.AddComponent<
+                    ActorTargetProfilePresenter>();
+                targets.Bind(
+                    actor.GetComponent<ActorStancePresenter>(),
+                    hooks);
+                animator.Update(0f);
+
+                hooks.PresentPinState(new ActorPinState(
+                    "actor",
+                    "prop",
+                    displacementSequence: 1,
+                    new DisplacementContactEvidence(
+                        "actor",
+                        new GameplayPosition(0f, 0f, 0f),
+                        new GameplayPosition(0f, 1f, 0f),
+                        overlapDepth: 0.2f)));
+                animator.Update(0.2f);
+
+                Assert.That(
+                    targets.ProfileKind,
+                    Is.EqualTo(ActorTargetProfileKind.PinnedDown));
+                Assert.That(
+                    animation.LastRequestedAction,
+                    Is.EqualTo(ActorAnimationAction.Incapacitate));
+
+                hooks.PresentPinState(null);
+                animator.Update(0.2f);
+
+                int layer = animator.GetLayerIndex(
+                    ActorAnimationParameters.ReactionLayerName);
+                Assert.That(
+                    animator.GetCurrentAnimatorStateInfo(layer).IsName(
+                        ActorAnimationParameters.NoReactionStateName),
+                    Is.True);
+                Assert.That(animator.GetLayerWeight(layer), Is.Zero);
+                Assert.That(
+                    targets.ProfileKind,
+                    Is.EqualTo(ActorTargetProfileKind.Standing));
+                Assert.That(
+                    animation.LastRequestedAction,
+                    Is.EqualTo(ActorAnimationAction.Interact));
             }
             finally
             {

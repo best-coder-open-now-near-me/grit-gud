@@ -49,13 +49,15 @@ namespace GritGud.Presentation.Gameplay
                 direction / distance,
                 distance,
                 layerMask,
-                QueryTriggerInteraction.Ignore);
+                QueryTriggerInteraction.Collide);
 
             float nearestDistance = float.PositiveInfinity;
             string nearestEntityId = null;
             foreach (RaycastHit hit in hits)
             {
-                if (hit.collider == null || hit.distance >= nearestDistance)
+                if (hit.collider == null
+                    || hit.distance >= nearestDistance
+                    || !IsProjectileCollider(hit.collider))
                 {
                     continue;
                 }
@@ -104,6 +106,18 @@ namespace GritGud.Presentation.Gameplay
                 nearestEntityId,
                 collisionFraction,
                 blastEffects);
+        }
+
+        private bool IsProjectileCollider(Collider candidate)
+        {
+            if (registry.TryGetActorContaining(
+                    candidate.transform,
+                    out _))
+            {
+                return ActorTargetProfilePresenter.IsAcquisitionCollider(
+                    candidate);
+            }
+            return !candidate.isTrigger;
         }
 
         private string ResolveEntityId(Transform hitTransform)

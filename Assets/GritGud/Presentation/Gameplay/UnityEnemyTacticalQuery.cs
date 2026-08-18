@@ -197,7 +197,7 @@ namespace GritGud.Presentation.Gameplay
         {
             GameplayActorView target = registry.GetActor(targetId);
             IReadOnlyList<ActorTargetRegionSample> presented =
-                target.Stance.GetTargetRegionSamples();
+                target.TargetProfile.GetTargetRegionSamples();
             var regions = new List<TargetRegionSample>(presented.Count);
             foreach (ActorTargetRegionSample region in presented)
                 regions.Add(new TargetRegionSample(

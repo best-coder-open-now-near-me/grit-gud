@@ -77,6 +77,44 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void PinnedProjectileCollisionUsesHorizontalTargetProfile()
+        {
+            GameplayWorldRegistry registry = CreateRegistry();
+            CreateActor(registry, "attacker", new Vector3(0f, 0f, -4f));
+            CreateActor(registry, "target", Vector3.zero);
+            GameplayActorView target = registry.GetActor("target");
+            target.ReplayActions.PresentPinState(new ActorPinState(
+                "target",
+                "prop",
+                displacementSequence: 1,
+                new DisplacementContactEvidence(
+                    "target",
+                    new GameplayPosition(0f, 0f, 0f),
+                    new GameplayPosition(0f, 1f, 0f),
+                    overlapDepth: 0.2f)));
+            Physics.SyncTransforms();
+            var adapter = new UnityProjectileSegmentQuery(
+                registry,
+                currentWorldStateRevision: () => 46L,
+                blastQuery: new EmptyBlastWorldQuery(46L));
+
+            ProjectileSegmentQueryResult bodyHit = adapter.Query(CreateQuery(
+                new Vector3(0f, 0.3f, -4f),
+                new Vector3(0f, 0.3f, 0f),
+                new Vector3(0f, 0.3f, 1f)));
+            ProjectileSegmentQueryResult uprightOnly = adapter.Query(
+                CreateQuery(
+                    new Vector3(0f, 1.2f, -4f),
+                    new Vector3(0f, 1.2f, 0f),
+                    new Vector3(0f, 1.2f, 1f)));
+
+            Assert.That(bodyHit.HasCollision, Is.True);
+            Assert.That(bodyHit.HitEntityId, Is.EqualTo("target"));
+            Assert.That(uprightOnly.HasCollision, Is.False,
+                "The old upright movement volume must not catch projectiles.");
+        }
+
+        [Test]
         public void BlockingWorldGeometryWinsBeforeTheIntendedTarget()
         {
             GameplayWorldRegistry registry = CreateRegistry();

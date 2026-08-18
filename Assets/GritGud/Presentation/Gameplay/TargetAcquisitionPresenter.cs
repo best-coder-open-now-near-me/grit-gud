@@ -508,7 +508,7 @@ namespace GritGud.Presentation.Gameplay
             }
 
             IReadOnlyList<ActorTargetRegionSample> presentedRegions =
-                target.Stance.GetTargetRegionSamples();
+                target.TargetProfile.GetTargetRegionSamples();
             targetRegionBuffer.Clear();
             if (targetRegionBuffer.Capacity < presentedRegions.Count)
                 targetRegionBuffer.Capacity = presentedRegions.Count;
@@ -671,7 +671,7 @@ namespace GritGud.Presentation.Gameplay
                 aimHitBuffer,
                 offset.magnitude + 0.15f,
                 Physics.DefaultRaycastLayers,
-                QueryTriggerInteraction.Ignore);
+                QueryTriggerInteraction.Collide);
             RaycastHit nearest = default;
             float nearestDistance = float.PositiveInfinity;
             for (int index = 0; index < hitCount; index++)
@@ -679,7 +679,8 @@ namespace GritGud.Presentation.Gameplay
                 RaycastHit candidate = aimHitBuffer[index];
                 if (candidate.collider == null
                     || candidate.distance >= nearestDistance
-                    || BelongsToObserver(candidate.collider.transform))
+                    || BelongsToObserver(candidate.collider.transform)
+                    || !IsAimCollider(candidate.collider))
                 {
                     continue;
                 }
@@ -779,7 +780,7 @@ namespace GritGud.Presentation.Gameplay
                 aimHitBuffer,
                 rangeEndDistance,
                 Physics.DefaultRaycastLayers,
-                QueryTriggerInteraction.Ignore);
+                QueryTriggerInteraction.Collide);
             Vector3 intendedAimPoint;
             Transform intendedTransform;
             bool foundPointerSurface;
@@ -789,7 +790,7 @@ namespace GritGud.Presentation.Gameplay
                     aimRay,
                     rangeEndDistance,
                     Physics.DefaultRaycastLayers,
-                    QueryTriggerInteraction.Ignore);
+                    QueryTriggerInteraction.Collide);
                 foundPointerSurface = TryFindNearestCharacterSideHit(
                     allHits,
                     allHits.Length,
@@ -855,14 +856,14 @@ namespace GritGud.Presentation.Gameplay
                 aimHitBuffer,
                 pathDistance,
                 Physics.DefaultRaycastLayers,
-                QueryTriggerInteraction.Ignore);
+                QueryTriggerInteraction.Collide);
             if (hitCount == aimHitBuffer.Length)
             {
                 RaycastHit[] allHits = Physics.RaycastAll(
                     characterRay,
                     pathDistance,
                     Physics.DefaultRaycastLayers,
-                    QueryTriggerInteraction.Ignore);
+                    QueryTriggerInteraction.Collide);
                 if (TryFindNearestCharacterSideHit(
                         allHits,
                         allHits.Length,
@@ -942,7 +943,8 @@ namespace GritGud.Presentation.Gameplay
                     || hit.distance + AimPlaneTolerance
                         < characterPlaneDistance
                     || hit.distance >= nearestDistance
-                    || BelongsToObserver(hit.collider.transform))
+                    || BelongsToObserver(hit.collider.transform)
+                    || !IsAimCollider(hit.collider))
                 {
                     continue;
                 }
@@ -955,6 +957,21 @@ namespace GritGud.Presentation.Gameplay
             aimPoint = nearestPoint;
             aimTransform = nearestTransform;
             return !float.IsPositiveInfinity(nearestDistance);
+        }
+
+        private bool IsAimCollider(Collider candidate)
+        {
+            if (candidate == null)
+                return false;
+            if (registry != null
+                && registry.TryGetActorContaining(
+                    candidate.transform,
+                    out _))
+            {
+                return ActorTargetProfilePresenter.IsAcquisitionCollider(
+                    candidate);
+            }
+            return !candidate.isTrigger;
         }
 
         private string ResolveAimTargetId(Transform aimTransform)

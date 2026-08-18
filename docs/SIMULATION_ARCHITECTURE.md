@@ -156,6 +156,14 @@ evaluation. The Unity parity corpus covers intact, rotated, toppled, moved,
 partially fractured, and destroyed cover, and must pass before hands-on
 playtesting.
 
+Actors use one portable target-profile catalog for standing, crouched, and
+pinned-down silhouettes. Each profile owns semantic body-region samples and a
+separate player-acquisition volume. Unity projects that acquisition volume into
+a query-only collider and ignores the movement controller for aiming; live and
+headless sight evaluate the same region centers. Pin presentation consumes the
+same profile transition, so Push Off restores stance targeting and releases the
+held prone reaction rather than clearing only canonical state.
+
 ## Extension rule
 
 New weapons and abilities reuse existing typed state, candidate, transition,
