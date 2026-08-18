@@ -1,5 +1,7 @@
+using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.Reflection;
 using GritGud.Application.Levels;
 using GritGud.Domain.Levels;
 using NUnit.Framework;
@@ -8,6 +10,29 @@ namespace GritGud.Domain.Tests.Levels
 {
     public sealed class LevelValidatorTests
     {
+        [Test]
+        public void DefaultValidatorRegistersEveryConcreteRule()
+        {
+            Type[] expectedRuleTypes = typeof(ILevelValidationRule).Assembly
+                .GetTypes()
+                .Where(type => typeof(ILevelValidationRule).IsAssignableFrom(type)
+                    && type.IsClass
+                    && !type.IsAbstract)
+                .ToArray();
+            FieldInfo serviceField = typeof(LevelValidator).GetField(
+                "DefaultService",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            var service = (LevelValidationService)serviceField.GetValue(null);
+            FieldInfo rulesField = typeof(LevelValidationService).GetField(
+                "rules",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            var registeredRules = (ILevelValidationRule[])rulesField.GetValue(service);
+
+            CollectionAssert.AreEquivalent(
+                expectedRuleTypes.Select(type => type.FullName),
+                registeredRules.Select(rule => rule.GetType().FullName));
+        }
+
         [Test]
         public void InvalidPortableLightingIsRejected()
         {
