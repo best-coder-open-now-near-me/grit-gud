@@ -121,11 +121,17 @@ catalog merely because they have a collider or presentation object.
 Headless spatial evidence is stamped by the static spatial identity plus a
 dynamic fingerprint derived from actor poses, destructible state and pose,
 vehicles, and smoke. The engine-free destructible evidence adapter projects
-authored cover volumes from the resulting canonical prop state for line of
-sight, route obstruction, and blast occlusion. Damage or displacement therefore
-invalidates later evidence; destroying a cover object removes its obstruction
-from the next branch evaluation. Unity evidence parity remains a promotion gate
-before hands-on playtesting.
+authored cover volumes through the resulting canonical prop's full position,
+pitch, yaw, and roll for line of sight, route obstruction, and blast occlusion.
+When a prop fractures, content assembly materializes portable per-chunk tactical
+volumes from its registered fracture profile and only attached chunks remain in
+later evidence. Detached chunks without a matching profile fail closed rather
+than silently retaining or removing the wrong obstruction. Damage,
+displacement, toppling, and fracture therefore invalidate later evidence;
+destroying a cover object removes its obstruction from the next branch
+evaluation. The Unity parity corpus covers intact, rotated, toppled, moved,
+partially fractured, and destroyed cover, and must pass before hands-on
+playtesting.
 
 ## Extension rule
 

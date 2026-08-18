@@ -7,6 +7,58 @@ using GritGud.Domain.Levels;
 
 namespace GritGud.Application.Gameplay
 {
+    public readonly struct GameplayLocalSpatialVolume
+    {
+        public GameplayLocalSpatialVolume(
+            GameplayPosition center,
+            GameplayPosition size)
+        {
+            GameplayNumericPolicy.RequireFinite(size.X, nameof(size));
+            GameplayNumericPolicy.RequireFinite(size.Y, nameof(size));
+            GameplayNumericPolicy.RequireFinite(size.Z, nameof(size));
+            if (size.X <= 0f || size.Y <= 0f || size.Z <= 0f)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(size),
+                    "Spatial volume dimensions must be positive.");
+            }
+
+            Center = center;
+            Size = size;
+        }
+
+        public GameplayPosition Center { get; }
+        public GameplayPosition Size { get; }
+    }
+
+    public sealed class GameplayFractureSpatialProfile
+    {
+        public GameplayFractureSpatialProfile(
+            string profileId,
+            IEnumerable<GameplayLocalSpatialVolume> chunkVolumes)
+        {
+            ProfileId = GameplayContentIdentity.RequireText(
+                profileId,
+                nameof(profileId));
+            if (chunkVolumes == null)
+                throw new ArgumentNullException(nameof(chunkVolumes));
+            var chunks = new List<GameplayLocalSpatialVolume>(chunkVolumes);
+            if (chunks.Count < 2
+                || chunks.Count > DestructibleFracture.MaximumChunkCount)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(chunkVolumes),
+                    $"Fracture spatial profiles require between 2 and "
+                    + $"{DestructibleFracture.MaximumChunkCount} chunks.");
+            }
+            ChunkVolumes = chunks.AsReadOnly();
+        }
+
+        public string ProfileId { get; }
+        public IReadOnlyList<GameplayLocalSpatialVolume> ChunkVolumes { get; }
+        public int ChunkCount => ChunkVolumes.Count;
+    }
+
     public sealed class GameplaySpatialEvidenceStamp
     {
         public GameplaySpatialEvidenceStamp(
@@ -108,14 +160,17 @@ namespace GritGud.Application.Gameplay
         {
             public ObstacleDefinition(
                 string propId,
-                IReadOnlyList<CoverVolumeData> volumes)
+                IReadOnlyList<CoverVolumeData> volumes,
+                GameplayFractureSpatialProfile fractureProfile)
             {
                 PropId = propId;
                 Volumes = volumes;
+                FractureProfile = fractureProfile;
             }
 
             public string PropId { get; }
             public IReadOnlyList<CoverVolumeData> Volumes { get; }
+            public GameplayFractureSpatialProfile FractureProfile { get; }
         }
 
         private readonly SpatialContentIdentity spatialIdentity;
@@ -123,7 +178,9 @@ namespace GritGud.Application.Gameplay
 
         public GameplayHeadlessSpatialEvidence(
             LevelDocument level,
-            SpatialContentIdentity identity)
+            SpatialContentIdentity identity,
+            IReadOnlyDictionary<string, GameplayFractureSpatialProfile>
+                fractureProfilesByArchetype = null)
         {
             if (level == null) throw new ArgumentNullException(nameof(level));
             spatialIdentity = identity ?? throw new ArgumentNullException(
@@ -144,7 +201,10 @@ namespace GritGud.Application.Gameplay
                 result.Add(new ObstacleDefinition(
                     entity.id,
                     new List<CoverVolumeData>(
-                        entity.coverVolumes).AsReadOnly()));
+                        entity.coverVolumes).AsReadOnly(),
+                    ResolveFractureProfile(
+                        entity.archetypeId,
+                        fractureProfilesByArchetype)));
             }
             result.Sort((left, right) => StringComparer.Ordinal.Compare(
                 left.PropId,
@@ -235,13 +295,71 @@ namespace GritGud.Application.Gameplay
                     state.Destructibles,
                     obstacle.PropId);
                 if (prop.State == DestructiblePropState.Destroyed) continue;
+                if (prop.DetachedFractureChunks != 0UL)
+                {
+                    GameplayFractureSpatialProfile profile =
+                        RequireFractureProfile(obstacle, prop);
+                    for (int index = 0; index < profile.ChunkCount; index++)
+                    {
+                        if ((prop.DetachedFractureChunks & (1UL << index)) != 0UL)
+                            continue;
+                        if (Intersects(
+                                origin,
+                                destination,
+                                prop.Pose,
+                                profile.ChunkVolumes[index],
+                                expansion))
+                            return true;
+                    }
+                    continue;
+                }
                 foreach (CoverVolumeData volume in obstacle.Volumes)
                 {
-                    Bounds bounds = CreateBounds(prop.Pose, volume, expansion);
-                    if (Intersects(origin, destination, bounds)) return true;
+                    if (Intersects(
+                            origin,
+                            destination,
+                            prop.Pose,
+                            volume,
+                            expansion))
+                        return true;
                 }
             }
             return false;
+        }
+
+        private static GameplayFractureSpatialProfile ResolveFractureProfile(
+            string archetypeId,
+            IReadOnlyDictionary<string, GameplayFractureSpatialProfile>
+                profiles)
+        {
+            if (profiles == null) return null;
+            string id = archetypeId ?? string.Empty;
+            return profiles.TryGetValue(id, out GameplayFractureSpatialProfile profile)
+                ? profile ?? throw new ArgumentException(
+                    $"Fracture spatial profile '{id}' cannot be null.",
+                    nameof(profiles))
+                : null;
+        }
+
+        private static GameplayFractureSpatialProfile RequireFractureProfile(
+            ObstacleDefinition obstacle,
+            DestructiblePropSnapshot prop)
+        {
+            GameplayFractureSpatialProfile profile = obstacle.FractureProfile;
+            if (profile == null)
+            {
+                throw new InvalidOperationException(
+                    $"Spatial destructible '{prop.PropId}' has detached fracture "
+                    + "chunks but no registered fracture spatial profile.");
+            }
+            if (profile.ChunkCount != prop.FractureChunkCount)
+            {
+                throw new InvalidOperationException(
+                    $"Spatial destructible '{prop.PropId}' declares "
+                    + $"{prop.FractureChunkCount} fracture chunks but profile "
+                    + $"'{profile.ProfileId}' contains {profile.ChunkCount}.");
+            }
+            return profile;
         }
 
         private static DestructiblePropSnapshot FindProp(
@@ -255,61 +373,129 @@ namespace GritGud.Application.Gameplay
                 $"Spatial destructible '{propId}' is absent from canonical state.");
         }
 
-        private static Bounds CreateBounds(
+        private static bool Intersects(
+            GameplayPosition origin,
+            GameplayPosition destination,
             GameplayPropPose pose,
             CoverVolumeData volume,
-            float expansion)
-        {
-            double radians = pose.YawDegrees * (Math.PI / 180d);
-            float cosine = (float)Math.Cos(radians);
-            float sine = (float)Math.Sin(radians);
-            float localX = volume.localCenter.x;
-            float localZ = volume.localCenter.z;
-            var center = new GameplayPosition(
-                pose.Position.X + (localX * cosine) + (localZ * sine),
-                pose.Position.Y + volume.localCenter.y,
-                pose.Position.Z - (localX * sine) + (localZ * cosine));
-            float halfX = volume.size.x * 0.5f;
-            float halfZ = volume.size.z * 0.5f;
-            float worldHalfX = Math.Abs(halfX * cosine)
-                + Math.Abs(halfZ * sine);
-            float worldHalfZ = Math.Abs(halfX * sine)
-                + Math.Abs(halfZ * cosine);
-            return new Bounds(
-                center,
-                worldHalfX + expansion,
-                (volume.size.y * 0.5f) + expansion,
-                worldHalfZ + expansion);
-        }
+            float expansion) => Intersects(
+                origin,
+                destination,
+                pose,
+                new GameplayPosition(
+                    volume.localCenter.x,
+                    volume.localCenter.y,
+                    volume.localCenter.z),
+                new GameplayPosition(
+                    volume.size.x,
+                    volume.size.y,
+                    volume.size.z),
+                expansion);
 
         private static bool Intersects(
             GameplayPosition origin,
             GameplayPosition destination,
-            Bounds bounds)
+            GameplayPropPose pose,
+            GameplayLocalSpatialVolume volume,
+            float expansion) => Intersects(
+                origin,
+                destination,
+                pose,
+                volume.Center,
+                volume.Size,
+                expansion);
+
+        private static bool Intersects(
+            GameplayPosition origin,
+            GameplayPosition destination,
+            GameplayPropPose pose,
+            GameplayPosition localCenter,
+            GameplayPosition size,
+            float expansion)
         {
+            GameplayPosition localOrigin = ToPropLocal(origin, pose);
+            GameplayPosition localDestination = ToPropLocal(
+                destination,
+                pose);
+            float halfX = (size.X * 0.5f) + expansion;
+            float halfY = (size.Y * 0.5f) + expansion;
+            float halfZ = (size.Z * 0.5f) + expansion;
             float minimum = 0f;
             float maximum = 1f;
             return IntersectsAxis(
-                    origin.X,
-                    destination.X - origin.X,
-                    bounds.Center.X - bounds.HalfX,
-                    bounds.Center.X + bounds.HalfX,
+                    localOrigin.X,
+                    localDestination.X - localOrigin.X,
+                    localCenter.X - halfX,
+                    localCenter.X + halfX,
                     ref minimum,
                     ref maximum)
                 && IntersectsAxis(
-                    origin.Y,
-                    destination.Y - origin.Y,
-                    bounds.Center.Y - bounds.HalfY,
-                    bounds.Center.Y + bounds.HalfY,
+                    localOrigin.Y,
+                    localDestination.Y - localOrigin.Y,
+                    localCenter.Y - halfY,
+                    localCenter.Y + halfY,
                     ref minimum,
                     ref maximum)
                 && IntersectsAxis(
-                    origin.Z,
-                    destination.Z - origin.Z,
-                    bounds.Center.Z - bounds.HalfZ,
-                    bounds.Center.Z + bounds.HalfZ,
+                    localOrigin.Z,
+                    localDestination.Z - localOrigin.Z,
+                    localCenter.Z - halfZ,
+                    localCenter.Z + halfZ,
                     ref minimum,
                     ref maximum);
+        }
+
+        private static GameplayPosition ToPropLocal(
+            GameplayPosition world,
+            GameplayPropPose pose)
+        {
+            double x = world.X - pose.Position.X;
+            double y = world.Y - pose.Position.Y;
+            double z = world.Z - pose.Position.Z;
+
+            RotateY(ref x, ref z, -pose.YawDegrees);
+            RotateX(ref y, ref z, -pose.PitchDegrees);
+            RotateZ(ref x, ref y, -pose.RollDegrees);
+            return new GameplayPosition((float)x, (float)y, (float)z);
+        }
+
+        private static void RotateX(
+            ref double y,
+            ref double z,
+            float degrees)
+        {
+            double radians = degrees * (Math.PI / 180d);
+            double cosine = Math.Cos(radians);
+            double sine = Math.Sin(radians);
+            double rotatedY = (cosine * y) - (sine * z);
+            z = (sine * y) + (cosine * z);
+            y = rotatedY;
+        }
+
+        private static void RotateY(
+            ref double x,
+            ref double z,
+            float degrees)
+        {
+            double radians = degrees * (Math.PI / 180d);
+            double cosine = Math.Cos(radians);
+            double sine = Math.Sin(radians);
+            double rotatedX = (cosine * x) + (sine * z);
+            z = (-sine * x) + (cosine * z);
+            x = rotatedX;
+        }
+
+        private static void RotateZ(
+            ref double x,
+            ref double y,
+            float degrees)
+        {
+            double radians = degrees * (Math.PI / 180d);
+            double cosine = Math.Cos(radians);
+            double sine = Math.Sin(radians);
+            double rotatedX = (cosine * x) - (sine * y);
+            y = (sine * x) + (cosine * y);
+            x = rotatedX;
         }
 
         private static bool IntersectsAxis(
@@ -351,24 +537,5 @@ namespace GritGud.Application.Gameplay
             }
         }
 
-        private readonly struct Bounds
-        {
-            public Bounds(
-                GameplayPosition center,
-                float halfX,
-                float halfY,
-                float halfZ)
-            {
-                Center = center;
-                HalfX = halfX;
-                HalfY = halfY;
-                HalfZ = halfZ;
-            }
-
-            public GameplayPosition Center { get; }
-            public float HalfX { get; }
-            public float HalfY { get; }
-            public float HalfZ { get; }
-        }
     }
 }

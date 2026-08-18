@@ -88,6 +88,14 @@ namespace GritGud.Presentation.Tests
                 "crate-warehouse-03",
                 out DisplacementSubjectDefinition pileSubject), Is.True);
             Assert.That(pileSubject.Toppling, Is.Not.Null);
+            Assert.That(content.FractureSpatialProfiles.Keys,
+                Does.Contain("prop.crate.standard"));
+            Assert.That(content.FractureSpatialProfiles.Keys,
+                Does.Contain("prop.barrel.metal"));
+            Assert.That(
+                content.FractureSpatialProfiles.Values.All(profile =>
+                    profile.ChunkCount == 12),
+                Is.True);
 
             Assert.That(content.Assembly.TryGetDisplacementSubject(
                 "barrel-yard-01",

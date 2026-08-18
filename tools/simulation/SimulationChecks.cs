@@ -610,6 +610,142 @@ internal static class SimulationChecks
                 sightOrigin,
                 sightDestination),
             "Intact cover did not block headless line of sight.");
+        var toppledProp = new DestructiblePropSnapshot(
+            "cover-wall",
+            DestructiblePropState.Intact,
+            maximumIntegrity: 2f,
+            remainingIntegrity: 2f,
+            new GameplayPropPose(
+                new GameplayPosition(0f, 0f, 0f),
+                pitchDegrees: 0f,
+                yawDegrees: 0f,
+                rollDegrees: 90f),
+            DestructiblePropPosture.Toppled);
+        GameplayCombatStateSnapshot toppled = WithDestructible(
+            initial,
+            toppledProp);
+        Require(!spatial.BlocksLineOfSight(
+                toppled,
+                sightOrigin,
+                sightDestination),
+            "Toppled cover retained its obsolete upright obstruction.");
+        var pitchedProp = new DestructiblePropSnapshot(
+            "cover-wall",
+            DestructiblePropState.Intact,
+            maximumIntegrity: 2f,
+            remainingIntegrity: 2f,
+            new GameplayPropPose(
+                new GameplayPosition(0f, 0f, 0f),
+                pitchDegrees: 90f,
+                yawDegrees: 0f,
+                rollDegrees: 0f),
+            DestructiblePropPosture.Toppled);
+        Require(!spatial.BlocksLineOfSight(
+                WithDestructible(initial, pitchedProp),
+                sightOrigin,
+                sightDestination),
+            "Pitched cover retained its obsolete upright obstruction.");
+        var movedProp = new DestructiblePropSnapshot(
+            "cover-wall",
+            DestructiblePropState.Intact,
+            maximumIntegrity: 2f,
+            remainingIntegrity: 2f,
+            new GameplayPropPose(
+                new GameplayPosition(0f, 0f, 4f),
+                pitchDegrees: 0f,
+                yawDegrees: 35f,
+                rollDegrees: 0f),
+            DestructiblePropPosture.Upright);
+        Require(!spatial.BlocksLineOfSight(
+                WithDestructible(initial, movedProp),
+                sightOrigin,
+                sightDestination),
+            "Moved cover remained at its authored starting obstruction.");
+        var highOrigin = new GameplayPosition(-2f, 2.6f, 0f);
+        var highDestination = new GameplayPosition(2f, 2.6f, 0f);
+        Require(!spatial.BlocksLineOfSight(
+                initial,
+                highOrigin,
+                highDestination)
+            && spatial.BlocksPath(
+                initial,
+                highOrigin,
+                highDestination,
+                clearanceRadius: 0.75f),
+            "Path clearance did not conservatively expand tactical cover.");
+
+        var fractureProfile = new GameplayFractureSpatialProfile(
+            "fracture.cover.wall",
+            new[]
+            {
+                new GameplayLocalSpatialVolume(
+                    new GameplayPosition(0f, 1f, 0f),
+                    new GameplayPosition(1f, 2f, 1f)),
+                new GameplayLocalSpatialVolume(
+                    new GameplayPosition(0f, 1f, 2f),
+                    new GameplayPosition(1f, 2f, 1f)),
+            });
+        var fractureProfiles = new Dictionary<
+            string,
+            GameplayFractureSpatialProfile>(StringComparer.Ordinal)
+        {
+            ["cover.wall"] = fractureProfile,
+        };
+        var fractureSpatial = new GameplayHeadlessSpatialEvidence(
+            level,
+            spatialIdentity,
+            fractureProfiles);
+        var detachedBlockingChunk = new DestructiblePropSnapshot(
+            "cover-wall",
+            DestructiblePropState.Damaged,
+            maximumIntegrity: 2f,
+            remainingIntegrity: 1f,
+            new GameplayPropPose(
+                new GameplayPosition(0f, 0f, 0f),
+                pitchDegrees: 0f,
+                yawDegrees: 0f,
+                rollDegrees: 0f),
+            DestructiblePropPosture.Upright,
+            fractureChunkCount: 2,
+            detachedFractureChunks: 1UL);
+        Require(!fractureSpatial.BlocksLineOfSight(
+                WithDestructible(initial, detachedBlockingChunk),
+                sightOrigin,
+                sightDestination),
+            "Detached fracture chunk remained in headless obstruction evidence.");
+        var retainedBlockingChunk = new DestructiblePropSnapshot(
+            "cover-wall",
+            DestructiblePropState.Damaged,
+            maximumIntegrity: 2f,
+            remainingIntegrity: 1f,
+            new GameplayPropPose(
+                new GameplayPosition(0f, 0f, 0f),
+                pitchDegrees: 0f,
+                yawDegrees: 0f,
+                rollDegrees: 0f),
+            DestructiblePropPosture.Upright,
+            fractureChunkCount: 2,
+            detachedFractureChunks: 2UL);
+        Require(fractureSpatial.BlocksLineOfSight(
+                WithDestructible(initial, retainedBlockingChunk),
+                sightOrigin,
+                sightDestination),
+            "Attached fracture chunk was absent from headless obstruction evidence.");
+        bool missingFractureRejected = false;
+        try
+        {
+            spatial.BlocksLineOfSight(
+                WithDestructible(initial, detachedBlockingChunk),
+                sightOrigin,
+                sightDestination);
+        }
+        catch (InvalidOperationException)
+        {
+            missingFractureRejected = true;
+        }
+        Require(missingFractureRejected,
+            "Detached fracture evidence did not fail closed without a profile.");
+
         GameplayEvidenceRecord beforeEvidence = spatial.CaptureEvidence(
             "line-of-sight",
             initial,
@@ -684,6 +820,16 @@ internal static class SimulationChecks
                 StringComparison.Ordinal),
             "Destructible reduction did not invalidate spatial evidence.");
     }
+
+    private static GameplayCombatStateSnapshot WithDestructible(
+        GameplayCombatStateSnapshot source,
+        DestructiblePropSnapshot prop) => new GameplayCombatStateSnapshot(
+            source.Session,
+            new[] { prop },
+            source.Vehicles,
+            source.Projectiles,
+            source.SmokeFields,
+            source.Coverage);
 
     private static LevelDocument CreateTacticalDestructibleLevel()
     {

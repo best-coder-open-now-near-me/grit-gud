@@ -122,6 +122,16 @@ namespace GritGud.Presentation.Tests
                     chunks.All(chunk =>
                         chunk.GetComponent<MeshCollider>()?.convex == true),
                     Is.True);
+                var spatial = fracture.CreateSpatialProfile();
+                Assert.That(spatial.ProfileId, Is.EqualTo(fracture.ProfileId));
+                Assert.That(spatial.ChunkCount, Is.EqualTo(fracture.ChunkCount));
+                Assert.That(
+                    spatial.ChunkVolumes.All(volume =>
+                        volume.Size.X > 0f
+                        && volume.Size.Y > 0f
+                        && volume.Size.Z > 0f),
+                    Is.True,
+                    archetypeId);
             }
         }
 

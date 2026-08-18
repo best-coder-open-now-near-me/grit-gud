@@ -33,6 +33,8 @@ namespace GritGud.Presentation.Gameplay
             CharacterAppearanceCatalog characterAppearances,
             UnityCharacterLibrary characters,
             GameplayScenarioAssembly assembly,
+            IReadOnlyDictionary<string, GameplayFractureSpatialProfile>
+                fractureSpatialProfiles,
             bool isSandbox = false)
         {
             Manifest = manifest;
@@ -43,6 +45,9 @@ namespace GritGud.Presentation.Gameplay
             CharacterAppearances = characterAppearances;
             Characters = characters;
             Assembly = assembly;
+            FractureSpatialProfiles = fractureSpatialProfiles
+                ?? throw new ArgumentNullException(
+                    nameof(fractureSpatialProfiles));
             ValidationContent = new LevelValidationContent(
                 archetypes.CreateKnownIdSet(),
                 scenario.actors
@@ -70,6 +75,9 @@ namespace GritGud.Presentation.Gameplay
         public UnityCharacterLibrary Characters { get; }
 
         public GameplayScenarioAssembly Assembly { get; }
+
+        public IReadOnlyDictionary<string, GameplayFractureSpatialProfile>
+            FractureSpatialProfiles { get; }
 
         public LevelValidationContent ValidationContent { get; }
 
@@ -319,6 +327,11 @@ namespace GritGud.Presentation.Gameplay
             ApplyCharacterAuthoring(scenario, characters);
             GameplayScenarioAssembly assembly =
                 new GameplayScenarioAssembler().Assemble(scenario, level);
+            IReadOnlyDictionary<string, GameplayFractureSpatialProfile>
+                fractureSpatialProfiles =
+                    GameplaySpatialContentAssembler.AssembleFractureProfiles(
+                        level,
+                        archetypes);
             foreach (ScenarioActorRuntimeDefinition actor in assembly.Actors)
             {
                 _ = actorPresentations.Get(actor.PresentationId);
@@ -333,6 +346,7 @@ namespace GritGud.Presentation.Gameplay
                 characterAppearances,
                 characters,
                 assembly,
+                fractureSpatialProfiles,
                 isSandbox);
         }
 
