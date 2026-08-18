@@ -43,6 +43,26 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public async Task RefreshReturnsThePendingOperationForComposition()
+        {
+            var pending = new TaskCompletionSource<
+                IReadOnlyList<LevelDraftSummary>>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            var repository = new StubRepository { ListTask = pending.Task };
+            using var coordinator = CreateCoordinator(repository);
+
+            Task refresh = coordinator.RefreshAsync();
+
+            Assert.That(refresh.IsCompleted, Is.False);
+            Assert.That(coordinator.IsBusy, Is.True);
+            pending.SetResult(new[] { Summary("one", "One") });
+            await refresh;
+
+            Assert.That(coordinator.IsBusy, Is.False);
+            Assert.That(coordinator.Drafts.Count, Is.EqualTo(1));
+        }
+
+        [Test]
         public async Task CreatingADraftRefreshesAndSelectsItsStableId()
         {
             LevelDraftSummary createdSummary = Summary("created", "Created Draft");
@@ -315,6 +335,7 @@ namespace GritGud.Presentation.Tests
             public Exception ListException { get; set; }
             public Exception CreateException { get; set; }
             public Exception SaveException { get; set; }
+            public Task<IReadOnlyList<LevelDraftSummary>> ListTask { get; set; }
             public LevelDraftId? DeletedId { get; private set; }
             public int ListCallCount { get; private set; }
 
@@ -322,6 +343,8 @@ namespace GritGud.Presentation.Tests
                 CancellationToken cancellationToken)
             {
                 ListCallCount++;
+                if (ListTask != null)
+                    return ListTask;
                 return ListException == null
                     ? Task.FromResult(Drafts)
                     : Task.FromException<IReadOnlyList<LevelDraftSummary>>(

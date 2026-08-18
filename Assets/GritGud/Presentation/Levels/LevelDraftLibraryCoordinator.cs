@@ -34,7 +34,9 @@ namespace GritGud.Presentation.Levels
         public bool HasLoaded { get; private set; }
         public string Status { get; private set; } = "Cloud drafts have not loaded.";
 
-        public async void Refresh()
+        public Task Refresh() => RefreshAsync();
+
+        public async Task RefreshAsync()
         {
             int version = BeginOperation("Loading cloud drafts…");
             try

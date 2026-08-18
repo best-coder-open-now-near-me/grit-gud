@@ -1,7 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
+using System.Threading.Tasks;
 using GritGud.Application.Levels;
 using GritGud.Presentation.LevelEditing;
 using GritGud.Presentation.Gameplay;
@@ -33,7 +33,7 @@ namespace GritGud.Presentation.Bootstrap
         private bool editorTestActive;
         private SupabaseRuntime supabase;
         private LevelDraftLibraryCoordinator draftLibrary;
-        private CancellationTokenSource cloudNavigation;
+        private CloudDraftNavigationCommands cloudNavigation;
 
         public LevelDraftRecord ActiveCloudDraft { get; private set; }
 
@@ -77,6 +77,16 @@ namespace GritGud.Presentation.Bootstrap
             Instance = this;
             DontDestroyOnLoad(gameObject);
             supabase = GetComponent<SupabaseRuntime>() ?? gameObject.AddComponent<SupabaseRuntime>();
+            cloudNavigation = new CloudDraftNavigationCommands(
+                new GameBootstrapCloudDraftNavigationGateway(
+                    () => DraftLibrary,
+                    () => supabase?.Status),
+                new GameBootstrapCloudDraftNavigationHost(
+                    () => gameplayStartRoutine == null
+                        && CurrentMode != ApplicationMode.Gameplay,
+                    () => CurrentMode == ApplicationMode.Menu,
+                    BeginCloudDraftGameplay,
+                    BeginCloudDraftEditor));
             EnsureCommittedLevels();
             EnsureStartMenu();
         }
@@ -158,60 +168,44 @@ namespace GritGud.Presentation.Bootstrap
             gameplayStartRoutine = StartCoroutine(BeginGameplayOnNextFrame(level));
         }
 
-        public async void PlayCloudDraft(LevelDraftId id, System.Action<string> status)
-        {
-            if (gameplayStartRoutine != null || CurrentMode == ApplicationMode.Gameplay)
-                return;
-            LevelDraftLibraryCoordinator library = DraftLibrary;
-            if (library == null)
-            {
-                status?.Invoke(supabase?.Status ?? "Cloud saves are not configured.");
-                return;
-            }
+        public Task PlayCloudDraftAsync(
+            LevelDraftId id,
+            System.Action<string> status) =>
+            cloudNavigation.PlayAsync(id, status);
 
-            CancellationToken token = BeginCloudNavigation();
-            try
-            {
-                LevelDraftRecord draft = await library.LoadAsync(id, token);
-                if (token.IsCancellationRequested || CurrentMode != ApplicationMode.Menu) return;
-                LevelDocument level = draft.CreateDocumentSnapshot();
-                GameplayContentPackage content = GameplayContentLoader.LoadDefault();
-                LevelValidationIssue error = LevelValidator
-                    .Validate(level, content.ValidationContent, LevelValidationProfile.Runtime)
-                    .FirstOrDefault(issue => issue.Severity == LevelValidationSeverity.Error);
-                if (error != null) throw new System.InvalidOperationException(error.Message);
-                ActiveCloudDraft = draft;
-                gameplayStartRoutine = StartCoroutine(BeginGameplayOnNextFrame(level, sandbox: true));
-            }
-            catch (System.OperationCanceledException) { }
-            catch (System.Exception exception) { status?.Invoke(exception.Message); }
+        public Task OpenCloudDraftEditorAsync(
+            LevelDraftId id,
+            System.Action<string> status) =>
+            cloudNavigation.OpenEditorAsync(id, status);
+
+        private void BeginCloudDraftGameplay(LevelDraftRecord draft)
+        {
+            LevelDocument level = draft.CreateDocumentSnapshot();
+            GameplayContentPackage content = GameplayContentLoader.LoadDefault();
+            LevelValidationIssue error = LevelValidator
+                .Validate(
+                    level,
+                    content.ValidationContent,
+                    LevelValidationProfile.Runtime)
+                .FirstOrDefault(issue =>
+                    issue.Severity == LevelValidationSeverity.Error);
+            if (error != null)
+                throw new System.InvalidOperationException(error.Message);
+
+            ActiveCloudDraft = draft;
+            gameplayStartRoutine = StartCoroutine(
+                BeginGameplayOnNextFrame(level, sandbox: true));
         }
 
-        public async void OpenCloudDraftEditor(LevelDraftId id, System.Action<string> status)
+        private void BeginCloudDraftEditor(LevelDraftRecord draft)
         {
-            LevelDraftLibraryCoordinator library = DraftLibrary;
-            if (library == null)
-            {
-                status?.Invoke(supabase?.Status ?? "Cloud saves are not configured.");
-                return;
-            }
-
-            CancellationToken token = BeginCloudNavigation();
-            try
-            {
-                LevelDraftRecord draft = await library.LoadAsync(id, token);
-                if (token.IsCancellationRequested || CurrentMode != ApplicationMode.Menu) return;
-                ActiveCloudDraft = draft;
-                OpenLevelTool(
-                    startInPreview: false,
-                    draft.CreateDocumentSnapshot(),
-                    "cloud draft: " + draft.Summary.Name,
-                    initialDocumentIsSaved: true);
-            }
-            catch (System.OperationCanceledException) { }
-            catch (System.Exception exception) { status?.Invoke(exception.Message); }
+            ActiveCloudDraft = draft;
+            OpenLevelTool(
+                startInPreview: false,
+                draft.CreateDocumentSnapshot(),
+                "cloud draft: " + draft.Summary.Name,
+                initialDocumentIsSaved: true);
         }
-
         public void PlayEditorTest(LevelDocument snapshot)
         {
             if (snapshot == null || gameplayStartRoutine != null || CurrentMode == ApplicationMode.Gameplay)
@@ -405,7 +399,7 @@ namespace GritGud.Presentation.Bootstrap
         {
             if (draftLibrary != null || supabase?.DraftLibrary == null) return;
             draftLibrary = new LevelDraftLibraryCoordinator(supabase.DraftLibrary);
-            draftLibrary.Refresh();
+            _ = draftLibrary.RefreshAsync();
         }
 
         private void CancelPendingGameplayStart()
@@ -419,19 +413,7 @@ namespace GritGud.Presentation.Bootstrap
             gameplayStartRoutine = null;
         }
 
-        private CancellationToken BeginCloudNavigation()
-        {
-            CancelCloudNavigation();
-            cloudNavigation = new CancellationTokenSource();
-            return cloudNavigation.Token;
-        }
-
-        private void CancelCloudNavigation()
-        {
-            cloudNavigation?.Cancel();
-            cloudNavigation?.Dispose();
-            cloudNavigation = null;
-        }
+        private void CancelCloudNavigation() => cloudNavigation?.Cancel();
 
         private void EnsureStartMenu()
         {
@@ -451,7 +433,8 @@ namespace GritGud.Presentation.Bootstrap
         {
             draftLibrary?.Dispose();
             draftLibrary = null;
-            CancelCloudNavigation();
+            cloudNavigation?.Dispose();
+            cloudNavigation = null;
             if (Instance == this)
             {
                 Instance = null;

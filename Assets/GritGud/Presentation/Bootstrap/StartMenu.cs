@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using GritGud.Application.Levels;
 using GritGud.Presentation.Levels;
 using UnityEngine;
@@ -155,7 +156,9 @@ namespace GritGud.Presentation.Bootstrap
             if (DrawMenuButton(new Rect(92f, 538f, 350f, 44f), "PLAY SELECTED"))
             {
                 if (cloudSelected)
-                    GameBootstrap.Instance.PlayCloudDraft(selectedDraft.Id, message => cloudDraftStatus = message);
+                    _ = GameBootstrap.Instance.PlayCloudDraftAsync(
+                        selectedDraft.Id,
+                        message => cloudDraftStatus = message);
                 else
                     GameBootstrap.Instance.PlayCommittedLevel(selected.ResourceKey);
             }
@@ -165,7 +168,9 @@ namespace GritGud.Presentation.Bootstrap
             if (DrawMenuButton(new Rect(92f, 590f, 350f, 44f), "EDIT SELECTED"))
             {
                 if (cloudSelected)
-                    GameBootstrap.Instance.OpenCloudDraftEditor(selectedDraft.Id, message => cloudDraftStatus = message);
+                    _ = GameBootstrap.Instance.OpenCloudDraftEditorAsync(
+                        selectedDraft.Id,
+                        message => cloudDraftStatus = message);
                 else
                     GameBootstrap.Instance.OpenCommittedLevelEditor(selected.ResourceKey);
             }
@@ -198,7 +203,7 @@ namespace GritGud.Presentation.Bootstrap
                 GUILayout.Label("MY CLOUD DRAFTS", statusStyle);
                 GUI.enabled = !draftLibrary.IsBusy;
                 if (GUILayout.Button("REFRESH", levelButtonStyle, GUILayout.Width(76f), GUILayout.Height(26f)))
-                    draftLibrary.Refresh();
+                    _ = draftLibrary.RefreshAsync();
                 GUI.enabled = true;
                 GUILayout.EndHorizontal();
                 foreach (LevelDraftSummary draft in draftLibrary.Drafts)
@@ -352,7 +357,7 @@ namespace GritGud.Presentation.Bootstrap
             GUILayout.BeginHorizontal();
             GUI.enabled = !draftDialogRunning;
             if (GUILayout.Button(draftDialogAction == DraftDialogAction.Delete ? "DELETE" : "CONFIRM", buttonStyle, GUILayout.Height(38f)))
-                ConfirmDraftDialog();
+                _ = ConfirmDraftDialogAsync();
             if (GUILayout.Button("CANCEL", buttonStyle, GUILayout.Height(38f)))
                 draftDialogAction = DraftDialogAction.None;
             GUI.enabled = true;
@@ -360,7 +365,7 @@ namespace GritGud.Presentation.Bootstrap
             GUILayout.EndArea();
         }
 
-        private async void ConfirmDraftDialog()
+        private async Task ConfirmDraftDialogAsync()
         {
             LevelDraftSummary selected = FindSelectedDraft();
             LevelDraftLibraryCoordinator library = GameBootstrap.Instance?.DraftLibrary;
