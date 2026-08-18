@@ -34,8 +34,7 @@ namespace GritGud.Presentation.Gameplay
                 new Dictionary<LevelEntityView, List<Renderer>>();
         private HashSet<Renderer> activeOccluders = new HashSet<Renderer>();
         private HashSet<Renderer> nextOccluders = new HashSet<Renderer>();
-        private readonly MaterialPropertyBlock propertyBlock =
-            new MaterialPropertyBlock();
+        private MaterialPropertyBlock propertyBlock;
 
         public bool IsBound => target != null;
 
@@ -50,6 +49,11 @@ namespace GritGud.Presentation.Gameplay
         public float CurrentVerticalRadius { get; private set; }
 
         public int ActiveOccluderCount => activeOccluders.Count;
+
+        private void Awake()
+        {
+            propertyBlock = new MaterialPropertyBlock();
+        }
 
         public void Bind(
             Camera camera,
@@ -304,6 +308,11 @@ namespace GritGud.Presentation.Gameplay
             if (renderer == null)
             {
                 return;
+            }
+
+            if (propertyBlock == null)
+            {
+                propertyBlock = new MaterialPropertyBlock();
             }
 
             renderer.GetPropertyBlock(propertyBlock);
