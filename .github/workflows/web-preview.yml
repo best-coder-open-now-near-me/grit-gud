@@ -193,6 +193,9 @@ jobs:
           targetPlatform: WebGL
           buildMethod: GritGud.Editor.BuildCommand.BuildWebPreview
 
+      - name: Smoke-test WebGL browser artifact
+        run: node tools/webgl-build-smoke.mjs Builds/Web
+
       - name: Publish branch folder
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}

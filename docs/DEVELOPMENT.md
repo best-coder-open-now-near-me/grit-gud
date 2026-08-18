@@ -23,6 +23,14 @@ Editor-only generation tools live in `GritGud.Editor`. Engine-free Domain and
 Application tests live in `GritGud.Domain.Tests`; Unity-facing adapter tests live
 in `GritGud.Presentation.Tests`. Both run as Edit Mode tests.
 
+`GritGud.Domain.Tests` is the historical assembly name for all engine-free core
+tests; it intentionally references both Domain and Application. Do not add
+Unity references to make an Application test convenient. Tests that require
+Unity adapters belong in `PresentationEditMode`, while frame/coroutine and full
+runtime lifecycle coverage belongs in `PlayMode`. The repository validator
+freezes these assembly contracts so tests cannot silently migrate across those
+boundaries.
+
 ## Bootstrap scene
 
 `Assets/GritGud/Scenes/Bootstrap.unity` is the application shell. Regenerate it
@@ -89,15 +97,26 @@ Generated folders such as `Library`, `Temp`, `Logs`, and `UserSettings` are not
 versioned.
 
 Run `tools/validate-repository.py` with Python 3 before invoking Unity. It scans
-tracked source for unresolved conflict markers and parses every tracked JSON
-document. Run `tools/validate-supabase-contracts.py` to verify ordered migrations,
-RPC parameters/return rows, permissions, and the matching C# adapter, then run
-`node tools/preview-id.test.mjs` to verify preview identity and workflow routing.
+tracked source for unresolved conflict markers, parses every tracked JSON
+document, freezes runtime and test assembly direction, verifies Unity
+source/meta pairing and GUID uniqueness, and prevents known production hotspots
+from growing past their explicit file budgets without another cohesive split.
+Run `tools/validate-supabase-contracts.py` to verify ordered migrations, RPC
+parameters/return rows, permissions, and the matching C# adapter. Run
+`node tools/preview-id.test.mjs` to verify preview identity/workflow routing and
+`node tools/webgl-build-smoke.test.mjs` to test the browser-artifact gate.
 Then run the complete EditMode and PlayMode suites in batch mode; use
 `-testResults <path>` and `-logFile <path>` beneath the ignored `Temp` directory
 so failures remain inspectable. PlayMode coverage includes both a sustained
 default-session smoke and startup/teardown for every committed level whose
 library entry is playable.
+
+An unlicensed sandbox can run the Python/Node gates and can compile against an
+already imported Unity workspace, but it cannot produce a trustworthy Unity
+Test Runner result or player build. Use a licensed local Editor or the trusted
+CI job for the complete EditMode/PlayMode suites and WebGL/Windows builds; do
+not treat a license failure as a test failure. After a WebGL build, run
+`node tools/webgl-build-smoke.mjs Builds/Web` before serving or publishing it.
 
 Runtime-generated terrain, outlines, and brush previews use the committed
 `GritGud/RuntimeColor` shader. It is explicitly listed in Graphics Settings so

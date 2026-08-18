@@ -1,7 +1,7 @@
 # Architecture and Separation-of-Concerns Review
 
 **Reviewed:** 2026-08-11; follow-up audits 2026-08-12, 2026-08-14, 2026-08-15,
-and 2026-08-17
+2026-08-17, and 2026-08-18
 **Scope:** the repository as a whole, with additional attention on the recent
 emergency-reaction, projectile, explosive, party-persistence, displacement, and HUD
 work.
@@ -142,6 +142,48 @@ checkpoint. Those belong to the next goal. Unity supplies spatial evidence and
 presentation; Application owns awareness, participant scope, initiative
 entry/exit, and recorded decisions; authored content owns sensing and patrol
 policy.
+
+### 2026-08-18 contract, lifecycle, and allocation follow-up
+
+The repository-wide follow-up closed several cross-layer correctness gaps and
+put explicit invalidation around the highest-frequency read paths:
+
+- scenario authoring, publish validation, and runtime loading now share timing,
+  mobility, momentum, starting-speed, and objective-HUD invariants; a complete
+  authored-level regression crosses all three boundaries;
+- gameplay lifecycle, party-control, level-session, and editor-workspace
+  observers publish only after commit, attempt every subscriber, and preserve
+  committed state when a projection fails;
+- `GameplaySession.Revision` is monotonic across authoritative mutations.
+  Actor state owns cached immutable full and inventory snapshots, while
+  targeting consumes an allocation-free state snapshot;
+- HUD projection reuses its object graph until a session, binding, route,
+  availability, warning, pending-action, or hotbar input changes. Targeting
+  reuses its target-region buffer and preview when exposure evidence is
+  unchanged;
+- mutable actor/objective implementation moved behind focused Application
+  state collaborators. Runtime-editor Rigidbody settling moved behind a
+  disposable Presentation coordinator that restores temporary colliders and
+  transforms before projected-world teardown; and
+- the fast repository gate now freezes all runtime/test assembly contracts,
+  Unity source/meta pairing and GUID uniqueness, neutral-source boundaries,
+  and a bounded production-file growth budget. WebGL publication validates the
+  generated browser artifact before it can replace a branch preview.
+
+The remaining large files are known incremental seams, not permission for a
+broad rewrite. `GameplaySession` still owns action validation/outcome dispatch;
+`GameplayHudRenderer` still owns multiple feature drawers;
+`LevelEditorController` still exposes a large GUI action adapter; and
+`GameplayScenarioAssembler`, `LevelValidator`, and `LevelEditCommands` remain
+large. The validator is mostly one cohesive rule catalog, whereas the session,
+renderer, editor controller, assembler, and command catalog should continue to
+split when a stable behavior owner emerges.
+
+The licensed Unity EditMode/PlayMode suites and WebGL build remain CI-owned.
+The browser-artifact smoke catches missing/empty loader, data, framework,
+WebAssembly, canvas, startup, and static-reference failures; it does not replace
+an eventual automated deployed-browser interaction pass for pointer input,
+storage, import/export, and responsive editor layout.
 
 
 ## Non-negotiable boundaries
@@ -354,13 +396,20 @@ combat effect while social resolution is absent.
 
 **Priority: high, incremental**
 
-**Status: partially resolved 2026-08-14.** Blast, displacement, equipment,
+**Status: partially resolved; updated 2026-08-18.** Blast, displacement, equipment,
 projectile, thrown-explosive, and party-persistence behavior already has
 focused sessions. Gameplay startup is now split into explicit bootstrap, world,
 session, binding, and interface stages with one teardown path. HUD choice state
 and generated texture ownership have moved into small lifecycle objects. The
 central session outcome switch and the remaining HUD feature drawers should be
 extracted only along proven behavior seams.
+
+Mutable actor/objective state and snapshot invalidation now have focused
+Application owners. Physics-assisted editor settling, cancellation, fallback
+colliders, and teardown restoration now have one disposable Presentation owner
+rather than living in `LevelEditorController`. The central action-validation
+and outcome switch, HUD feature drawers, and broad editor GUI adapter remain the
+next proven seams.
 
 `GameplaySession` is the authoritative aggregate and should remain the owner of
 actor state and journal ordering, but outcome-specific validation and
@@ -500,10 +549,15 @@ involve subjects other than the pointer target.
 
 **Priority: immediate correctness and WebGL performance**
 
-**Status: resolved 2026-08-12.** Exposure queries are cached by observer,
+**Status: resolved 2026-08-12; allocation follow-up 2026-08-18.** Exposure queries are cached by observer,
 target geometry/stance, and world revision. Enemy movement compares final hit
 chance (or normalized visible fraction when no attack exists), then authored
 range preference and movement cost. Unequal-raster regressions are covered.
+
+Pointer acquisition now also reuses its converted target-region buffer and
+`TargetAcquisitionPreview` when the cached exposure, accuracy definition,
+distance, and contact reach are unchanged. Actor pose reads no longer construct
+or sort inventory snapshots.
 
 The silhouette raster is materially more accurate than the earlier fixed sample
 set, but pointer acquisition currently rebuilds it every `LateUpdate`. Each
@@ -601,11 +655,17 @@ unrelated content.
 
 **Priority: continuous**
 
-**Status: current gate resolved 2026-08-14.** The listed regressions have
+**Status: current gate updated 2026-08-18.** The listed regressions have
 focused tests. The local gate passes 536 EditMode tests. PlayMode sustains the
 default gameplay session for 180 frames and separately boots and tears down
 every playable committed level. CI runs both suites before the WebGL build.
 This remains a continuous requirement for future gameplay slices.
+
+The latest additions cover the complete authoring-to-runtime scenario
+contract, committed-state visibility under throwing observers, actor snapshot
+reuse, HUD projection invalidation, and unchanged targeting-preview reuse. Fast
+source CI also tests the WebGL artifact validator; the branch workflow runs it
+against the actual generated player before publication.
 
 The repository has broad Domain/Application and Presentation EditMode coverage,
 a sustained-frame default-content PlayMode lifecycle smoke, and CI gates before

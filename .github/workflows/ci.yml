@@ -39,6 +39,9 @@ jobs:
       - name: Test preview identity contract
         run: node tools/preview-id.test.mjs
 
+      - name: Test WebGL browser artifact contract
+        run: node tools/webgl-build-smoke.test.mjs
+
   unity:
     name: Licensed Unity tests
     needs: source

@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -32,6 +33,55 @@ ASSEMBLY_CONTRACTS = {
         "references": ["GritGud.Domain"],
         "noEngineReferences": True,
     },
+    "Assets/GritGud/Presentation/GritGud.Presentation.asmdef": {
+        "references": [
+            "GritGud.Domain",
+            "GritGud.Application",
+            "Unity.InputSystem",
+            "Unity.RenderPipelines.Core.Runtime",
+            "Unity.RenderPipelines.Universal.Runtime",
+        ],
+        "includePlatforms": [],
+        "noEngineReferences": False,
+    },
+    "Assets/GritGud/Editor/GritGud.Editor.asmdef": {
+        "references": [
+            "GritGud.Domain",
+            "GritGud.Application",
+            "GritGud.Presentation",
+        ],
+        "includePlatforms": ["Editor"],
+        "noEngineReferences": False,
+    },
+    "Assets/GritGud/Tests/EditMode/GritGud.Domain.Tests.asmdef": {
+        "references": ["GritGud.Domain", "GritGud.Application"],
+        "includePlatforms": ["Editor"],
+        "noEngineReferences": True,
+        "optionalUnityReferences": ["TestAssemblies"],
+    },
+    "Assets/GritGud/Tests/PresentationEditMode/GritGud.Presentation.Tests.asmdef": {
+        "references": [
+            "GritGud.Domain",
+            "GritGud.Application",
+            "GritGud.Presentation",
+            "GritGud.Editor",
+            "Unity.InputSystem",
+        ],
+        "includePlatforms": ["Editor"],
+        "noEngineReferences": False,
+        "optionalUnityReferences": ["TestAssemblies"],
+    },
+    "Assets/GritGud/Tests/PlayMode/GritGud.PlayMode.Tests.asmdef": {
+        "references": [
+            "GritGud.Domain",
+            "GritGud.Application",
+            "GritGud.Presentation",
+            "Unity.InputSystem",
+        ],
+        "includePlatforms": [],
+        "noEngineReferences": False,
+        "optionalUnityReferences": ["TestAssemblies"],
+    },
 }
 
 NEUTRAL_SOURCE_ROOTS = (
@@ -44,6 +94,20 @@ FORBIDDEN_NEUTRAL_SOURCE_REFERENCES = (
     "UnityEngine",
     "GritGud.Presentation",
 )
+
+PRODUCTION_SOURCE_ROOTS = (
+    Path("Assets/GritGud/Domain"),
+    Path("Assets/GritGud/Application"),
+    Path("Assets/GritGud/Presentation"),
+    Path("Assets/GritGud/Editor"),
+)
+
+MAX_PRODUCTION_SOURCE_LINES = 1800
+PRODUCTION_SOURCE_LINE_BUDGETS = {
+    Path("Assets/GritGud/Application/Gameplay/GameplaySession.cs"): 2050,
+    Path("Assets/GritGud/Presentation/LevelEditing/LevelEditorController.cs"): 1900,
+}
+UNITY_META_GUID = re.compile(r"^guid:\s*([0-9a-f]{32})\s*$", re.MULTILINE)
 
 
 def tracked_files() -> list[Path]:
@@ -63,7 +127,11 @@ def tracked_files() -> list[Path]:
 def main() -> int:
     failures: list[str] = []
     files = tracked_files()
+    relative_files = {
+        path.relative_to(REPOSITORY_ROOT): path for path in files
+    }
     json_count = 0
+    meta_guids: dict[str, Path] = {}
 
     for path in files:
         if path.suffix.lower() not in TEXT_SUFFIXES:
@@ -88,6 +156,47 @@ def main() -> int:
                 failures.append(
                     f"{relative_path}:{error.lineno}:{error.colno}: {error.msg}"
                 )
+
+        if path.suffix.lower() == ".cs" and any(
+            relative_path.is_relative_to(root)
+            for root in PRODUCTION_SOURCE_ROOTS
+        ):
+            line_count = len(text.splitlines())
+            line_budget = PRODUCTION_SOURCE_LINE_BUDGETS.get(
+                relative_path,
+                MAX_PRODUCTION_SOURCE_LINES,
+            )
+            if line_count > line_budget:
+                failures.append(
+                    f"{relative_path}: production source has {line_count} lines; "
+                    f"split cohesive responsibilities before exceeding "
+                    f"{line_budget}"
+                )
+
+        if path.suffix.lower() == ".meta" and relative_path.is_relative_to(
+            Path("Assets")
+        ):
+            match = UNITY_META_GUID.search(text)
+            if match is None:
+                failures.append(f"{relative_path}: Unity meta file has no valid GUID")
+            else:
+                guid = match.group(1)
+                if guid in meta_guids:
+                    failures.append(
+                        f"{relative_path}: duplicate Unity meta GUID {guid}; "
+                        f"already used by {meta_guids[guid]}"
+                    )
+                else:
+                    meta_guids[guid] = relative_path
+
+    for relative_path in relative_files:
+        if relative_path.suffix.lower() != ".cs" or not relative_path.is_relative_to(
+            Path("Assets")
+        ):
+            continue
+        meta_path = Path(str(relative_path) + ".meta")
+        if meta_path not in relative_files:
+            failures.append(f"{relative_path}: tracked Unity source is missing {meta_path}")
 
     for relative_name, expected in ASSEMBLY_CONTRACTS.items():
         path = REPOSITORY_ROOT / relative_name
