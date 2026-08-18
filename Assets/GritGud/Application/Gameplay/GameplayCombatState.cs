@@ -495,8 +495,7 @@ namespace GritGud.Application.Gameplay
         }
 
         private static string Normalize(float value) =>
-            Math.Round(value, 5, MidpointRounding.AwayFromZero)
-                .ToString("0.#####", CultureInfo.InvariantCulture);
+            GameplayNumericPolicy.FormatCanonical(value);
 
         private static int CompareBlastEffects(
             BlastEffectRecord left,

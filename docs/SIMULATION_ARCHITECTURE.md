@@ -1,0 +1,71 @@
+# Executable simulation foundation
+
+## Delivery boundary
+
+The executable simulation foundation is complete when every current
+authoritative mechanic can capture, reconstruct, fork, reduce, install, record,
+and replay through one consequence path. The first user hands-on playtest begins
+after that candidate is technically verified. Playtest-driven stabilization,
+persistent fire, the broader trainable decision laboratory, and optimizer
+campaigns are later goals.
+
+## Identity boundaries
+
+Simulation artifacts carry independent identities:
+
+- **Gameplay content identity** covers the scenario schema, gameplay rules
+  schema, and actor, item, action, objective, and consequence definitions.
+- **Spatial content identity** covers the level schema, collision, terrain,
+  traversal, navigation, and evidence-algorithm version.
+- **Scenario run identity** covers the run ID, authored seed, and random-schema
+  version.
+- Presentation content remains outside pure-combat compatibility. Changing an
+  animation or effect must not invalidate a combat trajectory unless it also
+  changes gameplay or spatial content.
+
+## Numeric determinism
+
+Authoritative values must be finite. Canonical float text uses invariant
+culture, five decimal places, and midpoint rounding away from zero. Collections
+use stable ordinal identity ordering. Candidate ties use stable candidate IDs.
+Serialization and random mixing define byte order explicitly. Exact record and
+sequence identity is used where transitions require equality; documented
+tolerance applies only to physical evidence and float state comparisons.
+
+## Randomness
+
+Randomness is addressed by scenario seed, random-schema version, exact
+transition sequence and kind, actor and subject IDs, purpose, and sample index.
+Preview, candidate evaluation, cancellation, failed preparation, and branch
+visitation never advance mutable random state. Candidate scoring sees expected
+consequences; only the selected exact transition receives resolved hidden
+samples.
+
+## Execution spine
+
+The permanent flow is:
+
+1. capture a complete canonical state;
+2. generate candidate skeletons from an actor observation;
+3. freeze the deterministic world evidence required for legality and expected
+   features;
+4. select one exact candidate without observing hidden random samples;
+5. resolve its addressed random samples into a semantic transition;
+6. reduce the transition into a new canonical state and ordered domain events;
+7. atomically install the state in live gameplay or retain it as a detached
+   branch; and
+8. record the semantic step for exact replay, diagnostics, and promotion into
+   Unity verification.
+
+The first vertical proof is one complete direct-rifleman turn. The same spine
+then expands across movement, stance, equipment, displacement, pins,
+projectiles, emergency reactions, blasts, destructibles, consumables, smoke,
+vehicles, objectives, and encounter lifecycle.
+
+## Extension rule
+
+New weapons and abilities reuse existing typed state, candidate, transition,
+and feature families whenever their mechanics already exist. A genuinely new
+mechanic must register its canonical state, validation, reduction, diagnostics,
+domain events, candidate policy, and replay behavior. No mechanic may introduce
+a trainer-only rule implementation.

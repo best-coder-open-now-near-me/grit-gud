@@ -103,6 +103,11 @@ source/meta pairing and GUID uniqueness, and prevents known production hotspots
 from growing past their explicit file budgets without another cohesive split.
 It also rejects Presentation `async void` command internals and requires each
 concrete level-validation rule to live in its matching source file.
+Run `dotnet build tools/simulation/GritGud.Application.csproj -c Release
+--configfile tools/simulation/NuGet.Config` for a fast, offline Unity-free
+compile of the exact Domain and Application sources. The two hand-authored SDK
+projects under `tools/simulation` link the production source trees; they do not
+contain or generate a parallel gameplay implementation.
 Run `tools/validate-supabase-contracts.py` to verify ordered migrations, RPC
 parameters/return rows, permissions, and the matching C# adapter. Run
 `node tools/preview-id.test.mjs` to verify preview identity/workflow routing and

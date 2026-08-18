@@ -2,6 +2,7 @@
 [Ll]ibrary/
 [Tt]emp/
 [Oo]bj/
+[Bb]in/
 [Bb]uild/
 [Bb]uilds/
 [Ll]ogs/
@@ -26,6 +27,9 @@
 *.mdb
 *.opendb
 *.VC.db
+
+# Hand-authored build projections over the same Unity-free production source.
+!tools/simulation/*.csproj
 
 # Unity and platform output
 *.apk
