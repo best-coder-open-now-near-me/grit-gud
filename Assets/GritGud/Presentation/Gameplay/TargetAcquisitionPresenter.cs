@@ -96,6 +96,8 @@ namespace GritGud.Presentation.Gameplay
         private readonly HashSet<object> feedbackSuppressors =
             new HashSet<object>();
         private readonly RaycastHit[] aimHitBuffer = new RaycastHit[32];
+        private readonly List<TargetRegionSample> targetRegionBuffer =
+            new List<TargetRegionSample>();
         private GameplaySession session;
         private GameplayWorldRegistry registry;
         private GameplayActorView observer;
@@ -191,7 +193,7 @@ namespace GritGud.Presentation.Gameplay
             string nextObserverId = RequireId(
                 observingActorId,
                 nameof(observingActorId));
-            if (!session.TryGetActor(nextObserverId, out _))
+            if (!session.TryGetActorState(nextObserverId, out _))
             {
                 throw new ArgumentException(
                     $"Observer '{nextObserverId}' is not part of the gameplay session.",
@@ -507,10 +509,12 @@ namespace GritGud.Presentation.Gameplay
 
             IReadOnlyList<ActorTargetRegionSample> presentedRegions =
                 target.Stance.GetTargetRegionSamples();
-            var targetRegions = new List<TargetRegionSample>(presentedRegions.Count);
+            targetRegionBuffer.Clear();
+            if (targetRegionBuffer.Capacity < presentedRegions.Count)
+                targetRegionBuffer.Capacity = presentedRegions.Count;
             foreach (ActorTargetRegionSample region in presentedRegions)
             {
-                targetRegions.Add(new TargetRegionSample(
+                targetRegionBuffer.Add(new TargetRegionSample(
                     region.Id,
                     ToGameplayPosition(region.WorldCenter),
                     region.Radius));
@@ -533,7 +537,7 @@ namespace GritGud.Presentation.Gameplay
                 observerId,
                 ToGameplayPosition(observer.Stance.FirstPersonEyePosition),
                 target.ActorId,
-                targetRegions);
+                targetRegionBuffer);
             if (exposure.VisibleSampleCount == 0)
             {
                 ClearAcquisition();
@@ -544,13 +548,23 @@ namespace GritGud.Presentation.Gameplay
             AttackDefinition attack = session.GetEquippedAttack(observerId);
             AccuracyDecayDefinition accuracyDecay =
                 attack?.AccuracyDecay ?? AccuracyDecayDefinition.None;
-            float distance = session.GetActor(observerId).Pose.Position.DistanceTo(
-                session.GetActor(target.ActorId).Pose.Position);
-            CurrentPreview = TargetPreviewCalculator.Calculate(
-                exposure,
-                accuracyDecay,
-                distance,
-                attack?.Contact);
+            float distance = session.GetActorState(observerId).Pose.Position
+                .DistanceTo(session.GetActorState(target.ActorId).Pose.Position);
+            float? maximumReach = attack?.Contact?.MaximumReach;
+            if (CurrentPreview == null
+                || !ReferenceEquals(CurrentPreview.Exposure, exposure)
+                || !ReferenceEquals(
+                    CurrentPreview.AccuracyDecay,
+                    accuracyDecay)
+                || CurrentPreview.Distance != distance
+                || CurrentPreview.MaximumReach != maximumReach)
+            {
+                CurrentPreview = TargetPreviewCalculator.Calculate(
+                    exposure,
+                    accuracyDecay,
+                    distance,
+                    attack?.Contact);
+            }
             ApplyFeedbackVisibility();
         }
 

@@ -216,6 +216,57 @@ namespace GritGud.Application.Gameplay
 
     }
 
+    public readonly struct GameplayActorStateSnapshot
+    {
+        internal GameplayActorStateSnapshot(
+            string actorId,
+            GameplayActorPose pose,
+            TurnBudget turnBudget,
+            ActorWoundSnapshot wounds,
+            string equippedItemId,
+            EquipmentEffectSet equipmentEffects,
+            int maximumWounds,
+            int turnActionPointAllowance,
+            float turnMovementAllowance,
+            ActorPinState pinState)
+        {
+            ActorId = actorId;
+            Pose = pose;
+            TurnBudget = turnBudget;
+            Wounds = wounds;
+            EquippedItemId = equippedItemId;
+            EquipmentEffects = equipmentEffects;
+            MaximumWounds = maximumWounds;
+            TurnActionPointAllowance = turnActionPointAllowance;
+            TurnMovementAllowance = turnMovementAllowance;
+            PinState = pinState;
+        }
+
+        public string ActorId { get; }
+
+        public GameplayActorPose Pose { get; }
+
+        public TurnBudget TurnBudget { get; }
+
+        public ActorWoundSnapshot Wounds { get; }
+
+        public string EquippedItemId { get; }
+
+        public EquipmentEffectSet EquipmentEffects { get; }
+
+        public int MaximumWounds { get; }
+
+        public int TurnActionPointAllowance { get; }
+
+        public float TurnMovementAllowance { get; }
+
+        public ActorPinState PinState { get; }
+
+        public bool IsPinned => PinState != null;
+
+        public bool IsIncapacitated => Wounds.WoundCount >= MaximumWounds;
+    }
+
     public readonly struct GameplayObjectiveSnapshot
     {
         public GameplayObjectiveSnapshot(
@@ -424,6 +475,8 @@ namespace GritGud.Application.Gameplay
 
         public GameplaySessionOperation Operation { get; private set; } =
             GameplaySessionOperation.None;
+
+        public long Revision { get; private set; }
 
         public TurnModeContext TurnContext => turnLifecycle.TurnContext;
 
@@ -642,6 +695,11 @@ namespace GritGud.Application.Gameplay
             return RequireActor(actorId).CreateSnapshot();
         }
 
+        public GameplayActorStateSnapshot GetActorState(string actorId)
+        {
+            return RequireActor(actorId).CreateStateSnapshot();
+        }
+
         public int GetTurnActionPointAllowance(string actorId)
         {
             return RequireActor(actorId).TurnActionPointAllowance;
@@ -659,6 +717,21 @@ namespace GritGud.Application.Gameplay
             }
 
             actor = default(GameplayActorSnapshot);
+            return false;
+        }
+
+        public bool TryGetActorState(
+            string actorId,
+            out GameplayActorStateSnapshot actor)
+        {
+            if (!string.IsNullOrWhiteSpace(actorId)
+                && actors.TryGetValue(actorId, out ActorState state))
+            {
+                actor = state.CreateStateSnapshot();
+                return true;
+            }
+
+            actor = default(GameplayActorStateSnapshot);
             return false;
         }
 
@@ -771,6 +844,7 @@ namespace GritGud.Application.Gameplay
                     $"Pinned actor '{actorId}' cannot move in exploration.");
             }
             actor.Pose = pose;
+            MarkStateChanged();
         }
 
         public void SpendMovement(string actorId, float amount)
@@ -788,6 +862,7 @@ namespace GritGud.Application.Gameplay
                 amount,
                 previousBudget,
                 actor.TurnBudget);
+            MarkStateChanged();
         }
 
         public void CommitStanceChange(StanceChangeRecord record)
@@ -813,6 +888,7 @@ namespace GritGud.Application.Gameplay
 
             actor.Pose = record.ResultingPose;
             Journal.RecordStanceChanged(record);
+            MarkStateChanged();
         }
 
         public void CommitMovementRoute(MovementRouteRecord route)
@@ -853,6 +929,7 @@ namespace GritGud.Application.Gameplay
             pendingMovementRoute = route;
             Operation = GameplaySessionOperation.ResolvingMovement;
             Journal.RecordMovementRouteCommitted(route);
+            MarkStateChanged();
         }
 
         public void CommitForcedDisplacement(DisplacementRecord record)
@@ -881,6 +958,7 @@ namespace GritGud.Application.Gameplay
                 record.ResultingPosition,
                 actor.Pose.FacingDegrees,
                 actor.Pose.Stance);
+            MarkStateChanged();
         }
 
         internal void ValidatePinTransition(ActorPinTransition transition)
@@ -914,6 +992,7 @@ namespace GritGud.Application.Gameplay
             actor.Pose = transition.ResultingPose;
             actor.PinState = transition.ResultingState;
             notifications.Add(ActorCapabilityChanged, transition.ActorId);
+            MarkStateChanged();
         }
 
         public void CompleteMovementResolution()
@@ -934,6 +1013,7 @@ namespace GritGud.Application.Gameplay
             pendingMovementRoute = null;
             Operation = GameplaySessionOperation.None;
             Journal.RecordMovementRouteCompleted(completedRoute);
+            MarkStateChanged();
         }
 
         public void CommitAction(GameplayActionRecord record)
@@ -974,6 +1054,7 @@ namespace GritGud.Application.Gameplay
 
             resolvedActions.Add(record);
             Journal.RecordActionResolved(record);
+            MarkStateChanged();
         }
 
         private void ApplyActionFacing(
@@ -1598,6 +1679,7 @@ namespace GritGud.Application.Gameplay
 
             RequireActor(actorId).ApplyBlast(region, woundMovementPenalty);
             notifications.Add(ActorCapabilityChanged, actorId);
+            MarkStateChanged();
         }
 
         private void ValidateEquipmentChangeOutcome(
@@ -1803,6 +1885,14 @@ namespace GritGud.Application.Gameplay
             .CreateVoluntaryTurnCycleRecordForTurnLifecycle() =>
             CreateVoluntaryTurnCycleRecord();
 
+        void IGameplayTurnLifecycleHost.MarkStateChangedForTurnLifecycle() =>
+            MarkStateChanged();
+
+        private void MarkStateChanged()
+        {
+            Revision++;
+        }
+
         private ActorState RequireActiveActor(string actorId)
         {
             if (Mode != GameplaySessionMode.TurnBased)
@@ -1874,25 +1964,33 @@ namespace GritGud.Application.Gameplay
             private readonly TurnBudget turnBudgetAllowance;
             private readonly Dictionary<string, int> inventoryQuantities =
                 new Dictionary<string, int>(StringComparer.Ordinal);
+            private GameplayActorPose pose;
+            private TurnBudget turnBudget;
+            private ActorWoundSnapshot wounds;
+            private ActorPinState pinState;
+            private ActorInventorySnapshot cachedInventory;
+            private GameplayActorSnapshot cachedSnapshot;
+            private bool inventorySnapshotDirty = true;
+            private bool actorSnapshotDirty = true;
 
             public ActorState(
                 ScenarioActorDefinition definition,
                 CharacterPersistenceSnapshot restoredCharacter = null)
             {
                 ActorId = definition.Id;
-                Pose = definition.StartingPose;
+                pose = definition.StartingPose;
                 MaximumWounds = definition.Combat.MaximumWounds;
-                Wounds = restoredCharacter == null
+                wounds = restoredCharacter == null
                     ? new ActorWoundSnapshot(definition.Id, 0, 0f)
                     : RebindWounds(
                         restoredCharacter.Wounds,
                         definition.Id);
-                TurnBudget = new TurnBudget(
+                turnBudget = new TurnBudget(
                     definition.StartingTurnBudget.ActionPoints,
                     Math.Max(
                         0f,
                         definition.StartingTurnBudget.MovementOpportunity
-                            - Wounds.MovementPenalty));
+                            - wounds.MovementPenalty));
                 EquippedItemId = restoredCharacter != null
                     ? restoredCharacter.EquippedItemId
                     : definition.InitiallyEquippedItemId;
@@ -1925,16 +2023,32 @@ namespace GritGud.Application.Gameplay
 
             public string ActorId { get; }
 
-            public GameplayActorPose Pose { get; set; }
+            public GameplayActorPose Pose
+            {
+                get => pose;
+                set
+                {
+                    pose = value;
+                    actorSnapshotDirty = true;
+                }
+            }
 
-            public TurnBudget TurnBudget { get; set; }
+            public TurnBudget TurnBudget
+            {
+                get => turnBudget;
+                set
+                {
+                    turnBudget = value;
+                    actorSnapshotDirty = true;
+                }
+            }
 
             public int EmergencyActionPointAllowance { get; private set; }
 
             public int TurnActionPointAllowance =>
                 turnBudgetAllowance.ActionPoints;
 
-            public ActorWoundSnapshot Wounds { get; private set; }
+            public ActorWoundSnapshot Wounds => wounds;
 
             public int MaximumWounds { get; }
 
@@ -1945,13 +2059,22 @@ namespace GritGud.Application.Gameplay
 
             public EquipmentEffectSet EquipmentEffects { get; private set; }
 
-            public ActorPinState PinState { get; set; }
+            public ActorPinState PinState
+            {
+                get => pinState;
+                set
+                {
+                    pinState = value;
+                    actorSnapshotDirty = true;
+                }
+            }
 
             public void ApplyEquipment(InventoryItemDefinition item)
             {
                 EquippedItemId = item?.Id;
                 EquipmentEffects = item?.EquippedEffects
                     ?? EquipmentEffectSet.None;
+                actorSnapshotDirty = true;
             }
 
             public int GetInventoryQuantity(string itemId)
@@ -1969,6 +2092,8 @@ namespace GritGud.Application.Gameplay
                 InventoryQuantityChangeRecord change)
             {
                 inventoryQuantities[change.ItemId] = change.ResultingQuantity;
+                inventorySnapshotDirty = true;
+                actorSnapshotDirty = true;
             }
 
             public void RefreshTurnBudget()
@@ -1993,7 +2118,7 @@ namespace GritGud.Application.Gameplay
                     return;
                 }
 
-                Wounds = attack.TargetWoundsAfter;
+                wounds = attack.TargetWoundsAfter;
                 TurnBudget = new TurnBudget(
                     TurnBudget.ActionPoints,
                     Math.Min(
@@ -2006,9 +2131,9 @@ namespace GritGud.Application.Gameplay
                 float movementPenalty)
             {
                 if (movementPenalty <= 0f) return;
-                Wounds = region.HasValue
-                    ? Wounds.AddWound(region.Value, movementPenalty)
-                    : Wounds.AddUnlocalizedWound(movementPenalty);
+                wounds = region.HasValue
+                    ? wounds.AddWound(region.Value, movementPenalty)
+                    : wounds.AddUnlocalizedWound(movementPenalty);
                 TurnBudget = new TurnBudget(
                     TurnBudget.ActionPoints,
                     Math.Min(TurnBudget.MovementOpportunity, WoundedMovementAllowance));
@@ -2034,18 +2159,31 @@ namespace GritGud.Application.Gameplay
 
             public GameplayActorSnapshot CreateSnapshot()
             {
-                var quantities = new List<InventoryQuantitySnapshot>(
-                    inventoryQuantities.Count);
-                foreach (KeyValuePair<string, int> entry in inventoryQuantities)
+                if (!actorSnapshotDirty)
+                    return cachedSnapshot;
+
+                if (inventorySnapshotDirty)
                 {
-                    quantities.Add(new InventoryQuantitySnapshot(
-                        entry.Key,
-                        entry.Value));
+                    var quantities = new List<InventoryQuantitySnapshot>(
+                        inventoryQuantities.Count);
+                    foreach (KeyValuePair<string, int> entry in
+                        inventoryQuantities)
+                    {
+                        quantities.Add(new InventoryQuantitySnapshot(
+                            entry.Key,
+                            entry.Value));
+                    }
+                    quantities.Sort((left, right) =>
+                        StringComparer.Ordinal.Compare(
+                            left.ItemId,
+                            right.ItemId));
+                    cachedInventory = new ActorInventorySnapshot(
+                        ActorId,
+                        quantities);
+                    inventorySnapshotDirty = false;
                 }
-                quantities.Sort((left, right) => StringComparer.Ordinal.Compare(
-                    left.ItemId,
-                    right.ItemId));
-                return new GameplayActorSnapshot(
+
+                cachedSnapshot = new GameplayActorSnapshot(
                     ActorId,
                     Pose,
                     TurnBudget,
@@ -2053,11 +2191,26 @@ namespace GritGud.Application.Gameplay
                     EquippedItemId,
                     EquipmentEffects,
                     MaximumWounds,
-                    new ActorInventorySnapshot(ActorId, quantities),
+                    cachedInventory,
                     turnBudgetAllowance.ActionPoints,
                     turnBudgetAllowance.MovementOpportunity,
                     PinState);
+                actorSnapshotDirty = false;
+                return cachedSnapshot;
             }
+
+            public GameplayActorStateSnapshot CreateStateSnapshot() =>
+                new GameplayActorStateSnapshot(
+                    ActorId,
+                    Pose,
+                    TurnBudget,
+                    Wounds,
+                    EquippedItemId,
+                    EquipmentEffects,
+                    MaximumWounds,
+                    turnBudgetAllowance.ActionPoints,
+                    turnBudgetAllowance.MovementOpportunity,
+                    PinState);
 
             private float WoundedMovementAllowance => Math.Max(
                 0f,

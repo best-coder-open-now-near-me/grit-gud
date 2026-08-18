@@ -13,6 +13,8 @@ namespace GritGud.Presentation.Gameplay
 
         public GameplaySession Session { get; private set; }
 
+        public long Revision { get; private set; }
+
         public string PlayerActorId { get; private set; }
 
         public GameplayScenarioAssembly Scenario { get; private set; }
@@ -85,6 +87,7 @@ namespace GritGud.Presentation.Gameplay
             PlayerActorId = authoritativePlayerActorId;
             Scenario = scenarioAssembly
                 ?? throw new ArgumentNullException(nameof(scenarioAssembly));
+            MarkChanged();
         }
 
         public void SetActor(string authoritativePlayerActorId)
@@ -103,6 +106,7 @@ namespace GritGud.Presentation.Gameplay
 
             Session.GetActor(authoritativePlayerActorId);
             PlayerActorId = authoritativePlayerActorId;
+            MarkChanged();
         }
 
         public void UnbindSession()
@@ -110,38 +114,45 @@ namespace GritGud.Presentation.Gameplay
             Session = null;
             PlayerActorId = null;
             Scenario = null;
+            MarkChanged();
         }
 
         public void BindTurnMovement(TurnMovementController controller)
         {
             TurnMovement = controller;
+            MarkChanged();
         }
 
         public void UnbindTurnMovement()
         {
             TurnMovement = null;
+            MarkChanged();
         }
 
         public void BindGameplayActions(GameplayActionController controller)
         {
             ActionController = controller
                 ?? throw new ArgumentNullException(nameof(controller));
+            MarkChanged();
         }
 
         public void UnbindGameplayActions()
         {
             ActionController = null;
+            MarkChanged();
         }
 
         public void BindGameplayAttack(GameplayAttackController controller)
         {
             AttackController = controller
                 ?? throw new ArgumentNullException(nameof(controller));
+            MarkChanged();
         }
 
         public void UnbindGameplayAttack()
         {
             AttackController = null;
+            MarkChanged();
         }
 
         public void BindGameplayEquipment(
@@ -153,6 +164,7 @@ namespace GritGud.Presentation.Gameplay
             EquipmentController = controller
                 ?? throw new ArgumentNullException(nameof(controller));
             BindWarningHintSource(EquipmentController);
+            MarkChanged();
         }
 
         public void UnbindGameplayEquipment()
@@ -160,17 +172,20 @@ namespace GritGud.Presentation.Gameplay
             if (EquipmentController != null)
                 UnbindWarningHintSource(EquipmentController);
             EquipmentController = null;
+            MarkChanged();
         }
 
         public void BindGameplayHotbar(GameplayHotbarController controller)
         {
             HotbarController = controller
                 ?? throw new ArgumentNullException(nameof(controller));
+            MarkChanged();
         }
 
         public void UnbindGameplayHotbar()
         {
             HotbarController = null;
+            MarkChanged();
         }
 
         public void BindGameplayConsumables(
@@ -178,11 +193,13 @@ namespace GritGud.Presentation.Gameplay
         {
             ConsumableController = controller
                 ?? throw new ArgumentNullException(nameof(controller));
+            MarkChanged();
         }
 
         public void UnbindGameplayConsumables()
         {
             ConsumableController = null;
+            MarkChanged();
         }
 
         public void BindGameplayWeaponTargeting(
@@ -194,6 +211,7 @@ namespace GritGud.Presentation.Gameplay
             WeaponTargetingController = controller
                 ?? throw new ArgumentNullException(nameof(controller));
             BindWarningHintSource(WeaponTargetingController);
+            MarkChanged();
         }
 
         public void UnbindGameplayWeaponTargeting()
@@ -201,6 +219,7 @@ namespace GritGud.Presentation.Gameplay
             if (WeaponTargetingController != null)
                 UnbindWarningHintSource(WeaponTargetingController);
             WeaponTargetingController = null;
+            MarkChanged();
         }
 
         public void BindWarningHintSource(IGameplayWarningHintSource source)
@@ -208,13 +227,16 @@ namespace GritGud.Presentation.Gameplay
             if (source == null)
                 throw new ArgumentNullException(nameof(source));
             if (!warningHintSources.Contains(source))
+            {
                 warningHintSources.Add(source);
+                MarkChanged();
+            }
         }
 
         public void UnbindWarningHintSource(IGameplayWarningHintSource source)
         {
-            if (source != null)
-                warningHintSources.Remove(source);
+            if (source != null && warningHintSources.Remove(source))
+                MarkChanged();
         }
 
         public void BindGameplayProjectile(
@@ -222,11 +244,13 @@ namespace GritGud.Presentation.Gameplay
         {
             ProjectileController = controller
                 ?? throw new ArgumentNullException(nameof(controller));
+            MarkChanged();
         }
 
         public void UnbindGameplayProjectile()
         {
             ProjectileController = null;
+            MarkChanged();
         }
 
         public void BindGameplayDisplacement(
@@ -238,6 +262,7 @@ namespace GritGud.Presentation.Gameplay
             DisplacementController = controller
                 ?? throw new ArgumentNullException(nameof(controller));
             BindWarningHintSource(DisplacementController);
+            MarkChanged();
         }
 
         public void UnbindGameplayDisplacement()
@@ -245,28 +270,33 @@ namespace GritGud.Presentation.Gameplay
             if (DisplacementController != null)
                 UnbindWarningHintSource(DisplacementController);
             DisplacementController = null;
+            MarkChanged();
         }
 
         public void BindInputSource(IGameplayInputSource source)
         {
             InputSource = source
                 ?? throw new ArgumentNullException(nameof(source));
+            MarkChanged();
         }
 
         public void UnbindInputSource()
         {
             InputSource = null;
+            MarkChanged();
         }
 
         public void BindTurnModeToggle(Action toggleRequested)
         {
             turnModeToggleRequested = toggleRequested
                 ?? throw new ArgumentNullException(nameof(toggleRequested));
+            MarkChanged();
         }
 
         public void UnbindTurnModeToggle()
         {
             turnModeToggleRequested = null;
+            MarkChanged();
         }
 
         public void RequestTurnModeToggle()
@@ -323,6 +353,11 @@ namespace GritGud.Presentation.Gameplay
         {
             BugReportNoteOpen = false;
             BugReportNote = string.Empty;
+        }
+
+        private void MarkChanged()
+        {
+            Revision++;
         }
     }
 }

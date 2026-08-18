@@ -271,6 +271,7 @@ namespace GritGud.Domain.Tests.Gameplay
             };
             session.ActiveActorChanged += _ => laterActorObserverRan = true;
             session.TurnEnded += _ => turnObserverRan = true;
+            long revisionBeforeTurnEnd = session.Revision;
 
             InvalidOperationException exception =
                 Assert.Throws<InvalidOperationException>(() =>
@@ -278,6 +279,7 @@ namespace GritGud.Domain.Tests.Gameplay
 
             Assert.That(exception.Message, Is.EqualTo("projection failed"));
             Assert.That(session.ActiveActorId, Is.EqualTo("target"));
+            Assert.That(session.Revision, Is.GreaterThan(revisionBeforeTurnEnd));
             Assert.That(observedCommittedTurn, Is.SameAs(session.LastEndedTurn));
             Assert.That(observedJournalTurn, Is.SameAs(session.LastEndedTurn));
             Assert.That(session.LastEndedTurn.EndingActorId, Is.EqualTo("player"));
@@ -461,6 +463,34 @@ namespace GritGud.Domain.Tests.Gameplay
                     new GameplayActorPose(
                         new GameplayPosition(3f, 0f, 4f),
                         90f)));
+        }
+
+        [Test]
+        public void ActorReadsReuseImmutableInventoryAcrossPoseChanges()
+        {
+            GameplaySession session = CreateSession(CreateActor("player", 10));
+
+            GameplayActorSnapshot first = session.GetActor("player");
+            GameplayActorSnapshot repeated = session.GetActor("player");
+            long initialRevision = session.Revision;
+
+            Assert.That(repeated.Inventory, Is.SameAs(first.Inventory));
+            Assert.That(session.GetActorState("player").Pose,
+                Is.EqualTo(first.Pose));
+
+            session.UpdateExplorationPose(
+                "player",
+                new GameplayActorPose(
+                    new GameplayPosition(3f, 0f, 4f),
+                    90f));
+
+            GameplayActorSnapshot moved = session.GetActor("player");
+            Assert.That(session.Revision, Is.GreaterThan(initialRevision));
+            Assert.That(moved.Pose.Position.X, Is.EqualTo(3f));
+            Assert.That(moved.Inventory, Is.SameAs(first.Inventory));
+            Assert.That(
+                session.GetActorState("player").Pose.Position,
+                Is.EqualTo(moved.Pose.Position));
         }
 
         [Test]

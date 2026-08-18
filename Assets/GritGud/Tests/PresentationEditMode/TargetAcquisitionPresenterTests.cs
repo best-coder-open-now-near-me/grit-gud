@@ -544,8 +544,12 @@ namespace GritGud.Presentation.Tests
                     cameraObject.transform.position,
                     cameraObject.transform.forward);
                 presenter.RefreshNow(crosshairRay);
+                TargetAcquisitionPreview initialPreview =
+                    presenter.CurrentPreview;
+                presenter.RefreshNow(crosshairRay);
 
                 Assert.That(presenter.HasPointerTarget, Is.True);
+                Assert.That(presenter.CurrentPreview, Is.SameAs(initialPreview));
                 Assert.That(presenter.TargetOutlineVisible, Is.True);
                 Assert.That(presenter.GroundHaloVisible, Is.False);
                 Assert.That(presenter.CurrentSnapshot, Is.Not.Null);

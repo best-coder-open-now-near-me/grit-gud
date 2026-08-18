@@ -28,6 +28,8 @@ namespace GritGud.Application.Gameplay
         int GetEmergencyActionPointAllowanceForTurnLifecycle(string actorId);
 
         VoluntaryTurnCycleRecord CreateVoluntaryTurnCycleRecordForTurnLifecycle();
+
+        void MarkStateChangedForTurnLifecycle();
     }
 
     internal sealed class GameplayTurnLifecycle
@@ -130,7 +132,7 @@ namespace GritGud.Application.Gameplay
                 TurnContext,
                 activeActorId);
             failure = TurnModeEntryFailure.None;
-            notifications.Publish();
+            PublishCommitted(notifications);
             return true;
         }
 
@@ -154,6 +156,7 @@ namespace GritGud.Application.Gameplay
             voluntaryTurnReentrySecondsRemaining = Math.Max(
                 0f,
                 voluntaryTurnReentrySecondsRemaining - elapsedSeconds);
+            host.MarkStateChangedForTurnLifecycle();
         }
 
         public bool BeginEncounter()
@@ -168,6 +171,7 @@ namespace GritGud.Application.Gameplay
                 return TryEnterTurnMode(out _);
 
             TurnContext = TurnModeContext.InitiatedEncounter;
+            host.MarkStateChangedForTurnLifecycle();
             return true;
         }
 
@@ -182,6 +186,7 @@ namespace GritGud.Application.Gameplay
                 TurnContext = TurnModeContext.Voluntary;
 
             host.Journal.RecordEncounterChanged(isActive: false);
+            host.MarkStateChangedForTurnLifecycle();
             return true;
         }
 
@@ -191,6 +196,7 @@ namespace GritGud.Application.Gameplay
                 return false;
 
             EncounterCompletionRequested = true;
+            host.MarkStateChangedForTurnLifecycle();
             return true;
         }
 
@@ -217,7 +223,7 @@ namespace GritGud.Application.Gameplay
             var notifications = new GameplayNotificationBatch();
             CompleteVoluntaryTurnCycleAndExit(notifications);
             failure = TurnModeExitFailure.None;
-            notifications.Publish();
+            PublishCommitted(notifications);
             return true;
         }
 
@@ -253,7 +259,7 @@ namespace GritGud.Application.Gameplay
                     activeActorId,
                     notifications);
                 failure = TurnEndFailure.None;
-                notifications.Publish();
+                PublishCommitted(notifications);
                 return true;
             }
 
@@ -282,7 +288,7 @@ namespace GritGud.Application.Gameplay
                 CompleteEncounter();
                 CompleteVoluntaryTurnCycleAndExit(notifications);
                 failure = TurnEndFailure.None;
-                notifications.Publish();
+                PublishCommitted(notifications);
                 return true;
             }
 
@@ -295,7 +301,7 @@ namespace GritGud.Application.Gameplay
                 activeActorId,
                 notifications);
             failure = TurnEndFailure.None;
-            notifications.Publish();
+            PublishCommitted(notifications);
             return true;
         }
 
@@ -353,7 +359,7 @@ namespace GritGud.Application.Gameplay
                 firstResponderId,
                 actionPointAllowance);
             SetActiveActor(firstResponderId, notifications);
-            notifications.Publish();
+            PublishCommitted(notifications);
         }
 
         public bool TryEndEmergencyTurn(
@@ -397,7 +403,7 @@ namespace GritGud.Application.Gameplay
                 GameplayTurnKind.EmergencyReaction,
                 emergencyResumeActorId);
             failure = TurnEndFailure.None;
-            notifications.Publish();
+            PublishCommitted(notifications);
             return true;
         }
 
@@ -424,7 +430,7 @@ namespace GritGud.Application.Gameplay
             TurnPhase = GameplayTurnPhase.Normal;
             host.RefreshTurnBudgetForTurnLifecycle(resumeActorId);
             SetActiveActor(resumeActorId, notifications);
-            notifications.Publish();
+            PublishCommitted(notifications);
         }
 
         public bool CompleteVoluntaryWorldTurn()
@@ -452,7 +458,7 @@ namespace GritGud.Application.Gameplay
             TurnContext = TurnModeContext.Voluntary;
             host.Journal.RecordVoluntaryTurnCycleCompleted(completedCycle);
             notifications.Add(VoluntaryTurnCycleCompleted, completedCycle);
-            notifications.Publish();
+            PublishCommitted(notifications);
             return true;
         }
 
@@ -500,6 +506,12 @@ namespace GritGud.Application.Gameplay
             LastEndedTurn = record;
             host.Journal.RecordTurnEnded(record);
             notifications.Add(TurnEnded, record);
+        }
+
+        private void PublishCommitted(GameplayNotificationBatch notifications)
+        {
+            host.MarkStateChangedForTurnLifecycle();
+            notifications.Publish();
         }
 
         private void SetActiveActor(
