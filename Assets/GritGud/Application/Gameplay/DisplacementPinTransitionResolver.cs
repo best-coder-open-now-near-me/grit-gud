@@ -148,7 +148,7 @@ namespace GritGud.Application.Gameplay
                 }
             }
 
-            pinnedActor = null;
+            pinnedActor = default(GameplayActorSnapshot);
             return false;
         }
 
