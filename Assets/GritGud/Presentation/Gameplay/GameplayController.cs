@@ -351,7 +351,8 @@ namespace GritGud.Presentation.Gameplay
             cameraRig = GameplayCameraRig.Create(
                 player.transform,
                 worldStart.MovementInput,
-                inputController);
+                inputController,
+                environmentStyle.PlayerCutoutRenderers);
 
             return session;
         }
