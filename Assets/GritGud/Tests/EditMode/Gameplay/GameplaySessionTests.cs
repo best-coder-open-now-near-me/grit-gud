@@ -579,6 +579,27 @@ namespace GritGud.Domain.Tests.Gameplay
                 Is.EqualTo(ActorStance.Standing));
         }
 
+        [Test]
+        public void EveryConcreteActionOutcomeHasValidationAndApplicationOwnership()
+        {
+            GameplaySession session = CreateSession(CreateActor("player", 10));
+            Type[] concreteOutcomeTypes = typeof(GameplayActionOutcome)
+                .Assembly
+                .GetTypes()
+                .Where(type => !type.IsAbstract
+                    && typeof(GameplayActionOutcome).IsAssignableFrom(type))
+                .ToArray();
+
+            Assert.That(
+                session.ValidatedActionOutcomeTypes,
+                Is.EquivalentTo(concreteOutcomeTypes),
+                "Every authoritative outcome needs a focused validator.");
+            Assert.That(
+                session.AppliedActionOutcomeTypes,
+                Is.EquivalentTo(concreteOutcomeTypes),
+                "Every authoritative outcome needs an explicit applier.");
+        }
+
         private static GameplaySession CreateSession(
             params ScenarioActorDefinition[] actors)
         {

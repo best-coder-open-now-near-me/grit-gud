@@ -424,6 +424,8 @@ namespace GritGud.Application.Gameplay
             initiativeResults;
         private readonly IReadOnlyList<GameplayActionRecord> readOnlyResolvedActions;
         private readonly GameplayTurnLifecycle turnLifecycle;
+        private readonly GameplayActionCommitValidator actionCommitValidator;
+        private readonly GameplayActionOutcomeApplier actionOutcomeApplier;
         private MovementRouteRecord pendingMovementRoute;
 
         public GameplaySession(
@@ -469,6 +471,8 @@ namespace GritGud.Application.Gameplay
             initiativeResults = initiative.AsReadOnly();
             readOnlyResolvedActions = resolvedActions.AsReadOnly();
             turnLifecycle = new GameplayTurnLifecycle(this);
+            actionCommitValidator = new GameplayActionCommitValidator(this);
+            actionOutcomeApplier = new GameplayActionOutcomeApplier(this);
         }
 
         public ScenarioDefinition Scenario { get; }
@@ -524,6 +528,16 @@ namespace GritGud.Application.Gameplay
             resolvedActions.Count == 0
                 ? null
                 : resolvedActions[resolvedActions.Count - 1];
+
+        internal long NextActionSequence => LastResolvedAction == null
+            ? 1L
+            : LastResolvedAction.Sequence + 1L;
+
+        internal IReadOnlyCollection<Type> ValidatedActionOutcomeTypes =>
+            actionCommitValidator.SupportedOutcomeTypes;
+
+        internal IReadOnlyCollection<Type> AppliedActionOutcomeTypes =>
+            actionOutcomeApplier.SupportedOutcomeTypes;
 
         public bool IsActorIncapacitated(string actorId) =>
             RequireActor(actorId).IsIncapacitated;
@@ -1040,9 +1054,7 @@ namespace GritGud.Application.Gameplay
 
             ValidateActionCommit(record);
 
-            GameplayActorState actor = Mode == GameplaySessionMode.TurnBased
-                ? RequireActiveActor(record.Request.ActorId)
-                : RequireActor(record.Request.ActorId);
+            GameplayActorState actor = RequireActionActor(record.Request.ActorId);
             if (actor.PinState != null
                 && !IsPushOffAction(
                     record.Request.ActorId,
@@ -1054,8 +1066,12 @@ namespace GritGud.Application.Gameplay
             actor.TurnBudget = record.ResultingBudget;
             foreach (GameplayActionOutcome outcome in record.Outcomes)
             {
-                ApplyActionFacing(actor, outcome);
-                ApplyActionOutcome(outcome, notifications);
+                actionOutcomeApplier.Apply(
+                    actor,
+                    outcome,
+                    notifications,
+                    ActorCapabilityChanged,
+                    EquipmentChanged);
             }
 
             resolvedActions.Add(record);
@@ -1063,71 +1079,8 @@ namespace GritGud.Application.Gameplay
             MarkStateChanged();
         }
 
-        private void ApplyActionFacing(
-            GameplayActorState actor,
-            GameplayActionOutcome outcome)
-        {
-            switch (outcome)
-            {
-                case AttackResolvedActionOutcome attackResolved:
-                    actor.FaceToward(
-                        RequireActor(attackResolved.TargetId).Pose.Position);
-                    break;
-
-                case WeaponDischargedActionOutcome weaponDischarged:
-                    actor.FaceToward(weaponDischarged.Discharge.AimPoint);
-                    break;
-
-                case ProjectileLaunchedActionOutcome projectileLaunched:
-                    actor.FaceToward(projectileLaunched.Launch.AimPoint);
-                    break;
-
-                case ThrownExplosiveActionOutcome thrownExplosive:
-                    actor.FaceToward(
-                        thrownExplosive.Record.IntendedLanding);
-                    break;
-
-                case DisplacementActionOutcome displacement:
-                    actor.FaceToward(
-                        displacement.Displacement.PreviousPosition);
-                    break;
-            }
-        }
-
         internal void ValidateActionCommit(GameplayActionRecord record)
-        {
-            if (record == null)
-            {
-                throw new ArgumentNullException(nameof(record));
-            }
-
-            GameplayActorState actor = Mode == GameplaySessionMode.TurnBased
-                ? RequireActiveActor(record.Request.ActorId)
-                : RequireActor(record.Request.ActorId);
-            long expectedSequence = resolvedActions.Count == 0
-                ? 1
-                : resolvedActions[resolvedActions.Count - 1].Sequence + 1;
-            if (record.Sequence != expectedSequence)
-            {
-                throw new InvalidOperationException(
-                    "The action record is not the next authoritative sequence.");
-            }
-
-            if (!TurnBudgetsMatch(actor.TurnBudget, record.PreviousBudget))
-            {
-                throw new InvalidOperationException(
-                    "The action no longer begins at the actor's authoritative budget.");
-            }
-
-            TurnBudget expectedBudget = actor.TurnBudget.SpendAction(record.Cost);
-            if (!TurnBudgetsMatch(expectedBudget, record.ResultingBudget))
-            {
-                throw new InvalidOperationException(
-                    "The action record's resulting budget does not match its cost.");
-            }
-
-            ValidateActionOutcomes(record);
-        }
+            => actionCommitValidator.Validate(record);
 
         private static GameplayInitiativeResult ResolveInitiative(
             ScenarioActorDefinition actor,
@@ -1175,147 +1128,6 @@ namespace GritGud.Application.Gameplay
             ReferenceEquals(left, right)
             || (left != null && left.HasSameState(right));
 
-        private static bool TurnBudgetsMatch(
-            TurnBudget left,
-            TurnBudget right)
-        {
-            return left.ActionPoints == right.ActionPoints
-                && left.MovementOpportunity == right.MovementOpportunity;
-        }
-
-        private void ValidateActionOutcomes(GameplayActionRecord record)
-        {
-            var outcomeKeys = new HashSet<string>(StringComparer.Ordinal);
-            foreach (GameplayActionOutcome outcome in record.Outcomes)
-            {
-                string outcomeKey = outcome.GetType().FullName
-                    + ":"
-                    + (outcome.TargetId ?? string.Empty);
-                if (!outcomeKeys.Add(outcomeKey))
-                {
-                    throw new InvalidOperationException(
-                        "An action record cannot repeat the same authoritative outcome.");
-                }
-
-                switch (outcome)
-                {
-                    case ObjectiveCompletedActionOutcome objectiveCompleted:
-                        GameplayObjectiveState objective = RequireObjective(
-                            objectiveCompleted.ObjectiveId);
-                        if (objective.IsCompleted)
-                        {
-                            throw new InvalidOperationException(
-                                "The objective is already complete.");
-                        }
-
-                        break;
-
-                    case AttackResolvedActionOutcome attackResolved:
-                        ValidateAttackOutcome(record, attackResolved.Attack);
-                        break;
-
-                    case WeaponDischargedActionOutcome weaponDischarged:
-                        ValidateWeaponDischargeOutcome(
-                            record,
-                            weaponDischarged.Discharge);
-                        break;
-
-                    case ProjectileLaunchedActionOutcome projectileLaunched:
-                        ValidateProjectileLaunchOutcome(
-                            record,
-                            projectileLaunched.Launch);
-                        break;
-
-                    case EquipmentChangedActionOutcome equipmentChanged:
-                        ValidateEquipmentChangeOutcome(
-                            record,
-                            equipmentChanged.Change);
-                        break;
-
-                    case ThrownExplosiveActionOutcome thrownExplosive:
-                        ValidateThrownExplosiveOutcome(record, thrownExplosive.Record);
-                        break;
-
-                    case InventoryQuantityChangedActionOutcome inventory:
-                        ValidateInventoryQuantityChangeOutcome(
-                            record,
-                            inventory.Change);
-                        break;
-
-                    case DisplacementActionOutcome displacement:
-                        ValidateDisplacementActionOutcome(
-                            record,
-                            displacement.Displacement);
-                        break;
-
-                    default:
-                        throw new InvalidOperationException(
-                            $"Unsupported action outcome '{outcome.GetType().Name}'.");
-                }
-            }
-        }
-
-        private void ApplyActionOutcome(
-            GameplayActionOutcome outcome,
-            GameplayNotificationBatch notifications)
-        {
-            switch (outcome)
-            {
-                case ObjectiveCompletedActionOutcome objectiveCompleted:
-                    RequireObjective(objectiveCompleted.ObjectiveId).IsCompleted = true;
-                    break;
-
-                case AttackResolvedActionOutcome attackResolved:
-                    RequireActor(attackResolved.TargetId).ApplyAttack(
-                        attackResolved.Attack);
-                    notifications.Add(
-                        ActorCapabilityChanged,
-                        attackResolved.TargetId);
-                    break;
-
-                case WeaponDischargedActionOutcome _:
-                    // A world-point discharge spends the weapon cost and changes
-                    // facing, but has no target state to mutate.
-                    break;
-
-                case ProjectileLaunchedActionOutcome _:
-                    // The projectile session owns flight state. Launch only spends
-                    // the action's authored weapon cost in the gameplay session.
-                    break;
-
-                case EquipmentChangedActionOutcome equipmentChanged:
-                    EquipmentChangeRecord change = equipmentChanged.Change;
-                    GameplayActorState actor = RequireActor(change.ActorId);
-                    InventoryItemDefinition item = change.ResultingEquippedItemId
-                        == null
-                            ? null
-                            : RequireActorDefinition(change.ActorId)
-                                .GetInventoryItem(change.ResultingEquippedItemId);
-                    actor.ApplyEquipment(item);
-                    notifications.Add(EquipmentChanged, change);
-                    break;
-
-                case ThrownExplosiveActionOutcome thrownExplosive:
-                    // The focused thrown-explosive session validates and commits
-                    // shared blast consequences after the action is accepted.
-                    break;
-
-                case InventoryQuantityChangedActionOutcome inventory:
-                    RequireActor(inventory.Change.ActorId)
-                        .ApplyInventoryQuantity(inventory.Change);
-                    break;
-
-                case DisplacementActionOutcome _:
-                    // The displacement session commits the resolved world move
-                    // after the ordinary action budget has been accepted.
-                    break;
-
-                default:
-                    throw new InvalidOperationException(
-                        $"Unsupported action outcome '{outcome.GetType().Name}'.");
-            }
-        }
-
         private VoluntaryTurnCycleRecord CreateVoluntaryTurnCycleRecord()
         {
             long sequence = LastCompletedVoluntaryTurnCycle == null
@@ -1329,333 +1141,6 @@ namespace GritGud.Application.Gameplay
             }
 
             return new VoluntaryTurnCycleRecord(sequence, actorSnapshots);
-        }
-
-        private void ValidateAttackOutcome(
-            GameplayActionRecord action,
-            AttackResolutionRecord attack)
-        {
-            if (attack == null)
-            {
-                throw new InvalidOperationException(
-                    "Attack outcomes require a resolution record.");
-            }
-
-            if (!string.Equals(
-                    action.Request.ActorId,
-                    attack.AttackerId,
-                    StringComparison.Ordinal)
-                || !string.Equals(
-                    action.Request.TargetId,
-                    attack.TargetId,
-                    StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "The attack record does not match its action request.");
-            }
-
-            AttackDefinition equippedAttack = GetEquippedAttack(
-                attack.AttackerId);
-            if (equippedAttack == null
-                || !string.Equals(
-                    equippedAttack.ActionId,
-                    action.Request.ActionId,
-                    StringComparison.Ordinal)
-                || !ActionCostsMatch(
-                    action.Cost,
-                    GetAttackActionCost(
-                        equippedAttack,
-                        action))
-                || !AccuracyDecayDefinitionsMatch(
-                    equippedAttack.AccuracyDecay,
-                    attack.AccuracyDecay))
-            {
-                throw new InvalidOperationException(
-                    "The actor does not own the recorded attack action.");
-            }
-
-            GameplayActorState target = RequireActor(attack.TargetId);
-            GameplayActorState attacker = RequireActor(attack.AttackerId);
-            if (attacker.Pose.Position.DistanceTo(target.Pose.Position)
-                != attack.Distance)
-            {
-                throw new InvalidOperationException(
-                    "The attack distance no longer matches the authoritative actor positions.");
-            }
-
-            if (!WoundsMatch(target.Wounds, attack.TargetWoundsBefore))
-            {
-                throw new InvalidOperationException(
-                    "The attack no longer begins at the target's authoritative wound state.");
-            }
-        }
-
-        private void ValidateWeaponDischargeOutcome(
-            GameplayActionRecord action,
-            WeaponDischargeRecord discharge)
-        {
-            if (discharge == null
-                || !string.Equals(
-                    action.Request.ActorId,
-                    discharge.AttackerId,
-                    StringComparison.Ordinal)
-                || !string.Equals(
-                    action.Request.ActionId,
-                    discharge.ActionId,
-                    StringComparison.Ordinal)
-                || !string.Equals(
-                    action.Request.TargetId,
-                    discharge.TargetId,
-                    StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "The weapon discharge does not match its action request.");
-            }
-
-            AttackDefinition equippedAttack = GetEquippedAttack(
-                discharge.AttackerId);
-            GameplayActorState attacker = RequireActor(discharge.AttackerId);
-            if (equippedAttack == null
-                || equippedAttack.Projectile != null
-                || !ActionCostsMatch(
-                    action.Cost,
-                    GetAttackActionCost(
-                        equippedAttack,
-                        action))
-                || !string.Equals(
-                    equippedAttack.ActionId,
-                    discharge.ActionId,
-                    StringComparison.Ordinal)
-                || !string.Equals(
-                    action.Request.TargetId,
-                    discharge.TargetId,
-                    StringComparison.Ordinal)
-                || attacker.Pose.Position.DistanceTo(discharge.Origin) > 0f)
-            {
-                throw new InvalidOperationException(
-                    "The actor does not own the recorded immediate weapon discharge.");
-            }
-        }
-
-        private void ValidateThrownExplosiveOutcome(
-            GameplayActionRecord action,
-            ThrownExplosiveRecord thrown)
-        {
-            if (thrown == null
-                || !string.Equals(action.Request.ActorId, thrown.ThrowerId, StringComparison.Ordinal)
-                || !string.Equals(action.Request.ActionId, thrown.Definition.Id, StringComparison.Ordinal)
-                || !string.Equals(action.Request.TargetId, thrown.Definition.Id, StringComparison.Ordinal)
-                || !ActionCostsMatch(
-                    action.Cost,
-                    GetThrownExplosiveActionCost(
-                        thrown.Definition,
-                        action)))
-                throw new InvalidOperationException("The thrown explosive does not match its action request.");
-            GameplayActorState actor = RequireActor(thrown.ThrowerId);
-            InventoryItemDefinition item = RequireActorDefinition(thrown.ThrowerId)
-                .GetInventoryItem(thrown.Definition.Id);
-            if (!ThrownExplosiveDefinitionsMatch(
-                    item.ConsumablePower as ThrownExplosiveDefinition,
-                    thrown.Definition))
-                throw new InvalidOperationException(
-                    "The actor does not own the recorded thrown explosive.");
-            if (actor.Pose.Position.DistanceTo(thrown.Origin) > 0f)
-                throw new InvalidOperationException("The throw no longer starts at the actor's position.");
-            if (thrown.Definition.GetLaunchOrigin(actor.Pose)
-                    .DistanceTo(thrown.LaunchOrigin) > 0f)
-                throw new InvalidOperationException(
-                    "The throw no longer starts at its authored launch origin.");
-
-            InventoryQuantityChangeRecord quantity =
-                FindInventoryQuantityChange(action, thrown.Definition.Id);
-            if (quantity == null
-                || !string.Equals(
-                    quantity.ActorId,
-                    thrown.ThrowerId,
-                    StringComparison.Ordinal)
-                || quantity.ConsumedQuantity != 1)
-            {
-                throw new InvalidOperationException(
-                    "A thrown explosive must consume exactly one matching inventory item in the same action.");
-            }
-        }
-
-        private void ValidateInventoryQuantityChangeOutcome(
-            GameplayActionRecord action,
-            InventoryQuantityChangeRecord change)
-        {
-            if (change == null
-                || !string.Equals(
-                    action.Request.ActorId,
-                    change.ActorId,
-                    StringComparison.Ordinal)
-                || !string.Equals(
-                    action.Request.TargetId,
-                    change.ItemId,
-                    StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "The inventory quantity change does not match its action request.");
-            }
-
-            InventoryItemDefinition item = RequireActorDefinition(
-                change.ActorId).GetInventoryItem(change.ItemId);
-            GameplayActorState actor = RequireActor(change.ActorId);
-            int pairedThrowCount = 0;
-            foreach (GameplayActionOutcome outcome in action.Outcomes)
-            {
-                if (outcome is ThrownExplosiveActionOutcome thrown
-                    && string.Equals(
-                        thrown.Record.Definition.Id,
-                        change.ItemId,
-                        StringComparison.Ordinal))
-                {
-                    pairedThrowCount++;
-                }
-            }
-
-            if (item == null
-                || item.Kind != InventoryItemKind.Consumable
-                || pairedThrowCount != 1
-                || change.ConsumedQuantity != 1
-                || actor.GetInventoryQuantity(change.ItemId)
-                    != change.PreviousQuantity)
-            {
-                throw new InvalidOperationException(
-                    "The inventory quantity change is not valid for the actor's authoritative state.");
-            }
-        }
-
-        private static InventoryQuantityChangeRecord
-            FindInventoryQuantityChange(
-                GameplayActionRecord action,
-                string itemId)
-        {
-            InventoryQuantityChangeRecord matched = null;
-            foreach (GameplayActionOutcome outcome in action.Outcomes)
-            {
-                if (outcome is InventoryQuantityChangedActionOutcome inventory
-                    && string.Equals(
-                        inventory.Change.ItemId,
-                        itemId,
-                        StringComparison.Ordinal))
-                {
-                    if (matched != null)
-                    {
-                        throw new InvalidOperationException(
-                            "A thrown explosive action must contain exactly one matching inventory quantity change.");
-                    }
-
-                    matched = inventory.Change;
-                }
-            }
-
-            return matched;
-        }
-
-        private void ValidateDisplacementActionOutcome(
-            GameplayActionRecord action,
-            DisplacementRecord displacement)
-        {
-            if (displacement == null)
-            {
-                DisplacementActionCommitValidator.Validate(
-                    action,
-                    displacement,
-                    definition: null,
-                    equippedItem: null,
-                    chargesTurnCost: ShouldChargeTurnCost(action));
-                return;
-            }
-
-            DisplacementActionDefinition definition = RequireActorDefinition(
-                displacement.Request.ActorId).GetDisplacementAction(
-                    displacement.Request.ActionId);
-            RequireActor(displacement.Request.ActorId);
-            DisplacementActionCommitValidator.Validate(
-                action,
-                displacement,
-                definition,
-                GetEquippedItem(displacement.Request.ActorId),
-                ShouldChargeTurnCost(action));
-        }
-
-        private static bool ThrownExplosiveDefinitionsMatch(
-            ThrownExplosiveDefinition left,
-            ThrownExplosiveDefinition right) =>
-            left != null && right != null
-                && string.Equals(left.Id, right.Id, StringComparison.Ordinal)
-                && ActionCostsMatch(left.TurnCost, right.TurnCost)
-                && left.MaximumRange == right.MaximumRange
-                && left.StandingLaunchHeight == right.StandingLaunchHeight
-                && left.CrouchedLaunchHeight == right.CrouchedLaunchHeight
-                && left.BaseUncertaintyRadius == right.BaseUncertaintyRadius
-                && left.UncertaintyPerMeter == right.UncertaintyPerMeter
-                && left.BlastRadius == right.BlastRadius
-                && left.BlastWoundMovementPenalty
-                    == right.BlastWoundMovementPenalty
-                && left.BlastIntegrityDamage
-                    == right.BlastIntegrityDamage
-                && SmokeFieldDefinitionsMatch(
-                    left.SmokeField,
-                    right.SmokeField);
-
-        private static bool SmokeFieldDefinitionsMatch(
-            SmokeFieldDefinition left,
-            SmokeFieldDefinition right) =>
-            left == null
-                ? right == null
-                : left.Matches(right);
-
-        private void ValidateProjectileLaunchOutcome(
-            GameplayActionRecord action,
-            ProjectileLaunchRecord launch)
-        {
-            if (launch == null
-                || !string.Equals(
-                    action.Request.ActorId,
-                    launch.AttackerId,
-                    StringComparison.Ordinal)
-                || !string.Equals(
-                    action.Request.TargetId,
-                    launch.IntendedTargetId,
-                    StringComparison.Ordinal)
-                || !string.Equals(
-                    action.Request.ActionId,
-                    launch.ActionId,
-                    StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "The projectile launch does not match its action request.");
-            }
-
-            AttackDefinition weapon = GetEquippedAttack(launch.AttackerId);
-            if (weapon?.Projectile == null
-                || !string.Equals(
-                    weapon.ActionId,
-                    launch.ActionId,
-                    StringComparison.Ordinal)
-                || !ActionCostsMatch(action.Cost, weapon.TurnCost)
-                || !ProjectileDefinitionsMatch(
-                    launch.Definition,
-                    weapon.Projectile))
-            {
-                throw new InvalidOperationException(
-                    "The actor does not own the recorded projectile weapon.");
-            }
-
-            GameplayActorState attacker = RequireActor(launch.AttackerId);
-            GameplayPosition expectedOrigin = weapon.Projectile.GetLaunchOrigin(
-                attacker.Pose);
-            if (expectedOrigin.DistanceTo(launch.Origin) > 0f)
-            {
-                throw new InvalidOperationException(
-                    "The projectile launch no longer starts at the attacker's authored launch point.");
-            }
-
-            // Projectile attacks are aimed at a world point.  The reference id may
-            // identify an actor, destructible, or unregistered patch of terrain;
-            // collision at arrival remains authoritative.
         }
 
         internal void ApplyBlastInjury(
@@ -1688,85 +1173,7 @@ namespace GritGud.Application.Gameplay
             MarkStateChanged();
         }
 
-        private void ValidateEquipmentChangeOutcome(
-            GameplayActionRecord action,
-            EquipmentChangeRecord change)
-        {
-            foreach (GameplayActionOutcome outcome in action.Outcomes)
-            {
-                if (outcome is DisplacementActionOutcome)
-                {
-                    // The focused displacement validator owns its automatic
-                    // equipment transition as part of the composite action.
-                    return;
-                }
-            }
-
-            if (change == null
-                || !string.Equals(
-                    action.Request.ActorId,
-                    change.ActorId,
-                    StringComparison.Ordinal)
-                || !string.Equals(
-                    action.Request.TargetId,
-                    change.ItemId,
-                    StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "The equipment change does not match its action request.");
-            }
-
-            GameplayActorState actor = RequireActor(change.ActorId);
-            ScenarioActorDefinition definition = RequireActorDefinition(
-                change.ActorId);
-            InventoryItemDefinition item = definition.GetInventoryItem(
-                change.ItemId);
-            if (item == null)
-            {
-                throw new InvalidOperationException(
-                    "The actor does not own the recorded equipment change.");
-            }
-
-            ActionCost expectedCost = Mode == GameplaySessionMode.TurnBased
-                ? item.EquipmentCost
-                : new ActionCost(
-                    0,
-                    0f,
-                    item.EquipmentCost.Mobility);
-            if (!item.IsEquippable
-                || !string.Equals(
-                    actor.EquippedItemId,
-                    change.PreviousEquippedItemId,
-                    StringComparison.Ordinal)
-                || !ActionCostsMatch(action.Cost, expectedCost))
-            {
-                throw new InvalidOperationException(
-                    "The actor does not own the recorded equipment change.");
-            }
-
-            string expectedActionId = change.Kind == EquipmentChangeKind.Equip
-                ? EquipmentActionIds.Equip
-                : EquipmentActionIds.Unequip;
-            string expectedResult = change.Kind == EquipmentChangeKind.Equip
-                ? item.Id
-                : null;
-            if (!string.Equals(
-                    action.Request.ActionId,
-                    expectedActionId,
-                    StringComparison.Ordinal)
-                || !string.Equals(
-                    change.ResultingEquippedItemId,
-                    expectedResult,
-                    StringComparison.Ordinal)
-                || (change.Kind == EquipmentChangeKind.Equip
-                    && change.PreviousEquippedItemId != null))
-            {
-                throw new InvalidOperationException(
-                    "The recorded equipment transition is invalid.");
-            }
-        }
-
-        private ScenarioActorDefinition RequireActorDefinition(string actorId)
+        internal ScenarioActorDefinition RequireActorDefinition(string actorId)
         {
             foreach (ScenarioActorDefinition actor in Scenario.Actors)
             {
@@ -1778,74 +1185,6 @@ namespace GritGud.Application.Gameplay
 
             throw new KeyNotFoundException(
                 $"Actor definition '{actorId}' is not part of the scenario.");
-        }
-
-        private static bool WoundsMatch(
-            ActorWoundSnapshot left,
-            ActorWoundSnapshot right)
-        {
-            return left.HasSameState(right);
-        }
-
-        private static bool ActionCostsMatch(ActionCost left, ActionCost right)
-        {
-            return left.ActionPoints == right.ActionPoints
-                && left.MovementOpportunity == right.MovementOpportunity
-                && left.Mobility == right.Mobility;
-        }
-
-        private ActionCost GetAttackActionCost(
-            AttackDefinition attack,
-            GameplayActionRecord action) =>
-            ShouldChargeTurnCost(action)
-                ? attack.TurnCost
-                : new ActionCost(
-                    0,
-                    0f,
-                    attack.TurnCost.Mobility);
-
-        private ActionCost GetThrownExplosiveActionCost(
-            ThrownExplosiveDefinition definition,
-            GameplayActionRecord action) =>
-            ShouldChargeTurnCost(action)
-                ? definition.TurnCost
-                : new ActionCost(
-                    0,
-                    0f,
-                    definition.TurnCost.Mobility);
-
-        private bool ShouldChargeTurnCost(GameplayActionRecord action) =>
-            Mode == GameplaySessionMode.TurnBased
-            || (!EncounterActive && ActionStartsEncounter(action));
-
-        private static bool AccuracyDecayDefinitionsMatch(
-            AccuracyDecayDefinition left,
-            AccuracyDecayDefinition right) =>
-            left != null
-                && right != null
-                && left.HalfLifeDistance == right.HalfLifeDistance
-                && left.MinimumAccuracyPercent
-                    == right.MinimumAccuracyPercent;
-
-        private static bool ProjectileDefinitionsMatch(
-            ProjectileFlightDefinition left,
-            ProjectileFlightDefinition right)
-        {
-            return left != null
-                && right != null
-                && string.Equals(left.Id, right.Id, StringComparison.Ordinal)
-                && left.SpeedPerTurn == right.SpeedPerTurn
-                && left.Radius == right.Radius
-                && left.MaximumRange == right.MaximumRange
-                && left.StandingLaunchHeight == right.StandingLaunchHeight
-                && left.CrouchedLaunchHeight == right.CrouchedLaunchHeight
-                && left.OpensEmergencyReactionWindow
-                    == right.OpensEmergencyReactionWindow
-                && left.BlastRadius == right.BlastRadius
-                && left.BlastWoundMovementPenalty
-                    == right.BlastWoundMovementPenalty
-                && left.BlastIntegrityDamage
-                    == right.BlastIntegrityDamage;
         }
 
         GameplayJournal IGameplayTurnLifecycleHost.Journal => Journal;
@@ -1929,7 +1268,12 @@ namespace GritGud.Application.Gameplay
             return actor;
         }
 
-        private GameplayActorState RequireActor(string actorId)
+        internal GameplayActorState RequireActionActor(string actorId) =>
+            Mode == GameplaySessionMode.TurnBased
+                ? RequireActiveActor(actorId)
+                : RequireActor(actorId);
+
+        internal GameplayActorState RequireActor(string actorId)
         {
             if (string.IsNullOrWhiteSpace(actorId))
             {
@@ -1947,7 +1291,7 @@ namespace GritGud.Application.Gameplay
             return actor;
         }
 
-        private GameplayObjectiveState RequireObjective(string objectiveId)
+        internal GameplayObjectiveState RequireObjective(string objectiveId)
         {
             if (string.IsNullOrWhiteSpace(objectiveId))
             {
