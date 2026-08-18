@@ -223,6 +223,7 @@ namespace GritGud.Presentation.Gameplay
                 Quaternion.identity,
                 transform);
             root.name = field.Id + " Smoke Volume";
+            DisablePhysicsColliders(root);
             float scale = field.Definition.Radius
                 * presentation.PersistentEffectScalePerRadius;
             root.transform.localScale = Vector3.Scale(
@@ -459,6 +460,17 @@ namespace GritGud.Presentation.Gameplay
                     hash *= 16777619;
                 }
                 return hash == 0 ? 1u : hash;
+            }
+        }
+
+        internal static void DisablePhysicsColliders(GameObject visualRoot)
+        {
+            if (visualRoot == null)
+                throw new ArgumentNullException(nameof(visualRoot));
+            foreach (Collider collider in
+                visualRoot.GetComponentsInChildren<Collider>(true))
+            {
+                collider.enabled = false;
             }
         }
 

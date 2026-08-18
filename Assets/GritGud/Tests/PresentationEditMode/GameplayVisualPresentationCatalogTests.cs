@@ -62,6 +62,21 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void RifleUsesACompactSurfaceImpactEffect()
+        {
+            WeaponPresentationCatalog weapons =
+                WeaponPresentationCatalog.LoadDefault();
+
+            Assert.That(
+                weapons.Get("weapon.rifle").ImpactEffectScaleMultiplier,
+                Is.EqualTo(0.05f));
+            Assert.That(
+                weapons.Get("weapon.rocket-launcher")
+                    .ImpactEffectScaleMultiplier,
+                Is.EqualTo(1f));
+        }
+
+        [Test]
         public void SmokeGrenadeOwnsSparsePersistentPresentation()
         {
             ThrownExplosivePresentationDefinition smoke =

@@ -58,6 +58,9 @@ namespace GritGud.Presentation.Gameplay
         [SerializeField, Min(0.01f)]
         private float muzzleLightSeconds = 0.06f;
 
+        [SerializeField, Min(0f)]
+        private float impactEffectScaleMultiplier = 1f;
+
         [SerializeField, Range(1f, 90f)]
         private float maximumAimCorrectionDegrees = 55f;
 
@@ -90,7 +93,8 @@ namespace GritGud.Presentation.Gameplay
             float shotLightSeconds = 0.06f,
             float contactImpactTime =
                 GameplayCloseQuartersPresentationTiming
-                    .ContactImpactNormalizedTime)
+                    .ContactImpactNormalizedTime,
+            float impactScaleMultiplier = 1f)
         {
             itemId = inventoryItemId ?? string.Empty;
             prefab = weaponRigPrefab;
@@ -108,6 +112,7 @@ namespace GritGud.Presentation.Gameplay
             muzzleLightIntensity = Mathf.Max(0f, shotLightIntensity);
             muzzleLightRange = Mathf.Max(0.01f, shotLightRange);
             muzzleLightSeconds = Mathf.Max(0.01f, shotLightSeconds);
+            impactEffectScaleMultiplier = Mathf.Max(0f, impactScaleMultiplier);
         }
 
         public string ItemId => itemId;
@@ -135,6 +140,9 @@ namespace GritGud.Presentation.Gameplay
         public float MuzzleLightRange => Mathf.Max(0.01f, muzzleLightRange);
 
         public float MuzzleLightSeconds => Mathf.Max(0.01f, muzzleLightSeconds);
+
+        public float ImpactEffectScaleMultiplier =>
+            Mathf.Max(0f, impactEffectScaleMultiplier);
 
         public float MaximumAimCorrectionDegrees =>
             Mathf.Clamp(maximumAimCorrectionDegrees, 1f, 90f);
@@ -189,6 +197,14 @@ namespace GritGud.Presentation.Gameplay
             }
 
             return definition;
+        }
+
+        public bool TryGet(
+            string itemId,
+            out WeaponPresentationDefinition definition)
+        {
+            EnsureIndex();
+            return index.TryGetValue(itemId ?? string.Empty, out definition);
         }
 
         internal static WeaponPresentationCatalog CreateRuntime(

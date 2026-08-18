@@ -24,6 +24,7 @@ MonoBehaviour:
     muzzleLightIntensity: 3.6
     muzzleLightRange: 3.4
     muzzleLightSeconds: 0.055
+    impactEffectScaleMultiplier: 0.05
     maximumAimCorrectionDegrees: 18
     attackPresentation: 0
     contactStrikeSeconds: 0.34
@@ -39,6 +40,7 @@ MonoBehaviour:
     muzzleLightIntensity: 4.2
     muzzleLightRange: 4
     muzzleLightSeconds: 0.085
+    impactEffectScaleMultiplier: 1
     maximumAimCorrectionDegrees: 12
     attackPresentation: 0
     contactStrikeSeconds: 0.34
@@ -54,6 +56,7 @@ MonoBehaviour:
     muzzleLightIntensity: 0
     muzzleLightRange: 1
     muzzleLightSeconds: 0.01
+    impactEffectScaleMultiplier: 1
     maximumAimCorrectionDegrees: 1
     attackPresentation: 1
     contactStrikeSeconds: 0.8

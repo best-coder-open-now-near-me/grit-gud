@@ -16,6 +16,7 @@ namespace GritGud.Presentation.Gameplay
         private GameplayAttackController attacks;
         private GameplayWorldRegistry registry;
         private SurfacePresentationCatalog catalog;
+        private WeaponPresentationCatalog weapons;
         private GameObject root;
         private Material decalMaterial;
 
@@ -23,7 +24,8 @@ namespace GritGud.Presentation.Gameplay
             GameplayAttackController attackController,
             GameplayWorldRegistry worldRegistry,
             SurfacePresentationCatalog surfaceCatalog,
-            Transform parent)
+            Transform parent,
+            WeaponPresentationCatalog weaponCatalog = null)
         {
             if (attackController == null)
             {
@@ -46,6 +48,7 @@ namespace GritGud.Presentation.Gameplay
             attacks = attackController;
             registry = worldRegistry;
             catalog = surfaceCatalog;
+            weapons = weaponCatalog ?? WeaponPresentationCatalog.LoadDefault();
             root = new GameObject("Gameplay Surface Impacts");
             root.transform.SetParent(parent, false);
             attacks.AttackResolved += HandleAttackResolved;
@@ -64,6 +67,7 @@ namespace GritGud.Presentation.Gameplay
             attacks = null;
             registry = null;
             catalog = null;
+            weapons = null;
             GameplayObjectLifecycle.Destroy(root);
             GameplayObjectLifecycle.Destroy(decalMaterial);
             root = null;
@@ -91,7 +95,8 @@ namespace GritGud.Presentation.Gameplay
                 SurfacePresentationCatalog.ActorSurfaceId,
                 position,
                 normal.sqrMagnitude > 0.0001f ? normal : Vector3.up,
-                createDecal: false);
+                createDecal: false,
+                ResolveImpactScaleMultiplier(resolution.AttackerId));
         }
 
         private void HandleWeaponDischarged(GameplayActionRecord action)
@@ -137,7 +142,12 @@ namespace GritGud.Presentation.Gameplay
                 }
             }
 
-            PresentImpact(surfaceId, position, normal, createDecal: true);
+            PresentImpact(
+                surfaceId,
+                position,
+                normal,
+                createDecal: true,
+                ResolveImpactScaleMultiplier(discharge.AttackerId));
         }
 
         private string ResolveSurfaceId(string targetId)
@@ -151,7 +161,8 @@ namespace GritGud.Presentation.Gameplay
             string surfaceId,
             Vector3 position,
             Vector3 normal,
-            bool createDecal)
+            bool createDecal,
+            float scaleMultiplier)
         {
             SurfacePresentationDefinition definition = catalog.Get(surfaceId);
             if (definition.ImpactEffectPrefab != null)
@@ -166,7 +177,8 @@ namespace GritGud.Presentation.Gameplay
                 effect.name = definition.SurfaceId + " Impact";
                 effect.transform.localScale =
                     definition.ImpactEffectPrefab.transform.localScale
-                    * definition.ImpactScale;
+                    * definition.ImpactScale
+                    * scaleMultiplier;
                 foreach (ParticleSystem particles in
                     effect.GetComponentsInChildren<ParticleSystem>(true))
                 {
@@ -179,6 +191,19 @@ namespace GritGud.Presentation.Gameplay
             {
                 CreateDecal(definition, position, normal);
             }
+        }
+
+        private float ResolveImpactScaleMultiplier(string attackerId)
+        {
+            string equippedItemId = attacks?.Session?.GetActor(attackerId)
+                .EquippedItemId;
+            return equippedItemId != null
+                && weapons != null
+                && weapons.TryGet(
+                    equippedItemId,
+                    out WeaponPresentationDefinition weapon)
+                ? weapon.ImpactEffectScaleMultiplier
+                : 1f;
         }
 
         private void CreateDecal(

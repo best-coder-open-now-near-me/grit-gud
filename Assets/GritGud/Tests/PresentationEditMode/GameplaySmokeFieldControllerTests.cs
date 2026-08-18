@@ -46,6 +46,7 @@ namespace GritGud.Presentation.Tests
             var projectile = new GameObject("Smoke Grenade Prefab");
             var persistent = new GameObject("Smoke Volume Prefab");
             persistent.AddComponent<ParticleSystem>();
+            persistent.AddComponent<BoxCollider>();
             var catalog = ConsumablePresentationCatalog.CreateRuntime(
                 new ThrownExplosivePresentationDefinition(
                     "item.smoke-grenade",
@@ -93,6 +94,11 @@ namespace GritGud.Presentation.Tests
                     Is.False,
                     "Smoke should wait for the grenade's authored release "
                     + "and flight time.");
+                Assert.That(
+                    host.transform.GetChild(0).GetComponent<BoxCollider>()
+                        .enabled,
+                    Is.False,
+                    "Smoke visuals must never participate in projectile physics.");
                 Assert.That(
                     catalog.GetThrownExplosive("item.smoke-grenade")
                         .ImpactDelaySeconds,
