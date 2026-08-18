@@ -104,10 +104,19 @@ PRODUCTION_SOURCE_ROOTS = (
 
 MAX_PRODUCTION_SOURCE_LINES = 1800
 PRODUCTION_SOURCE_LINE_BUDGETS = {
-    Path("Assets/GritGud/Application/Gameplay/GameplaySession.cs"): 2050,
-    Path("Assets/GritGud/Presentation/LevelEditing/LevelEditorController.cs"): 1900,
+    Path("Assets/GritGud/Application/Gameplay/GameplaySession.cs"): 1400,
+    Path("Assets/GritGud/Application/Gameplay/GameplayScenarioAssembler.cs"): 225,
+    Path("Assets/GritGud/Domain/Levels/LevelValidator.cs"): 250,
+    Path("Assets/GritGud/Presentation/Gameplay/GameplayController.cs"): 1000,
+    Path("Assets/GritGud/Presentation/Gameplay/GameplayHudRenderer.cs"): 1150,
+    Path("Assets/GritGud/Presentation/LevelEditing/LevelEditorController.cs"): 1500,
 }
 UNITY_META_GUID = re.compile(r"^guid:\s*([0-9a-f]{32})\s*$", re.MULTILINE)
+ASYNC_VOID_DECLARATION = re.compile(r"\basync\s+void\b")
+LEVEL_VALIDATION_RULE_DECLARATION = re.compile(
+    r"\b(?:public|internal)\s+sealed\s+class\s+"
+    r"(\w+ValidationRule)\s*:\s*ILevelValidationRule\b"
+)
 
 
 def tracked_files() -> list[Path]:
@@ -172,6 +181,31 @@ def main() -> int:
                     f"split cohesive responsibilities before exceeding "
                     f"{line_budget}"
                 )
+
+            if relative_path.is_relative_to(
+                Path("Assets/GritGud/Presentation")
+            ) and ASYNC_VOID_DECLARATION.search(text):
+                failures.append(
+                    f"{relative_path}: Presentation commands must return Task; "
+                    "async void is reserved for framework event boundaries"
+                )
+
+            if relative_path.is_relative_to(
+                Path("Assets/GritGud/Domain/Levels")
+            ):
+                rule_names = LEVEL_VALIDATION_RULE_DECLARATION.findall(text)
+                if len(rule_names) > 1:
+                    failures.append(
+                        f"{relative_path}: level validation rules require one "
+                        "concrete rule per file"
+                    )
+                for rule_name in rule_names:
+                    expected_name = f"{rule_name}.cs"
+                    if relative_path.name != expected_name:
+                        failures.append(
+                            f"{relative_path}: level validation rule "
+                            f"'{rule_name}' must live in {expected_name}"
+                        )
 
         if path.suffix.lower() == ".meta" and relative_path.is_relative_to(
             Path("Assets")
