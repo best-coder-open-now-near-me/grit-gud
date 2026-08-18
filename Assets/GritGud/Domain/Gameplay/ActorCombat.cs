@@ -12,7 +12,10 @@ namespace GritGud.Domain.Gameplay
             float preferredEngagementRange,
             float movementSearchRadius,
             int maximumAttacksPerTurn,
-            int minimumAttackHitChancePercent = 25)
+            int minimumAttackHitChancePercent = 25,
+            EncounterAwarenessPolicyDefinition awarenessPolicy = null,
+            PatrolRouteDefinition patrolRoute = null,
+            IEnumerable<string> reinforcementActorIds = null)
         {
             if (string.IsNullOrWhiteSpace(behaviorId))
                 throw new ArgumentException(
@@ -47,6 +50,10 @@ namespace GritGud.Domain.Gameplay
             MovementSearchRadius = movementSearchRadius;
             MaximumAttacksPerTurn = maximumAttacksPerTurn;
             MinimumAttackHitChancePercent = minimumAttackHitChancePercent;
+            AwarenessPolicy = awarenessPolicy
+                ?? EncounterAwarenessPolicyDefinition.CreateLegacyDefault();
+            PatrolRoute = patrolRoute;
+            ReinforcementActorIds = CopyReinforcements(reinforcementActorIds);
         }
 
         public string BehaviorId { get; }
@@ -62,6 +69,30 @@ namespace GritGud.Domain.Gameplay
         public int MaximumAttacksPerTurn { get; }
 
         public int MinimumAttackHitChancePercent { get; }
+
+        public EncounterAwarenessPolicyDefinition AwarenessPolicy { get; }
+
+        public PatrolRouteDefinition PatrolRoute { get; }
+
+        public IReadOnlyList<string> ReinforcementActorIds { get; }
+
+        private static IReadOnlyList<string> CopyReinforcements(
+            IEnumerable<string> values)
+        {
+            var copy = new List<string>();
+            var unique = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string value in values ?? Array.Empty<string>())
+            {
+                if (string.IsNullOrWhiteSpace(value) || !unique.Add(value))
+                {
+                    throw new ArgumentException(
+                        "Enemy reinforcement IDs must be unique and non-empty.",
+                        nameof(values));
+                }
+                copy.Add(value);
+            }
+            return copy.AsReadOnly();
+        }
 
         private static void RequireFinitePositive(float value, string name)
         {

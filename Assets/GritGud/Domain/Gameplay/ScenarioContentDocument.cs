@@ -191,6 +191,26 @@ namespace GritGud.Domain.Gameplay
         public float movementSearchRadius;
         public int maximumAttacksPerTurn;
         public int minimumAttackHitChancePercent = 25;
+        public ScenarioEncounterAwarenessData awareness;
+        public ScenarioPatrolRouteData patrol;
+        public List<string> reinforcementActorIds = new List<string>();
+    }
+
+    [Serializable]
+    public sealed class ScenarioEncounterAwarenessData
+    {
+        public float hearingRange;
+        public int sightSuspicionGain;
+        public int soundSuspicionGain;
+        public int suspicionDecayPerTick;
+        public int alertThreshold;
+    }
+
+    [Serializable]
+    public sealed class ScenarioPatrolRouteData
+    {
+        public bool loops = true;
+        public List<Float3Data> waypoints = new List<Float3Data>();
     }
 
     [Serializable]

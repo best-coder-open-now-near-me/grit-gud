@@ -80,6 +80,13 @@ namespace GritGud.Application.Gameplay
                 GameplayActorCombatAssembler.ValidateCombat(actor);
             }
 
+            foreach (ScenarioActorContentData actor in actors)
+            {
+                GameplayActorCombatAssembler.ValidateEncounterReferences(
+                    actor,
+                    index);
+            }
+
             return index;
         }
 

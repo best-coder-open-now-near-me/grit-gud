@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using GritGud.Domain.Gameplay;
+using GritGud.Domain.Levels;
 using GritGud.Domain.Turns;
 
 namespace GritGud.Application.Gameplay
@@ -23,7 +24,10 @@ namespace GritGud.Application.Gameplay
                     data.enemyBehavior.preferredEngagementRange,
                     data.enemyBehavior.movementSearchRadius,
                     data.enemyBehavior.maximumAttacksPerTurn,
-                    data.enemyBehavior.minimumAttackHitChancePercent);
+                    data.enemyBehavior.minimumAttackHitChancePercent,
+                    CreateAwarenessPolicy(data.enemyBehavior.awareness),
+                    CreatePatrolRoute(data.enemyBehavior.patrol),
+                    data.enemyBehavior.reinforcementActorIds);
             return new ActorCombatDefinition(
                 data.allegianceId,
                 data.hostileAllegianceIds,
@@ -94,6 +98,11 @@ namespace GritGud.Application.Gameplay
                         && data.enemyBehavior.minimumAttackHitChancePercent
                             <= 100,
                     $"Actor '{actor.id}' minimum attack hit chance must be between 0 and 100.");
+                ValidateAwareness(actor.id, data.enemyBehavior.awareness);
+                ValidatePatrol(actor.id, data.enemyBehavior.patrol);
+                ValidateReinforcements(
+                    actor.id,
+                    data.enemyBehavior.reinforcementActorIds);
                 GameplayScenarioAssemblyValidation.Require(
                     HasImmediateEnemyAttack(actor),
                     $"Enemy actor '{actor.id}' requires an equipped immediate attack.");
@@ -114,6 +123,119 @@ namespace GritGud.Application.Gameplay
                 || behavior.preferredEngagementRange != 0f
                 || behavior.movementSearchRadius != 0f
                 || behavior.maximumAttacksPerTurn != 0);
+
+        internal static void ValidateEncounterReferences(
+            ScenarioActorContentData actor,
+            IReadOnlyDictionary<string, ScenarioActorContentData> actors)
+        {
+            ScenarioEnemyBehaviorData behavior = actor.combat?.enemyBehavior;
+            if (!HasAuthoredEnemyBehavior(behavior))
+                return;
+            foreach (string reinforcementId in behavior.reinforcementActorIds
+                ?? new List<string>())
+            {
+                GameplayScenarioAssemblyValidation.Require(
+                    !string.Equals(reinforcementId, actor.id,
+                        StringComparison.Ordinal),
+                    $"Enemy actor '{actor.id}' cannot reinforce itself.");
+                GameplayScenarioAssemblyValidation.Require(
+                    actors.TryGetValue(reinforcementId, out ScenarioActorContentData reinforcement),
+                    $"Enemy actor '{actor.id}' references unknown reinforcement '{reinforcementId}'.");
+                GameplayScenarioAssemblyValidation.Require(
+                    HasAuthoredEnemyBehavior(reinforcement.combat?.enemyBehavior),
+                    $"Enemy actor '{actor.id}' reinforcement '{reinforcementId}' must be AI-controlled.");
+            }
+        }
+
+        private static EncounterAwarenessPolicyDefinition CreateAwarenessPolicy(
+            ScenarioEncounterAwarenessData data) =>
+            data == null
+                ? null
+                : new EncounterAwarenessPolicyDefinition(
+                    data.hearingRange,
+                    data.sightSuspicionGain,
+                    data.soundSuspicionGain,
+                    data.suspicionDecayPerTick,
+                    data.alertThreshold);
+
+        private static PatrolRouteDefinition CreatePatrolRoute(
+            ScenarioPatrolRouteData data)
+        {
+            if (data == null)
+                return null;
+            var points = new List<GameplayPosition>();
+            foreach (Float3Data point in data.waypoints ?? new List<Float3Data>())
+                points.Add(new GameplayPosition(point.x, point.y, point.z));
+            return new PatrolRouteDefinition(points, data.loops);
+        }
+
+        private static void ValidateAwareness(
+            string actorId,
+            ScenarioEncounterAwarenessData data)
+        {
+            GameplayScenarioAssemblyValidation.Require(
+                data != null,
+                $"Enemy actor '{actorId}' requires an awareness policy.");
+            GameplayScenarioAssemblyValidation.RequireFinitePositive(
+                data.hearingRange,
+                $"Enemy actor '{actorId}' hearing range");
+            ValidateSuspicionValue(
+                actorId, data.sightSuspicionGain, "sight suspicion gain", allowZero: false);
+            ValidateSuspicionValue(
+                actorId, data.soundSuspicionGain, "sound suspicion gain", allowZero: false);
+            ValidateSuspicionValue(
+                actorId, data.suspicionDecayPerTick, "suspicion decay", allowZero: true);
+            GameplayScenarioAssemblyValidation.Require(
+                data.alertThreshold > 0 && data.alertThreshold <= 100,
+                $"Enemy actor '{actorId}' alert threshold must be between 1 and 100.");
+        }
+
+        private static void ValidatePatrol(
+            string actorId,
+            ScenarioPatrolRouteData data)
+        {
+            if (data == null)
+                return;
+            GameplayScenarioAssemblyValidation.Require(
+                data.waypoints != null && data.waypoints.Count >= 2,
+                $"Enemy actor '{actorId}' patrol requires at least two waypoints.");
+            try
+            {
+                _ = CreatePatrolRoute(data);
+            }
+            catch (ArgumentException exception)
+            {
+                throw new InvalidOperationException(
+                    $"Enemy actor '{actorId}' patrol is invalid: "
+                    + exception.Message,
+                    exception);
+            }
+        }
+
+        private static void ValidateReinforcements(
+            string actorId,
+            IEnumerable<string> values)
+        {
+            var unique = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string value in values ?? new List<string>())
+            {
+                GameplayScenarioAssemblyValidation.RequireText(
+                    value,
+                    $"Enemy actor '{actorId}' reinforcement ID");
+                GameplayScenarioAssemblyValidation.Require(
+                    unique.Add(value),
+                    $"Enemy actor '{actorId}' reinforcement '{value}' is duplicated.");
+            }
+        }
+
+        private static void ValidateSuspicionValue(
+            string actorId,
+            int value,
+            string label,
+            bool allowZero) => GameplayScenarioAssemblyValidation.Require(
+                value >= (allowZero ? 0 : 1) && value <= 100,
+                $"Enemy actor '{actorId}' {label} must be between "
+                + (allowZero ? "0" : "1") + " and 100.");
 
         public static void ValidateAttack(
             string actorId,

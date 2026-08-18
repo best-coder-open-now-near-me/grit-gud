@@ -524,7 +524,24 @@
           "preferredEngagementRange": 14.0,
           "movementSearchRadius": 6.0,
           "maximumAttacksPerTurn": 1,
-          "minimumAttackHitChancePercent": 35
+          "minimumAttackHitChancePercent": 35,
+          "awareness": {
+            "hearingRange": 18.0,
+            "sightSuspicionGain": 100,
+            "soundSuspicionGain": 50,
+            "suspicionDecayPerTick": 10,
+            "alertThreshold": 100
+          },
+          "patrol": {
+            "loops": true,
+            "waypoints": [
+              { "x": 5.0, "y": 2.0, "z": 0.0 },
+              { "x": 5.0, "y": 2.0, "z": 6.0 },
+              { "x": 1.5, "y": 2.0, "z": 6.0 },
+              { "x": 1.5, "y": 2.0, "z": 0.0 }
+            ]
+          },
+          "reinforcementActorIds": []
         }
       },
       "displacementAbility": {
