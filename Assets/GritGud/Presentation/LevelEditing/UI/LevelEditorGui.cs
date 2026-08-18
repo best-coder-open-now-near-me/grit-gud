@@ -159,7 +159,12 @@ namespace GritGud.Presentation.LevelEditing.UI
             SelectionLevelEditorTool selectionTool,
             LevelSnapSettings snapSettings,
             LevelEditorPresentationState presentationState,
-            ILevelEditorGuiActions actions)
+            ILevelEditorFileActions fileActions,
+            ILevelEditorHistoryActions historyActions,
+            ILevelEditorSelectionGroupActions selectionGroupActions,
+            ILevelEditorEnvironmentDressingActions environmentDressingActions,
+            ILevelEditorSpatialPlacementActions spatialPlacementActions,
+            ILevelEditorPreviewTestActions previewTestActions)
         {
             this.selection = selection ?? throw new ArgumentNullException(nameof(selection));
             this.catalog = catalog != null ? catalog : throw new ArgumentNullException(nameof(catalog));
@@ -176,14 +181,18 @@ namespace GritGud.Presentation.LevelEditing.UI
             this.snapSettings = snapSettings ?? throw new ArgumentNullException(nameof(snapSettings));
             this.presentationState = presentationState
                 ?? throw new ArgumentNullException(nameof(presentationState));
-            if (actions == null)
-                throw new ArgumentNullException(nameof(actions));
-            fileActions = actions;
-            historyActions = actions;
-            selectionGroupActions = actions;
-            environmentDressingActions = actions;
-            spatialPlacementActions = actions;
-            previewTestActions = actions;
+            this.fileActions = fileActions ?? throw new ArgumentNullException(
+                nameof(fileActions));
+            this.historyActions = historyActions ?? throw new ArgumentNullException(
+                nameof(historyActions));
+            this.selectionGroupActions = selectionGroupActions
+                ?? throw new ArgumentNullException(nameof(selectionGroupActions));
+            this.environmentDressingActions = environmentDressingActions
+                ?? throw new ArgumentNullException(nameof(environmentDressingActions));
+            this.spatialPlacementActions = spatialPlacementActions
+                ?? throw new ArgumentNullException(nameof(spatialPlacementActions));
+            this.previewTestActions = previewTestActions
+                ?? throw new ArgumentNullException(nameof(previewTestActions));
         }
 
         public void Draw(LevelEditorViewState state)

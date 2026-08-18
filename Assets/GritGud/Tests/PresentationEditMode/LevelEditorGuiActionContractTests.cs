@@ -51,14 +51,45 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
-        public void ControllerImplementsEveryCapabilityDirectly()
+        public void ControllerDoesNotOwnGuiActionCapabilities()
         {
             Type controller = typeof(LevelEditorController);
 
             foreach (Type capability in typeof(ILevelEditorGuiActions)
                 .GetInterfaces())
             {
-                Assert.That(capability.IsAssignableFrom(controller), Is.True);
+                Assert.That(capability.IsAssignableFrom(controller), Is.False);
+            }
+        }
+
+        [Test]
+        public void EveryCapabilityHasADedicatedAdapter()
+        {
+            var ownership = new Dictionary<Type, Type>
+            {
+                [typeof(ILevelEditorFileActions)] =
+                    typeof(LevelEditorFileActions),
+                [typeof(ILevelEditorHistoryActions)] =
+                    typeof(LevelEditorHistoryActions),
+                [typeof(ILevelEditorSelectionGroupActions)] =
+                    typeof(LevelEditorSelectionGroupActions),
+                [typeof(ILevelEditorEnvironmentDressingActions)] =
+                    typeof(LevelEditorEnvironmentDressingActions),
+                [typeof(ILevelEditorSpatialPlacementActions)] =
+                    typeof(LevelEditorSpatialPlacementActions),
+                [typeof(ILevelEditorPreviewTestActions)] =
+                    typeof(LevelEditorPreviewTestActions),
+            };
+
+            Assert.That(
+                ownership.Keys,
+                Is.EquivalentTo(typeof(ILevelEditorGuiActions).GetInterfaces()));
+            foreach (KeyValuePair<Type, Type> owner in ownership)
+            {
+                Assert.That(owner.Key.IsAssignableFrom(owner.Value), Is.True);
+                Assert.That(
+                    typeof(ILevelEditorGuiActions).IsAssignableFrom(owner.Value),
+                    Is.False);
             }
         }
 
@@ -82,6 +113,25 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 actionFieldTypes,
                 Has.None.EqualTo(typeof(ILevelEditorGuiActions)));
+        }
+
+        [Test]
+        public void GuiConstructorRequiresNarrowCapabilitiesIndividually()
+        {
+            Type[] constructorParameters = typeof(LevelEditorGui)
+                .GetConstructors()
+                .Single()
+                .GetParameters()
+                .Select(parameter => parameter.ParameterType)
+                .ToArray();
+
+            Assert.That(
+                constructorParameters,
+                Has.None.EqualTo(typeof(ILevelEditorGuiActions)));
+            Assert.That(
+                constructorParameters.Intersect(
+                    typeof(ILevelEditorGuiActions).GetInterfaces()),
+                Is.EquivalentTo(typeof(ILevelEditorGuiActions).GetInterfaces()));
         }
     }
 }

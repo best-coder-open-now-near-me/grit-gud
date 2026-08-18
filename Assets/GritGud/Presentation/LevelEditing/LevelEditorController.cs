@@ -15,12 +15,11 @@ using GritGud.Presentation.Levels.Persistence;
 using GritGud.Presentation.Levels.Runtime;
 using GritGud.Presentation.Characters;
 using GritGud.Presentation.Persistence;
-using GritGud.Presentation.Supabase;
 using UnityEngine;
 
 namespace GritGud.Presentation.LevelEditing
 {
-    public sealed class LevelEditorController : MonoBehaviour, ILevelEditorGuiActions
+    public sealed class LevelEditorController : MonoBehaviour
     {
         private LevelArchetypeCatalog catalog;
         private ScenarioAuthoringCatalog scenarioCatalog;
@@ -45,6 +44,13 @@ namespace GritGud.Presentation.LevelEditing
         private SpatialRecordPlacementTool spatialPlacementTool;
         private TerrainHeightLevelEditorTool terrainTool;
         private LevelEditorGui gui;
+        private LevelEditorCloudDraftCommands cloudDraftCommands;
+        private LevelEditorFileActions fileActions;
+        private LevelEditorHistoryActions historyActions;
+        private LevelEditorSelectionGroupActions selectionGroupActions;
+        private LevelEditorEnvironmentDressingActions environmentDressingActions;
+        private LevelEditorSpatialPlacementActions spatialPlacementActions;
+        private LevelEditorPreviewTestActions previewTestActions;
         private LevelEditorPresentationState presentationState;
         private LevelDocument viewDocument;
         private ScenarioAuthoringCoordinator scenarioAuthoring;
@@ -64,15 +70,15 @@ namespace GritGud.Presentation.LevelEditing
             Array.Empty<LevelValidationIssue>();
         private bool previewMode;
         private bool suspended;
-        private bool audioZonePreviewEnabled;
         private LevelDocument sourceDocument;
         private bool sourceDocumentIsSaved;
         private string sourceLabel = string.Empty;
         private string statusMessage = string.Empty;
         private bool sessionReady;
-        private bool cloudOperationRunning;
-        private int sessionGeneration;
         private LevelEditorSessionLifecycle sessionLifecycle;
+
+        private bool AudioZonePreviewEnabled =>
+            environmentDressingActions?.AudioZonePreviewEnabled == true;
 
         public void Begin(bool startInPreview)
         {
@@ -312,6 +318,57 @@ namespace GritGud.Presentation.LevelEditing
                     HandleGroupFocusRequested,
                 () => organizationAuthoring.GroupFocusRequested -=
                     HandleGroupFocusRequested);
+            cloudDraftCommands = new LevelEditorCloudDraftCommands(
+                new GameBootstrapCloudDraftGateway(GameBootstrap.Instance),
+                new LevelEditorCloudDraftHost(
+                    workspace,
+                    () => sessionReady,
+                    ApplyCloudSavedSource,
+                    ApplyCloudLoadedSource,
+                    SetStatus));
+            fileActions = new LevelEditorFileActions(
+                persistence,
+                workspace,
+                cloudDraftCommands,
+                () => cloudDraftCommands.HasActiveDraft,
+                CreateNewLevel,
+                ReloadSourceLevel);
+            historyActions = new LevelEditorHistoryActions(workspace);
+            selectionGroupActions = new LevelEditorSelectionGroupActions(
+                cameraController,
+                organizationModel,
+                layoutAuthoring,
+                organizationAuthoring,
+                FrameSelection,
+                FrameLevel,
+                FocusEntity);
+            environmentDressingActions =
+                new LevelEditorEnvironmentDressingActions(
+                    environmentAuthoring,
+                    dressingAuthoring,
+                    dressingProjector,
+                    () => previewMode,
+                    SetStatus);
+            spatialPlacementActions = new LevelEditorSpatialPlacementActions(
+                layoutAuthoring,
+                spatialPlacementTool,
+                toolManager,
+                physicsPlacement,
+                scenarioAuthoring,
+                ApplyLevelDisplayName,
+                ApplyInspectorTransform,
+                DropAndSettleSelection,
+                SetEntityRotationPivot,
+                ResetEntityRotationPivot,
+                AddInteractionPoint,
+                ApplyInteractionPoint,
+                DeleteInteractionPoint,
+                ApplyDestructibleDefaults);
+            previewTestActions = new LevelEditorPreviewTestActions(
+                playabilityAuthoring,
+                () => GameBootstrap.Instance.ReturnToMenu(),
+                TogglePreview,
+                StartTestPlay);
             gui = new LevelEditorGui(
                 selection,
                 catalog,
@@ -324,7 +381,12 @@ namespace GritGud.Presentation.LevelEditing
                 selectionTool,
                 snapSettings,
                 presentationState,
-                this);
+                fileActions,
+                historyActions,
+                selectionGroupActions,
+                environmentDressingActions,
+                spatialPlacementActions,
+                previewTestActions);
             gui.SyncScenarioFields(viewDocument, forceLevelIdentity: true);
             gui.SyncEnvironmentFields(viewDocument, force: true);
             gui.SyncDressingFields(viewDocument, force: true);
@@ -345,7 +407,7 @@ namespace GritGud.Presentation.LevelEditing
                 dressingProjector.Replace(
                     viewDocument.dressing,
                     showZoneGizmos: true,
-                    playAudio: audioZonePreviewEnabled);
+                    playAudio: AudioZonePreviewEnabled);
                 scenarioActorHandles.Refresh(workspace.CreateSnapshot());
                 organizationModel.ApplyProjection(projector);
                 SetStatus("Edit the main level or choose New to start from an empty level.");
@@ -358,10 +420,10 @@ namespace GritGud.Presentation.LevelEditing
 
         public void EndSession()
         {
-            sessionGeneration++;
             sessionReady = false;
             enabled = false;
             SaveLocalPreferences();
+            cloudDraftCommands?.Dispose();
             physicsPlacement?.Dispose();
             sessionLifecycle?.Dispose();
             sessionLifecycle = null;
@@ -411,17 +473,22 @@ namespace GritGud.Presentation.LevelEditing
             snapSettings = null;
             preferencesStore = null;
             gui = null;
+            cloudDraftCommands = null;
+            fileActions = null;
+            historyActions = null;
+            selectionGroupActions = null;
+            environmentDressingActions = null;
+            spatialPlacementActions = null;
+            previewTestActions = null;
 
             previewMode = false;
             suspended = false;
-            audioZonePreviewEnabled = false;
             viewDocument = null;
             validationIssues = Array.Empty<LevelValidationIssue>();
             sourceDocument = null;
             sourceDocumentIsSaved = false;
             sourceLabel = string.Empty;
             statusMessage = string.Empty;
-            cloudOperationRunning = false;
         }
 
         private void HandleScenarioActorFocusRequested(string actorId)
@@ -593,7 +660,7 @@ namespace GritGud.Presentation.LevelEditing
             dressingProjector.SetVisible(true);
             dressingProjector.SetEditorPresentation(
                 showZoneGizmos: !previewMode,
-                playAudio: previewMode || audioZonePreviewEnabled);
+                playAudio: previewMode || AudioZonePreviewEnabled);
             scenarioActorHandles.SetVisible(!previewMode);
             gridPresenter.Refresh(workspace.CreateSnapshot().bounds, gridSettings);
             gridPresenter.SetVisible(!previewMode && gridSettings.Visible);
@@ -925,7 +992,7 @@ namespace GritGud.Presentation.LevelEditing
             dressingProjector.Replace(
                 workspace.CreateSnapshot().dressing,
                 showZoneGizmos: true,
-                playAudio: audioZonePreviewEnabled);
+                playAudio: AudioZonePreviewEnabled);
             interactionPointHandles.Refresh(workspace.CreateSnapshot(), selection, projector);
             scenarioActorHandles.Refresh(workspace.CreateSnapshot());
             scenarioActorHandles.SetVisible(true);
@@ -976,7 +1043,7 @@ namespace GritGud.Presentation.LevelEditing
                     dressingProjector.Replace(
                         snapshot.dressing,
                         showZoneGizmos: true,
-                        playAudio: audioZonePreviewEnabled);
+                        playAudio: AudioZonePreviewEnabled);
                 }
                 if (args.SessionChange.RequiresFullProjection
                     || IsBoundsCommand(args.SessionChange.Command))
@@ -1343,483 +1410,25 @@ namespace GritGud.Presentation.LevelEditing
             statusMessage = message ?? string.Empty;
         }
 
-        void ILevelEditorPreviewTestActions.ReturnToMenu() =>
-            GameBootstrap.Instance.ReturnToMenu();
-
-        bool ILevelEditorFileActions.HasDraft => persistence?.HasDraft ?? false;
-
-        bool ILevelEditorFileActions.HasCloudDraftContext =>
-            GameBootstrap.Instance?.ActiveCloudDraft != null;
-
-        bool ILevelEditorFileActions.CloudOperationRunning => cloudOperationRunning;
-
-        int ILevelEditorFileActions.RecoveryGenerationCount =>
-            LevelEditorPersistenceCoordinator.RecoveryGenerationCount;
-
-        bool ILevelEditorFileActions.HasRecovery(int generation) =>
-            persistence?.HasRecovery(generation) ?? false;
-
-        bool ILevelEditorFileActions.UsesBrowserFileDialog =>
-            persistence?.UsesBrowserFileDialog ?? false;
-
-        string ILevelEditorFileActions.DesktopImportPath
+        private void ApplyCloudSavedSource(
+            LevelDocument document,
+            string savedSourceLabel)
         {
-            get => persistence?.DesktopImportPath ?? string.Empty;
-            set
-            {
-                if (persistence != null)
-                    persistence.DesktopImportPath = value;
-            }
+            sourceDocument = document.DeepCopy();
+            sourceDocumentIsSaved = true;
+            if (!string.IsNullOrWhiteSpace(savedSourceLabel))
+                sourceLabel = savedSourceLabel;
         }
 
-        LevelEditorCameraView ILevelEditorSelectionGroupActions.CameraView =>
-            cameraController.View;
-
-        string ILevelEditorSelectionGroupActions.IsolatedGroupId =>
-            organizationModel.IsolatedGroupId;
-
-        string ILevelEditorSelectionGroupActions.SelectionCategoryFilter =>
-            organizationModel.CategoryFilter;
-
-        string ILevelEditorSelectionGroupActions.SelectionGroupFilter =>
-            organizationModel.GroupFilter;
-
-        LevelPlayabilityReport ILevelEditorPreviewTestActions.PlayabilityReport =>
-            playabilityAuthoring.Report;
-
-        bool ILevelEditorPreviewTestActions.PlayabilityReportIsStale =>
-            playabilityAuthoring.IsStale;
-
-        bool ILevelEditorPreviewTestActions.SlopeOverlayEnabled =>
-            playabilityAuthoring.SlopeOverlayEnabled;
-
-        bool ILevelEditorEnvironmentDressingActions.AudioZonePreviewEnabled =>
-            audioZonePreviewEnabled;
-
-        bool ILevelEditorSpatialPlacementActions.PhysicsPlacementRunning =>
-            physicsPlacement?.IsRunning == true;
-
-        void ILevelEditorHistoryActions.Undo() => workspace.Undo();
-
-        void ILevelEditorHistoryActions.Redo() => workspace.Redo();
-
-        void ILevelEditorFileActions.SaveDraft() => persistence.SaveDraft(workspace);
-
-        async void ILevelEditorFileActions.SaveToCloud()
+        private void ApplyCloudLoadedSource(
+            LevelDocument document,
+            string loadedSourceLabel)
         {
-            GameBootstrap bootstrap = GameBootstrap.Instance;
-            LevelDraftLibraryCoordinator library = bootstrap?.DraftLibrary;
-            if (library == null || workspace == null || cloudOperationRunning)
-            {
-                SetStatus(bootstrap?.Supabase?.Status ?? "Cloud saves are not configured.");
-                return;
-            }
-
-            int generation = sessionGeneration;
-            int savedRevision = workspace.Revision;
-            LevelDocument snapshot = workspace.CreateSnapshot();
-            cloudOperationRunning = true;
-            SetStatus("Saving cloud draft…");
-            try
-            {
-                LevelDraftRecord active = bootstrap.ActiveCloudDraft;
-                if (active == null)
-                {
-                    string name = string.IsNullOrWhiteSpace(snapshot.displayName)
-                        ? "Untitled Level"
-                        : snapshot.displayName;
-                    active = await library.CreateAsync(name, snapshot);
-                    if (generation != sessionGeneration || !sessionReady) return;
-                    bootstrap.AdoptActiveCloudDraft(active);
-                    sourceDocument = snapshot.DeepCopy();
-                    sourceDocumentIsSaved = true;
-                    sourceLabel = "cloud draft: " + active.Summary.Name;
-                }
-                else
-                {
-                    LevelDraftSummary summary = await library.SaveAsync(
-                        active.Summary.Id,
-                        active.Summary.Revision,
-                        snapshot);
-                    if (generation != sessionGeneration || !sessionReady) return;
-                    bootstrap.AdoptActiveCloudDraft(new LevelDraftRecord(summary, snapshot));
-                    sourceDocument = snapshot.DeepCopy();
-                    sourceDocumentIsSaved = true;
-                }
-
-                if (workspace.Revision == savedRevision) workspace.MarkSaved();
-                SetStatus(library.Status);
-            }
-            catch (Exception exception)
-            {
-                if (generation == sessionGeneration && sessionReady)
-                    SetStatus(exception.Message);
-            }
-            finally
-            {
-                if (generation == sessionGeneration) cloudOperationRunning = false;
-            }
+            sourceDocument = document.DeepCopy();
+            sourceDocumentIsSaved = true;
+            sourceLabel = loadedSourceLabel;
+            ReplaceWorkspaceDocument(document, isSaved: true);
         }
-
-        async void ILevelEditorFileActions.LoadFromCloud()
-        {
-            GameBootstrap bootstrap = GameBootstrap.Instance;
-            LevelDraftRecord active = bootstrap?.ActiveCloudDraft;
-            LevelDraftLibraryCoordinator library = bootstrap?.DraftLibrary;
-            if (active == null || library == null || cloudOperationRunning)
-            {
-                SetStatus("Open a cloud draft before loading it.");
-                return;
-            }
-
-            int generation = sessionGeneration;
-            cloudOperationRunning = true;
-            SetStatus("Loading cloud draft…");
-            try
-            {
-                LevelDraftRecord loaded = await library.LoadAsync(active.Summary.Id);
-                if (generation != sessionGeneration || !sessionReady) return;
-                LevelDocument document = loaded.CreateDocumentSnapshot();
-                bootstrap.AdoptActiveCloudDraft(loaded);
-                sourceDocument = document.DeepCopy();
-                sourceDocumentIsSaved = true;
-                sourceLabel = "cloud draft: " + loaded.Summary.Name;
-                ReplaceWorkspaceDocument(document, isSaved: true);
-                SetStatus("Loaded cloud draft.");
-            }
-            catch (Exception exception)
-            {
-                if (generation == sessionGeneration && sessionReady)
-                    SetStatus(exception.Message);
-            }
-            finally
-            {
-                if (generation == sessionGeneration) cloudOperationRunning = false;
-            }
-        }
-
-        void ILevelEditorFileActions.LoadDraft() => persistence.LoadDraft();
-
-        void ILevelEditorFileActions.LoadRecovery(int generation) =>
-            persistence.LoadRecovery(generation);
-
-        void ILevelEditorFileActions.Export() => persistence.Export(workspace);
-
-        void ILevelEditorFileActions.RequestImport() => persistence.RequestImport();
-
-        void ILevelEditorPreviewTestActions.TogglePreview() => TogglePreview();
-
-        void ILevelEditorPreviewTestActions.StartTestPlay() => StartTestPlay();
-
-        void ILevelEditorFileActions.CreateNewLevel() => CreateNewLevel();
-
-        void ILevelEditorFileActions.ReloadSourceLevel() => ReloadSourceLevel();
-
-        void ILevelEditorSelectionGroupActions.FrameSelection() =>
-            FrameSelection();
-
-        void ILevelEditorSelectionGroupActions.FrameLevel() => FrameLevel();
-
-        void ILevelEditorSelectionGroupActions.FocusEntity(string entityId) =>
-            FocusEntity(entityId);
-
-        void ILevelEditorSpatialPlacementActions.ApplyLevelDisplayName(
-            string displayName) =>
-            ApplyLevelDisplayName(displayName);
-
-        void ILevelEditorSpatialPlacementActions.ApplyLevelBounds(
-            LevelBoundsAuthoringRequest request) =>
-            layoutAuthoring.ApplyBounds(request);
-
-        void ILevelEditorSpatialPlacementActions.ConfigureGrid(
-            LevelGridAuthoringRequest request) =>
-            layoutAuthoring.ConfigureGrid(request);
-
-        void ILevelEditorSelectionGroupActions.SetCameraView(
-            LevelEditorCameraView view) =>
-            layoutAuthoring.SetCameraView(view);
-
-        void ILevelEditorSelectionGroupActions.DuplicateArray(
-            LevelArrayAuthoringRequest request) =>
-            layoutAuthoring.DuplicateArray(request);
-
-        void ILevelEditorSelectionGroupActions.CreateEntityGroup(
-            string displayName) =>
-            organizationAuthoring.CreateGroup(displayName);
-
-        void ILevelEditorSelectionGroupActions.RenameEntityGroup(
-            string groupId,
-            string displayName) =>
-            organizationAuthoring.RenameGroup(groupId, displayName);
-
-        void ILevelEditorSelectionGroupActions.SetEntityGroupLocked(
-            string groupId,
-            bool locked) =>
-            organizationAuthoring.SetGroupLocked(groupId, locked);
-
-        void ILevelEditorSelectionGroupActions.SetEntityGroupHidden(
-            string groupId,
-            bool hidden) =>
-            organizationAuthoring.SetGroupHidden(groupId, hidden);
-
-        void ILevelEditorSelectionGroupActions.AssignSelectionToGroup(
-            string groupId) =>
-            organizationAuthoring.AssignSelection(groupId);
-
-        void ILevelEditorSelectionGroupActions.DeleteEntityGroup(
-            string groupId) =>
-            organizationAuthoring.DeleteGroup(groupId);
-
-        void ILevelEditorSelectionGroupActions.IsolateEntityGroup(
-            string groupId) =>
-            organizationAuthoring.IsolateGroup(groupId);
-
-        void ILevelEditorSelectionGroupActions.SetSelectionCategoryFilter(
-            string category) =>
-            organizationAuthoring.SetCategoryFilter(category);
-
-        void ILevelEditorSelectionGroupActions.SetSelectionGroupFilter(
-            string groupId) =>
-            organizationAuthoring.SetGroupFilter(groupId);
-
-        void ILevelEditorSelectionGroupActions.SelectMatchingEntities() =>
-            organizationAuthoring.SelectMatching();
-
-        void ILevelEditorPreviewTestActions.RunPlayabilityDiagnostics() =>
-            playabilityAuthoring.Run();
-
-        void ILevelEditorPreviewTestActions.SetSlopeOverlayEnabled(bool enabled) =>
-            playabilityAuthoring.SetSlopeOverlay(enabled);
-
-        void ILevelEditorEnvironmentDressingActions.ApplyEnvironment(
-            LevelEnvironmentAuthoringRequest request) =>
-            environmentAuthoring.ApplyEnvironment(request);
-
-        void ILevelEditorEnvironmentDressingActions.AddPracticalLight() =>
-            environmentAuthoring.AddPracticalLight();
-
-        void ILevelEditorSpatialPlacementActions.QueueSpatialPlacement(
-            LevelSpatialPlacementKind kind)
-        {
-            spatialPlacementTool.Queue(kind);
-            toolManager.Activate(SpatialRecordPlacementTool.ToolId);
-        }
-
-        void ILevelEditorSpatialPlacementActions.QueueSpatialRelocation(
-            LevelSpatialPlacementKind kind,
-            string targetId)
-        {
-            spatialPlacementTool.Queue(kind, targetId);
-            toolManager.Activate(SpatialRecordPlacementTool.ToolId);
-        }
-
-        void ILevelEditorEnvironmentDressingActions.ApplyPracticalLight(
-            LevelPracticalLightAuthoringRequest request) =>
-            environmentAuthoring.ApplyPracticalLight(request);
-
-        void ILevelEditorEnvironmentDressingActions.DeletePracticalLight(
-            string lightId) =>
-            environmentAuthoring.DeletePracticalLight(lightId);
-
-        void ILevelEditorEnvironmentDressingActions.AddDecal() =>
-            dressingAuthoring.AddDecal();
-
-        void ILevelEditorEnvironmentDressingActions.ApplyDecal(
-            LevelDecalAuthoringRequest request) =>
-            dressingAuthoring.ApplyDecal(request);
-
-        void ILevelEditorEnvironmentDressingActions.DeleteDecal(
-            string decalId) =>
-            dressingAuthoring.DeleteDecal(decalId);
-
-        void ILevelEditorEnvironmentDressingActions.AddAmbientVfx() =>
-            dressingAuthoring.AddAmbientVfx();
-
-        void ILevelEditorEnvironmentDressingActions.ApplyAmbientVfx(
-            LevelAmbientVfxAuthoringRequest request) =>
-            dressingAuthoring.ApplyAmbientVfx(request);
-
-        void ILevelEditorEnvironmentDressingActions.DeleteAmbientVfx(
-            string effectId) =>
-            dressingAuthoring.DeleteAmbientVfx(effectId);
-
-        void ILevelEditorEnvironmentDressingActions.AddAudioZone() =>
-            dressingAuthoring.AddAudioZone();
-
-        void ILevelEditorEnvironmentDressingActions.ApplyAudioZone(
-            LevelAudioZoneAuthoringRequest request) =>
-            dressingAuthoring.ApplyAudioZone(request);
-
-        void ILevelEditorEnvironmentDressingActions.DeleteAudioZone(
-            string zoneId) =>
-            dressingAuthoring.DeleteAudioZone(zoneId);
-
-        void ILevelEditorEnvironmentDressingActions
-            .SetAudioZonePreviewEnabled(bool enabled)
-        {
-            audioZonePreviewEnabled = enabled;
-            dressingProjector?.SetEditorPresentation(
-                showZoneGizmos: !previewMode,
-                playAudio: previewMode || enabled);
-            SetStatus(enabled
-                ? "Ambient audio preview enabled."
-                : "Ambient audio preview muted.");
-        }
-
-        void ILevelEditorSpatialPlacementActions.ApplyEntityTransform(
-            string x,
-            string y,
-            string z,
-            string pitch,
-            string yaw,
-            string roll) => ApplyInspectorTransform(x, y, z, pitch, yaw, roll);
-
-        void ILevelEditorSpatialPlacementActions.DropAndSettleSelection(
-            string dropHeight,
-            bool keepUpright) => DropAndSettleSelection(dropHeight, keepUpright);
-
-        void ILevelEditorSpatialPlacementActions.CancelPhysicsPlacement() =>
-            physicsPlacement?.Cancel();
-
-        void ILevelEditorSpatialPlacementActions.SetEntityRotationPivot(
-            float normalizedX,
-            float normalizedZ) =>
-            SetEntityRotationPivot(normalizedX, normalizedZ);
-
-        void ILevelEditorSpatialPlacementActions.ResetEntityRotationPivot() =>
-            ResetEntityRotationPivot();
-
-        void ILevelEditorSpatialPlacementActions.ApplyPlayerStart(
-            string x,
-            string y,
-            string z,
-            string yaw) => scenarioAuthoring.ApplyPlayerStart(x, y, z, yaw);
-
-        void ILevelEditorSpatialPlacementActions.AddInteractionPoint() =>
-            AddInteractionPoint();
-
-        void ILevelEditorSpatialPlacementActions.ApplyInteractionPoint(
-            string type,
-            string x,
-            string y,
-            string z,
-            string radius) => ApplyInteractionPoint(type, x, y, z, radius);
-
-        void ILevelEditorSpatialPlacementActions.DeleteInteractionPoint() =>
-            DeleteInteractionPoint();
-
-        void ILevelEditorSpatialPlacementActions.ApplyDestructibleDefaults(
-            string enabled,
-            string state,
-            string integrity) => ApplyDestructibleDefaults(enabled, state, integrity);
-
-        void ILevelEditorSpatialPlacementActions.AddScenarioActor(
-            string templateId) =>
-            scenarioAuthoring.AddActor(templateId);
-
-        void ILevelEditorSpatialPlacementActions.ApplyScenarioActorCharacter(
-            string actorId,
-            string characterId) =>
-            scenarioAuthoring.ApplyActorCharacter(actorId, characterId);
-
-        void ILevelEditorSpatialPlacementActions.ApplyScenarioActor(
-            string actorId,
-            string x,
-            string y,
-            string z,
-            string yaw,
-            bool playerControlled,
-            bool initiallySelected,
-            bool primaryTarget) => scenarioAuthoring.ApplyActor(
-                actorId,
-                x,
-                y,
-                z,
-                yaw,
-                playerControlled,
-                initiallySelected,
-                primaryTarget);
-
-        void ILevelEditorSpatialPlacementActions.DeleteScenarioActor(
-            string actorId) =>
-            scenarioAuthoring.DeleteActor(actorId);
-
-        void ILevelEditorSpatialPlacementActions.PlaceScenarioActorAtView(
-            string actorId) =>
-            scenarioAuthoring.PlaceActorAtView(actorId);
-
-        void ILevelEditorSpatialPlacementActions.ApplyScenarioProp(
-            string entityId,
-            bool enabled,
-            string mass,
-            string sizeClass,
-            bool startsEncounter,
-            bool topplingEnabled,
-            string topplingPitch,
-            string topplingRoll,
-            string topplingElevation,
-            bool pinningEnabled,
-            string maximumPinnedActorMass,
-            string minimumPinContactDepth) => scenarioAuthoring.ApplyProp(
-                entityId,
-                enabled,
-                mass,
-                sizeClass,
-                startsEncounter,
-                topplingEnabled,
-                topplingPitch,
-                topplingRoll,
-                topplingElevation,
-                pinningEnabled,
-                maximumPinnedActorMass,
-                minimumPinContactDepth);
-
-        void ILevelEditorSpatialPlacementActions.ApplyScenarioObjective(
-            string entityId,
-            string pointId,
-            bool enabled,
-            string displayName,
-            string activeText,
-            string completedText,
-            string actionPointCost,
-            string movementOpportunityCost,
-            string mobility) => scenarioAuthoring.ApplyObjective(
-                entityId,
-                pointId,
-                enabled,
-                displayName,
-                activeText,
-                completedText,
-                actionPointCost,
-                movementOpportunityCost,
-                mobility);
-
-        void ILevelEditorSpatialPlacementActions.ApplyScenarioVehicle(
-            string entityId,
-            bool enabled,
-            string maximumSpeed,
-            string acceleration,
-            string braking,
-            string lowSpeedTurn,
-            string highSpeedTurn,
-            string baseRadius,
-            string radiusFactor,
-            string startingSpeed,
-            string occupantActorId,
-            bool startsEncounter) => scenarioAuthoring.ApplyVehicle(
-                entityId,
-                enabled,
-                maximumSpeed,
-                acceleration,
-                braking,
-                lowSpeedTurn,
-                highSpeedTurn,
-                baseRadius,
-                radiusFactor,
-                startingSpeed,
-                occupantActorId,
-                startsEncounter);
-
         private static bool TryParse(string text, out float value)
         {
             bool parsed = float.TryParse(
