@@ -25,6 +25,8 @@ namespace GritGud.Presentation.Gameplay
             Shader.PropertyToID("_EdgeSheenStrength");
 
         private readonly List<GameObject> outlineObjects = new List<GameObject>();
+        private readonly List<Renderer> playerCutoutRenderers =
+            new List<Renderer>();
         private GameplayCelMaterialStyle materialStyle;
         private Material outlineMaterial;
         private Material wallOutlineMaterial;
@@ -34,6 +36,9 @@ namespace GritGud.Presentation.Gameplay
         private GameplayEnvironmentStyle()
         {
         }
+
+        public IReadOnlyList<Renderer> PlayerCutoutRenderers =>
+            playerCutoutRenderers;
 
         public static GameplayEnvironmentStyle Create(
             Transform environmentRoot,
@@ -95,6 +100,7 @@ namespace GritGud.Presentation.Gameplay
             }
 
             outlineObjects.Clear();
+            playerCutoutRenderers.Clear();
             GameplayObjectLifecycle.Destroy(outlineMaterial);
             outlineMaterial = null;
             GameplayObjectLifecycle.Destroy(wallOutlineMaterial);
@@ -109,6 +115,10 @@ namespace GritGud.Presentation.Gameplay
             foreach (Renderer renderer in renderers)
             {
                 bool usesPlayerCutout = UsesPlayerCutout(renderer);
+                if (usesPlayerCutout)
+                {
+                    playerCutoutRenderers.Add(renderer);
+                }
                 if (ShouldOutline(renderer))
                 {
                     CreateOutline(renderer, usesPlayerCutout);
@@ -224,6 +234,10 @@ namespace GritGud.Presentation.Gameplay
             outlineRenderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
             outlineRenderer.renderingLayerMask = source.renderingLayerMask;
             outlineObjects.Add(outlineObject);
+            if (usesPlayerCutout)
+            {
+                playerCutoutRenderers.Add(outlineRenderer);
+            }
         }
     }
 }

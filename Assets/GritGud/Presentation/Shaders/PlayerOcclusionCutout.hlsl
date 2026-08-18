@@ -13,56 +13,37 @@ float PlayerCutoutNoise(float2 pixelPosition)
     return frac(52.9829189 * frac(dot(pixelPosition, float2(0.06711056, 0.00583715))));
 }
 
-float SampleSilhouetteAlpha(float2 screenUV)
+float SamplePlayerSilhouette(float2 screenUV)
 {
-    return SAMPLE_TEXTURE2D(
+    float2 texel = _GritGudPlayerSilhouetteMask_TexelSize.xy * 0.75;
+    float coverage = SAMPLE_TEXTURE2D(
         _GritGudPlayerSilhouetteMask,
         sampler_GritGudPlayerSilhouetteMask,
         screenUV).a;
-}
-
-float SampleSilhouetteRing(float2 screenUV, float2 radius)
-{
-    float2 diagonal = radius * 0.70710678;
-    float coverage = SampleSilhouetteAlpha(
-        screenUV + float2(radius.x, 0.0));
-    coverage = max(coverage, SampleSilhouetteAlpha(
-        screenUV - float2(radius.x, 0.0)));
-    coverage = max(coverage, SampleSilhouetteAlpha(
-        screenUV + float2(0.0, radius.y)));
-    coverage = max(coverage, SampleSilhouetteAlpha(
-        screenUV - float2(0.0, radius.y)));
-    coverage = max(coverage, SampleSilhouetteAlpha(
-        screenUV + diagonal));
-    coverage = max(coverage, SampleSilhouetteAlpha(
-        screenUV - diagonal));
-    coverage = max(coverage, SampleSilhouetteAlpha(
-        screenUV + float2(diagonal.x, -diagonal.y)));
-    coverage = max(coverage, SampleSilhouetteAlpha(
-        screenUV + float2(-diagonal.x, diagonal.y)));
-    return coverage;
-}
-
-float SamplePlayerSilhouette(float2 screenUV)
-{
-    float2 texel = _GritGudPlayerSilhouetteMask_TexelSize.xy;
-    float coverage = SampleSilhouetteAlpha(screenUV);
-    coverage = max(
-        coverage,
-        SampleSilhouetteRing(screenUV, texel * 1.25) * 0.86);
-    coverage = max(
-        coverage,
-        SampleSilhouetteRing(screenUV, texel * 2.25) * 0.58);
-    coverage = max(
-        coverage,
-        SampleSilhouetteRing(screenUV, texel * 3.25) * 0.30);
+    coverage = max(coverage, SAMPLE_TEXTURE2D(
+        _GritGudPlayerSilhouetteMask,
+        sampler_GritGudPlayerSilhouetteMask,
+        screenUV + float2(texel.x, 0.0)).a);
+    coverage = max(coverage, SAMPLE_TEXTURE2D(
+        _GritGudPlayerSilhouetteMask,
+        sampler_GritGudPlayerSilhouetteMask,
+        screenUV - float2(texel.x, 0.0)).a);
+    coverage = max(coverage, SAMPLE_TEXTURE2D(
+        _GritGudPlayerSilhouetteMask,
+        sampler_GritGudPlayerSilhouetteMask,
+        screenUV + float2(0.0, texel.y)).a);
+    coverage = max(coverage, SAMPLE_TEXTURE2D(
+        _GritGudPlayerSilhouetteMask,
+        sampler_GritGudPlayerSilhouetteMask,
+        screenUV - float2(0.0, texel.y)).a);
     return coverage;
 }
 
 void ClipPlayerOcclusion(
     float4 positionHCS,
     float viewDepth,
-    half cutoutEnabled)
+    half cutoutEnabled,
+    half ovalEnabled)
 {
     if (cutoutEnabled < 0.5h
         || _GritGudPlayerCutout.z <= 0.0
@@ -74,8 +55,6 @@ void ClipPlayerOcclusion(
 
     float2 screenUV = GetNormalizedScreenSpaceUV(positionHCS);
     float2 offset = screenUV - _GritGudPlayerCutout.xy;
-    // Keep the reveal close to the character silhouette. The broader ellipse
-    // remains only as a safety bound around the player-only render mask.
     offset.x += min(
         max(-offset.x, 0.0),
         _GritGudPlayerCutoutLeftExtension);
@@ -84,23 +63,22 @@ void ClipPlayerOcclusion(
         offset.y / _GritGudPlayerCutoutVerticalRadius);
     float distanceFromPlayer = length(normalizedOffset);
     float feather = 0.2;
-    float coverage = smoothstep(
+    float ovalRetainedCoverage = smoothstep(
         1.0 - feather,
         1.0,
         distanceFromPlayer);
-    if (coverage >= 1.0)
+    if (ovalRetainedCoverage >= 1.0)
     {
         return;
     }
 
-    float playerSilhouette = SamplePlayerSilhouette(screenUV);
-    if (playerSilhouette <= 0.001)
+    float cutoutCoverage = 1.0 - ovalRetainedCoverage;
+    if (ovalEnabled < 0.5h)
     {
-        return;
+        cutoutCoverage *= SamplePlayerSilhouette(screenUV);
     }
 
-    float retainedCoverage = 1.0
-        - (playerSilhouette * (1.0 - coverage));
+    float retainedCoverage = 1.0 - cutoutCoverage;
     clip(retainedCoverage - PlayerCutoutNoise(positionHCS.xy));
 }
 

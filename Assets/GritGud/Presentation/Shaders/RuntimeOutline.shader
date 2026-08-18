@@ -8,6 +8,7 @@ Shader "GritGud/RuntimeOutline"
         _OutlineScreenWidth ("Screen-Space Width (Pixels)", Range(0.5, 12)) = 4
         [Toggle] _OutlineEnabled ("Outline Enabled", Float) = 1
         [Toggle] _PlayerCutoutEnabled ("Player Occlusion Cutout", Float) = 0
+        [HideInInspector] _PlayerCutoutOvalEnabled ("Player Cutout Oval", Float) = 0
     }
 
     SubShader
@@ -53,6 +54,7 @@ Shader "GritGud/RuntimeOutline"
                 half _OutlineScreenWidth;
                 half _OutlineEnabled;
                 half _PlayerCutoutEnabled;
+                half _PlayerCutoutOvalEnabled;
             CBUFFER_END
 
             #include "PlayerOcclusionCutout.hlsl"
@@ -98,7 +100,8 @@ Shader "GritGud/RuntimeOutline"
                 ClipPlayerOcclusion(
                     input.positionHCS,
                     input.viewDepth,
-                    _PlayerCutoutEnabled);
+                    _PlayerCutoutEnabled,
+                    _PlayerCutoutOvalEnabled);
                 half3 foggedColor = MixFog(
                     _OutlineColor.rgb,
                     input.fogFactor);

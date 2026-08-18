@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
@@ -31,7 +32,8 @@ namespace GritGud.Presentation.Gameplay
         public static GameplayCameraRig Create(
             Transform target,
             ExplorationMovementInput movementInput,
-            IGameplayInputSource inputSource)
+            IGameplayInputSource inputSource,
+            IReadOnlyList<Renderer> playerCutoutRenderers)
         {
             if (target == null)
             {
@@ -64,7 +66,11 @@ namespace GritGud.Presentation.Gameplay
             cameraController.Bind(target, inputSource, stancePresenter);
             GameplayPlayerCutoutPresenter playerCutout = gameplayCamera.gameObject
                 .AddComponent<GameplayPlayerCutoutPresenter>();
-            playerCutout.Bind(gameplayCamera, target, stancePresenter);
+            playerCutout.Bind(
+                gameplayCamera,
+                target,
+                stancePresenter,
+                playerCutoutRenderers);
             movementInput.BindView(gameplayCamera.transform);
             return new GameplayCameraRig(
                 sceneCamera,

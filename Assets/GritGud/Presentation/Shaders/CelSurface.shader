@@ -25,6 +25,7 @@ Shader "GritGud/CelSurface"
         [Toggle] _TerrainDiagnosticsEnabled ("Terrain Diagnostics", Float) = 0
         _DiagnosticSlopeCos ("Diagnostic Slope Cosine", Float) = 0.707
         [Toggle] _PlayerCutoutEnabled ("Player Occlusion Cutout", Float) = 0
+        [HideInInspector] _PlayerCutoutOvalEnabled ("Player Cutout Oval", Float) = 0
     }
 
     SubShader
@@ -104,6 +105,7 @@ Shader "GritGud/CelSurface"
                 half _TerrainDiagnosticsEnabled;
                 half _DiagnosticSlopeCos;
                 half _PlayerCutoutEnabled;
+                half _PlayerCutoutOvalEnabled;
             CBUFFER_END
 
             #include "PlayerOcclusionCutout.hlsl"
@@ -162,7 +164,8 @@ Shader "GritGud/CelSurface"
                 ClipPlayerOcclusion(
                     input.positionHCS,
                     viewDepth,
-                    _PlayerCutoutEnabled);
+                    _PlayerCutoutEnabled,
+                    _PlayerCutoutOvalEnabled);
                 half3 normalWS = normalize(input.normalWS);
                 half4 baseSample = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv);
                 half4 baseColor = baseSample * _BaseColor;
@@ -289,6 +292,7 @@ Shader "GritGud/CelSurface"
                 half _TerrainDiagnosticsEnabled;
                 half _DiagnosticSlopeCos;
                 half _PlayerCutoutEnabled;
+                half _PlayerCutoutOvalEnabled;
             CBUFFER_END
 
             #include "PlayerOcclusionCutout.hlsl"
@@ -308,7 +312,8 @@ Shader "GritGud/CelSurface"
                 ClipPlayerOcclusion(
                     input.positionHCS,
                     input.viewDepth,
-                    _PlayerCutoutEnabled);
+                    _PlayerCutoutEnabled,
+                    _PlayerCutoutOvalEnabled);
                 return input.positionHCS.z;
             }
             ENDHLSL
@@ -364,6 +369,7 @@ Shader "GritGud/CelSurface"
                 half _TerrainDiagnosticsEnabled;
                 half _DiagnosticSlopeCos;
                 half _PlayerCutoutEnabled;
+                half _PlayerCutoutOvalEnabled;
             CBUFFER_END
 
             #include "PlayerOcclusionCutout.hlsl"
@@ -384,7 +390,8 @@ Shader "GritGud/CelSurface"
                 ClipPlayerOcclusion(
                     input.positionHCS,
                     input.viewDepth,
-                    _PlayerCutoutEnabled);
+                    _PlayerCutoutEnabled,
+                    _PlayerCutoutOvalEnabled);
 #if defined(_GBUFFER_NORMALS_OCT)
                 float2 octNormal = PackNormalOctQuadEncode(normalize(input.normalWS));
                 float2 remappedNormal = saturate(octNormal * 0.5 + 0.5);
