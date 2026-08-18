@@ -77,6 +77,50 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void InstantiatedRifleImpactClearsAwakeParticlesBeforeScaling()
+        {
+            SurfacePresentationDefinition surface =
+                SurfacePresentationCatalog.LoadDefault().Get("surface.concrete");
+            WeaponPresentationDefinition rifle =
+                WeaponPresentationCatalog.LoadDefault().Get("weapon.rifle");
+            var root = new GameObject("Impact Scale Test Root");
+            GameObject effect = null;
+            try
+            {
+                effect = GameplaySurfaceImpactPresenter.CreateImpactVisual(
+                    surface,
+                    Vector3.zero,
+                    Quaternion.identity,
+                    root.transform,
+                    rifle.ImpactEffectScaleMultiplier);
+
+                Vector3 expectedScale =
+                    surface.ImpactEffectPrefab.transform.localScale
+                    * surface.ImpactScale
+                    * 0.05f;
+                Assert.That(
+                    Vector3.Distance(effect.transform.localScale, expectedScale),
+                    Is.LessThan(0.000001f));
+                ParticleSystem[] systems = effect.GetComponentsInChildren<
+                    ParticleSystem>(true);
+                Assert.That(systems, Is.Not.Empty);
+                foreach (ParticleSystem particles in systems)
+                {
+                    Assert.That(particles.main.playOnAwake, Is.False);
+                    Assert.That(
+                        particles.main.scalingMode,
+                        Is.EqualTo(ParticleSystemScalingMode.Hierarchy));
+                }
+            }
+            finally
+            {
+                if (effect != null)
+                    Object.DestroyImmediate(effect);
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
         public void SmokeGrenadeOwnsSparsePersistentPresentation()
         {
             ThrownExplosivePresentationDefinition smoke =

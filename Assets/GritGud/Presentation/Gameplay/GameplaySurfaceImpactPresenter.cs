@@ -169,21 +169,12 @@ namespace GritGud.Presentation.Gameplay
             {
                 Quaternion orientation = Quaternion.LookRotation(normal)
                     * definition.ImpactRotation;
-                GameObject effect = Instantiate(
-                    definition.ImpactEffectPrefab,
+                GameObject effect = CreateImpactVisual(
+                    definition,
                     position + (normal * 0.012f),
                     orientation,
-                    root.transform);
-                effect.name = definition.SurfaceId + " Impact";
-                effect.transform.localScale =
-                    definition.ImpactEffectPrefab.transform.localScale
-                    * definition.ImpactScale
-                    * scaleMultiplier;
-                foreach (ParticleSystem particles in
-                    effect.GetComponentsInChildren<ParticleSystem>(true))
-                {
-                    particles.Play(withChildren: true);
-                }
+                    root.transform,
+                    scaleMultiplier);
                 Destroy(effect, definition.ImpactLifetimeSeconds);
             }
 
@@ -191,6 +182,47 @@ namespace GritGud.Presentation.Gameplay
             {
                 CreateDecal(definition, position, normal);
             }
+        }
+
+        internal static GameObject CreateImpactVisual(
+            SurfacePresentationDefinition definition,
+            Vector3 position,
+            Quaternion orientation,
+            Transform parent,
+            float scaleMultiplier)
+        {
+            if (definition == null)
+                throw new ArgumentNullException(nameof(definition));
+            if (definition.ImpactEffectPrefab == null)
+                throw new InvalidOperationException(
+                    $"Surface '{definition.SurfaceId}' has no impact effect.");
+            if (parent == null)
+                throw new ArgumentNullException(nameof(parent));
+
+            GameObject effect = Instantiate(
+                definition.ImpactEffectPrefab,
+                position,
+                orientation,
+                parent);
+            effect.name = definition.SurfaceId + " Impact";
+            ParticleSystem[] systems = effect.GetComponentsInChildren<
+                ParticleSystem>(true);
+            foreach (ParticleSystem particles in systems)
+            {
+                particles.Stop(
+                    withChildren: false,
+                    ParticleSystemStopBehavior.StopEmittingAndClear);
+                ParticleSystem.MainModule main = particles.main;
+                main.playOnAwake = false;
+                main.scalingMode = ParticleSystemScalingMode.Hierarchy;
+            }
+            effect.transform.localScale =
+                definition.ImpactEffectPrefab.transform.localScale
+                * definition.ImpactScale
+                * Mathf.Max(0f, scaleMultiplier);
+            foreach (ParticleSystem particles in systems)
+                particles.Play(withChildren: false);
+            return effect;
         }
 
         private float ResolveImpactScaleMultiplier(string attackerId)
