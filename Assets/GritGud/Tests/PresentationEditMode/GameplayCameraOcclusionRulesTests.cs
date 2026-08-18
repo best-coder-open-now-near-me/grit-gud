@@ -61,6 +61,10 @@ namespace GritGud.Presentation.Tests
                 Assert.That(presenter.ActiveOccluderCount, Is.EqualTo(1));
                 Assert.That(ReadCutoutEnabled(blockingRenderer), Is.EqualTo(1f));
                 Assert.That(ReadCutoutEnabled(adjacentRenderer), Is.Zero);
+                Vector4 visibilityRect = Shader.GetGlobalVector(
+                    "_GritGudPlayerCutoutVisibilityRect");
+                Assert.That(visibilityRect.z, Is.GreaterThan(0f));
+                Assert.That(visibilityRect.w, Is.GreaterThan(0f));
 
                 blockingWall.transform.position =
                     new Vector3(-2f, 1.3f, -1.5f);

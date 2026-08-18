@@ -4,6 +4,9 @@
 float4 _GritGudPlayerCutout;
 float _GritGudPlayerCutoutLeftExtension;
 float _GritGudPlayerCutoutVerticalRadius;
+TEXTURE2D(_GritGudPlayerCutoutVisibilityMask);
+SAMPLER(sampler_GritGudPlayerCutoutVisibilityMask);
+float4 _GritGudPlayerCutoutVisibilityRect;
 
 float PlayerCutoutNoise(float2 pixelPosition)
 {
@@ -24,6 +27,22 @@ void ClipPlayerOcclusion(
     }
 
     float2 screenUV = GetNormalizedScreenSpaceUV(positionHCS);
+    float2 maskUV = (screenUV - _GritGudPlayerCutoutVisibilityRect.xy)
+        / max(_GritGudPlayerCutoutVisibilityRect.zw, 0.0001);
+    if (any(maskUV < 0.0) || any(maskUV > 1.0))
+    {
+        return;
+    }
+
+    float playerVisibility = SAMPLE_TEXTURE2D(
+        _GritGudPlayerCutoutVisibilityMask,
+        sampler_GritGudPlayerCutoutVisibilityMask,
+        maskUV).r;
+    if (playerVisibility < 0.5)
+    {
+        return;
+    }
+
     float2 offset = screenUV - _GritGudPlayerCutout.xy;
     // Keep the reveal close to the character silhouette. The former large,
     // circular screen-space mask could reach sideways through unrelated walls

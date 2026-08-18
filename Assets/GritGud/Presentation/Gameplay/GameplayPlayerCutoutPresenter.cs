@@ -14,7 +14,11 @@ namespace GritGud.Presentation.Gameplay
         public const float LeftViewportExtension = 0.04f;
 
         private const float DefaultPivotHeight = 1.3f;
+        private const float DefaultEyeHeight = 1.62f;
         private const int RaycastBufferSize = 64;
+        private const int VisibilityMaskWidth = 12;
+        private const int VisibilityMaskHeight = 20;
+        private const float SurfaceSeparation = 0.03f;
         private static readonly int PlayerCutoutEnabled =
             Shader.PropertyToID("_PlayerCutoutEnabled");
         private static readonly int PlayerCutout =
@@ -23,6 +27,10 @@ namespace GritGud.Presentation.Gameplay
             Shader.PropertyToID("_GritGudPlayerCutoutLeftExtension");
         private static readonly int PlayerCutoutVerticalRadius =
             Shader.PropertyToID("_GritGudPlayerCutoutVerticalRadius");
+        private static readonly int PlayerCutoutVisibilityMask =
+            Shader.PropertyToID("_GritGudPlayerCutoutVisibilityMask");
+        private static readonly int PlayerCutoutVisibilityRect =
+            Shader.PropertyToID("_GritGudPlayerCutoutVisibilityRect");
 
         private Camera gameplayCamera;
         private Transform target;
@@ -35,6 +43,8 @@ namespace GritGud.Presentation.Gameplay
         private HashSet<Renderer> activeOccluders = new HashSet<Renderer>();
         private HashSet<Renderer> nextOccluders = new HashSet<Renderer>();
         private MaterialPropertyBlock propertyBlock;
+        private Texture2D visibilityMask;
+        private byte[] visibilityMaskPixels;
 
         public bool IsBound => target != null;
 
@@ -53,6 +63,20 @@ namespace GritGud.Presentation.Gameplay
         private void Awake()
         {
             propertyBlock = new MaterialPropertyBlock();
+            visibilityMask = new Texture2D(
+                VisibilityMaskWidth,
+                VisibilityMaskHeight,
+                TextureFormat.R8,
+                mipChain: false,
+                linear: true)
+            {
+                name = "Player POV Visibility Mask",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave,
+            };
+            visibilityMaskPixels = new byte[
+                VisibilityMaskWidth * VisibilityMaskHeight];
         }
 
         public void Bind(
@@ -130,15 +154,18 @@ namespace GritGud.Presentation.Gameplay
                 ? stancePresenter.CameraPivotHeight
                 : DefaultPivotHeight;
             Vector3 focus = target.position + (Vector3.up * pivotHeight);
-            RefreshOccludingRenderers(
-                gameplayCamera.transform.position,
-                focus);
             Vector3 viewport = gameplayCamera.WorldToViewportPoint(focus);
             if (viewport.z <= gameplayCamera.nearClipPlane)
             {
+                ClearOccludingRenderers();
                 ClearShaderData();
                 return;
             }
+
+            RefreshOccludingRenderers(
+                gameplayCamera.transform.position,
+                focus,
+                viewport);
 
             CurrentShaderData = new Vector4(
                 viewport.x,
@@ -171,6 +198,9 @@ namespace GritGud.Presentation.Gameplay
         {
             ClearOccludingRenderers();
             ClearShaderData();
+            GameplayObjectLifecycle.Destroy(visibilityMask);
+            visibilityMask = null;
+            visibilityMaskPixels = null;
         }
 
         private void RegisterCutoutRenderers(
@@ -213,38 +243,62 @@ namespace GritGud.Presentation.Gameplay
 
         private void RefreshOccludingRenderers(
             Vector3 cameraPosition,
-            Vector3 focus)
+            Vector3 focus,
+            Vector3 focusViewport)
         {
             nextOccluders.Clear();
-            Vector3 offset = focus - cameraPosition;
-            float distance = offset.magnitude;
-            if (distance > 0.001f)
+            Array.Clear(
+                visibilityMaskPixels,
+                0,
+                visibilityMaskPixels.Length);
+            var visibilityRect = new Rect(
+                focusViewport.x - HorizontalViewportRadius
+                    - LeftViewportExtension,
+                focusViewport.y - VerticalViewportRadius,
+                (HorizontalViewportRadius * 2f) + LeftViewportExtension,
+                VerticalViewportRadius * 2f);
+            Vector3 playerEye = stancePresenter != null
+                ? stancePresenter.FirstPersonEyePosition
+                : target.position + (Vector3.up * DefaultEyeHeight);
+            float maximumWallDistance =
+                Vector3.Distance(cameraPosition, focus) + 0.5f;
+            for (int row = 0; row < VisibilityMaskHeight; row++)
             {
-                Vector3 direction = offset / distance;
-                int hitCount = Physics.RaycastNonAlloc(
-                    cameraPosition,
-                    direction,
-                    raycastBuffer,
-                    distance,
-                    Physics.DefaultRaycastLayers,
-                    QueryTriggerInteraction.Ignore);
-                RaycastHit[] hits = raycastBuffer;
-                if (hitCount == raycastBuffer.Length)
+                float viewportY = visibilityRect.yMin
+                    + (((row + 0.5f) / VisibilityMaskHeight)
+                        * visibilityRect.height);
+                for (int column = 0; column < VisibilityMaskWidth; column++)
                 {
-                    hits = Physics.RaycastAll(
-                        cameraPosition,
-                        direction,
-                        distance,
-                        Physics.DefaultRaycastLayers,
-                        QueryTriggerInteraction.Ignore);
-                    hitCount = hits.Length;
-                }
+                    float viewportX = visibilityRect.xMin
+                        + (((column + 0.5f) / VisibilityMaskWidth)
+                            * visibilityRect.width);
+                    Ray ray = gameplayCamera.ViewportPointToRay(
+                        new Vector3(viewportX, viewportY));
+                    if (!TryFindVisibleCameraOccluder(
+                        ray,
+                        maximumWallDistance,
+                        playerEye,
+                        out LevelEntityView occludingEntity))
+                    {
+                        continue;
+                    }
 
-                for (int index = 0; index < hitCount; index++)
-                {
-                    AddOccludingEntity(hits[index].collider);
+                    visibilityMaskPixels[
+                        (row * VisibilityMaskWidth) + column] = byte.MaxValue;
+                    AddOccludingEntity(occludingEntity);
                 }
             }
+
+            visibilityMask.LoadRawTextureData(visibilityMaskPixels);
+            visibilityMask.Apply(updateMipmaps: false, makeNoLongerReadable: false);
+            Shader.SetGlobalTexture(PlayerCutoutVisibilityMask, visibilityMask);
+            Shader.SetGlobalVector(
+                PlayerCutoutVisibilityRect,
+                new Vector4(
+                    visibilityRect.xMin,
+                    visibilityRect.yMin,
+                    visibilityRect.width,
+                    visibilityRect.height));
 
             foreach (Renderer renderer in activeOccluders)
             {
@@ -267,14 +321,150 @@ namespace GritGud.Presentation.Gameplay
             nextOccluders = previous;
         }
 
-        private void AddOccludingEntity(Collider collider)
+        private bool TryFindVisibleCameraOccluder(
+            Ray cameraRay,
+            float maximumWallDistance,
+            Vector3 playerEye,
+            out LevelEntityView occludingEntity)
         {
-            LevelEntityView entity = collider != null
-                ? collider.GetComponentInParent<LevelEntityView>()
-                : null;
+            occludingEntity = null;
+            RaycastHit[] hits = GetRayHits(
+                cameraRay,
+                gameplayCamera.farClipPlane,
+                out int hitCount);
+            float nearestWallDistance = float.PositiveInfinity;
+            for (int index = 0; index < hitCount; index++)
+            {
+                RaycastHit hit = hits[index];
+                LevelEntityView entity = hit.collider != null
+                    ? hit.collider.GetComponentInParent<LevelEntityView>()
+                    : null;
+                if (hit.distance >= nearestWallDistance
+                    || hit.distance > maximumWallDistance
+                    || entity == null
+                    || !GameplayCameraOcclusionRules.UsesPlayerCutout(
+                        entity.ArchetypeId)
+                    || !renderersByEntity.ContainsKey(entity))
+                {
+                    continue;
+                }
+
+                nearestWallDistance = hit.distance;
+                occludingEntity = entity;
+            }
+
+            if (occludingEntity == null)
+            {
+                return false;
+            }
+
+            float nearestRevealedDistance = float.PositiveInfinity;
+            Collider revealedCollider = null;
+            Vector3 revealedPoint = cameraRay.GetPoint(
+                gameplayCamera.farClipPlane * 0.95f);
+            for (int index = 0; index < hitCount; index++)
+            {
+                RaycastHit hit = hits[index];
+                if (hit.distance <= nearestWallDistance + SurfaceSeparation
+                    || hit.distance >= nearestRevealedDistance)
+                {
+                    continue;
+                }
+
+                LevelEntityView entity = hit.collider != null
+                    ? hit.collider.GetComponentInParent<LevelEntityView>()
+                    : null;
+                if (entity == occludingEntity)
+                {
+                    continue;
+                }
+
+                nearestRevealedDistance = hit.distance;
+                revealedCollider = hit.collider;
+                revealedPoint = hit.point;
+            }
+
+            if (IsPlayerCollider(revealedCollider))
+            {
+                return true;
+            }
+
+            return HasPlayerLineOfSight(
+                playerEye,
+                revealedPoint,
+                revealedCollider);
+        }
+
+        private RaycastHit[] GetRayHits(
+            Ray ray,
+            float distance,
+            out int hitCount)
+        {
+            hitCount = Physics.RaycastNonAlloc(
+                ray,
+                raycastBuffer,
+                distance,
+                Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Ignore);
+            if (hitCount < raycastBuffer.Length)
+            {
+                return raycastBuffer;
+            }
+
+            RaycastHit[] overflowHits = Physics.RaycastAll(
+                ray,
+                distance,
+                Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Ignore);
+            hitCount = overflowHits.Length;
+            return overflowHits;
+        }
+
+        private bool HasPlayerLineOfSight(
+            Vector3 playerEye,
+            Vector3 revealedPoint,
+            Collider revealedCollider)
+        {
+            Vector3 offset = revealedPoint - playerEye;
+            float distance = offset.magnitude;
+            if (distance <= SurfaceSeparation)
+            {
+                return true;
+            }
+
+            RaycastHit[] hits = GetRayHits(
+                new Ray(playerEye, offset / distance),
+                distance,
+                out int hitCount);
+            for (int index = 0; index < hitCount; index++)
+            {
+                RaycastHit hit = hits[index];
+                if (IsPlayerCollider(hit.collider)
+                    || (hit.collider == revealedCollider
+                        && hit.distance >= distance - SurfaceSeparation))
+                {
+                    continue;
+                }
+
+                if (hit.distance < distance - SurfaceSeparation)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool IsPlayerCollider(Collider collider)
+        {
+            Transform source = collider != null ? collider.transform : null;
+            return source != null
+                && (source == target || source.IsChildOf(target));
+        }
+
+        private void AddOccludingEntity(LevelEntityView entity)
+        {
             if (entity == null
-                || !GameplayCameraOcclusionRules.UsesPlayerCutout(
-                    entity.ArchetypeId)
                 || !renderersByEntity.TryGetValue(
                     entity,
                     out List<Renderer> entityRenderers))
@@ -331,6 +521,10 @@ namespace GritGud.Presentation.Gameplay
             Shader.SetGlobalVector(PlayerCutout, Vector4.zero);
             Shader.SetGlobalFloat(PlayerCutoutLeftExtension, 0f);
             Shader.SetGlobalFloat(PlayerCutoutVerticalRadius, 0f);
+            Shader.SetGlobalTexture(
+                PlayerCutoutVisibilityMask,
+                Texture2D.blackTexture);
+            Shader.SetGlobalVector(PlayerCutoutVisibilityRect, Vector4.zero);
         }
     }
 }
