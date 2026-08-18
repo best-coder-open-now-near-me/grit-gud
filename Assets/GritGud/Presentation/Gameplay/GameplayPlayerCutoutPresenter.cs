@@ -7,14 +7,17 @@ namespace GritGud.Presentation.Gameplay
     [RequireComponent(typeof(Camera))]
     public sealed class GameplayPlayerCutoutPresenter : MonoBehaviour
     {
-        public const float ViewportRadius = 0.34f;
-        public const float LeftViewportExtension = 1f / 6f;
+        public const float HorizontalViewportRadius = 0.12f;
+        public const float VerticalViewportRadius = 0.3f;
+        public const float LeftViewportExtension = 0.04f;
 
         private const float DefaultPivotHeight = 1.3f;
         private static readonly int PlayerCutout =
             Shader.PropertyToID("_GritGudPlayerCutout");
         private static readonly int PlayerCutoutLeftExtension =
             Shader.PropertyToID("_GritGudPlayerCutoutLeftExtension");
+        private static readonly int PlayerCutoutVerticalRadius =
+            Shader.PropertyToID("_GritGudPlayerCutoutVerticalRadius");
 
         private Camera gameplayCamera;
         private Transform target;
@@ -29,6 +32,8 @@ namespace GritGud.Presentation.Gameplay
         public Vector4 CurrentShaderData { get; private set; }
 
         public float CurrentLeftExtension { get; private set; }
+
+        public float CurrentVerticalRadius { get; private set; }
 
         public void Bind(
             Camera camera,
@@ -110,13 +115,17 @@ namespace GritGud.Presentation.Gameplay
             CurrentShaderData = new Vector4(
                 viewport.x,
                 viewport.y,
-                ViewportRadius,
+                HorizontalViewportRadius,
                 viewport.z);
             CurrentLeftExtension = LeftViewportExtension;
+            CurrentVerticalRadius = VerticalViewportRadius;
             Shader.SetGlobalVector(PlayerCutout, CurrentShaderData);
             Shader.SetGlobalFloat(
                 PlayerCutoutLeftExtension,
                 CurrentLeftExtension);
+            Shader.SetGlobalFloat(
+                PlayerCutoutVerticalRadius,
+                CurrentVerticalRadius);
         }
 
         private void OnPreCull()
@@ -138,8 +147,10 @@ namespace GritGud.Presentation.Gameplay
         {
             CurrentShaderData = Vector4.zero;
             CurrentLeftExtension = 0f;
+            CurrentVerticalRadius = 0f;
             Shader.SetGlobalVector(PlayerCutout, Vector4.zero);
             Shader.SetGlobalFloat(PlayerCutoutLeftExtension, 0f);
+            Shader.SetGlobalFloat(PlayerCutoutVerticalRadius, 0f);
         }
     }
 }

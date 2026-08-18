@@ -3,6 +3,7 @@
 
 float4 _GritGudPlayerCutout;
 float _GritGudPlayerCutoutLeftExtension;
+float _GritGudPlayerCutoutVerticalRadius;
 
 float PlayerCutoutNoise(float2 pixelPosition)
 {
@@ -16,6 +17,7 @@ void ClipPlayerOcclusion(
 {
     if (cutoutEnabled < 0.5h
         || _GritGudPlayerCutout.z <= 0.0
+        || _GritGudPlayerCutoutVerticalRadius <= 0.0
         || viewDepth >= _GritGudPlayerCutout.w - 0.04)
     {
         return;
@@ -23,17 +25,20 @@ void ClipPlayerOcclusion(
 
     float2 screenUV = GetNormalizedScreenSpaceUV(positionHCS);
     float2 offset = screenUV - _GritGudPlayerCutout.xy;
-    // Preserve the player-centered circle on the right while adding a short
-    // viewport-space capsule segment toward the left-shoulder view corridor.
+    // Keep the reveal close to the character silhouette. The former large,
+    // circular screen-space mask could reach sideways through unrelated walls
+    // and expose neighboring rooms.
     offset.x += min(
         max(-offset.x, 0.0),
         _GritGudPlayerCutoutLeftExtension);
-    offset.x *= _ScaledScreenParams.x / max(_ScaledScreenParams.y, 1.0);
-    float distanceFromPlayer = length(offset);
-    float feather = max(0.018, _GritGudPlayerCutout.z * 0.2);
+    float2 normalizedOffset = float2(
+        offset.x / _GritGudPlayerCutout.z,
+        offset.y / _GritGudPlayerCutoutVerticalRadius);
+    float distanceFromPlayer = length(normalizedOffset);
+    float feather = 0.2;
     float coverage = smoothstep(
-        _GritGudPlayerCutout.z - feather,
-        _GritGudPlayerCutout.z,
+        1.0 - feather,
+        1.0,
         distanceFromPlayer);
     clip(coverage - PlayerCutoutNoise(positionHCS.xy));
 }

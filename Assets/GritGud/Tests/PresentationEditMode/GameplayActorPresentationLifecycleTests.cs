@@ -244,8 +244,13 @@ namespace GritGud.Presentation.Tests
             playerCutout.RefreshNow();
             Assert.That(
                 playerCutout.CurrentShaderData.z,
-                Is.EqualTo(GameplayPlayerCutoutPresenter.ViewportRadius));
+                Is.EqualTo(
+                    GameplayPlayerCutoutPresenter.HorizontalViewportRadius));
             Assert.That(playerCutout.CurrentShaderData.w, Is.GreaterThan(0f));
+            Assert.That(
+                playerCutout.CurrentVerticalRadius,
+                Is.EqualTo(
+                    GameplayPlayerCutoutPresenter.VerticalViewportRadius));
             Assert.That(
                 playerCutout.CurrentLeftExtension,
                 Is.EqualTo(GameplayPlayerCutoutPresenter.LeftViewportExtension));
@@ -288,6 +293,7 @@ namespace GritGud.Presentation.Tests
             Assert.That(playerCutout.PresentationEnabled, Is.False);
             Assert.That(playerCutout.CurrentShaderData, Is.EqualTo(Vector4.zero));
             Assert.That(playerCutout.CurrentLeftExtension, Is.Zero);
+            Assert.That(playerCutout.CurrentVerticalRadius, Is.Zero);
 
             cameraController.ToggleView();
             cameraController.RefreshNow();
