@@ -257,9 +257,7 @@ namespace GritGud.Presentation.Gameplay
             {
                 if (!GameplayCameraOcclusionRules.ShouldMoveCamera(
                     hit.collider,
-                    target,
-                    desired,
-                    CollisionRadius))
+                    target))
                 {
                     continue;
                 }
