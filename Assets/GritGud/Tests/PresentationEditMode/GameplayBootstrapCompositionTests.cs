@@ -164,9 +164,9 @@ namespace GritGud.Presentation.Tests
             Assert.That(gameplay.PartyHud, Is.Not.Null);
             Assert.That(gameplay.PartyHud.CurrentModel.Members, Has.Count.EqualTo(2));
             Assert.That(gameplay.PartyHud.CurrentModel.Members[0].Selected, Is.True);
-            Assert.That(gameplay.Session.GetInventory("player"), Has.Count.EqualTo(5));
+            Assert.That(gameplay.Session.GetInventory("player"), Has.Count.EqualTo(6));
             Assert.That(gameplay.Session.GetInventory("oren-vale"),
-                Has.Count.EqualTo(3));
+                Has.Count.EqualTo(4));
             Assert.That(
                 gameplay.Session.GetInventoryItem(
                     "player",
@@ -191,6 +191,17 @@ namespace GritGud.Presentation.Tests
                 gameplay.Session.GetInventoryQuantity(
                     "player",
                     "item.smoke-grenade"),
+                Is.EqualTo(2));
+            Assert.That(
+                ((ThrownExplosiveDefinition)gameplay.Session.GetInventoryItem(
+                    "player",
+                    "item.incendiary-grenade").ConsumablePower).DeploysFire,
+                Is.True);
+            Assert.That(
+                ((ThrownExplosiveDefinition)gameplay.Session.GetInventoryItem(
+                    "oren-vale",
+                    "item.concussive-grenade").ConsumablePower)
+                        .BlastActionPointReduction,
                 Is.EqualTo(2));
             Assert.That(
                 gameplay.Session.GetActor("player").EquippedItemId,
