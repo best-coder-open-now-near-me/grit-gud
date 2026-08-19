@@ -1079,7 +1079,7 @@ namespace GritGud.Application.Gameplay
                     return new GameplayTurnResourceModel(
                         actor.ActorId,
                         actor.TurnBudget.ActionPoints,
-                        actor.MaximumActionPoints,
+                        actor.ActionPointEconomy.MaximumHeldActionPoints,
                         actor.TurnBudget.MovementOpportunity,
                         definition.StartingTurnBudget.MovementOpportunity);
                 }

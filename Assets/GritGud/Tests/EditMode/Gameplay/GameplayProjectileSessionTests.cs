@@ -63,7 +63,7 @@ namespace GritGud.Domain.Tests.Gameplay
                 Is.EqualTo(2));
             Assert.That(projectiles.Launches, Has.Count.EqualTo(1));
             ProjectileLaunchRecord launch = projectiles.Launches[0];
-            Assert.That(launch.TurnActionPointAllowance, Is.EqualTo(4));
+            Assert.That(launch.TurnActionPointTimeScale, Is.EqualTo(4));
             Assert.That(
                 launch.RemainingActionPointsAfterLaunch,
                 Is.EqualTo(2));

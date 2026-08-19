@@ -202,13 +202,13 @@ namespace GritGud.Application.Gameplay
                         + Format(prediction.CollisionTurnTime) + " turn",
                     "REACTION AP - ceil("
                         + Format(prediction.CollisionTurnTime)
-                        + " x " + launch.TurnActionPointAllowance
+                        + " x " + launch.TurnActionPointTimeScale
                         + ") = " + window.ActionPointAllowance,
                     "SHARED RESOLUTION INTERVAL - "
                         + window.ActionPointAllowance + " / "
-                        + launch.TurnActionPointAllowance + " = "
+                        + launch.TurnActionPointTimeScale + " = "
                         + Format((float)window.ActionPointAllowance
-                            / launch.TurnActionPointAllowance)
+                            / launch.TurnActionPointTimeScale)
                         + " turn",
                     "PREDICTION WORLD REVISION - "
                         + prediction.WorldStateRevision

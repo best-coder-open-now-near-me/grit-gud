@@ -20,6 +20,7 @@ internal static class SimulationChecks
             VerifyAllCurrentContentCoverage();
             VerifyTacticalDestructibleSimulation();
             VerifyEncounterAwarenessAndScopedInitiative();
+            VerifyBankedActionPointEconomy();
             SimulationParityChecks.Verify();
             Console.WriteLine(
                 "Simulation checks passed: reducers, exact replay, atomic installation, and all-content capability coverage.");
@@ -30,6 +31,90 @@ internal static class SimulationChecks
             Console.Error.WriteLine(exception);
             return 1;
         }
+    }
+
+    private static void VerifyBankedActionPointEconomy()
+    {
+        var economy = new TurnActionPointEconomy(4, 4, 6);
+        VerifyGrant(economy, 0, granted: 4, waste: 0, resulting: 4);
+        VerifyGrant(economy, 1, granted: 4, waste: 0, resulting: 5);
+        VerifyGrant(economy, 2, granted: 4, waste: 0, resulting: 6);
+        VerifyGrant(economy, 5, granted: 1, waste: 3, resulting: 6);
+        VerifyGrant(economy, 6, granted: 0, waste: 4, resulting: 6);
+
+        var legacy = new ScenarioContentDocument
+        {
+            schemaVersion = 16,
+            timing = new ScenarioTimingData
+            {
+                minimumVoluntaryTurnSeconds = 1f,
+            },
+            actors = new List<ScenarioActorContentData>
+            {
+                new ScenarioActorContentData
+                {
+                    id = "legacy.actor",
+                    turnBudget = new ScenarioTurnBudgetData
+                    {
+                        actionPoints = 3,
+                    },
+                },
+            },
+        };
+        ScenarioContentMigrator.Migrate(legacy);
+        Require(legacy.schemaVersion == ScenarioContentDocument.CurrentSchemaVersion
+            && legacy.timing.startingActionPoints == 3
+            && legacy.timing.actionPointIncome == 3
+            && legacy.timing.maximumHeldActionPoints == 3,
+            "Legacy scenario migration did not install explicit equivalent AP semantics.");
+
+        GameplaySession encounter = CreateGameplay(CreateRifle());
+        Require(encounter.GetActor("player").TurnBudget.ActionPoints == 4,
+            "Scenario starting AP did not use the authored economy.");
+        Require(encounter.BeginEncounter(), "AP check encounter did not begin.");
+        Require(encounter.TryEndTurn("player", out _),
+            "AP check could not complete a personal turn.");
+        TurnEndRecord ended = encounter.LastEndedTurn;
+        Require(ended.PersonalTurnStart != null
+            && ended.PersonalTurnStart.ActionPoints.PreviousActionPoints == 4
+            && ended.PersonalTurnStart.ActionPoints.GrantedActionPoints == 2
+            && ended.PersonalTurnStart.ActionPoints.CapWaste == 2
+            && ended.PersonalTurnStart.ActionPoints.ResultingActionPoints == 6
+            && encounter.GetActor("enemy").TurnBudget.ActionPoints == 6,
+            "Personal-turn record did not freeze the capped AP grant.");
+        Require(encounter.CompleteEncounter(),
+            "AP check encounter did not complete.");
+        Require(encounter.GetActor("enemy").TurnBudget.ActionPoints == 6,
+            "Encounter completion generated or discarded AP.");
+
+        GameplaySession voluntary = CreateGameplay(CreateRifle());
+        Require(voluntary.EnterTurnMode(),
+            "AP check voluntary interval did not begin.");
+        Require(voluntary.TryEndTurn("player", out _),
+            "AP check voluntary interval did not end.");
+        Require(voluntary.CompleteVoluntaryWorldTurn(),
+            "AP check voluntary world cycle did not complete.");
+        Require(voluntary.GetActor("player").TurnBudget.ActionPoints == 6
+            && voluntary.LastCompletedVoluntaryTurnCycle
+                .PersonalTurnStarts.Count == 2,
+            "Voluntary world completion did not grant each capable actor once.");
+    }
+
+    private static void VerifyGrant(
+        TurnActionPointEconomy economy,
+        int previous,
+        int granted,
+        int waste,
+        int resulting)
+    {
+        PersonalTurnActionPointGrant record =
+            PersonalTurnActionPointRules.Grant(previous, economy);
+        Require(record.PreviousActionPoints == previous
+            && record.RequestedIncome == 4
+            && record.GrantedActionPoints == granted
+            && record.CapWaste == waste
+            && record.ResultingActionPoints == resulting,
+            $"AP grant mismatch for previous AP {previous}.");
     }
 
     private static void VerifyTacticalRuleCoverageAndOutcomeProjection()

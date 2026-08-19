@@ -15,7 +15,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplayPartySave
     {
-        public const int CurrentSchemaVersion = 1;
+        public const int CurrentSchemaVersion = 2;
 
         private readonly Dictionary<string, CharacterPersistenceSnapshot>
             charactersByIdentity;
@@ -93,7 +93,8 @@ namespace GritGud.Application.Gameplay
                 characters.Add(new CharacterPersistenceSnapshot(
                     profile.IdentityId,
                     actor.EquippedItemId,
-                    actor.Wounds));
+                    actor.Wounds,
+                    actor.TurnBudget.ActionPoints));
             }
             return new GameplayPartySave(
                 CurrentSchemaVersion,
@@ -140,6 +141,13 @@ namespace GritGud.Application.Gameplay
                     throw new InvalidOperationException(
                         $"Party save is missing identity '{profile.IdentityId}'.");
                 }
+
+                if (character.CurrentActionPoints.HasValue
+                    && character.CurrentActionPoints.Value
+                        > scenario.Timing.ActionPointEconomy
+                            .MaximumHeldActionPoints)
+                    throw new InvalidOperationException(
+                        $"Saved AP for identity '{profile.IdentityId}' exceeds the scenario cap.");
 
                 if (character.EquippedItemId != null)
                 {

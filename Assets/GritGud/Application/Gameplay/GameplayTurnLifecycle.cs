@@ -17,9 +17,11 @@ namespace GritGud.Application.Gameplay
 
         bool IsActorIncapacitatedForTurnLifecycle(string actorId);
 
-        void RefreshTurnBudgetForTurnLifecycle(string actorId);
+        PersonalTurnStartRecord StartPersonalTurnForTurnLifecycle(
+            string actorId);
 
-        void RefreshAllTurnBudgetsForTurnLifecycle();
+        IReadOnlyList<PersonalTurnStartRecord>
+            StartCapablePersonalTurnsForTurnLifecycle();
 
         void BeginEmergencyTurnForTurnLifecycle(
             string actorId,
@@ -311,12 +313,14 @@ namespace GritGud.Application.Gameplay
 
             string nextActorId = FindNextCapableActor(activeIndex)
                 ?? endingActorId;
-            host.RefreshTurnBudgetForTurnLifecycle(nextActorId);
+            PersonalTurnStartRecord personalTurnStart =
+                host.StartPersonalTurnForTurnLifecycle(nextActorId);
             SetActiveActor(nextActorId, notifications);
             RecordTurnEnd(
                 endingActorId,
                 activeActorId,
-                notifications);
+                notifications,
+                personalTurnStart: personalTurnStart);
             failure = TurnEndFailure.None;
             PublishCommitted(notifications);
             return true;
@@ -463,12 +467,15 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
-            VoluntaryTurnCycleRecord completedCycle =
-                pendingVoluntaryTurnCycle;
+            IReadOnlyList<PersonalTurnStartRecord> starts =
+                host.StartCapablePersonalTurnsForTurnLifecycle();
+            var completedCycle = new VoluntaryTurnCycleRecord(
+                pendingVoluntaryTurnCycle.Sequence,
+                pendingVoluntaryTurnCycle.Actors,
+                starts);
             var notifications = new GameplayNotificationBatch();
             pendingVoluntaryTurnCycle = null;
             LastCompletedVoluntaryTurnCycle = completedCycle;
-            host.RefreshAllTurnBudgetsForTurnLifecycle();
             SetActiveActor(
                 FindNextCapableActor(startingAfterIndex: -1)
                     ?? host.InitiativeOrder[0],
@@ -513,14 +520,16 @@ namespace GritGud.Application.Gameplay
             string nextActorId,
             GameplayNotificationBatch notifications,
             GameplayTurnKind kind = GameplayTurnKind.Normal,
-            string interruptedActorId = null)
+            string interruptedActorId = null,
+            PersonalTurnStartRecord personalTurnStart = null)
         {
             var record = new TurnEndRecord(
                 LastEndedTurn == null ? 1 : LastEndedTurn.Sequence + 1,
                 endingActorId,
                 nextActorId,
                 kind,
-                interruptedActorId);
+                interruptedActorId,
+                personalTurnStart);
             LastEndedTurn = record;
             host.Journal.RecordTurnEnded(record);
             notifications.Add(TurnEnded, record);

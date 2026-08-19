@@ -240,7 +240,7 @@ namespace GritGud.Domain.Tests.Gameplay
                 equipmentEffects: EquipmentEffectSet.None,
                 maximumWounds: int.MaxValue,
                 inventory: null,
-                turnActionPointAllowance: 4,
+                turnActionPointTimeScale: 4,
                 turnMovementAllowance: 8f,
                 pinState: pinState);
         }

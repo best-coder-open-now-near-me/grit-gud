@@ -9,7 +9,7 @@ namespace GritGud.Tests.EditMode.Gameplay
     public sealed class GameplayPartyPersistenceSessionTests
     {
         [Test]
-        public void PartySaveCapturesIdentityEquipmentAndWoundsOnly()
+        public void PartySaveCapturesIdentityEquipmentWoundsAndCurrentAp()
         {
             GameplaySession gameplay = CreateGameplay();
 
@@ -21,6 +21,7 @@ namespace GritGud.Tests.EditMode.Gameplay
                 out CharacterPersistenceSnapshot mara), Is.True);
             Assert.That(mara.EquippedItemId, Is.EqualTo("weapon.rifle"));
             Assert.That(mara.Wounds.ActorId, Is.EqualTo("mara"));
+            Assert.That(mara.CurrentActionPoints, Is.EqualTo(4));
             Assert.That(
                 typeof(CharacterPersistenceSnapshot).GetProperty("Progression"),
                 Is.Null);
@@ -46,7 +47,8 @@ namespace GritGud.Tests.EditMode.Gameplay
                             leftLegWounds: 0,
                             rightLegWounds: 0,
                             unlocalizedWounds: 0,
-                            movementPenalty: 1.5f)),
+                            movementPenalty: 1.5f),
+                        currentActionPoints: 2),
                     new CharacterPersistenceSnapshot(
                         "character.vale",
                         "weapon.rifle",
@@ -63,6 +65,7 @@ namespace GritGud.Tests.EditMode.Gameplay
             Assert.That(mara.Wounds.TorsoWounds, Is.EqualTo(1));
             Assert.That(mara.TurnBudget.MovementOpportunity,
                 Is.EqualTo(6.5f));
+            Assert.That(mara.TurnBudget.ActionPoints, Is.EqualTo(2));
             Assert.That(restored.GetActor("vale").EquippedItemId,
                 Is.EqualTo("weapon.rifle"));
         }

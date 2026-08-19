@@ -12,6 +12,7 @@
   "randomSeed": 12648430,
   "timing": {
     "minimumVoluntaryTurnSeconds": 1.25,
+    "startingActionPoints": 4,
     "actionPointIncome": 4,
     "maximumHeldActionPoints": 6
   },

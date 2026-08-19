@@ -338,7 +338,9 @@ namespace GritGud.Presentation.Gameplay
                 .Append(" | actor=")
                 .Append(turn.EndingActorId)
                 .Append(" | next=")
-                .AppendLine(turn.NextActorId);
+                .Append(turn.NextActorId);
+            AppendPersonalTurnStart(report, turn.PersonalTurnStart);
+            report.AppendLine();
         }
 
         private static void AppendGameplayJournal(
@@ -511,7 +513,11 @@ namespace GritGud.Presentation.Gameplay
                         report.Append("TurnEnded | actor=")
                             .Append(turn.Turn.EndingActorId)
                             .Append(" | next=")
-                            .AppendLine(turn.Turn.NextActorId);
+                            .Append(turn.Turn.NextActorId);
+                        AppendPersonalTurnStart(
+                            report,
+                            turn.Turn.PersonalTurnStart);
+                        report.AppendLine();
                         break;
                     case VoluntaryTurnCycleCompletedJournalEntry cycle:
                         report.Append("VoluntaryTurnCycleCompleted | cycle=")
@@ -523,6 +529,30 @@ namespace GritGud.Presentation.Gameplay
                         break;
                 }
             }
+        }
+
+        private static void AppendPersonalTurnStart(
+            StringBuilder report,
+            PersonalTurnStartRecord start)
+        {
+            if (start == null) return;
+            PersonalTurnActionPointGrant ap = start.ActionPoints;
+            report.Append(" | AP grant=")
+                .Append(ap.PreviousActionPoints.ToString(
+                    CultureInfo.InvariantCulture))
+                .Append(" + ")
+                .Append(ap.GrantedActionPoints.ToString(
+                    CultureInfo.InvariantCulture))
+                .Append(" = ")
+                .Append(ap.ResultingActionPoints.ToString(
+                    CultureInfo.InvariantCulture))
+                .Append(" | requested=")
+                .Append(ap.RequestedIncome.ToString(
+                    CultureInfo.InvariantCulture))
+                .Append(" | cap-waste=")
+                .Append(ap.CapWaste.ToString(CultureInfo.InvariantCulture))
+                .Append(" | move=")
+                .Append(FormatFloat(start.RefreshedMovement));
         }
 
         private static void AppendMovementJournalLine(

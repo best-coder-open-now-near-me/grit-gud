@@ -128,11 +128,10 @@ namespace GritGud.Application.Gameplay
             EquipmentEffectSet equipmentEffects,
             int maximumWounds = int.MaxValue,
             ActorInventorySnapshot inventory = null,
-            int turnActionPointAllowance = -1,
+            TurnActionPointEconomy? actionPointEconomy = null,
             float turnMovementAllowance = -1f,
             ActorPinState pinState = null,
             int emergencyActionPointAllowance = 0,
-            int maximumActionPoints = -1,
             TurnBudget? suspendedTurnBudget = null)
         {
             if (!string.Equals(actorId, wounds.ActorId, StringComparison.Ordinal))
@@ -178,12 +177,11 @@ namespace GritGud.Application.Gameplay
             EquipmentEffects = equipmentEffects;
             MaximumWounds = maximumWounds;
             Inventory = resolvedInventory;
-            TurnActionPointAllowance = turnActionPointAllowance < 0
-                ? turnBudget.ActionPoints
-                : turnActionPointAllowance;
-            MaximumActionPoints = maximumActionPoints < 0
-                ? Math.Max(TurnActionPointAllowance, turnBudget.ActionPoints)
-                : maximumActionPoints;
+            ActionPointEconomy = actionPointEconomy
+                ?? new TurnActionPointEconomy(
+                    turnBudget.ActionPoints,
+                    turnBudget.ActionPoints,
+                    Math.Max(1, turnBudget.ActionPoints));
             TurnMovementAllowance = turnMovementAllowance < 0f
                 ? turnBudget.MovementOpportunity + wounds.MovementPenalty
                 : turnMovementAllowance;
@@ -192,8 +190,8 @@ namespace GritGud.Application.Gameplay
             SuspendedTurnBudget = suspendedTurnBudget;
             if (float.IsNaN(TurnMovementAllowance)
                 || float.IsInfinity(TurnMovementAllowance)
-                || MaximumActionPoints < TurnActionPointAllowance
-                || MaximumActionPoints < turnBudget.ActionPoints
+                || ActionPointEconomy.MaximumHeldActionPoints
+                    < turnBudget.ActionPoints
                 || TurnMovementAllowance + 0.0001f
                     < turnBudget.MovementOpportunity + wounds.MovementPenalty)
                 throw new ArgumentException(
@@ -216,9 +214,7 @@ namespace GritGud.Application.Gameplay
 
         public ActorInventorySnapshot Inventory { get; }
 
-        public int TurnActionPointAllowance { get; }
-
-        public int MaximumActionPoints { get; }
+        public TurnActionPointEconomy ActionPointEconomy { get; }
 
         public float TurnMovementAllowance { get; }
 
@@ -244,7 +240,7 @@ namespace GritGud.Application.Gameplay
             string equippedItemId,
             EquipmentEffectSet equipmentEffects,
             int maximumWounds,
-            int turnActionPointAllowance,
+            TurnActionPointEconomy actionPointEconomy,
             float turnMovementAllowance,
             ActorPinState pinState)
         {
@@ -255,7 +251,7 @@ namespace GritGud.Application.Gameplay
             EquippedItemId = equippedItemId;
             EquipmentEffects = equipmentEffects;
             MaximumWounds = maximumWounds;
-            TurnActionPointAllowance = turnActionPointAllowance;
+            ActionPointEconomy = actionPointEconomy;
             TurnMovementAllowance = turnMovementAllowance;
             PinState = pinState;
         }
@@ -274,7 +270,7 @@ namespace GritGud.Application.Gameplay
 
         public int MaximumWounds { get; }
 
-        public int TurnActionPointAllowance { get; }
+        public TurnActionPointEconomy ActionPointEconomy { get; }
 
         public float TurnMovementAllowance { get; }
 
@@ -317,7 +313,8 @@ namespace GritGud.Application.Gameplay
     {
         public VoluntaryTurnCycleRecord(
             long sequence,
-            IEnumerable<GameplayActorSnapshot> actors)
+            IEnumerable<GameplayActorSnapshot> actors,
+            IEnumerable<PersonalTurnStartRecord> personalTurnStarts = null)
         {
             if (sequence <= 0)
             {
@@ -339,64 +336,16 @@ namespace GritGud.Application.Gameplay
 
             Sequence = sequence;
             Actors = actorSnapshots.AsReadOnly();
+            PersonalTurnStarts = new List<PersonalTurnStartRecord>(
+                personalTurnStarts
+                    ?? Array.Empty<PersonalTurnStartRecord>()).AsReadOnly();
         }
 
         public long Sequence { get; }
 
         public IReadOnlyList<GameplayActorSnapshot> Actors { get; }
-    }
 
-    public sealed class TurnEndRecord
-    {
-        public TurnEndRecord(
-            long sequence,
-            string endingActorId,
-            string nextActorId,
-            GameplayTurnKind kind = GameplayTurnKind.Normal,
-            string interruptedActorId = null)
-        {
-            if (sequence <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(sequence));
-            }
-
-            EndingActorId = RequireActorId(endingActorId, nameof(endingActorId));
-            NextActorId = RequireActorId(nextActorId, nameof(nextActorId));
-            if (!Enum.IsDefined(typeof(GameplayTurnKind), kind))
-                throw new ArgumentOutOfRangeException(nameof(kind));
-            if (kind == GameplayTurnKind.EmergencyReaction
-                && string.IsNullOrWhiteSpace(interruptedActorId))
-            {
-                throw new ArgumentException(
-                    "Emergency turns require the interrupted actor identifier.",
-                    nameof(interruptedActorId));
-            }
-            Sequence = sequence;
-            Kind = kind;
-            InterruptedActorId = interruptedActorId ?? string.Empty;
-        }
-
-        public long Sequence { get; }
-
-        public string EndingActorId { get; }
-
-        public string NextActorId { get; }
-
-        public GameplayTurnKind Kind { get; }
-
-        public string InterruptedActorId { get; }
-
-        private static string RequireActorId(string value, string parameterName)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                throw new ArgumentException(
-                    "Turn records require actor identifiers.",
-                    parameterName);
-            }
-
-            return value;
-        }
+        public IReadOnlyList<PersonalTurnStartRecord> PersonalTurnStarts { get; }
     }
 
     public readonly struct GameplayActiveActorChange
@@ -790,9 +739,9 @@ namespace GritGud.Application.Gameplay
             return RequireActor(actorId).CreateStateSnapshot();
         }
 
-        public int GetTurnActionPointAllowance(string actorId)
+        public TurnActionPointEconomy GetActionPointEconomy(string actorId)
         {
-            return RequireActor(actorId).TurnActionPointAllowance;
+            return RequireActor(actorId).ActionPointEconomy;
         }
 
         public bool TryGetActor(
@@ -1280,13 +1229,18 @@ namespace GritGud.Application.Gameplay
         bool IGameplayTurnLifecycleHost.IsActorIncapacitatedForTurnLifecycle(
             string actorId) => RequireActor(actorId).IsIncapacitated;
 
-        void IGameplayTurnLifecycleHost.RefreshTurnBudgetForTurnLifecycle(
-            string actorId) => RequireActor(actorId).RefreshTurnBudget();
+        PersonalTurnStartRecord
+            IGameplayTurnLifecycleHost.StartPersonalTurnForTurnLifecycle(
+                string actorId) => RequireActor(actorId).StartPersonalTurn();
 
-        void IGameplayTurnLifecycleHost.RefreshAllTurnBudgetsForTurnLifecycle()
+        IReadOnlyList<PersonalTurnStartRecord>
+            IGameplayTurnLifecycleHost.StartCapablePersonalTurnsForTurnLifecycle()
         {
+            var starts = new List<PersonalTurnStartRecord>();
             foreach (string actorId in initiativeOrder)
-                actors[actorId].RefreshTurnBudget();
+                if (!actors[actorId].IsIncapacitated)
+                    starts.Add(actors[actorId].StartPersonalTurn());
+            return starts.AsReadOnly();
         }
 
         void IGameplayTurnLifecycleHost.BeginEmergencyTurnForTurnLifecycle(

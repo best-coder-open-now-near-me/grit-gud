@@ -92,8 +92,8 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(
                 session.LastCompletedVoluntaryTurnCycle,
                 Is.SameAs(completedCycle));
-            Assert.That(actor.TurnBudget.ActionPoints, Is.EqualTo(4));
-            Assert.That(actor.TurnBudget.MovementOpportunity, Is.EqualTo(8f));
+            Assert.That(actor.TurnBudget.ActionPoints, Is.EqualTo(3));
+            Assert.That(actor.TurnBudget.MovementOpportunity, Is.EqualTo(4f));
 
             session.AdvanceContinuousTime(
                 session.Scenario.Timing.MinimumVoluntaryTurnSeconds - 0.01f);
@@ -151,7 +151,7 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(session.TryExitTurnMode(out failure), Is.True);
             Assert.That(
                 session.GetActor("player").TurnBudget.ActionPoints,
-                Is.EqualTo(4));
+                Is.EqualTo(3));
         }
 
         [Test]
@@ -213,7 +213,7 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(observed.HasValue, Is.True);
             Assert.That(observed.Value.PreviousActorId, Is.EqualTo("player"));
             Assert.That(observed.Value.CurrentActorId, Is.EqualTo("target"));
-            Assert.That(observedBudget.ActionPoints, Is.EqualTo(4));
+            Assert.That(observedBudget.ActionPoints, Is.EqualTo(6));
             Assert.That(observedBudget.MovementOpportunity, Is.EqualTo(8f));
         }
 
@@ -289,7 +289,7 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
-        public void RequestedEncounterCompletionClosesOnEndTurnAndRefreshesMovement()
+        public void RequestedEncounterCompletionClosesWithoutMintingResources()
         {
             GameplaySession session = CreateSession(CreateActor("player", 10));
             Assert.That(session.BeginEncounter(), Is.True);
@@ -316,7 +316,7 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(session.TurnContext, Is.EqualTo(TurnModeContext.None));
             Assert.That(
                 session.GetActor("player").TurnBudget.MovementOpportunity,
-                Is.EqualTo(8f));
+                Is.EqualTo(5f));
             Assert.That(session.LastCompletedVoluntaryTurnCycle, Is.Not.Null);
             Assert.That(
                 session.LastCompletedVoluntaryTurnCycle.Actors[0]

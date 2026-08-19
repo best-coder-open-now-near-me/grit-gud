@@ -15,6 +15,7 @@ namespace GritGud.Domain.Gameplay
     public sealed class ScenarioTimingData
     {
         public float minimumVoluntaryTurnSeconds;
+        public int startingActionPoints = 4;
         public int actionPointIncome = 4;
         public int maximumHeldActionPoints = 6;
     }

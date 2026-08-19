@@ -42,7 +42,8 @@ namespace GritGud.Presentation.Tests
                             leftLegWounds: 0,
                             rightLegWounds: 0,
                             unlocalizedWounds: 0,
-                            movementPenalty: 1.25f)),
+                            movementPenalty: 1.25f),
+                        currentActionPoints: 2),
                 });
 
             store.Save(save);
@@ -58,6 +59,7 @@ namespace GritGud.Presentation.Tests
             Assert.That(character.Wounds.TorsoWounds, Is.EqualTo(1));
             Assert.That(character.Wounds.MovementPenalty,
                 Is.EqualTo(1.25f));
+            Assert.That(character.CurrentActionPoints, Is.EqualTo(2));
         }
 
         [Test]

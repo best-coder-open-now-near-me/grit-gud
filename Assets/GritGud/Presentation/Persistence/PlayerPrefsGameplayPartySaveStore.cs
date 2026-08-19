@@ -22,6 +22,8 @@ namespace GritGud.Presentation.Persistence
         {
             public string identityId;
             public string equippedItemId;
+            public bool hasCurrentActionPoints;
+            public int currentActionPoints;
             public WoundDocument wounds = new WoundDocument();
         }
 
@@ -71,6 +73,10 @@ namespace GritGud.Presentation.Persistence
             if (document == null || document.characters == null)
                 throw new InvalidOperationException(
                     "The local party save has no character collection.");
+            if (document.schemaVersion < 1
+                || document.schemaVersion > GameplayPartySave.CurrentSchemaVersion)
+                throw new InvalidOperationException(
+                    $"Party save schema {document.schemaVersion} is unsupported.");
 
             var characters = new List<CharacterPersistenceSnapshot>(
                 document.characters.Count);
@@ -96,11 +102,15 @@ namespace GritGud.Presentation.Persistence
                 characters.Add(new CharacterPersistenceSnapshot(
                     character.identityId,
                     NormalizeOptionalId(character.equippedItemId),
-                    woundSnapshot));
+                    woundSnapshot,
+                    document.schemaVersion >= 2
+                        && character.hasCurrentActionPoints
+                            ? character.currentActionPoints
+                            : (int?)null));
             }
 
             save = new GameplayPartySave(
-                document.schemaVersion,
+                GameplayPartySave.CurrentSchemaVersion,
                 characters);
             return true;
         }
@@ -121,6 +131,10 @@ namespace GritGud.Presentation.Persistence
                 {
                     identityId = character.IdentityId,
                     equippedItemId = character.EquippedItemId ?? string.Empty,
+                    hasCurrentActionPoints =
+                        character.CurrentActionPoints.HasValue,
+                    currentActionPoints =
+                        character.CurrentActionPoints ?? 0,
                     wounds = new WoundDocument
                     {
                         head = character.Wounds.HeadWounds,

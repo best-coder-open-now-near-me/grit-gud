@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using GritGud.Domain.Gameplay;
+using GritGud.Domain.Turns;
 
 namespace GritGud.Application.Gameplay
 {
@@ -86,5 +87,36 @@ namespace GritGud.Application.Gameplay
                 woundsApplied: 0,
                 soundSignature: 0f);
         }
+    }
+
+    /// <summary>
+    /// Policy-neutral temporal-planning facts from a canonical personal-turn
+    /// transition. Policies may value preservation and waste but cannot alter
+    /// the authoritative grant.
+    /// </summary>
+    public sealed class GameplayPersonalTurnOutcome
+    {
+        internal GameplayPersonalTurnOutcome(PersonalTurnStartRecord start)
+        {
+            Start = start ?? throw new ArgumentNullException(nameof(start));
+        }
+
+        public PersonalTurnStartRecord Start { get; }
+        public string ActorId => Start.ActorId;
+        public int ActionPointsPreserved =>
+            Start.ActionPoints.PreviousActionPoints;
+        public int ActionPointsGranted =>
+            Start.ActionPoints.GrantedActionPoints;
+        public int ActionPointCapWaste => Start.ActionPoints.CapWaste;
+        public int ResultingActionPoints =>
+            Start.ActionPoints.ResultingActionPoints;
+        public float RefreshedMovement => Start.RefreshedMovement;
+    }
+
+    public static class GameplayPersonalTurnOutcomeProjector
+    {
+        public static GameplayPersonalTurnOutcome Project(
+            PersonalTurnStartRecord start) =>
+            new GameplayPersonalTurnOutcome(start);
     }
 }

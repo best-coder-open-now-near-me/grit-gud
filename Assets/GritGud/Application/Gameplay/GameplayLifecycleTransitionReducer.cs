@@ -361,11 +361,16 @@ namespace GritGud.Application.Gameplay
                     || session.PendingVoluntaryTurnCycle == null)
                     throw new InvalidOperationException(
                         "No voluntary world turn is pending.");
-                VoluntaryTurnCycleRecord cycle =
+                VoluntaryTurnCycleRecord pending =
                     session.PendingVoluntaryTurnCycle;
+                IReadOnlyList<PersonalTurnStartRecord> starts =
+                    RefreshAll(mutation, session.Actors);
+                var cycle = new VoluntaryTurnCycleRecord(
+                    pending.Sequence,
+                    pending.Actors,
+                    starts);
                 mutation.PendingVoluntaryTurnCycle = null;
                 mutation.LastVoluntaryTurnCycleSequence = cycle.Sequence;
-                RefreshAll(mutation, session.Actors);
                 mutation.ActiveActorId = FirstCapable(session);
                 mutation.Operation = GameplaySessionOperation.None;
                 mutation.TurnContext = TurnModeContext.Voluntary;
@@ -469,29 +474,38 @@ namespace GritGud.Application.Gameplay
             return payload;
         }
 
-        private static void RefreshAll(
+        private static IReadOnlyList<PersonalTurnStartRecord> RefreshAll(
             GameplayCanonicalStateMutation mutation,
             IEnumerable<GameplayActorSnapshot> actors)
         {
+            var starts = new List<PersonalTurnStartRecord>();
             foreach (GameplayActorSnapshot actor in actors)
-                Refresh(mutation, actor);
+                if (!actor.IsIncapacitated)
+                    starts.Add(Refresh(mutation, actor));
+            return starts.AsReadOnly();
         }
 
-        private static void Refresh(
+        private static PersonalTurnStartRecord Refresh(
             GameplayCanonicalStateMutation mutation,
             GameplayActorSnapshot actor)
         {
+            PersonalTurnActionPointGrant grant =
+                PersonalTurnActionPointRules.Grant(
+                    actor.TurnBudget.ActionPoints,
+                    actor.ActionPointEconomy);
+            float movement = Math.Max(
+                0f,
+                actor.TurnMovementAllowance
+                    - actor.Wounds.MovementPenalty);
             mutation.ReplaceActor(GameplayCanonicalStateMutation.CopyActor(
                 actor,
                 budget: new TurnBudget(
-                    Math.Min(
-                        actor.MaximumActionPoints,
-                        checked(actor.TurnBudget.ActionPoints
-                            + actor.TurnActionPointAllowance)),
-                    Math.Max(
-                        0f,
-                        actor.TurnMovementAllowance
-                            - actor.Wounds.MovementPenalty))));
+                    grant.ResultingActionPoints,
+                    movement)));
+            return new PersonalTurnStartRecord(
+                actor.ActorId,
+                grant,
+                movement);
         }
 
         private static IReadOnlyList<string> ResolveScope(

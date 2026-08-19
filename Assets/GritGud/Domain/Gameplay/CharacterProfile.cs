@@ -126,7 +126,8 @@ namespace GritGud.Domain.Gameplay
         public CharacterPersistenceSnapshot(
             string identityId,
             string equippedItemId,
-            ActorWoundSnapshot wounds)
+            ActorWoundSnapshot wounds,
+            int? currentActionPoints = null)
         {
             if (string.IsNullOrWhiteSpace(identityId))
             {
@@ -137,6 +138,9 @@ namespace GritGud.Domain.Gameplay
             IdentityId = identityId;
             EquippedItemId = equippedItemId;
             Wounds = wounds;
+            if (currentActionPoints < 0)
+                throw new ArgumentOutOfRangeException(nameof(currentActionPoints));
+            CurrentActionPoints = currentActionPoints;
         }
 
         public string IdentityId { get; }
@@ -144,5 +148,7 @@ namespace GritGud.Domain.Gameplay
         public string EquippedItemId { get; }
 
         public ActorWoundSnapshot Wounds { get; }
+
+        public int? CurrentActionPoints { get; }
     }
 }

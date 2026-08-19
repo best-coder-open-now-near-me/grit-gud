@@ -126,7 +126,7 @@ namespace GritGud.Domain.Gameplay
             GameplayPosition origin,
             GameplayPosition aimPoint,
             ProjectileFlightDefinition definition,
-            int turnActionPointAllowance,
+            int turnActionPointTimeScale,
             int remainingActionPointsAfterLaunch)
         {
             if (sequence <= 0)
@@ -142,13 +142,14 @@ namespace GritGud.Domain.Gameplay
             ActionId = RequireText(actionId, nameof(actionId));
             Definition = definition ?? throw new ArgumentNullException(
                 nameof(definition));
-            if (turnActionPointAllowance <= 0)
+            if (turnActionPointTimeScale <= 0)
             {
                 throw new ArgumentOutOfRangeException(
-                    nameof(turnActionPointAllowance));
+                    nameof(turnActionPointTimeScale));
             }
             if (remainingActionPointsAfterLaunch < 0
-                || remainingActionPointsAfterLaunch > turnActionPointAllowance)
+                || remainingActionPointsAfterLaunch
+                    > turnActionPointTimeScale)
             {
                 throw new ArgumentOutOfRangeException(
                     nameof(remainingActionPointsAfterLaunch));
@@ -165,7 +166,7 @@ namespace GritGud.Domain.Gameplay
             Sequence = sequence;
             Origin = origin;
             AimPoint = aimPoint;
-            TurnActionPointAllowance = turnActionPointAllowance;
+            TurnActionPointTimeScale = turnActionPointTimeScale;
             RemainingActionPointsAfterLaunch =
                 remainingActionPointsAfterLaunch;
             directionX = ((double)aimPoint.X - origin.X) / aimDistance;
@@ -189,7 +190,7 @@ namespace GritGud.Domain.Gameplay
 
         public ProjectileFlightDefinition Definition { get; }
 
-        public int TurnActionPointAllowance { get; }
+        public int TurnActionPointTimeScale { get; }
 
         public int RemainingActionPointsAfterLaunch { get; }
 

@@ -216,12 +216,11 @@ namespace GritGud.Application.Gameplay
                     : actor.EquipmentEffects,
                 actor.MaximumWounds,
                 inventory ?? actor.Inventory,
-                actor.TurnActionPointAllowance,
+                actor.ActionPointEconomy,
                 actor.TurnMovementAllowance,
                 replacePin ? pinState : actor.PinState,
                 emergencyActionPointAllowance
                     ?? actor.EmergencyActionPointAllowance,
-                actor.MaximumActionPoints,
                 replaceSuspendedTurnBudget
                     ? suspendedTurnBudget
                     : actor.SuspendedTurnBudget);

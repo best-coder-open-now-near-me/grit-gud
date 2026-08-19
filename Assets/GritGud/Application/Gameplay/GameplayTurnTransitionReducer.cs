@@ -113,14 +113,17 @@ namespace GritGud.Application.Gameplay
                 payload.ActorId);
             string nextActorId = FindNextCapableActor(session, activeIndex)
                 ?? payload.ActorId;
-            RefreshActor(mutation, mutation.GetActor(nextActorId));
+            PersonalTurnStartRecord personalTurnStart = RefreshActor(
+                mutation,
+                mutation.GetActor(nextActorId));
             mutation.ActiveActorId = nextActorId;
             mutation.JournalSequence = checked(mutation.JournalSequence + 1L);
             mutation.Revision = checked(mutation.Revision + 1L);
             return new TurnEndRecord(
                 sequence,
                 payload.ActorId,
-                nextActorId);
+                nextActorId,
+                personalTurnStart: personalTurnStart);
         }
 
         private static TurnEndRecord ReduceEmergency(
@@ -196,15 +199,16 @@ namespace GritGud.Application.Gameplay
             mutation.ReplaceSmokeFields(remaining);
         }
 
-        private static void RefreshActor(
+        private static PersonalTurnStartRecord RefreshActor(
             GameplayCanonicalStateMutation mutation,
             GameplayActorSnapshot actor)
         {
+            PersonalTurnActionPointGrant grant =
+                PersonalTurnActionPointRules.Grant(
+                    actor.TurnBudget.ActionPoints,
+                    actor.ActionPointEconomy);
             var budget = new TurnBudget(
-                Math.Min(
-                    actor.MaximumActionPoints,
-                    checked(actor.TurnBudget.ActionPoints
-                        + actor.TurnActionPointAllowance)),
+                grant.ResultingActionPoints,
                 Math.Max(
                     0f,
                     actor.TurnMovementAllowance
@@ -212,6 +216,10 @@ namespace GritGud.Application.Gameplay
             mutation.ReplaceActor(GameplayCanonicalStateMutation.CopyActor(
                 actor,
                 budget: budget));
+            return new PersonalTurnStartRecord(
+                actor.ActorId,
+                grant,
+                budget.MovementOpportunity);
         }
 
         private static int IndexOf(

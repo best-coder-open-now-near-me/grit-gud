@@ -142,6 +142,7 @@ namespace GritGud.Presentation.Tests
                         ScenarioObjectiveRuntimeDefinition>(),
                     new Dictionary<string, ScenarioVehicleRuntimeDefinition>(),
                     new Dictionary<string, DisplacementSubjectDefinition>(),
+                    Array.Empty<TacticalContextRuleDefinition>(),
                 },
                 culture: null);
             return new GameplaySession(scenario);

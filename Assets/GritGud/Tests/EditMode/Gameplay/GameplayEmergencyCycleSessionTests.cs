@@ -26,7 +26,7 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(cycle.CurrentWindow.Status, Is.EqualTo(EmergencyReactionWindowStatus.Completed));
             Assert.That(gameplay.ActiveActorId, Is.EqualTo("player"));
             Assert.That(gameplay.GetActor("guard").TurnBudget.ActionPoints,
-                Is.EqualTo(4),
+                Is.EqualTo(6),
                 "Emergency AP must not replace the responder's normal budget.");
             Assert.That(gameplay.GetActor("player").TurnBudget.ActionPoints,
                 Is.EqualTo(4),

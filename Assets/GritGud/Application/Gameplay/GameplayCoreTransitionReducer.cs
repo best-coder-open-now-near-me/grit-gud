@@ -270,8 +270,12 @@ namespace GritGud.Application.Gameplay
             string nextActorId = FindNextCapableActor(session, activeIndex)
                 ?? payload.ActorId;
             GameplayActorSnapshot nextActor = session.GetActor(nextActorId);
+            PersonalTurnActionPointGrant grant =
+                PersonalTurnActionPointRules.Grant(
+                    nextActor.TurnBudget.ActionPoints,
+                    nextActor.ActionPointEconomy);
             TurnBudget refreshed = new TurnBudget(
-                nextActor.TurnActionPointAllowance,
+                grant.ResultingActionPoints,
                 Math.Max(
                     0f,
                     nextActor.TurnMovementAllowance
@@ -283,7 +287,11 @@ namespace GritGud.Application.Gameplay
             var record = new TurnEndRecord(
                 turnSequence,
                 payload.ActorId,
-                nextActorId);
+                nextActorId,
+                personalTurnStart: new PersonalTurnStartRecord(
+                    nextActorId,
+                    grant,
+                    refreshed.MovementOpportunity));
             GameplaySessionStateSnapshot resultingSession = CopySession(
                 session,
                 actors,
@@ -443,11 +451,10 @@ namespace GritGud.Application.Gameplay
                 actor.EquipmentEffects,
                 actor.MaximumWounds,
                 actor.Inventory,
-                actor.TurnActionPointAllowance,
+                actor.ActionPointEconomy,
                 actor.TurnMovementAllowance,
                 actor.PinState,
                 actor.EmergencyActionPointAllowance,
-                actor.MaximumActionPoints,
                 actor.SuspendedTurnBudget);
 
         private static IReadOnlyList<GameplayActorSnapshot> ReplaceActor(

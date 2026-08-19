@@ -227,7 +227,7 @@ namespace GritGud.Presentation.Tests
                 origin: ToPosition(origin),
                 aimPoint: ToPosition(aimPoint),
                 definition: definition,
-                turnActionPointAllowance: 4,
+                turnActionPointTimeScale: 4,
                 remainingActionPointsAfterLaunch: 2);
             var flight = new ProjectileFlightSnapshot(
                 launch,

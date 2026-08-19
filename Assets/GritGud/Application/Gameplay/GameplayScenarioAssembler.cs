@@ -22,7 +22,7 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(level));
             }
 
-            content.Normalize();
+            ScenarioContentMigrator.Migrate(content);
             Require(
                 content.schemaVersion == ScenarioContentDocument.CurrentSchemaVersion,
                 $"Scenario schema {content.schemaVersion} is unsupported; expected "
@@ -33,11 +33,15 @@ namespace GritGud.Application.Gameplay
             RequireFinitePositive(
                 content.timing.minimumVoluntaryTurnSeconds,
                 "Minimum voluntary turn duration");
-            Require(content.timing.actionPointIncome > 0,
-                "Action-point income must be positive.");
+            Require(content.timing.startingActionPoints >= 0,
+                "Starting action points cannot be negative.");
+            Require(content.timing.actionPointIncome >= 0,
+                "Action-point income cannot be negative.");
             Require(content.timing.maximumHeldActionPoints
-                    >= content.timing.actionPointIncome,
-                "Maximum held action points cannot be below income.");
+                    >= Math.Max(
+                        content.timing.actionPointIncome,
+                        content.timing.startingActionPoints),
+                "Maximum held action points cannot be below starting AP or income.");
             Require(
                 string.Equals(content.levelId, level.levelId, StringComparison.Ordinal),
                 $"Scenario '{content.scenarioId}' requires level '{content.levelId}', "
@@ -69,6 +73,10 @@ namespace GritGud.Application.Gameplay
             {
                 ScenarioActorDefinition gameplayDefinition =
                     GameplayActorAssembler.CreateActorDefinition(actor);
+                Require(
+                    gameplayDefinition.StartingTurnBudget.ActionPoints
+                        == content.timing.startingActionPoints,
+                    $"Actor '{actor.id}' starting AP must equal scenario economy starting AP {content.timing.startingActionPoints}.");
                 actorDefinitions.Add(gameplayDefinition);
                 actorRuntimeDefinitions.Add(
                     actor.id,
@@ -121,6 +129,7 @@ namespace GritGud.Application.Gameplay
                 content.scenarioId,
                 new ScenarioTimingDefinition(
                     content.timing.minimumVoluntaryTurnSeconds,
+                    content.timing.startingActionPoints,
                     content.timing.actionPointIncome,
                     content.timing.maximumHeldActionPoints),
                 actorDefinitions,

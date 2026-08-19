@@ -70,7 +70,7 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(turn.ObjectiveSummary,
                 Is.EqualTo("OBJECTIVE - DECK SECURED"));
             Assert.That(turn.CommandBar.Resources.ActionPoints, Is.EqualTo(3));
-            Assert.That(turn.CommandBar.Resources.MaximumActionPoints, Is.EqualTo(4));
+            Assert.That(turn.CommandBar.Resources.MaximumActionPoints, Is.EqualTo(6));
             Assert.That(turn.CommandBar.Status, Is.EqualTo("ROUTE - 1.5"));
             Assert.That(
                 turn.CommandBar.FindCommand(GameplayControl.EndTurn).Enabled,

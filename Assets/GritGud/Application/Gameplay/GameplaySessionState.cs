@@ -8,8 +8,7 @@ namespace GritGud.Application.Gameplay
     internal sealed class GameplayActorState
     {
         private readonly TurnBudget turnBudgetAllowance;
-        private readonly int maximumActionPoints;
-        private readonly int actionPointIncome;
+        private readonly TurnActionPointEconomy actionPointEconomy;
         private readonly Dictionary<string, int> inventoryQuantities =
             new Dictionary<string, int>(StringComparer.Ordinal);
         private GameplayActorPose pose;
@@ -34,7 +33,8 @@ namespace GritGud.Application.Gameplay
                 ? new ActorWoundSnapshot(definition.Id, 0, 0f)
                 : RebindWounds(restoredCharacter.Wounds, definition.Id);
             turnBudget = new TurnBudget(
-                definition.StartingTurnBudget.ActionPoints,
+                restoredCharacter?.CurrentActionPoints
+                    ?? definition.StartingTurnBudget.ActionPoints,
                 Math.Max(
                     0f,
                     definition.StartingTurnBudget.MovementOpportunity
@@ -51,12 +51,14 @@ namespace GritGud.Application.Gameplay
                     inventoryQuantities.Add(item.Id, item.InitialQuantity);
             }
             turnBudgetAllowance = definition.StartingTurnBudget;
-            maximumActionPoints = timing.MaximumHeldActionPoints;
-            actionPointIncome = timing.ActionPointIncome;
-            if (turnBudget.ActionPoints > maximumActionPoints)
-                throw new ArgumentException(
-                    "Starting action points exceed the scenario maximum.",
-                    nameof(definition));
+            actionPointEconomy = new TurnActionPointEconomy(
+                definition.StartingTurnBudget.ActionPoints,
+                timing.ActionPointEconomy.IncomePerPersonalTurn,
+                timing.ActionPointEconomy.MaximumHeldActionPoints);
+            if (turnBudget.ActionPoints
+                > actionPointEconomy.MaximumHeldActionPoints)
+                throw new InvalidOperationException(
+                    "Restored AP exceeds the scenario held cap.");
         }
 
         public string ActorId { get; }
@@ -83,8 +85,8 @@ namespace GritGud.Application.Gameplay
 
         public int EmergencyActionPointAllowance { get; private set; }
 
-        public int TurnActionPointAllowance =>
-            turnBudgetAllowance.ActionPoints;
+        public TurnActionPointEconomy ActionPointEconomy =>
+            actionPointEconomy;
 
         public ActorWoundSnapshot Wounds => wounds;
 
@@ -131,13 +133,18 @@ namespace GritGud.Application.Gameplay
             actorSnapshotDirty = true;
         }
 
-        public void RefreshTurnBudget()
+        public PersonalTurnStartRecord StartPersonalTurn()
         {
+            PersonalTurnActionPointGrant grant =
+                PersonalTurnActionPointRules.Grant(
+                    TurnBudget.ActionPoints,
+                    actionPointEconomy);
             TurnBudget = new TurnBudget(
-                Math.Min(
-                    maximumActionPoints,
-                    checked(TurnBudget.ActionPoints
-                        + actionPointIncome)),
+                grant.ResultingActionPoints,
+                WoundedMovementAllowance);
+            return new PersonalTurnStartRecord(
+                ActorId,
+                grant,
                 WoundedMovementAllowance);
         }
 
@@ -245,11 +252,10 @@ namespace GritGud.Application.Gameplay
                 EquipmentEffects,
                 MaximumWounds,
                 cachedInventory,
-                turnBudgetAllowance.ActionPoints,
+                actionPointEconomy,
                 turnBudgetAllowance.MovementOpportunity,
                 PinState,
                 EmergencyActionPointAllowance,
-                maximumActionPoints,
                 suspendedTurnBudget);
             actorSnapshotDirty = false;
             return cachedSnapshot;
@@ -264,7 +270,7 @@ namespace GritGud.Application.Gameplay
                 EquippedItemId,
                 EquipmentEffects,
                 MaximumWounds,
-                turnBudgetAllowance.ActionPoints,
+                actionPointEconomy,
                 turnBudgetAllowance.MovementOpportunity,
                 PinState);
 

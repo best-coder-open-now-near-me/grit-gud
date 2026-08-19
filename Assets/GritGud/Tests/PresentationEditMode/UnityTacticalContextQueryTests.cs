@@ -125,7 +125,7 @@ namespace GritGud.Presentation.Tests
                 equipmentEffects: EquipmentEffectSet.None,
                 maximumWounds: int.MaxValue,
                 inventory: null,
-                turnActionPointAllowance: 4,
+                actionPointEconomy: new TurnActionPointEconomy(4, 4, 6),
                 turnMovementAllowance: 8f);
 
         private sealed class FixedExposureQuery : ITargetExposureQuery

@@ -238,7 +238,8 @@ namespace GritGud.Application.Gameplay
                 launchOrigin,
                 aimPoint,
                 weapon.Projectile,
-                gameplay.GetTurnActionPointAllowance(actorId),
+                gameplay.GetActionPointEconomy(actorId)
+                    .IncomePerPersonalTurn,
                 resultingBudget.ActionPoints);
             long actionSequence = gameplay.LastResolvedAction == null
                 ? 1L

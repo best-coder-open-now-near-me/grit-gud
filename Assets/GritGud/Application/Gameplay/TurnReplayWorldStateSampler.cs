@@ -605,11 +605,10 @@ namespace GritGud.Application.Gameplay
                     : actor.EquipmentEffects,
                 actor.MaximumWounds,
                 inventory ?? actor.Inventory,
-                actor.TurnActionPointAllowance,
+                actor.ActionPointEconomy,
                 actor.TurnMovementAllowance,
                 replacePin ? pinState : actor.PinState,
                 actor.EmergencyActionPointAllowance,
-                actor.MaximumActionPoints,
                 actor.SuspendedTurnBudget);
 
         private static GameplayPosition Lerp(

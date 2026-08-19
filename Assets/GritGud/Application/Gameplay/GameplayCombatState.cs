@@ -20,7 +20,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplaySessionStateSnapshot
     {
-        public const int CurrentSchemaVersion = 4;
+        public const int CurrentSchemaVersion = 5;
 
         public GameplaySessionStateSnapshot(
             string scenarioId,
@@ -205,7 +205,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplayCombatStateSnapshot
     {
-        public const int CurrentSchemaVersion = 4;
+        public const int CurrentSchemaVersion = 5;
 
         public GameplayCombatStateSnapshot(
             GameplaySessionStateSnapshot session,
@@ -501,7 +501,7 @@ namespace GritGud.Application.Gameplay
                 Append(text, root + ".definition.blast.integrityDamage",
                     projectile.Launch.Definition.BlastIntegrityDamage);
                 Append(text, root + ".allowance.ap",
-                    projectile.Launch.TurnActionPointAllowance);
+                    projectile.Launch.TurnActionPointTimeScale);
                 Append(text, root + ".remaining.ap",
                     projectile.Launch.RemainingActionPointsAfterLaunch);
                 Append(text, root + ".distance", projectile.DistanceTraveled);
@@ -611,8 +611,12 @@ namespace GritGud.Application.Gameplay
             Append(text, root + ".stance", (int)actor.Pose.Stance);
             Append(text, root + ".ap", actor.TurnBudget.ActionPoints);
             Append(text, root + ".move", actor.TurnBudget.MovementOpportunity);
-            Append(text, root + ".allowance.ap", actor.TurnActionPointAllowance);
-            Append(text, root + ".allowance.maximumAp", actor.MaximumActionPoints);
+            Append(text, root + ".economy.startingAp",
+                actor.ActionPointEconomy.StartingActionPoints);
+            Append(text, root + ".economy.incomeAp",
+                actor.ActionPointEconomy.IncomePerPersonalTurn);
+            Append(text, root + ".economy.maximumHeldAp",
+                actor.ActionPointEconomy.MaximumHeldActionPoints);
             Append(text, root + ".allowance.move", actor.TurnMovementAllowance);
             Append(text, root + ".allowance.emergencyAp",
                 actor.EmergencyActionPointAllowance);
@@ -794,6 +798,17 @@ namespace GritGud.Application.Gameplay
                     || actor.TurnBudget.MovementOpportunity < 0f)
                     violations.Add(new GameplayInvariantViolation(
                         "budget.negative", path, "Turn resources cannot be negative."));
+                if (actor.TurnBudget.ActionPoints
+                    > actor.ActionPointEconomy.MaximumHeldActionPoints
+                    && actor.EmergencyActionPointAllowance == 0)
+                    violations.Add(new GameplayInvariantViolation(
+                        "budget.above-cap", path,
+                        "Normal-turn AP cannot exceed the authored held cap."));
+                if (actor.SuspendedTurnBudget.HasValue
+                    != (actor.EmergencyActionPointAllowance > 0))
+                    violations.Add(new GameplayInvariantViolation(
+                        "budget.emergency-suspension", path,
+                        "Emergency AP and the suspended normal budget must coexist."));
                 foreach (InventoryQuantitySnapshot quantity in actor.Inventory.Quantities)
                     if (quantity.Quantity < 0)
                         violations.Add(new GameplayInvariantViolation(
