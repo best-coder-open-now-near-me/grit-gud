@@ -30,6 +30,17 @@ namespace GritGud.Application.Gameplay
             return text.ToString();
         }
 
+        internal static string FormatCanonicalValue(object value)
+        {
+            var text = new StringBuilder(4 * 1024);
+            AppendValue(
+                text,
+                value,
+                new HashSet<object>(ReferenceComparer.Instance),
+                depth: 0);
+            return text.ToString();
+        }
+
         private static void AppendValue(
             StringBuilder text,
             object value,

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace GritGud.Application.Gameplay
@@ -9,7 +10,8 @@ namespace GritGud.Application.Gameplay
         public GameplayTrajectoryStep(
             GameplaySemanticTransition transition,
             string resultingStateHash,
-            IEnumerable<string> domainEventTypes)
+            IEnumerable<string> domainEventTypes,
+            string transitionPayloadDigest = null)
         {
             Transition = transition ?? throw new ArgumentNullException(
                 nameof(transition));
@@ -27,11 +29,36 @@ namespace GritGud.Application.Gameplay
                     "Trajectory steps require domain-event production.",
                     nameof(domainEventTypes));
             DomainEventTypes = eventTypes.AsReadOnly();
+            TransitionPayloadDigest = transitionPayloadDigest == null
+                ? GameplayTransitionPayloadDigest.Calculate(Transition)
+                : GameplayContentIdentity.RequireDigest(
+                    transitionPayloadDigest,
+                    nameof(transitionPayloadDigest));
         }
 
         public GameplaySemanticTransition Transition { get; }
         public string ResultingStateHash { get; }
         public IReadOnlyList<string> DomainEventTypes { get; }
+        public string TransitionPayloadDigest { get; }
+    }
+
+    public static class GameplayTransitionPayloadDigest
+    {
+        public static string Calculate(GameplaySemanticTransition transition)
+        {
+            if (transition == null)
+                throw new ArgumentNullException(nameof(transition));
+            string canonical = GameplayReproBundleFormatter
+                .FormatCanonicalValue(transition);
+            using (SHA256 sha = SHA256.Create())
+            {
+                byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(canonical));
+                var text = new StringBuilder(hash.Length * 2);
+                foreach (byte value in hash)
+                    text.Append(value.ToString("x2"));
+                return text.ToString();
+            }
+        }
     }
 
     public sealed class GameplaySimulationBranch
@@ -163,6 +190,21 @@ namespace GritGud.Application.Gameplay
                     throw new ArgumentException(
                         "Replay trajectories cannot contain null steps.",
                         nameof(trajectory));
+                string actualTransitionDigest =
+                    GameplayTransitionPayloadDigest.Calculate(step.Transition);
+                if (!string.Equals(
+                        step.TransitionPayloadDigest,
+                        actualTransitionDigest,
+                        StringComparison.Ordinal))
+                {
+                    return new GameplayExactReplayResult(
+                        state,
+                        index,
+                        index,
+                        step.TransitionPayloadDigest,
+                        actualTransitionDigest,
+                        "transition-payload");
+                }
                 GameplayReductionResult reduction = reducers.Reduce(
                     state,
                     step.Transition);
@@ -230,7 +272,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplayReproBundle
     {
-        public const int CurrentSchemaVersion = 1;
+        public const int CurrentSchemaVersion = 2;
 
         public GameplayReproBundle(
             GameplayExecutionIdentity executionIdentity,

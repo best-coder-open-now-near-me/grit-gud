@@ -666,6 +666,22 @@ internal static class SimulationChecks
                 StringComparison.Ordinal),
             "Exact replay did not detect domain-event divergence.");
 
+        var wrongPayload = new GameplayTrajectoryStep(
+            transition,
+            runtime.CurrentState.CanonicalHash,
+            runtime.Trajectory[0].DomainEventTypes,
+            new string('0', 64));
+        GameplayExactReplayResult payloadDivergence = GameplayExactReplay.Verify(
+            initial,
+            new[] { wrongPayload },
+            reducers);
+        Require(!payloadDivergence.IsExact
+            && string.Equals(
+                payloadDivergence.DivergenceReason,
+                "transition-payload",
+                StringComparison.Ordinal),
+            "Exact replay did not detect semantic payload divergence.");
+
         var failingPresentationRuntime = new GameplaySimulationRuntime(
             executionIdentity,
             initial,
