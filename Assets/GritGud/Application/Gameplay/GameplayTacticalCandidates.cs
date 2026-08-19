@@ -99,6 +99,17 @@ namespace GritGud.Application.Gameplay
                         | GameplayTacticalAffordance.AffectsSight
                         | GameplayTacticalAffordance.AffectsRouting
                         | GameplayTacticalAffordance.AffectsBlast));
+            foreach (DroneSnapshot drone in state.Drones)
+            {
+                if (!drone.IsOperational) continue;
+                result.Add(new GameplayTacticalSubject(
+                    new GameplaySubjectReference(
+                        GameplaySemanticSubjectKind.Vehicle,
+                        drone.DroneId),
+                    drone.Position,
+                    GameplayTacticalAffordance.Damage,
+                    drone.RemainingIntegrity));
+            }
             result.Sort((left, right) =>
             {
                 int comparison = left.Subject.Kind.CompareTo(
@@ -206,6 +217,13 @@ namespace GritGud.Application.Gameplay
             switch (input.Profile.Capability)
             {
                 case GameplaySemanticCapability.Move:
+                    if (input.Profile.Equals(
+                            GameplayCapabilityProfiles.AerialDroneMove()))
+                        return input.SubjectIdHint != null;
+                    return string.Equals(
+                        input.ActorId,
+                        subject.Subject.Id,
+                        StringComparison.Ordinal);
                 case GameplaySemanticCapability.ChangeStance:
                 case GameplaySemanticCapability.EndTurn:
                 case GameplaySemanticCapability.EmergencyReaction:

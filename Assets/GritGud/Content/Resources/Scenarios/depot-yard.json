@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 17,
+  "schemaVersion": 18,
   "scenarioId": "depot-yard",
   "displayName": "Depot Yard",
   "levelId": "main-depot-yard-v1",
@@ -1070,6 +1070,37 @@
       "speedTurningRadiusFactor": 0.16,
       "startingSpeed": 4.0,
       "startingOccupantActorId": ""
+    }
+  ],
+  "drones": [
+    {
+      "entityId": "scout-drone-01",
+      "controllerActorId": "player",
+      "maximumIntegrity": 4.0,
+      "maximumMoveDistance": 5.0,
+      "moveCost": {
+        "actionPoints": 1,
+        "movementOpportunity": 0.0,
+        "mobility": "mobile"
+      },
+      "sensorRange": 16.0,
+      "sensorViewAngleDegrees": 120.0,
+      "attackCapability": {
+        "enabled": true,
+        "actionId": "attack.drone-light-rifle",
+        "displayName": "Drone Light Rifle",
+        "turnCost": {
+          "actionPoints": 1,
+          "movementOpportunity": 0.0,
+          "mobility": "set"
+        },
+        "woundMovementPenalty": 1.0,
+        "accuracyDecay": {
+          "halfLifeDistance": 14.0,
+          "minimumAccuracyPercent": 20.0
+        },
+        "soundSignature": 0.65
+      }
     }
   ]
 }

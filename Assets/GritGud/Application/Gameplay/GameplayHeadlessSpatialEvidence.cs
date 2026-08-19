@@ -111,6 +111,13 @@ namespace GritGud.Application.Gameplay
                 Append(text, "position", vehicle.Position);
                 Append(text, "forward", vehicle.ForwardDegrees);
             }
+            foreach (DroneSnapshot drone in state.Drones)
+            {
+                Append(text, "drone", drone.DroneId);
+                Append(text, "position", drone.Position);
+                Append(text, "facing", drone.FacingDegrees);
+                Append(text, "integrity", drone.RemainingIntegrity);
+            }
             foreach (SmokeFieldSnapshot smoke in state.SmokeFields)
             {
                 Append(text, "smoke", smoke.Field.Id);

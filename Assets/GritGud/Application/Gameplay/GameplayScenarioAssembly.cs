@@ -126,6 +126,7 @@ namespace GritGud.Application.Gameplay
             actors;
         private readonly Dictionary<string, ScenarioVehicleRuntimeDefinition>
             vehicles;
+        private readonly Dictionary<string, DroneDefinition> drones;
         private readonly Dictionary<string, ScenarioObjectiveRuntimeDefinition>
             objectives;
         private readonly Dictionary<string, DisplacementSubjectDefinition>
@@ -145,7 +146,8 @@ namespace GritGud.Application.Gameplay
             Dictionary<string, ScenarioVehicleRuntimeDefinition> vehicleIndex,
             Dictionary<string, DisplacementSubjectDefinition>
                 displacementSubjectIndex,
-            IEnumerable<TacticalContextRuleDefinition> tacticalRuleDefinitions = null)
+            IEnumerable<TacticalContextRuleDefinition> tacticalRuleDefinitions = null,
+            Dictionary<string, DroneDefinition> droneIndex = null)
         {
             DisplayName = string.IsNullOrWhiteSpace(displayName)
                 ? throw new ArgumentException(
@@ -160,6 +162,8 @@ namespace GritGud.Application.Gameplay
                 ?? throw new ArgumentNullException(nameof(actorIndex));
             vehicles = vehicleIndex
                 ?? throw new ArgumentNullException(nameof(vehicleIndex));
+            drones = droneIndex ?? new Dictionary<string, DroneDefinition>(
+                StringComparer.Ordinal);
             objectives = objectiveIndex
                 ?? throw new ArgumentNullException(nameof(objectiveIndex));
             displacementSubjects = displacementSubjectIndex
@@ -218,6 +222,14 @@ namespace GritGud.Application.Gameplay
         public IReadOnlyCollection<ScenarioVehicleRuntimeDefinition> Vehicles =>
             vehicles.Values;
 
+        public IReadOnlyCollection<DroneDefinition> Drones => drones.Values;
+
+        public DroneDefinition GetDrone(string droneId) =>
+            drones.TryGetValue(droneId ?? string.Empty, out DroneDefinition drone)
+                ? drone
+                : throw new KeyNotFoundException(
+                    $"Scenario drone '{droneId}' is not defined.");
+
         public IReadOnlyCollection<DisplacementSubjectDefinition>
             DisplacementSubjects => displacementSubjects.Values;
 
@@ -256,7 +268,8 @@ namespace GritGud.Application.Gameplay
                 objectives,
                 vehicles,
                 displacementSubjects,
-                tacticalRules);
+                tacticalRules,
+                drones);
         }
 
         public bool TryGetDisplacementSubject(

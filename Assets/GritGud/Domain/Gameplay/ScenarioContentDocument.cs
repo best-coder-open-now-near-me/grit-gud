@@ -390,6 +390,19 @@ namespace GritGud.Domain.Gameplay
     }
 
     [Serializable]
+    public sealed class ScenarioDroneContentData
+    {
+        public string entityId = string.Empty;
+        public string controllerActorId = string.Empty;
+        public float maximumIntegrity;
+        public float maximumMoveDistance;
+        public ScenarioActionCostData moveCost = new ScenarioActionCostData();
+        public float sensorRange;
+        public float sensorViewAngleDegrees;
+        public ScenarioAttackCapabilityData attackCapability;
+    }
+
+    [Serializable]
     public sealed class ScenarioPlayerPartyData
     {
         public List<string> actorIds = new List<string>();
@@ -407,7 +420,7 @@ namespace GritGud.Domain.Gameplay
     [Serializable]
     public sealed class ScenarioContentDocument
     {
-        public const int CurrentSchemaVersion = 17;
+        public const int CurrentSchemaVersion = 18;
 
         public int schemaVersion = CurrentSchemaVersion;
         public string scenarioId = string.Empty;
@@ -427,6 +440,8 @@ namespace GritGud.Domain.Gameplay
             new List<ScenarioPropContentData>();
         public List<ScenarioVehicleContentData> vehicles =
             new List<ScenarioVehicleContentData>();
+        public List<ScenarioDroneContentData> drones =
+            new List<ScenarioDroneContentData>();
         public List<ScenarioTacticalRuleData> tacticalRules =
             new List<ScenarioTacticalRuleData>();
 
@@ -446,6 +461,7 @@ namespace GritGud.Domain.Gameplay
             objectives = objectives ?? new List<ScenarioObjectiveContentData>();
             props = props ?? new List<ScenarioPropContentData>();
             vehicles = vehicles ?? new List<ScenarioVehicleContentData>();
+            drones = drones ?? new List<ScenarioDroneContentData>();
             tacticalRules = tacticalRules
                 ?? new List<ScenarioTacticalRuleData>();
         }

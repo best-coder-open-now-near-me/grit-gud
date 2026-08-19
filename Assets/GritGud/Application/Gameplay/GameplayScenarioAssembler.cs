@@ -125,6 +125,11 @@ namespace GritGud.Application.Gameplay
                     content.vehicles,
                     level,
                     actorIndex);
+            Dictionary<string, DroneDefinition> droneIndex =
+                GameplayDroneAssembler.Index(
+                    content.drones,
+                    level,
+                    actorIndex);
             var scenario = new ScenarioDefinition(
                 content.scenarioId,
                 new ScenarioTimingDefinition(
@@ -156,7 +161,8 @@ namespace GritGud.Application.Gameplay
                 GameplayDisplacementAssembler.CreateSubjects(
                     actorIndex,
                     propIndex),
-                tacticalRules);
+                tacticalRules,
+                droneIndex);
             GameplayCapabilityCoverageGate.RequireCurrent(assembly, level);
             return assembly;
         }

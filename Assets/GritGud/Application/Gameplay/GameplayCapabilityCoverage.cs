@@ -380,6 +380,14 @@ namespace GritGud.Application.Gameplay
                     GameplayCapabilityProfiles.VehicleMove(),
                     vehicle.EntityId);
             }
+            foreach (DroneDefinition drone in assembly.Drones)
+            {
+                Add(result, GameplayReachableInputKind.MovementControl,
+                    drone.Id + ".move",
+                    drone.ControllerActorId,
+                    GameplayCapabilityProfiles.AerialDroneMove(),
+                    drone.Id);
+            }
             return result.AsReadOnly();
         }
 
