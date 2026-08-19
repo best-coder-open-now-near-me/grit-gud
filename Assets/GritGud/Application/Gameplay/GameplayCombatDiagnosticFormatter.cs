@@ -271,6 +271,19 @@ namespace GritGud.Application.Gameplay
                     projection = FormatVehicleMomentum(vehicle.Momentum);
                     return true;
 
+                case DroneMovedJournalEntry droneMove:
+                    projection = FormatDroneMove(droneMove.Movement);
+                    return true;
+
+                case DroneAttackResolvedJournalEntry droneAttack:
+                    projection = FormatDroneAttack(droneAttack.Attack);
+                    return true;
+
+                case ActorDroneAttackResolvedJournalEntry actorDroneAttack:
+                    projection = FormatActorDroneAttack(
+                        actorDroneAttack.Attack);
+                    return true;
+
                 case ProjectileAdvancedJournalEntry projectile:
                     projection = FormatProjectileAdvance(projectile.Advance);
                     return true;
@@ -335,6 +348,9 @@ namespace GritGud.Application.Gameplay
                 case GameplayJournalEntryKind.ActionResolved:
                 case GameplayJournalEntryKind.DestructibleDamaged:
                 case GameplayJournalEntryKind.VehicleMomentumResolved:
+                case GameplayJournalEntryKind.DroneMoved:
+                case GameplayJournalEntryKind.DroneAttackResolved:
+                case GameplayJournalEntryKind.ActorDroneAttackResolved:
                 case GameplayJournalEntryKind.ProjectileAdvanced:
                 case GameplayJournalEntryKind.EmergencyReactionChanged:
                 case GameplayJournalEntryKind.EnemyDecisionCommitted:
@@ -389,6 +405,61 @@ namespace GritGud.Application.Gameplay
                         + " -> "
                         + FormatPosition(momentum.Resulting.Position),
                     "PATH - " + momentum.Path.Count + " recorded points",
+                });
+
+        private static GameplayDiagnosticProjection FormatDroneMove(
+            DroneMoveRecord movement) => new GameplayDiagnosticProjection(
+                movement.DroneId + " MOVES",
+                new[]
+                {
+                    "CONTROLLER - " + movement.ControllerActorId,
+                    "POSITION - " + FormatPosition(movement.Origin)
+                        + " -> " + FormatPosition(movement.Destination),
+                    "FACING - " + Format(movement.ResultingFacingDegrees)
+                        + " degrees",
+                    "AP - " + movement.PreviousBudget.ActionPoints
+                        + " -> " + movement.ResultingBudget.ActionPoints,
+                });
+
+        private static GameplayDiagnosticProjection FormatDroneAttack(
+            DroneAttackRecord attack)
+        {
+            var lines = new List<string>
+            {
+                "CONTROLLER - " + attack.ControllerActorId,
+                "TARGET - " + attack.TargetKind + " " + attack.TargetId,
+                "AP - " + attack.PreviousBudget.ActionPoints
+                    + " -> " + attack.ResultingBudget.ActionPoints,
+                "CONSEQUENCE - " + attack.Consequence.GetType().Name,
+            };
+            if (attack.Consequence is AttackResolutionRecord resolution)
+                lines.Add(resolution.Hit
+                    ? "RESULT - HIT " + resolution.HitRegion
+                    : "RESULT - MISS");
+            return new GameplayDiagnosticProjection(
+                attack.DroneId + " ATTACKS",
+                lines);
+        }
+
+        private static GameplayDiagnosticProjection FormatActorDroneAttack(
+            ActorDroneAttackRecord attack) => new GameplayDiagnosticProjection(
+                attack.AttackerId + " ATTACKS " + attack.DroneId,
+                new[]
+                {
+                    "ATTACK - " + attack.AttackId,
+                    "LOS - " + attack.Exposure.VisibleSampleCount
+                        + " / " + attack.Exposure.TotalSampleCount
+                        + " samples visible",
+                    "HIT CHANCE - " + attack.HitChancePercent
+                        + "% - ROLL " + attack.HitRoll,
+                    attack.Hit
+                        ? "INTEGRITY - "
+                            + Format(attack.Damage.Previous.RemainingIntegrity)
+                            + " -> "
+                            + Format(attack.Damage.Resulting.RemainingIntegrity)
+                        : "RESULT - MISS",
+                    "AP - " + attack.PreviousBudget.ActionPoints
+                        + " -> " + attack.ResultingBudget.ActionPoints,
                 });
 
         private static GameplayDiagnosticProjection FormatReactionWindow(
