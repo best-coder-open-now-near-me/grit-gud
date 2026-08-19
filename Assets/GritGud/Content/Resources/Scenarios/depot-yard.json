@@ -688,6 +688,7 @@
             "suspicionDecayPerTick": 10,
             "alertThreshold": 100
           },
+          "patrol": null,
           "reinforcementActorIds": []
         }
       },
@@ -844,6 +845,7 @@
             "suspicionDecayPerTick": 6,
             "alertThreshold": 100
           },
+          "patrol": null,
           "reinforcementActorIds": []
         }
       },
