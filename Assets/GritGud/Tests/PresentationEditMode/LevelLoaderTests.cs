@@ -256,6 +256,10 @@ namespace GritGud.Presentation.Tests
                 .position.x, Is.EqualTo(1f));
             Assert.That(package.Scenario.actors.Single(actor => actor.id == "guard-a")
                 .facingDegrees, Is.EqualTo(180f));
+            Assert.That(
+                package.Assembly.GetActorDefinition("guard-a")
+                    .Combat.EnemyBehavior.ReinforcementActorIds,
+                Is.Empty);
             Assert.That(package.Scenario.props.Single().entityId,
                 Is.EqualTo("crate-01"));
             Assert.That(package.Scenario.props.Single().mass, Is.EqualTo(31f));

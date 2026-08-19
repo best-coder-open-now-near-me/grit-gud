@@ -176,7 +176,7 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
-        public void DeletingActorClearsVehicleOccupantInSameUndoStep()
+        public void DeletingActorClearsInstanceLinksInSameUndoStep()
         {
             LevelDocument document = LevelDocumentFactory.CreateEmpty();
             var opponent = new LevelScenarioActorData
@@ -186,6 +186,7 @@ namespace GritGud.Presentation.Tests
                 primaryTarget = true,
             };
             document.scenario.actors.Add(opponent);
+            document.scenario.actors[0].reinforcementActorIds.Add(opponent.id);
             document.scenario.vehicles.Add(new LevelScenarioVehicleData
             {
                 entityId = "truck",
@@ -201,10 +202,16 @@ namespace GritGud.Presentation.Tests
 
             LevelDocument deleted = workspace.CreateSnapshot();
             Assert.That(deleted.scenario.actors.Any(actor => actor.id == opponent.id), Is.False);
+            Assert.That(
+                deleted.scenario.actors[0].reinforcementActorIds,
+                Does.Not.Contain(opponent.id));
             Assert.That(deleted.scenario.vehicles[0].startingOccupantActorId, Is.Empty);
             Assert.That(workspace.Undo(), Is.True);
             LevelDocument restored = workspace.CreateSnapshot();
             Assert.That(restored.scenario.actors.Any(actor => actor.id == opponent.id), Is.True);
+            Assert.That(
+                restored.scenario.actors[0].reinforcementActorIds,
+                Does.Contain(opponent.id));
             Assert.That(restored.scenario.vehicles[0].startingOccupantActorId,
                 Is.EqualTo(opponent.id));
         }

@@ -319,7 +319,8 @@
         },
         "playerControlled": true,
         "initiallySelected": true,
-        "primaryTarget": false
+        "primaryTarget": false,
+        "reinforcementActorIds": []
       },
       {
         "id": "oren-vale",
@@ -330,7 +331,8 @@
         },
         "playerControlled": true,
         "initiallySelected": false,
-        "primaryTarget": false
+        "primaryTarget": false,
+        "reinforcementActorIds": []
       },
       {
         "id": "depot-rifleman",
@@ -341,7 +343,8 @@
         },
         "playerControlled": false,
         "initiallySelected": false,
-        "primaryTarget": true
+        "primaryTarget": true,
+        "reinforcementActorIds": ["depot-yard-support"]
       },
       {
         "id": "depot-yard-support",
@@ -352,7 +355,8 @@
         },
         "playerControlled": false,
         "initiallySelected": false,
-        "primaryTarget": false
+        "primaryTarget": false,
+        "reinforcementActorIds": []
       },
       {
         "id": "depot-warehouse-patrol",
@@ -363,7 +367,8 @@
         },
         "playerControlled": false,
         "initiallySelected": false,
-        "primaryTarget": false
+        "primaryTarget": false,
+        "reinforcementActorIds": ["depot-loading-guard"]
       },
       {
         "id": "depot-loading-guard",
@@ -374,7 +379,8 @@
         },
         "playerControlled": false,
         "initiallySelected": false,
-        "primaryTarget": false
+        "primaryTarget": false,
+        "reinforcementActorIds": []
       }
     ],
     "objectives": [

@@ -261,6 +261,26 @@ namespace GritGud.Domain.Tests.Levels
         }
 
         [Test]
+        public void ScenarioReinforcementLinksAreInstanceScopedAndMustResolve()
+        {
+            LevelDocument document = LevelDocumentFactory.CreateEmpty();
+            LevelScenarioActorData actor = document.scenario.actors[0];
+            actor.reinforcementActorIds.Add(actor.id);
+            actor.reinforcementActorIds.Add("missing-enemy");
+            actor.reinforcementActorIds.Add("missing-enemy");
+
+            IReadOnlyList<LevelValidationIssue> issues =
+                LevelValidator.Validate(document);
+
+            Assert.That(issues, Has.Some.Matches<LevelValidationIssue>(issue =>
+                issue.Code == "scenario.actor.reinforcement.self"));
+            Assert.That(issues, Has.Some.Matches<LevelValidationIssue>(issue =>
+                issue.Code == "scenario.actor.reinforcement.unknown"));
+            Assert.That(issues, Has.Some.Matches<LevelValidationIssue>(issue =>
+                issue.Code == "scenario.actor.reinforcement.id.duplicate"));
+        }
+
+        [Test]
         public void ScenarioTimingUsesTheRuntimePositiveDurationContract()
         {
             LevelDocument document = LevelDocumentFactory.CreateEmpty();

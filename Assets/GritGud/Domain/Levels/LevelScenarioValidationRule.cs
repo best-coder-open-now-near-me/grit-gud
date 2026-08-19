@@ -133,7 +133,50 @@ namespace GritGud.Domain.Levels
                     "The scenario can define at most one primary target actor.");
             }
 
+            ValidateReinforcementLinks(context, scenario.actors, actorIds);
             ValidateEntityLinks(context, scenario, actorIds);
+        }
+
+        private static void ValidateReinforcementLinks(
+            LevelValidationContext context,
+            IEnumerable<LevelScenarioActorData> actors,
+            HashSet<string> actorIds)
+        {
+            foreach (LevelScenarioActorData actor in actors.Where(actor => actor != null))
+            {
+                var unique = new HashSet<string>(StringComparer.Ordinal);
+                foreach (string reinforcementId in actor.reinforcementActorIds
+                    ?? Enumerable.Empty<string>())
+                {
+                    if (string.IsNullOrWhiteSpace(reinforcementId))
+                    {
+                        context.Error(
+                            "scenario.actor.reinforcement.id.missing",
+                            $"Scenario actor '{actor.id}' has an empty reinforcement ID.");
+                    }
+                    else if (!unique.Add(reinforcementId))
+                    {
+                        context.Error(
+                            "scenario.actor.reinforcement.id.duplicate",
+                            $"Scenario actor '{actor.id}' repeats reinforcement "
+                            + $"'{reinforcementId}'.");
+                    }
+                    else if (string.Equals(actor.id, reinforcementId,
+                                 StringComparison.Ordinal))
+                    {
+                        context.Error(
+                            "scenario.actor.reinforcement.self",
+                            $"Scenario actor '{actor.id}' cannot reinforce itself.");
+                    }
+                    else if (!actorIds.Contains(reinforcementId))
+                    {
+                        context.Error(
+                            "scenario.actor.reinforcement.unknown",
+                            $"Scenario actor '{actor.id}' references unknown reinforcement "
+                            + $"'{reinforcementId}'.");
+                    }
+                }
+            }
         }
 
         private static void ValidateActorTemplate(

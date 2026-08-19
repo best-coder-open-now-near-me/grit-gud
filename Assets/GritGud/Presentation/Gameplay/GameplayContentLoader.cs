@@ -200,6 +200,18 @@ namespace GritGud.Presentation.Gameplay
                 actor.characterId = instance.characterId;
                 actor.position = instance.transform.position;
                 actor.facingDegrees = instance.transform.yawDegrees;
+                if (actor.combat?.enemyBehavior != null)
+                {
+                    actor.combat.enemyBehavior.reinforcementActorIds =
+                        new List<string>(instance.reinforcementActorIds
+                            ?? new List<string>());
+                }
+                else if ((instance.reinforcementActorIds?.Count ?? 0) > 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Scenario actor '{instance.id}' authors reinforcements "
+                        + "but its template has no enemy behavior.");
+                }
                 scenario.actors.Add(actor);
                 if (instance.playerControlled)
                     scenario.playerParty.actorIds.Add(instance.id);

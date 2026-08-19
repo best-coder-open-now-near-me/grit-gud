@@ -492,12 +492,14 @@ namespace GritGud.Domain.Levels
         public bool playerControlled;
         public bool initiallySelected;
         public bool primaryTarget;
+        public List<string> reinforcementActorIds = new List<string>();
 
         public void Normalize()
         {
             id = id ?? string.Empty;
             templateId = templateId ?? string.Empty;
             characterId = characterId ?? string.Empty;
+            reinforcementActorIds = reinforcementActorIds ?? new List<string>();
         }
 
         public LevelScenarioActorData DeepCopy()
@@ -511,6 +513,8 @@ namespace GritGud.Domain.Levels
                 playerControlled = playerControlled,
                 initiallySelected = initiallySelected,
                 primaryTarget = primaryTarget,
+                reinforcementActorIds = new List<string>(
+                    reinforcementActorIds ?? new List<string>()),
             };
         }
     }

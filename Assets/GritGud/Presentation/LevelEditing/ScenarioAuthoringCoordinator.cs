@@ -175,17 +175,25 @@ namespace GritGud.Presentation.LevelEditing
 
             var commands = new List<ILevelEditCommand>();
             LevelScenarioData linksAfter = snapshot.scenario.DeepCopy();
-            bool clearedOccupant = false;
+            bool clearedLinks = false;
             foreach (LevelScenarioVehicleData vehicle in linksAfter.vehicles.Where(vehicle =>
                 string.Equals(vehicle?.startingOccupantActorId, actorId, StringComparison.Ordinal)))
             {
                 vehicle.startingOccupantActorId = string.Empty;
-                clearedOccupant = true;
+                clearedLinks = true;
             }
-            if (clearedOccupant)
+            foreach (LevelScenarioActorData source in linksAfter.actors.Where(candidate =>
+                candidate != null && !string.Equals(candidate.id, actorId,
+                    StringComparison.Ordinal)))
+            {
+                int removed = source.reinforcementActorIds?.RemoveAll(candidate =>
+                    string.Equals(candidate, actorId, StringComparison.Ordinal)) ?? 0;
+                clearedLinks |= removed > 0;
+            }
+            if (clearedLinks)
             {
                 commands.Add(new SetScenarioConfigurationCommand(
-                    "Clear deleted vehicle occupant",
+                    "Clear deleted actor links",
                     snapshot.scenario,
                     linksAfter,
                     linksAfter.vehicles.Select(vehicle => vehicle?.entityId)));
