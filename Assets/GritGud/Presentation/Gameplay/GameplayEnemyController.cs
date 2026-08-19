@@ -12,7 +12,7 @@ namespace GritGud.Presentation.Gameplay
         private GameplaySession session;
         private GameplayPartyControlSession partyControl;
         private GameplayEnemyRuntimeRegistry enemies;
-        private GameplayExplorationSoundLedger explorationSounds;
+        private GameplayCommittedActionConsequenceCoordinator committedConsequences;
         private GameplayEnemyExplorationCoordinator exploration;
         private GameplayEnemyCombatTurnExecutor combatTurns;
         private GameplayEnemyOutcomePresenter outcomes;
@@ -75,14 +75,17 @@ namespace GritGud.Presentation.Gameplay
                 presentationCatalog,
                 obscuranceQuery,
                 traversalLinks);
-            explorationSounds = new GameplayExplorationSoundLedger(session);
+            committedConsequences =
+                new GameplayCommittedActionConsequenceCoordinator(
+                    session,
+                    new GameplayEnemyCommittedActionSoundQuery(enemies),
+                    beginEncounter);
             exploration = new GameplayEnemyExplorationCoordinator(
                 session,
                 enemies,
                 sessionPresenter,
                 actionController,
                 partyControl,
-                explorationSounds,
                 beginEncounter,
                 tacticalTransition,
                 presentationCatalog.DetectionIntervalSeconds);
@@ -109,12 +112,12 @@ namespace GritGud.Presentation.Gameplay
 
         internal void Unbind()
         {
-            explorationSounds?.Dispose();
+            committedConsequences?.Dispose();
             enemies?.Dispose();
             outcomes = null;
             combatTurns = null;
             exploration = null;
-            explorationSounds = null;
+            committedConsequences = null;
             enemies = null;
             partyControl = null;
             session = null;

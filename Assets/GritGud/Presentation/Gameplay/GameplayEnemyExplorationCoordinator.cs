@@ -12,7 +12,6 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplaySessionPresenter sessionPresenter;
         private readonly GameplayActionController actionController;
         private readonly GameplayPartyControlSession partyControl;
-        private readonly GameplayExplorationSoundLedger sounds;
         private readonly Func<IReadOnlyList<string>, bool> beginEncounter;
         private readonly GameplayTacticalTransitionPresenter tacticalTransition;
         private readonly float detectionIntervalSeconds;
@@ -26,7 +25,6 @@ namespace GritGud.Presentation.Gameplay
             GameplaySessionPresenter sessionPresenter,
             GameplayActionController actionController,
             GameplayPartyControlSession partyControl,
-            GameplayExplorationSoundLedger soundLedger,
             Func<IReadOnlyList<string>, bool> beginEncounter,
             GameplayTacticalTransitionPresenter tacticalTransition,
             float detectionIntervalSeconds)
@@ -41,8 +39,6 @@ namespace GritGud.Presentation.Gameplay
                 ?? throw new ArgumentNullException(nameof(actionController));
             this.partyControl = partyControl ?? throw new ArgumentNullException(
                 nameof(partyControl));
-            sounds = soundLedger ?? throw new ArgumentNullException(
-                nameof(soundLedger));
             this.beginEncounter = beginEncounter
                 ?? throw new ArgumentNullException(nameof(beginEncounter));
             this.tacticalTransition = tacticalTransition
@@ -69,7 +65,6 @@ namespace GritGud.Presentation.Gameplay
             if (pendingEncounterScope != null)
                 return;
 
-            sounds.Advance(unscaledDeltaTime);
             if (TickPatrolPlayback(unscaledDeltaTime))
                 return;
 
@@ -154,24 +149,11 @@ namespace GritGud.Presentation.Gameplay
                 targetPosition = session.GetActor(targetId).Pose.Position;
             }
 
-            EncounterSoundEvidence sound = null;
-            if (sounds.TryConsume(
-                    enemy.Definition.Id,
-                    out string sourceId,
-                    out GameplayPosition origin,
-                    out float loudness))
-            {
-                sound = enemy.TacticalQuery.CaptureSound(
-                    sourceId,
-                    origin,
-                    loudness);
-            }
-
             return new EncounterObservation(
                 enemy.Definition.Id,
                 sight,
                 targetPosition,
-                sound);
+                sound: null);
         }
 
         private void TryStartPatrol(

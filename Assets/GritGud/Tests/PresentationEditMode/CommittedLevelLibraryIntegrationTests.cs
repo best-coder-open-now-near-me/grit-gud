@@ -35,6 +35,54 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void PublishedDepotEnforcesTacticalRuleAndBankedApLifecycle()
+        {
+            GameplayContentPackage content = GameplayContentLoader.LoadDefault();
+            ScenarioDefinition scenario = content.Assembly.Scenario;
+
+            Assert.That(content.Scenario.schemaVersion,
+                Is.EqualTo(ScenarioContentDocument.CurrentSchemaVersion));
+            Assert.That(scenario.Timing.ActionPointEconomy.StartingActionPoints,
+                Is.EqualTo(4));
+            Assert.That(scenario.Timing.ActionPointEconomy.IncomePerPersonalTurn,
+                Is.EqualTo(4));
+            Assert.That(scenario.Timing.ActionPointEconomy.MaximumHeldActionPoints,
+                Is.EqualTo(6));
+            Assert.That(content.Assembly.TacticalRules.Select(rule => rule.RuleId),
+                Does.Contain("rule.ambush.direct-attack.actor"));
+
+            var session = new GameplaySession(
+                scenario,
+                scenarioSeed: content.Assembly.RandomSeed);
+            Assert.That(session.GetActor("player").TurnBudget.ActionPoints,
+                Is.EqualTo(4));
+            Assert.That(session.EnterTurnMode(), Is.True);
+            Assert.That(session.TryExitTurnMode(out _), Is.True);
+            Assert.That(session.GetActor("player").TurnBudget.ActionPoints,
+                Is.EqualTo(4), "UI mode changes cannot mint AP.");
+            session.AdvanceContinuousTime(
+                scenario.Timing.MinimumVoluntaryTurnSeconds);
+            Assert.That(session.EnterTurnMode(), Is.True);
+            Assert.That(session.TryEndTurn("player", out _), Is.True);
+            Assert.That(session.CompleteVoluntaryWorldTurn(), Is.True);
+            Assert.That(session.GetActor("player").TurnBudget.ActionPoints,
+                Is.EqualTo(6));
+            Assert.That(session.LastCompletedVoluntaryTurnCycle
+                .PersonalTurnStarts.Single(start => start.ActorId == "player")
+                .ActionPoints.CapWaste, Is.EqualTo(2));
+
+            var encounter = new GameplaySession(
+                scenario,
+                scenarioSeed: content.Assembly.RandomSeed);
+            Assert.That(encounter.BeginEncounter(), Is.True);
+            Assert.That(encounter.GetActor("player").TurnBudget.ActionPoints,
+                Is.EqualTo(4), "Encounter onset cannot mint AP.");
+            Assert.That(encounter.CompleteEncounter(), Is.True);
+            Assert.That(encounter.GetActor("player").TurnBudget.ActionPoints,
+                Is.EqualTo(4), "Encounter completion cannot mint AP.");
+        }
+
+        [Test]
         public void DefaultPublishedLevelUsesStableIdentityAndDetachedSnapshots()
         {
             CommittedLevelLibrary library =

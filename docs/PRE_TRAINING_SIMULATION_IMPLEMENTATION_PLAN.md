@@ -20,6 +20,26 @@ meta, redesign encounter presentation, or regenerate lower-priority generator
 fixtures. The completion point is a focused player-validation build containing
 the generic context route, one Ambush rule, and the 4/4/6 economy.
 
+## Execution status (2026-08-18)
+
+Implementation is complete through the code-validation gate:
+
+- frozen tactical context, declarative Ambush consequences, diagnostics,
+  policy-neutral outcome projection, exact replay payload verification, and
+  tactical-rule coverage are installed;
+- post-action sound, stable observer awareness, and scoped encounter onset now
+  have one Application-owned live coordinator and one ordered headless planner;
+- scenario content and persisted state use the explicit start 4 / income 4 /
+  maximum 6 economy, including legacy migration and canonical personal-turn
+  grants; and
+- engine-free simulation checks cover the integrated action → sound → awareness
+  → encounter trajectory and exact replay.
+
+The next and only remaining roadmap gate is the hosted Unity pipeline followed
+by the focused player-validation build/playtest. Broad training remains blocked
+until that player gate is accepted. Lower-priority generator regeneration tests
+remain deferred as previously agreed.
+
 ## Non-negotiable invariants
 
 - Canonical state and immutable evidence decide gameplay. Unity supplies

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Turns;
@@ -95,7 +97,54 @@ namespace GritGud.Domain.Tests.Gameplay
                 Is.TypeOf<EncounterChangedJournalEntry>());
         }
 
-        private static GameplaySession CreateSession()
+        [Test]
+        public void CommittedAttackAppliesSoundBeforeStartingScopedEncounter()
+        {
+            GameplaySession gameplay = CreateSession(soundSuspicionGain: 100);
+            var attacks = new GameplayAttackSession(gameplay);
+            var observedStates = new List<EncounterAwarenessState>();
+            using var consequences =
+                new GameplayCommittedActionConsequenceCoordinator(
+                    gameplay,
+                    new AudibleSoundQuery(),
+                    scope =>
+                    {
+                        observedStates.Add(gameplay.EncounterState
+                            .GetAwareness("enemy").State);
+                        return gameplay.BeginEncounter(scope);
+                    });
+            var exposure = new TargetExposureSnapshot(
+                "player",
+                "enemy",
+                new[]
+                {
+                    new TargetRegionExposure(TargetRegionId.Torso, 1, 1),
+                });
+
+            Assert.That(attacks.TryResolve(
+                "player",
+                exposure,
+                out GameplayActionRecord action,
+                out AttackResolutionFailure failure), Is.True);
+
+            Assert.That(failure, Is.EqualTo(AttackResolutionFailure.None));
+            Assert.That(action.Context, Is.Not.Null);
+            Assert.That(gameplay.EncounterState.GetAwareness("enemy").State,
+                Is.EqualTo(EncounterAwarenessState.Alert));
+            Assert.That(observedStates,
+                Is.EqualTo(new[] { EncounterAwarenessState.Alert }));
+            Assert.That(gameplay.EncounterActive, Is.True);
+            Assert.That(gameplay.EncounterState.ParticipantIds,
+                Does.Contain("player"));
+            Assert.That(gameplay.EncounterState.ParticipantIds,
+                Does.Contain("enemy"));
+            Assert.That(gameplay.Journal.Entries
+                    .OfType<EnemyAwarenessChangedJournalEntry>().Count(),
+                Is.EqualTo(1));
+        }
+
+        private static GameplaySession CreateSession(
+            int soundSuspicionGain = 60)
         {
             var behavior = new EnemyBehaviorDefinition(
                 "behavior.encounter-test",
@@ -107,7 +156,7 @@ namespace GritGud.Domain.Tests.Gameplay
                 awarenessPolicy: new EncounterAwarenessPolicyDefinition(
                     hearingRange: 12f,
                     sightSuspicionGain: 100,
-                    soundSuspicionGain: 60,
+                    soundSuspicionGain,
                     suspicionDecayPerTick: 10,
                     alertThreshold: 100),
                 patrolRoute: new PatrolRouteDefinition(
@@ -117,11 +166,19 @@ namespace GritGud.Domain.Tests.Gameplay
                         new GameplayPosition(0f, 0f, 3f),
                     },
                     loops: true));
+            var attack = new AttackDefinition(
+                "attack.rifle",
+                "Fire rifle",
+                new ActionCost(1, 0f, ActionMobility.Set),
+                woundMovementPenalty: 2f,
+                accuracyDecay: AccuracyDecayDefinition.None,
+                soundSignature: 1f);
             var player = new ScenarioActorDefinition(
                 "player",
                 5,
                 new GameplayActorPose(new GameplayPosition(0f, 0f, 6f), 180f),
                 new TurnBudget(4, 8f),
+                attack,
                 combat: new ActorCombatDefinition("player", new[] { "raider" }, 2));
             var enemy = new ScenarioActorDefinition(
                 "enemy",
@@ -144,6 +201,19 @@ namespace GritGud.Domain.Tests.Gameplay
                 new ScenarioTimingDefinition(1f),
                 new[] { player, enemy, bystander },
                 Array.Empty<ScenarioObjectiveDefinition>()));
+        }
+
+        private sealed class AudibleSoundQuery :
+            IGameplayCommittedActionSoundQuery
+        {
+            public EncounterSoundEvidence Capture(
+                string observerActorId,
+                string sourceActorId,
+                GameplayPosition origin,
+                float soundSignature) => new EncounterSoundEvidence(
+                    sourceActorId,
+                    origin,
+                    soundSignature);
         }
     }
 }

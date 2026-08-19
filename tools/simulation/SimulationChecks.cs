@@ -20,6 +20,7 @@ internal static class SimulationChecks
             VerifyAllCurrentContentCoverage();
             VerifyTacticalDestructibleSimulation();
             VerifyEncounterAwarenessAndScopedInitiative();
+            VerifyCommittedActionConsequenceTrajectory();
             VerifyBankedActionPointEconomy();
             SimulationParityChecks.Verify();
             Console.WriteLine(
@@ -489,6 +490,89 @@ internal static class SimulationChecks
             branch.Apply(transition);
         Require(GameplayExactReplay.Verify(initial, branch.Steps, reducers).IsExact,
             "Headless encounter trajectory did not replay exactly.");
+    }
+
+    private static void VerifyCommittedActionConsequenceTrajectory()
+    {
+        GameplaySession live = CreateEncounterGameplay();
+        GameplayCombatStateSnapshot initial = GameplayCombatStateCapture.Capture(
+            live);
+        initial = new GameplayCombatStateSnapshot(
+            initial.Session,
+            destructibles: Array.Empty<DestructiblePropSnapshot>(),
+            coverage: GameplayCombatStateCoverage.Session
+                | GameplayCombatStateCoverage.Destructibles);
+        var attacks = new GameplayAttackSession(live);
+        var exposure = new TargetExposureSnapshot(
+            "player",
+            "enemy",
+            new[]
+            {
+                new TargetRegionExposure(TargetRegionId.Torso, 1, 1),
+            });
+        Require(attacks.TryPrepareResolve(
+                "player",
+                exposure,
+                out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                out AttackResolutionFailure failure)
+            && failure == AttackResolutionFailure.None,
+            "Could not prepare the committed-action trajectory attack.");
+        AttackDefinition attack = live.Scenario.GetActor("player").Attack;
+        var identity = new GameplayTransitionIdentity(
+            initial.Session.LastTransitionSequence + 1L,
+            GameplaySemanticCapability.DirectAttack.ToString(),
+            "player",
+            "enemy");
+        var transition = new GameplaySemanticTransition(
+            identity,
+            initial.CanonicalHash,
+            new GameplayWeaponTransitionPayload(
+                GameplayCapabilityProfiles.Attack(attack),
+                prepared.Record));
+        var level = new LevelDocument
+        {
+            levelId = "committed-action-empty-space",
+            schemaVersion = 1,
+        };
+        var spatial = new GameplayHeadlessSpatialEvidence(
+            level,
+            new SpatialContentIdentity(
+                level.levelId,
+                level.schemaVersion,
+                evidenceAlgorithmVersion: 1,
+                new string('b', 64)));
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
+
+        GameplayCommittedActionConsequencePlan plan =
+            GameplayCommittedActionConsequencePlanner.Execute(
+                initial,
+                transition,
+                live.Scenario,
+                spatial,
+                reducers,
+                authoredActionStartsEncounter: true);
+
+        Require(plan.Steps.Count == 3,
+            "Committed action did not reduce as action, sound awareness, then encounter.");
+        Require(plan.Steps[0].Transition.Payload
+                is GameplayWeaponTransitionPayload
+            && plan.Steps[1].Transition.Payload
+                is GameplayEncounterObservationTransitionPayload
+            && plan.Steps[2].Transition.Payload
+                is GameplaySessionControlTransitionPayload,
+            "Committed action consequence ordering is not canonical.");
+        Require(plan.ResultingState.Session.EncounterState
+                .GetAwareness("enemy").State
+                == EncounterAwarenessState.Suspicious,
+            "Post-action sound did not update headless awareness.");
+        Require(plan.ResultingState.Session.EncounterActive,
+            "Committed action did not begin its scoped encounter.");
+        Require(GameplayExactReplay.Verify(
+                initial,
+                plan.Steps,
+                reducers).IsExact,
+            "Committed action consequence trajectory did not replay exactly.");
     }
 
     private static GameplaySession CreateEncounterGameplay()
