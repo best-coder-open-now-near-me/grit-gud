@@ -23,7 +23,7 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 catalog.Require(GameplayGuidanceIds.VoluntaryActive)
                     .ExpectedBehavior,
-                Does.Contain("replenishes AP"));
+                Does.Contain("adds the scenario AP income"));
             Assert.That(
                 catalog.Require(GameplayGuidanceIds.RoutePlanning).PlayerTip,
                 Does.Contain("Enter"));
