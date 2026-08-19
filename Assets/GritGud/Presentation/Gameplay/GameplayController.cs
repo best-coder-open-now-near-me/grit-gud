@@ -45,6 +45,8 @@ namespace GritGud.Presentation.Gameplay
         private GameplayThrownExplosiveController thrownExplosiveController;
         private GameplaySmokeFieldController smokeFieldController;
         private GameplaySmokeFieldSession smokeFieldSession;
+        private GameplayFireFieldController fireFieldController;
+        private GameplayFireFieldSession fireFieldSession;
         private GameplayConsumableController consumableController;
         private GameplayPartyControlSession partyControl;
         private GameplayPartyPersistenceSession partyPersistence;
@@ -101,6 +103,7 @@ namespace GritGud.Presentation.Gameplay
             thrownExplosiveController =
                 GetOrAddComponent<GameplayThrownExplosiveController>();
             smokeFieldController = GetOrAddComponent<GameplaySmokeFieldController>();
+            fireFieldController = GetOrAddComponent<GameplayFireFieldController>();
             weaponTargetingController =
                 GetOrAddComponent<GameplayWeaponTargetingController>();
             targetingCursorPresenter =
@@ -170,6 +173,7 @@ namespace GritGud.Presentation.Gameplay
             projectileController?.Unbind();
             thrownExplosiveController?.Unbind();
             smokeFieldController?.Unbind();
+            fireFieldController?.Unbind();
             objectivePresenter?.Unbind();
             targetAcquisitionPresenter?.Unbind();
             destructibleController?.Unbind();
@@ -321,6 +325,10 @@ namespace GritGud.Presentation.Gameplay
             partyPersistence.Bind(session);
             smokeFieldSession = new GameplaySmokeFieldSession(session);
             smokeFieldController.Bind(smokeFieldSession);
+            fireFieldSession = new GameplayFireFieldSession(
+                session,
+                destructibleController.Session);
+            fireFieldController.Bind(fireFieldSession);
             tacticalTransitionPresenter.Bind(
                 session,
                 visualTheme,
@@ -380,6 +388,7 @@ namespace GritGud.Presentation.Gameplay
                     projectileController,
                     thrownExplosiveController,
                     smokeFieldSession,
+                    fireFieldSession,
                     actorId,
                     scenarioAssembly.RandomSeed,
                     (installedEmergencyCycle, installedConsumables) =>
@@ -577,6 +586,8 @@ namespace GritGud.Presentation.Gameplay
             consumableController = null;
             smokeFieldSession?.Dispose();
             smokeFieldSession = null;
+            fireFieldSession?.Dispose();
+            fireFieldSession = null;
             postProcessing?.Dispose();
             postProcessing = null;
             environmentStyle?.Dispose();

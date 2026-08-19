@@ -117,6 +117,14 @@ namespace GritGud.Application.Gameplay
                 Append(text, "origin", smoke.Field.Origin);
                 Append(text, "remaining", smoke.RemainingFraction);
             }
+            foreach (FireFieldSnapshot fire in state.FireFields)
+            {
+                Append(text, "fire", fire.Field.Id);
+                Append(text, "origin", fire.Field.Origin);
+                Append(text, "radius", fire.CurrentRadius);
+                Append(text, "remaining", fire.RemainingFraction);
+                Append(text, "pulse", fire.PulseProgress);
+            }
             using (SHA256 sha = SHA256.Create())
             {
                 byte[] digest = sha.ComputeHash(
@@ -255,6 +263,28 @@ namespace GritGud.Application.Gameplay
                 subjectPosition)
                     ? 0f
                     : 1f;
+
+        /// <summary>
+        /// Returns the total length of a proposed segment that crosses active
+        /// authoritative fire. Fire is a cost/hazard, not a solid obstacle;
+        /// callers can therefore value or prune the route without pretending
+        /// it is impassable.
+        /// </summary>
+        public float EvaluateFireHazardTraversal(
+            GameplayCombatStateSnapshot state,
+            GameplayPosition origin,
+            GameplayPosition destination)
+        {
+            if (state == null) throw new ArgumentNullException(nameof(state));
+            state.RequireCoverage(GameplayCombatStateCoverage.FireFields);
+            float total = 0f;
+            foreach (FireFieldSnapshot fire in state.FireFields)
+                total += GameplayFireFieldSession.CalculateHazardTraversal(
+                    origin,
+                    destination,
+                    fire);
+            return total;
+        }
 
         public GameplayEvidenceRecord CaptureEvidence(
             string queryKind,

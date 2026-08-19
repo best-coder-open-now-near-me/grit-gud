@@ -210,7 +210,8 @@ namespace GritGud.Application.Gameplay
                 previous.Vehicles,
                 projectiles,
                 previous.SmokeFields,
-                previous.Coverage);
+                previous.Coverage,
+                previous.FireFields);
         }
 
         private static GameplayActorSnapshot ProjectActor(

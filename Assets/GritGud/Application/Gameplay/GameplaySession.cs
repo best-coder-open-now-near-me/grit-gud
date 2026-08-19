@@ -1195,6 +1195,21 @@ namespace GritGud.Application.Gameplay
             MarkStateChanged();
         }
 
+        internal void ApplyEnvironmentalInjury(
+            string actorId,
+            TargetRegionId region,
+            float woundMovementPenalty,
+            GameplayNotificationBatch notifications)
+        {
+            if (notifications == null)
+                throw new ArgumentNullException(nameof(notifications));
+            GameplayActorState actor = RequireActor(actorId);
+            if (actor.IsIncapacitated) return;
+            actor.ApplyBlast(region, woundMovementPenalty);
+            notifications.Add(ActorCapabilityChanged, actorId);
+            MarkStateChanged();
+        }
+
         internal ScenarioActorDefinition RequireActorDefinition(string actorId)
         {
             foreach (ScenarioActorDefinition actor in Scenario.Actors)

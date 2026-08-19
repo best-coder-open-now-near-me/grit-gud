@@ -151,15 +151,17 @@ namespace GritGud.Application.Gameplay
 
             if (Mode != GameplaySessionMode.Exploration
                 || EncounterActive
-                || voluntaryTurnReentrySecondsRemaining <= 0f
                 || elapsedSeconds == 0f)
             {
                 return;
             }
 
-            voluntaryTurnReentrySecondsRemaining = Math.Max(
-                0f,
-                voluntaryTurnReentrySecondsRemaining - elapsedSeconds);
+            if (voluntaryTurnReentrySecondsRemaining > 0f)
+            {
+                voluntaryTurnReentrySecondsRemaining = Math.Max(
+                    0f,
+                    voluntaryTurnReentrySecondsRemaining - elapsedSeconds);
+            }
             host.MarkStateChangedForTurnLifecycle();
         }
 

@@ -201,6 +201,7 @@ namespace GritGud.Domain.Gameplay
         public float blastWoundMovementPenalty;
         public float blastIntegrityDamage;
         public ScenarioSmokeFieldData smokeField;
+        public ScenarioFireFieldData fireField;
     }
 
     [Serializable]
@@ -211,6 +212,20 @@ namespace GritGud.Domain.Gameplay
         public float explorationDurationSeconds;
         public int durationTurnEnds;
         public float minimumObscuredPath;
+    }
+
+    [Serializable]
+    public sealed class ScenarioFireFieldData
+    {
+        public float initialRadius;
+        public float maximumRadius;
+        public float height;
+        public float explorationDurationSeconds;
+        public int durationTurnEnds;
+        public float explorationPulseSeconds;
+        public float actorWoundMovementPenalty;
+        public float destructibleIntegrityDamage;
+        public float minimumHazardPath;
     }
 
     [Serializable]

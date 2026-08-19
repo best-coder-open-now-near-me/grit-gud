@@ -345,7 +345,8 @@ namespace GritGud.Presentation.Tests
                 source.Vehicles,
                 source.Projectiles,
                 source.SmokeFields,
-                source.Coverage | GameplayCombatStateCoverage.Destructibles);
+                source.Coverage | GameplayCombatStateCoverage.Destructibles,
+                source.FireFields);
 
         private static DestructiblePropSnapshot CreateProp(
             DestructiblePropState state,

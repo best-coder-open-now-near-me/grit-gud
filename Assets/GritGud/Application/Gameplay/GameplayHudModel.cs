@@ -880,11 +880,8 @@ namespace GritGud.Application.Gameplay
             if (item.ConsumablePower
                 is ThrownExplosiveDefinition thrownExplosive)
             {
-                string area = thrownExplosive.SmokeField == null
-                    ? "\nBLAST - "
-                        + thrownExplosive.BlastRadius.ToString("0.#")
-                        + " M"
-                    : "\nSMOKE - "
+                string area = thrownExplosive.SmokeField != null
+                    ? "\nSMOKE - "
                         + thrownExplosive.SmokeField.Radius.ToString("0.#")
                         + " M RADIUS"
                         + "\nHEIGHT - "
@@ -900,7 +897,27 @@ namespace GritGud.Application.Gameplay
                         + "\nSIGHT BLOCK - "
                         + thrownExplosive.SmokeField.MinimumObscuredPath
                             .ToString("0.#")
-                        + " M THROUGH SMOKE";
+                        + " M THROUGH SMOKE"
+                    : thrownExplosive.FireField != null
+                    ? "\nFIRE - "
+                        + thrownExplosive.FireField.InitialRadius.ToString("0.#")
+                        + "-"
+                        + thrownExplosive.FireField.MaximumRadius.ToString("0.#")
+                        + " M RADIUS"
+                        + "\nDURATION - "
+                        + (turnBased
+                            ? thrownExplosive.FireField.DurationTurnEnds
+                                + " TURN ENDS"
+                            : thrownExplosive.FireField
+                                .ExplorationDurationSeconds.ToString("0.#")
+                                + " SEC")
+                        + "\nPULSE - "
+                        + thrownExplosive.FireField.ExplorationPulseSeconds
+                            .ToString("0.#")
+                        + " SEC"
+                    : "\nBLAST - "
+                        + thrownExplosive.BlastRadius.ToString("0.#")
+                        + " M";
                 return AppendRequirement(heading
                     + "\nPOWER - THROW"
                     + "\nQUANTITY - " + remainingQuantity.GetValueOrDefault()

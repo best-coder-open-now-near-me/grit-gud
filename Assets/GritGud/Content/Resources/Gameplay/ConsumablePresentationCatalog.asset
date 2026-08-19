@@ -69,3 +69,31 @@ MonoBehaviour:
     insideOverlayMaximumAlpha: 0.11
     persistentParticlesCastShadows: 0
     persistentParticlesReceiveShadows: 1
+  - itemId: item.incendiary-grenade
+    projectilePrefab: {fileID: 1000582683020524, guid: 1ddc1d0c706325d4ab53c03f00f0520d, type: 3}
+    visualRotationEuler: {x: 0, y: 0, z: 0}
+    visualScale: 1
+    flightSeconds: 0.55
+    releaseDelaySeconds: 0.45
+    spinDegreesPerSecond: {x: 310, y: 190, z: 240}
+    arcHeightPerMeter: 0.2
+    minimumArcHeight: 0.8
+    maximumArcHeight: 3
+    aimPreviewHeight: 0.035
+    uncertaintyRingWidth: 0.035
+    blastRingWidth: 0.018
+    uncertaintyColor: {r: 1.6, g: 0.34, b: 0.02, a: 1}
+    blastColor: {r: 1.4, g: 0.2, b: 0.02, a: 0.85}
+    impactEffectPrefab: {fileID: 0}
+    impactRotationEuler: {x: 0, y: 0, z: 0}
+    impactScalePerBlastRadius: 0
+    impactEffectSeconds: 0.2
+    persistentAreaEffectPrefab: {fileID: 100000, guid: 24f1c337007419342a39123f658c432b, type: 3}
+    persistentEffectScalePerRadius: 0.55
+    persistentParticleEmissionMultiplier: 0.7
+    persistentEffectFadeSeconds: 0.5
+    hideParticlesWhenCameraInside: 0
+    insideOverlayColor: {r: 0.3, g: 0.08, b: 0.01, a: 1}
+    insideOverlayMaximumAlpha: 0
+    persistentParticlesCastShadows: 0
+    persistentParticlesReceiveShadows: 1

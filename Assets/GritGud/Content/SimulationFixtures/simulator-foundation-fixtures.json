@@ -40,6 +40,12 @@
       "assertions": ["smoke-is-not-solid-cover", "smoke-obscures-los-evidence", "smoke-decays-on-canonical-world-advancement"]
     },
     {
+      "id": "sim-persistent-fire",
+      "actorIds": ["player", "depot-rifleman"],
+      "entityIds": ["crate-exposure-demo"],
+      "assertions": ["fire-expands-from-canonical-time", "fire-damages-actors-and-destructibles", "fire-changes-route-hazard-evidence-without-becoming-solid", "live-and-headless-reduction-match"]
+    },
+    {
       "id": "sim-pinned-recovery",
       "actorIds": ["player", "depot-rifleman"],
       "entityIds": ["crate-exposure-demo"],

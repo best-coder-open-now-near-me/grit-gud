@@ -16,11 +16,12 @@ namespace GritGud.Application.Gameplay
         Vehicles = 1 << 2,
         Projectiles = 1 << 3,
         SmokeFields = 1 << 4,
+        FireFields = 1 << 5,
     }
 
     public sealed class GameplaySessionStateSnapshot
     {
-        public const int CurrentSchemaVersion = 5;
+        public const int CurrentSchemaVersion = 6;
 
         public GameplaySessionStateSnapshot(
             string scenarioId,
@@ -214,7 +215,8 @@ namespace GritGud.Application.Gameplay
             IEnumerable<ProjectileFlightSnapshot> projectiles = null,
             IEnumerable<SmokeFieldSnapshot> smokeFields = null,
             GameplayCombatStateCoverage coverage =
-                GameplayCombatStateCoverage.Session)
+                GameplayCombatStateCoverage.Session,
+            IEnumerable<FireFieldSnapshot> fireFields = null)
         {
             Session = session ?? throw new ArgumentNullException(nameof(session));
             if ((coverage & GameplayCombatStateCoverage.Session) == 0
@@ -229,6 +231,8 @@ namespace GritGud.Application.Gameplay
                 projectiles, value => value.ProjectileId, "projectile");
             SmokeFields = CopyAndSort(
                 smokeFields, value => value.Field.Id, "smoke field");
+            FireFields = CopyAndSort(
+                fireFields, value => value.Field.Id, "fire field");
             CanonicalHash = GameplayCombatStateHasher.Hash(this);
         }
 
@@ -238,13 +242,15 @@ namespace GritGud.Application.Gameplay
             | GameplayCombatStateCoverage.Destructibles
             | GameplayCombatStateCoverage.Vehicles
             | GameplayCombatStateCoverage.Projectiles
-            | GameplayCombatStateCoverage.SmokeFields;
+            | GameplayCombatStateCoverage.SmokeFields
+            | GameplayCombatStateCoverage.FireFields;
         public GameplaySessionStateSnapshot Session { get; }
         public GameplayCombatStateCoverage Coverage { get; }
         public IReadOnlyList<DestructiblePropSnapshot> Destructibles { get; }
         public IReadOnlyList<VehicleMomentumState> Vehicles { get; }
         public IReadOnlyList<ProjectileFlightSnapshot> Projectiles { get; }
         public IReadOnlyList<SmokeFieldSnapshot> SmokeFields { get; }
+        public IReadOnlyList<FireFieldSnapshot> FireFields { get; }
         public string CanonicalHash { get; }
 
         public bool Covers(GameplayCombatStateCoverage required) =>
@@ -285,7 +291,8 @@ namespace GritGud.Application.Gameplay
             DestructiblePropSession destructibles = null,
             IEnumerable<VehicleMomentumSession> vehicles = null,
             GameplayProjectileSession projectiles = null,
-            GameplaySmokeFieldSession smokeFields = null)
+            GameplaySmokeFieldSession smokeFields = null,
+            GameplayFireFieldSession fireFields = null)
         {
             if (gameplay == null) throw new ArgumentNullException(nameof(gameplay));
             var actors = new List<GameplayActorSnapshot>();
@@ -344,13 +351,16 @@ namespace GritGud.Application.Gameplay
                 coverage |= GameplayCombatStateCoverage.Projectiles;
             if (smokeFields != null)
                 coverage |= GameplayCombatStateCoverage.SmokeFields;
+            if (fireFields != null)
+                coverage |= GameplayCombatStateCoverage.FireFields;
             return new GameplayCombatStateSnapshot(
                 session,
                 propStates,
                 vehicleStates,
                 projectileStates,
                 smokeFields?.CaptureActiveFields(),
-                coverage);
+                coverage,
+                fireFields?.CaptureActiveFields());
         }
     }
 
@@ -554,6 +564,31 @@ namespace GritGud.Application.Gameplay
                 Append(text, root + ".minimumObscuredPath",
                     smoke.Field.Definition.MinimumObscuredPath);
                 Append(text, root + ".remaining", smoke.RemainingFraction);
+            }
+            foreach (FireFieldSnapshot fire in state.FireFields)
+            {
+                string root = "fire." + fire.Field.Id;
+                FireFieldDefinition definition = fire.Field.Definition;
+                Append(text, root + ".source.actor", fire.Field.SourceActorId);
+                Append(text, root + ".source.item", fire.Field.SourceItemId);
+                Append(text, root + ".origin", fire.Field.Origin);
+                Append(text, root + ".radius.initial", definition.InitialRadius);
+                Append(text, root + ".radius.maximum", definition.MaximumRadius);
+                Append(text, root + ".height", definition.Height);
+                Append(text, root + ".duration.exploration",
+                    definition.ExplorationDurationSeconds);
+                Append(text, root + ".duration.turns",
+                    definition.DurationTurnEnds);
+                Append(text, root + ".pulse.exploration",
+                    definition.ExplorationPulseSeconds);
+                Append(text, root + ".damage.actor",
+                    definition.ActorWoundMovementPenalty);
+                Append(text, root + ".damage.destructible",
+                    definition.DestructibleIntegrityDamage);
+                Append(text, root + ".minimumHazardPath",
+                    definition.MinimumHazardPath);
+                Append(text, root + ".remaining", fire.RemainingFraction);
+                Append(text, root + ".pulse.progress", fire.PulseProgress);
             }
             return text.ToString();
         }

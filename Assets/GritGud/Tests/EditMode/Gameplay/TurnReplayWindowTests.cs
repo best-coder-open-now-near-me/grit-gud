@@ -987,7 +987,9 @@ namespace GritGud.Domain.Tests.Gameplay
                 destructibles,
                 source.Vehicles,
                 source.Projectiles,
-                source.SmokeFields);
+                source.SmokeFields,
+                source.Coverage,
+                source.FireFields);
         }
 
         private static ScenarioActorDefinition CreateActor(

@@ -19,7 +19,8 @@ namespace GritGud.Domain.Gameplay
             float blastRadius,
             float blastWoundMovementPenalty = 0f,
             float blastIntegrityDamage = 0f,
-            SmokeFieldDefinition smokeField = null)
+            SmokeFieldDefinition smokeField = null,
+            FireFieldDefinition fireField = null)
             : base(id, turnCost)
         {
             if (!IsFinite(maximumRange)
@@ -39,7 +40,7 @@ namespace GritGud.Domain.Gameplay
                 || ((blastWoundMovementPenalty > 0f
                         || blastIntegrityDamage > 0f)
                     != (blastRadius > 0f))
-                || ((blastRadius > 0f) == (smokeField != null)))
+                || CountPayloads(blastRadius, smokeField, fireField) != 1)
                 throw new ArgumentOutOfRangeException(nameof(maximumRange));
             MaximumRange = maximumRange;
             StandingLaunchHeight = standingLaunchHeight;
@@ -50,6 +51,7 @@ namespace GritGud.Domain.Gameplay
             BlastWoundMovementPenalty = blastWoundMovementPenalty;
             BlastIntegrityDamage = blastIntegrityDamage;
             SmokeField = smokeField;
+            FireField = fireField;
         }
 
         public override string PowerTypeId => TypeId;
@@ -63,8 +65,12 @@ namespace GritGud.Domain.Gameplay
         public float BlastWoundMovementPenalty { get; }
         public float BlastIntegrityDamage { get; }
         public SmokeFieldDefinition SmokeField { get; }
+        public FireFieldDefinition FireField { get; }
         public bool DeploysSmoke => SmokeField != null;
-        public float AreaRadius => SmokeField?.Radius ?? BlastRadius;
+        public bool DeploysFire => FireField != null;
+        public float AreaRadius => SmokeField?.Radius
+            ?? FireField?.MaximumRadius
+            ?? BlastRadius;
 
         public GameplayPosition GetLaunchOrigin(GameplayActorPose pose)
         {
@@ -86,6 +92,14 @@ namespace GritGud.Domain.Gameplay
 
         private static bool IsFinite(float value) =>
             !float.IsNaN(value) && !float.IsInfinity(value);
+
+        private static int CountPayloads(
+            float blastRadius,
+            SmokeFieldDefinition smokeField,
+            FireFieldDefinition fireField) =>
+            (blastRadius > 0f ? 1 : 0)
+            + (smokeField != null ? 1 : 0)
+            + (fireField != null ? 1 : 0);
     }
 
     public sealed class ThrownExplosiveRecord
@@ -102,7 +116,8 @@ namespace GritGud.Domain.Gameplay
             float uncertaintyRadius,
             long worldStateRevision,
             IEnumerable<BlastEffectRecord> blastEffects,
-            SmokeFieldRecord smokeField = null)
+            SmokeFieldRecord smokeField = null,
+            FireFieldRecord fireField = null)
         {
             if (sequence <= 0) throw new ArgumentOutOfRangeException(nameof(sequence));
             if (string.IsNullOrWhiteSpace(throwerId)) throw new ArgumentException("Throws require an actor.", nameof(throwerId));
@@ -142,6 +157,28 @@ namespace GritGud.Domain.Gameplay
                     "The smoke field does not match its thrown payload.",
                     nameof(smokeField));
             SmokeField = smokeField;
+            if ((Definition.FireField == null) != (fireField == null))
+                throw new ArgumentException(
+                    "Incendiary payloads require their matching fire field record.",
+                    nameof(fireField));
+            if (fireField != null
+                && (!string.Equals(
+                        fireField.SourceActorId,
+                        throwerId,
+                        StringComparison.Ordinal)
+                    || !string.Equals(
+                        fireField.SourceItemId,
+                        Definition.Id,
+                        StringComparison.Ordinal)
+                    || fireField.Origin.DistanceTo(resolvedLanding) > 0f
+                    || !Definition.FireField.Matches(
+                        fireField.Definition)))
+            {
+                throw new ArgumentException(
+                    "The fire field does not match its thrown payload.",
+                    nameof(fireField));
+            }
+            FireField = fireField;
         }
 
         public long Sequence { get; }
@@ -156,6 +193,7 @@ namespace GritGud.Domain.Gameplay
         public long WorldStateRevision { get; }
         public IReadOnlyList<BlastEffectRecord> BlastEffects { get; }
         public SmokeFieldRecord SmokeField { get; }
+        public FireFieldRecord FireField { get; }
     }
 
     public sealed class ThrownExplosiveActionOutcome : GameplayActionOutcome

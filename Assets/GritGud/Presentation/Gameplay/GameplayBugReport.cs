@@ -727,6 +727,28 @@ namespace GritGud.Presentation.Gameplay
                                 .Append(FormatFloat(
                                     smoke.MinimumObscuredPath));
                         }
+                        else if (thrown.FireField != null)
+                        {
+                            FireFieldDefinition fire =
+                                thrown.FireField.Definition;
+                            report.Append(" | fire-field=")
+                                .Append(thrown.FireField.Id)
+                                .Append(" | fire-initial-radius=")
+                                .Append(FormatFloat(fire.InitialRadius))
+                                .Append(" | fire-maximum-radius=")
+                                .Append(FormatFloat(fire.MaximumRadius))
+                                .Append(" | fire-height=")
+                                .Append(FormatFloat(fire.Height))
+                                .Append(" | fire-exploration-seconds=")
+                                .Append(FormatFloat(
+                                    fire.ExplorationDurationSeconds))
+                                .Append(" | fire-turn-ends=")
+                                .Append(fire.DurationTurnEnds.ToString(
+                                    CultureInfo.InvariantCulture))
+                                .Append(" | fire-pulse-seconds=")
+                                .Append(FormatFloat(
+                                    fire.ExplorationPulseSeconds));
+                        }
                         else
                         {
                             report.Append(" | blast-radius=")

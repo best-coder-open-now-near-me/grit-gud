@@ -26,6 +26,7 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplayEquipmentController equipment;
         private readonly GameplayScenarioAssembly scenario;
         private readonly GameplaySmokeFieldSession smokeFields;
+        private readonly GameplayFireFieldSession fireFields;
         private readonly string actorId;
         private readonly string objectiveId;
         private readonly Action<string> requestItemPower;
@@ -149,6 +150,7 @@ namespace GritGud.Presentation.Gameplay
             GameplayProjectileController projectiles,
             GameplayThrownExplosiveController thrownExplosives,
             GameplaySmokeFieldSession smokeFields,
+            GameplayFireFieldSession fireFields,
             string actorId,
             uint thrownExplosiveRandomSeed,
             Action<GameplayEmergencyCycleSession, GameplayConsumableController>
@@ -170,6 +172,8 @@ namespace GritGud.Presentation.Gameplay
                 ?? throw new ArgumentNullException(nameof(thrownExplosives));
             this.smokeFields = smokeFields ?? throw new ArgumentNullException(
                 nameof(smokeFields));
+            this.fireFields = fireFields ?? throw new ArgumentNullException(
+                nameof(fireFields));
             this.actorId = actorId;
             this.thrownExplosiveRandomSeed = thrownExplosiveRandomSeed;
             this.captureInstalled = captureInstalled
@@ -211,7 +215,8 @@ namespace GritGud.Presentation.Gameplay
                 actorId,
                 thrownExplosiveRandomSeed,
                 sessionPresenter.TryBeginEncounterFromAction,
-                smokeFieldSession: smokeFields);
+                smokeFieldSession: smokeFields,
+                fireFieldSession: fireFields);
             captureInstalled(
                 emergencyCycle,
                 new GameplayConsumableController(session, thrownExplosives));

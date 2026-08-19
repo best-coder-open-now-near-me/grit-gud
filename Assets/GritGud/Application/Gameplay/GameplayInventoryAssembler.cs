@@ -176,7 +176,8 @@ namespace GritGud.Application.Gameplay
                         data.blastRadius,
                         data.blastWoundMovementPenalty,
                         data.blastIntegrityDamage,
-                        CreateSmokeFieldDefinition(data.smokeField));
+                        CreateSmokeFieldDefinition(data.smokeField),
+                        CreateFireFieldDefinition(data.fireField));
                 default:
                     throw new InvalidOperationException(
                         $"Consumable '{item.id}' has unsupported power type '{powerType}'.");
@@ -237,15 +238,21 @@ namespace GritGud.Application.Gameplay
             bool hasBlastConsequence = data.blastWoundMovementPenalty > 0f
                 || data.blastIntegrityDamage > 0f;
             bool hasSmoke = IsAuthoredSmokeField(data.smokeField);
+            bool hasFire = IsAuthoredFireField(data.fireField);
             Require(
                 hasBlast == hasBlastConsequence,
                 $"Actor '{actorId}' consumable '{itemId}' blast radius and consequences must be authored together.");
             Require(
-                hasBlast != hasSmoke,
-                $"Actor '{actorId}' consumable '{itemId}' requires exactly one blast or smoke payload.");
+                (hasBlast ? 1 : 0) + (hasSmoke ? 1 : 0)
+                    + (hasFire ? 1 : 0) == 1,
+                $"Actor '{actorId}' consumable '{itemId}' requires exactly one blast, smoke, or fire payload.");
             if (hasSmoke)
             {
                 ValidateSmokeField(actorId, itemId, data.smokeField);
+            }
+            if (hasFire)
+            {
+                ValidateFireField(actorId, itemId, data.fireField);
             }
         }
 
@@ -268,6 +275,33 @@ namespace GritGud.Application.Gameplay
                 || data.explorationDurationSeconds != 0f
                 || data.durationTurnEnds != 0
                 || data.minimumObscuredPath != 0f);
+
+        private static FireFieldDefinition CreateFireFieldDefinition(
+            ScenarioFireFieldData data) =>
+            !IsAuthoredFireField(data)
+                ? null
+                : new FireFieldDefinition(
+                    data.initialRadius,
+                    data.maximumRadius,
+                    data.height,
+                    data.explorationDurationSeconds,
+                    data.durationTurnEnds,
+                    data.explorationPulseSeconds,
+                    data.actorWoundMovementPenalty,
+                    data.destructibleIntegrityDamage,
+                    data.minimumHazardPath);
+
+        private static bool IsAuthoredFireField(ScenarioFireFieldData data) =>
+            data != null
+            && (data.initialRadius != 0f
+                || data.maximumRadius != 0f
+                || data.height != 0f
+                || data.explorationDurationSeconds != 0f
+                || data.durationTurnEnds != 0
+                || data.explorationPulseSeconds != 0f
+                || data.actorWoundMovementPenalty != 0f
+                || data.destructibleIntegrityDamage != 0f
+                || data.minimumHazardPath != 0f);
 
         private static void ValidateSmokeField(
             string actorId,
@@ -292,6 +326,45 @@ namespace GritGud.Application.Gameplay
             Require(
                 data.minimumObscuredPath <= data.radius * 2f,
                 $"Actor '{actorId}' consumable '{itemId}' minimum obscured path cannot exceed its diameter.");
+        }
+
+        private static void ValidateFireField(
+            string actorId,
+            string itemId,
+            ScenarioFireFieldData data)
+        {
+            string prefix = $"Actor '{actorId}' consumable '{itemId}' fire";
+            RequireFinitePositive(data.initialRadius, prefix + " initial radius");
+            RequireFinitePositive(data.maximumRadius, prefix + " maximum radius");
+            Require(
+                data.maximumRadius >= data.initialRadius,
+                prefix + " maximum radius cannot be smaller than its initial radius.");
+            RequireFinitePositive(data.height, prefix + " height");
+            RequireFinitePositive(
+                data.explorationDurationSeconds,
+                prefix + " exploration duration");
+            Require(
+                data.durationTurnEnds > 0,
+                prefix + " turn duration must be positive.");
+            RequireFinitePositive(
+                data.explorationPulseSeconds,
+                prefix + " exploration pulse interval");
+            RequireFiniteNonNegative(
+                data.actorWoundMovementPenalty,
+                prefix + " actor wound movement penalty");
+            RequireFiniteNonNegative(
+                data.destructibleIntegrityDamage,
+                prefix + " destructible integrity damage");
+            Require(
+                data.actorWoundMovementPenalty > 0f
+                    || data.destructibleIntegrityDamage > 0f,
+                prefix + " requires at least one consequence.");
+            RequireFinitePositive(
+                data.minimumHazardPath,
+                prefix + " minimum hazard path");
+            Require(
+                data.minimumHazardPath <= data.maximumRadius * 2f,
+                prefix + " minimum hazard path cannot exceed its maximum diameter.");
         }
 
         private static InventoryItemKind ParseInventoryItemKind(string value)

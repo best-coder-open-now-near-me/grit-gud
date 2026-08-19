@@ -68,7 +68,8 @@ namespace GritGud.Presentation.Gameplay
             uint randomSeed,
             Func<GameplayActionRecord, bool> onEncounterStartRequested = null,
             ConsumablePresentationCatalog presentation = null,
-            GameplaySmokeFieldSession smokeFieldSession = null)
+            GameplaySmokeFieldSession smokeFieldSession = null,
+            GameplayFireFieldSession fireFieldSession = null)
         {
             Unbind();
             Session = session ?? throw new ArgumentNullException(nameof(session));
@@ -91,7 +92,8 @@ namespace GritGud.Presentation.Gameplay
                 consequenceResolver ?? throw new ArgumentNullException(
                     nameof(consequenceResolver)),
                 new AddressedUncertaintySampler(),
-                smokeFieldSession);
+                smokeFieldSession,
+                fireFieldSession);
             enabled = true;
             SetActor(authoritativeActorId);
         }
@@ -249,6 +251,8 @@ namespace GritGud.Presentation.Gameplay
             StatusMessage = LastThrow.SmokeField != null
                 ? $"{itemId} deployed smoke across "
                     + $"{LastThrow.Definition.AreaRadius:0.0} m."
+                : LastThrow.FireField != null
+                    ? $"{itemId} ignited a persistent fire field."
                 : $"{itemId} landed with {exposedTargetCount} exposed targets.";
             if (GameplayCombatDiagnosticFormatter.TryFormatAction(
                     action,

@@ -14,6 +14,7 @@ internal static class SimulationParityChecks
         VerifyInteraction();
         VerifyThrownExplosive();
         VerifyThrownSmokeAndWorldTime();
+        VerifyThrownFireDeployment();
         VerifyProjectileLifecycle();
         VerifyVehicleMovement();
         VerifyMovementRoute();
@@ -417,6 +418,142 @@ internal static class SimulationParityChecks
                     gameplay,
                     destructibles,
                     smokeFields: smokeFields));
+        }
+    }
+
+    private static void VerifyThrownFireDeployment()
+    {
+        var fireDefinition = new FireFieldDefinition(
+            initialRadius: 1.5f,
+            maximumRadius: 3f,
+            height: 1.5f,
+            explorationDurationSeconds: 12f,
+            durationTurnEnds: 6,
+            explorationPulseSeconds: 2f,
+            actorWoundMovementPenalty: 1f,
+            destructibleIntegrityDamage: 2f,
+            minimumHazardPath: 0.5f);
+        var incendiary = new ThrownExplosiveDefinition(
+            "item.incendiary",
+            new ActionCost(1, 0f, ActionMobility.Mobile),
+            maximumRange: 10f,
+            standingLaunchHeight: 1f,
+            crouchedLaunchHeight: 0.7f,
+            baseUncertaintyRadius: 0f,
+            uncertaintyPerMeter: 0f,
+            blastRadius: 0f,
+            fireField: fireDefinition);
+        var item = new InventoryItemDefinition(
+            incendiary.Id,
+            "Incendiary grenade",
+            hotbarSlot: 4,
+            InventoryItemKind.Consumable,
+            new ActionCost(0, 0f, ActionMobility.Mobile),
+            EquipmentEffectSet.None,
+            consumablePower: incendiary,
+            occupiedHands: 0,
+            initialQuantity: 2);
+        GameplaySession gameplay = CreateGameplayWithInventory(
+            item,
+            objective: null);
+        var destructibles = new DestructiblePropSession(
+            new[]
+            {
+                new DestructiblePropDefinition(
+                    "fire-crate",
+                    maximumIntegrity: 3f,
+                    DestructiblePropState.Intact,
+                    new GameplayPosition(0f, 0f, 4.5f)),
+            },
+            gameplay.Journal);
+        using (var fireFields = new GameplayFireFieldSession(
+            gameplay,
+            destructibles))
+        {
+            var evidence = new FixedExplosiveEvidence(
+                Array.Empty<BlastEffectRecord>());
+            var live = new GameplayThrownExplosiveSession(
+                gameplay,
+                evidence,
+                evidence,
+                new GameplayBlastConsequenceResolver(
+                    gameplay,
+                    destructibles),
+                new CenterUncertaintySampler(),
+                smokeFieldSession: null,
+                fireFieldSession: fireFields);
+            GameplayCombatStateSnapshot previous =
+                GameplayCombatStateCapture.Capture(
+                    gameplay,
+                    destructibles,
+                    fireFields: fireFields);
+            Require(live.TryThrowItem(
+                    "player",
+                    incendiary.Id,
+                    new GameplayPosition(0f, 0f, 4f),
+                    out GameplayActionRecord action,
+                    out ThrownExplosiveFailure failure),
+                "Thrown fire failed: " + failure);
+            GameplaySemanticTransition transition = CreateTransition(
+                previous,
+                new GameplayResolvedActionTransitionPayload(
+                    GameplayCapabilityProfiles.ThrowExplosive(incendiary),
+                    action));
+            GameplayCombatStateSnapshot reduced = Reduce(
+                previous,
+                transition);
+            gameplay.RecordSemanticTransition(transition.Identity);
+            RequireExact(
+                "thrown fire",
+                reduced,
+                GameplayCombatStateCapture.Capture(
+                    gameplay,
+                    destructibles,
+                    fireFields: fireFields));
+            Require(
+                reduced.FireFields.Count == 1
+                    && reduced.FireFields[0].CurrentRadius == 1.5f,
+                "Thrown fire did not enter canonical state at its initial radius.");
+
+            GameplayCombatStateSnapshot beforeTime =
+                GameplayCombatStateCapture.Capture(
+                    gameplay,
+                    destructibles,
+                    fireFields: fireFields);
+            gameplay.AdvanceContinuousTime(2f);
+            fireFields.AdvanceContinuousTime(2f);
+            GameplaySemanticTransition time = CreateTransition(
+                beforeTime,
+                new GameplayWorldAdvanceTransitionPayload(
+                    "player",
+                    "continuous-time",
+                    elapsedSeconds: 2f));
+            GameplayReductionResult timeReduction =
+                GameplaySimulationReducers.CreateCurrent().Reduce(
+                    beforeTime,
+                    time);
+            gameplay.RecordSemanticTransition(time.Identity);
+            RequireExact(
+                "continuous fire time",
+                timeReduction.Resulting,
+                GameplayCombatStateCapture.Capture(
+                    gameplay,
+                    destructibles,
+                    fireFields: fireFields));
+            Require(
+                timeReduction.Resulting.FireFields.Count == 1
+                    && timeReduction.Resulting.FireFields[0].CurrentRadius > 1.5f,
+                "Continuous fire time did not expand the field.");
+            Require(
+                timeReduction.Resulting.Session.GetActor("enemy")
+                    .Wounds.WoundCount == 1,
+                "Continuous fire pulse did not injure an actor in the field.");
+            Require(
+                timeReduction.Resulting.Destructibles[0].RemainingIntegrity == 1f,
+                "Continuous fire pulse did not damage a destructible in the field.");
+            Require(
+                ContainsEvent(timeReduction, "fire-fields-advanced"),
+                "Continuous fire time did not produce its domain event.");
         }
     }
 
@@ -1300,6 +1437,19 @@ internal static class SimulationParityChecks
         GameplaySimulationReducers.CreateCurrent().Reduce(
             previous,
             transition).Resulting;
+
+    private static bool ContainsEvent(
+        GameplayReductionResult reduction,
+        string eventType)
+    {
+        foreach (GameplayDomainEvent domainEvent in reduction.DomainEvents)
+            if (string.Equals(
+                domainEvent.EventType,
+                eventType,
+                StringComparison.Ordinal))
+                return true;
+        return false;
+    }
 
     private static void RequireExact(
         string label,

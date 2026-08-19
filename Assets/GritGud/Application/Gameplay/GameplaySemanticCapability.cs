@@ -222,7 +222,9 @@ namespace GritGud.Application.Gameplay
                 Trait("resource", "inventory-quantity"),
                 Trait("consequence", definition.DeploysSmoke
                     ? "smoke-field"
-                    : "blast-actor-and-destructible"));
+                    : definition.DeploysFire
+                        ? "fire-field"
+                        : "blast-actor-and-destructible"));
         }
 
         public static GameplayCapabilityProfile Displace(

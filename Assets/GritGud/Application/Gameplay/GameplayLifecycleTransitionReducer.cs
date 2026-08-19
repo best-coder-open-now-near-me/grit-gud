@@ -196,10 +196,16 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(transition));
             var mutation = new GameplayCanonicalStateMutation(state);
             object record;
+            IReadOnlyList<GameplayFireFieldAdvanceRecord> fireAdvances =
+                Array.Empty<GameplayFireFieldAdvanceRecord>();
             if (transition.Payload
                 is GameplayWorldAdvanceTransitionPayload world)
             {
-                record = ReduceWorld(state, mutation, world);
+                record = ReduceWorld(
+                    state,
+                    mutation,
+                    world,
+                    out fireAdvances);
             }
             else if (transition.Payload
                 is GameplayEmergencyReactionTransitionPayload emergency)
@@ -221,16 +227,21 @@ namespace GritGud.Application.Gameplay
                     nameof(transition));
             }
             mutation.LastTransitionSequence = transition.Identity.Sequence;
+            var events = new List<GameplayDomainEvent>
+            {
+                new GameplayTransitionReducedEvent(
+                    transition.Identity,
+                    transition.Payload.SubjectId,
+                    record),
+            };
+            if (fireAdvances.Count > 0)
+                events.Add(new GameplayFireFieldsAdvancedEvent(
+                    transition.Identity,
+                    fireAdvances));
             return new GameplayReductionResult(
                 state,
                 mutation.Build(),
-                new GameplayDomainEvent[]
-                {
-                    new GameplayTransitionReducedEvent(
-                        transition.Identity,
-                        transition.Payload.SubjectId,
-                        record),
-                });
+                events);
         }
 
         private static object ReduceSessionControl(
@@ -348,8 +359,10 @@ namespace GritGud.Application.Gameplay
         private static object ReduceWorld(
             GameplayCombatStateSnapshot state,
             GameplayCanonicalStateMutation mutation,
-            GameplayWorldAdvanceTransitionPayload payload)
+            GameplayWorldAdvanceTransitionPayload payload,
+            out IReadOnlyList<GameplayFireFieldAdvanceRecord> fireAdvances)
         {
+            fireAdvances = Array.Empty<GameplayFireFieldAdvanceRecord>();
             string mode = payload.Profile.GetTrait("mode");
             if (mode == "voluntary-cycle")
             {
@@ -386,6 +399,8 @@ namespace GritGud.Application.Gameplay
             if (state.Session.Mode != GameplaySessionMode.Exploration)
                 throw new InvalidOperationException(
                     "Continuous world time advances only in exploration.");
+            if (payload.ElapsedSeconds > 0f)
+                mutation.Revision = checked(mutation.Revision + 1L);
             bool changedGameplayClock = !state.Session.EncounterActive
                 && state.Session.VoluntaryTurnReentrySecondsRemaining > 0f
                 && payload.ElapsedSeconds > 0f;
@@ -395,7 +410,6 @@ namespace GritGud.Application.Gameplay
                     0f,
                     state.Session.VoluntaryTurnReentrySecondsRemaining
                         - payload.ElapsedSeconds);
-                mutation.Revision = checked(mutation.Revision + 1L);
             }
             if (state.Covers(GameplayCombatStateCoverage.SmokeFields)
                 && payload.ElapsedSeconds > 0f)
@@ -415,6 +429,38 @@ namespace GritGud.Application.Gameplay
                             remaining));
                 }
                 mutation.ReplaceSmokeFields(fields);
+            }
+            if (state.Covers(GameplayCombatStateCoverage.FireFields)
+                && payload.ElapsedSeconds > 0f)
+            {
+                var fields = new List<FireFieldSnapshot>();
+                var advances = new List<GameplayFireFieldAdvanceRecord>();
+                int actorInjuries = 0;
+                int destructibleDamages = 0;
+                foreach (FireFieldSnapshot fire in state.FireFields)
+                {
+                    GameplayFireFieldAdvanceRecord advance =
+                        GameplayFireFieldEvolution.AdvanceContinuous(
+                            state,
+                            fire,
+                            payload.ElapsedSeconds);
+                    GameplayFireProjectionCounts counts =
+                        GameplayFireStateProjector.Apply(
+                            mutation,
+                            fire.Field.Definition,
+                            advance.Pulses);
+                    actorInjuries += counts.ActorInjuries;
+                    destructibleDamages += counts.DestructibleDamages;
+                    if (advance.Resulting.HasValue)
+                        fields.Add(advance.Resulting.Value);
+                    advances.Add(advance);
+                }
+                mutation.ReplaceFireFields(fields);
+                mutation.JournalSequence = checked(
+                    mutation.JournalSequence + destructibleDamages);
+                mutation.Revision = checked(
+                    mutation.Revision + actorInjuries);
+                fireAdvances = advances.AsReadOnly();
             }
             return payload.ElapsedSeconds;
         }

@@ -13,6 +13,7 @@ namespace GritGud.Application.Gameplay
         private readonly List<VehicleMomentumState> vehicles;
         private readonly List<ProjectileFlightSnapshot> projectiles;
         private readonly List<SmokeFieldSnapshot> smokeFields;
+        private readonly List<FireFieldSnapshot> fireFields;
 
         public GameplayCanonicalStateMutation(
             GameplayCombatStateSnapshot canonicalState)
@@ -27,6 +28,7 @@ namespace GritGud.Application.Gameplay
             vehicles = new List<VehicleMomentumState>(source.Vehicles);
             projectiles = new List<ProjectileFlightSnapshot>(source.Projectiles);
             smokeFields = new List<SmokeFieldSnapshot>(source.SmokeFields);
+            fireFields = new List<FireFieldSnapshot>(source.FireFields);
             Mode = session.Mode;
             Operation = session.Operation;
             TurnContext = session.TurnContext;
@@ -152,6 +154,23 @@ namespace GritGud.Application.Gameplay
                 nameof(values)));
         }
 
+        public void AddFireField(FireFieldSnapshot fire)
+        {
+            EnsureMissing(
+                fireFields,
+                value => value.Field.Id,
+                fire.Field.Id,
+                "fire field");
+            fireFields.Add(fire);
+        }
+
+        public void ReplaceFireFields(IEnumerable<FireFieldSnapshot> values)
+        {
+            fireFields.Clear();
+            fireFields.AddRange(values ?? throw new ArgumentNullException(
+                nameof(values)));
+        }
+
         public GameplayCombatStateSnapshot Build()
         {
             GameplaySessionStateSnapshot original = source.Session;
@@ -188,7 +207,8 @@ namespace GritGud.Application.Gameplay
                 vehicles,
                 projectiles,
                 smokeFields,
-                source.Coverage);
+                source.Coverage,
+                fireFields);
         }
 
         public static GameplayActorSnapshot CopyActor(

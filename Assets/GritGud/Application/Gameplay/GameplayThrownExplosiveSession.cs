@@ -26,6 +26,7 @@ namespace GritGud.Application.Gameplay
         private readonly IBlastWorldQuery blast;
         private readonly GameplayBlastConsequenceResolver consequences;
         private readonly GameplaySmokeFieldSession smokeFields;
+        private readonly GameplayFireFieldSession fireFields;
         private readonly IUncertaintySampler uncertainty;
         private readonly List<ThrownExplosiveRecord> throws = new List<ThrownExplosiveRecord>();
         private readonly IReadOnlyList<ThrownExplosiveRecord> readOnlyThrows;
@@ -36,7 +37,8 @@ namespace GritGud.Application.Gameplay
             IBlastWorldQuery blastQuery,
             GameplayBlastConsequenceResolver consequenceResolver,
             IUncertaintySampler uncertaintySampler,
-            GameplaySmokeFieldSession smokeFieldSession = null)
+            GameplaySmokeFieldSession smokeFieldSession = null,
+            GameplayFireFieldSession fireFieldSession = null)
         {
             gameplay = gameplaySession ?? throw new ArgumentNullException(nameof(gameplaySession));
             landing = landingQuery ?? throw new ArgumentNullException(
@@ -46,6 +48,7 @@ namespace GritGud.Application.Gameplay
             consequences = consequenceResolver ??
                 throw new ArgumentNullException(nameof(consequenceResolver));
             smokeFields = smokeFieldSession;
+            fireFields = fireFieldSession;
             uncertainty = uncertaintySampler ?? throw new ArgumentNullException(nameof(uncertaintySampler));
             readOnlyThrows = throws.AsReadOnly();
         }
@@ -155,12 +158,21 @@ namespace GritGud.Application.Gameplay
                     definition.Id,
                     landingResult.LandingPosition,
                     definition.SmokeField);
+            FireFieldRecord fireField = definition.FireField == null
+                ? null
+                : new FireFieldRecord(
+                    $"fire.{actorId}.{sequence}",
+                    actorId,
+                    definition.Id,
+                    landingResult.LandingPosition,
+                    definition.FireField);
             prepared = new ThrownExplosiveRecord(
                 sequence, actorId, definition, actor.Pose.Position,
                 launchOrigin, intendedLanding, sampled,
                 landingResult.LandingPosition, radius,
                 blastResult.WorldStateRevision, blastResult.Effects,
-                smokeField);
+                smokeField,
+                fireField);
             failure = ThrownExplosiveFailure.None;
             return true;
         }
@@ -302,6 +314,15 @@ namespace GritGud.Application.Gameplay
                 throw new InvalidOperationException(
                     $"Smoke field '{outcome.Record.SmokeField.Id}' is already active.");
             }
+            if (outcome.Record.FireField != null && fireFields == null)
+                throw new InvalidOperationException(
+                    "Thrown incendiaries require an authoritative fire-field session.");
+            if (outcome.Record.FireField != null
+                && fireFields.TryGetField(outcome.Record.FireField.Id, out _))
+            {
+                throw new InvalidOperationException(
+                    $"Fire field '{outcome.Record.FireField.Id}' is already active.");
+            }
 
             var notifications = new GameplayNotificationBatch();
             gameplay.CommitAction(action, notifications);
@@ -315,6 +336,12 @@ namespace GritGud.Application.Gameplay
             {
                 smokeFields.Deploy(
                     outcome.Record.SmokeField,
+                    notifications);
+            }
+            if (outcome.Record.FireField != null)
+            {
+                fireFields.Deploy(
+                    outcome.Record.FireField,
                     notifications);
             }
 

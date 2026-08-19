@@ -115,11 +115,17 @@ namespace GritGud.Application.Gameplay
             && left.BlastWoundMovementPenalty
                 == right.BlastWoundMovementPenalty
             && left.BlastIntegrityDamage == right.BlastIntegrityDamage
-            && SmokeFieldDefinitionsMatch(left.SmokeField, right.SmokeField);
+            && SmokeFieldDefinitionsMatch(left.SmokeField, right.SmokeField)
+            && FireFieldDefinitionsMatch(left.FireField, right.FireField);
 
         private static bool SmokeFieldDefinitionsMatch(
             SmokeFieldDefinition left,
             SmokeFieldDefinition right) =>
+            left == null ? right == null : left.Matches(right);
+
+        private static bool FireFieldDefinitionsMatch(
+            FireFieldDefinition left,
+            FireFieldDefinition right) =>
             left == null ? right == null : left.Matches(right);
 
         private static ActionCost WithoutTurnSpend(ActionCost cost) =>

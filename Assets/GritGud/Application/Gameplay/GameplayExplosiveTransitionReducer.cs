@@ -22,6 +22,7 @@ namespace GritGud.Application.Gameplay
                     && profile.GetTrait("targeting") == "world-area"
                     && profile.GetTrait("resource") == "inventory-quantity"
                     && (consequence == "smoke-field"
+                        || consequence == "fire-field"
                         || consequence == "blast-actor-and-destructible");
             }
             catch (KeyNotFoundException)
@@ -82,6 +83,12 @@ namespace GritGud.Application.Gameplay
                     record.SmokeField,
                     remainingFraction: 1f));
             }
+            if (record.FireField != null)
+            {
+                mutation.AddFireField(new FireFieldSnapshot(
+                    record.FireField,
+                    remainingFraction: 1f));
+            }
             mutation.LastActionSequence = action.Sequence;
             mutation.JournalSequence = checked(
                 mutation.JournalSequence
@@ -109,6 +116,8 @@ namespace GritGud.Application.Gameplay
         {
             if (record.SmokeField != null)
                 state.RequireCoverage(GameplayCombatStateCoverage.SmokeFields);
+            if (record.FireField != null)
+                state.RequireCoverage(GameplayCombatStateCoverage.FireFields);
             foreach (BlastEffectRecord effect in record.BlastEffects)
                 if (effect.SubjectKind == BlastSubjectKind.DestructibleProp
                     && effect.Exposure > 0f

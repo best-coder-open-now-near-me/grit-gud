@@ -21,6 +21,7 @@ internal static class SimulationChecks
             VerifyAllCurrentContentCoverage();
             VerifyTacticalDestructibleSimulation();
             VerifyHeadlessSmokeExposure();
+            VerifyHeadlessFireHazard();
             VerifyEncounterAwarenessAndScopedInitiative();
             VerifyCommittedActionConsequenceTrajectory();
             VerifyBankedActionPointEconomy();
@@ -1108,6 +1109,7 @@ internal static class SimulationChecks
             "sim-target-kind-matrix",
             "sim-ap-banking",
             "sim-smoke-and-exposure",
+            "sim-persistent-fire",
             "sim-pinned-recovery",
             "sim-integrated-encounter",
         }, StringComparer.Ordinal);
@@ -1545,6 +1547,68 @@ internal static class SimulationChecks
             "Smoke incorrectly became a solid headless path obstacle.");
     }
 
+    private static void VerifyHeadlessFireHazard()
+    {
+        GameplaySession gameplay = CreateEncounterGameplay();
+        GameplayCombatStateSnapshot sessionOnly =
+            GameplayCombatStateCapture.Capture(gameplay);
+        var level = new LevelDocument
+        {
+            levelId = "headless-fire-check",
+            schemaVersion = 1,
+        };
+        var spatial = new GameplayHeadlessSpatialEvidence(
+            level,
+            new SpatialContentIdentity(
+                level.levelId,
+                level.schemaVersion,
+                evidenceAlgorithmVersion: 1,
+                new string('d', 64)));
+        var field = new FireFieldRecord(
+            "fire.headless-check",
+            "player",
+            "item.incendiary",
+            new GameplayPosition(0f, 0f, 3f),
+            new FireFieldDefinition(
+                initialRadius: 1f,
+                maximumRadius: 3f,
+                height: 2f,
+                explorationDurationSeconds: 12f,
+                durationTurnEnds: 6,
+                explorationPulseSeconds: 2f,
+                actorWoundMovementPenalty: 1f,
+                destructibleIntegrityDamage: 1f,
+                minimumHazardPath: 0.5f));
+        GameplayCombatStateCoverage coverage =
+            GameplayCombatStateCoverage.Session
+            | GameplayCombatStateCoverage.Destructibles
+            | GameplayCombatStateCoverage.FireFields;
+        var initial = new GameplayCombatStateSnapshot(
+            sessionOnly.Session,
+            destructibles: Array.Empty<DestructiblePropSnapshot>(),
+            coverage: coverage,
+            fireFields: new[] { new FireFieldSnapshot(field, 1f) });
+        var expanded = new GameplayCombatStateSnapshot(
+            sessionOnly.Session,
+            destructibles: Array.Empty<DestructiblePropSnapshot>(),
+            coverage: coverage,
+            fireFields: new[] { new FireFieldSnapshot(field, 0.25f) });
+        GameplayPosition start = new GameplayPosition(1.75f, 0.5f, 0f);
+        GameplayPosition end = new GameplayPosition(1.75f, 0.5f, 6f);
+
+        Require(spatial.EvaluateFireHazardTraversal(initial, start, end) == 0f,
+            "Initial fire radius incorrectly reached a clear route.");
+        Require(spatial.EvaluateFireHazardTraversal(expanded, start, end)
+                >= field.Definition.MinimumHazardPath,
+            "Expanded fire radius did not alter headless route hazard evidence.");
+        Require(!spatial.BlocksPath(
+                expanded,
+                start,
+                end,
+                clearanceRadius: 0.5f),
+            "Fire incorrectly became a solid headless path obstacle.");
+    }
+
     private static GameplayCombatStateSnapshot WithDestructible(
         GameplayCombatStateSnapshot source,
         DestructiblePropSnapshot prop) => new GameplayCombatStateSnapshot(
@@ -1553,7 +1617,8 @@ internal static class SimulationChecks
             source.Vehicles,
             source.Projectiles,
             source.SmokeFields,
-            source.Coverage);
+            source.Coverage,
+            source.FireFields);
 
     private static LevelDocument CreateTacticalDestructibleLevel()
     {

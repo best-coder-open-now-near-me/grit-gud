@@ -449,6 +449,24 @@ namespace GritGud.Application.Gameplay
                     + Format(smoke.MinimumObscuredPath)
                     + " m traversed smoke");
             }
+            else if (thrown.Definition.FireField != null)
+            {
+                FireFieldDefinition fire = thrown.Definition.FireField;
+                lines.Add("FIRE AREA - "
+                    + Format(fire.InitialRadius) + " m initial / "
+                    + Format(fire.MaximumRadius) + " m maximum - HEIGHT "
+                    + Format(fire.Height) + " m");
+                lines.Add("FIRE LIFETIME - "
+                    + Format(fire.ExplorationDurationSeconds)
+                    + " s exploration / " + fire.DurationTurnEnds
+                    + " ended turns");
+                lines.Add("FIRE PULSE - "
+                    + Format(fire.ExplorationPulseSeconds) + " s - ACTOR "
+                    + Format(fire.ActorWoundMovementPenalty)
+                    + " wound movement penalty - PROP "
+                    + Format(fire.DestructibleIntegrityDamage)
+                    + " integrity damage");
+            }
             else
             {
                 lines.Add("BLAST RADIUS - "
@@ -459,7 +477,9 @@ namespace GritGud.Application.Gameplay
                 thrown.BlastEffects,
                 thrown.Definition.BlastWoundMovementPenalty,
                 thrown.Definition.BlastIntegrityDamage,
-                thrown.Definition.SmokeField != null ? "SMOKE" : "BLAST");
+                thrown.Definition.SmokeField != null
+                    ? "SMOKE"
+                    : thrown.Definition.FireField != null ? "FIRE" : "BLAST");
         }
 
         private static void AppendInventoryQuantity(

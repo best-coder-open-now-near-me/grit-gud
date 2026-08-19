@@ -43,19 +43,26 @@ namespace GritGud.Application.Gameplay
                 ? ReduceEmergency(session, mutation, payload)
                 : ReduceNormal(session, mutation, payload);
             AdvanceSmokeFields(state, mutation);
+            IReadOnlyList<GameplayFireFieldAdvanceRecord> fireAdvances =
+                AdvanceFireFields(state, mutation);
             mutation.LastTurnSequence = record.Sequence;
             mutation.LastTransitionSequence = transition.Identity.Sequence;
             GameplayCombatStateSnapshot resulting = mutation.Build();
+            var events = new List<GameplayDomainEvent>
+            {
+                new GameplayTransitionReducedEvent(
+                    transition.Identity,
+                    payload.ActorId,
+                    record),
+            };
+            if (fireAdvances.Count > 0)
+                events.Add(new GameplayFireFieldsAdvancedEvent(
+                    transition.Identity,
+                    fireAdvances));
             return new GameplayReductionResult(
                 state,
                 resulting,
-                new GameplayDomainEvent[]
-                {
-                    new GameplayTransitionReducedEvent(
-                        transition.Identity,
-                        payload.ActorId,
-                        record),
-                });
+                events);
         }
 
         private static TurnEndRecord ReduceNormal(
@@ -197,6 +204,40 @@ namespace GritGud.Application.Gameplay
                         fraction));
             }
             mutation.ReplaceSmokeFields(remaining);
+        }
+
+        private static IReadOnlyList<GameplayFireFieldAdvanceRecord>
+            AdvanceFireFields(
+                GameplayCombatStateSnapshot state,
+                GameplayCanonicalStateMutation mutation)
+        {
+            if (!state.Covers(GameplayCombatStateCoverage.FireFields))
+                return Array.Empty<GameplayFireFieldAdvanceRecord>();
+            var remaining = new List<FireFieldSnapshot>();
+            var advances = new List<GameplayFireFieldAdvanceRecord>();
+            int actorInjuries = 0;
+            int destructibleDamages = 0;
+            foreach (FireFieldSnapshot fire in state.FireFields)
+            {
+                GameplayFireFieldAdvanceRecord advance =
+                    GameplayFireFieldEvolution.AdvanceTurnEnd(state, fire);
+                GameplayFireProjectionCounts counts =
+                    GameplayFireStateProjector.Apply(
+                        mutation,
+                        fire.Field.Definition,
+                        advance.Pulses);
+                actorInjuries += counts.ActorInjuries;
+                destructibleDamages += counts.DestructibleDamages;
+                if (advance.Resulting.HasValue)
+                    remaining.Add(advance.Resulting.Value);
+                advances.Add(advance);
+            }
+            mutation.ReplaceFireFields(remaining);
+            mutation.JournalSequence = checked(
+                mutation.JournalSequence + destructibleDamages);
+            mutation.Revision = checked(
+                mutation.Revision + actorInjuries);
+            return advances.AsReadOnly();
         }
 
         private static PersonalTurnStartRecord RefreshActor(
