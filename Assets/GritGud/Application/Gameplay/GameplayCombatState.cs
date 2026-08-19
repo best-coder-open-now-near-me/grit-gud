@@ -298,7 +298,8 @@ namespace GritGud.Application.Gameplay
             IEnumerable<VehicleMomentumSession> vehicles = null,
             GameplayProjectileSession projectiles = null,
             GameplaySmokeFieldSession smokeFields = null,
-            GameplayFireFieldSession fireFields = null)
+            GameplayFireFieldSession fireFields = null,
+            GameplayDroneSession drones = null)
         {
             if (gameplay == null) throw new ArgumentNullException(nameof(gameplay));
             var actors = new List<GameplayActorSnapshot>();
@@ -359,6 +360,8 @@ namespace GritGud.Application.Gameplay
                 coverage |= GameplayCombatStateCoverage.SmokeFields;
             if (fireFields != null)
                 coverage |= GameplayCombatStateCoverage.FireFields;
+            if (drones != null)
+                coverage |= GameplayCombatStateCoverage.Drones;
             return new GameplayCombatStateSnapshot(
                 session,
                 propStates,
@@ -366,7 +369,8 @@ namespace GritGud.Application.Gameplay
                 projectileStates,
                 smokeFields?.CaptureActiveFields(),
                 coverage,
-                fireFields?.CaptureActiveFields());
+                fireFields?.CaptureActiveFields(),
+                drones?.CaptureDrones());
         }
     }
 

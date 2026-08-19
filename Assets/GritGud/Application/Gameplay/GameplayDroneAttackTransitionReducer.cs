@@ -97,8 +97,11 @@ namespace GritGud.Application.Gameplay
 
             var mutation = new GameplayCanonicalStateMutation(state)
             {
-                JournalSequence = checked(session.JournalSequence + 1L),
-                LastActionSequence = checked(session.LastActionSequence + 1L),
+                JournalSequence = checked(
+                    session.JournalSequence
+                        + (action.Consequence is DestructibleDamageRecord
+                            ? 2L
+                            : 1L)),
                 Revision = checked(session.Revision + 1L),
                 LastTransitionSequence = transition.Identity.Sequence,
             };

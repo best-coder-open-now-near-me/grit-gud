@@ -973,6 +973,71 @@ namespace GritGud.Application.Gameplay
             MarkStateChanged();
         }
 
+        internal void CommitDroneMoveBudget(DroneMoveRecord record)
+        {
+            if (record == null) throw new ArgumentNullException(nameof(record));
+            GameplayActorState actor = RequireActiveActor(
+                record.ControllerActorId);
+            if (actor.IsIncapacitated)
+                throw new InvalidOperationException(
+                    "An incapacitated actor cannot control a drone.");
+            if (actor.TurnBudget.ActionPoints
+                    != record.PreviousBudget.ActionPoints
+                || actor.TurnBudget.MovementOpportunity
+                    != record.PreviousBudget.MovementOpportunity)
+                throw new InvalidOperationException(
+                    "Drone movement was prepared against a stale controller budget.");
+            actor.TurnBudget = record.ResultingBudget;
+            Journal.RecordDroneMoved(record);
+            MarkStateChanged();
+        }
+
+        internal void CommitDroneAttackBudget(DroneAttackRecord record)
+        {
+            if (record == null) throw new ArgumentNullException(nameof(record));
+            GameplayActorState actor = RequireActiveActor(
+                record.ControllerActorId);
+            if (actor.IsIncapacitated)
+                throw new InvalidOperationException(
+                    "An incapacitated actor cannot control a drone.");
+            if (actor.TurnBudget.ActionPoints
+                    != record.PreviousBudget.ActionPoints
+                || actor.TurnBudget.MovementOpportunity
+                    != record.PreviousBudget.MovementOpportunity)
+                throw new InvalidOperationException(
+                    "Drone attack was prepared against a stale controller budget.");
+            actor.TurnBudget = record.ResultingBudget;
+            Journal.RecordDroneAttackResolved(record);
+            MarkStateChanged();
+        }
+
+        internal void CommitDroneActorAttack(
+            DroneAttackRecord record,
+            ActorWoundRecord wound)
+        {
+            if (record == null) throw new ArgumentNullException(nameof(record));
+            if (wound == null) throw new ArgumentNullException(nameof(wound));
+            GameplayActorState controller = RequireActiveActor(
+                record.ControllerActorId);
+            GameplayActorState target = RequireActor(wound.ActorId);
+            if (controller.IsIncapacitated
+                || controller.TurnBudget.ActionPoints
+                    != record.PreviousBudget.ActionPoints
+                || controller.TurnBudget.MovementOpportunity
+                    != record.PreviousBudget.MovementOpportunity
+                || !target.Wounds.HasSameState(wound.Previous))
+                throw new InvalidOperationException(
+                    "Drone actor attack starts from stale live state.");
+            controller.TurnBudget = record.ResultingBudget;
+            target.ApplyBlast(wound.Region, wound.AppliedMovementPenalty);
+            Journal.RecordDroneAttackResolved(record);
+            var notifications = new GameplayNotificationBatch();
+            notifications.Add(ActorCapabilityChanged, wound.ActorId);
+            MarkStateChanged();
+            notifications.Publish();
+        }
+
+
         public void CommitForcedDisplacement(DisplacementRecord record)
         {
             if (record == null)

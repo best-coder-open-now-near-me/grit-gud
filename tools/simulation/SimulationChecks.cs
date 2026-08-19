@@ -114,7 +114,90 @@ internal static class SimulationChecks
             branch.Apply(transition);
         Require(GameplayExactReplay.Verify(initial, branch.Steps, reducers).IsExact,
             "Drone headless trajectory did not replay exactly.");
+
+        GameplaySession liveGameplay = CreateGameplay(CreateRifle());
+        Require(liveGameplay.BeginEncounter(),
+            "Live drone parity encounter did not begin.");
+        var liveDrones = new GameplayDroneSession(
+            liveGameplay,
+            new[] { droneDefinition });
+        GameplayCombatStateSnapshot liveInitial = GameplayCombatStateCapture.Capture(
+            liveGameplay,
+            drones: liveDrones);
+        DroneMoveRecord liveMove = liveDrones.PrepareMove(
+            droneDefinition.Id,
+            movement.Destination,
+            movement.ResultingFacingDegrees);
+        GameplaySemanticTransition liveMoveTransition = CreateTransition(
+            liveInitial,
+            new GameplayDroneMoveTransitionPayload(liveMove),
+            1L);
+        GameplayCombatStateSnapshot predictedMove = reducers.Reduce(
+            liveInitial,
+            liveMoveTransition).Resulting;
+        liveDrones.CommitMove(liveMove);
+        liveGameplay.RecordSemanticTransition(liveMoveTransition.Identity);
+        GameplayCombatStateSnapshot actualMove = GameplayCombatStateCapture.Capture(
+            liveGameplay,
+            drones: liveDrones);
+        IReadOnlyList<GameplayStateDifference> moveDifferences =
+            GameplayCombatStateDiffer.Compare(predictedMove, actualMove);
+        Require(moveDifferences.Count == 0,
+            "Live drone movement diverged from pure reduction at "
+                + (moveDifferences.Count == 0
+                    ? "unknown"
+                    : moveDifferences[0].Path));
+        GameplayActorSnapshot liveTarget = actualMove.Session.GetActor("enemy");
+        var liveWound = new ActorWoundRecord(
+            TargetRegionId.Torso,
+            droneDefinition.Attack.WoundMovementPenalty,
+            liveTarget.Wounds,
+            liveTarget.Wounds.AddWound(
+                TargetRegionId.Torso,
+                droneDefinition.Attack.WoundMovementPenalty));
+        TurnBudget liveBudget = actualMove.Session.GetActor("player").TurnBudget;
+        var liveAttack = new DroneAttackRecord(
+            "player",
+            droneDefinition.Id,
+            "enemy",
+            GameplaySemanticSubjectKind.Actor.ToString(),
+            droneDefinition.Attack.TurnCost,
+            liveBudget,
+            liveBudget.SpendAction(droneDefinition.Attack.TurnCost),
+            liveWound);
+        var liveAttackPayload = new GameplayDroneAttackTransitionPayload(
+            GameplaySemanticSubjectKind.Actor,
+            droneDefinition.Attack,
+            liveAttack);
+        GameplaySemanticTransition liveAttackTransition = CreateTransition(
+            actualMove,
+            liveAttackPayload,
+            2L);
+        GameplayCombatStateSnapshot predictedAttack = reducers.Reduce(
+            actualMove,
+            liveAttackTransition).Resulting;
+        liveDrones.CommitAttack(liveAttack);
+        liveGameplay.RecordSemanticTransition(liveAttackTransition.Identity);
+        GameplayCombatStateSnapshot actualAttack = GameplayCombatStateCapture.Capture(
+            liveGameplay,
+            drones: liveDrones);
+        Require(GameplayCombatStateDiffer.Compare(
+                predictedAttack,
+                actualAttack).Count == 0,
+            "Live drone attack diverged from pure reduction.");
     }
+
+    private static GameplaySemanticTransition CreateTransition(
+        GameplayCombatStateSnapshot state,
+        GameplayTransitionPayload payload,
+        long sequence) => new GameplaySemanticTransition(
+            new GameplayTransitionIdentity(
+                sequence,
+                payload.Profile.Capability.ToString(),
+                payload.ActorId,
+                payload.SubjectId),
+            state.CanonicalHash,
+            payload);
 
     private static void VerifyBankedActionPointEconomy()
     {

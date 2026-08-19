@@ -24,6 +24,33 @@ namespace GritGud.Application.Gameplay
         EnemyDecisionCommitted,
         EnemyAwarenessChanged,
         PatrolAdvanced,
+        DroneMoved,
+        DroneAttackResolved,
+    }
+
+    public sealed class DroneMovedJournalEntry : GameplayJournalEntry
+    {
+        public DroneMovedJournalEntry(long sequence, DroneMoveRecord movement)
+            : base(sequence, GameplayJournalEntryKind.DroneMoved)
+        {
+            Movement = movement ?? throw new ArgumentNullException(
+                nameof(movement));
+        }
+
+        public DroneMoveRecord Movement { get; }
+    }
+
+    public sealed class DroneAttackResolvedJournalEntry : GameplayJournalEntry
+    {
+        public DroneAttackResolvedJournalEntry(
+            long sequence,
+            DroneAttackRecord attack)
+            : base(sequence, GameplayJournalEntryKind.DroneAttackResolved)
+        {
+            Attack = attack ?? throw new ArgumentNullException(nameof(attack));
+        }
+
+        public DroneAttackRecord Attack { get; }
     }
 
     public sealed class EnemyDecisionCommittedJournalEntry :
@@ -398,6 +425,12 @@ namespace GritGud.Application.Gameplay
 
         internal void RecordVehicleMomentumResolved(VehicleMomentumRecord record) =>
             Append(new VehicleMomentumResolvedJournalEntry(NextSequence, record));
+
+        internal void RecordDroneMoved(DroneMoveRecord record) =>
+            Append(new DroneMovedJournalEntry(NextSequence, record));
+
+        internal void RecordDroneAttackResolved(DroneAttackRecord record) =>
+            Append(new DroneAttackResolvedJournalEntry(NextSequence, record));
 
         internal void RecordProjectileAdvanced(ProjectileAdvanceRecord record) =>
             Append(new ProjectileAdvancedJournalEntry(NextSequence, record));
