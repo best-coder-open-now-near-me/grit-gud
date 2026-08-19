@@ -110,7 +110,7 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.Throws<ArgumentException>(() => CreateContext(
                 TacticalAwarenessBand.Unaware,
                 TacticalVisibilityRelation.AttackerOnly,
-                default));
+                new GameplaySubjectReference()));
         }
 
         [Test]
