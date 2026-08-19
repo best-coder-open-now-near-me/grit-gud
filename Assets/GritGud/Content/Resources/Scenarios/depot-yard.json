@@ -561,6 +561,7 @@
             "alertThreshold": 100
           },
           "patrol": {
+            "enabled": true,
             "loops": true,
             "waypoints": [
               { "x": 5.0, "y": 2.0, "z": 0.0 },
@@ -767,6 +768,7 @@
             "alertThreshold": 100
           },
           "patrol": {
+            "enabled": true,
             "loops": true,
             "waypoints": [
               { "x": 2.0, "y": 2.0, "z": -10.0 },

@@ -247,6 +247,9 @@ namespace GritGud.Domain.Gameplay
     [Serializable]
     public sealed class ScenarioPatrolRouteData
     {
+        // JsonUtility materializes omitted/null nested objects. This explicit
+        // discriminator keeps stationary enemies portable across serializers.
+        public bool enabled;
         public bool loops = true;
         public List<Float3Data> waypoints = new List<Float3Data>();
     }

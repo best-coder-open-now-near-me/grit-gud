@@ -161,7 +161,7 @@ namespace GritGud.Application.Gameplay
         private static PatrolRouteDefinition CreatePatrolRoute(
             ScenarioPatrolRouteData data)
         {
-            if (data == null)
+            if (data == null || !data.enabled)
                 return null;
             var points = new List<GameplayPosition>();
             foreach (Float3Data point in data.waypoints ?? new List<Float3Data>())
@@ -194,7 +194,7 @@ namespace GritGud.Application.Gameplay
             string actorId,
             ScenarioPatrolRouteData data)
         {
-            if (data == null)
+            if (data == null || !data.enabled)
                 return;
             GameplayScenarioAssemblyValidation.Require(
                 data.waypoints != null && data.waypoints.Count >= 2,
