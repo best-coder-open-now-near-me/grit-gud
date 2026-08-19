@@ -131,7 +131,9 @@ namespace GritGud.Application.Gameplay
             int turnActionPointAllowance = -1,
             float turnMovementAllowance = -1f,
             ActorPinState pinState = null,
-            int emergencyActionPointAllowance = 0)
+            int emergencyActionPointAllowance = 0,
+            int maximumActionPoints = -1,
+            TurnBudget? suspendedTurnBudget = null)
         {
             if (!string.Equals(actorId, wounds.ActorId, StringComparison.Ordinal))
             {
@@ -179,14 +181,19 @@ namespace GritGud.Application.Gameplay
             TurnActionPointAllowance = turnActionPointAllowance < 0
                 ? turnBudget.ActionPoints
                 : turnActionPointAllowance;
+            MaximumActionPoints = maximumActionPoints < 0
+                ? Math.Max(TurnActionPointAllowance, turnBudget.ActionPoints)
+                : maximumActionPoints;
             TurnMovementAllowance = turnMovementAllowance < 0f
                 ? turnBudget.MovementOpportunity + wounds.MovementPenalty
                 : turnMovementAllowance;
             PinState = pinState;
             EmergencyActionPointAllowance = emergencyActionPointAllowance;
+            SuspendedTurnBudget = suspendedTurnBudget;
             if (float.IsNaN(TurnMovementAllowance)
                 || float.IsInfinity(TurnMovementAllowance)
-                || TurnActionPointAllowance < turnBudget.ActionPoints
+                || MaximumActionPoints < TurnActionPointAllowance
+                || MaximumActionPoints < turnBudget.ActionPoints
                 || TurnMovementAllowance + 0.0001f
                     < turnBudget.MovementOpportunity + wounds.MovementPenalty)
                 throw new ArgumentException(
@@ -211,11 +218,15 @@ namespace GritGud.Application.Gameplay
 
         public int TurnActionPointAllowance { get; }
 
+        public int MaximumActionPoints { get; }
+
         public float TurnMovementAllowance { get; }
 
         public ActorPinState PinState { get; }
 
         public int EmergencyActionPointAllowance { get; }
+
+        public TurnBudget? SuspendedTurnBudget { get; }
 
         public bool IsPinned => PinState != null;
 
@@ -480,7 +491,10 @@ namespace GritGud.Application.Gameplay
                 }
                 actors.Add(
                     actor.Id,
-                    new GameplayActorState(actor, restoredCharacter));
+                    new GameplayActorState(
+                        actor,
+                        scenario.Timing,
+                        restoredCharacter));
                 initiative.Add(ResolveInitiative(actor, participantCount));
             }
             initiative.Sort(CompareInitiative);
@@ -1279,6 +1293,9 @@ namespace GritGud.Application.Gameplay
             string actorId,
             int actionPointAllowance) =>
             RequireActor(actorId).BeginEmergencyTurn(actionPointAllowance);
+
+        void IGameplayTurnLifecycleHost.EndEmergencyTurnForTurnLifecycle(
+            string actorId) => RequireActor(actorId).EndEmergencyTurn();
 
         int IGameplayTurnLifecycleHost
             .GetEmergencyActionPointAllowanceForTurnLifecycle(

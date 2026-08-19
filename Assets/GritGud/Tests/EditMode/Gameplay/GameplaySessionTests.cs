@@ -378,7 +378,7 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(completedCycle.Actors[0].TurnBudget.MovementOpportunity,
                 Is.EqualTo(4f));
             Assert.That(session.GetActor("player").TurnBudget.ActionPoints,
-                Is.EqualTo(4));
+                Is.EqualTo(6));
             Assert.That(session.GetActor("player").TurnBudget.MovementOpportunity,
                 Is.EqualTo(8f));
             Assert.That(endedTurn, Is.SameAs(session.LastEndedTurn));

@@ -446,7 +446,9 @@ namespace GritGud.Application.Gameplay
                 actor.TurnActionPointAllowance,
                 actor.TurnMovementAllowance,
                 actor.PinState,
-                actor.EmergencyActionPointAllowance);
+                actor.EmergencyActionPointAllowance,
+                actor.MaximumActionPoints,
+                actor.SuspendedTurnBudget);
 
         private static IReadOnlyList<GameplayActorSnapshot> ReplaceActor(
             IReadOnlyList<GameplayActorSnapshot> actors,

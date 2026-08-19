@@ -6,7 +6,10 @@ namespace GritGud.Domain.Gameplay
 {
     public sealed class ScenarioTimingDefinition
     {
-        public ScenarioTimingDefinition(float minimumVoluntaryTurnSeconds)
+        public ScenarioTimingDefinition(
+            float minimumVoluntaryTurnSeconds,
+            int actionPointIncome = 4,
+            int maximumHeldActionPoints = 6)
         {
             if (!IsValidMinimumVoluntaryTurnSeconds(
                     minimumVoluntaryTurnSeconds))
@@ -16,9 +19,19 @@ namespace GritGud.Domain.Gameplay
             }
 
             MinimumVoluntaryTurnSeconds = minimumVoluntaryTurnSeconds;
+            if (actionPointIncome <= 0)
+                throw new ArgumentOutOfRangeException(nameof(actionPointIncome));
+            if (maximumHeldActionPoints < actionPointIncome)
+                throw new ArgumentOutOfRangeException(nameof(maximumHeldActionPoints));
+            ActionPointIncome = actionPointIncome;
+            MaximumHeldActionPoints = maximumHeldActionPoints;
         }
 
         public float MinimumVoluntaryTurnSeconds { get; }
+
+        public int ActionPointIncome { get; }
+
+        public int MaximumHeldActionPoints { get; }
 
         public static bool IsValidMinimumVoluntaryTurnSeconds(float value) =>
             !float.IsNaN(value)

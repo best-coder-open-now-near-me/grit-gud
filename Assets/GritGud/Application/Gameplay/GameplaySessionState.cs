@@ -8,12 +8,15 @@ namespace GritGud.Application.Gameplay
     internal sealed class GameplayActorState
     {
         private readonly TurnBudget turnBudgetAllowance;
+        private readonly int maximumActionPoints;
+        private readonly int actionPointIncome;
         private readonly Dictionary<string, int> inventoryQuantities =
             new Dictionary<string, int>(StringComparer.Ordinal);
         private GameplayActorPose pose;
         private TurnBudget turnBudget;
         private ActorWoundSnapshot wounds;
         private ActorPinState pinState;
+        private TurnBudget? suspendedTurnBudget;
         private ActorInventorySnapshot cachedInventory;
         private GameplayActorSnapshot cachedSnapshot;
         private bool inventorySnapshotDirty = true;
@@ -21,6 +24,7 @@ namespace GritGud.Application.Gameplay
 
         public GameplayActorState(
             ScenarioActorDefinition definition,
+            ScenarioTimingDefinition timing,
             CharacterPersistenceSnapshot restoredCharacter = null)
         {
             ActorId = definition.Id;
@@ -47,6 +51,12 @@ namespace GritGud.Application.Gameplay
                     inventoryQuantities.Add(item.Id, item.InitialQuantity);
             }
             turnBudgetAllowance = definition.StartingTurnBudget;
+            maximumActionPoints = timing.MaximumHeldActionPoints;
+            actionPointIncome = timing.ActionPointIncome;
+            if (turnBudget.ActionPoints > maximumActionPoints)
+                throw new ArgumentException(
+                    "Starting action points exceed the scenario maximum.",
+                    nameof(definition));
         }
 
         public string ActorId { get; }
@@ -124,16 +134,33 @@ namespace GritGud.Application.Gameplay
         public void RefreshTurnBudget()
         {
             TurnBudget = new TurnBudget(
-                turnBudgetAllowance.ActionPoints,
+                Math.Min(
+                    maximumActionPoints,
+                    checked(TurnBudget.ActionPoints
+                        + actionPointIncome)),
                 WoundedMovementAllowance);
         }
 
         public void BeginEmergencyTurn(int actionPoints)
         {
+            if (suspendedTurnBudget.HasValue)
+                throw new InvalidOperationException(
+                    "Actor already has a suspended normal-turn budget.");
+            suspendedTurnBudget = TurnBudget;
             EmergencyActionPointAllowance = actionPoints;
             TurnBudget = new TurnBudget(
                 actionPoints,
                 WoundedMovementAllowance);
+        }
+
+        public void EndEmergencyTurn()
+        {
+            if (!suspendedTurnBudget.HasValue)
+                throw new InvalidOperationException(
+                    "Actor has no suspended normal-turn budget.");
+            TurnBudget = suspendedTurnBudget.Value;
+            suspendedTurnBudget = null;
+            EmergencyActionPointAllowance = 0;
         }
 
         public void ApplyAttack(AttackResolutionRecord attack)
@@ -221,7 +248,9 @@ namespace GritGud.Application.Gameplay
                 turnBudgetAllowance.ActionPoints,
                 turnBudgetAllowance.MovementOpportunity,
                 PinState,
-                EmergencyActionPointAllowance);
+                EmergencyActionPointAllowance,
+                maximumActionPoints,
+                suspendedTurnBudget);
             actorSnapshotDirty = false;
             return cachedSnapshot;
         }

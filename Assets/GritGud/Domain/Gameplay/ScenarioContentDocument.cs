@@ -15,6 +15,8 @@ namespace GritGud.Domain.Gameplay
     public sealed class ScenarioTimingData
     {
         public float minimumVoluntaryTurnSeconds;
+        public int actionPointIncome = 4;
+        public int maximumHeldActionPoints = 6;
     }
 
     [Serializable]
@@ -385,7 +387,7 @@ namespace GritGud.Domain.Gameplay
     [Serializable]
     public sealed class ScenarioContentDocument
     {
-        public const int CurrentSchemaVersion = 16;
+        public const int CurrentSchemaVersion = 17;
 
         public int schemaVersion = CurrentSchemaVersion;
         public string scenarioId = string.Empty;

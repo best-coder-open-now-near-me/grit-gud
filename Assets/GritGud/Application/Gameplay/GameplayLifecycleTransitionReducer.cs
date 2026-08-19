@@ -270,7 +270,6 @@ namespace GritGud.Application.Gameplay
                 var cycle = new VoluntaryTurnCycleRecord(
                     checked(session.LastVoluntaryTurnCycleSequence + 1L),
                     session.Actors);
-                RefreshAll(mutation, session.Actors);
                 mutation.Mode = GameplaySessionMode.Exploration;
                 mutation.TurnContext = TurnModeContext.None;
                 mutation.VoluntaryTurnReentrySecondsRemaining =
@@ -442,7 +441,9 @@ namespace GritGud.Application.Gameplay
                         actor,
                         budget: budget,
                         emergencyActionPointAllowance:
-                            payload.ActionPointAllowance));
+                            payload.ActionPointAllowance,
+                        suspendedTurnBudget: actor.TurnBudget,
+                        replaceSuspendedTurnBudget: true));
                 mutation.EmergencyResponders = payload.Responders;
                 mutation.EmergencyResponderIndex = 0;
                 mutation.EmergencyResumeActorId = payload.ActorId;
@@ -459,8 +460,6 @@ namespace GritGud.Application.Gameplay
                 throw new InvalidOperationException(
                     "Emergency reaction is not ready to complete.");
             string resume = session.EmergencyResumeActorId;
-            GameplayActorSnapshot resuming = mutation.GetActor(resume);
-            Refresh(mutation, resuming);
             mutation.EmergencyResponders = Array.Empty<string>();
             mutation.EmergencyResponderIndex = -1;
             mutation.EmergencyResumeActorId = string.Empty;
@@ -485,7 +484,10 @@ namespace GritGud.Application.Gameplay
             mutation.ReplaceActor(GameplayCanonicalStateMutation.CopyActor(
                 actor,
                 budget: new TurnBudget(
-                    actor.TurnActionPointAllowance,
+                    Math.Min(
+                        actor.MaximumActionPoints,
+                        checked(actor.TurnBudget.ActionPoints
+                            + actor.TurnActionPointAllowance)),
                     Math.Max(
                         0f,
                         actor.TurnMovementAllowance

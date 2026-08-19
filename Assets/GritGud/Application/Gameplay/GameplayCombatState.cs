@@ -612,9 +612,18 @@ namespace GritGud.Application.Gameplay
             Append(text, root + ".ap", actor.TurnBudget.ActionPoints);
             Append(text, root + ".move", actor.TurnBudget.MovementOpportunity);
             Append(text, root + ".allowance.ap", actor.TurnActionPointAllowance);
+            Append(text, root + ".allowance.maximumAp", actor.MaximumActionPoints);
             Append(text, root + ".allowance.move", actor.TurnMovementAllowance);
             Append(text, root + ".allowance.emergencyAp",
                 actor.EmergencyActionPointAllowance);
+            Append(text, root + ".suspended", actor.SuspendedTurnBudget.HasValue);
+            if (actor.SuspendedTurnBudget.HasValue)
+            {
+                Append(text, root + ".suspended.ap",
+                    actor.SuspendedTurnBudget.Value.ActionPoints);
+                Append(text, root + ".suspended.move",
+                    actor.SuspendedTurnBudget.Value.MovementOpportunity);
+            }
             Append(text, root + ".equipped", actor.EquippedItemId ?? string.Empty);
             Append(text, root + ".equipment.movementMultiplier",
                 actor.EquipmentEffects.MovementSpeedMultiplier);

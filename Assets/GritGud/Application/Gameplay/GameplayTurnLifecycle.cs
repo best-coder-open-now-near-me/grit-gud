@@ -25,6 +25,8 @@ namespace GritGud.Application.Gameplay
             string actorId,
             int actionPointAllowance);
 
+        void EndEmergencyTurnForTurnLifecycle(string actorId);
+
         int GetEmergencyActionPointAllowanceForTurnLifecycle(string actorId);
 
         VoluntaryTurnCycleRecord CreateVoluntaryTurnCycleRecordForTurnLifecycle();
@@ -398,6 +400,10 @@ namespace GritGud.Application.Gameplay
 
             var notifications = new GameplayNotificationBatch();
             string endingActorId = activeActorId;
+            int emergencyAllowance =
+                host.GetEmergencyActionPointAllowanceForTurnLifecycle(
+                    endingActorId);
+            host.EndEmergencyTurnForTurnLifecycle(endingActorId);
             emergencyResponderIndex++;
             responsePassCompleted =
                 emergencyResponderIndex >= emergencyResponders.Count;
@@ -407,8 +413,7 @@ namespace GritGud.Application.Gameplay
                     emergencyResponders[emergencyResponderIndex];
                 host.BeginEmergencyTurnForTurnLifecycle(
                     nextResponderId,
-                    host.GetEmergencyActionPointAllowanceForTurnLifecycle(
-                        endingActorId));
+                    emergencyAllowance);
                 SetActiveActor(nextResponderId, notifications);
             }
             RecordTurnEnd(
@@ -443,7 +448,6 @@ namespace GritGud.Application.Gameplay
             emergencyResponderIndex = -1;
             emergencyResumeActorId = null;
             TurnPhase = GameplayTurnPhase.Normal;
-            host.RefreshTurnBudgetForTurnLifecycle(resumeActorId);
             SetActiveActor(resumeActorId, notifications);
             PublishCommitted(notifications);
         }
@@ -490,7 +494,6 @@ namespace GritGud.Application.Gameplay
             VoluntaryTurnCycleRecord completedCycle =
                 host.CreateVoluntaryTurnCycleRecordForTurnLifecycle();
             LastCompletedVoluntaryTurnCycle = completedCycle;
-            host.RefreshAllTurnBudgetsForTurnLifecycle();
             GameplaySessionMode previousMode = Mode;
             SetMode(GameplaySessionMode.Exploration, notifications);
             TurnContext = TurnModeContext.None;

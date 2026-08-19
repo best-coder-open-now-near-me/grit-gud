@@ -33,6 +33,11 @@ namespace GritGud.Application.Gameplay
             RequireFinitePositive(
                 content.timing.minimumVoluntaryTurnSeconds,
                 "Minimum voluntary turn duration");
+            Require(content.timing.actionPointIncome > 0,
+                "Action-point income must be positive.");
+            Require(content.timing.maximumHeldActionPoints
+                    >= content.timing.actionPointIncome,
+                "Maximum held action points cannot be below income.");
             Require(
                 string.Equals(content.levelId, level.levelId, StringComparison.Ordinal),
                 $"Scenario '{content.scenarioId}' requires level '{content.levelId}', "
@@ -115,7 +120,9 @@ namespace GritGud.Application.Gameplay
             var scenario = new ScenarioDefinition(
                 content.scenarioId,
                 new ScenarioTimingDefinition(
-                    content.timing.minimumVoluntaryTurnSeconds),
+                    content.timing.minimumVoluntaryTurnSeconds,
+                    content.timing.actionPointIncome,
+                    content.timing.maximumHeldActionPoints),
                 actorDefinitions,
                 objectiveDefinitions,
                 GameplayAttackResponseAssembler.Create(

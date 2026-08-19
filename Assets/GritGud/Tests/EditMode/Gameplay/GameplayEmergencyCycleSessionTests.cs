@@ -25,6 +25,12 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(resolution.ResolveCount, Is.EqualTo(1));
             Assert.That(cycle.CurrentWindow.Status, Is.EqualTo(EmergencyReactionWindowStatus.Completed));
             Assert.That(gameplay.ActiveActorId, Is.EqualTo("player"));
+            Assert.That(gameplay.GetActor("guard").TurnBudget.ActionPoints,
+                Is.EqualTo(4),
+                "Emergency AP must not replace the responder's normal budget.");
+            Assert.That(gameplay.GetActor("player").TurnBudget.ActionPoints,
+                Is.EqualTo(4),
+                "Resuming an interrupted turn must not mint AP.");
         }
 
         private static GameplaySession CreateGameplay()

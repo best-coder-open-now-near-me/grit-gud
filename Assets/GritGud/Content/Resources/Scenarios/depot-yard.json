@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 16,
+  "schemaVersion": 17,
   "scenarioId": "depot-yard",
   "displayName": "Depot Yard",
   "levelId": "main-depot-yard-v1",
@@ -10,7 +10,11 @@
   "primaryTargetActorId": "depot-rifleman",
   "primaryObjectiveId": "raised-deck",
   "randomSeed": 12648430,
-  "timing": { "minimumVoluntaryTurnSeconds": 1.25 },
+  "timing": {
+    "minimumVoluntaryTurnSeconds": 1.25,
+    "actionPointIncome": 4,
+    "maximumHeldActionPoints": 6
+  },
   "tacticalRules": [
     {
       "id": "rule.ambush.direct-attack.actor",

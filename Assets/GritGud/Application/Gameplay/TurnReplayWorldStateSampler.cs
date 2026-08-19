@@ -608,7 +608,9 @@ namespace GritGud.Application.Gameplay
                 actor.TurnActionPointAllowance,
                 actor.TurnMovementAllowance,
                 replacePin ? pinState : actor.PinState,
-                actor.EmergencyActionPointAllowance);
+                actor.EmergencyActionPointAllowance,
+                actor.MaximumActionPoints,
+                actor.SuspendedTurnBudget);
 
         private static GameplayPosition Lerp(
             GameplayPosition from,

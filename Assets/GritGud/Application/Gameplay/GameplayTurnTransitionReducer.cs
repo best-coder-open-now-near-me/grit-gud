@@ -92,7 +92,6 @@ namespace GritGud.Application.Gameplay
                 var cycle = new VoluntaryTurnCycleRecord(
                     checked(session.LastVoluntaryTurnCycleSequence + 1L),
                     session.Actors);
-                RefreshAllActors(mutation, session.Actors);
                 mutation.EncounterActive = false;
                 mutation.EncounterCompletionRequested = false;
                 mutation.Mode = GameplaySessionMode.Exploration;
@@ -136,10 +135,20 @@ namespace GritGud.Application.Gameplay
             bool completed = nextIndex >= session.EmergencyResponders.Count;
             mutation.EmergencyResponderIndex = nextIndex;
             string nextActorId = session.EmergencyResumeActorId;
+            GameplayActorSnapshot ending = mutation.GetActor(payload.ActorId);
+            if (!ending.SuspendedTurnBudget.HasValue)
+                throw new InvalidOperationException(
+                    "Emergency responder has no suspended normal-turn budget.");
+            mutation.ReplaceActor(
+                GameplayCanonicalStateMutation.CopyActor(
+                    ending,
+                    budget: ending.SuspendedTurnBudget.Value,
+                    emergencyActionPointAllowance: 0,
+                    suspendedTurnBudget: null,
+                    replaceSuspendedTurnBudget: true));
             if (!completed)
             {
                 nextActorId = session.EmergencyResponders[nextIndex];
-                GameplayActorSnapshot ending = mutation.GetActor(payload.ActorId);
                 GameplayActorSnapshot next = mutation.GetActor(nextActorId);
                 int allowance = ending.EmergencyActionPointAllowance;
                 var budget = new TurnBudget(
@@ -152,7 +161,9 @@ namespace GritGud.Application.Gameplay
                     GameplayCanonicalStateMutation.CopyActor(
                         next,
                         budget: budget,
-                        emergencyActionPointAllowance: allowance));
+                        emergencyActionPointAllowance: allowance,
+                        suspendedTurnBudget: next.TurnBudget,
+                        replaceSuspendedTurnBudget: true));
                 mutation.ActiveActorId = nextActorId;
             }
             mutation.JournalSequence = checked(mutation.JournalSequence + 1L);
@@ -185,20 +196,15 @@ namespace GritGud.Application.Gameplay
             mutation.ReplaceSmokeFields(remaining);
         }
 
-        private static void RefreshAllActors(
-            GameplayCanonicalStateMutation mutation,
-            IEnumerable<GameplayActorSnapshot> actors)
-        {
-            foreach (GameplayActorSnapshot actor in actors)
-                RefreshActor(mutation, actor);
-        }
-
         private static void RefreshActor(
             GameplayCanonicalStateMutation mutation,
             GameplayActorSnapshot actor)
         {
             var budget = new TurnBudget(
-                actor.TurnActionPointAllowance,
+                Math.Min(
+                    actor.MaximumActionPoints,
+                    checked(actor.TurnBudget.ActionPoints
+                        + actor.TurnActionPointAllowance)),
                 Math.Max(
                     0f,
                     actor.TurnMovementAllowance
