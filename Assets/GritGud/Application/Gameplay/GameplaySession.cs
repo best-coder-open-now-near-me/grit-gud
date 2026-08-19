@@ -1013,26 +1013,34 @@ namespace GritGud.Application.Gameplay
 
         internal void CommitDroneActorAttack(
             DroneAttackRecord record,
-            ActorWoundRecord wound)
+            AttackResolutionRecord resolution)
         {
             if (record == null) throw new ArgumentNullException(nameof(record));
-            if (wound == null) throw new ArgumentNullException(nameof(wound));
+            if (resolution == null) throw new ArgumentNullException(
+                nameof(resolution));
             GameplayActorState controller = RequireActiveActor(
                 record.ControllerActorId);
-            GameplayActorState target = RequireActor(wound.ActorId);
+            GameplayActorState target = RequireActor(resolution.TargetId);
             if (controller.IsIncapacitated
                 || controller.TurnBudget.ActionPoints
                     != record.PreviousBudget.ActionPoints
                 || controller.TurnBudget.MovementOpportunity
                     != record.PreviousBudget.MovementOpportunity
-                || !target.Wounds.HasSameState(wound.Previous))
+                || !target.Wounds.HasSameState(
+                    resolution.TargetWoundsBefore))
                 throw new InvalidOperationException(
                     "Drone actor attack starts from stale live state.");
             controller.TurnBudget = record.ResultingBudget;
-            target.ApplyBlast(wound.Region, wound.AppliedMovementPenalty);
+            if (resolution.Hit)
+                target.ApplyBlast(
+                    resolution.Wound.Region,
+                    resolution.Wound.AppliedMovementPenalty);
             Journal.RecordDroneAttackResolved(record);
             var notifications = new GameplayNotificationBatch();
-            notifications.Add(ActorCapabilityChanged, wound.ActorId);
+            if (resolution.Hit)
+                notifications.Add(
+                    ActorCapabilityChanged,
+                    resolution.TargetId);
             MarkStateChanged();
             notifications.Publish();
         }

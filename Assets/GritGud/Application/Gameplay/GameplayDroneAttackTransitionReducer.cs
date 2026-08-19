@@ -131,16 +131,19 @@ namespace GritGud.Application.Gameplay
             switch (targetKind)
             {
                 case GameplaySemanticSubjectKind.Actor
-                    when action.Consequence is ActorWoundRecord wound:
+                    when action.Consequence is AttackResolutionRecord resolution:
                     GameplayActorSnapshot target = state.Session.GetActor(
                         action.TargetId);
-                    if (!target.Wounds.HasSameState(wound.Previous)
+                    if (!target.Wounds.HasSameState(
+                            resolution.TargetWoundsBefore)
                         || !string.Equals(
-                            wound.ActorId,
+                            resolution.TargetId,
                             action.TargetId,
                             StringComparison.Ordinal))
                         throw new InvalidOperationException(
                             "Drone attack actor consequence is stale.");
+                    if (!resolution.Hit) return;
+                    ActorWoundRecord wound = resolution.Wound;
                     mutation.ReplaceActor(
                         GameplayCanonicalStateMutation.CopyActor(
                             target,

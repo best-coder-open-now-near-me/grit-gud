@@ -70,12 +70,22 @@ namespace GritGud.Domain.Tests.Gameplay
         {
             GameplayCombatStateSnapshot initial = CreateState("controller");
             GameplayActorSnapshot target = initial.Session.GetActor("other");
-            var wound = new ActorWoundRecord(
-                TargetRegionId.Torso,
+            DroneDefinition drone = initial.Drones[0].Definition;
+            var exposure = new TargetExposureSnapshot(
+                drone.Id,
+                target.ActorId,
+                new[]
+                {
+                    new TargetRegionExposure(TargetRegionId.Torso, 1, 1),
+                });
+            AttackResolutionRecord resolution = AttackResolutionRules.Resolve(
+                1L,
+                7u,
+                exposure,
+                drone.Attack.AccuracyDecay,
                 1f,
                 target.Wounds,
-                target.Wounds.AddWound(TargetRegionId.Torso, 1f));
-            DroneDefinition drone = initial.Drones[0].Definition;
+                drone.Attack.WoundMovementPenalty);
             var action = new DroneAttackRecord(
                 "controller",
                 drone.Id,
@@ -84,7 +94,7 @@ namespace GritGud.Domain.Tests.Gameplay
                 drone.Attack.TurnCost,
                 new TurnBudget(4, 8f),
                 new TurnBudget(3, 8f),
-                wound);
+                resolution);
             var payload = new GameplayDroneAttackTransitionPayload(
                 GameplaySemanticSubjectKind.Actor,
                 drone.Attack,

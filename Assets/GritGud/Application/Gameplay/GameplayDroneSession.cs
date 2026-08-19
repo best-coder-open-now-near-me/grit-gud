@@ -97,8 +97,8 @@ namespace GritGud.Application.Gameplay
                     "Destroyed drones cannot attack.");
             switch (record.Consequence)
             {
-                case ActorWoundRecord wound:
-                    gameplay.CommitDroneActorAttack(record, wound);
+                case AttackResolutionRecord resolution:
+                    gameplay.CommitDroneActorAttack(record, resolution);
                     break;
                 case DestructibleDamageRecord damage:
                     if (destructibles == null)

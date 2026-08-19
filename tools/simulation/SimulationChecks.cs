@@ -78,13 +78,21 @@ internal static class SimulationChecks
             new GameplayDroneMoveTransitionPayload(movement),
             trajectory);
         GameplayActorSnapshot target = moved.Session.GetActor("enemy");
-        var wound = new ActorWoundRecord(
-            TargetRegionId.Torso,
-            droneDefinition.Attack.WoundMovementPenalty,
+        var exposure = new TargetExposureSnapshot(
+            droneDefinition.Id,
+            target.ActorId,
+            new[]
+            {
+                new TargetRegionExposure(TargetRegionId.Torso, 1, 1),
+            });
+        AttackResolutionRecord resolution = AttackResolutionRules.Resolve(
+            1L,
+            7u,
+            exposure,
+            droneDefinition.Attack.AccuracyDecay,
+            1f,
             target.Wounds,
-            target.Wounds.AddWound(
-                TargetRegionId.Torso,
-                droneDefinition.Attack.WoundMovementPenalty));
+            droneDefinition.Attack.WoundMovementPenalty);
         TurnBudget attackBudget = moved.Session.GetActor("player").TurnBudget;
         var attack = new DroneAttackRecord(
             "player",
@@ -94,7 +102,7 @@ internal static class SimulationChecks
             droneDefinition.Attack.TurnCost,
             attackBudget,
             attackBudget.SpendAction(droneDefinition.Attack.TurnCost),
-            wound);
+            resolution);
         GameplayCombatStateSnapshot resulting = Reduce(
             reducers,
             moved,
@@ -148,13 +156,21 @@ internal static class SimulationChecks
                     ? "unknown"
                     : moveDifferences[0].Path));
         GameplayActorSnapshot liveTarget = actualMove.Session.GetActor("enemy");
-        var liveWound = new ActorWoundRecord(
-            TargetRegionId.Torso,
-            droneDefinition.Attack.WoundMovementPenalty,
+        var liveExposure = new TargetExposureSnapshot(
+            droneDefinition.Id,
+            liveTarget.ActorId,
+            new[]
+            {
+                new TargetRegionExposure(TargetRegionId.Torso, 1, 1),
+            });
+        AttackResolutionRecord liveResolution = AttackResolutionRules.Resolve(
+            1L,
+            7u,
+            liveExposure,
+            droneDefinition.Attack.AccuracyDecay,
+            1f,
             liveTarget.Wounds,
-            liveTarget.Wounds.AddWound(
-                TargetRegionId.Torso,
-                droneDefinition.Attack.WoundMovementPenalty));
+            droneDefinition.Attack.WoundMovementPenalty);
         TurnBudget liveBudget = actualMove.Session.GetActor("player").TurnBudget;
         var liveAttack = new DroneAttackRecord(
             "player",
@@ -164,7 +180,7 @@ internal static class SimulationChecks
             droneDefinition.Attack.TurnCost,
             liveBudget,
             liveBudget.SpendAction(droneDefinition.Attack.TurnCost),
-            liveWound);
+            liveResolution);
         var liveAttackPayload = new GameplayDroneAttackTransitionPayload(
             GameplaySemanticSubjectKind.Actor,
             droneDefinition.Attack,
