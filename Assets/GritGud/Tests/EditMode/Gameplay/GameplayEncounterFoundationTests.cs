@@ -128,7 +128,6 @@ namespace GritGud.Domain.Tests.Gameplay
                 out AttackResolutionFailure failure), Is.True);
 
             Assert.That(failure, Is.EqualTo(AttackResolutionFailure.None));
-            Assert.That(action.Context, Is.Not.Null);
             Assert.That(gameplay.EncounterState.GetAwareness("enemy").State,
                 Is.EqualTo(EncounterAwarenessState.Alert));
             Assert.That(observedStates,

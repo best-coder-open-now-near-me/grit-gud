@@ -63,12 +63,17 @@ namespace GritGud.Presentation.Tests
             session.AdvanceContinuousTime(
                 scenario.Timing.MinimumVoluntaryTurnSeconds);
             Assert.That(session.EnterTurnMode(), Is.True);
-            Assert.That(session.TryEndTurn("player", out _), Is.True);
+            string voluntaryActorId = session.ActiveActorId;
+            Assert.That(session.GetActor(voluntaryActorId)
+                .TurnBudget.ActionPoints, Is.EqualTo(4));
+            Assert.That(session.TryEndTurn(voluntaryActorId, out _), Is.True);
             Assert.That(session.CompleteVoluntaryWorldTurn(), Is.True);
-            Assert.That(session.GetActor("player").TurnBudget.ActionPoints,
+            Assert.That(session.GetActor(voluntaryActorId)
+                .TurnBudget.ActionPoints,
                 Is.EqualTo(6));
             Assert.That(session.LastCompletedVoluntaryTurnCycle
-                .PersonalTurnStarts.Single(start => start.ActorId == "player")
+                .PersonalTurnStarts.Single(
+                    start => start.ActorId == voluntaryActorId)
                 .ActionPoints.CapWaste, Is.EqualTo(2));
 
             var encounter = new GameplaySession(

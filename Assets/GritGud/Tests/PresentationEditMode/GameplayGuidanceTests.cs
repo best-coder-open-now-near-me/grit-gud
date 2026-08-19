@@ -19,7 +19,7 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 catalog.Require(GameplayGuidanceIds.VoluntaryEntry)
                     .ExpectedBehavior,
-                Does.Contain("full AP"));
+                Does.Contain("held AP"));
             Assert.That(
                 catalog.Require(GameplayGuidanceIds.VoluntaryActive)
                     .ExpectedBehavior,
