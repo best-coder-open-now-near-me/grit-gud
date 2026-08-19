@@ -108,6 +108,26 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void CanonicalStateSafelyFramesHostileDelimiterCharacters()
+        {
+            GameplayCombatStateSnapshot state = CreateState(
+                CreateActor("alpha\nactor.alpha.ap=999", 1f, 4));
+
+            Assert.That(state.CanonicalHash, Has.Length.EqualTo(64));
+            Assert.That(GameplayCombatStateDiffer.Compare(state, state), Is.Empty);
+        }
+
+        [Test]
+        public void ContentIdentityRejectsControlCharacters()
+        {
+            Assert.Throws<ArgumentException>(() => new GameplayContentIdentity(
+                "scenario\nrevision=999",
+                1,
+                1,
+                new string('a', 64)));
+        }
+
+        [Test]
         public void CommitRejectsStalePreparedStateBeforeMutation()
         {
             GameplayCombatStateSnapshot previous = CreateState(

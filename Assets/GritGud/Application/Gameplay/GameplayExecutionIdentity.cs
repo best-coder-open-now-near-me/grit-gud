@@ -72,7 +72,17 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentException(
                     "Identity fields cannot be empty.",
                     parameterName);
-            return value.Trim();
+            string trimmed = value.Trim();
+            foreach (char character in trimmed)
+            {
+                if (char.IsControl(character))
+                {
+                    throw new ArgumentException(
+                        "Identity fields cannot contain control characters.",
+                        parameterName);
+                }
+            }
+            return trimmed;
         }
     }
 

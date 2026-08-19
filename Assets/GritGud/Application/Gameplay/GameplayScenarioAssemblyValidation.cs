@@ -21,6 +21,12 @@ namespace GritGud.Application.Gameplay
             Require(
                 !string.IsNullOrWhiteSpace(value),
                 label + " cannot be empty.");
+            foreach (char character in value)
+            {
+                Require(
+                    !char.IsControl(character),
+                    label + " cannot contain control characters.");
+            }
         }
 
         public static void RequireFinitePositive(float value, string label)

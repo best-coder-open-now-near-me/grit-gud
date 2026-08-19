@@ -719,11 +719,22 @@ namespace GritGud.Presentation.Gameplay
                 offset.magnitude + 0.15f,
                 Physics.DefaultRaycastLayers,
                 QueryTriggerInteraction.Collide);
+            RaycastHit[] hits = aimHitBuffer;
+            if (hitCount == aimHitBuffer.Length)
+            {
+                hits = Physics.RaycastAll(
+                    origin,
+                    offset.normalized,
+                    offset.magnitude + 0.15f,
+                    Physics.DefaultRaycastLayers,
+                    QueryTriggerInteraction.Collide);
+                hitCount = hits.Length;
+            }
             RaycastHit nearest = default;
             float nearestDistance = float.PositiveInfinity;
             for (int index = 0; index < hitCount; index++)
             {
-                RaycastHit candidate = aimHitBuffer[index];
+                RaycastHit candidate = hits[index];
                 if (candidate.collider == null
                     || candidate.distance >= nearestDistance
                     || BelongsToObserver(candidate.collider.transform)

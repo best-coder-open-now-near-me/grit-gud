@@ -673,26 +673,31 @@ namespace GritGud.Application.Gameplay
 
         private static void Append(StringBuilder text, string key, object value)
         {
-            text.Append(key).Append('=');
+            string formatted;
             switch (value)
             {
-                case null: break;
+                case null:
+                    formatted = string.Empty;
+                    break;
                 case float number:
-                    text.Append(Normalize(number));
+                    formatted = Normalize(number);
                     break;
                 case double number:
-                    text.Append(number.ToString("R", CultureInfo.InvariantCulture));
+                    formatted = number.ToString("R", CultureInfo.InvariantCulture);
                     break;
                 case GameplayPosition position:
-                    text.Append(Normalize(position.X)).Append(',')
-                        .Append(Normalize(position.Y)).Append(',')
-                        .Append(Normalize(position.Z));
+                    formatted = Normalize(position.X) + ","
+                        + Normalize(position.Y) + ","
+                        + Normalize(position.Z);
                     break;
                 default:
-                    text.Append(Convert.ToString(value, CultureInfo.InvariantCulture));
+                    formatted = Convert.ToString(
+                        value,
+                        CultureInfo.InvariantCulture);
                     break;
             }
-            text.Append('\n');
+            text.Append(key.Length).Append(':').Append(key)
+                .Append(formatted.Length).Append(':').Append(formatted);
         }
 
         private static string Normalize(float value) =>
@@ -759,13 +764,39 @@ namespace GritGud.Application.Gameplay
         private static Dictionary<string, string> Parse(string canonical)
         {
             var fields = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (string line in canonical.Split(new[] { '\n' },
-                StringSplitOptions.RemoveEmptyEntries))
+            int position = 0;
+            while (position < canonical.Length)
             {
-                int separator = line.IndexOf('=');
-                fields.Add(line.Substring(0, separator), line.Substring(separator + 1));
+                string key = ReadLengthPrefixed(canonical, ref position);
+                string value = ReadLengthPrefixed(canonical, ref position);
+                fields.Add(key, value);
             }
             return fields;
+        }
+
+        private static string ReadLengthPrefixed(
+            string canonical,
+            ref int position)
+        {
+            int separator = canonical.IndexOf(':', position);
+            if (separator < position)
+                throw new InvalidOperationException(
+                    "Canonical state contains an invalid field length.");
+            if (!int.TryParse(
+                    canonical.Substring(position, separator - position),
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out int length)
+                || length < 0
+                || separator + 1 + length > canonical.Length)
+            {
+                throw new InvalidOperationException(
+                    "Canonical state contains an invalid field length.");
+            }
+            position = separator + 1;
+            string value = canonical.Substring(position, length);
+            position += length;
+            return value;
         }
     }
 
