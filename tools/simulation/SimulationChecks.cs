@@ -13,20 +13,32 @@ internal static class SimulationChecks
     {
         try
         {
+            var executedFixtureChecks = new HashSet<string>(StringComparer.Ordinal);
             VerifyWalkingSliceAndExactReplay();
             VerifyCapabilityCoverageFailsClosed();
             VerifyTacticalRuleCoverageAndOutcomeProjection();
             VerifyAtomicLiveInstallation();
-            VerifySimulationFixtureManifest();
             VerifyAllCurrentContentCoverage();
             VerifyTacticalDestructibleSimulation();
+            executedFixtureChecks.Add("sim-destructible-cover");
+            executedFixtureChecks.Add("sim-target-kind-matrix");
             VerifyHeadlessSmokeExposure();
+            executedFixtureChecks.Add("sim-smoke-and-exposure");
             VerifyHeadlessFireHazard();
+            executedFixtureChecks.Add("sim-persistent-fire");
             VerifyEncounterAwarenessAndScopedInitiative();
+            executedFixtureChecks.Add("sim-awareness-multi-observer");
+            executedFixtureChecks.Add("sim-reinforcement-scope");
             VerifyCommittedActionConsequenceTrajectory();
             VerifyBankedActionPointEconomy();
+            executedFixtureChecks.Add("sim-ap-banking");
             VerifyDroneHeadlessTrajectory();
+            executedFixtureChecks.Add("sim-drone-control");
             SimulationParityChecks.Verify();
+            executedFixtureChecks.Add("sim-concussive-ap");
+            executedFixtureChecks.Add("sim-pinned-recovery");
+            executedFixtureChecks.Add("sim-integrated-encounter");
+            VerifySimulationFixtureManifest(executedFixtureChecks);
             Console.WriteLine(
                 "Simulation checks passed: reducers, exact replay, atomic installation, and all-content capability coverage.");
             return 0;
@@ -1224,7 +1236,8 @@ internal static class SimulationChecks
             + $"{unreachable} implemented-but-unreachable profile(s).");
     }
 
-    private static void VerifySimulationFixtureManifest()
+    private static void VerifySimulationFixtureManifest(
+        ISet<string> executedBehaviorChecks)
     {
         string repositoryRoot = FindRepositoryRoot();
         string contentRoot = Path.Combine(
@@ -1289,6 +1302,7 @@ internal static class SimulationChecks
             "sim-smoke-and-exposure",
             "sim-persistent-fire",
             "sim-concussive-ap",
+            "sim-drone-control",
             "sim-pinned-recovery",
             "sim-integrated-encounter",
         }, StringComparer.Ordinal);
@@ -1302,6 +1316,12 @@ internal static class SimulationChecks
             Require(fixture.assertions != null
                     && fixture.assertions.Count > 0,
                 $"Simulation fixture '{fixture.id}' has no behavioral assertions.");
+            Require(string.Equals(
+                    fixture.behaviorCheckId,
+                    fixture.id,
+                    StringComparison.Ordinal)
+                && executedBehaviorChecks.Contains(fixture.behaviorCheckId),
+                $"Simulation fixture '{fixture.id}' is not backed by an executed behavior check.");
             foreach (string actorId in fixture.actorIds)
                 Require(actorIds.Contains(actorId),
                     $"Simulation fixture '{fixture.id}' references missing actor '{actorId}'.");
@@ -1939,5 +1959,6 @@ internal static class SimulationChecks
         public List<string> actorIds = new List<string>();
         public List<string> entityIds = new List<string>();
         public List<string> assertions = new List<string>();
+        public string behaviorCheckId = string.Empty;
     }
 }
