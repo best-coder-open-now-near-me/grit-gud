@@ -197,9 +197,11 @@ namespace GritGud.PlayMode.Tests
                 bootstrap.GetComponent<GameplayController>();
             GameplayDisplacementController displacement =
                 bootstrap.GetComponent<GameplayDisplacementController>();
+            GameplayDestructibleController destructibles =
+                bootstrap.GetComponent<GameplayDestructibleController>();
             const string actorId = "oren-vale";
             const string propId = "barrel-yard-01";
-            DestructiblePropSnapshot propSnapshot = displacement.Session
+            DestructiblePropSnapshot propSnapshot = destructibles.Session
                 .GetProp(propId);
             GameplayPosition playerPosition = gameplay.Session
                 .GetActor("player").Pose.Position;
