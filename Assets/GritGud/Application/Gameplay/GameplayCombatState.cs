@@ -336,7 +336,7 @@ namespace GritGud.Application.Gameplay
                 gameplay.EmergencyResponders,
                 gameplay.EmergencyResponderIndex,
                 gameplay.EmergencyResumeActorId,
-                gameplay.LastResolvedAction?.Sequence ?? 0L,
+                gameplay.LastActionSequence,
                 gameplay.LastEndedTurn?.Sequence ?? 0L,
                 gameplay.Journal.LastEntry?.Sequence ?? 0L,
                 gameplay.RunIdentity,
@@ -521,6 +521,8 @@ namespace GritGud.Application.Gameplay
                     attack.DirectFireDamage?.DamageTypeId ?? string.Empty);
                 Append(text, root + ".attack.directDamage.base",
                     attack.DirectFireDamage?.BaseIntegrityDamage ?? 0f);
+                Append(text, root + ".attack.vehicleDamage",
+                    attack.DirectVehicleIntegrityDamage);
             }
             foreach (ProjectileFlightSnapshot projectile in state.Projectiles)
             {

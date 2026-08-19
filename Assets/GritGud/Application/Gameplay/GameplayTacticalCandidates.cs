@@ -235,6 +235,16 @@ namespace GritGud.Application.Gameplay
                         StringComparison.Ordinal);
                 case GameplaySemanticCapability.DirectAttack:
                 case GameplaySemanticCapability.LaunchProjectile:
+                    if (subject.Subject.Kind
+                            == GameplaySemanticSubjectKind.Vehicle
+                        && subject.Affords(GameplayTacticalAffordance.Damage))
+                        return input.Profile.GetTrait("consequence")
+                            == "drone-integrity";
+                    if (subject.Subject.Kind
+                            == GameplaySemanticSubjectKind.Vehicle
+                        && input.Profile.GetTrait("consequence")
+                            == "drone-integrity")
+                        return false;
                     return !string.Equals(
                             input.ActorId,
                             subject.Subject.Id,

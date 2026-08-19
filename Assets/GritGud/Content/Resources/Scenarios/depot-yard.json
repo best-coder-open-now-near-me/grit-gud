@@ -166,6 +166,7 @@
             },
             "woundMovementPenalty": 2.0,
             "soundSignature": 1.0,
+            "directVehicleIntegrityDamage": 1.0,
             "accuracyDecay": {
               "halfLifeDistance": 60.0,
               "minimumAccuracyPercent": 5.0
@@ -489,6 +490,7 @@
             },
             "woundMovementPenalty": 2.0,
             "soundSignature": 1.0,
+            "directVehicleIntegrityDamage": 1.0,
             "accuracyDecay": {
               "halfLifeDistance": 60.0,
               "minimumAccuracyPercent": 5.0
@@ -716,6 +718,7 @@
             },
             "woundMovementPenalty": 2.0,
             "soundSignature": 1.0,
+            "directVehicleIntegrityDamage": 1.0,
             "accuracyDecay": {
               "halfLifeDistance": 45.0,
               "minimumAccuracyPercent": 5.0
@@ -780,6 +783,7 @@
         },
         "woundMovementPenalty": 2.0,
         "soundSignature": 1.0,
+        "directVehicleIntegrityDamage": 1.0,
         "accuracyDecay": {
           "halfLifeDistance": 45.0,
           "minimumAccuracyPercent": 5.0
@@ -863,6 +867,7 @@
         "turnCost": { "actionPoints": 1, "movementOpportunity": 0.0, "mobility": "set" },
         "woundMovementPenalty": 2.0,
         "soundSignature": 1.0,
+        "directVehicleIntegrityDamage": 1.0,
         "accuracyDecay": { "halfLifeDistance": 42.0, "minimumAccuracyPercent": 5.0 },
         "directFireDamage": {
           "damageTypeId": "damage.ballistic.rifle",
@@ -934,6 +939,7 @@
         "turnCost": { "actionPoints": 1, "movementOpportunity": 0.0, "mobility": "set" },
         "woundMovementPenalty": 2.0,
         "soundSignature": 1.0,
+        "directVehicleIntegrityDamage": 1.0,
         "accuracyDecay": { "halfLifeDistance": 48.0, "minimumAccuracyPercent": 5.0 },
         "directFireDamage": {
           "damageTypeId": "damage.ballistic.rifle",

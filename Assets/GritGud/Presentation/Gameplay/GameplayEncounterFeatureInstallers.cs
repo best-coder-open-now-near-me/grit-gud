@@ -22,6 +22,7 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplaySessionPresenter sessionPresenter;
         private readonly GameplayDisplacementController displacement;
         private readonly GameplayPartyControlSession partyControl;
+        private readonly GameplayDroneController drones;
         private readonly GameplayDialogueLog dialogue;
         private readonly GameplaySmokeFieldSession smokeFields;
         private readonly IEnumerable<LevelTraversalLinkData> traversalLinks;
@@ -43,6 +44,7 @@ namespace GritGud.Presentation.Gameplay
             GameplaySessionPresenter sessionPresenter,
             GameplayDisplacementController displacement,
             GameplayPartyControlSession partyControl,
+            GameplayDroneController drones,
             GameplayDialogueLog dialogue,
             GameplaySmokeFieldSession smokeFields,
             IEnumerable<LevelTraversalLinkData> traversalLinks,
@@ -68,6 +70,8 @@ namespace GritGud.Presentation.Gameplay
                 nameof(displacement));
             this.partyControl = partyControl ?? throw new ArgumentNullException(
                 nameof(partyControl));
+            this.drones = drones ?? throw new ArgumentNullException(
+                nameof(drones));
             this.dialogue = dialogue ?? throw new ArgumentNullException(nameof(dialogue));
             this.smokeFields = smokeFields ?? throw new ArgumentNullException(
                 nameof(smokeFields));
@@ -107,6 +111,7 @@ namespace GritGud.Presentation.Gameplay
                 displacement,
                 emergencyCycle,
                 partyControl,
+                drones,
                 dialogue,
                 sessionPresenter.TryBeginEncounter,
                 tacticalTransition,

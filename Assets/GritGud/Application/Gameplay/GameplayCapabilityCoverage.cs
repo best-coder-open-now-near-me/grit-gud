@@ -417,7 +417,60 @@ namespace GritGud.Application.Gameplay
                         GameplaySemanticSubjectKind.Vehicle),
                     sourceSubjectId: drone.Id);
             }
+            if (assembly.Drones.Count > 0)
+            {
+                foreach (ScenarioActorDefinition actor in
+                    assembly.Scenario.Actors)
+                {
+                    bool player = assembly.Scenario.PlayerParty == null
+                        || assembly.Scenario.PlayerParty.Contains(actor.Id);
+                    bool ai = actor.Combat.EnemyBehavior != null;
+                    AddActorDroneAttack(
+                        result,
+                        actor,
+                        actor.Attack,
+                        actor.Attack?.ActionId,
+                        player,
+                        ai);
+                    foreach (InventoryItemDefinition item in actor.Inventory)
+                        AddActorDroneAttack(
+                            result,
+                            actor,
+                            item.Attack,
+                            item.Id + ".power",
+                            player,
+                            ai && string.Equals(
+                                item.Id,
+                                actor.InitiallyEquippedItemId,
+                                StringComparison.Ordinal));
+                }
+            }
             return result.AsReadOnly();
+        }
+
+        private static void AddActorDroneAttack(
+            ICollection<GameplayReachableInput> result,
+            ScenarioActorDefinition actor,
+            AttackDefinition attack,
+            string sourceId,
+            bool playerControlled,
+            bool aiControlled)
+        {
+            if (attack == null || attack.DirectVehicleIntegrityDamage <= 0f)
+                return;
+            GameplayCapabilityProfile profile =
+                GameplayCapabilityProfiles.AttackDrone(attack);
+            if (playerControlled)
+                Add(result, GameplayReachableInputKind.EquippedAttack,
+                    sourceId + "->DamageableDrone",
+                    actor.Id,
+                    profile);
+            if (aiControlled)
+                Add(result, GameplayReachableInputKind.EnemyDecision,
+                    "ai." + actor.Combat.EnemyBehavior.BehaviorId + "."
+                        + sourceId + "->DamageableDrone",
+                    actor.Id,
+                    profile);
         }
 
         public static IReadOnlyList<GameplayReachableInput> Enumerate(

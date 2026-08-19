@@ -225,6 +225,184 @@ namespace GritGud.Domain.Gameplay
         public DroneSnapshot Resulting { get; }
     }
 
+    public sealed class DroneExposureSnapshot
+    {
+        public DroneExposureSnapshot(
+            string observerId,
+            string droneId,
+            int visibleSampleCount,
+            int totalSampleCount)
+        {
+            ObserverId = DroneDefinition.RequireText(
+                observerId, nameof(observerId));
+            DroneId = DroneDefinition.RequireText(droneId, nameof(droneId));
+            if (totalSampleCount <= 0
+                || visibleSampleCount < 0
+                || visibleSampleCount > totalSampleCount)
+                throw new ArgumentOutOfRangeException(nameof(visibleSampleCount));
+            VisibleSampleCount = visibleSampleCount;
+            TotalSampleCount = totalSampleCount;
+        }
+
+        public string ObserverId { get; }
+        public string DroneId { get; }
+        public int VisibleSampleCount { get; }
+        public int TotalSampleCount { get; }
+        public float VisibleFraction =>
+            VisibleSampleCount / (float)TotalSampleCount;
+    }
+
+    public sealed class ActorDroneAttackRecord
+    {
+        internal ActorDroneAttackRecord(
+            long sequence,
+            string attackerId,
+            string attackId,
+            ActionCost cost,
+            TurnBudget previousBudget,
+            TurnBudget resultingBudget,
+            DroneExposureSnapshot exposure,
+            uint resolutionSeed,
+            float distance,
+            int hitChancePercent,
+            int hitRoll,
+            DroneIntegrityDamageRecord damage)
+        {
+            if (sequence <= 0) throw new ArgumentOutOfRangeException(
+                nameof(sequence));
+            AttackerId = DroneDefinition.RequireText(
+                attackerId, nameof(attackerId));
+            AttackId = DroneDefinition.RequireText(attackId, nameof(attackId));
+            Exposure = exposure ?? throw new ArgumentNullException(
+                nameof(exposure));
+            if (!string.Equals(attackerId, exposure.ObserverId,
+                    StringComparison.Ordinal))
+                throw new ArgumentException(
+                    "Drone exposure must originate from the attacking actor.",
+                    nameof(exposure));
+            if (float.IsNaN(distance) || float.IsInfinity(distance)
+                || distance < 0f)
+                throw new ArgumentOutOfRangeException(nameof(distance));
+            if (hitChancePercent < 0 || hitChancePercent > 100
+                || hitRoll < 1 || hitRoll > 100
+                || (damage != null) != (hitRoll <= hitChancePercent)
+                || (damage != null && !string.Equals(
+                    damage.DroneId, exposure.DroneId,
+                    StringComparison.Ordinal)))
+                throw new ArgumentException(
+                    "Drone attack roll and integrity consequence are inconsistent.",
+                    nameof(damage));
+            TurnBudget expected = previousBudget.SpendAction(cost);
+            if (expected.ActionPoints != resultingBudget.ActionPoints
+                || expected.MovementOpportunity
+                    != resultingBudget.MovementOpportunity)
+                throw new ArgumentException(
+                    "Actor drone attack budget does not match its cost.",
+                    nameof(resultingBudget));
+            Sequence = sequence;
+            Cost = cost;
+            PreviousBudget = previousBudget;
+            ResultingBudget = resultingBudget;
+            ResolutionSeed = resolutionSeed;
+            Distance = distance;
+            HitChancePercent = hitChancePercent;
+            HitRoll = hitRoll;
+            Damage = damage;
+        }
+
+        public long Sequence { get; }
+        public string AttackerId { get; }
+        public string AttackId { get; }
+        public string DroneId => Exposure.DroneId;
+        public ActionCost Cost { get; }
+        public TurnBudget PreviousBudget { get; }
+        public TurnBudget ResultingBudget { get; }
+        public DroneExposureSnapshot Exposure { get; }
+        public uint ResolutionSeed { get; }
+        public float Distance { get; }
+        public int HitChancePercent { get; }
+        public int HitRoll { get; }
+        public bool Hit => Damage != null;
+        public DroneIntegrityDamageRecord Damage { get; }
+    }
+
+    public static class DroneDirectAttackRules
+    {
+        public static int CalculateHitChancePercent(
+            AttackDefinition attack,
+            DroneExposureSnapshot exposure,
+            float distance)
+        {
+            if (attack == null) throw new ArgumentNullException(nameof(attack));
+            if (exposure == null) throw new ArgumentNullException(nameof(exposure));
+            if (float.IsNaN(distance) || float.IsInfinity(distance)
+                || distance < 0f)
+                throw new ArgumentOutOfRangeException(nameof(distance));
+            float accuracy = attack.AccuracyDecay.EvaluatePercent(distance);
+            return Math.Max(0, Math.Min(100, (int)Math.Round(
+                accuracy * exposure.VisibleFraction,
+                MidpointRounding.AwayFromZero)));
+        }
+
+        public static ActorDroneAttackRecord Resolve(
+            long sequence,
+            uint resolutionSeed,
+            string attackerId,
+            AttackDefinition attack,
+            TurnBudget previousBudget,
+            DroneExposureSnapshot exposure,
+            float distance,
+            DroneSnapshot target)
+        {
+            if (attack == null) throw new ArgumentNullException(nameof(attack));
+            if (attack.DirectVehicleIntegrityDamage <= 0f)
+                throw new InvalidOperationException(
+                    "Attack has no authored vehicle integrity damage.");
+            if (!string.Equals(target.DroneId, exposure?.DroneId,
+                    StringComparison.Ordinal))
+                throw new ArgumentException(
+                    "Exposure does not describe the target drone.",
+                    nameof(exposure));
+            int chance = CalculateHitChancePercent(attack, exposure, distance);
+            int roll = Roll100(resolutionSeed);
+            DroneIntegrityDamageRecord damage = roll <= chance
+                ? new DroneIntegrityDamageRecord(
+                    attack.DirectVehicleIntegrityDamage,
+                    target,
+                    new DroneSnapshot(
+                        target.Definition,
+                        target.Position,
+                        target.FacingDegrees,
+                        Math.Max(
+                            0f,
+                            target.RemainingIntegrity
+                                - attack.DirectVehicleIntegrityDamage)))
+                : null;
+            return new ActorDroneAttackRecord(
+                sequence,
+                attackerId,
+                attack.ActionId,
+                attack.TurnCost,
+                previousBudget,
+                previousBudget.SpendAction(attack.TurnCost),
+                exposure,
+                resolutionSeed,
+                distance,
+                chance,
+                roll,
+                damage);
+        }
+
+        private static int Roll100(uint seed)
+        {
+            uint state = seed != 0u ? seed : 0x6D2B79F5u;
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            return (int)(state % 100u) + 1;
+        }
+    }
+
     public sealed class DroneAttackRecord
     {
         public DroneAttackRecord(

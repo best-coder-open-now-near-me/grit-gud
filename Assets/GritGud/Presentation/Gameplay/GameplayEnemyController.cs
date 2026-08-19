@@ -29,6 +29,7 @@ namespace GritGud.Presentation.Gameplay
             GameplayDisplacementController displacements,
             GameplayEmergencyCycleSession cycle,
             GameplayPartyControlSession controlledParty,
+            GameplayDroneController droneController,
             GameplayDialogueLog dialogueLog,
             Func<IReadOnlyList<string>, bool> onEncounterStartRequested,
             GameplayTacticalTransitionPresenter tacticalTransition,
@@ -99,6 +100,7 @@ namespace GritGud.Presentation.Gameplay
                 emergencyCycle,
                 partyControl,
                 decisions,
+                droneController,
                 dialogue);
             outcomes = new GameplayEnemyOutcomePresenter(
                 session,

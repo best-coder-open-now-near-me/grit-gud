@@ -386,6 +386,7 @@ namespace GritGud.Application.Gameplay
             new Dictionary<string, GameplayObjectiveState>(StringComparer.Ordinal);
         private readonly List<GameplayActionRecord> resolvedActions =
             new List<GameplayActionRecord>();
+        private long lastAuxiliaryActionSequence;
         private readonly List<string> initiativeOrder;
         private readonly IReadOnlyList<string> allInitiativeOrder;
         private readonly IReadOnlyList<string> allActorIds;
@@ -561,9 +562,11 @@ namespace GritGud.Application.Gameplay
                 ? null
                 : resolvedActions[resolvedActions.Count - 1];
 
-        internal long NextActionSequence => LastResolvedAction == null
-            ? 1L
-            : LastResolvedAction.Sequence + 1L;
+        public long LastActionSequence => Math.Max(
+            LastResolvedAction?.Sequence ?? 0L,
+            lastAuxiliaryActionSequence);
+
+        internal long NextActionSequence => LastActionSequence + 1L;
 
         internal IReadOnlyCollection<Type> ValidatedActionOutcomeTypes =>
             actionCommitValidator.SupportedOutcomeTypes;

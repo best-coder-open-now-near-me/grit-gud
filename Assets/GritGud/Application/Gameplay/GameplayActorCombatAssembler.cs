@@ -262,6 +262,9 @@ namespace GritGud.Application.Gameplay
                     && attack.soundSignature >= 0f
                     && attack.soundSignature <= 1f,
                 $"Actor '{actorId}' attack sound signature must be between zero and one.");
+            GameplayScenarioAssemblyValidation.RequireFiniteNonNegative(
+                attack.directVehicleIntegrityDamage,
+                $"Actor '{actorId}' direct vehicle integrity damage");
             GameplayScenarioAssemblyValidation.ParseMobility(
                 attack.turnCost.mobility);
 
@@ -286,6 +289,9 @@ namespace GritGud.Application.Gameplay
                 GameplayScenarioAssemblyValidation.Require(
                     directFireDamage == null,
                     $"Actor '{actorId}' contact attack cannot author direct-fire prop damage.");
+                GameplayScenarioAssemblyValidation.Require(
+                    attack.directVehicleIntegrityDamage == 0f,
+                    $"Actor '{actorId}' contact attack cannot author direct vehicle damage.");
                 GameplayScenarioAssemblyValidation.RequireFinitePositive(
                     contact.maximumReach,
                     $"Actor '{actorId}' contact attack maximum reach");
@@ -315,6 +321,9 @@ namespace GritGud.Application.Gameplay
             GameplayScenarioAssemblyValidation.Require(
                 directFireDamage == null,
                 $"Actor '{actorId}' projectile attack cannot author immediate direct-fire prop damage.");
+            GameplayScenarioAssemblyValidation.Require(
+                attack.directVehicleIntegrityDamage == 0f,
+                $"Actor '{actorId}' projectile attack cannot author immediate direct vehicle damage.");
             GameplayScenarioAssemblyValidation.RequireText(
                 projectile.id,
                 $"Actor '{actorId}' projectile ID");
@@ -400,7 +409,8 @@ namespace GritGud.Application.Gameplay
                 accuracyDecayDefinition,
                 contactDefinition,
                 directFireDamageDefinition,
-                attack.soundSignature);
+                attack.soundSignature,
+                attack.directVehicleIntegrityDamage);
         }
 
         private static bool HasImmediateEnemyAttack(

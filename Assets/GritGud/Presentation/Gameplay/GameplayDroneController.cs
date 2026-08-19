@@ -108,6 +108,161 @@ namespace GritGud.Presentation.Gameplay
             commandDroneId = null;
         }
 
+        public bool TryAttackDroneAtPointer(
+            string attackingActorId,
+            Ray pointerRay)
+        {
+            if (drones == null
+                || string.IsNullOrWhiteSpace(attackingActorId)
+                || !TryAcquireDrone(pointerRay, out DroneSnapshot drone))
+                return false;
+            AttackDefinition attack = gameplay.GetEquippedAttack(
+                attackingActorId);
+            if (attack == null || attack.DirectVehicleIntegrityDamage <= 0f)
+                return false;
+            DroneExposureSnapshot exposure = CaptureActorExposure(
+                attackingActorId,
+                drone);
+            if (exposure.VisibleSampleCount == 0) return false;
+            return TryResolveActorAttack(
+                attackingActorId,
+                exposure,
+                out _);
+        }
+
+        internal bool TrySelectActorAttackTarget(
+            string attackingActorId,
+            out DroneExposureSnapshot selectedExposure,
+            out int selectedHitChance)
+        {
+            selectedExposure = null;
+            selectedHitChance = 0;
+            if (drones == null || string.IsNullOrWhiteSpace(attackingActorId))
+                return false;
+            AttackDefinition attack = gameplay.GetEquippedAttack(
+                attackingActorId);
+            if (attack == null || attack.DirectVehicleIntegrityDamage <= 0f)
+                return false;
+            GameplayPosition origin = gameplay.GetActor(attackingActorId)
+                .Pose.Position;
+            float bestDistance = float.PositiveInfinity;
+            foreach (DroneSnapshot drone in drones.CaptureDrones())
+            {
+                if (!drone.IsOperational
+                    || !gameplay.IsHostile(
+                        attackingActorId,
+                        drone.Definition.ControllerActorId))
+                    continue;
+                DroneExposureSnapshot exposure = CaptureActorExposure(
+                    attackingActorId,
+                    drone);
+                float distance = origin.DistanceTo(drone.Position);
+                int hitChance = DroneDirectAttackRules
+                    .CalculateHitChancePercent(attack, exposure, distance);
+                if (selectedExposure == null
+                    || hitChance > selectedHitChance
+                    || (hitChance == selectedHitChance
+                        && distance < bestDistance))
+                {
+                    selectedExposure = exposure;
+                    selectedHitChance = hitChance;
+                    bestDistance = distance;
+                }
+            }
+            return selectedExposure != null && selectedHitChance > 0;
+        }
+
+        internal bool TryResolveActorAttack(
+            string attackingActorId,
+            DroneExposureSnapshot exposure,
+            out ActorDroneAttackRecord resolved)
+        {
+            resolved = null;
+            if (drones == null || exposure == null) return false;
+            DroneSnapshot drone = drones.GetDrone(exposure.DroneId);
+            AttackDefinition attack = gameplay.GetEquippedAttack(
+                attackingActorId);
+            if (attack == null || attack.DirectVehicleIntegrityDamage <= 0f)
+                return false;
+            GameplayPosition origin = gameplay.GetActor(attackingActorId)
+                .Pose.Position;
+            GameObject targetRoot = roots[drone.DroneId];
+            long sequence = gameplay.LastActionSequence + 1L;
+            try
+            {
+                ActorDroneAttackRecord record = drones.PrepareActorAttack(
+                    attackingActorId,
+                    drone.DroneId,
+                    exposure,
+                    origin.DistanceTo(drone.Position),
+                    AttackResolutionRules.DeriveResolutionSeed(
+                        scenarioSeed,
+                        sequence));
+                drones.CommitActorAttack(record);
+                RecordTransition(
+                    new GameplayActorDroneAttackTransitionPayload(
+                        attack,
+                        record));
+                GameplayDroneVisualPresenter visual = targetRoot.GetComponent<
+                    GameplayDroneVisualPresenter>();
+                visual?.SetOperational(drones.GetDrone(drone.DroneId)
+                    .IsOperational);
+                dialogue.Append(GameplayDialogueChannel.System, "DRONE IMPACT",
+                    record.Hit
+                        ? $"{drone.DroneId} integrity {record.Damage.Resulting.RemainingIntegrity:0.#}/{drone.Definition.MaximumIntegrity:0.#}."
+                        : $"{attackingActorId} missed {drone.DroneId}.");
+                resolved = record;
+                return true;
+            }
+            catch (InvalidOperationException exception)
+            {
+                dialogue.Append(GameplayDialogueChannel.System,
+                    "DRONE ATTACK REJECTED", exception.Message);
+                return false;
+            }
+        }
+
+        private DroneExposureSnapshot CaptureActorExposure(
+            string attackingActorId,
+            DroneSnapshot drone)
+        {
+            GameplayActorView observer = registry.GetActor(attackingActorId);
+            GameObject targetRoot = roots[drone.DroneId];
+            GameplayPosition origin = ToGameplayPosition(
+                observer.Stance.FirstPersonEyePosition);
+            var samples = new List<TargetRegionSample>
+            {
+                DroneSample(TargetRegionId.Head, targetRoot.transform,
+                    new Vector3(0f, 0.2f, 0f)),
+                DroneSample(TargetRegionId.Torso, targetRoot.transform,
+                    Vector3.zero),
+                DroneSample(TargetRegionId.LeftArm, targetRoot.transform,
+                    new Vector3(-0.55f, 0f, 0f)),
+                DroneSample(TargetRegionId.RightArm, targetRoot.transform,
+                    new Vector3(0.55f, 0f, 0f)),
+                DroneSample(TargetRegionId.LeftLeg, targetRoot.transform,
+                    new Vector3(0f, 0f, -0.55f)),
+                DroneSample(TargetRegionId.RightLeg, targetRoot.transform,
+                    new Vector3(0f, 0f, 0.55f)),
+            };
+            var query = new UnityTargetExposureQuery(
+                observer.Transform,
+                targetRoot.transform,
+                Physics.DefaultRaycastLayers,
+                () => gameplay.Revision,
+                smoke);
+            TargetExposureSnapshot raster = query.Capture(
+                attackingActorId,
+                origin,
+                drone.DroneId,
+                samples);
+            return new DroneExposureSnapshot(
+                attackingActorId,
+                drone.DroneId,
+                raster.VisibleSampleCount,
+                raster.TotalSampleCount);
+        }
+
         public void Unbind()
         {
             CancelTargeting();
@@ -271,6 +426,47 @@ namespace GritGud.Presentation.Gameplay
             result = default;
             return false;
         }
+
+        private bool TryAcquireDrone(
+            Ray ray,
+            out DroneSnapshot result)
+        {
+            RaycastHit[] hits = Physics.RaycastAll(
+                ray,
+                250f,
+                Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Collide);
+            Array.Sort(hits, (left, right) => left.distance.CompareTo(
+                right.distance));
+            foreach (RaycastHit hit in hits)
+            {
+                if (hit.collider == null) continue;
+                foreach (DroneSnapshot drone in drones.CaptureDrones())
+                {
+                    Transform root = roots[drone.DroneId].transform;
+                    Transform candidate = hit.collider.transform;
+                    if (drone.IsOperational
+                        && (candidate == root || candidate.IsChildOf(root)))
+                    {
+                        result = drone;
+                        return true;
+                    }
+                }
+            }
+            result = default;
+            return false;
+        }
+
+        private static TargetRegionSample DroneSample(
+            TargetRegionId id,
+            Transform root,
+            Vector3 localPosition) => new TargetRegionSample(
+                id,
+                ToGameplayPosition(root.TransformPoint(localPosition)),
+                0.15f);
+
+        private static GameplayPosition ToGameplayPosition(Vector3 value) =>
+            new GameplayPosition(value.x, value.y, value.z);
 
         private static float CalculateFacing(
             GameplayPosition origin,

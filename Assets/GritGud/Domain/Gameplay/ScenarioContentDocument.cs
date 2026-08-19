@@ -123,6 +123,7 @@ namespace GritGud.Domain.Gameplay
         public ScenarioContactAttackData contact;
         public ScenarioDirectFireDamageData directFireDamage;
         public float soundSignature = 1f;
+        public float directVehicleIntegrityDamage;
     }
 
     [Serializable]

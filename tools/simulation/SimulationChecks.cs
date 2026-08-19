@@ -213,6 +213,40 @@ internal static class SimulationChecks
                 predictedAttack,
                 actualAttack).Count == 0,
             "Live drone attack diverged from pure reduction.");
+
+        DroneSnapshot liveDroneTarget = actualAttack.Drones[0];
+        var droneExposure = new DroneExposureSnapshot(
+            "player",
+            liveDroneTarget.DroneId,
+            visibleSampleCount: 1,
+            totalSampleCount: 1);
+        ActorDroneAttackRecord incoming = liveDrones.PrepareActorAttack(
+            "player",
+            liveDroneTarget.DroneId,
+            droneExposure,
+            distance: 3f,
+            resolutionSeed: 9u);
+        var incomingPayload = new GameplayActorDroneAttackTransitionPayload(
+            CreateRifle(),
+            incoming);
+        GameplaySemanticTransition incomingTransition = CreateTransition(
+            actualAttack,
+            incomingPayload,
+            3L);
+        GameplayCombatStateSnapshot predictedIncoming = reducers.Reduce(
+            actualAttack,
+            incomingTransition).Resulting;
+        liveDrones.CommitActorAttack(incoming);
+        liveGameplay.RecordSemanticTransition(incomingTransition.Identity);
+        GameplayCombatStateSnapshot actualIncoming =
+            GameplayCombatStateCapture.Capture(
+                liveGameplay,
+                drones: liveDrones);
+        Require(GameplayCombatStateDiffer.Compare(
+                predictedIncoming,
+                actualIncoming).Count == 0
+            && actualIncoming.Drones[0].RemainingIntegrity == 4f,
+            "Incoming drone damage diverged across live and pure reduction.");
     }
 
     private static GameplaySemanticTransition CreateTransition(
@@ -1927,7 +1961,8 @@ internal static class SimulationChecks
         "Fire rifle",
         new ActionCost(1, 0f, ActionMobility.Set),
         woundMovementPenalty: 2f,
-        accuracyDecay: AccuracyDecayDefinition.None);
+        accuracyDecay: AccuracyDecayDefinition.None,
+        directVehicleIntegrityDamage: 1f);
 
     private static bool ContainsActor(
         IReadOnlyList<string> actorIds,

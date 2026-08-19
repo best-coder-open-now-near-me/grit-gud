@@ -242,6 +242,24 @@ namespace GritGud.Application.Gameplay
                 Trait("consequence", consequence));
         }
 
+        public static GameplayCapabilityProfile AttackDrone(
+            AttackDefinition attack)
+        {
+            if (attack == null) throw new ArgumentNullException(nameof(attack));
+            if (attack.Projectile != null
+                || attack.Contact != null
+                || attack.DirectVehicleIntegrityDamage <= 0f)
+                throw new NotSupportedException(
+                    "Drone integrity attacks require authored immediate vehicle damage.");
+            return Profile(
+                GameplaySemanticCapability.DirectAttack,
+                Subject(GameplaySemanticSubjectKind.Vehicle),
+                Trait("delivery", "immediate-ranged"),
+                Trait("targeting", "semantic-subject"),
+                Trait("resource", "equipped-weapon"),
+                Trait("consequence", "drone-integrity"));
+        }
+
         public static GameplayCapabilityProfile ThrowExplosive(
             ThrownExplosiveDefinition definition)
         {

@@ -26,6 +26,7 @@ namespace GritGud.Application.Gameplay
         PatrolAdvanced,
         DroneMoved,
         DroneAttackResolved,
+        ActorDroneAttackResolved,
     }
 
     public sealed class DroneMovedJournalEntry : GameplayJournalEntry
@@ -51,6 +52,20 @@ namespace GritGud.Application.Gameplay
         }
 
         public DroneAttackRecord Attack { get; }
+    }
+
+    public sealed class ActorDroneAttackResolvedJournalEntry :
+        GameplayJournalEntry
+    {
+        public ActorDroneAttackResolvedJournalEntry(
+            long sequence,
+            ActorDroneAttackRecord attack)
+            : base(sequence, GameplayJournalEntryKind.ActorDroneAttackResolved)
+        {
+            Attack = attack ?? throw new ArgumentNullException(nameof(attack));
+        }
+
+        public ActorDroneAttackRecord Attack { get; }
     }
 
     public sealed class EnemyDecisionCommittedJournalEntry :
@@ -431,6 +446,10 @@ namespace GritGud.Application.Gameplay
 
         internal void RecordDroneAttackResolved(DroneAttackRecord record) =>
             Append(new DroneAttackResolvedJournalEntry(NextSequence, record));
+
+        internal void RecordActorDroneAttackResolved(
+            ActorDroneAttackRecord record) => Append(
+                new ActorDroneAttackResolvedJournalEntry(NextSequence, record));
 
         internal void RecordProjectileAdvanced(ProjectileAdvanceRecord record) =>
             Append(new ProjectileAdvancedJournalEntry(NextSequence, record));

@@ -164,6 +164,50 @@ namespace GritGud.Application.Gameplay
             drones[current.DroneId] = damage.Resulting;
         }
 
+        public ActorDroneAttackRecord PrepareActorAttack(
+            string attackerId,
+            string droneId,
+            DroneExposureSnapshot exposure,
+            float distance,
+            uint resolutionSeed)
+        {
+            DroneSnapshot drone = GetDrone(droneId);
+            if (!drone.IsOperational)
+                throw new InvalidOperationException(
+                    "Destroyed drones cannot be attacked again.");
+            if (gameplay.Mode != GameplaySessionMode.TurnBased
+                || gameplay.Operation != GameplaySessionOperation.None
+                || !string.Equals(gameplay.ActiveActorId, attackerId,
+                    StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "Only the idle active actor can attack a drone.");
+            AttackDefinition attack = gameplay.GetEquippedAttack(attackerId)
+                ?? throw new InvalidOperationException(
+                    "Actor has no equipped attack.");
+            return DroneDirectAttackRules.Resolve(
+                gameplay.LastActionSequence + 1L,
+                resolutionSeed,
+                attackerId,
+                attack,
+                gameplay.GetActor(attackerId).TurnBudget,
+                exposure,
+                distance,
+                drone);
+        }
+
+        public void CommitActorAttack(ActorDroneAttackRecord record)
+        {
+            if (record == null) throw new ArgumentNullException(nameof(record));
+            DroneSnapshot drone = GetDrone(record.DroneId);
+            if (record.Damage != null
+                && !StatesMatch(drone, record.Damage.Previous))
+                throw new InvalidOperationException(
+                    "Actor-drone attack starts from stale drone state.");
+            gameplay.CommitActorDroneAttack(record);
+            if (record.Damage != null)
+                drones[drone.DroneId] = record.Damage.Resulting;
+        }
+
         private void RequireControllerTurn(DroneSnapshot drone)
         {
             if (gameplay.Mode != GameplaySessionMode.TurnBased

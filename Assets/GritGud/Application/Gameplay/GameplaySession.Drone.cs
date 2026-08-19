@@ -77,5 +77,22 @@ namespace GritGud.Application.Gameplay
                 throw new InvalidOperationException(
                     $"Drone {actionLabel} was prepared against a stale controller budget.");
         }
+
+        internal void CommitActorDroneAttack(ActorDroneAttackRecord record)
+        {
+            if (record == null) throw new ArgumentNullException(nameof(record));
+            GameplayActorState actor = RequireActiveActor(record.AttackerId);
+            if (record.Sequence != NextActionSequence)
+                throw new InvalidOperationException(
+                    "Actor-drone attack is not the next action sequence.");
+            RequireDroneControllerBudget(
+                actor,
+                record.PreviousBudget,
+                "integrity attack");
+            actor.TurnBudget = record.ResultingBudget;
+            lastAuxiliaryActionSequence = record.Sequence;
+            Journal.RecordActorDroneAttackResolved(record);
+            MarkStateChanged();
+        }
     }
 }

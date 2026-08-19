@@ -481,6 +481,7 @@ namespace GritGud.Presentation.Gameplay
                     sessionPresenter,
                     displacementController,
                     partyControl,
+                    droneController,
                     dialogueLog,
                     smokeFieldSession,
                     content.Level.traversalLinks,
@@ -888,7 +889,14 @@ namespace GritGud.Presentation.Gameplay
                 return projectileController.TryLaunch();
             }
 
-            return attackController != null && attackController.TryAttack();
+            if (attackController != null && attackController.TryAttack())
+                return true;
+            return droneController != null
+                && !string.IsNullOrWhiteSpace(partyControl?.CommandActorId)
+                && Camera.main != null
+                && droneController.TryAttackDroneAtPointer(
+                    partyControl.CommandActorId,
+                    Camera.main.ScreenPointToRay(pointer));
         }
 
         private bool ShouldShowTargetingCursor()

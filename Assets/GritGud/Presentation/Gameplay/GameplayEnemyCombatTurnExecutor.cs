@@ -17,6 +17,7 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplayEmergencyCycleSession emergencyCycle;
         private readonly GameplayPartyControlSession partyControl;
         private readonly GameplayEnemyDecisionSession decisions;
+        private readonly GameplayDroneController drones;
         private readonly GameplayDialogueLog dialogue;
         private string observedActiveActorId;
         private long observedTurnSequence = -1L;
@@ -32,6 +33,7 @@ namespace GritGud.Presentation.Gameplay
             GameplayEmergencyCycleSession emergencyCycle,
             GameplayPartyControlSession partyControl,
             GameplayEnemyDecisionSession decisions,
+            GameplayDroneController droneController,
             GameplayDialogueLog dialogue)
         {
             this.session = session ?? throw new ArgumentNullException(
@@ -52,6 +54,8 @@ namespace GritGud.Presentation.Gameplay
                 nameof(partyControl));
             this.decisions = decisions ?? throw new ArgumentNullException(
                 nameof(decisions));
+            drones = droneController ?? throw new ArgumentNullException(
+                nameof(droneController));
             this.dialogue = dialogue ?? throw new ArgumentNullException(
                 nameof(dialogue));
         }
@@ -105,6 +109,17 @@ namespace GritGud.Presentation.Gameplay
                 enemy.Definition.Id,
                 partyControl.ActorIds,
                 enemy.TacticalQuery.CaptureExposure);
+            bool hasDroneTarget = drones.TrySelectActorAttackTarget(
+                enemy.Definition.Id,
+                out DroneExposureSnapshot droneExposure,
+                out int droneHitChance);
+            if (hasDroneTarget
+                && (target == null
+                    || droneHitChance > target.HitChancePercent))
+            {
+                ExecuteDroneAttack(enemy, droneExposure);
+                return;
+            }
             if (target == null)
             {
                 EndActiveTurn(enemy, "no capable hostile target remains");
@@ -232,6 +247,29 @@ namespace GritGud.Presentation.Gameplay
             actionController.PresentExternalStatus(
                 $"{enemy.Definition.Id} attack failed: {failure}.");
             EndActiveTurn(enemy, $"attack failed: {failure}");
+        }
+
+        private void ExecuteDroneAttack(
+            GameplayEnemyRuntimeRegistry.Entry enemy,
+            DroneExposureSnapshot exposure)
+        {
+            if (drones.TryResolveActorAttack(
+                    enemy.Definition.Id,
+                    exposure,
+                    out ActorDroneAttackRecord record))
+            {
+                enemy.AttacksCommittedThisTurn++;
+                actionController.PresentExternalStatus(
+                    record.Hit
+                        ? $"{enemy.Definition.Id} hit {record.DroneId}."
+                        : $"{enemy.Definition.Id} missed {record.DroneId}.");
+                decisionDelaySeconds = enemy.Presentation
+                    .PresentationDefinition.PostAttackDelaySeconds;
+                return;
+            }
+            actionController.PresentExternalStatus(
+                $"{enemy.Definition.Id} could not attack {exposure.DroneId}.");
+            EndActiveTurn(enemy, "drone attack failed");
         }
 
         private void TickMovement(

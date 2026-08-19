@@ -310,7 +310,8 @@ namespace GritGud.Domain.Gameplay
             AccuracyDecayDefinition accuracyDecay = null,
             ContactAttackDefinition contact = null,
             DirectFireDamageDefinition directFireDamage = null,
-            float soundSignature = 1f)
+            float soundSignature = 1f,
+            float directVehicleIntegrityDamage = 0f)
         {
             if (string.IsNullOrWhiteSpace(actionId))
             {
@@ -340,6 +341,11 @@ namespace GritGud.Domain.Gameplay
             {
                 throw new ArgumentOutOfRangeException(nameof(soundSignature));
             }
+            if (float.IsNaN(directVehicleIntegrityDamage)
+                || float.IsInfinity(directVehicleIntegrityDamage)
+                || directVehicleIntegrityDamage < 0f)
+                throw new ArgumentOutOfRangeException(
+                    nameof(directVehicleIntegrityDamage));
 
             if (projectile != null && contact != null)
             {
@@ -355,6 +361,11 @@ namespace GritGud.Domain.Gameplay
                     "Only ranged immediate attacks can author direct-fire prop damage.",
                     nameof(directFireDamage));
             }
+            if (directVehicleIntegrityDamage > 0f
+                && (projectile != null || contact != null))
+                throw new ArgumentException(
+                    "Only ranged immediate attacks can author direct vehicle integrity damage.",
+                    nameof(directVehicleIntegrityDamage));
 
             if (contact != null && accuracyDecay != null)
             {
@@ -378,6 +389,7 @@ namespace GritGud.Domain.Gameplay
             Contact = contact;
             DirectFireDamage = directFireDamage;
             SoundSignature = soundSignature;
+            DirectVehicleIntegrityDamage = directVehicleIntegrityDamage;
             AccuracyDecay = contact == null
                 ? accuracyDecay
                 : AccuracyDecayDefinition.None;
@@ -400,6 +412,8 @@ namespace GritGud.Domain.Gameplay
         public DirectFireDamageDefinition DirectFireDamage { get; }
 
         public float SoundSignature { get; }
+
+        public float DirectVehicleIntegrityDamage { get; }
 
         public bool CanTargetWorldPoint => Projectile == null && Contact == null;
     }
