@@ -51,6 +51,45 @@ namespace GritGud.Application.Gameplay
                 regions);
         }
 
+        public static TargetExposureSnapshot CaptureDroneSight(
+            GameplayCombatStateSnapshot state,
+            GameplayHeadlessSpatialEvidence spatial,
+            string droneId,
+            string targetActorId)
+        {
+            if (state == null) throw new ArgumentNullException(nameof(state));
+            if (spatial == null) throw new ArgumentNullException(nameof(spatial));
+            state.RequireCoverage(GameplayCombatStateCoverage.Drones);
+            DroneSnapshot drone = FindDrone(state.Drones, droneId);
+            GameplayActorSnapshot target = state.Session.GetActor(targetActorId);
+            IReadOnlyList<TargetRegionSample> samples =
+                ActorTargetProfileCatalog.CreateWorldSamples(
+                    target.Pose,
+                    target.IsPinned);
+            var regions = new List<TargetRegionExposure>(samples.Count);
+            bool withinSensor = drone.IsOperational
+                && IsWithinSensorCone(
+                    drone,
+                    target.Pose.Position);
+            foreach (TargetRegionSample sample in samples)
+            {
+                bool visible = withinSensor
+                    && !spatial.BlocksLineOfSight(
+                        state,
+                        drone.Position,
+                        sample.Center)
+                    && !IsObscuredBySmoke(
+                        state,
+                        drone.Position,
+                        sample.Center);
+                regions.Add(new TargetRegionExposure(
+                    sample.Id,
+                    visible ? 1 : 0,
+                    totalSampleCount: 1));
+            }
+            return new TargetExposureSnapshot(droneId, targetActorId, regions);
+        }
+
         private static bool IsObscuredBySmoke(
             GameplayCombatStateSnapshot state,
             GameplayPosition origin,
@@ -143,6 +182,39 @@ namespace GritGud.Application.Gameplay
             }
             throw new InvalidOperationException(
                 $"Actor target profile does not contain region '{regionId}'.");
+        }
+
+        private static DroneSnapshot FindDrone(
+            IReadOnlyList<DroneSnapshot> drones,
+            string droneId)
+        {
+            foreach (DroneSnapshot drone in drones)
+                if (string.Equals(drone.DroneId, droneId,
+                    StringComparison.Ordinal)) return drone;
+            throw new KeyNotFoundException(
+                $"Drone '{droneId}' is absent from canonical state.");
+        }
+
+        private static bool IsWithinSensorCone(
+            DroneSnapshot drone,
+            GameplayPosition target)
+        {
+            float dx = target.X - drone.Position.X;
+            float dy = target.Y - drone.Position.Y;
+            float dz = target.Z - drone.Position.Z;
+            float distance = (float)Math.Sqrt((dx * dx) + (dy * dy) + (dz * dz));
+            if (distance > drone.Definition.Sensor.Range) return false;
+            if (distance == 0f) return true;
+            double radians = drone.FacingDegrees * Math.PI / 180d;
+            float forwardX = (float)Math.Sin(radians);
+            float forwardZ = (float)Math.Cos(radians);
+            float horizontal = (float)Math.Sqrt((dx * dx) + (dz * dz));
+            if (horizontal == 0f) return true;
+            float dot = ((dx / horizontal) * forwardX)
+                + ((dz / horizontal) * forwardZ);
+            dot = Math.Max(-1f, Math.Min(1f, dot));
+            float angle = (float)(Math.Acos(dot) * 180d / Math.PI);
+            return angle <= drone.Definition.Sensor.ViewAngleDegrees * 0.5f;
         }
     }
 }

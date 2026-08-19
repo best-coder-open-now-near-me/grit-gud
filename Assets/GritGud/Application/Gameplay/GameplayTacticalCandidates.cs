@@ -210,8 +210,10 @@ namespace GritGud.Application.Gameplay
                     subject.Subject.Id,
                     StringComparison.Ordinal))
                 return false;
-            GameplayActorSnapshot actor = state.Session.GetActor(input.ActorId);
-            if (actor.Pose.Position.DistanceTo(subject.Position)
+            GameplayPosition sourcePosition = input.SourceSubjectId == null
+                ? state.Session.GetActor(input.ActorId).Pose.Position
+                : FindDrone(state.Drones, input.SourceSubjectId).Position;
+            if (sourcePosition.DistanceTo(subject.Position)
                 > options.MaximumSubjectDistance)
                 return false;
             switch (input.Profile.Capability)
@@ -260,5 +262,16 @@ namespace GritGud.Application.Gameplay
             || subjectKind == GameplaySemanticSubjectKind.InventoryItem
             || subjectKind == GameplaySemanticSubjectKind.Projectile
             || subjectKind == GameplaySemanticSubjectKind.System;
+
+        private static DroneSnapshot FindDrone(
+            IReadOnlyList<DroneSnapshot> drones,
+            string droneId)
+        {
+            foreach (DroneSnapshot drone in drones)
+                if (string.Equals(drone.DroneId, droneId,
+                    StringComparison.Ordinal)) return drone;
+            throw new KeyNotFoundException(
+                $"Reachable input source drone '{droneId}' is absent from canonical state.");
+        }
     }
 }

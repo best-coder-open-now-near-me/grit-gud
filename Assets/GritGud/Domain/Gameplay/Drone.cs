@@ -75,6 +75,9 @@ namespace GritGud.Domain.Gameplay
             MoveCost = moveCost;
             Sensor = sensor ?? throw new ArgumentNullException(nameof(sensor));
             Attack = attack ?? throw new ArgumentNullException(nameof(attack));
+            if (attack.Projectile != null || attack.Contact != null)
+                throw new NotSupportedException(
+                    "Drone weapons currently require immediate ranged delivery.");
             InitiativeBinding = initiativeBinding;
         }
 
@@ -187,5 +190,79 @@ namespace GritGud.Domain.Gameplay
         public ActionCost Cost { get; }
         public TurnBudget PreviousBudget { get; }
         public TurnBudget ResultingBudget { get; }
+    }
+
+    public sealed class DroneIntegrityDamageRecord
+    {
+        public DroneIntegrityDamageRecord(
+            float appliedDamage,
+            DroneSnapshot previous,
+            DroneSnapshot resulting)
+        {
+            if (float.IsNaN(appliedDamage)
+                || float.IsInfinity(appliedDamage)
+                || appliedDamage <= 0f)
+                throw new ArgumentOutOfRangeException(nameof(appliedDamage));
+            if (!string.Equals(
+                    previous.DroneId,
+                    resulting.DroneId,
+                    StringComparison.Ordinal)
+                || previous.Position.DistanceTo(resulting.Position) != 0f
+                || previous.FacingDegrees != resulting.FacingDegrees
+                || resulting.RemainingIntegrity
+                    != Math.Max(0f, previous.RemainingIntegrity - appliedDamage))
+                throw new ArgumentException(
+                    "Drone integrity damage must preserve identity and pose and clamp at zero.",
+                    nameof(resulting));
+            AppliedDamage = appliedDamage;
+            Previous = previous;
+            Resulting = resulting;
+        }
+
+        public string DroneId => Previous.DroneId;
+        public float AppliedDamage { get; }
+        public DroneSnapshot Previous { get; }
+        public DroneSnapshot Resulting { get; }
+    }
+
+    public sealed class DroneAttackRecord
+    {
+        public DroneAttackRecord(
+            string controllerActorId,
+            string droneId,
+            string targetId,
+            string targetKind,
+            ActionCost cost,
+            TurnBudget previousBudget,
+            TurnBudget resultingBudget,
+            object consequence)
+        {
+            ControllerActorId = DroneDefinition.RequireText(
+                controllerActorId, nameof(controllerActorId));
+            DroneId = DroneDefinition.RequireText(droneId, nameof(droneId));
+            TargetId = DroneDefinition.RequireText(targetId, nameof(targetId));
+            TargetKind = DroneDefinition.RequireText(targetKind, nameof(targetKind));
+            TurnBudget expected = previousBudget.SpendAction(cost);
+            if (expected.ActionPoints != resultingBudget.ActionPoints
+                || expected.MovementOpportunity
+                    != resultingBudget.MovementOpportunity)
+                throw new ArgumentException(
+                    "Drone attack budget does not match its action cost.",
+                    nameof(resultingBudget));
+            Consequence = consequence ?? throw new ArgumentNullException(
+                nameof(consequence));
+            Cost = cost;
+            PreviousBudget = previousBudget;
+            ResultingBudget = resultingBudget;
+        }
+
+        public string ControllerActorId { get; }
+        public string DroneId { get; }
+        public string TargetId { get; }
+        public string TargetKind { get; }
+        public ActionCost Cost { get; }
+        public TurnBudget PreviousBudget { get; }
+        public TurnBudget ResultingBudget { get; }
+        public object Consequence { get; }
     }
 }

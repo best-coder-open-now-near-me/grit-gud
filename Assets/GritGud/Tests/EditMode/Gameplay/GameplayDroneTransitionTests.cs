@@ -65,6 +65,51 @@ namespace GritGud.Domain.Tests.Gameplay
                 CreateTransition(destroyed, movement)));
         }
 
+        [Test]
+        public void DroneAttackSpendsControllerApAndAppliesFrozenActorWound()
+        {
+            GameplayCombatStateSnapshot initial = CreateState("controller");
+            GameplayActorSnapshot target = initial.Session.GetActor("other");
+            var wound = new ActorWoundRecord(
+                TargetRegionId.Torso,
+                1f,
+                target.Wounds,
+                target.Wounds.AddWound(TargetRegionId.Torso, 1f));
+            DroneDefinition drone = initial.Drones[0].Definition;
+            var action = new DroneAttackRecord(
+                "controller",
+                drone.Id,
+                "other",
+                GameplaySemanticSubjectKind.Actor.ToString(),
+                drone.Attack.TurnCost,
+                new TurnBudget(4, 8f),
+                new TurnBudget(3, 8f),
+                wound);
+            var payload = new GameplayDroneAttackTransitionPayload(
+                GameplaySemanticSubjectKind.Actor,
+                drone.Attack,
+                action);
+            var transition = new GameplaySemanticTransition(
+                new GameplayTransitionIdentity(
+                    1L,
+                    GameplaySemanticCapability.DirectAttack.ToString(),
+                    "controller",
+                    "other"),
+                initial.CanonicalHash,
+                payload);
+            var reducer = new GameplayDroneAttackTransitionReducer();
+
+            GameplayReductionResult first = reducer.Reduce(initial, transition);
+            GameplayReductionResult replay = reducer.Reduce(initial, transition);
+
+            Assert.That(first.Resulting.Session.GetActor("controller")
+                .TurnBudget.ActionPoints, Is.EqualTo(3));
+            Assert.That(first.Resulting.Session.GetActor("other")
+                .Wounds.TorsoWounds, Is.EqualTo(1));
+            Assert.That(replay.Resulting.CanonicalHash,
+                Is.EqualTo(first.Resulting.CanonicalHash));
+        }
+
         private static GameplaySemanticTransition CreateTransition(
             GameplayCombatStateSnapshot state,
             DroneMoveRecord movement)

@@ -48,7 +48,8 @@ namespace GritGud.Application.Gameplay
             string sourceId,
             string actorId,
             GameplayCapabilityProfile profile,
-            string subjectIdHint = null)
+            string subjectIdHint = null,
+            string sourceSubjectId = null)
         {
             if (!Enum.IsDefined(typeof(GameplayReachableInputKind), kind))
                 throw new ArgumentOutOfRangeException(nameof(kind));
@@ -64,6 +65,9 @@ namespace GritGud.Application.Gameplay
             SubjectIdHint = string.IsNullOrWhiteSpace(subjectIdHint)
                 ? null
                 : subjectIdHint.Trim();
+            SourceSubjectId = string.IsNullOrWhiteSpace(sourceSubjectId)
+                ? null
+                : sourceSubjectId.Trim();
         }
 
         public GameplayReachableInputKind Kind { get; }
@@ -72,6 +76,7 @@ namespace GritGud.Application.Gameplay
         public GameplayCapabilityProfile Profile { get; }
         public GameplaySemanticSubjectKind SubjectKind { get; }
         public string SubjectIdHint { get; }
+        public string SourceSubjectId { get; }
     }
 
     public sealed class GameplayCapabilityRegistration
@@ -386,7 +391,31 @@ namespace GritGud.Application.Gameplay
                     drone.Id + ".move",
                     drone.ControllerActorId,
                     GameplayCapabilityProfiles.AerialDroneMove(),
+                    drone.Id,
                     drone.Id);
+                Add(result, GameplayReachableInputKind.EquippedAttack,
+                    drone.Id + ".attack->Actor",
+                    drone.ControllerActorId,
+                    GameplayCapabilityProfiles.DroneAttack(
+                        drone.Attack,
+                        GameplaySemanticSubjectKind.Actor),
+                    sourceSubjectId: drone.Id);
+                if (HasTacticalDestructible(level)
+                    && drone.Attack.DirectFireDamage != null)
+                    Add(result, GameplayReachableInputKind.EquippedAttack,
+                        drone.Id + ".attack->DestructibleProp",
+                        drone.ControllerActorId,
+                        GameplayCapabilityProfiles.DroneAttack(
+                            drone.Attack,
+                            GameplaySemanticSubjectKind.DestructibleProp),
+                        sourceSubjectId: drone.Id);
+                Add(result, GameplayReachableInputKind.EquippedAttack,
+                    drone.Id + ".attack->Vehicle",
+                    drone.ControllerActorId,
+                    GameplayCapabilityProfiles.DroneAttack(
+                        drone.Attack,
+                        GameplaySemanticSubjectKind.Vehicle),
+                    sourceSubjectId: drone.Id);
             }
             return result.AsReadOnly();
         }
@@ -704,12 +733,14 @@ namespace GritGud.Application.Gameplay
             string sourceId,
             string actorId,
             GameplayCapabilityProfile profile,
-            string subjectIdHint = null) => result.Add(
+            string subjectIdHint = null,
+            string sourceSubjectId = null) => result.Add(
                 new GameplayReachableInput(
                     kind,
                     sourceId,
                     actorId,
                     profile,
-                    subjectIdHint));
+                    subjectIdHint,
+                    sourceSubjectId));
     }
 }

@@ -353,6 +353,7 @@ namespace GritGud.Application.Gameplay
             registry.Register(new GameplayExplosiveTransitionReducer());
             registry.Register(new GameplayDisplacementTransitionReducer());
             registry.Register(new GameplayWorldTransitionReducer());
+            registry.Register(new GameplayDroneAttackTransitionReducer());
             registry.Register(new GameplayLifecycleTransitionReducer());
             registry.Register(new GameplayEncounterTransitionReducer());
             return registry;

@@ -25,6 +25,7 @@ internal static class SimulationChecks
             VerifyEncounterAwarenessAndScopedInitiative();
             VerifyCommittedActionConsequenceTrajectory();
             VerifyBankedActionPointEconomy();
+            VerifyDroneHeadlessTrajectory();
             SimulationParityChecks.Verify();
             Console.WriteLine(
                 "Simulation checks passed: reducers, exact replay, atomic installation, and all-content capability coverage.");
@@ -35,6 +36,84 @@ internal static class SimulationChecks
             Console.Error.WriteLine(exception);
             return 1;
         }
+    }
+
+    private static void VerifyDroneHeadlessTrajectory()
+    {
+        GameplaySession gameplay = CreateGameplay(CreateRifle());
+        Require(gameplay.BeginEncounter(),
+            "Drone fixture encounter did not begin.");
+        GameplayCombatStateSnapshot captured = GameplayCombatStateCapture.Capture(
+            gameplay);
+        var droneDefinition = new DroneDefinition(
+            "drone.fixture",
+            "player",
+            new GameplayPosition(0f, 2f, 0f),
+            0f,
+            5f,
+            5f,
+            new ActionCost(1, 0f, ActionMobility.Mobile),
+            new DroneSensorDefinition(16f, 120f),
+            CreateRifle());
+        var initial = new GameplayCombatStateSnapshot(
+            captured.Session,
+            coverage: GameplayCombatStateCoverage.Session
+                | GameplayCombatStateCoverage.Drones,
+            drones: new[] { droneDefinition.CreateInitialSnapshot() });
+        var reducers = GameplaySimulationReducers.CreateCurrent();
+        var trajectory = new List<GameplaySemanticTransition>();
+        TurnBudget initialBudget = initial.Session.GetActor("player").TurnBudget;
+        var movement = new DroneMoveRecord(
+            "player",
+            droneDefinition.Id,
+            droneDefinition.StartingPosition,
+            new GameplayPosition(3f, 2f, 0f),
+            90f,
+            droneDefinition.MoveCost,
+            initialBudget,
+            initialBudget.SpendAction(droneDefinition.MoveCost));
+        GameplayCombatStateSnapshot moved = Reduce(
+            reducers,
+            initial,
+            new GameplayDroneMoveTransitionPayload(movement),
+            trajectory);
+        GameplayActorSnapshot target = moved.Session.GetActor("enemy");
+        var wound = new ActorWoundRecord(
+            TargetRegionId.Torso,
+            droneDefinition.Attack.WoundMovementPenalty,
+            target.Wounds,
+            target.Wounds.AddWound(
+                TargetRegionId.Torso,
+                droneDefinition.Attack.WoundMovementPenalty));
+        TurnBudget attackBudget = moved.Session.GetActor("player").TurnBudget;
+        var attack = new DroneAttackRecord(
+            "player",
+            droneDefinition.Id,
+            "enemy",
+            GameplaySemanticSubjectKind.Actor.ToString(),
+            droneDefinition.Attack.TurnCost,
+            attackBudget,
+            attackBudget.SpendAction(droneDefinition.Attack.TurnCost),
+            wound);
+        GameplayCombatStateSnapshot resulting = Reduce(
+            reducers,
+            moved,
+            new GameplayDroneAttackTransitionPayload(
+                GameplaySemanticSubjectKind.Actor,
+                droneDefinition.Attack,
+                attack),
+            trajectory);
+        Require(resulting.Drones[0].Position.DistanceTo(
+                movement.Destination) == 0f
+            && resulting.Session.GetActor("player")
+                .TurnBudget.ActionPoints == 2
+            && resulting.Session.GetActor("enemy").Wounds.TorsoWounds == 1,
+            "Drone trajectory did not preserve controller AP, movement, and damage.");
+        var branch = new GameplaySimulationBranch("drone", initial, reducers);
+        foreach (GameplaySemanticTransition transition in trajectory)
+            branch.Apply(transition);
+        Require(GameplayExactReplay.Verify(initial, branch.Steps, reducers).IsExact,
+            "Drone headless trajectory did not replay exactly.");
     }
 
     private static void VerifyBankedActionPointEconomy()

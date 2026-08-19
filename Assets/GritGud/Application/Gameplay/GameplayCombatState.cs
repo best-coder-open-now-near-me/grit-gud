@@ -509,6 +509,14 @@ namespace GritGud.Application.Gameplay
                 Append(text, root + ".attack.cost.mobility", (int)attack.TurnCost.Mobility);
                 Append(text, root + ".attack.woundPenalty", attack.WoundMovementPenalty);
                 Append(text, root + ".attack.sound", attack.SoundSignature);
+                Append(text, root + ".attack.accuracy.halfLife",
+                    attack.AccuracyDecay.HalfLifeDistance);
+                Append(text, root + ".attack.accuracy.minimum",
+                    attack.AccuracyDecay.MinimumAccuracyPercent);
+                Append(text, root + ".attack.directDamage.type",
+                    attack.DirectFireDamage?.DamageTypeId ?? string.Empty);
+                Append(text, root + ".attack.directDamage.base",
+                    attack.DirectFireDamage?.BaseIntegrityDamage ?? 0f);
             }
             foreach (ProjectileFlightSnapshot projectile in state.Projectiles)
             {
