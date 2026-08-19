@@ -15,6 +15,7 @@ internal static class SimulationChecks
         {
             VerifyWalkingSliceAndExactReplay();
             VerifyCapabilityCoverageFailsClosed();
+            VerifyTacticalRuleCoverageAndOutcomeProjection();
             VerifyAtomicLiveInstallation();
             VerifyAllCurrentContentCoverage();
             VerifyTacticalDestructibleSimulation();
@@ -29,6 +30,57 @@ internal static class SimulationChecks
             Console.Error.WriteLine(exception);
             return 1;
         }
+    }
+
+    private static void VerifyTacticalRuleCoverageAndOutcomeProjection()
+    {
+        AttackDefinition rifle = CreateRifle();
+        GameplayCapabilityProfile profile = GameplayCapabilityProfiles.Attack(
+            rifle,
+            GameplaySemanticSubjectKind.Actor);
+        var rule = new TacticalContextRuleDefinition(
+            "rule.ambush",
+            "Ambush",
+            order: 0,
+            new[] { profile.Signature },
+            new[] { GameplaySemanticSubjectKind.Actor },
+            new[]
+            {
+                new TacticalContextPredicate(
+                    TacticalContextFeature.TargetAwareness,
+                    TacticalPredicateOperator.Equal,
+                    (int)TacticalAwarenessBand.Unaware),
+            },
+            new TacticalModifierConsequences(accuracyDeltaPercent: 15),
+            new[] { "outcome.ambush" });
+        var input = new GameplayReachableInput(
+            GameplayReachableInputKind.EquippedAttack,
+            rifle.ActionId,
+            "player",
+            profile,
+            "enemy");
+        GameplayTacticalRuleSupportRegistry registry =
+            GameplayCurrentTacticalRuleSupport.Create(
+                new[] { rule },
+                "UnityTacticalContextQuery");
+        GameplayTacticalRuleCoverageReport complete =
+            GameplayTacticalRuleCoverageValidator.Validate(
+                new[] { rule },
+                new[] { input },
+                registry);
+        Require(complete.IsComplete,
+            "Current tactical-rule support did not cover its exact route.");
+
+        GameplayTacticalRuleCoverageReport missing =
+            GameplayTacticalRuleCoverageValidator.Validate(
+                new[] { rule },
+                new[] { input },
+                new GameplayTacticalRuleSupportRegistry());
+        Require(!missing.IsComplete
+            && missing.Issues.Count == 1
+            && missing.Issues[0].MissingStages
+                == GameplayTacticalRuleSupportStage.Complete,
+            "Tactical-rule validation did not fail closed for a missing route.");
     }
 
     private static void VerifyWalkingSliceAndExactReplay()

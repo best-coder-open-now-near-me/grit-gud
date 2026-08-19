@@ -151,6 +151,14 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(diagnostics, Does.Contain(
                 "TACTICAL OUTCOMES - outcome.ambush"));
             Assert.That(diagnostics, Does.Contain("+15% context"));
+            GameplayTacticalOutcome tacticalOutcome =
+                GameplayTacticalOutcomeProjector.Project(prepared.Record);
+            Assert.That(tacticalOutcome.FeatureIds, Is.EqualTo(
+                new[] { "outcome.ambush" }));
+            Assert.That(tacticalOutcome.FinalHitChancePercent, Is.EqualTo(48));
+            Assert.That(tacticalOutcome.ContextualAccuracyDeltaPercent,
+                Is.EqualTo(15));
+            Assert.That(tacticalOutcome.ActionPointsRemaining, Is.EqualTo(3));
         }
 
         [Test]
