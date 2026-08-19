@@ -569,7 +569,7 @@
               { "x": 1.5, "y": 2.0, "z": 0.0 }
             ]
           },
-          "reinforcementActorIds": []
+          "reinforcementActorIds": ["depot-yard-support"]
         }
       },
       "displacementAbility": {
@@ -655,6 +655,232 @@
           }
         }
       ]
+    },
+    {
+      "id": "depot-yard-support",
+      "displayName": "Yard Support",
+      "presentationId": "actor.enemy.rifleman",
+      "targetable": true,
+      "position": { "x": 10.0, "y": 2.0, "z": 6.0 },
+      "facingDegrees": 225.0,
+      "stance": "standing",
+      "turnBudget": { "actionPoints": 4 },
+      "mass": 78.0,
+      "sizeClass": "medium",
+      "control": { "talentId": "", "talentModifier": 0 },
+      "attackResponse": { "startsEncounter": true },
+      "combat": {
+        "allegianceId": "raider",
+        "hostileAllegianceIds": ["player"],
+        "maximumWounds": 2,
+        "enemyBehavior": {
+          "behaviorId": "behavior.yard-support",
+          "perceptionRange": 24.0,
+          "viewAngleDegrees": 100.0,
+          "preferredEngagementRange": 12.0,
+          "movementSearchRadius": 5.0,
+          "maximumAttacksPerTurn": 1,
+          "minimumAttackHitChancePercent": 40,
+          "awareness": {
+            "hearingRange": 16.0,
+            "sightSuspicionGain": 100,
+            "soundSuspicionGain": 45,
+            "suspicionDecayPerTick": 10,
+            "alertThreshold": 100
+          },
+          "reinforcementActorIds": []
+        }
+      },
+      "attackCapability": {
+        "enabled": true,
+        "actionId": "attack.rifle",
+        "displayName": "Fire rifle",
+        "turnCost": {
+          "actionPoints": 1,
+          "movementOpportunity": 0.0,
+          "mobility": "set"
+        },
+        "woundMovementPenalty": 2.0,
+        "soundSignature": 1.0,
+        "accuracyDecay": {
+          "halfLifeDistance": 45.0,
+          "minimumAccuracyPercent": 5.0
+        },
+        "directFireDamage": {
+          "damageTypeId": "damage.ballistic.rifle",
+          "baseIntegrityDamage": 2.0,
+          "surfaceModifiers": [
+            { "surfaceId": "surface.wood", "multiplier": 2.0 },
+            { "surfaceId": "surface.metal", "multiplier": 1.0 },
+            { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+          ]
+        }
+      },
+      "characterProfile": {
+        "identityId": "character.depot-yard-support",
+        "displayName": "Yard Support",
+        "archetype": "Raider Rifleman",
+        "attributes": [
+          { "id": "attribute.strength", "rating": 3 },
+          { "id": "attribute.dexterity", "rating": 3 },
+          { "id": "attribute.grit", "rating": 3 },
+          { "id": "attribute.charisma", "rating": 1 }
+        ],
+        "skills": [
+          { "id": "skill.firearms", "rating": 3 },
+          { "id": "skill.close-quarters", "rating": 3 }
+        ],
+        "talentIds": []
+      }
+    },
+    {
+      "id": "depot-warehouse-patrol",
+      "displayName": "Warehouse Patrol",
+      "presentationId": "actor.enemy.rifleman",
+      "targetable": true,
+      "position": { "x": 2.0, "y": 2.0, "z": -10.0 },
+      "facingDegrees": 90.0,
+      "stance": "standing",
+      "turnBudget": { "actionPoints": 4 },
+      "mass": 76.0,
+      "sizeClass": "medium",
+      "control": { "talentId": "", "talentModifier": 0 },
+      "attackResponse": { "startsEncounter": true },
+      "combat": {
+        "allegianceId": "raider",
+        "hostileAllegianceIds": ["player"],
+        "maximumWounds": 2,
+        "enemyBehavior": {
+          "behaviorId": "behavior.warehouse-patrol",
+          "perceptionRange": 22.0,
+          "viewAngleDegrees": 90.0,
+          "preferredEngagementRange": 10.0,
+          "movementSearchRadius": 5.0,
+          "maximumAttacksPerTurn": 1,
+          "minimumAttackHitChancePercent": 35,
+          "awareness": {
+            "hearingRange": 20.0,
+            "sightSuspicionGain": 100,
+            "soundSuspicionGain": 55,
+            "suspicionDecayPerTick": 8,
+            "alertThreshold": 100
+          },
+          "patrol": {
+            "loops": true,
+            "waypoints": [
+              { "x": 2.0, "y": 2.0, "z": -10.0 },
+              { "x": 8.0, "y": 2.0, "z": -10.0 },
+              { "x": 8.0, "y": 2.0, "z": -5.0 },
+              { "x": 2.0, "y": 2.0, "z": -5.0 }
+            ]
+          },
+          "reinforcementActorIds": ["depot-loading-guard"]
+        }
+      },
+      "attackCapability": {
+        "enabled": true,
+        "actionId": "attack.rifle",
+        "displayName": "Fire rifle",
+        "turnCost": { "actionPoints": 1, "movementOpportunity": 0.0, "mobility": "set" },
+        "woundMovementPenalty": 2.0,
+        "soundSignature": 1.0,
+        "accuracyDecay": { "halfLifeDistance": 42.0, "minimumAccuracyPercent": 5.0 },
+        "directFireDamage": {
+          "damageTypeId": "damage.ballistic.rifle",
+          "baseIntegrityDamage": 2.0,
+          "surfaceModifiers": [
+            { "surfaceId": "surface.wood", "multiplier": 2.0 },
+            { "surfaceId": "surface.metal", "multiplier": 1.0 },
+            { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+          ]
+        }
+      },
+      "characterProfile": {
+        "identityId": "character.depot-warehouse-patrol",
+        "displayName": "Warehouse Patrol",
+        "archetype": "Raider Scout",
+        "attributes": [
+          { "id": "attribute.strength", "rating": 2 },
+          { "id": "attribute.dexterity", "rating": 4 },
+          { "id": "attribute.grit", "rating": 3 },
+          { "id": "attribute.charisma", "rating": 1 }
+        ],
+        "skills": [
+          { "id": "skill.firearms", "rating": 3 },
+          { "id": "skill.close-quarters", "rating": 3 }
+        ],
+        "talentIds": []
+      }
+    },
+    {
+      "id": "depot-loading-guard",
+      "displayName": "Loading Guard",
+      "presentationId": "actor.enemy.rifleman",
+      "targetable": true,
+      "position": { "x": 13.0, "y": 2.0, "z": -5.0 },
+      "facingDegrees": 180.0,
+      "stance": "standing",
+      "turnBudget": { "actionPoints": 4 },
+      "mass": 82.0,
+      "sizeClass": "medium",
+      "control": { "talentId": "", "talentModifier": 0 },
+      "attackResponse": { "startsEncounter": true },
+      "combat": {
+        "allegianceId": "raider",
+        "hostileAllegianceIds": ["player"],
+        "maximumWounds": 3,
+        "enemyBehavior": {
+          "behaviorId": "behavior.loading-guard",
+          "perceptionRange": 20.0,
+          "viewAngleDegrees": 80.0,
+          "preferredEngagementRange": 11.0,
+          "movementSearchRadius": 4.0,
+          "maximumAttacksPerTurn": 1,
+          "minimumAttackHitChancePercent": 45,
+          "awareness": {
+            "hearingRange": 22.0,
+            "sightSuspicionGain": 100,
+            "soundSuspicionGain": 60,
+            "suspicionDecayPerTick": 6,
+            "alertThreshold": 100
+          },
+          "reinforcementActorIds": []
+        }
+      },
+      "attackCapability": {
+        "enabled": true,
+        "actionId": "attack.rifle",
+        "displayName": "Fire rifle",
+        "turnCost": { "actionPoints": 1, "movementOpportunity": 0.0, "mobility": "set" },
+        "woundMovementPenalty": 2.0,
+        "soundSignature": 1.0,
+        "accuracyDecay": { "halfLifeDistance": 48.0, "minimumAccuracyPercent": 5.0 },
+        "directFireDamage": {
+          "damageTypeId": "damage.ballistic.rifle",
+          "baseIntegrityDamage": 2.0,
+          "surfaceModifiers": [
+            { "surfaceId": "surface.wood", "multiplier": 2.0 },
+            { "surfaceId": "surface.metal", "multiplier": 1.0 },
+            { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+          ]
+        }
+      },
+      "characterProfile": {
+        "identityId": "character.depot-loading-guard",
+        "displayName": "Loading Guard",
+        "archetype": "Raider Guard",
+        "attributes": [
+          { "id": "attribute.strength", "rating": 4 },
+          { "id": "attribute.dexterity", "rating": 2 },
+          { "id": "attribute.grit", "rating": 4 },
+          { "id": "attribute.charisma", "rating": 1 }
+        ],
+        "skills": [
+          { "id": "skill.firearms", "rating": 3 },
+          { "id": "skill.close-quarters", "rating": 4 }
+        ],
+        "talentIds": []
+      }
     }
   ],
   "objectives": [

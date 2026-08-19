@@ -1074,6 +1074,19 @@ internal static class SimulationChecks
                 "cover-wall",
                 StringComparison.Ordinal),
             "Registered tactical destructible did not become an attack candidate.");
+        var decisionContext = new GameplayDecisionContext(
+            initial,
+            GameplayObservationSnapshot.FullState("player", initial));
+        GameplayCandidateEvaluation evaluation =
+            new GameplayCandidateRouteEvaluator(capabilities).Evaluate(
+                decisionContext,
+                tactical[0]);
+        Require(evaluation.RequiredEvidenceTypes.Count == 1
+            && string.Equals(
+                evaluation.RequiredEvidenceTypes[0],
+                "target-exposure",
+                StringComparison.Ordinal),
+            "Destructible attack candidate did not reach its evidence contract.");
 
         var spatialIdentity = new SpatialContentIdentity(
             level.levelId,
