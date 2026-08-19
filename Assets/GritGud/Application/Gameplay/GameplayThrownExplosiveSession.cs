@@ -166,13 +166,18 @@ namespace GritGud.Application.Gameplay
                     definition.Id,
                     landingResult.LandingPosition,
                     definition.FireField);
+            IReadOnlyList<ConcussiveActionPointEffectRecord>
+                concussiveEffects = consequences.ResolveConcussiveEffects(
+                    blastResult.Effects,
+                    definition.BlastActionPointReduction);
             prepared = new ThrownExplosiveRecord(
                 sequence, actorId, definition, actor.Pose.Position,
                 launchOrigin, intendedLanding, sampled,
                 landingResult.LandingPosition, radius,
                 blastResult.WorldStateRevision, blastResult.Effects,
                 smokeField,
-                fireField);
+                fireField,
+                concussiveEffects);
             failure = ThrownExplosiveFailure.None;
             return true;
         }
@@ -233,6 +238,28 @@ namespace GritGud.Application.Gameplay
                 prepared.Definition,
                 startsEncounter);
             TurnBudget resultingBudget = actor.TurnBudget.SpendAction(cost);
+            IReadOnlyList<ConcussiveActionPointEffectRecord>
+                committedConcussiveEffects =
+                    consequences.ResolveConcussiveEffects(
+                        prepared.BlastEffects,
+                        prepared.Definition.BlastActionPointReduction,
+                        prepared.ThrowerId,
+                        resultingBudget.ActionPoints);
+            var committedRecord = new ThrownExplosiveRecord(
+                prepared.Sequence,
+                prepared.ThrowerId,
+                prepared.Definition,
+                prepared.Origin,
+                prepared.LaunchOrigin,
+                prepared.IntendedLanding,
+                prepared.SampledLanding,
+                prepared.ResolvedLanding,
+                prepared.UncertaintyRadius,
+                prepared.WorldStateRevision,
+                prepared.BlastEffects,
+                prepared.SmokeField,
+                prepared.FireField,
+                committedConcussiveEffects);
             int previousQuantity = gameplay.GetInventoryQuantity(
                 prepared.ThrowerId,
                 prepared.Definition.Id);
@@ -253,7 +280,7 @@ namespace GritGud.Application.Gameplay
                 resultingBudget,
                 new GameplayActionOutcome[]
                 {
-                    new ThrownExplosiveActionOutcome(prepared),
+                    new ThrownExplosiveActionOutcome(committedRecord),
                     new InventoryQuantityChangedActionOutcome(quantityChange),
                 });
             CommitThrow(action);
@@ -331,6 +358,9 @@ namespace GritGud.Application.Gameplay
                 outcome.Record.BlastEffects,
                 outcome.Record.Definition.BlastWoundMovementPenalty,
                 outcome.Record.Definition.BlastIntegrityDamage,
+                notifications);
+            consequences.ApplyConcussiveEffects(
+                outcome.Record.ConcussiveEffects,
                 notifications);
             if (outcome.Record.SmokeField != null)
             {

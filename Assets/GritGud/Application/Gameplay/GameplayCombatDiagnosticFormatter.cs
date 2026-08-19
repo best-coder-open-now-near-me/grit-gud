@@ -480,6 +480,12 @@ namespace GritGud.Application.Gameplay
                 thrown.Definition.SmokeField != null
                     ? "SMOKE"
                     : thrown.Definition.FireField != null ? "FIRE" : "BLAST");
+            foreach (ConcussiveActionPointEffectRecord effect
+                in thrown.ConcussiveEffects)
+                lines.Add("CONCUSSION - " + effect.ActorId
+                    + " - AP " + effect.PreviousActionPoints
+                    + " - " + effect.RemovedActionPoints
+                    + " = " + effect.ResultingActionPoints);
         }
 
         private static void AppendInventoryQuantity(

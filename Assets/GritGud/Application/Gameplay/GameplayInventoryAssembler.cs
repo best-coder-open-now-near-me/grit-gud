@@ -177,7 +177,8 @@ namespace GritGud.Application.Gameplay
                         data.blastWoundMovementPenalty,
                         data.blastIntegrityDamage,
                         CreateSmokeFieldDefinition(data.smokeField),
-                        CreateFireFieldDefinition(data.fireField));
+                        CreateFireFieldDefinition(data.fireField),
+                        data.blastActionPointReduction);
                 default:
                     throw new InvalidOperationException(
                         $"Consumable '{item.id}' has unsupported power type '{powerType}'.");
@@ -234,9 +235,12 @@ namespace GritGud.Application.Gameplay
                 $"Actor '{actorId}' consumable '{itemId}' blast wound movement penalty");
             RequireFiniteNonNegative(data.blastIntegrityDamage,
                 $"Actor '{actorId}' consumable '{itemId}' blast integrity damage");
+            Require(data.blastActionPointReduction >= 0,
+                $"Actor '{actorId}' consumable '{itemId}' blast AP reduction cannot be negative.");
             bool hasBlast = data.blastRadius > 0f;
             bool hasBlastConsequence = data.blastWoundMovementPenalty > 0f
-                || data.blastIntegrityDamage > 0f;
+                || data.blastIntegrityDamage > 0f
+                || data.blastActionPointReduction > 0;
             bool hasSmoke = IsAuthoredSmokeField(data.smokeField);
             bool hasFire = IsAuthoredFireField(data.fireField);
             Require(

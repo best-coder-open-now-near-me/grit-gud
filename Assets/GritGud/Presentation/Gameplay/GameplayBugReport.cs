@@ -755,6 +755,19 @@ namespace GritGud.Presentation.Gameplay
                                 .Append(FormatFloat(
                                     thrown.Definition.BlastRadius));
                         }
+                        foreach (ConcussiveActionPointEffectRecord effect
+                            in thrown.ConcussiveEffects)
+                            report.Append(" | concussion[")
+                                .Append(effect.ActorId)
+                                .Append("]=")
+                                .Append(effect.PreviousActionPoints.ToString(
+                                    CultureInfo.InvariantCulture))
+                                .Append("-")
+                                .Append(effect.RemovedActionPoints.ToString(
+                                    CultureInfo.InvariantCulture))
+                                .Append("=")
+                                .Append(effect.ResultingActionPoints.ToString(
+                                    CultureInfo.InvariantCulture));
                         report.AppendLine();
                         break;
                     case InventoryQuantityChangedActionOutcome inventory:

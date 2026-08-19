@@ -1110,6 +1110,7 @@ internal static class SimulationChecks
             "sim-ap-banking",
             "sim-smoke-and-exposure",
             "sim-persistent-fire",
+            "sim-concussive-ap",
             "sim-pinned-recovery",
             "sim-integrated-encounter",
         }, StringComparer.Ordinal);

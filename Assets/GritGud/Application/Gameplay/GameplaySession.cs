@@ -1210,6 +1210,18 @@ namespace GritGud.Application.Gameplay
             MarkStateChanged();
         }
 
+        internal void ApplyConcussion(
+            ConcussiveActionPointEffectRecord effect,
+            GameplayNotificationBatch notifications)
+        {
+            if (effect == null) throw new ArgumentNullException(nameof(effect));
+            if (notifications == null)
+                throw new ArgumentNullException(nameof(notifications));
+            RequireActor(effect.ActorId).ApplyConcussion(effect);
+            notifications.Add(ActorCapabilityChanged, effect.ActorId);
+            MarkStateChanged();
+        }
+
         internal ScenarioActorDefinition RequireActorDefinition(string actorId)
         {
             foreach (ScenarioActorDefinition actor in Scenario.Actors)

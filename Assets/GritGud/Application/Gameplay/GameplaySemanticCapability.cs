@@ -224,6 +224,8 @@ namespace GritGud.Application.Gameplay
                     ? "smoke-field"
                     : definition.DeploysFire
                         ? "fire-field"
+                        : definition.IsConcussive
+                            ? "concussive-actor-ap"
                         : "blast-actor-and-destructible"));
         }
 

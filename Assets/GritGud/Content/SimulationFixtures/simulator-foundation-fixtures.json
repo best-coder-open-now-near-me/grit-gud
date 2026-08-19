@@ -46,6 +46,12 @@
       "assertions": ["fire-expands-from-canonical-time", "fire-damages-actors-and-destructibles", "fire-changes-route-hazard-evidence-without-becoming-solid", "live-and-headless-reduction-match"]
     },
     {
+      "id": "sim-concussive-ap",
+      "actorIds": ["player", "oren-vale", "depot-rifleman"],
+      "entityIds": [],
+      "assertions": ["blast-exposure-freezes-per-actor-ap-reduction", "current-ap-clamps-at-zero", "maximum-ap-and-income-are-unchanged", "thrower-cost-precedes-self-concussion", "live-and-headless-reduction-match"]
+    },
+    {
       "id": "sim-pinned-recovery",
       "actorIds": ["player", "depot-rifleman"],
       "entityIds": ["crate-exposure-demo"],

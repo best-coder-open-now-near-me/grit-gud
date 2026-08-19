@@ -95,4 +95,62 @@ namespace GritGud.Domain.Gameplay
         private static bool IsUnitInterval(float value) =>
             IsFinite(value) && value >= 0f && value <= 1f;
     }
+
+    /// <summary>
+    /// Frozen authoritative current-AP consequence for one actor. This records
+    /// the clamped result at commit time so replay and headless execution never
+    /// depend on whatever AP the actor happens to have later.
+    /// </summary>
+    public sealed class ConcussiveActionPointEffectRecord
+    {
+        public ConcussiveActionPointEffectRecord(
+            string actorId,
+            int previousActionPoints,
+            int requestedReduction,
+            int removedActionPoints,
+            int resultingActionPoints)
+        {
+            if (string.IsNullOrWhiteSpace(actorId))
+                throw new ArgumentException(
+                    "Concussive effects require an actor.", nameof(actorId));
+            if (previousActionPoints < 0 || requestedReduction <= 0
+                || removedActionPoints < 0
+                || removedActionPoints > requestedReduction
+                || resultingActionPoints < 0
+                || previousActionPoints - removedActionPoints
+                    != resultingActionPoints
+                || removedActionPoints
+                    != Math.Min(previousActionPoints, requestedReduction))
+                throw new ArgumentOutOfRangeException(nameof(removedActionPoints));
+            ActorId = actorId;
+            PreviousActionPoints = previousActionPoints;
+            RequestedReduction = requestedReduction;
+            RemovedActionPoints = removedActionPoints;
+            ResultingActionPoints = resultingActionPoints;
+        }
+
+        public string ActorId { get; }
+        public int PreviousActionPoints { get; }
+        public int RequestedReduction { get; }
+        public int RemovedActionPoints { get; }
+        public int ResultingActionPoints { get; }
+    }
+
+    public static class ConcussiveActionPointRules
+    {
+        public static int RequestedReduction(
+            int maximumActionPointReduction,
+            float exposure)
+        {
+            if (maximumActionPointReduction <= 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(maximumActionPointReduction));
+            if (float.IsNaN(exposure) || float.IsInfinity(exposure)
+                || exposure <= 0f || exposure > 1f)
+                throw new ArgumentOutOfRangeException(nameof(exposure));
+            return Math.Max(
+                1,
+                (int)Math.Ceiling(maximumActionPointReduction * exposure));
+        }
+    }
 }

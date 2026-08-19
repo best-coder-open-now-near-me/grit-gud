@@ -115,6 +115,8 @@ namespace GritGud.Application.Gameplay
             && left.BlastWoundMovementPenalty
                 == right.BlastWoundMovementPenalty
             && left.BlastIntegrityDamage == right.BlastIntegrityDamage
+            && left.BlastActionPointReduction
+                == right.BlastActionPointReduction
             && SmokeFieldDefinitionsMatch(left.SmokeField, right.SmokeField)
             && FireFieldDefinitionsMatch(left.FireField, right.FireField);
 

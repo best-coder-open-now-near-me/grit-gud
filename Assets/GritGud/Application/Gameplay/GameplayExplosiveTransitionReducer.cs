@@ -23,6 +23,7 @@ namespace GritGud.Application.Gameplay
                     && profile.GetTrait("resource") == "inventory-quantity"
                     && (consequence == "smoke-field"
                         || consequence == "fire-field"
+                        || consequence == "concussive-actor-ap"
                         || consequence == "blast-actor-and-destructible");
             }
             catch (KeyNotFoundException)
@@ -77,6 +78,10 @@ namespace GritGud.Application.Gameplay
                     record.BlastEffects,
                     record.Definition.BlastWoundMovementPenalty,
                     record.Definition.BlastIntegrityDamage);
+            int concussedActors = GameplayBlastStateProjector
+                .ApplyConcussiveEffects(
+                    mutation,
+                    record.ConcussiveEffects);
             if (record.SmokeField != null)
             {
                 mutation.AddSmokeField(new SmokeFieldSnapshot(
@@ -95,7 +100,8 @@ namespace GritGud.Application.Gameplay
                 + 1L
                 + counts.DestructibleDamages);
             mutation.Revision = checked(
-                mutation.Revision + 1L + counts.ActorInjuries);
+                mutation.Revision + 1L + counts.ActorInjuries
+                + concussedActors);
             mutation.LastTransitionSequence = transition.Identity.Sequence;
             GameplayCombatStateSnapshot resulting = mutation.Build();
             return new GameplayReductionResult(

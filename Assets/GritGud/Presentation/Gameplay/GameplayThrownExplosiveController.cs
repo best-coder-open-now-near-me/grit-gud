@@ -253,6 +253,9 @@ namespace GritGud.Presentation.Gameplay
                     + $"{LastThrow.Definition.AreaRadius:0.0} m."
                 : LastThrow.FireField != null
                     ? $"{itemId} ignited a persistent fire field."
+                : LastThrow.ConcussiveEffects.Count > 0
+                    ? $"{itemId} reduced current AP for "
+                        + $"{LastThrow.ConcussiveEffects.Count} target(s)."
                 : $"{itemId} landed with {exposedTargetCount} exposed targets.";
             if (GameplayCombatDiagnosticFormatter.TryFormatAction(
                     action,

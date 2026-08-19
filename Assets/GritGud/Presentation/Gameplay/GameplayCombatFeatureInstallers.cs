@@ -26,7 +26,6 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplayEquipmentController equipment;
         private readonly GameplayScenarioAssembly scenario;
         private readonly GameplaySmokeFieldSession smokeFields;
-        private readonly GameplayFireFieldSession fireFields;
         private readonly string actorId;
         private readonly string objectiveId;
         private readonly Action<string> requestItemPower;
@@ -133,6 +132,7 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplayProjectileController projectiles;
         private readonly GameplayThrownExplosiveController thrownExplosives;
         private readonly GameplaySmokeFieldSession smokeFields;
+        private readonly GameplayFireFieldSession fireFields;
         private readonly string actorId;
         private readonly uint thrownExplosiveRandomSeed;
         private readonly Action<

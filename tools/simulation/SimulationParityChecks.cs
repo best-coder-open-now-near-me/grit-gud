@@ -13,6 +13,7 @@ internal static class SimulationParityChecks
         VerifyEquipment();
         VerifyInteraction();
         VerifyThrownExplosive();
+        VerifyConcussiveExplosive();
         VerifyThrownSmokeAndWorldTime();
         VerifyThrownFireDeployment();
         VerifyProjectileLifecycle();
@@ -419,6 +420,103 @@ internal static class SimulationParityChecks
                     destructibles,
                     smokeFields: smokeFields));
         }
+    }
+
+    private static void VerifyConcussiveExplosive()
+    {
+        var definition = new ThrownExplosiveDefinition(
+            "item.concussive",
+            new ActionCost(1, 0f, ActionMobility.Mobile),
+            maximumRange: 10f,
+            standingLaunchHeight: 1f,
+            crouchedLaunchHeight: 0.7f,
+            baseUncertaintyRadius: 0f,
+            uncertaintyPerMeter: 0f,
+            blastRadius: 2f,
+            blastActionPointReduction: 2);
+        var item = new InventoryItemDefinition(
+            definition.Id,
+            "Concussive grenade",
+            hotbarSlot: 3,
+            InventoryItemKind.Consumable,
+            new ActionCost(0, 0f, ActionMobility.Mobile),
+            EquipmentEffectSet.None,
+            consumablePower: definition,
+            occupiedHands: 0,
+            initialQuantity: 2);
+        GameplaySession gameplay = CreateGameplayWithInventory(item, null);
+        Require(gameplay.BeginEncounter(),
+            "Concussive parity encounter did not begin.");
+        var destructibles = new DestructiblePropSession(
+            Array.Empty<DestructiblePropDefinition>(),
+            gameplay.Journal);
+        var evidence = new FixedExplosiveEvidence(new[]
+        {
+            new BlastEffectRecord(
+                "player",
+                BlastSubjectKind.Actor,
+                distance: 1f,
+                occlusionExposure: 1f,
+                distanceFalloff: 1f),
+            new BlastEffectRecord(
+                "enemy",
+                BlastSubjectKind.Actor,
+                distance: 1f,
+                occlusionExposure: 1f,
+                distanceFalloff: 0.5f),
+        });
+        var live = new GameplayThrownExplosiveSession(
+            gameplay,
+            evidence,
+            evidence,
+            new GameplayBlastConsequenceResolver(gameplay, destructibles),
+            new CenterUncertaintySampler());
+        GameplayCombatStateSnapshot previous =
+            GameplayCombatStateCapture.Capture(gameplay, destructibles);
+
+        Require(live.TryThrowItem(
+                "player",
+                definition.Id,
+                new GameplayPosition(0f, 0f, 4f),
+                out GameplayActionRecord action,
+                out ThrownExplosiveFailure failure),
+            "Concussive throw failed: " + failure);
+        GameplaySemanticTransition transition = CreateTransition(
+            previous,
+            new GameplayResolvedActionTransitionPayload(
+                GameplayCapabilityProfiles.ThrowExplosive(definition),
+                action));
+        GameplayCombatStateSnapshot reduced = Reduce(previous, transition);
+        gameplay.RecordSemanticTransition(transition.Identity);
+
+        RequireExact(
+            "concussive explosive",
+            reduced,
+            GameplayCombatStateCapture.Capture(gameplay, destructibles));
+        Require(reduced.Session.GetActor("player").TurnBudget.ActionPoints == 1,
+            "Concussion did not reduce the thrower's post-cost current AP.");
+        Require(reduced.Session.GetActor("enemy").TurnBudget.ActionPoints == 3,
+            "Concussion did not scale the target's frozen AP loss by exposure.");
+        Require(reduced.Session.GetActor("enemy").ActionPointEconomy
+                .MaximumHeldActionPoints
+                == previous.Session.GetActor("enemy").ActionPointEconomy
+                    .MaximumHeldActionPoints
+            && reduced.Session.GetActor("enemy").ActionPointEconomy
+                .IncomePerPersonalTurn
+                == previous.Session.GetActor("enemy").ActionPointEconomy
+                    .IncomePerPersonalTurn,
+            "Concussion changed AP economy instead of current AP.");
+        Require(action.Outcomes[0] is ThrownExplosiveActionOutcome thrown
+                && thrown.Record.ConcussiveEffects.Count == 2,
+            "Concussive action did not freeze its per-actor AP effects.");
+        var clamped = new ConcussiveActionPointEffectRecord(
+            "low-ap",
+            previousActionPoints: 1,
+            requestedReduction: 2,
+            removedActionPoints: 1,
+            resultingActionPoints: 0);
+        Require(clamped.ResultingActionPoints == 0,
+            "Concussion did not permit authoritative AP clamping at zero.");
     }
 
     private static void VerifyThrownFireDeployment()

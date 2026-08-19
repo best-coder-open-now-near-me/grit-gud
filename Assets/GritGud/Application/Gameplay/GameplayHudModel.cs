@@ -915,6 +915,12 @@ namespace GritGud.Application.Gameplay
                         + thrownExplosive.FireField.ExplorationPulseSeconds
                             .ToString("0.#")
                         + " SEC"
+                    : thrownExplosive.IsConcussive
+                    ? "\nCONCUSSION - "
+                        + thrownExplosive.BlastRadius.ToString("0.#")
+                        + " M"
+                        + "\nCURRENT AP REDUCTION - UP TO "
+                        + thrownExplosive.BlastActionPointReduction
                     : "\nBLAST - "
                         + thrownExplosive.BlastRadius.ToString("0.#")
                         + " M";

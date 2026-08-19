@@ -544,6 +544,39 @@
           }
         },
         {
+          "id": "item.concussive-grenade",
+          "displayName": "Concussive Grenade",
+          "hotbarSlot": 3,
+          "kind": "consumable",
+          "occupiedHands": 0,
+          "quantity": 2,
+          "equipmentCost": {
+            "actionPoints": 0,
+            "movementOpportunity": 0.0,
+            "mobility": "mobile"
+          },
+          "equippedEffects": { "movementSpeedMultiplier": 1.0 },
+          "consumablePower": {
+            "type": "thrown-explosive",
+            "thrownExplosive": {
+              "turnCost": {
+                "actionPoints": 2,
+                "movementOpportunity": 0.0,
+                "mobility": "mobile"
+              },
+              "maximumRange": 12.0,
+              "standingLaunchHeight": 1.2,
+              "crouchedLaunchHeight": 0.82,
+              "baseUncertaintyRadius": 0.65,
+              "uncertaintyPerMeter": 0.1,
+              "blastRadius": 4.0,
+              "blastWoundMovementPenalty": 0.0,
+              "blastIntegrityDamage": 0.0,
+              "blastActionPointReduction": 2
+            }
+          }
+        },
+        {
           "id": "weapon.combat-knife",
           "displayName": "Combat Knife",
           "hotbarSlot": 5,

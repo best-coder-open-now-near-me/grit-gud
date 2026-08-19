@@ -87,6 +87,57 @@ namespace GritGud.Application.Gameplay
             notifications.Publish();
         }
 
+        public IReadOnlyList<ConcussiveActionPointEffectRecord>
+            ResolveConcussiveEffects(
+                IReadOnlyList<BlastEffectRecord> effects,
+                int maximumActionPointReduction,
+                string overriddenActorId = null,
+                int overriddenActionPoints = 0)
+        {
+            if (effects == null) throw new ArgumentNullException(nameof(effects));
+            if (maximumActionPointReduction < 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(maximumActionPointReduction));
+            if (overriddenActorId != null && overriddenActionPoints < 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(overriddenActionPoints));
+            var result = new List<ConcussiveActionPointEffectRecord>();
+            if (maximumActionPointReduction == 0) return result.AsReadOnly();
+            foreach (BlastEffectRecord effect in effects)
+            {
+                if (effect == null)
+                    throw new ArgumentException(
+                        "Blast effects cannot contain null entries.",
+                        nameof(effects));
+                if (effect.SubjectKind != BlastSubjectKind.Actor
+                    || effect.Exposure <= 0f)
+                    continue;
+                GameplayActorSnapshot actor = gameplay.GetActor(effect.EntityId);
+                int previous = string.Equals(
+                        actor.ActorId,
+                        overriddenActorId,
+                        StringComparison.Ordinal)
+                    ? overriddenActionPoints
+                    : actor.TurnBudget.ActionPoints;
+                int requested = ConcussiveActionPointRules.RequestedReduction(
+                    maximumActionPointReduction,
+                    effect.Exposure);
+                int removed = Math.Min(
+                    previous,
+                    requested);
+                result.Add(new ConcussiveActionPointEffectRecord(
+                    actor.ActorId,
+                    previous,
+                    requested,
+                    removed,
+                    previous - removed));
+            }
+            result.Sort((left, right) => string.CompareOrdinal(
+                left.ActorId,
+                right.ActorId));
+            return result.AsReadOnly();
+        }
+
         internal void Apply(
             IReadOnlyList<BlastEffectRecord> effects,
             float woundMovementPenalty,
@@ -130,6 +181,24 @@ namespace GritGud.Application.Gameplay
                         }
                         break;
                 }
+            }
+        }
+
+        internal void ApplyConcussiveEffects(
+            IReadOnlyList<ConcussiveActionPointEffectRecord> effects,
+            GameplayNotificationBatch notifications)
+        {
+            if (effects == null) throw new ArgumentNullException(nameof(effects));
+            if (notifications == null)
+                throw new ArgumentNullException(nameof(notifications));
+            foreach (ConcussiveActionPointEffectRecord effect in effects)
+            {
+                if (effect == null)
+                    throw new ArgumentException(
+                        "Concussive effects cannot contain null entries.",
+                        nameof(effects));
+                if (effect.RemovedActionPoints > 0)
+                    gameplay.ApplyConcussion(effect, notifications);
             }
         }
 

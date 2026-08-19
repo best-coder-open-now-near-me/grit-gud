@@ -861,6 +861,36 @@ namespace GritGud.Domain.Tests
         }
 
         [Test]
+        public void AssemblerBuildsConcussiveCurrentApPayload()
+        {
+            ScenarioContentDocument content = CreateContent();
+            ScenarioActorContentData player = content.actors[0];
+            player.attackCapability = null;
+            ScenarioInventoryItemData item = CreateGrenadeItem(quantity: 2);
+            item.id = "item.concussive-grenade";
+            item.consumablePower.thrownExplosive
+                .blastWoundMovementPenalty = 0f;
+            item.consumablePower.thrownExplosive.blastIntegrityDamage = 0f;
+            item.consumablePower.thrownExplosive
+                .blastActionPointReduction = 2;
+            player.inventory.Add(item);
+
+            var grenade = (ThrownExplosiveDefinition)
+                new GameplayScenarioAssembler()
+                    .Assemble(content, CreateLevel())
+                    .GetActorDefinition("actor.player")
+                    .GetInventoryItem(item.id)
+                    .ConsumablePower;
+
+            Assert.That(grenade.IsConcussive, Is.True);
+            Assert.That(grenade.BlastActionPointReduction, Is.EqualTo(2));
+            Assert.That(
+                GameplayCapabilityProfiles.ThrowExplosive(grenade)
+                    .GetTrait("consequence"),
+                Is.EqualTo("concussive-actor-ap"));
+        }
+
+        [Test]
         public void FragIgnoresJsonUtilityDefaultSmokeObject()
         {
             ScenarioContentDocument content = CreateContent();

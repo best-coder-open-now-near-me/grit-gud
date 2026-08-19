@@ -200,6 +200,7 @@ namespace GritGud.Domain.Gameplay
         public float blastRadius;
         public float blastWoundMovementPenalty;
         public float blastIntegrityDamage;
+        public int blastActionPointReduction;
         public ScenarioSmokeFieldData smokeField;
         public ScenarioFireFieldData fireField;
     }

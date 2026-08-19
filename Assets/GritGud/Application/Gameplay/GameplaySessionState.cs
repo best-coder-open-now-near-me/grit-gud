@@ -199,6 +199,18 @@ namespace GritGud.Application.Gameplay
                     WoundedMovementAllowance));
         }
 
+        public void ApplyConcussion(ConcussiveActionPointEffectRecord effect)
+        {
+            if (effect == null) throw new ArgumentNullException(nameof(effect));
+            if (!string.Equals(effect.ActorId, ActorId, StringComparison.Ordinal)
+                || TurnBudget.ActionPoints != effect.PreviousActionPoints)
+                throw new InvalidOperationException(
+                    "Concussive AP consequence no longer matches actor state.");
+            TurnBudget = new TurnBudget(
+                effect.ResultingActionPoints,
+                TurnBudget.MovementOpportunity);
+        }
+
         public void FaceToward(GameplayPosition target)
         {
             double deltaX = (double)target.X - Pose.Position.X;

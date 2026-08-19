@@ -80,6 +80,33 @@ namespace GritGud.Application.Gameplay
                 destructibleDamages);
         }
 
+        public static int ApplyConcussiveEffects(
+            GameplayCanonicalStateMutation mutation,
+            IEnumerable<ConcussiveActionPointEffectRecord> effects)
+        {
+            if (mutation == null) throw new ArgumentNullException(nameof(mutation));
+            if (effects == null) throw new ArgumentNullException(nameof(effects));
+            int changed = 0;
+            foreach (ConcussiveActionPointEffectRecord effect in effects)
+            {
+                if (effect == null)
+                    throw new ArgumentException(
+                        "Concussive effects cannot contain null entries.",
+                        nameof(effects));
+                GameplayActorSnapshot actor = mutation.GetActor(effect.ActorId);
+                if (actor.TurnBudget.ActionPoints != effect.PreviousActionPoints)
+                    throw new InvalidOperationException(
+                        "Concussive AP consequence no longer matches canonical state.");
+                mutation.ReplaceActor(GameplayCanonicalStateMutation.CopyActor(
+                    actor,
+                    budget: new TurnBudget(
+                        effect.ResultingActionPoints,
+                        actor.TurnBudget.MovementOpportunity)));
+                if (effect.RemovedActionPoints > 0) changed++;
+            }
+            return changed;
+        }
+
         private static void ApplyActor(
             GameplayCanonicalStateMutation mutation,
             BlastEffectRecord effect,
