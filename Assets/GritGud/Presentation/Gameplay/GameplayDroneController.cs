@@ -14,7 +14,7 @@ namespace GritGud.Presentation.Gameplay
         internal const string AbilityId = "ability.control-drone";
         internal const string MoveOptionId = "drone.move";
         internal const string AttackOptionId = "drone.attack";
-        internal const int HotbarSlot = 5;
+        internal const int HotbarSlot = 7;
 
         private enum CommandMode { None, Move, Attack }
 
