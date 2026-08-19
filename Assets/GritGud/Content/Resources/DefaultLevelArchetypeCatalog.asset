@@ -139,6 +139,24 @@ MonoBehaviour:
     initialDestructibleState: intact
     initialIntegrity: 0
     fractureProfile: {fileID: 0}
+  - archetypeId: vehicle.drone.scout
+    displayName: Scout Drone
+    category: Vehicles
+    surfacePresentationId: surface.metal
+    prefab: {fileID: 100000, guid: e97b7d3b78394d52a40c7893eb50d70e, type: 3}
+    localBoundsCenter: {x: 0, y: 0, z: 0}
+    localBoundsSize: {x: 1.6, y: 0.6, z: 1.6}
+    positionSnap: 0.25
+    angleSnap: 15
+    placementSurface: 2
+    providesCover: 0
+    defaultCoverCenter: {x: 0, y: 0, z: 0}
+    defaultCoverSize: {x: 1, y: 1, z: 1}
+    destructible: 0
+    vehicle: 1
+    initialDestructibleState: intact
+    initialIntegrity: 0
+    fractureProfile: {fileID: 0}
   - archetypeId: structure.barrier.concrete
     displayName: Concrete Barrier
     category: Infrastructure

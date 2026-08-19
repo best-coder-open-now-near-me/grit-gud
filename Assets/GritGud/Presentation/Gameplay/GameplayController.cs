@@ -58,6 +58,7 @@ namespace GritGud.Presentation.Gameplay
         private GameplayDestructibleController destructibleController;
         private GameplayDisplacementController displacementController;
         private GameplayVehicleController vehicleController;
+        private GameplayDroneController droneController;
         private GameplayDialogueLog dialogueLog;
         private GameplayCharacterGroundingPresenter characterGroundingPresenter;
         private GameplayTacticalTransitionPresenter tacticalTransitionPresenter;
@@ -116,6 +117,7 @@ namespace GritGud.Presentation.Gameplay
             displacementController =
                 GetOrAddComponent<GameplayDisplacementController>();
             vehicleController = GetOrAddComponent<GameplayVehicleController>();
+            droneController = GetOrAddComponent<GameplayDroneController>();
             characterGroundingPresenter =
                 GetOrAddComponent<GameplayCharacterGroundingPresenter>();
             tacticalTransitionPresenter =
@@ -179,6 +181,7 @@ namespace GritGud.Presentation.Gameplay
             destructibleController?.Unbind();
             displacementController?.Unbind();
             vehicleController?.Unbind();
+            droneController?.Unbind();
             sessionPresenter?.Unbind();
         }
 
@@ -321,6 +324,7 @@ namespace GritGud.Presentation.Gameplay
                 worldStart.Journal,
                 scenarioAssembly.RandomSeed,
                 restoredParty);
+            dialogueLog = new GameplayDialogueLog();
             partyControl = new GameplayPartyControlSession(session);
             partyPersistence.Bind(session);
             smokeFieldSession = new GameplaySmokeFieldSession(session);
@@ -346,6 +350,19 @@ namespace GritGud.Presentation.Gameplay
                     session,
                     scenarioAssembly.Vehicles);
             }
+            if (scenarioAssembly.Drones.Count > 0)
+            {
+                droneController.Bind(
+                    levelWorld,
+                    session,
+                    worldRegistry,
+                    scenarioAssembly.Drones,
+                    destructibleController.Session,
+                    smokeFieldSession,
+                    dialogueLog,
+                    scenarioAssembly.RandomSeed,
+                    IsPointerOverGameplayInterface);
+            }
             sessionPresenter.Bind(
                 session,
                 worldStart.MovementInput,
@@ -355,7 +372,6 @@ namespace GritGud.Presentation.Gameplay
                 session,
                 worldStart.InitiallySelectedActorId,
                 scenarioAssembly);
-            dialogueLog = new GameplayDialogueLog();
             dialogueLog.AppendCombatDiagnostic(
                 GameplayCombatDiagnosticFormatter.FormatInitiative(session));
             dialogueDrawer.Bind(dialogueLog, ExportDialogue);
@@ -446,7 +462,8 @@ namespace GritGud.Presentation.Gameplay
                     actorId,
                     CreateActorAbilityHotbarDefinitions(
                         scenarioAssembly.GetActorDefinition(actorId)
-                            .DisplacementAbility),
+                            .DisplacementAbility,
+                        HasControlledDrone(actorId)),
                     equipmentController.TryActivateItem,
                     TryActivateActorAbility,
                     CanActivateHotbarBinding,
@@ -675,7 +692,9 @@ namespace GritGud.Presentation.Gameplay
                 .DisplacementAbility;
             hotbarController.SetActor(
                 control.SelectedActorId,
-                CreateActorAbilityHotbarDefinitions(ability));
+                CreateActorAbilityHotbarDefinitions(
+                    ability,
+                    HasControlledDrone(control.SelectedActorId)));
             weaponTargetingController.SetActor(control.SelectedActorId);
             hud.SetActor(control.SelectedActorId);
             player = selectedView.Motor;
@@ -761,6 +780,9 @@ namespace GritGud.Presentation.Gameplay
                 return binding.Kind == GameplayHotbarBindingKind.ActorAbility;
             }
 
+            if (droneController != null && droneController.IsTargeting)
+                return binding.Kind == GameplayHotbarBindingKind.ActorAbility;
+
             if (weaponTargetingController != null
                 && weaponTargetingController.IsTargeting)
             {
@@ -806,6 +828,18 @@ namespace GritGud.Presentation.Gameplay
                 return sessionPresenter.ToggleStance();
             }
 
+            if (string.Equals(
+                    abilityId,
+                    GameplayDroneController.AbilityId,
+                    StringComparison.Ordinal))
+            {
+                equipmentController?.CancelPending();
+                displacementController?.CancelTargeting();
+                weaponTargetingController?.CancelTargeting();
+                return droneController != null
+                    && droneController.TryToggle(actorId, optionId);
+            }
+
             DisplacementAbilityDefinition displacementAbility =
                 scenarioAssembly.GetActorDefinition(
                     actorId)
@@ -829,7 +863,8 @@ namespace GritGud.Presentation.Gameplay
 
         private static IReadOnlyList<GameplayActorAbilityHotbarDefinition>
             CreateActorAbilityHotbarDefinitions(
-                DisplacementAbilityDefinition displacementAbility)
+                DisplacementAbilityDefinition displacementAbility,
+                bool hasControlledDrone)
         {
             var definitions = new List<
                 GameplayActorAbilityHotbarDefinition>
@@ -839,6 +874,23 @@ namespace GritGud.Presentation.Gameplay
                     "Crouch / Stand",
                     GameplayCoreActorAbilities.StanceHotbarSlot),
             };
+
+            if (hasControlledDrone)
+            {
+                definitions.Add(new GameplayActorAbilityHotbarDefinition(
+                    GameplayDroneController.AbilityId,
+                    "Scout Drone",
+                    GameplayDroneController.HotbarSlot,
+                    new[]
+                    {
+                        new GameplayActorAbilityOptionDefinition(
+                            GameplayDroneController.MoveOptionId,
+                            "Move Drone"),
+                        new GameplayActorAbilityOptionDefinition(
+                            GameplayDroneController.AttackOptionId,
+                            "Drone Attack"),
+                    }));
+            }
 
             if (displacementAbility == null)
                 return definitions;
@@ -864,10 +916,22 @@ namespace GritGud.Presentation.Gameplay
         private void CancelPendingHotbarActions()
         {
             displacementController?.CancelTargeting();
+            droneController?.CancelTargeting();
             weaponTargetingController?.CancelTargeting();
             hotbarController?.CloseActorAbilityFlyout();
             consumableController?.CancelPending();
             equipmentController?.CancelPending();
+        }
+
+        private bool HasControlledDrone(string actorId)
+        {
+            if (scenarioAssembly == null) return false;
+            foreach (DroneDefinition drone in scenarioAssembly.Drones)
+                if (string.Equals(
+                    drone.ControllerActorId,
+                    actorId,
+                    StringComparison.Ordinal)) return true;
+            return false;
         }
 
         private bool ConfirmArmedWeaponFire()

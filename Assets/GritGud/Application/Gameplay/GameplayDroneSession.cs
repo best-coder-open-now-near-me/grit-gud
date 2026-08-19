@@ -87,6 +87,38 @@ namespace GritGud.Application.Gameplay
                 drone.RemainingIntegrity);
         }
 
+        public DroneAttackRecord PrepareActorAttack(
+            string droneId,
+            AttackResolutionRecord resolution)
+        {
+            if (resolution == null) throw new ArgumentNullException(
+                nameof(resolution));
+            DroneSnapshot drone = GetDrone(droneId);
+            RequireControllerTurn(drone);
+            if (!drone.IsOperational)
+                throw new InvalidOperationException(
+                    "Destroyed drones cannot attack.");
+            if (!string.Equals(
+                    resolution.AttackerId,
+                    droneId,
+                    StringComparison.Ordinal))
+                throw new ArgumentException(
+                    "Drone attack evidence must originate from the firing drone.",
+                    nameof(resolution));
+            TurnBudget previous = gameplay.GetActor(
+                drone.Definition.ControllerActorId).TurnBudget;
+            ActionCost cost = drone.Definition.Attack.TurnCost;
+            return new DroneAttackRecord(
+                drone.Definition.ControllerActorId,
+                drone.DroneId,
+                resolution.TargetId,
+                GameplaySemanticSubjectKind.Actor.ToString(),
+                cost,
+                previous,
+                previous.SpendAction(cost),
+                resolution);
+        }
+
         public void CommitAttack(DroneAttackRecord record)
         {
             if (record == null) throw new ArgumentNullException(nameof(record));
