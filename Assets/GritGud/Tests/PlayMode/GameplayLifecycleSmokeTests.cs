@@ -112,12 +112,17 @@ namespace GritGud.PlayMode.Tests
             const string propId = "barrel-yard-01";
             string actingActorId =
                 gameplay.PartyControl.Snapshot.SelectedActorId;
+            DestructiblePropSnapshot before =
+                destructibles.Session.GetProp(propId);
+            GameplayPosition actorPosition = gameplay.Session
+                .GetActor(actingActorId).Pose.Position;
             ArrangeActorPose(
                 gameplay,
                 actingActorId,
-                new Vector3(1.25f, 2f, -8.75f));
-            DestructiblePropSnapshot before =
-                destructibles.Session.GetProp(propId);
+                new Vector3(
+                    before.Pose.Position.X + 1.25f,
+                    actorPosition.Y,
+                    before.Pose.Position.Z));
             Transform prop = gameplay.WorldRegistry
                 .GetLevelEntity(propId).transform;
             DisplacementDestinationEvaluation destination =
@@ -194,14 +199,26 @@ namespace GritGud.PlayMode.Tests
                 bootstrap.GetComponent<GameplayDisplacementController>();
             const string actorId = "oren-vale";
             const string propId = "barrel-yard-01";
+            DestructiblePropSnapshot propSnapshot = displacement.Session
+                .GetProp(propId);
+            GameplayPosition playerPosition = gameplay.Session
+                .GetActor("player").Pose.Position;
+            GameplayPosition pinnedActorPosition = gameplay.Session
+                .GetActor(actorId).Pose.Position;
             ArrangeActorPose(
                 gameplay,
                 "player",
-                new Vector3(1.25f, 2f, -8.75f));
+                new Vector3(
+                    propSnapshot.Pose.Position.X + 1.25f,
+                    playerPosition.Y,
+                    propSnapshot.Pose.Position.Z));
             ArrangeActorPose(
                 gameplay,
                 actorId,
-                new Vector3(-1f, 2f, -8.75f));
+                new Vector3(
+                    propSnapshot.Pose.Position.X - 1f,
+                    pinnedActorPosition.Y,
+                    propSnapshot.Pose.Position.Z));
             Transform prop = gameplay.WorldRegistry.GetLevelEntity(propId)
                 .transform;
             DisplacementDestinationEvaluation pinDestination =
