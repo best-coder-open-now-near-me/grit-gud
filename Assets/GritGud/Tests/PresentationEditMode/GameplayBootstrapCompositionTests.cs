@@ -145,7 +145,18 @@ namespace GritGud.Presentation.Tests
             Assert.That(gameplay.Session, Is.SameAs(sessionPresenter.Session));
             Assert.That(gameplay.Session.Mode,
                 Is.EqualTo(GameplaySessionMode.Exploration));
-            Assert.That(gameplay.Session.Scenario.Actors.Count, Is.EqualTo(3));
+            Assert.That(gameplay.Session.Scenario.Actors.Count, Is.EqualTo(6));
+            Assert.That(
+                gameplay.Session.Scenario.Actors.Select(actor => actor.Id),
+                Is.EquivalentTo(new[]
+                {
+                    "player",
+                    "oren-vale",
+                    "depot-rifleman",
+                    "depot-yard-support",
+                    "depot-warehouse-patrol",
+                    "depot-loading-guard",
+                }));
             Assert.That(gameplay.Session.Scenario.Objectives.Count, Is.EqualTo(1));
             Assert.That(
                 gameplay.Session.Scenario.PlayerParty.ActorIds,

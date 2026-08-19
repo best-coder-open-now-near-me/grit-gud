@@ -217,7 +217,7 @@ namespace GritGud.Presentation.Tests
             GameplayEnemyController enemies =
                 runtime.Bootstrap.GetComponent<GameplayEnemyController>();
             Assert.That(enemies, Is.Not.Null);
-            Assert.That(enemies.EnemyCount, Is.EqualTo(1));
+            Assert.That(enemies.EnemyCount, Is.EqualTo(4));
             TargetAcquisitionPresenter targetAcquisition =
                 runtime.Bootstrap.GetComponent<TargetAcquisitionPresenter>();
             Assert.That(targetAcquisition, Is.Not.Null);

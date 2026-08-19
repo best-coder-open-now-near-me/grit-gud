@@ -143,7 +143,14 @@ namespace GritGud.Presentation.Tests
                 actions.LastTurnModeEntryFailure,
                 Is.EqualTo(TurnModeEntryFailure.VoluntaryReentryLocked));
 
-            Assert.That(gameplay.Session.BeginEncounter(), Is.True);
+            Assert.That(
+                gameplay.Session.BeginEncounter(new[]
+                {
+                    "player",
+                    "oren-vale",
+                    "depot-rifleman",
+                }),
+                Is.True);
             sessionPresenter.RefreshModePresentation();
             Assert.That(gameplay.Session.ActiveActorId, Is.EqualTo("oren-vale"));
             Assert.That(actions.CanExitTurnMode, Is.False);

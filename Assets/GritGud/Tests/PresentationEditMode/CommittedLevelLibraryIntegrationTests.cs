@@ -232,9 +232,12 @@ namespace GritGud.Presentation.Tests
                 "player");
 
             Assert.That(scope, Does.Contain("depot-rifleman"));
+            Assert.That(scope, Does.Contain("depot-yard-support"));
             Assert.That(scope, Does.Contain("player"));
             Assert.That(scope, Does.Not.Contain("oren-vale"));
-            Assert.That(scope, Has.Count.EqualTo(2));
+            Assert.That(scope, Does.Not.Contain("depot-warehouse-patrol"));
+            Assert.That(scope, Does.Not.Contain("depot-loading-guard"));
+            Assert.That(scope, Has.Count.EqualTo(3));
         }
 
         [Test]
