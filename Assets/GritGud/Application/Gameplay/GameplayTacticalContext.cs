@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text;
 using GritGud.Domain.Gameplay;
 
 namespace GritGud.Application.Gameplay
@@ -527,7 +529,7 @@ namespace GritGud.Application.Gameplay
         public IReadOnlyList<string> OutcomeFeatureIds { get; }
     }
 
-    public sealed class ResolvedTacticalContext
+    public sealed class ResolvedTacticalContext : IGameplayActionContext
     {
         public ResolvedTacticalContext(
             TacticalContextSnapshot snapshot,
@@ -577,12 +579,78 @@ namespace GritGud.Application.Gameplay
             var orderedFeatures = new List<string>(features);
             orderedFeatures.Sort(StringComparer.Ordinal);
             OutcomeFeatureIds = orderedFeatures.AsReadOnly();
+            CanonicalDigest = BuildCanonicalDigest();
         }
 
         public TacticalContextSnapshot Snapshot { get; }
         public IReadOnlyList<AppliedTacticalModifier> Modifiers { get; }
         public int AccuracyDeltaPercent { get; }
         public IReadOnlyList<string> OutcomeFeatureIds { get; }
+        public string AttackerId => Snapshot.AttackerId;
+        public string SubjectId => Snapshot.Subject.Id;
+        public string SubjectKind => Snapshot.Subject.Kind.ToString();
+        public string CapabilitySignature => Snapshot.CapabilitySignature;
+        public long StateRevision => Snapshot.StateRevision;
+        public string CanonicalDigest { get; }
+
+        private string BuildCanonicalDigest()
+        {
+            var text = new StringBuilder();
+            Append(text, AttackerId);
+            Append(text, SubjectKind);
+            Append(text, SubjectId);
+            Append(text, CapabilitySignature);
+            Append(text, StateRevision);
+            Append(text, (int)Snapshot.TargetAwareness);
+            Append(text, (int)Snapshot.Visibility);
+            Append(text, (int)Snapshot.AttackerStance);
+            Append(text, (int)Snapshot.TargetStance);
+            Append(text, (int)Snapshot.RangeBand);
+            Append(text, (int)Snapshot.ExposureBand);
+            Append(text, (int)Snapshot.IsolationBand);
+            Append(text, Snapshot.NearbyAttackerAllies);
+            Append(text, Snapshot.NearbyTargetAllies);
+            Append(text, Snapshot.AttackerSuppressed);
+            Append(text, Snapshot.TargetSuppressed);
+            Append(text, Snapshot.TargetDisplaced);
+            Append(text, Snapshot.SoundSignature);
+            Append(text, Snapshot.AttackerActionPoints);
+            Append(text, Snapshot.TargetActionPoints);
+            foreach (AppliedTacticalModifier modifier in Modifiers)
+            {
+                Append(text, modifier.RuleId);
+                Append(text, modifier.RuleOrder);
+                Append(text, modifier.Consequences.AccuracyDeltaPercent);
+                Append(text, modifier.Consequences.WoundDelta);
+                Append(text, modifier.Consequences.ReactionsAllowed);
+                Append(text, modifier.Consequences.SoundMultiplier);
+                Append(text, modifier.Consequences.ActionPointCostDelta);
+                foreach (string feature in modifier.OutcomeFeatureIds)
+                    Append(text, feature);
+            }
+            using (SHA256 sha = SHA256.Create())
+            {
+                byte[] hash = sha.ComputeHash(
+                    Encoding.UTF8.GetBytes(text.ToString()));
+                var result = new StringBuilder(hash.Length * 2);
+                foreach (byte value in hash)
+                    result.Append(value.ToString("x2"));
+                return result.ToString();
+            }
+        }
+
+        private static void Append(StringBuilder text, object value)
+        {
+            string serialized = value == null
+                ? "null"
+                : value is float number
+                    ? number.ToString("R", System.Globalization.CultureInfo.InvariantCulture)
+                    : value.ToString();
+            text.Append(serialized.Length)
+                .Append(':')
+                .Append(serialized)
+                .Append('|');
+        }
     }
 
     public sealed class GameplayTacticalContextEvaluator

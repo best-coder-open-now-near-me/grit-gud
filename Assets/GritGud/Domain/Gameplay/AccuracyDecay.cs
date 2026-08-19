@@ -59,7 +59,8 @@ namespace GritGud.Domain.Gameplay
         public static int CalculateFinalHitChancePercent(
             TargetExposureSnapshot exposure,
             AccuracyDecayDefinition accuracyDecay,
-            float distance)
+            float distance,
+            int contextualAccuracyDeltaPercent = 0)
         {
             if (exposure == null)
             {
@@ -69,6 +70,12 @@ namespace GritGud.Domain.Gameplay
             if (accuracyDecay == null)
             {
                 throw new ArgumentNullException(nameof(accuracyDecay));
+            }
+            if (contextualAccuracyDeltaPercent < -100
+                || contextualAccuracyDeltaPercent > 100)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(contextualAccuracyDeltaPercent));
             }
 
             int geometricChance =
@@ -82,6 +89,8 @@ namespace GritGud.Domain.Gameplay
             int combinedChance = (int)Math.Round(
                 geometricChance * accuracyPercent / 100f,
                 MidpointRounding.AwayFromZero);
+            combinedChance = checked(
+                combinedChance + contextualAccuracyDeltaPercent);
             return Math.Max(1, Math.Min(100, combinedChance));
         }
     }

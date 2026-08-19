@@ -84,6 +84,25 @@ namespace GritGud.Domain.Tests.Gameplay
                 Is.EqualTo(new[] { "rule.alpha", "rule.zulu" }));
             Assert.That(RuleIds(right), Is.EqualTo(RuleIds(left)));
             Assert.That(left.AccuracyDeltaPercent, Is.EqualTo(5));
+            Assert.That(left.CanonicalDigest, Is.EqualTo(right.CanonicalDigest));
+        }
+
+        [Test]
+        public void CanonicalDigestChangesWhenAuthoritativeEvidenceChanges()
+        {
+            ResolvedTacticalContext unaware = CreateEvaluator().Evaluate(
+                CreateContext(
+                    TacticalAwarenessBand.Unaware,
+                    TacticalVisibilityRelation.AttackerOnly));
+            ResolvedTacticalContext suspicious = CreateEvaluator().Evaluate(
+                CreateContext(
+                    TacticalAwarenessBand.Suspicious,
+                    TacticalVisibilityRelation.AttackerOnly));
+
+            Assert.That(unaware.CanonicalDigest, Has.Length.EqualTo(64));
+            Assert.That(
+                unaware.CanonicalDigest,
+                Is.Not.EqualTo(suspicious.CanonicalDigest));
         }
 
         [Test]

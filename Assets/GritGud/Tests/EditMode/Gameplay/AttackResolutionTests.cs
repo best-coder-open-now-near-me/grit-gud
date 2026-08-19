@@ -427,6 +427,29 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void HitChanceAppliesFrozenContextAfterDistanceBeforeClamping()
+        {
+            TargetExposureSnapshot exposure = CreateExposure(
+                torsoVisible: 5,
+                legsVisible: 5);
+            var decay = new AccuracyDecayDefinition(20f, 5f);
+
+            int boosted = AttackHitChanceRules.CalculateFinalHitChancePercent(
+                exposure,
+                decay,
+                distance: 20f,
+                contextualAccuracyDeltaPercent: 15);
+            int penalized = AttackHitChanceRules.CalculateFinalHitChancePercent(
+                exposure,
+                decay,
+                distance: 20f,
+                contextualAccuracyDeltaPercent: -30);
+
+            Assert.That(boosted, Is.EqualTo(32));
+            Assert.That(penalized, Is.EqualTo(1));
+        }
+
+        [Test]
         public void ContactAttackRejectsOutOfReachTargetWithoutMutation()
         {
             GameplaySession session = CreateContactSession(

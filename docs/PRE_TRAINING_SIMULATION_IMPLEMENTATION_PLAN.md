@@ -260,10 +260,14 @@ destructible-opened LOS, and stale world revision. Commit suggestion:
 
 ### C1. Attach context to the action record
 
-Extend `GameplayActionRecord` with optional `ResolvedTacticalContext`. Existing
-non-contextual action constructors may pass an explicit neutral context or use a
-single well-defined neutral default. Do not add parallel Ambush-only fields to
-`AttackResolutionRecord` and `GameplayActionRecord`.
+Extend `GameplayActionRecord` with an optional Domain-owned
+`IGameplayActionContext` contract implemented by Application's
+`ResolvedTacticalContext`. This preserves the dependency direction: Domain
+action/replay records own authoritative context identity, consequence values,
+and canonical digest, while Application owns evidence capture and rule
+evaluation. Existing non-contextual action constructors may omit context. Do
+not add parallel Ambush-only fields to `AttackResolutionRecord` and
+`GameplayActionRecord`.
 
 Validate that context attacker, subject, capability, action request, and world
 revision agree. Context is authoritative action evidence, not presentation
