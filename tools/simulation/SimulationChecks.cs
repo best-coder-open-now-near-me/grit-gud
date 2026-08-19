@@ -17,8 +17,10 @@ internal static class SimulationChecks
             VerifyCapabilityCoverageFailsClosed();
             VerifyTacticalRuleCoverageAndOutcomeProjection();
             VerifyAtomicLiveInstallation();
+            VerifySimulationFixtureManifest();
             VerifyAllCurrentContentCoverage();
             VerifyTacticalDestructibleSimulation();
+            VerifyHeadlessSmokeExposure();
             VerifyEncounterAwarenessAndScopedInitiative();
             VerifyCommittedActionConsequenceTrajectory();
             VerifyBankedActionPointEconomy();
@@ -424,6 +426,9 @@ internal static class SimulationChecks
         Require(live.EncounterState.GetAwareness("enemy").State
                 == EncounterAwarenessState.Suspicious,
             "Audible sound did not raise suspicion.");
+        Require(live.EncounterState.GetAwareness("support").State
+                == EncounterAwarenessState.Unaware,
+            "One observer's sound evidence leaked into another enemy's awareness.");
         Require(GameplayCombatStateDiffer.Compare(
                 reduced,
                 GameplayCombatStateCapture.Capture(live)).Count == 0,
@@ -472,9 +477,10 @@ internal static class SimulationChecks
         GameplayCombatStateSnapshot liveState = GameplayCombatStateCapture.Capture(live);
         Require(GameplayCombatStateDiffer.Compare(reduced, liveState).Count == 0,
             "Live scoped encounter diverged from its pure reducer.");
-        Require(live.InitiativeOrder.Count == 2
+        Require(live.InitiativeOrder.Count == 3
+                && ContainsActor(live.InitiativeOrder, "support")
                 && !ContainsActor(live.InitiativeOrder, "bystander"),
-            "Scoped encounter incorrectly included a nonparticipant.");
+            "Scoped encounter omitted a declared reinforcement or included a nonparticipant.");
 
         GameplayCombatStateSnapshot replay = initial;
         foreach (GameplaySemanticTransition transition in trajectory)
@@ -553,19 +559,26 @@ internal static class SimulationChecks
                 reducers,
                 authoredActionStartsEncounter: true);
 
-        Require(plan.Steps.Count == 3,
-            "Committed action did not reduce as action, sound awareness, then encounter.");
+        Require(plan.Steps.Count == 4,
+            "Committed action did not reduce as action, per-observer sound awareness, then encounter; got "
+                + plan.Steps.Count + " steps.");
         Require(plan.Steps[0].Transition.Payload
                 is GameplayWeaponTransitionPayload
             && plan.Steps[1].Transition.Payload
                 is GameplayEncounterObservationTransitionPayload
             && plan.Steps[2].Transition.Payload
+                is GameplayEncounterObservationTransitionPayload
+            && plan.Steps[3].Transition.Payload
                 is GameplaySessionControlTransitionPayload,
             "Committed action consequence ordering is not canonical.");
         Require(plan.ResultingState.Session.EncounterState
                 .GetAwareness("enemy").State
                 == EncounterAwarenessState.Suspicious,
             "Post-action sound did not update headless awareness.");
+        Require(plan.ResultingState.Session.EncounterState
+                .GetAwareness("support").State
+                == EncounterAwarenessState.Unaware,
+            "Out-of-range sound incorrectly leaked into reinforcement awareness.");
         Require(plan.ResultingState.Session.EncounterActive,
             "Committed action did not begin its scoped encounter.");
         Require(GameplayExactReplay.Verify(
@@ -618,7 +631,8 @@ internal static class SimulationChecks
                     new GameplayPosition(0f, 0f, 0f),
                     new GameplayPosition(0f, 0f, 3f),
                 },
-                loops: true));
+                loops: true),
+            reinforcementActorIds: new[] { "support" });
         var enemy = new ScenarioActorDefinition(
             "enemy",
             3,
@@ -637,10 +651,34 @@ internal static class SimulationChecks
             new TurnBudget(4, 8f),
             rifle,
             combat: new ActorCombatDefinition("neutral", new string[0], 1));
+        var supportBehavior = new EnemyBehaviorDefinition(
+            "behavior.encounter-support",
+            perceptionRange: 16f,
+            viewAngleDegrees: 90f,
+            preferredEngagementRange: 10f,
+            movementSearchRadius: 4f,
+            maximumAttacksPerTurn: 1,
+            awarenessPolicy: new EncounterAwarenessPolicyDefinition(
+                hearingRange: 8f,
+                sightSuspicionGain: 100,
+                soundSuspicionGain: 40,
+                suspicionDecayPerTick: 10,
+                alertThreshold: 100));
+        var support = new ScenarioActorDefinition(
+            "support",
+            2,
+            new GameplayActorPose(new GameplayPosition(12f, 0f, 0f), 270f),
+            new TurnBudget(4, 8f),
+            rifle,
+            combat: new ActorCombatDefinition(
+                "raider",
+                new[] { "player" },
+                2,
+                supportBehavior));
         var scenario = new ScenarioDefinition(
             "encounter-check",
             new ScenarioTimingDefinition(1f),
-            new[] { player, enemy, bystander },
+            new[] { player, enemy, support, bystander },
             Array.Empty<ScenarioObjectiveDefinition>(),
             playerParty: new PlayerPartyDefinition(
                 new[] { "player" },
@@ -1007,6 +1045,96 @@ internal static class SimulationChecks
             + $"{unreachable} implemented-but-unreachable profile(s).");
     }
 
+    private static void VerifySimulationFixtureManifest()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        string contentRoot = Path.Combine(
+            repositoryRoot,
+            "Assets",
+            "GritGud",
+            "Content");
+        var json = new JsonSerializerOptions
+        {
+            IncludeFields = true,
+            PropertyNameCaseInsensitive = true,
+        };
+        SimulationFixtureManifest manifest = ReadJson<
+            SimulationFixtureManifest>(
+            Path.Combine(
+                contentRoot,
+                "SimulationFixtures",
+                "simulator-foundation-fixtures.json"),
+            json);
+        ScenarioContentDocument scenario = ReadJson<ScenarioContentDocument>(
+            Path.Combine(
+                contentRoot,
+                "Resources",
+                "Scenarios",
+                "depot-yard.json"),
+            json);
+        LevelDocument level = ReadJson<LevelDocument>(
+            Path.Combine(
+                contentRoot,
+                "Resources",
+                "Levels",
+                "Published",
+                "main-level.json"),
+            json);
+        scenario.Normalize();
+        level.Normalize();
+        Require(manifest.schemaVersion == 1,
+            "Simulation fixture manifest schema is unsupported.");
+        Require(string.Equals(
+                manifest.scenarioId,
+                scenario.scenarioId,
+                StringComparison.Ordinal)
+            && string.Equals(
+                manifest.levelId,
+                level.levelId,
+                StringComparison.Ordinal),
+            "Simulation fixture manifest does not target the playable Depot content.");
+
+        var actorIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (ScenarioActorContentData actor in scenario.actors)
+            actorIds.Add(actor.id);
+        var entityIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (LevelEntity entity in level.entities)
+            entityIds.Add(entity.id);
+        var required = new HashSet<string>(new[]
+        {
+            "sim-awareness-multi-observer",
+            "sim-reinforcement-scope",
+            "sim-destructible-cover",
+            "sim-target-kind-matrix",
+            "sim-ap-banking",
+            "sim-smoke-and-exposure",
+            "sim-pinned-recovery",
+            "sim-integrated-encounter",
+        }, StringComparer.Ordinal);
+        var found = new HashSet<string>(StringComparer.Ordinal);
+        foreach (SimulationFixtureDefinition fixture in manifest.fixtures)
+        {
+            Require(fixture != null
+                    && !string.IsNullOrWhiteSpace(fixture.id)
+                    && found.Add(fixture.id),
+                "Simulation fixtures require unique non-empty IDs.");
+            Require(fixture.assertions != null
+                    && fixture.assertions.Count > 0,
+                $"Simulation fixture '{fixture.id}' has no behavioral assertions.");
+            foreach (string actorId in fixture.actorIds)
+                Require(actorIds.Contains(actorId),
+                    $"Simulation fixture '{fixture.id}' references missing actor '{actorId}'.");
+            foreach (string entityId in fixture.entityIds)
+                Require(entityIds.Contains(entityId),
+                    $"Simulation fixture '{fixture.id}' references missing entity '{entityId}'.");
+        }
+        Require(found.SetEquals(required),
+            "Simulation fixture manifest does not contain the complete foundation matrix.");
+        Console.WriteLine(
+            $"Simulation fixtures: {found.Count} content-loaded cases target "
+            + $"{actorIds.Count} Depot actors.");
+    }
+
     private static void VerifyTacticalDestructibleSimulation()
     {
         LevelDocument level = CreateTacticalDestructibleLevel();
@@ -1103,6 +1231,12 @@ internal static class SimulationChecks
                 sightOrigin,
                 sightDestination),
             "Intact cover did not block headless line of sight.");
+        Require(spatial.BlocksPath(
+                initial,
+                sightOrigin,
+                sightDestination,
+                clearanceRadius: 0.25f),
+            "Intact cover did not block the corresponding headless route.");
         var toppledProp = new DestructiblePropSnapshot(
             "cover-wall",
             DestructiblePropState.Intact,
@@ -1330,6 +1464,12 @@ internal static class SimulationChecks
                 sightOrigin,
                 sightDestination),
             "Destroyed cover remained in headless line-of-sight evidence.");
+        Require(!spatial.BlocksPath(
+                resulting,
+                sightOrigin,
+                sightDestination,
+                clearanceRadius: 0.25f),
+            "Destroyed cover remained in headless route evidence.");
         GameplayEvidenceRecord afterEvidence = spatial.CaptureEvidence(
             "line-of-sight",
             resulting,
@@ -1340,6 +1480,69 @@ internal static class SimulationChecks
                 afterEvidence.EvidenceDigest,
                 StringComparison.Ordinal),
             "Destructible reduction did not invalidate spatial evidence.");
+    }
+
+    private static void VerifyHeadlessSmokeExposure()
+    {
+        GameplaySession gameplay = CreateEncounterGameplay();
+        GameplayCombatStateSnapshot sessionOnly =
+            GameplayCombatStateCapture.Capture(gameplay);
+        var level = new LevelDocument
+        {
+            levelId = "headless-smoke-check",
+            schemaVersion = 1,
+        };
+        var spatial = new GameplayHeadlessSpatialEvidence(
+            level,
+            new SpatialContentIdentity(
+                level.levelId,
+                level.schemaVersion,
+                evidenceAlgorithmVersion: 1,
+                new string('c', 64)));
+        var smoke = new SmokeFieldRecord(
+            "smoke.headless-check",
+            "player",
+            "item.smoke",
+            new GameplayPosition(0f, 0f, 3f),
+            new SmokeFieldDefinition(
+                radius: 2f,
+                height: 3f,
+                explorationDurationSeconds: 20f,
+                durationTurnEnds: 4,
+                minimumObscuredPath: 0.5f));
+        var clear = new GameplayCombatStateSnapshot(
+            sessionOnly.Session,
+            destructibles: Array.Empty<DestructiblePropSnapshot>(),
+            smokeFields: Array.Empty<SmokeFieldSnapshot>(),
+            coverage: GameplayCombatStateCoverage.Session
+                | GameplayCombatStateCoverage.Destructibles
+                | GameplayCombatStateCoverage.SmokeFields);
+        var obscured = new GameplayCombatStateSnapshot(
+            sessionOnly.Session,
+            destructibles: Array.Empty<DestructiblePropSnapshot>(),
+            smokeFields: new[] { new SmokeFieldSnapshot(smoke, 1f) },
+            coverage: GameplayCombatStateCoverage.Session
+                | GameplayCombatStateCoverage.Destructibles
+                | GameplayCombatStateCoverage.SmokeFields);
+
+        Require(GameplayHeadlessEncounterEvidence.CaptureSight(
+                    clear,
+                    spatial,
+                    "enemy",
+                    "player").VisibleSampleCount > 0,
+            "Clear headless encounter sight was unexpectedly blocked.");
+        Require(GameplayHeadlessEncounterEvidence.CaptureSight(
+                    obscured,
+                    spatial,
+                    "enemy",
+                    "player").VisibleSampleCount == 0,
+            "Canonical smoke did not obscure headless encounter sight.");
+        Require(!spatial.BlocksPath(
+                obscured,
+                gameplay.GetActor("enemy").Pose.Position,
+                gameplay.GetActor("player").Pose.Position,
+                clearanceRadius: 0.5f),
+            "Smoke incorrectly became a solid headless path obstacle.");
     }
 
     private static GameplayCombatStateSnapshot WithDestructible(
@@ -1475,5 +1678,22 @@ internal static class SimulationChecks
     private static void Require(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException(message);
+    }
+
+    private sealed class SimulationFixtureManifest
+    {
+        public int schemaVersion = -1;
+        public string scenarioId = string.Empty;
+        public string levelId = string.Empty;
+        public List<SimulationFixtureDefinition> fixtures = new List<
+            SimulationFixtureDefinition>();
+    }
+
+    private sealed class SimulationFixtureDefinition
+    {
+        public string id = string.Empty;
+        public List<string> actorIds = new List<string>();
+        public List<string> entityIds = new List<string>();
+        public List<string> assertions = new List<string>();
     }
 }

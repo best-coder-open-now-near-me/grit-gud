@@ -33,9 +33,13 @@ namespace GritGud.Application.Gameplay
             foreach (TargetRegionSample sample in targetSamples)
             {
                 bool blocked = spatial.BlocksLineOfSight(
-                    state,
-                    observerHead.Center,
-                    sample.Center);
+                        state,
+                        observerHead.Center,
+                        sample.Center)
+                    || IsObscuredBySmoke(
+                        state,
+                        observerHead.Center,
+                        sample.Center);
                 regions.Add(new TargetRegionExposure(
                     sample.Id,
                     blocked ? 0 : 1,
@@ -45,6 +49,28 @@ namespace GritGud.Application.Gameplay
                 observerId,
                 targetId,
                 regions);
+        }
+
+        private static bool IsObscuredBySmoke(
+            GameplayCombatStateSnapshot state,
+            GameplayPosition origin,
+            GameplayPosition destination)
+        {
+            if (!state.Covers(GameplayCombatStateCoverage.SmokeFields))
+                return false;
+            foreach (SmokeFieldSnapshot smoke in state.SmokeFields)
+            {
+                SmokeFieldRecord field = smoke.Field;
+                if (GameplaySmokeFieldSession.CalculateTraversalLength(
+                        origin,
+                        destination,
+                        field.Origin,
+                        field.Definition.Radius,
+                        field.Definition.Height)
+                    >= field.Definition.MinimumObscuredPath)
+                    return true;
+            }
+            return false;
         }
 
         public static EncounterSoundEvidence CaptureSound(

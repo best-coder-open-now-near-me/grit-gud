@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "depot-yard",
+  "levelId": "main-depot-yard-v1",
+  "fixtures": [
+    {
+      "id": "sim-awareness-multi-observer",
+      "actorIds": ["player", "depot-rifleman", "depot-warehouse-patrol", "depot-loading-guard"],
+      "entityIds": [],
+      "assertions": ["observer-awareness-is-independent", "observer-order-is-deterministic", "sound-and-sight-are-distinct"]
+    },
+    {
+      "id": "sim-reinforcement-scope",
+      "actorIds": ["player", "depot-rifleman", "depot-yard-support", "depot-warehouse-patrol", "depot-loading-guard"],
+      "entityIds": [],
+      "assertions": ["detected-actor-enters-scope", "declared-reinforcements-enter-scope", "unrelated-enemies-remain-outside-scope"]
+    },
+    {
+      "id": "sim-destructible-cover",
+      "actorIds": ["player", "depot-rifleman"],
+      "entityIds": ["crate-exposure-demo"],
+      "assertions": ["destructible-is-an-attack-candidate", "damage-reduces-authoritative-state", "resulting-los-and-routing-evidence-refresh"]
+    },
+    {
+      "id": "sim-target-kind-matrix",
+      "actorIds": ["player", "depot-rifleman"],
+      "entityIds": ["crate-exposure-demo", "yard-runner"],
+      "assertions": ["actor-target-route", "destructible-target-route", "vehicle-target-route", "world-position-target-route"]
+    },
+    {
+      "id": "sim-ap-banking",
+      "actorIds": ["player", "oren-vale", "depot-rifleman"],
+      "entityIds": [],
+      "assertions": ["personal-turn-income-only", "six-ap-cap", "cap-waste-is-recorded", "encounter-transitions-do-not-grant-ap"]
+    },
+    {
+      "id": "sim-smoke-and-exposure",
+      "actorIds": ["player", "oren-vale", "depot-rifleman"],
+      "entityIds": [],
+      "assertions": ["smoke-is-not-solid-cover", "smoke-obscures-los-evidence", "smoke-decays-on-canonical-world-advancement"]
+    },
+    {
+      "id": "sim-pinned-recovery",
+      "actorIds": ["player", "depot-rifleman"],
+      "entityIds": ["crate-exposure-demo"],
+      "assertions": ["pinned-target-profile-parity", "push-off-releases-pin", "released-actor-can-resume-turn"]
+    },
+    {
+      "id": "sim-integrated-encounter",
+      "actorIds": ["player", "oren-vale", "depot-rifleman", "depot-yard-support", "depot-warehouse-patrol", "depot-loading-guard"],
+      "entityIds": ["crate-exposure-demo", "yard-runner"],
+      "assertions": ["multi-enemy-lifecycle-terminates", "trajectory-reduces-exactly", "detached-headless-replay-matches", "all-reachable-inputs-have-complete-routes"]
+    }
+  ]
+}
