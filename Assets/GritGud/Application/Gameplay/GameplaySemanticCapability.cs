@@ -145,6 +145,12 @@ namespace GritGud.Application.Gameplay
             Subject(GameplaySemanticSubjectKind.Actor),
             Trait("path", "authored-traversal"));
 
+        public static GameplayCapabilityProfile AerialDroneMove() => Profile(
+            GameplaySemanticCapability.Move,
+            Subject(GameplaySemanticSubjectKind.Vehicle),
+            Trait("path", "aerial-direct"),
+            Trait("resource", "controller-turn-ap"));
+
         public static GameplayCapabilityProfile ChangeStance() => Profile(
             GameplaySemanticCapability.ChangeStance,
             Subject(GameplaySemanticSubjectKind.Actor),

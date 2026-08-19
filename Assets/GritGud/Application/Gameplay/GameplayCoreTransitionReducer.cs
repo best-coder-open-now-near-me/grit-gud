@@ -402,7 +402,8 @@ namespace GritGud.Application.Gameplay
                 source.Projectiles,
                 source.SmokeFields,
                 source.Coverage,
-                source.FireFields);
+                source.FireFields,
+                source.Drones);
 
         private static GameplaySessionStateSnapshot CopySession(
             GameplaySessionStateSnapshot source,

@@ -14,6 +14,7 @@ namespace GritGud.Application.Gameplay
         private readonly List<ProjectileFlightSnapshot> projectiles;
         private readonly List<SmokeFieldSnapshot> smokeFields;
         private readonly List<FireFieldSnapshot> fireFields;
+        private readonly List<DroneSnapshot> drones;
 
         public GameplayCanonicalStateMutation(
             GameplayCombatStateSnapshot canonicalState)
@@ -29,6 +30,7 @@ namespace GritGud.Application.Gameplay
             projectiles = new List<ProjectileFlightSnapshot>(source.Projectiles);
             smokeFields = new List<SmokeFieldSnapshot>(source.SmokeFields);
             fireFields = new List<FireFieldSnapshot>(source.FireFields);
+            drones = new List<DroneSnapshot>(source.Drones);
             Mode = session.Mode;
             Operation = session.Operation;
             TurnContext = session.TurnContext;
@@ -110,7 +112,10 @@ namespace GritGud.Application.Gameplay
             value => value.PropId,
             prop.PropId,
             prop,
-            "destructible");
+                "destructible");
+
+        public DroneSnapshot GetDrone(string droneId) =>
+            Find(drones, value => value.DroneId, droneId, "drone");
 
         public void ReplaceVehicle(VehicleMomentumState vehicle) => Replace(
             vehicles,
@@ -118,6 +123,13 @@ namespace GritGud.Application.Gameplay
             vehicle.VehicleId,
             vehicle,
             "vehicle");
+
+        public void ReplaceDrone(DroneSnapshot drone) => Replace(
+            drones,
+            value => value.DroneId,
+            drone.DroneId,
+            drone,
+            "drone");
 
         public void ReplaceProjectile(ProjectileFlightSnapshot projectile) =>
             Replace(
@@ -208,7 +220,8 @@ namespace GritGud.Application.Gameplay
                 projectiles,
                 smokeFields,
                 source.Coverage,
-                fireFields);
+                fireFields,
+                drones);
         }
 
         public static GameplayActorSnapshot CopyActor(

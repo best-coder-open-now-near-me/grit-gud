@@ -44,13 +44,30 @@ namespace GritGud.Application.Gameplay
         public VehicleMomentumRecord Movement { get; }
     }
 
+    public sealed class GameplayDroneMoveTransitionPayload :
+        GameplayTransitionPayload
+    {
+        public GameplayDroneMoveTransitionPayload(DroneMoveRecord movement)
+            : base(
+                GameplayCapabilityProfiles.AerialDroneMove(),
+                (movement ?? throw new ArgumentNullException(nameof(movement)))
+                    .ControllerActorId,
+                movement.DroneId)
+        {
+            Movement = movement;
+        }
+
+        public DroneMoveRecord Movement { get; }
+    }
+
     public sealed class GameplayWorldTransitionReducer :
         IGameplaySemanticTransitionReducer
     {
         public bool Supports(GameplayCapabilityProfile profile) =>
             profile != null
             && (profile.Equals(GameplayCapabilityProfiles.AdvanceProjectile())
-                || profile.Equals(GameplayCapabilityProfiles.VehicleMove()));
+                || profile.Equals(GameplayCapabilityProfiles.VehicleMove())
+                || profile.Equals(GameplayCapabilityProfiles.AerialDroneMove()));
 
         public GameplayReductionResult Reduce(
             GameplayCombatStateSnapshot state,
@@ -65,6 +82,8 @@ namespace GritGud.Application.Gameplay
                     return ReduceProjectile(state, transition, projectile);
                 case GameplayVehicleMoveTransitionPayload vehicle:
                     return ReduceVehicle(state, transition, vehicle);
+                case GameplayDroneMoveTransitionPayload drone:
+                    return ReduceDrone(state, transition, drone);
                 default:
                     throw new ArgumentException(
                         "World transition payload is unsupported.",
@@ -113,6 +132,70 @@ namespace GritGud.Application.Gameplay
             return Result(state, mutation.Build(), transition, movement);
         }
 
+        private static GameplayReductionResult ReduceDrone(
+            GameplayCombatStateSnapshot state,
+            GameplaySemanticTransition transition,
+            GameplayDroneMoveTransitionPayload payload)
+        {
+            state.RequireCoverage(GameplayCombatStateCoverage.Drones);
+            GameplaySessionStateSnapshot session = state.Session;
+            DroneMoveRecord movement = payload.Movement;
+            DroneSnapshot drone = FindDrone(state.Drones, movement.DroneId);
+            if (!drone.IsOperational)
+                throw new InvalidOperationException(
+                    "Destroyed drones cannot receive movement commands.");
+            if (drone.Definition.InitiativeBinding
+                    != DroneInitiativeBinding.ControllerTurn
+                || !string.Equals(
+                    drone.Definition.ControllerActorId,
+                    movement.ControllerActorId,
+                    StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "Drone movement does not match its controller binding.");
+            if (session.Mode != GameplaySessionMode.TurnBased
+                || session.Operation != GameplaySessionOperation.None
+                || !string.Equals(
+                    session.ActiveActorId,
+                    movement.ControllerActorId,
+                    StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "A drone can move only during its controller's idle turn.");
+            GameplayActorSnapshot controller = session.GetActor(
+                movement.ControllerActorId);
+            if (controller.IsIncapacitated)
+                throw new InvalidOperationException(
+                    "An incapacitated actor cannot control a drone.");
+            if (drone.Position.DistanceTo(movement.Origin) != 0f)
+                throw new InvalidOperationException(
+                    "Drone movement starts from a stale position.");
+            if (drone.Position.DistanceTo(movement.Destination)
+                > drone.Definition.MaximumMoveDistance)
+                throw new InvalidOperationException(
+                    "Drone movement exceeds its authored maximum distance.");
+            if (!CostsMatch(movement.Cost, drone.Definition.MoveCost)
+                || !BudgetsMatch(
+                    controller.TurnBudget,
+                    movement.PreviousBudget))
+                throw new InvalidOperationException(
+                    "Drone movement was prepared against stale authored costs or budget.");
+
+            var mutation = new GameplayCanonicalStateMutation(state)
+            {
+                JournalSequence = checked(session.JournalSequence + 1L),
+                Revision = checked(session.Revision + 1L),
+                LastTransitionSequence = transition.Identity.Sequence,
+            };
+            mutation.ReplaceActor(GameplayCanonicalStateMutation.CopyActor(
+                controller,
+                budget: movement.ResultingBudget));
+            mutation.ReplaceDrone(new DroneSnapshot(
+                drone.Definition,
+                movement.Destination,
+                movement.ResultingFacingDegrees,
+                drone.RemainingIntegrity));
+            return Result(state, mutation.Build(), transition, movement);
+        }
+
         private static GameplayReductionResult Result(
             GameplayCombatStateSnapshot previous,
             GameplayCombatStateSnapshot resulting,
@@ -141,6 +224,33 @@ namespace GritGud.Application.Gameplay
             throw new KeyNotFoundException(
                 $"Vehicle '{vehicleId}' is absent from canonical state.");
         }
+
+        private static DroneSnapshot FindDrone(
+            IEnumerable<DroneSnapshot> drones,
+            string droneId)
+        {
+            foreach (DroneSnapshot drone in drones)
+                if (string.Equals(
+                    drone.DroneId,
+                    droneId,
+                    StringComparison.Ordinal))
+                    return drone;
+            throw new KeyNotFoundException(
+                $"Drone '{droneId}' is absent from canonical state.");
+        }
+
+        private static bool CostsMatch(
+            GritGud.Domain.Turns.ActionCost left,
+            GritGud.Domain.Turns.ActionCost right) =>
+            left.ActionPoints == right.ActionPoints
+            && left.MovementOpportunity == right.MovementOpportunity
+            && left.Mobility == right.Mobility;
+
+        private static bool BudgetsMatch(
+            GritGud.Domain.Turns.TurnBudget left,
+            GritGud.Domain.Turns.TurnBudget right) =>
+            left.ActionPoints == right.ActionPoints
+            && left.MovementOpportunity == right.MovementOpportunity;
 
         private static bool StatesMatch(
             VehicleMomentumState left,

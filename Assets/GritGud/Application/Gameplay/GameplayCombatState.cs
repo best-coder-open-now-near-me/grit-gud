@@ -17,6 +17,7 @@ namespace GritGud.Application.Gameplay
         Projectiles = 1 << 3,
         SmokeFields = 1 << 4,
         FireFields = 1 << 5,
+        Drones = 1 << 6,
     }
 
     public sealed class GameplaySessionStateSnapshot
@@ -206,7 +207,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplayCombatStateSnapshot
     {
-        public const int CurrentSchemaVersion = 5;
+        public const int CurrentSchemaVersion = 6;
 
         public GameplayCombatStateSnapshot(
             GameplaySessionStateSnapshot session,
@@ -216,7 +217,8 @@ namespace GritGud.Application.Gameplay
             IEnumerable<SmokeFieldSnapshot> smokeFields = null,
             GameplayCombatStateCoverage coverage =
                 GameplayCombatStateCoverage.Session,
-            IEnumerable<FireFieldSnapshot> fireFields = null)
+            IEnumerable<FireFieldSnapshot> fireFields = null,
+            IEnumerable<DroneSnapshot> drones = null)
         {
             Session = session ?? throw new ArgumentNullException(nameof(session));
             if ((coverage & GameplayCombatStateCoverage.Session) == 0
@@ -233,6 +235,8 @@ namespace GritGud.Application.Gameplay
                 smokeFields, value => value.Field.Id, "smoke field");
             FireFields = CopyAndSort(
                 fireFields, value => value.Field.Id, "fire field");
+            Drones = CopyAndSort(
+                drones, value => value.DroneId, "drone");
             CanonicalHash = GameplayCombatStateHasher.Hash(this);
         }
 
@@ -243,7 +247,8 @@ namespace GritGud.Application.Gameplay
             | GameplayCombatStateCoverage.Vehicles
             | GameplayCombatStateCoverage.Projectiles
             | GameplayCombatStateCoverage.SmokeFields
-            | GameplayCombatStateCoverage.FireFields;
+            | GameplayCombatStateCoverage.FireFields
+            | GameplayCombatStateCoverage.Drones;
         public GameplaySessionStateSnapshot Session { get; }
         public GameplayCombatStateCoverage Coverage { get; }
         public IReadOnlyList<DestructiblePropSnapshot> Destructibles { get; }
@@ -251,6 +256,7 @@ namespace GritGud.Application.Gameplay
         public IReadOnlyList<ProjectileFlightSnapshot> Projectiles { get; }
         public IReadOnlyList<SmokeFieldSnapshot> SmokeFields { get; }
         public IReadOnlyList<FireFieldSnapshot> FireFields { get; }
+        public IReadOnlyList<DroneSnapshot> Drones { get; }
         public string CanonicalHash { get; }
 
         public bool Covers(GameplayCombatStateCoverage required) =>
@@ -479,6 +485,30 @@ namespace GritGud.Application.Gameplay
                 Append(text, root + ".position", vehicle.Position);
                 Append(text, root + ".forward", vehicle.ForwardDegrees);
                 Append(text, root + ".speed", vehicle.Speed);
+            }
+            foreach (DroneSnapshot drone in state.Drones)
+            {
+                string root = "drone." + drone.DroneId;
+                DroneDefinition definition = drone.Definition;
+                AttackDefinition attack = definition.Attack;
+                Append(text, root + ".controller", definition.ControllerActorId);
+                Append(text, root + ".position", drone.Position);
+                Append(text, root + ".facing", drone.FacingDegrees);
+                Append(text, root + ".integrity.maximum", definition.MaximumIntegrity);
+                Append(text, root + ".integrity.remaining", drone.RemainingIntegrity);
+                Append(text, root + ".move.maximum", definition.MaximumMoveDistance);
+                Append(text, root + ".move.cost.ap", definition.MoveCost.ActionPoints);
+                Append(text, root + ".move.cost.movement", definition.MoveCost.MovementOpportunity);
+                Append(text, root + ".move.cost.mobility", (int)definition.MoveCost.Mobility);
+                Append(text, root + ".sensor.range", definition.Sensor.Range);
+                Append(text, root + ".sensor.angle", definition.Sensor.ViewAngleDegrees);
+                Append(text, root + ".initiative", (int)definition.InitiativeBinding);
+                Append(text, root + ".attack.id", attack.ActionId);
+                Append(text, root + ".attack.cost.ap", attack.TurnCost.ActionPoints);
+                Append(text, root + ".attack.cost.movement", attack.TurnCost.MovementOpportunity);
+                Append(text, root + ".attack.cost.mobility", (int)attack.TurnCost.Mobility);
+                Append(text, root + ".attack.woundPenalty", attack.WoundMovementPenalty);
+                Append(text, root + ".attack.sound", attack.SoundSignature);
             }
             foreach (ProjectileFlightSnapshot projectile in state.Projectiles)
             {
