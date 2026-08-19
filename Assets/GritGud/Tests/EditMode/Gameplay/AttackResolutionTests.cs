@@ -117,6 +117,70 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void PreparedAttackFreezesQualifyingAmbushContextAndAccuracy()
+        {
+            GameplaySession session = CreateSession();
+            session.EnterTurnMode();
+            AttackDefinition definition = session.GetEquippedAttack("player");
+            var attacks = new GameplayAttackSession(
+                session,
+                tacticalContextQuery: new FixedTacticalContextQuery(
+                    TacticalAwarenessBand.Unaware,
+                    TacticalVisibilityRelation.AttackerOnly),
+                tacticalContextEvaluator: CreateAmbushEvaluator(definition));
+
+            Assert.That(attacks.TryPrepareResolve(
+                "player",
+                CreateExposure(torsoVisible: 5, legsVisible: 5),
+                out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                out AttackResolutionFailure failure), Is.True);
+
+            AttackResolutionRecord attack = prepared.Record.Outcomes
+                .OfType<AttackResolvedActionOutcome>()
+                .Single().Attack;
+            Assert.That(failure, Is.EqualTo(AttackResolutionFailure.None));
+            Assert.That(prepared.Record.Context, Is.SameAs(attack.Context));
+            Assert.That(attack.Context.AccuracyDeltaPercent, Is.EqualTo(15));
+            Assert.That(attack.FinalHitChancePercent, Is.EqualTo(48));
+            Assert.That(attack.Context.CanonicalDigest, Has.Length.EqualTo(64));
+            string diagnostics = string.Join(
+                Environment.NewLine,
+                AttackDiagnosticFormatter.Format(prepared.Record));
+            Assert.That(diagnostics, Does.Contain(
+                "TACTICAL RULE - rule.ambush.direct-attack.actor"));
+            Assert.That(diagnostics, Does.Contain(
+                "TACTICAL OUTCOMES - outcome.ambush"));
+            Assert.That(diagnostics, Does.Contain("+15% context"));
+        }
+
+        [Test]
+        public void PreparedAttackRejectsStaleTacticalEvidence()
+        {
+            GameplaySession session = CreateSession();
+            session.EnterTurnMode();
+            AttackDefinition definition = session.GetEquippedAttack("player");
+            var attacks = new GameplayAttackSession(
+                session,
+                tacticalContextQuery: new FixedTacticalContextQuery(
+                    TacticalAwarenessBand.Unaware,
+                    TacticalVisibilityRelation.AttackerOnly,
+                    revisionOffset: -1),
+                tacticalContextEvaluator: CreateAmbushEvaluator(definition));
+
+            bool prepared = attacks.TryPrepareResolve(
+                "player",
+                CreateExposure(torsoVisible: 5, legsVisible: 5),
+                out GameplayPreparedTransition<GameplayActionRecord> action,
+                out AttackResolutionFailure failure);
+
+            Assert.That(prepared, Is.False);
+            Assert.That(action, Is.Null);
+            Assert.That(failure, Is.EqualTo(
+                AttackResolutionFailure.WorldStateChanged));
+            Assert.That(session.ResolvedActions, Is.Empty);
+        }
+
+        [Test]
         public void PreparedAttackRejectsChangedTurnBeforeCommit()
         {
             GameplaySession session = CreateSession();
@@ -616,6 +680,78 @@ namespace GritGud.Domain.Tests.Gameplay
                     new TargetRegionExposure(TargetRegionId.LeftLeg, legsVisible, 5),
                     new TargetRegionExposure(TargetRegionId.RightLeg, 0, 5),
                 });
+        }
+
+        private static GameplayTacticalContextEvaluator CreateAmbushEvaluator(
+            AttackDefinition attack)
+        {
+            string signature = GameplayCapabilityProfiles.Attack(
+                attack,
+                GameplaySemanticSubjectKind.Actor).Signature;
+            return new GameplayTacticalContextEvaluator(new[]
+            {
+                new TacticalContextRuleDefinition(
+                    "rule.ambush.direct-attack.actor",
+                    "Ambush",
+                    order: 0,
+                    new[] { signature },
+                    new[] { GameplaySemanticSubjectKind.Actor },
+                    new[]
+                    {
+                        new TacticalContextPredicate(
+                            TacticalContextFeature.TargetAwareness,
+                            TacticalPredicateOperator.Equal,
+                            (int)TacticalAwarenessBand.Unaware),
+                        new TacticalContextPredicate(
+                            TacticalContextFeature.VisibilityRelation,
+                            TacticalPredicateOperator.Equal,
+                            (int)TacticalVisibilityRelation.AttackerOnly),
+                    },
+                    new TacticalModifierConsequences(
+                        accuracyDeltaPercent: 15),
+                    new[] { "outcome.ambush" }),
+            });
+        }
+
+        private sealed class FixedTacticalContextQuery :
+            IGameplayTacticalContextQuery
+        {
+            private readonly TacticalAwarenessBand awareness;
+            private readonly TacticalVisibilityRelation visibility;
+            private readonly long revisionOffset;
+
+            public FixedTacticalContextQuery(
+                TacticalAwarenessBand targetAwareness,
+                TacticalVisibilityRelation visibilityRelation,
+                long revisionOffset = 0L)
+            {
+                awareness = targetAwareness;
+                visibility = visibilityRelation;
+                this.revisionOffset = revisionOffset;
+            }
+
+            public TacticalContextSnapshot Capture(
+                GameplayCombatStateSnapshot state,
+                GameplayTacticalContextRequest request) => new(
+                    request.AttackerId,
+                    request.Subject,
+                    request.Profile.Signature,
+                    state.Session.Revision + revisionOffset,
+                    awareness,
+                    visibility,
+                    ActorStance.Crouched,
+                    ActorStance.Standing,
+                    TacticalRangeBand.Effective,
+                    TacticalExposureBand.Exposed,
+                    TacticalIsolationBand.Isolated,
+                    nearbyAttackerAllies: 0,
+                    nearbyTargetAllies: 0,
+                    attackerSuppressed: false,
+                    targetSuppressed: false,
+                    targetDisplaced: false,
+                    request.SoundSignature,
+                    attackerActionPoints: 4,
+                    targetActionPoints: 0);
         }
     }
 }

@@ -29,6 +29,8 @@ namespace GritGud.Application.Gameplay
         private readonly GameplaySession gameplay;
         private readonly DestructiblePropSession destructibles;
         private readonly ScenarioRunIdentity runIdentity;
+        private readonly IGameplayTacticalContextQuery contextQuery;
+        private readonly GameplayTacticalContextEvaluator contextEvaluator;
         private readonly List<AttackResolutionRecord> records =
             new List<AttackResolutionRecord>();
         private readonly IReadOnlyList<AttackResolutionRecord> readOnlyRecords;
@@ -39,12 +41,23 @@ namespace GritGud.Application.Gameplay
 
         public GameplayAttackSession(
             GameplaySession gameplaySession,
-            DestructiblePropSession destructibleSession = null)
+            DestructiblePropSession destructibleSession = null,
+            IGameplayTacticalContextQuery tacticalContextQuery = null,
+            GameplayTacticalContextEvaluator tacticalContextEvaluator = null)
         {
             gameplay = gameplaySession ??
                 throw new ArgumentNullException(nameof(gameplaySession));
             runIdentity = gameplay.RunIdentity;
             destructibles = destructibleSession;
+            if ((tacticalContextQuery == null)
+                != (tacticalContextEvaluator == null))
+            {
+                throw new ArgumentException(
+                    "Tactical evidence capture and rule evaluation must be installed together.",
+                    nameof(tacticalContextQuery));
+            }
+            contextQuery = tacticalContextQuery;
+            contextEvaluator = tacticalContextEvaluator;
             if (destructibles != null
                 && !ReferenceEquals(gameplay.Journal, destructibles.Journal))
             {
@@ -151,6 +164,14 @@ namespace GritGud.Application.Gameplay
                 runIdentity,
                 transition,
                 "resolution");
+            ResolvedTacticalContext context = PrepareTacticalContext(
+                previous,
+                attack,
+                actorId,
+                target.ActorId,
+                out failure);
+            if (contextQuery != null && context == null)
+                return false;
             AttackResolutionRecord resolution = AttackResolutionRules.Resolve(
                 attackSequence,
                 resolutionSeed,
@@ -159,7 +180,8 @@ namespace GritGud.Application.Gameplay
                 actor.Pose.Position.DistanceTo(target.Pose.Position),
                 target.Wounds,
                 attack.WoundMovementPenalty,
-                attack.Contact);
+                attack.Contact,
+                context);
             TurnBudget resultingBudget = actor.TurnBudget.SpendAction(cost);
             var action = new GameplayActionRecord(
                 actionSequence,
@@ -170,7 +192,8 @@ namespace GritGud.Application.Gameplay
                 cost,
                 actor.TurnBudget,
                 resultingBudget,
-                new[] { new AttackResolvedActionOutcome(resolution) });
+                new[] { new AttackResolvedActionOutcome(resolution) },
+                context);
             prepared = new GameplayPreparedTransition<GameplayActionRecord>(
                 action,
                 previous,
@@ -335,6 +358,7 @@ namespace GritGud.Application.Gameplay
             }
 
             AttackResolutionRecord attack = outcome.Attack;
+            ValidateTacticalContext(action, attack);
             long expectedSequence = records.Count + 1L;
             if (attack.Sequence != expectedSequence)
             {
@@ -360,6 +384,92 @@ namespace GritGud.Application.Gameplay
             gameplay.CommitAction(action, notifications);
             records.Add(attack);
             notifications.Publish();
+        }
+
+        private ResolvedTacticalContext PrepareTacticalContext(
+            GameplayCombatStateSnapshot state,
+            AttackDefinition attack,
+            string attackerId,
+            string targetId,
+            out AttackResolutionFailure failure)
+        {
+            if (contextQuery == null)
+            {
+                failure = AttackResolutionFailure.None;
+                return null;
+            }
+
+            GameplayCapabilityProfile profile = GameplayCapabilityProfiles.Attack(
+                attack,
+                GameplaySemanticSubjectKind.Actor);
+            TacticalContextSnapshot snapshot = contextQuery.Capture(
+                state,
+                new GameplayTacticalContextRequest(
+                    profile,
+                    attackerId,
+                    new GameplaySubjectReference(
+                        GameplaySemanticSubjectKind.Actor,
+                        targetId),
+                    attack.SoundSignature));
+            if (snapshot == null)
+                throw new InvalidOperationException(
+                    "Tactical context queries must return frozen evidence.");
+            if (snapshot.StateRevision != state.Session.Revision)
+            {
+                failure = AttackResolutionFailure.WorldStateChanged;
+                return null;
+            }
+
+            failure = AttackResolutionFailure.None;
+            return contextEvaluator.Evaluate(snapshot);
+        }
+
+        private void ValidateTacticalContext(
+            GameplayActionRecord action,
+            AttackResolutionRecord attack)
+        {
+            if (!ReferenceEquals(action.Context, attack.Context))
+                throw new InvalidOperationException(
+                    "Committed attack context does not match its action record.");
+            if (action.Context == null) return;
+            if (!(action.Context is ResolvedTacticalContext context))
+                throw new InvalidOperationException(
+                    "Committed direct attacks require resolved tactical context.");
+            if (context.StateRevision != gameplay.Revision)
+                throw new InvalidOperationException(
+                    "Committed tactical evidence does not match current world revision.");
+
+            AttackDefinition definition = gameplay.GetEquippedAttack(
+                action.Request.ActorId);
+            string expectedSignature = GameplayCapabilityProfiles.Attack(
+                definition,
+                GameplaySemanticSubjectKind.Actor).Signature;
+            if (!string.Equals(
+                    context.CapabilitySignature,
+                    expectedSignature,
+                    StringComparison.Ordinal)
+                || !string.Equals(
+                    context.SubjectKind,
+                    GameplaySemanticSubjectKind.Actor.ToString(),
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Committed tactical context does not match the direct-attack capability.");
+            }
+
+            var reconstructed = new ResolvedTacticalContext(
+                context.Snapshot,
+                context.Modifiers);
+            if (reconstructed.AccuracyDeltaPercent
+                    != context.AccuracyDeltaPercent
+                || !string.Equals(
+                    reconstructed.CanonicalDigest,
+                    context.CanonicalDigest,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Committed tactical context consequences are not canonical.");
+            }
         }
 
         private void CommitDischarge(

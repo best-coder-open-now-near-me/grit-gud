@@ -299,7 +299,8 @@ namespace GritGud.Domain.Gameplay
             ProjectileFlightDefinition projectile = null,
             AccuracyDecayDefinition accuracyDecay = null,
             ContactAttackDefinition contact = null,
-            DirectFireDamageDefinition directFireDamage = null)
+            DirectFireDamageDefinition directFireDamage = null,
+            float soundSignature = 1f)
         {
             if (string.IsNullOrWhiteSpace(actionId))
             {
@@ -321,6 +322,13 @@ namespace GritGud.Domain.Gameplay
             {
                 throw new ArgumentOutOfRangeException(
                     nameof(woundMovementPenalty));
+            }
+            if (float.IsNaN(soundSignature)
+                || float.IsInfinity(soundSignature)
+                || soundSignature < 0f
+                || soundSignature > 1f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(soundSignature));
             }
 
             if (projectile != null && contact != null)
@@ -359,6 +367,7 @@ namespace GritGud.Domain.Gameplay
             Projectile = projectile;
             Contact = contact;
             DirectFireDamage = directFireDamage;
+            SoundSignature = soundSignature;
             AccuracyDecay = contact == null
                 ? accuracyDecay
                 : AccuracyDecayDefinition.None;
@@ -379,6 +388,8 @@ namespace GritGud.Domain.Gameplay
         public ContactAttackDefinition Contact { get; }
 
         public DirectFireDamageDefinition DirectFireDamage { get; }
+
+        public float SoundSignature { get; }
 
         public bool CanTargetWorldPoint => Projectile == null && Contact == null;
     }
