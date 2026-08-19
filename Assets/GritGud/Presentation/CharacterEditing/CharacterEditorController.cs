@@ -14,7 +14,8 @@ using UnityEngine;
 
 namespace GritGud.Presentation.CharacterEditing
 {
-    public sealed class CharacterEditorController : MonoBehaviour
+    public sealed class CharacterEditorController : MonoBehaviour,
+        ICharacterEditorCloudHost
     {
         private const float ToolbarHeight = 52f;
         private const float StatusHeight = 32f;
@@ -73,6 +74,7 @@ namespace GritGud.Presentation.CharacterEditing
         private UnityCharacterJsonSerializer serializer;
         private TextFileImportReceiver textImport;
         private CharacterAuthoringSession session;
+        private CharacterEditorCloudCommands cloudCommands;
         private GameObject stage;
         private GameObject preview;
         private Camera sceneCamera;
@@ -127,6 +129,9 @@ namespace GritGud.Presentation.CharacterEditing
                 ?? CreateNewDocument();
             session = new CharacterAuthoringSession(document, initial != null || library.Entries.Count > 0);
             session.Changed += HandleChanged;
+            cloudCommands = new CharacterEditorCloudCommands(
+                new GameBootstrapCharacterCloudGateway(),
+                this);
             displayNameText = document.displayName;
             importPath = Path.Combine(
                 UnityEngine.Application.persistentDataPath,
@@ -146,6 +151,8 @@ namespace GritGud.Presentation.CharacterEditing
             }
             if (session != null)
                 session.Changed -= HandleChanged;
+            cloudCommands?.Dispose();
+            cloudCommands = null;
             session = null;
             CancelDestructiveAction();
             DestroyObject(stage);
@@ -301,28 +308,29 @@ namespace GritGud.Presentation.CharacterEditing
             () => Replace(CreateNewDocument(), false, "Created a new character."));
 
         private void SaveToCloud()
-        {
-            CharacterDocument document = session.CreateSnapshot();
-            GameBootstrap.Instance.Supabase.SaveCharacter(
-                document,
-                serializer.Serialize(document),
-                message => status = message);
-        }
+            => cloudCommands.Save();
 
         private void LoadFromCloud()
         {
-            string characterId = session.CreateSnapshot().characterId;
-            GameBootstrap.Instance.Supabase.LoadCharacter(characterId, text =>
-            {
-                try
-                {
-                    CharacterDocument document = serializer.Deserialize(text);
-                    RequireValid(document);
-                    Replace(document, true, "Loaded the character from cloud.");
-                }
-                catch (Exception exception) { status = exception.Message; }
-            }, error => status = error);
+            cloudCommands.Load();
         }
+
+        bool ICharacterEditorCloudHost.IsReady => session != null;
+        long ICharacterEditorCloudHost.Revision => session?.Revision ?? -1L;
+        CharacterDocument ICharacterEditorCloudHost.CreateSnapshot() =>
+            session.CreateSnapshot();
+        string ICharacterEditorCloudHost.Serialize(CharacterDocument document) =>
+            serializer.Serialize(document);
+        CharacterDocument ICharacterEditorCloudHost.DeserializeAndValidate(string text)
+        {
+            CharacterDocument document = serializer.Deserialize(text);
+            RequireValid(document);
+            return document;
+        }
+        void ICharacterEditorCloudHost.ReplaceWithLoaded(CharacterDocument document) =>
+            Replace(document, true, "Loaded the character from cloud.");
+        void ICharacterEditorCloudHost.MarkSaved() => session.MarkSaved();
+        void ICharacterEditorCloudHost.SetStatus(string message) => status = message;
 
         private void DrawIdentityAndBodies()
         {

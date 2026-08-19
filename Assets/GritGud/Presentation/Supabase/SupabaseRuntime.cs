@@ -89,19 +89,20 @@ namespace GritGud.Presentation.Supabase
         public void SaveCharacter(
             GritGud.Domain.Characters.CharacterDocument character,
             string serializedCharacter,
-            Action<string> completed)
+            Action succeeded,
+            Action<string> failed)
         {
             if (!IsReady)
             {
-                completed?.Invoke(Status);
+                failed?.Invoke(Status);
                 return;
             }
             StartCoroutine(Documents.SaveCharacter(
                 character,
                 serializedCharacter,
                 Session,
-                () => completed?.Invoke("Saved the character to cloud."),
-                error => completed?.Invoke(error)));
+                succeeded,
+                failed));
         }
 
         public void LoadCharacter(string characterId, Action<string> succeeded, Action<string> failed)

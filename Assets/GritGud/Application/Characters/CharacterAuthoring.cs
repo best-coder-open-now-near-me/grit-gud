@@ -71,17 +71,18 @@ namespace GritGud.Application.Characters
 
     public sealed class CharacterAuthoringSession
     {
-        private sealed class Revision
+        private sealed class EditRevision
         {
             public string Description;
             public CharacterDocument Before;
             public CharacterDocument After;
         }
 
-        private readonly List<Revision> history = new List<Revision>();
+        private readonly List<EditRevision> history = new List<EditRevision>();
         private CharacterDocument document;
         private int position;
         private int savedPosition;
+        private long revision;
 
         public CharacterAuthoringSession(CharacterDocument document, bool initiallySaved = true)
         {
@@ -93,6 +94,7 @@ namespace GritGud.Application.Characters
         public bool CanUndo => position > 0;
         public bool CanRedo => position < history.Count;
         public bool IsDirty => savedPosition < 0 || position != savedPosition;
+        public long Revision => revision;
 
         public CharacterDocument CreateSnapshot() => document.DeepCopy();
 
@@ -106,7 +108,7 @@ namespace GritGud.Application.Characters
                     savedPosition = -1;
                 history.RemoveRange(position, history.Count - position);
             }
-            var revision = new Revision
+            var revision = new EditRevision
             {
                 Description = description ?? "Edit character",
                 Before = document.DeepCopy(),
@@ -115,6 +117,7 @@ namespace GritGud.Application.Characters
             document = revision.After.DeepCopy();
             history.Add(revision);
             position++;
+            this.revision++;
             Changed?.Invoke();
         }
 
@@ -124,6 +127,7 @@ namespace GritGud.Application.Characters
                 return false;
             position--;
             document = history[position].Before.DeepCopy();
+            revision++;
             Changed?.Invoke();
             return true;
         }
@@ -134,6 +138,7 @@ namespace GritGud.Application.Characters
                 return false;
             document = history[position].After.DeepCopy();
             position++;
+            revision++;
             Changed?.Invoke();
             return true;
         }
@@ -144,6 +149,7 @@ namespace GritGud.Application.Characters
             history.Clear();
             position = 0;
             savedPosition = saved ? 0 : -1;
+            revision++;
             Changed?.Invoke();
         }
 
