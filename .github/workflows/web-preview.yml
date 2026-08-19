@@ -70,8 +70,8 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.sha }}
           lfs: true
 
-      - name: Validate tracked source and JSON
-        run: python3 tools/validate-repository.py
+      - name: Run fast source gate
+        uses: ./.github/actions/fast-source-gate
 
       - name: Read licensed asset revision
         id: licensed_asset_config

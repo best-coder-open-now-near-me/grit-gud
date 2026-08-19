@@ -25,32 +25,8 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Set up .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "8.0.x"
-
-      - name: Run engine-free simulation contracts
-        run: |
-          dotnet restore tools/simulation/GritGud.SimulationChecks.csproj --configfile tools/simulation/NuGet.Config
-          dotnet run --project tools/simulation/GritGud.SimulationChecks.csproj -c Release --no-restore
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Validate repository boundaries
-        run: python tools/validate-repository.py
-
-      - name: Validate Supabase migrations and RPC contracts
-        run: python tools/validate-supabase-contracts.py
-
-      - name: Test preview identity contract
-        run: node tools/preview-id.test.mjs
-
-      - name: Test WebGL browser artifact contract
-        run: node tools/webgl-build-smoke.test.mjs
+      - name: Run fast source gate
+        uses: ./.github/actions/fast-source-gate
 
   unity:
     name: Licensed Unity tests

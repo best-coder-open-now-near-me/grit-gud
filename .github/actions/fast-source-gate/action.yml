@@ -1,0 +1,37 @@
+name: Fast source gate
+description: Run every engine-free source, contract, and browser-artifact check.
+
+runs:
+  using: composite
+  steps:
+    - name: Set up .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: "8.0.x"
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Run engine-free simulation contracts
+      shell: bash
+      run: |
+        dotnet restore tools/simulation/GritGud.SimulationChecks.csproj --configfile tools/simulation/NuGet.Config
+        dotnet run --project tools/simulation/GritGud.SimulationChecks.csproj -c Release --no-restore
+
+    - name: Validate repository boundaries
+      shell: bash
+      run: python tools/validate-repository.py
+
+    - name: Validate Supabase migrations and RPC contracts
+      shell: bash
+      run: python tools/validate-supabase-contracts.py
+
+    - name: Test preview identity contract
+      shell: bash
+      run: node tools/preview-id.test.mjs
+
+    - name: Test WebGL browser artifact contract
+      shell: bash
+      run: node tools/webgl-build-smoke.test.mjs
