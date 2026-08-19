@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 15,
+  "schemaVersion": 16,
   "scenarioId": "depot-yard",
   "displayName": "Depot Yard",
   "levelId": "main-depot-yard-v1",
@@ -11,6 +11,24 @@
   "primaryObjectiveId": "raised-deck",
   "randomSeed": 12648430,
   "timing": { "minimumVoluntaryTurnSeconds": 1.25 },
+  "tacticalRules": [
+    {
+      "id": "rule.ambush.direct-attack.actor",
+      "displayName": "Ambush",
+      "order": 0,
+      "capability": "direct-attack",
+      "subjectKinds": ["actor"],
+      "predicates": [
+        { "feature": "target-awareness", "comparison": "equal", "value": "unaware" },
+        { "feature": "visibility-relation", "comparison": "equal", "value": "attacker-only" }
+      ],
+      "consequences": {
+        "accuracyDeltaPercent": 15,
+        "soundMultiplier": 1.0
+      },
+      "outcomeFeatureIds": ["outcome.ambush"]
+    }
+  ],
   "actors": [
     {
       "id": "player",
@@ -142,6 +160,7 @@
               "mobility": "set"
             },
             "woundMovementPenalty": 2.0,
+            "soundSignature": 1.0,
             "accuracyDecay": {
               "halfLifeDistance": 60.0,
               "minimumAccuracyPercent": 5.0
@@ -179,6 +198,7 @@
               "mobility": "set"
             },
             "woundMovementPenalty": 2.0,
+            "soundSignature": 1.0,
             "projectile": {
               "enabled": true,
               "id": "projectile.rocket.synty",
@@ -287,6 +307,7 @@
               "mobility": "mobile"
             },
             "woundMovementPenalty": 2.0,
+            "soundSignature": 0.2,
             "contact": { "enabled": true, "maximumReach": 2.0 }
           }
         }
@@ -419,6 +440,7 @@
               "mobility": "set"
             },
             "woundMovementPenalty": 2.0,
+            "soundSignature": 1.0,
             "accuracyDecay": {
               "halfLifeDistance": 60.0,
               "minimumAccuracyPercent": 5.0
@@ -495,6 +517,7 @@
               "mobility": "mobile"
             },
             "woundMovementPenalty": 2.0,
+            "soundSignature": 0.2,
             "contact": { "enabled": true, "maximumReach": 2.0 }
           }
         }
@@ -610,6 +633,7 @@
               "mobility": "set"
             },
             "woundMovementPenalty": 2.0,
+            "soundSignature": 1.0,
             "accuracyDecay": {
               "halfLifeDistance": 45.0,
               "minimumAccuracyPercent": 5.0

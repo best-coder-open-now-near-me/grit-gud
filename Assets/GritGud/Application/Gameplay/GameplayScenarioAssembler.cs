@@ -123,6 +123,11 @@ namespace GritGud.Application.Gameplay
                     content.props,
                     content.vehicles),
                 playerParty);
+            IReadOnlyList<TacticalContextRuleDefinition> tacticalRules =
+                GameplayTacticalRuleAssembler.Create(
+                    content.tacticalRules,
+                    scenario,
+                    level);
             var assembly = new GameplayScenarioAssembly(
                 content.displayName,
                 content.primaryTargetActorId,
@@ -134,7 +139,8 @@ namespace GritGud.Application.Gameplay
                 vehicleIndex,
                 GameplayDisplacementAssembler.CreateSubjects(
                     actorIndex,
-                    propIndex));
+                    propIndex),
+                tacticalRules);
             GameplayCapabilityCoverageGate.RequireCurrent(assembly, level);
             return assembly;
         }

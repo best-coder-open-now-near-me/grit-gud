@@ -36,7 +36,9 @@ namespace GritGud.Presentation.Gameplay
             GameplayDialogueLog dialogueLog,
             string authoritativeActorId,
             Func<GameplayActionRecord, bool> onEncounterStartRequested = null,
-            DestructiblePropSession destructibleSession = null)
+            DestructiblePropSession destructibleSession = null,
+            IGameplayTacticalContextQuery tacticalContextQuery = null,
+            GameplayTacticalContextEvaluator tacticalContextEvaluator = null)
         {
             Unbind();
             Session = session ?? throw new ArgumentNullException(nameof(session));
@@ -55,7 +57,9 @@ namespace GritGud.Presentation.Gameplay
                 ?? Session.BeginEncounterFromAction;
             attacks = new GameplayAttackSession(
                 Session,
-                destructibleSession);
+                destructibleSession,
+                tacticalContextQuery,
+                tacticalContextEvaluator);
             LastFailure = AttackResolutionFailure.None;
             LastResolvedAction = null;
             LastResolution = null;

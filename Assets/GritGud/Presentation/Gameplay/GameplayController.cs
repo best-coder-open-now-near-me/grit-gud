@@ -424,6 +424,8 @@ namespace GritGud.Presentation.Gameplay
                     surfacePresentationCatalog,
                     levelWorld.Root.transform,
                     equipmentController,
+                    scenarioAssembly,
+                    smokeFieldSession,
                     actorId,
                     scenarioAssembly.PrimaryObjectiveId,
                     TryUseEquippedItemPower,

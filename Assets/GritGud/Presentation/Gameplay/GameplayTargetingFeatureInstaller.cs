@@ -94,7 +94,14 @@ namespace GritGud.Presentation.Gameplay
                 session,
                 worldRegistry,
                 actorId,
-                smokeFields);
+                smokeFields,
+                destructibles.Session,
+                UnityTacticalContextQuery.CreateForWorld(
+                    session,
+                    worldRegistry,
+                    smokeFields),
+                new GameplayTacticalContextEvaluator(
+                    scenario.TacticalRules));
             targetAcquisition.SetPointerBlocker(pointerBlocker);
             displacement.Bind(
                 session,

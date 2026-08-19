@@ -256,6 +256,12 @@ namespace GritGud.Application.Gameplay
             GameplayScenarioAssemblyValidation.RequireFinitePositive(
                 attack.woundMovementPenalty,
                 $"Actor '{actorId}' wound movement penalty");
+            GameplayScenarioAssemblyValidation.Require(
+                !float.IsNaN(attack.soundSignature)
+                    && !float.IsInfinity(attack.soundSignature)
+                    && attack.soundSignature >= 0f
+                    && attack.soundSignature <= 1f,
+                $"Actor '{actorId}' attack sound signature must be between zero and one.");
             GameplayScenarioAssemblyValidation.ParseMobility(
                 attack.turnCost.mobility);
 
@@ -393,7 +399,8 @@ namespace GritGud.Application.Gameplay
                 projectileDefinition,
                 accuracyDecayDefinition,
                 contactDefinition,
-                directFireDamageDefinition);
+                directFireDamageDefinition,
+                attack.soundSignature);
         }
 
         private static bool HasImmediateEnemyAttack(

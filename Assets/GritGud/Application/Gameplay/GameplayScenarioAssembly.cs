@@ -130,6 +130,8 @@ namespace GritGud.Application.Gameplay
             objectives;
         private readonly Dictionary<string, DisplacementSubjectDefinition>
             displacementSubjects;
+        private readonly IReadOnlyList<TacticalContextRuleDefinition>
+            tacticalRules;
 
         internal GameplayScenarioAssembly(
             string displayName,
@@ -142,7 +144,8 @@ namespace GritGud.Application.Gameplay
                 objectiveIndex,
             Dictionary<string, ScenarioVehicleRuntimeDefinition> vehicleIndex,
             Dictionary<string, DisplacementSubjectDefinition>
-                displacementSubjectIndex)
+                displacementSubjectIndex,
+            IEnumerable<TacticalContextRuleDefinition> tacticalRuleDefinitions = null)
         {
             DisplayName = string.IsNullOrWhiteSpace(displayName)
                 ? throw new ArgumentException(
@@ -162,6 +165,10 @@ namespace GritGud.Application.Gameplay
             displacementSubjects = displacementSubjectIndex
                 ?? throw new ArgumentNullException(
                     nameof(displacementSubjectIndex));
+            tacticalRules = new List<TacticalContextRuleDefinition>(
+                tacticalRuleDefinitions
+                    ?? Array.Empty<TacticalContextRuleDefinition>())
+                .AsReadOnly();
         }
 
         public string DisplayName { get; }
@@ -214,6 +221,9 @@ namespace GritGud.Application.Gameplay
         public IReadOnlyCollection<DisplacementSubjectDefinition>
             DisplacementSubjects => displacementSubjects.Values;
 
+        public IReadOnlyList<TacticalContextRuleDefinition> TacticalRules =>
+            tacticalRules;
+
         public GameplayScenarioAssembly WithResolvedActorPoses(
             IReadOnlyDictionary<string, GameplayActorPose> resolvedPoses)
         {
@@ -245,7 +255,8 @@ namespace GritGud.Application.Gameplay
                 resolvedActors,
                 objectives,
                 vehicles,
-                displacementSubjects);
+                displacementSubjects,
+                tacticalRules);
         }
 
         public bool TryGetDisplacementSubject(

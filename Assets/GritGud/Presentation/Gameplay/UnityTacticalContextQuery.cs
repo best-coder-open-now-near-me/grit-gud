@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
+using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
 {
@@ -22,6 +24,36 @@ namespace GritGud.Presentation.Gameplay
                 nameof(worldRevision));
             policy = evidencePolicy
                 ?? new GameplayTacticalContextEvidencePolicy();
+        }
+
+        internal static UnityTacticalContextQuery CreateForWorld(
+            GameplaySession session,
+            GameplayWorldRegistry registry,
+            ISightObscuranceQuery sightObscurance = null)
+        {
+            if (session == null) throw new ArgumentNullException(nameof(session));
+            if (registry == null) throw new ArgumentNullException(nameof(registry));
+            var queries = new Dictionary<string, UnityTargetExposureQuery>(
+                StringComparer.Ordinal);
+            return new UnityTacticalContextQuery(
+                (observerId, targetId) =>
+                {
+                    string key = observerId + "\n" + targetId;
+                    if (!queries.TryGetValue(key, out UnityTargetExposureQuery query))
+                    {
+                        GameplayActorView observer = registry.GetActor(observerId);
+                        GameplayActorView target = registry.GetActor(targetId);
+                        query = new UnityTargetExposureQuery(
+                            observer.Transform,
+                            target.Transform,
+                            Physics.DefaultRaycastLayers,
+                            () => session.Revision,
+                            sightObscurance);
+                        queries.Add(key, query);
+                    }
+                    return query;
+                },
+                () => session.Revision);
         }
 
         public TacticalContextSnapshot Capture(

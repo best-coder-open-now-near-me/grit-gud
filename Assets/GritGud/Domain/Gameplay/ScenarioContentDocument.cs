@@ -119,6 +119,41 @@ namespace GritGud.Domain.Gameplay
         public ScenarioProjectileCapabilityData projectile;
         public ScenarioContactAttackData contact;
         public ScenarioDirectFireDamageData directFireDamage;
+        public float soundSignature = 1f;
+    }
+
+    [Serializable]
+    public sealed class ScenarioTacticalPredicateData
+    {
+        public string feature = string.Empty;
+        public string comparison = "equal";
+        public string value = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class ScenarioTacticalConsequencesData
+    {
+        public int accuracyDeltaPercent;
+        public int woundDelta;
+        public bool hasReactionsAllowed;
+        public bool reactionsAllowed;
+        public float soundMultiplier = 1f;
+        public int actionPointCostDelta;
+    }
+
+    [Serializable]
+    public sealed class ScenarioTacticalRuleData
+    {
+        public string id = string.Empty;
+        public string displayName = string.Empty;
+        public int order;
+        public string capability = string.Empty;
+        public List<string> subjectKinds = new List<string>();
+        public List<ScenarioTacticalPredicateData> predicates =
+            new List<ScenarioTacticalPredicateData>();
+        public ScenarioTacticalConsequencesData consequences =
+            new ScenarioTacticalConsequencesData();
+        public List<string> outcomeFeatureIds = new List<string>();
     }
 
     [Serializable]
@@ -350,7 +385,7 @@ namespace GritGud.Domain.Gameplay
     [Serializable]
     public sealed class ScenarioContentDocument
     {
-        public const int CurrentSchemaVersion = 15;
+        public const int CurrentSchemaVersion = 16;
 
         public int schemaVersion = CurrentSchemaVersion;
         public string scenarioId = string.Empty;
@@ -370,6 +405,8 @@ namespace GritGud.Domain.Gameplay
             new List<ScenarioPropContentData>();
         public List<ScenarioVehicleContentData> vehicles =
             new List<ScenarioVehicleContentData>();
+        public List<ScenarioTacticalRuleData> tacticalRules =
+            new List<ScenarioTacticalRuleData>();
 
         public void Normalize()
         {
@@ -387,6 +424,8 @@ namespace GritGud.Domain.Gameplay
             objectives = objectives ?? new List<ScenarioObjectiveContentData>();
             props = props ?? new List<ScenarioPropContentData>();
             vehicles = vehicles ?? new List<ScenarioVehicleContentData>();
+            tacticalRules = tacticalRules
+                ?? new List<ScenarioTacticalRuleData>();
         }
     }
 }

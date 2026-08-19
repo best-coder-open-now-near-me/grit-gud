@@ -115,6 +115,9 @@ namespace GritGud.Presentation.Gameplay
         private bool hasResolvedWeaponAim;
         private GameplayWeaponAim resolvedWeaponAim;
         private ISightObscuranceQuery sightObscurance;
+        private DestructiblePropSession destructibles;
+        private IGameplayTacticalContextQuery tacticalContextQuery;
+        private GameplayTacticalContextEvaluator tacticalContextEvaluator;
         private object validationFeedbackOwner;
         private string validationTargetId;
         private Transform validationTargetRoot;
@@ -165,7 +168,10 @@ namespace GritGud.Presentation.Gameplay
             GameplaySession gameplaySession,
             GameplayWorldRegistry worldRegistry,
             string observingActorId,
-            ISightObscuranceQuery obscuranceQuery = null)
+            ISightObscuranceQuery obscuranceQuery = null,
+            DestructiblePropSession destructibleSession = null,
+            IGameplayTacticalContextQuery contextQuery = null,
+            GameplayTacticalContextEvaluator contextEvaluator = null)
         {
             Unbind();
             session = gameplaySession ??
@@ -173,6 +179,13 @@ namespace GritGud.Presentation.Gameplay
             registry = worldRegistry ??
                 throw new ArgumentNullException(nameof(worldRegistry));
             sightObscurance = obscuranceQuery;
+            if ((contextQuery == null) != (contextEvaluator == null))
+                throw new ArgumentException(
+                    "Tactical preview evidence and evaluation must be installed together.",
+                    nameof(contextQuery));
+            destructibles = destructibleSession;
+            tacticalContextQuery = contextQuery;
+            tacticalContextEvaluator = contextEvaluator;
             feedback = new TargetFeedbackPresenter();
             chancePresenter = GetComponent<TargetChancePresenter>()
                 ?? gameObject.AddComponent<TargetChancePresenter>();
@@ -238,6 +251,9 @@ namespace GritGud.Presentation.Gameplay
             session = null;
             registry = null;
             sightObscurance = null;
+            destructibles = null;
+            tacticalContextQuery = null;
+            tacticalContextEvaluator = null;
             hasPointerRay = false;
             WeaponTargetingActive = false;
             isPointerBlocked = null;
@@ -551,21 +567,52 @@ namespace GritGud.Presentation.Gameplay
             float distance = session.GetActorState(observerId).Pose.Position
                 .DistanceTo(session.GetActorState(target.ActorId).Pose.Position);
             float? maximumReach = attack?.Contact?.MaximumReach;
+            ResolvedTacticalContext tacticalContext = attack == null
+                ? null
+                : CaptureTacticalContext(attack, target.ActorId);
             if (CurrentPreview == null
                 || !ReferenceEquals(CurrentPreview.Exposure, exposure)
                 || !ReferenceEquals(
                     CurrentPreview.AccuracyDecay,
                     accuracyDecay)
                 || CurrentPreview.Distance != distance
-                || CurrentPreview.MaximumReach != maximumReach)
+                || CurrentPreview.MaximumReach != maximumReach
+                || !string.Equals(
+                    CurrentPreview.TacticalContext?.CanonicalDigest,
+                    tacticalContext?.CanonicalDigest,
+                    StringComparison.Ordinal))
             {
                 CurrentPreview = TargetPreviewCalculator.Calculate(
                     exposure,
                     accuracyDecay,
                     distance,
-                    attack?.Contact);
+                    attack?.Contact,
+                    tacticalContext);
             }
             ApplyFeedbackVisibility();
+        }
+
+        private ResolvedTacticalContext CaptureTacticalContext(
+            AttackDefinition attack,
+            string targetId)
+        {
+            if (tacticalContextQuery == null) return null;
+            GameplayCombatStateSnapshot state = GameplayCombatStateCapture.Capture(
+                session,
+                destructibles);
+            GameplayCapabilityProfile profile = GameplayCapabilityProfiles.Attack(
+                attack,
+                GameplaySemanticSubjectKind.Actor);
+            TacticalContextSnapshot snapshot = tacticalContextQuery.Capture(
+                state,
+                new GameplayTacticalContextRequest(
+                    profile,
+                    observerId,
+                    new GameplaySubjectReference(
+                        GameplaySemanticSubjectKind.Actor,
+                        targetId),
+                    attack.SoundSignature));
+            return tacticalContextEvaluator.Evaluate(snapshot);
         }
 
         internal bool TryGetPresentationAimPoint(

@@ -24,6 +24,8 @@ namespace GritGud.Presentation.Gameplay
         private readonly SurfacePresentationCatalog surfaces;
         private readonly Transform worldRoot;
         private readonly GameplayEquipmentController equipment;
+        private readonly GameplayScenarioAssembly scenario;
+        private readonly GameplaySmokeFieldSession smokeFields;
         private readonly string actorId;
         private readonly string objectiveId;
         private readonly Action<string> requestItemPower;
@@ -43,6 +45,8 @@ namespace GritGud.Presentation.Gameplay
             SurfacePresentationCatalog surfaces,
             Transform worldRoot,
             GameplayEquipmentController equipment,
+            GameplayScenarioAssembly scenarioAssembly,
+            GameplaySmokeFieldSession smokeFieldSession,
             string actorId,
             string objectiveId,
             Action<string> requestItemPower,
@@ -65,6 +69,10 @@ namespace GritGud.Presentation.Gameplay
             this.surfaces = surfaces ?? throw new ArgumentNullException(nameof(surfaces));
             this.worldRoot = worldRoot ?? throw new ArgumentNullException(nameof(worldRoot));
             this.equipment = equipment ?? throw new ArgumentNullException(nameof(equipment));
+            scenario = scenarioAssembly ?? throw new ArgumentNullException(
+                nameof(scenarioAssembly));
+            smokeFields = smokeFieldSession ?? throw new ArgumentNullException(
+                nameof(smokeFieldSession));
             this.actorId = actorId;
             this.objectiveId = objectiveId;
             this.requestItemPower = requestItemPower
@@ -91,7 +99,13 @@ namespace GritGud.Presentation.Gameplay
                 dialogue,
                 actorId,
                 sessionPresenter.TryBeginEncounterFromAction,
-                destructibles.Session);
+                destructibles.Session,
+                UnityTacticalContextQuery.CreateForWorld(
+                    session,
+                    worldRegistry,
+                    smokeFields),
+                new GameplayTacticalContextEvaluator(
+                    scenario.TacticalRules));
             surfaceImpacts.Bind(
                 attacks,
                 worldRegistry,

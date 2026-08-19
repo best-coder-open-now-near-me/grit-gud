@@ -33,6 +33,18 @@ namespace GritGud.Application.Gameplay
                 assembly,
                 level);
             report.RequireComplete(assembly.Scenario.Id);
+            GameplayTacticalRuleSupportRegistry tacticalSupport =
+                GameplayCurrentTacticalRuleSupport.Create(
+                    assembly.TacticalRules,
+                    "UnityTacticalContextQuery");
+            GameplayTacticalRuleCoverageReport tacticalReport =
+                GameplayTacticalRuleCoverageValidator.Validate(
+                    assembly.TacticalRules,
+                    GameplayReachableInputEnumerator.Enumerate(
+                        assembly,
+                        level),
+                    tacticalSupport);
+            tacticalReport.RequireComplete(assembly.Scenario.Id);
             return report;
         }
     }

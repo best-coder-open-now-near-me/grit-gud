@@ -10,7 +10,8 @@ namespace GritGud.Application.Gameplay
             AccuracyDecayDefinition accuracyDecay,
             float distance,
             int hitChancePercent,
-            float? maximumReach = null)
+            float? maximumReach = null,
+            ResolvedTacticalContext tacticalContext = null)
         {
             Exposure = exposure ?? throw new ArgumentNullException(nameof(exposure));
             AccuracyDecay = accuracyDecay ?? throw new ArgumentNullException(
@@ -31,6 +32,7 @@ namespace GritGud.Application.Gameplay
             HitChancePercent = hitChancePercent;
             Distance = distance;
             MaximumReach = maximumReach;
+            TacticalContext = tacticalContext;
         }
 
         public string ObserverId => Exposure.ObserverId;
@@ -53,6 +55,8 @@ namespace GritGud.Application.Gameplay
             AccuracyDecay.EvaluatePercent(Distance);
 
         public int HitChancePercent { get; }
+
+        public ResolvedTacticalContext TacticalContext { get; }
     }
 
     public static class TargetPreviewCalculator
@@ -61,7 +65,8 @@ namespace GritGud.Application.Gameplay
             TargetExposureSnapshot exposure,
             AccuracyDecayDefinition accuracyDecay,
             float distance,
-            ContactAttackDefinition contact = null)
+            ContactAttackDefinition contact = null,
+            ResolvedTacticalContext tacticalContext = null)
         {
             if (exposure == null)
             {
@@ -77,8 +82,10 @@ namespace GritGud.Application.Gameplay
                     : AttackHitChanceRules.CalculateFinalHitChancePercent(
                         exposure,
                         accuracyDecay,
-                        distance),
-                contact?.MaximumReach);
+                        distance,
+                        tacticalContext?.AccuracyDeltaPercent ?? 0),
+                contact?.MaximumReach,
+                tacticalContext);
         }
     }
 }

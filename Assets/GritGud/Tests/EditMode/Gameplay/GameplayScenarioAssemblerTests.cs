@@ -638,6 +638,86 @@ namespace GritGud.Domain.Tests
         }
 
         [Test]
+        public void AssemblerCarriesAuthoredSoundAndTacticalRules()
+        {
+            ScenarioContentDocument content = CreateContent();
+            content.actors[0].attackCapability.soundSignature = 0.75f;
+            content.tacticalRules.Add(new ScenarioTacticalRuleData
+            {
+                id = "rule.ambush",
+                displayName = "Ambush",
+                capability = "direct-attack",
+                subjectKinds = { "actor" },
+                predicates =
+                {
+                    new ScenarioTacticalPredicateData
+                    {
+                        feature = "target-awareness",
+                        comparison = "equal",
+                        value = "unaware",
+                    },
+                },
+                consequences = new ScenarioTacticalConsequencesData
+                {
+                    accuracyDeltaPercent = 15,
+                    soundMultiplier = 1f,
+                },
+                outcomeFeatureIds = { "outcome.ambush" },
+            });
+
+            GameplayScenarioAssembly assembly = new GameplayScenarioAssembler()
+                .Assemble(content, CreateLevel());
+
+            Assert.That(
+                assembly.GetActorDefinition("actor.player").Attack.SoundSignature,
+                Is.EqualTo(0.75f));
+            Assert.That(assembly.TacticalRules, Has.Count.EqualTo(1));
+            Assert.That(
+                assembly.TacticalRules[0].ApplicableCapabilitySignatures,
+                Has.Count.EqualTo(1));
+            Assert.That(
+                assembly.TacticalRules[0].Consequences.AccuracyDeltaPercent,
+                Is.EqualTo(15));
+        }
+
+        [Test]
+        public void TacticalRuleRejectsUnreachableTargetKind()
+        {
+            ScenarioContentDocument content = CreateContent();
+            content.tacticalRules.Add(new ScenarioTacticalRuleData
+            {
+                id = "rule.invalid-prop-ambush",
+                displayName = "Invalid",
+                capability = "direct-attack",
+                subjectKinds = { "destructible-prop" },
+                predicates =
+                {
+                    new ScenarioTacticalPredicateData
+                    {
+                        feature = "target-awareness",
+                        comparison = "equal",
+                        value = "unaware",
+                    },
+                },
+                consequences = new ScenarioTacticalConsequencesData
+                {
+                    accuracyDeltaPercent = 15,
+                    soundMultiplier = 1f,
+                },
+                outcomeFeatureIds = { "outcome.invalid" },
+            });
+
+            InvalidOperationException exception =
+                Assert.Throws<InvalidOperationException>(() =>
+                    new GameplayScenarioAssembler().Assemble(
+                        content,
+                        CreateLevel()));
+
+            Assert.That(exception.Message, Does.Contain(
+                "matches no reachable capability and subject route"));
+        }
+
+        [Test]
         public void ContactAttackRejectsRangedDecayAndInvalidReach()
         {
             ScenarioContentDocument content = CreateContent();
