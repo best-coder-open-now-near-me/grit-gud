@@ -342,6 +342,39 @@
         "playerControlled": false,
         "initiallySelected": false,
         "primaryTarget": true
+      },
+      {
+        "id": "depot-yard-support",
+        "templateId": "depot-yard-support",
+        "transform": {
+          "position": { "x": 10.0, "y": 2.0, "z": 6.0 },
+          "yawDegrees": 225.0
+        },
+        "playerControlled": false,
+        "initiallySelected": false,
+        "primaryTarget": false
+      },
+      {
+        "id": "depot-warehouse-patrol",
+        "templateId": "depot-warehouse-patrol",
+        "transform": {
+          "position": { "x": 2.0, "y": 2.0, "z": -10.0 },
+          "yawDegrees": 90.0
+        },
+        "playerControlled": false,
+        "initiallySelected": false,
+        "primaryTarget": false
+      },
+      {
+        "id": "depot-loading-guard",
+        "templateId": "depot-loading-guard",
+        "transform": {
+          "position": { "x": 13.0, "y": 2.0, "z": -5.0 },
+          "yawDegrees": 180.0
+        },
+        "playerControlled": false,
+        "initiallySelected": false,
+        "primaryTarget": false
       }
     ],
     "objectives": [

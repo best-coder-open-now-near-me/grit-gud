@@ -84,7 +84,9 @@ jobs:
             exit 1
           fi
           revision="$(git -C .private-assets rev-parse HEAD)"
-          rsync -a --exclude='.git*' .private-assets/grit-gud/Assets/ Assets/
+          # Licensed assets supplement the tracked project. They must never
+          # replace newer authored gameplay/content files from this commit.
+          rsync -a --ignore-existing --exclude='.git*' .private-assets/grit-gud/Assets/ Assets/
           echo "revision=$revision" >> "$GITHUB_OUTPUT"
           rm -rf .private-assets
 
