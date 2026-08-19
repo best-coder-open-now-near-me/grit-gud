@@ -15,7 +15,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplayPartySave
     {
-        public const int CurrentSchemaVersion = 2;
+        public const int CurrentSchemaVersion = 3;
 
         private readonly Dictionary<string, CharacterPersistenceSnapshot>
             charactersByIdentity;
@@ -93,8 +93,8 @@ namespace GritGud.Application.Gameplay
                 characters.Add(new CharacterPersistenceSnapshot(
                     profile.IdentityId,
                     actor.EquippedItemId,
-                    actor.Wounds,
-                    actor.TurnBudget.ActionPoints));
+                    new ActorWoundSnapshot(actorId, 0, 0f),
+                    currentActionPoints: null));
             }
             return new GameplayPartySave(
                 CurrentSchemaVersion,
@@ -221,7 +221,6 @@ namespace GritGud.Application.Gameplay
             gameplay = gameplaySession
                 ?? throw new ArgumentNullException(nameof(gameplaySession));
             gameplay.EquipmentChanged += HandleEquipmentChanged;
-            gameplay.ActorCapabilityChanged += HandleActorCapabilityChanged;
             dirty = false;
         }
 
@@ -235,7 +234,7 @@ namespace GritGud.Application.Gameplay
             {
                 store.Save(GameplayPartySave.Capture(gameplay));
                 dirty = false;
-                Report("Saved party equipment and wounds.");
+                Report("Saved party equipment.");
                 return true;
             }
             catch (Exception exception)
@@ -253,16 +252,12 @@ namespace GritGud.Application.Gameplay
             {
                 Flush();
                 gameplay.EquipmentChanged -= HandleEquipmentChanged;
-                gameplay.ActorCapabilityChanged -= HandleActorCapabilityChanged;
             }
             gameplay = null;
             disposed = true;
         }
 
         private void HandleEquipmentChanged(EquipmentChangeRecord _) =>
-            MarkDirtyAndFlush();
-
-        private void HandleActorCapabilityChanged(string _) =>
             MarkDirtyAndFlush();
 
         private void MarkDirtyAndFlush()

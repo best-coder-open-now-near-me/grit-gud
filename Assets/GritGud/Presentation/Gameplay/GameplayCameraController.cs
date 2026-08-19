@@ -51,9 +51,8 @@ namespace GritGud.Presentation.Gameplay
             ActorStancePresenter actorStancePresenter = null)
         {
             Unbind();
-            target = followTarget != null
-                ? followTarget
-                : throw new ArgumentNullException(nameof(followTarget));
+            if (followTarget == null)
+                throw new ArgumentNullException(nameof(followTarget));
             inputSource = gameplayInput ??
                 throw new ArgumentNullException(nameof(gameplayInput));
             View = GameplayCameraView.ThirdPerson;
@@ -73,11 +72,14 @@ namespace GritGud.Presentation.Gameplay
                     "Bind the gameplay camera before changing its target.");
             }
 
-            target = followTarget != null
+            Transform nextTarget = followTarget != null
                 ? followTarget
                 : throw new ArgumentNullException(nameof(followTarget));
+            bool targetChanged = target != nextTarget;
+            target = nextTarget;
             stancePresenter = actorStancePresenter;
-            yaw = followTarget.eulerAngles.y;
+            if (targetChanged)
+                yaw = followTarget.eulerAngles.y;
             playerVisibility?.Dispose();
             playerVisibility = new LocalPlayerCameraVisibility(
                 GetComponent<Camera>(),

@@ -216,6 +216,38 @@ namespace GritGud.Presentation.Tests
             }
         }
 
+        [Test]
+        public void ReapplyingSameTargetPreservesPlayerOrbit()
+        {
+            var actor = new GameObject("Stable Camera Actor");
+            var cameraObject = new GameObject("Stable Camera");
+            try
+            {
+                actor.AddComponent<CharacterController>();
+                var stance = actor.AddComponent<ActorStancePresenter>();
+                cameraObject.AddComponent<Camera>();
+                GameplayCameraController controller = cameraObject
+                    .AddComponent<GameplayCameraController>();
+                controller.Bind(
+                    actor.transform,
+                    new EmptyInputSource(),
+                    stance);
+                Vector3 playerChosenPosition = cameraObject.transform.position;
+
+                actor.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
+                controller.SetTarget(actor.transform, stance);
+
+                Assert.That(cameraObject.transform.position,
+                    Is.EqualTo(playerChosenPosition)
+                        .Using(Vector3ComparerWithEqualsOperator.Instance));
+            }
+            finally
+            {
+                Object.DestroyImmediate(cameraObject);
+                Object.DestroyImmediate(actor);
+            }
+        }
+
         private sealed class EmptyInputSource : IGameplayInputSource
         {
             public GameplayInputFrame CurrentFrame => default;

@@ -9,7 +9,7 @@ namespace GritGud.Tests.EditMode.Gameplay
     public sealed class GameplayPartyPersistenceSessionTests
     {
         [Test]
-        public void PartySaveCapturesIdentityEquipmentWoundsAndCurrentAp()
+        public void PartySaveCapturesIdentityAndEquipmentWithoutTransientCombatState()
         {
             GameplaySession gameplay = CreateGameplay();
 
@@ -21,14 +21,15 @@ namespace GritGud.Tests.EditMode.Gameplay
                 out CharacterPersistenceSnapshot mara), Is.True);
             Assert.That(mara.EquippedItemId, Is.EqualTo("weapon.rifle"));
             Assert.That(mara.Wounds.ActorId, Is.EqualTo("mara"));
-            Assert.That(mara.CurrentActionPoints, Is.EqualTo(4));
+            Assert.That(mara.Wounds.WoundCount, Is.Zero);
+            Assert.That(mara.CurrentActionPoints, Is.Null);
             Assert.That(
                 typeof(CharacterPersistenceSnapshot).GetProperty("Progression"),
                 Is.Null);
         }
 
         [Test]
-        public void ValidPartySaveRestoresIdentityBoundEquipmentAndWounds()
+        public void ValidPartySaveRestoresLegacyCombatStateOnlyWithinExplicitSnapshot()
         {
             GameplaySession authored = CreateGameplay();
             var save = new GameplayPartySave(
@@ -93,7 +94,23 @@ namespace GritGud.Tests.EditMode.Gameplay
                 out CharacterPersistenceSnapshot mara), Is.True);
             Assert.That(mara.EquippedItemId, Is.Null);
             Assert.That(persistence.Status,
-                Is.EqualTo("Saved party equipment and wounds."));
+                Is.EqualTo("Saved party equipment."));
+        }
+
+        [Test]
+        public void CombatDamageDoesNotWriteTransientPartyState()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            var store = new MemoryPartySaveStore();
+            using var persistence = new GameplayPartyPersistenceSession(store);
+            persistence.Bind(gameplay);
+
+            gameplay.ApplyBlastInjury(
+                "mara",
+                TargetRegionId.Torso,
+                woundMovementPenalty: 1f);
+
+            Assert.That(store.SaveCount, Is.Zero);
         }
 
         private sealed class MemoryPartySaveStore : IGameplayPartySaveStore
