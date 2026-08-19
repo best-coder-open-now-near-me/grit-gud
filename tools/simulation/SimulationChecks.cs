@@ -37,6 +37,7 @@ internal static class SimulationChecks
             SimulationParityChecks.Verify();
             executedFixtureChecks.Add("sim-concussive-ap");
             executedFixtureChecks.Add("sim-pinned-recovery");
+            VerifyIntegratedDepotGauntlet();
             executedFixtureChecks.Add("sim-integrated-encounter");
             VerifySimulationFixtureManifest(executedFixtureChecks);
             Console.WriteLine(
@@ -338,6 +339,383 @@ internal static class SimulationChecks
                 payload.SubjectId),
             state.CanonicalHash,
             payload);
+
+    private static void VerifyIntegratedDepotGauntlet()
+    {
+        LoadDepotContent(
+            out GameplayScenarioAssembly assembly,
+            out LevelDocument level);
+        var gameplay = new GameplaySession(
+            assembly.Scenario,
+            scenarioSeed: assembly.RandomSeed);
+        DestructiblePropSession destructibles =
+            DestructiblePropSession.FromLevel(level, gameplay.Journal);
+        var drones = new GameplayDroneSession(
+            gameplay,
+            assembly.Drones,
+            destructibles);
+        using (var fireFields = new GameplayFireFieldSession(
+            gameplay,
+            destructibles))
+        {
+            var evidence = new IntegratedExplosiveEvidence(
+                "oren-vale",
+                "depot-rifleman");
+            var explosives = new GameplayThrownExplosiveSession(
+                gameplay,
+                evidence,
+                evidence,
+                new GameplayBlastConsequenceResolver(
+                    gameplay,
+                    destructibles),
+                new IntegratedCenterUncertaintySampler(),
+                fireFieldSession: fireFields);
+            GameplayTransitionReducerRegistry reducers =
+                GameplaySimulationReducers.CreateCurrent();
+            var trajectory = new List<GameplaySemanticTransition>();
+            GameplayCombatStateSnapshot initial = CaptureIntegratedState(
+                gameplay,
+                destructibles,
+                fireFields,
+                drones);
+            GameplayCombatStateSnapshot predicted = initial;
+
+            Require(gameplay.BeginEncounter(),
+                "Integrated Depot encounter did not begin.");
+            predicted = VerifyIntegratedStep(
+                "Depot encounter start",
+                predicted,
+                new GameplaySessionControlTransitionPayload(
+                    "player",
+                    GameplaySemanticCapability.ChangeEncounter,
+                    "begin"),
+                gameplay,
+                destructibles,
+                fireFields,
+                drones,
+                reducers,
+                trajectory);
+            int turnGuard = 0;
+            while (!string.Equals(
+                gameplay.ActiveActorId,
+                "player",
+                StringComparison.Ordinal))
+            {
+                string skippedActorId = gameplay.ActiveActorId;
+                Require(turnGuard++ < gameplay.InitiativeOrder.Count,
+                    "Integrated Depot fixture could not reach the player turn.");
+                Require(gameplay.TryEndTurn(
+                        skippedActorId,
+                        out TurnEndFailure skippedFailure),
+                    "Integrated Depot setup turn failed to end: "
+                        + skippedFailure);
+                predicted = VerifyIntegratedStep(
+                    "Depot setup turn " + skippedActorId,
+                    predicted,
+                    new GameplayEndTurnTransitionPayload(
+                        skippedActorId,
+                        emergency: false),
+                    gameplay,
+                    destructibles,
+                    fireFields,
+                    drones,
+                    reducers,
+                    trajectory);
+            }
+
+            GameplayPosition playerPosition = gameplay.GetActor("player")
+                .Pose.Position;
+            GameplayPosition fireLanding = new GameplayPosition(
+                playerPosition.X,
+                playerPosition.Y,
+                playerPosition.Z + 2f);
+            Require(explosives.TryThrowItem(
+                    "player",
+                    "item.incendiary-grenade",
+                    fireLanding,
+                    out GameplayActionRecord fireAction,
+                    out ThrownExplosiveFailure fireFailure),
+                "Integrated Depot incendiary failed: " + fireFailure);
+            predicted = VerifyIntegratedStep(
+                "Depot incendiary",
+                predicted,
+                new GameplayResolvedActionTransitionPayload(
+                    GameplayCapabilityProfiles.ThrowExplosive(
+                        (ThrownExplosiveDefinition)gameplay.GetInventoryItem(
+                            "player",
+                            "item.incendiary-grenade").ConsumablePower),
+                    fireAction),
+                gameplay,
+                destructibles,
+                fireFields,
+                drones,
+                reducers,
+                trajectory);
+
+            DroneDefinition droneDefinition = assembly.GetDrone(
+                "scout-drone-01");
+            DroneSnapshot drone = drones.GetDrone(droneDefinition.Id);
+            var droneDestination = new GameplayPosition(
+                drone.Position.X,
+                drone.Position.Y,
+                drone.Position.Z + 2f);
+            DroneMoveRecord movement = drones.PrepareMove(
+                drone.DroneId,
+                droneDestination,
+                facingDegrees: 0f);
+            drones.CommitMove(movement);
+            predicted = VerifyIntegratedStep(
+                "Depot drone movement",
+                predicted,
+                new GameplayDroneMoveTransitionPayload(movement),
+                gameplay,
+                destructibles,
+                fireFields,
+                drones,
+                reducers,
+                trajectory);
+
+            GameplayActorSnapshot droneTarget = gameplay.GetActor(
+                "depot-rifleman");
+            var droneExposure = new TargetExposureSnapshot(
+                drone.DroneId,
+                droneTarget.ActorId,
+                new[]
+                {
+                    new TargetRegionExposure(TargetRegionId.Torso, 1, 1),
+                });
+            long attackSequence = gameplay.LastActionSequence + 1L;
+            AttackResolutionRecord droneResolution =
+                AttackResolutionRules.Resolve(
+                    attackSequence,
+                    AttackResolutionRules.DeriveResolutionSeed(
+                        assembly.RandomSeed,
+                        attackSequence),
+                    droneExposure,
+                    droneDefinition.Attack.AccuracyDecay,
+                    droneDestination.DistanceTo(droneTarget.Pose.Position),
+                    droneTarget.Wounds,
+                    droneDefinition.Attack.WoundMovementPenalty);
+            DroneAttackRecord droneAttack = drones.PrepareActorAttack(
+                drone.DroneId,
+                droneResolution);
+            drones.CommitAttack(droneAttack);
+            predicted = VerifyIntegratedStep(
+                "Depot drone attack",
+                predicted,
+                new GameplayDroneAttackTransitionPayload(
+                    GameplaySemanticSubjectKind.Actor,
+                    droneDefinition.Attack,
+                    droneAttack),
+                gameplay,
+                destructibles,
+                fireFields,
+                drones,
+                reducers,
+                trajectory);
+
+            Require(gameplay.TryEndTurn(
+                    "player",
+                    out TurnEndFailure endFailure),
+                "Integrated Depot player turn failed to end: " + endFailure);
+            predicted = VerifyIntegratedStep(
+                "Depot fire advancement",
+                predicted,
+                new GameplayEndTurnTransitionPayload(
+                    "player",
+                    emergency: false),
+                gameplay,
+                destructibles,
+                fireFields,
+                drones,
+                reducers,
+                trajectory);
+            Require(predicted.FireFields.Count == 1
+                && predicted.FireFields[0].CurrentRadius
+                    > predicted.FireFields[0].Field.Definition.InitialRadius,
+                "Integrated Depot fire did not evolve on canonical turn time.");
+            turnGuard = 0;
+            while (!string.Equals(
+                gameplay.ActiveActorId,
+                "oren-vale",
+                StringComparison.Ordinal))
+            {
+                string skippedActorId = gameplay.ActiveActorId;
+                Require(turnGuard++ < gameplay.InitiativeOrder.Count,
+                    "Integrated Depot fixture could not reach Oren's turn.");
+                Require(gameplay.TryEndTurn(
+                        skippedActorId,
+                        out TurnEndFailure skippedFailure),
+                    "Integrated Depot intervening turn failed to end: "
+                        + skippedFailure);
+                predicted = VerifyIntegratedStep(
+                    "Depot intervening turn " + skippedActorId,
+                    predicted,
+                    new GameplayEndTurnTransitionPayload(
+                        skippedActorId,
+                        emergency: false),
+                    gameplay,
+                    destructibles,
+                    fireFields,
+                    drones,
+                    reducers,
+                    trajectory);
+            }
+
+            GameplayPosition orenPosition = gameplay.GetActor("oren-vale")
+                .Pose.Position;
+            int riflemanActionPoints = gameplay.GetActor("depot-rifleman")
+                .TurnBudget.ActionPoints;
+            Require(explosives.TryThrowItem(
+                    "oren-vale",
+                    "item.concussive-grenade",
+                    new GameplayPosition(
+                        orenPosition.X,
+                        orenPosition.Y,
+                        orenPosition.Z + 2f),
+                    out GameplayActionRecord concussiveAction,
+                    out ThrownExplosiveFailure concussiveFailure),
+                "Integrated Depot concussion failed: " + concussiveFailure);
+            predicted = VerifyIntegratedStep(
+                "Depot concussion",
+                predicted,
+                new GameplayResolvedActionTransitionPayload(
+                    GameplayCapabilityProfiles.ThrowExplosive(
+                        (ThrownExplosiveDefinition)gameplay.GetInventoryItem(
+                            "oren-vale",
+                            "item.concussive-grenade").ConsumablePower),
+                    concussiveAction),
+                gameplay,
+                destructibles,
+                fireFields,
+                drones,
+                reducers,
+                trajectory);
+            Require(predicted.Session.GetActor("oren-vale")
+                    .TurnBudget.ActionPoints
+                    == Math.Max(
+                        0,
+                        concussiveAction.ResultingBudget.ActionPoints - 2)
+                && predicted.Session.GetActor("depot-rifleman")
+                    .TurnBudget.ActionPoints
+                    == Math.Max(0, riflemanActionPoints - 2),
+                "Integrated Depot concussion did not reduce frozen current AP after throw cost.");
+
+            Require(gameplay.CompleteEncounter(),
+                "Integrated Depot encounter did not complete.");
+            predicted = VerifyIntegratedStep(
+                "Depot encounter completion",
+                predicted,
+                new GameplaySessionControlTransitionPayload(
+                    "oren-vale",
+                    GameplaySemanticCapability.ChangeEncounter,
+                    "complete"),
+                gameplay,
+                destructibles,
+                fireFields,
+                drones,
+                reducers,
+                trajectory);
+            Require(!predicted.Session.EncounterActive
+                && predicted.Session.TurnContext == TurnModeContext.Voluntary,
+                "Integrated multi-enemy Depot lifecycle did not terminate.");
+            var branch = new GameplaySimulationBranch(
+                "integrated-depot",
+                initial,
+                reducers);
+            foreach (GameplaySemanticTransition transition in trajectory)
+                branch.Apply(transition);
+            Require(string.Equals(
+                    branch.CurrentState.CanonicalHash,
+                    predicted.CanonicalHash,
+                    StringComparison.Ordinal),
+                "Detached headless Depot branch diverged from the live trajectory.");
+            GameplayExactReplayResult replay = GameplayExactReplay.Verify(
+                initial,
+                branch.Steps,
+                reducers);
+            Require(replay.IsExact
+                && string.Equals(
+                    replay.FinalState.CanonicalHash,
+                    predicted.CanonicalHash,
+                    StringComparison.Ordinal),
+                "Integrated Depot trajectory did not replay exactly.");
+        }
+    }
+
+    private static GameplayCombatStateSnapshot VerifyIntegratedStep(
+        string label,
+        GameplayCombatStateSnapshot previous,
+        GameplayTransitionPayload payload,
+        GameplaySession gameplay,
+        DestructiblePropSession destructibles,
+        GameplayFireFieldSession fireFields,
+        GameplayDroneSession drones,
+        GameplayTransitionReducerRegistry reducers,
+        ICollection<GameplaySemanticTransition> trajectory)
+    {
+        GameplaySemanticTransition transition = CreateTransition(
+            previous,
+            payload,
+            previous.Session.LastTransitionSequence + 1L);
+        GameplayCombatStateSnapshot predicted = reducers.Reduce(
+            previous,
+            transition).Resulting;
+        gameplay.RecordSemanticTransition(transition.Identity);
+        GameplayCombatStateSnapshot actual = CaptureIntegratedState(
+            gameplay,
+            destructibles,
+            fireFields,
+            drones);
+        IReadOnlyList<GameplayStateDifference> differences =
+            GameplayCombatStateDiffer.Compare(predicted, actual);
+        Require(differences.Count == 0,
+            label + " live/headless parity diverged at "
+                + (differences.Count == 0 ? "unknown" : differences[0].Path));
+        trajectory.Add(transition);
+        return actual;
+    }
+
+    private static GameplayCombatStateSnapshot CaptureIntegratedState(
+        GameplaySession gameplay,
+        DestructiblePropSession destructibles,
+        GameplayFireFieldSession fireFields,
+        GameplayDroneSession drones) => GameplayCombatStateCapture.Capture(
+            gameplay,
+            destructibles,
+            fireFields: fireFields,
+            drones: drones);
+
+    private static void LoadDepotContent(
+        out GameplayScenarioAssembly assembly,
+        out LevelDocument level)
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        string contentRoot = Path.Combine(
+            repositoryRoot,
+            "Assets",
+            "GritGud",
+            "Content",
+            "Resources");
+        var json = new JsonSerializerOptions
+        {
+            IncludeFields = true,
+            PropertyNameCaseInsensitive = true,
+        };
+        ScenarioContentDocument scenario = ReadJson<ScenarioContentDocument>(
+            Path.Combine(contentRoot, "Scenarios", "depot-yard.json"),
+            json);
+        level = ReadJson<LevelDocument>(
+            Path.Combine(
+                contentRoot,
+                "Levels",
+                "Published",
+                "main-level.json"),
+            json);
+        scenario.Normalize();
+        level.Normalize();
+        assembly = new GameplayScenarioAssembler().Assemble(scenario, level);
+    }
 
     private static void VerifyBankedActionPointEconomy()
     {
@@ -2055,6 +2433,62 @@ internal static class SimulationChecks
     private static void Require(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException(message);
+    }
+
+    private sealed class IntegratedExplosiveEvidence :
+        IThrownExplosiveLandingQuery,
+        IBlastWorldQuery
+    {
+        private readonly string firstActorId;
+        private readonly string secondActorId;
+
+        public IntegratedExplosiveEvidence(
+            string firstActorId,
+            string secondActorId)
+        {
+            this.firstActorId = firstActorId;
+            this.secondActorId = secondActorId;
+        }
+
+        public ThrownExplosiveLandingResult Resolve(
+            GameplayPosition launchOrigin,
+            GameplayPosition sampledLanding) =>
+            new ThrownExplosiveLandingResult(
+                sampledLanding,
+                worldStateRevision: 0L);
+
+        public BlastWorldQueryResult Query(BlastWorldQuery query) =>
+            new BlastWorldQueryResult(
+                query,
+                worldStateRevision: 0L,
+                query.Radius <= 0f
+                    ? Array.Empty<BlastEffectRecord>()
+                    : new[]
+                    {
+                        new BlastEffectRecord(
+                            firstActorId,
+                            BlastSubjectKind.Actor,
+                            distance: 0f,
+                            occlusionExposure: 1f,
+                            distanceFalloff: 1f),
+                        new BlastEffectRecord(
+                            secondActorId,
+                            BlastSubjectKind.Actor,
+                            distance: 0f,
+                            occlusionExposure: 1f,
+                            distanceFalloff: 1f),
+                    });
+    }
+
+    private sealed class IntegratedCenterUncertaintySampler :
+        IUncertaintySampler
+    {
+        public GameplayPosition Sample(
+            GameplayPosition center,
+            float radius,
+            ScenarioRunIdentity run,
+            GameplayTransitionIdentity transition,
+            string purpose) => center;
     }
 
     private sealed class SimulationFixtureManifest
