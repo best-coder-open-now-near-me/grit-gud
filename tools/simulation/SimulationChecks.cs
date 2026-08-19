@@ -67,12 +67,90 @@ internal static class SimulationChecks
             new ActionCost(1, 0f, ActionMobility.Mobile),
             new DroneSensorDefinition(16f, 120f),
             CreateRifle());
+        Require(DroneSensorRules.CanObserve(
+                droneDefinition.CreateInitialSnapshot(),
+                new GameplayPosition(0f, 2f, 8f))
+            && !DroneSensorRules.CanObserve(
+                droneDefinition.CreateInitialSnapshot(),
+                new GameplayPosition(0f, 2f, -8f))
+            && !DroneSensorRules.CanObserve(
+                droneDefinition.CreateInitialSnapshot(),
+                new GameplayPosition(0f, 2f, 17f)),
+            "Drone perception did not enforce its canonical range and facing cone.");
         var initial = new GameplayCombatStateSnapshot(
             captured.Session,
             coverage: GameplayCombatStateCoverage.Session
-                | GameplayCombatStateCoverage.Drones,
+                | GameplayCombatStateCoverage.Drones
+                | GameplayCombatStateCoverage.Destructibles
+                | GameplayCombatStateCoverage.SmokeFields,
+            destructibles: Array.Empty<DestructiblePropSnapshot>(),
+            smokeFields: Array.Empty<SmokeFieldSnapshot>(),
             drones: new[] { droneDefinition.CreateInitialSnapshot() });
+        var sensorLevel = new LevelDocument
+        {
+            levelId = "drone-sensor-fixture",
+            schemaVersion = 1,
+        };
+        var sensorSpatial = new GameplayHeadlessSpatialEvidence(
+            sensorLevel,
+            new SpatialContentIdentity(
+                sensorLevel.levelId,
+                sensorLevel.schemaVersion,
+                evidenceAlgorithmVersion: 1,
+                new string('d', 64)));
+        TargetExposureSnapshot forwardSight =
+            GameplayHeadlessEncounterEvidence.CaptureDroneSight(
+                initial,
+                sensorSpatial,
+                droneDefinition.Id,
+                "enemy");
+        var reversed = new GameplayCombatStateSnapshot(
+            captured.Session,
+            coverage: GameplayCombatStateCoverage.Session
+                | GameplayCombatStateCoverage.Drones
+                | GameplayCombatStateCoverage.Destructibles
+                | GameplayCombatStateCoverage.SmokeFields,
+            destructibles: Array.Empty<DestructiblePropSnapshot>(),
+            smokeFields: Array.Empty<SmokeFieldSnapshot>(),
+            drones: new[]
+            {
+                new DroneSnapshot(
+                    droneDefinition,
+                    droneDefinition.StartingPosition,
+                    facingDegrees: 180f,
+                    droneDefinition.MaximumIntegrity),
+            });
+        TargetExposureSnapshot rearSight =
+            GameplayHeadlessEncounterEvidence.CaptureDroneSight(
+                reversed,
+                sensorSpatial,
+                droneDefinition.Id,
+                "enemy");
+        Require(forwardSight.VisibleSampleCount > 0
+            && rearSight.VisibleSampleCount == 0,
+            "Headless drone exposure diverged from its canonical sensor cone.");
         var reducers = GameplaySimulationReducers.CreateCurrent();
+        var droneAttackInput = new GameplayReachableInput(
+            GameplayReachableInputKind.CharacterAbility,
+            "fixture.drone.attack",
+            "player",
+            GameplayCapabilityProfiles.DroneAttack(
+                droneDefinition.Attack,
+                GameplaySemanticSubjectKind.Actor),
+            sourceSubjectId: droneDefinition.Id);
+        GameplayCapabilityRegistry droneCapabilities =
+            GameplayCurrentCapabilityCatalog.Create(
+                reducers,
+                new[] { droneAttackInput });
+        var droneCandidates = new GameplayTacticalCandidateBuilder(
+            droneCapabilities);
+        Require(droneCandidates.Build(
+                    initial,
+                    new[] { droneAttackInput }).Count == 1
+            && droneCandidates.Build(
+                    reversed,
+                    new[] { droneAttackInput }).Count == 0,
+            "Drone candidate generation ignored its canonical sensor envelope.");
         var trajectory = new List<GameplaySemanticTransition>();
         TurnBudget initialBudget = initial.Session.GetActor("player").TurnBudget;
         var movement = new DroneMoveRecord(

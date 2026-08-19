@@ -341,6 +341,10 @@ namespace GritGud.Presentation.Gameplay
                         drone.Definition.ControllerActorId,
                         candidate.ActorId));
             if (!query.TryAcquire(ray, out GameplayActorView target)) return;
+            GameplayActorSnapshot targetState = gameplay.GetActor(target.ActorId);
+            if (!DroneSensorRules.CanObserve(
+                    drone,
+                    targetState.Pose.Position)) return;
             IReadOnlyList<ActorTargetRegionSample> presented =
                 target.TargetProfile.GetTargetRegionSamples();
             var samples = new List<TargetRegionSample>(presented.Count);
@@ -364,7 +368,6 @@ namespace GritGud.Presentation.Gameplay
                 target.ActorId,
                 samples);
             if (exposure.VisibleSampleCount == 0) return;
-            GameplayActorSnapshot targetState = gameplay.GetActor(target.ActorId);
             long resolutionSequence = gameplay.Journal.LastEntry?.Sequence + 1L
                 ?? 1L;
             AttackResolutionRecord resolution = AttackResolutionRules.Resolve(

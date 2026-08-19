@@ -144,6 +144,31 @@ namespace GritGud.Domain.Gameplay
         public bool IsOperational => RemainingIntegrity > 0f;
     }
 
+    public static class DroneSensorRules
+    {
+        public static bool CanObserve(
+            DroneSnapshot drone,
+            GameplayPosition target)
+        {
+            if (!drone.IsOperational) return false;
+            float dx = target.X - drone.Position.X;
+            float dy = target.Y - drone.Position.Y;
+            float dz = target.Z - drone.Position.Z;
+            float distance = (float)Math.Sqrt(
+                (dx * dx) + (dy * dy) + (dz * dz));
+            if (distance > drone.Definition.Sensor.Range) return false;
+            if (distance == 0f) return true;
+            float horizontal = (float)Math.Sqrt((dx * dx) + (dz * dz));
+            if (horizontal == 0f) return true;
+            double radians = drone.FacingDegrees * Math.PI / 180d;
+            float dot = ((dx / horizontal) * (float)Math.Sin(radians))
+                + ((dz / horizontal) * (float)Math.Cos(radians));
+            dot = Math.Max(-1f, Math.Min(1f, dot));
+            float angle = (float)(Math.Acos(dot) * 180d / Math.PI);
+            return angle <= drone.Definition.Sensor.ViewAngleDegrees * 0.5f;
+        }
+    }
+
     public sealed class DroneMoveRecord
     {
         public DroneMoveRecord(

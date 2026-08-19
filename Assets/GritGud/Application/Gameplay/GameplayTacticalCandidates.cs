@@ -210,11 +210,24 @@ namespace GritGud.Application.Gameplay
                     subject.Subject.Id,
                     StringComparison.Ordinal))
                 return false;
-            GameplayPosition sourcePosition = input.SourceSubjectId == null
-                ? state.Session.GetActor(input.ActorId).Pose.Position
-                : FindDrone(state.Drones, input.SourceSubjectId).Position;
+            DroneSnapshot sourceDrone = default;
+            bool hasSourceDrone = input.SourceSubjectId != null;
+            GameplayPosition sourcePosition = hasSourceDrone
+                ? (sourceDrone = FindDrone(
+                    state.Drones,
+                    input.SourceSubjectId)).Position
+                : state.Session.GetActor(input.ActorId).Pose.Position;
             if (sourcePosition.DistanceTo(subject.Position)
                 > options.MaximumSubjectDistance)
+                return false;
+            if (hasSourceDrone
+                && (input.Profile.Capability
+                        == GameplaySemanticCapability.DirectAttack
+                    || input.Profile.Capability
+                        == GameplaySemanticCapability.LaunchProjectile)
+                && !DroneSensorRules.CanObserve(
+                    sourceDrone,
+                    subject.Position))
                 return false;
             switch (input.Profile.Capability)
             {
