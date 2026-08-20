@@ -322,6 +322,74 @@ namespace GritGud.Application.Gameplay
         }
 
         /// <summary>
+        /// Resolves an exact portable first hit against an authored tactical
+        /// destructible. Every intact cover/fracture volume participates, so a
+        /// nearer obstruction wins and headless fire cannot pass through it.
+        /// </summary>
+        public bool TryResolveDestructibleDirectFireImpact(
+            GameplayCombatStateSnapshot state,
+            GameplayPosition origin,
+            string propId,
+            out DirectFireImpactRecord impact)
+        {
+            if (state == null) throw new ArgumentNullException(nameof(state));
+            string id = GameplayContentIdentity.RequireText(
+                propId,
+                nameof(propId));
+            ObstacleDefinition target = FindObstacle(id);
+            if (!target.IsDestructible)
+                throw new InvalidOperationException(
+                    $"Spatial entity '{id}' is not destructible.");
+            state.RequireCoverage(GameplayCombatStateCoverage.Destructibles);
+            DestructiblePropSnapshot prop = FindProp(state.Destructibles, id);
+            if (prop.State == DestructiblePropState.Destroyed)
+            {
+                impact = null;
+                return false;
+            }
+
+            float bestDistance = float.PositiveInfinity;
+            DirectFireImpactRecord best = null;
+            if (prop.DetachedFractureChunks != 0UL)
+            {
+                GameplayFractureSpatialProfile profile =
+                    RequireFractureProfile(target, prop);
+                for (int index = 0; index < profile.ChunkCount; index++)
+                {
+                    if ((prop.DetachedFractureChunks & (1UL << index)) != 0UL)
+                        continue;
+                    TryResolveDirectFireAim(
+                        state,
+                        origin,
+                        id,
+                        prop.Pose,
+                        profile.ChunkVolumes[index].Center,
+                        index,
+                        ref bestDistance,
+                        ref best);
+                }
+            }
+            else
+            {
+                foreach (CoverVolumeData volume in target.Volumes)
+                    TryResolveDirectFireAim(
+                        state,
+                        origin,
+                        id,
+                        prop.Pose,
+                        new GameplayPosition(
+                            volume.localCenter.x,
+                            volume.localCenter.y,
+                            volume.localCenter.z),
+                        preferredFractureChunkIndex: -1,
+                        ref bestDistance,
+                        ref best);
+            }
+            impact = best;
+            return impact != null;
+        }
+
+        /// <summary>
         /// Mirrors authored spawn grounding without Unity physics. The highest
         /// portable placement or terrain surface intersected by the same
         /// vertical probe wins, and the canonical actor root retains the live
@@ -526,6 +594,179 @@ namespace GritGud.Application.Gameplay
             return false;
         }
 
+        private void TryResolveDirectFireAim(
+            GameplayCombatStateSnapshot state,
+            GameplayPosition origin,
+            string targetId,
+            GameplayPropPose targetPose,
+            GameplayPosition targetLocalCenter,
+            int preferredFractureChunkIndex,
+            ref float bestDistance,
+            ref DirectFireImpactRecord best)
+        {
+            GameplayPosition destination = ToWorld(
+                targetLocalCenter,
+                targetPose);
+            if (!TryFindFirstObstacleHit(
+                    state,
+                    origin,
+                    destination,
+                    out string hitId,
+                    out GameplayPosition point,
+                    out GameplayPosition normal,
+                    out int hitChunk)
+                || !string.Equals(hitId, targetId, StringComparison.Ordinal))
+                return;
+            float distance = origin.DistanceTo(point);
+            if (distance >= bestDistance) return;
+            bestDistance = distance;
+            best = new DirectFireImpactRecord(
+                targetId,
+                GetDestructibleSurfaceId(targetId),
+                point,
+                normal.X,
+                normal.Y,
+                normal.Z,
+                state.Session.JournalSequence,
+                hitChunk >= 0 ? hitChunk : preferredFractureChunkIndex);
+        }
+
+        private bool TryFindFirstObstacleHit(
+            GameplayCombatStateSnapshot state,
+            GameplayPosition origin,
+            GameplayPosition destination,
+            out string entityId,
+            out GameplayPosition point,
+            out GameplayPosition normal,
+            out int fractureChunkIndex)
+        {
+            if (hasDestructibleObstacles)
+                state.RequireCoverage(GameplayCombatStateCoverage.Destructibles);
+            float bestFraction = float.PositiveInfinity;
+            string bestId = null;
+            GameplayPosition bestNormal = default;
+            int bestChunk = -1;
+            foreach (ObstacleDefinition obstacle in obstacles)
+            {
+                GameplayPropPose pose = obstacle.StaticPose;
+                if (!obstacle.IsDestructible)
+                {
+                    foreach (CoverVolumeData volume in obstacle.Volumes)
+                        ConsiderHit(
+                            origin,
+                            destination,
+                            obstacle.EntityId,
+                            pose,
+                            new GameplayPosition(
+                                volume.localCenter.x,
+                                volume.localCenter.y,
+                                volume.localCenter.z),
+                            new GameplayPosition(
+                                volume.size.x,
+                                volume.size.y,
+                                volume.size.z),
+                            -1,
+                            ref bestFraction,
+                            ref bestId,
+                            ref bestNormal,
+                            ref bestChunk);
+                    continue;
+                }
+
+                DestructiblePropSnapshot prop = FindProp(
+                    state.Destructibles,
+                    obstacle.EntityId);
+                if (prop.State == DestructiblePropState.Destroyed) continue;
+                pose = prop.Pose;
+                if (prop.DetachedFractureChunks != 0UL)
+                {
+                    GameplayFractureSpatialProfile profile =
+                        RequireFractureProfile(obstacle, prop);
+                    for (int index = 0; index < profile.ChunkCount; index++)
+                    {
+                        if ((prop.DetachedFractureChunks & (1UL << index)) != 0UL)
+                            continue;
+                        GameplayLocalSpatialVolume chunk =
+                            profile.ChunkVolumes[index];
+                        ConsiderHit(
+                            origin,
+                            destination,
+                            obstacle.EntityId,
+                            pose,
+                            chunk.Center,
+                            chunk.Size,
+                            index,
+                            ref bestFraction,
+                            ref bestId,
+                            ref bestNormal,
+                            ref bestChunk);
+                    }
+                    continue;
+                }
+                foreach (CoverVolumeData volume in obstacle.Volumes)
+                    ConsiderHit(
+                        origin,
+                        destination,
+                        obstacle.EntityId,
+                        pose,
+                        new GameplayPosition(
+                            volume.localCenter.x,
+                            volume.localCenter.y,
+                            volume.localCenter.z),
+                        new GameplayPosition(
+                            volume.size.x,
+                            volume.size.y,
+                            volume.size.z),
+                        -1,
+                        ref bestFraction,
+                        ref bestId,
+                        ref bestNormal,
+                        ref bestChunk);
+            }
+            if (bestId == null)
+            {
+                entityId = null;
+                point = default;
+                normal = default;
+                fractureChunkIndex = -1;
+                return false;
+            }
+            entityId = bestId;
+            point = Lerp(origin, destination, bestFraction);
+            normal = bestNormal;
+            fractureChunkIndex = bestChunk;
+            return true;
+        }
+
+        private static void ConsiderHit(
+            GameplayPosition origin,
+            GameplayPosition destination,
+            string entityId,
+            GameplayPropPose pose,
+            GameplayPosition localCenter,
+            GameplayPosition size,
+            int fractureChunkIndex,
+            ref float bestFraction,
+            ref string bestId,
+            ref GameplayPosition bestNormal,
+            ref int bestChunk)
+        {
+            if (!TryIntersect(
+                    origin,
+                    destination,
+                    pose,
+                    localCenter,
+                    size,
+                    out float fraction,
+                    out GameplayPosition normal)
+                || fraction >= bestFraction)
+                return;
+            bestFraction = fraction;
+            bestId = entityId;
+            bestNormal = normal;
+            bestChunk = fractureChunkIndex;
+        }
+
         private bool TryResolveSurfaceHeight(
             GameplayPosition position,
             float maximumHeight,
@@ -709,6 +950,18 @@ namespace GritGud.Application.Gameplay
                 $"Spatial destructible '{propId}' is absent from canonical state.");
         }
 
+        private ObstacleDefinition FindObstacle(string entityId)
+        {
+            foreach (ObstacleDefinition obstacle in obstacles)
+                if (string.Equals(
+                    obstacle.EntityId,
+                    entityId,
+                    StringComparison.Ordinal))
+                    return obstacle;
+            throw new InvalidOperationException(
+                $"Spatial entity '{entityId}' has no authoritative collision volumes.");
+        }
+
         private static bool Intersects(
             GameplayPosition origin,
             GameplayPosition destination,
@@ -781,6 +1034,69 @@ namespace GritGud.Application.Gameplay
                     ref maximum);
         }
 
+        private static bool TryIntersect(
+            GameplayPosition origin,
+            GameplayPosition destination,
+            GameplayPropPose pose,
+            GameplayPosition localCenter,
+            GameplayPosition size,
+            out float fraction,
+            out GameplayPosition worldNormal)
+        {
+            GameplayPosition localOrigin = ToPropLocal(origin, pose);
+            GameplayPosition localDestination = ToPropLocal(destination, pose);
+            GameplayPosition delta = new GameplayPosition(
+                localDestination.X - localOrigin.X,
+                localDestination.Y - localOrigin.Y,
+                localDestination.Z - localOrigin.Z);
+            float minimum = 0f;
+            float maximum = 1f;
+            GameplayPosition localNormal = default;
+            if (!IntersectsAxis(
+                    localOrigin.X,
+                    delta.X,
+                    localCenter.X - (size.X * 0.5f),
+                    localCenter.X + (size.X * 0.5f),
+                    new GameplayPosition(-1f, 0f, 0f),
+                    new GameplayPosition(1f, 0f, 0f),
+                    ref minimum,
+                    ref maximum,
+                    ref localNormal)
+                || !IntersectsAxis(
+                    localOrigin.Y,
+                    delta.Y,
+                    localCenter.Y - (size.Y * 0.5f),
+                    localCenter.Y + (size.Y * 0.5f),
+                    new GameplayPosition(0f, -1f, 0f),
+                    new GameplayPosition(0f, 1f, 0f),
+                    ref minimum,
+                    ref maximum,
+                    ref localNormal)
+                || !IntersectsAxis(
+                    localOrigin.Z,
+                    delta.Z,
+                    localCenter.Z - (size.Z * 0.5f),
+                    localCenter.Z + (size.Z * 0.5f),
+                    new GameplayPosition(0f, 0f, -1f),
+                    new GameplayPosition(0f, 0f, 1f),
+                    ref minimum,
+                    ref maximum,
+                    ref localNormal))
+            {
+                fraction = 0f;
+                worldNormal = default;
+                return false;
+            }
+            if (localNormal.DistanceTo(default) <= 0.0001f)
+                localNormal = Normalize(new GameplayPosition(
+                    -delta.X,
+                    -delta.Y,
+                    -delta.Z));
+            fraction = minimum;
+            worldNormal = TransformDirection(localNormal, pose);
+            return true;
+        }
+
         private static GameplayPosition ToPropLocal(
             GameplayPosition world,
             GameplayPropPose pose)
@@ -809,6 +1125,37 @@ namespace GritGud.Application.Gameplay
                 (float)(x + pose.Position.X),
                 (float)(y + pose.Position.Y),
                 (float)(z + pose.Position.Z));
+        }
+
+        private static GameplayPosition TransformDirection(
+            GameplayPosition local,
+            GameplayPropPose pose)
+        {
+            double x = local.X;
+            double y = local.Y;
+            double z = local.Z;
+            RotateZ(ref x, ref y, pose.RollDegrees);
+            RotateX(ref y, ref z, pose.PitchDegrees);
+            RotateY(ref x, ref z, pose.YawDegrees);
+            return Normalize(new GameplayPosition(
+                (float)x,
+                (float)y,
+                (float)z));
+        }
+
+        private static GameplayPosition Normalize(GameplayPosition value)
+        {
+            double magnitude = Math.Sqrt(
+                (value.X * value.X)
+                + (value.Y * value.Y)
+                + (value.Z * value.Z));
+            if (magnitude <= 0.000001d)
+                throw new InvalidOperationException(
+                    "A spatial hit normal cannot be derived from a zero-length segment.");
+            return new GameplayPosition(
+                (float)(value.X / magnitude),
+                (float)(value.Y / magnitude),
+                (float)(value.Z / magnitude));
         }
 
         private static void RotateX(
@@ -872,6 +1219,49 @@ namespace GritGud.Application.Gameplay
             maximum = Math.Min(maximum, second);
             return maximum >= minimum;
         }
+
+        private static bool IntersectsAxis(
+            float start,
+            float delta,
+            float lower,
+            float upper,
+            GameplayPosition lowerNormal,
+            GameplayPosition upperNormal,
+            ref float minimum,
+            ref float maximum,
+            ref GameplayPosition entryNormal)
+        {
+            if (Math.Abs(delta) <= 0.000001f)
+                return start >= lower && start <= upper;
+            float first = (lower - start) / delta;
+            float second = (upper - start) / delta;
+            GameplayPosition firstNormal = lowerNormal;
+            GameplayPosition secondNormal = upperNormal;
+            if (first > second)
+            {
+                float swap = first;
+                first = second;
+                second = swap;
+                GameplayPosition normalSwap = firstNormal;
+                firstNormal = secondNormal;
+                secondNormal = normalSwap;
+            }
+            if (first > minimum)
+            {
+                minimum = first;
+                entryNormal = firstNormal;
+            }
+            maximum = Math.Min(maximum, second);
+            return maximum >= minimum;
+        }
+
+        private static GameplayPosition Lerp(
+            GameplayPosition from,
+            GameplayPosition to,
+            float fraction) => new GameplayPosition(
+                Lerp(from.X, to.X, fraction),
+                Lerp(from.Y, to.Y, fraction),
+                Lerp(from.Z, to.Z, fraction));
 
         private static string Format(GameplayPosition value) =>
             GameplayNumericPolicy.FormatCanonical(value.X) + ","

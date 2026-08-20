@@ -28,6 +28,7 @@ internal static class SimulationChecks
             VerifyConcreteGroundedMoveCandidateRoute();
             VerifyCanonicalActionOwnedRecordSequences();
             VerifyConcreteActorAttackCandidateRoute();
+            VerifyConcreteDirectFireCandidateRoute();
             VerifyPermanentPolicyRunner();
             VerifyLogicalExecutionGuards();
             VerifyBasicExecutableCandidateRoutes();
@@ -3254,6 +3255,145 @@ internal static class SimulationChecks
             "A discharge used its private record count instead of the canonical action sequence.");
     }
 
+    private static void VerifyConcreteDirectFireCandidateRoute()
+    {
+        LoadDepotContent(
+            out GameplayScenarioAssembly authored,
+            out LevelDocument level);
+        var spatialIdentity = new SpatialContentIdentity(
+            level.levelId,
+            level.schemaVersion,
+            evidenceAlgorithmVersion: 1,
+            new string('6', 64));
+        var spatial = new GameplayHeadlessSpatialEvidence(
+            level,
+            spatialIdentity);
+        GameplayScenarioAssembly assembly = GameplayHeadlessScenarioGrounding
+            .Resolve(authored, spatial);
+        var gameplay = new GameplaySession(
+            assembly.Scenario,
+            scenarioSeed: assembly.RandomSeed);
+        var destructibles = DestructiblePropSession.FromLevel(
+            level,
+            gameplay.Journal);
+        Require(gameplay.BeginEncounter(),
+            "Direct-fire fixture encounter did not begin.");
+        GameplayCombatStateSnapshot initial = GameplayCombatStateCapture.Capture(
+            gameplay,
+            destructibles);
+        IReadOnlyList<GameplayReachableInput> inputs =
+            GameplayReachableInputEnumerator.Enumerate(
+                assembly.Scenario,
+                level);
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
+        GameplayCapabilityRegistry capabilities =
+            GameplayCurrentCapabilityCatalog.Create(reducers, inputs);
+        var routes = new GameplayCandidateExecutionRouteRegistry(capabilities);
+        routes.Register(new GameplayDirectAttackCandidateExecutionRoute(
+            assembly,
+            spatial));
+        IReadOnlyList<GameplayCandidate> candidates =
+            new GameplayTacticalCandidateBuilder(capabilities).Build(
+                initial,
+                inputs);
+        string activeActorId = initial.Session.ActiveActorId;
+        var context = new GameplayDecisionContext(
+            initial,
+            GameplayObservationSnapshot.FullState(activeActorId, initial));
+        GameplayExecutableCandidateEvaluation selected = null;
+        var failures = new List<string>();
+        foreach (GameplayCandidate candidate in candidates)
+        {
+            if (!string.Equals(
+                    candidate.ActorId,
+                    activeActorId,
+                    StringComparison.Ordinal)
+                || candidate.Profile.Capability
+                    != GameplaySemanticCapability.DirectAttack
+                || candidate.SubjectKind
+                    != GameplaySemanticSubjectKind.DestructibleProp)
+                continue;
+            GameplayExecutableCandidateEvaluation evaluated = routes.Evaluate(
+                context,
+                candidate);
+            if (!evaluated.IsLegal)
+            {
+                failures.Add(
+                    candidate.SubjectId + ":" + evaluated.FailureCode);
+                continue;
+            }
+            selected = evaluated;
+            break;
+        }
+        Require(selected != null,
+            "Depot supplied no legal reducer-owned direct-fire prop candidate: "
+                + string.Join(", ", failures));
+        GameplaySemanticTransition transition = routes.Prepare(
+            context,
+            selected);
+        var weaponPayload = (GameplayWeaponTransitionPayload)
+            transition.Payload;
+        var discharged = (WeaponDischargedActionOutcome)
+            weaponPayload.Action.Outcomes[0];
+        LevelEntity targetEntity = null;
+        foreach (LevelEntity entity in level.entities)
+            if (string.Equals(
+                entity.id,
+                selected.Candidate.SubjectId,
+                StringComparison.Ordinal))
+            {
+                targetEntity = entity;
+                break;
+            }
+        Require(targetEntity?.destructible?.enabled == true
+            && discharged.Discharge.Impact != null
+            && string.Equals(
+                discharged.Discharge.Impact.SurfaceId,
+                targetEntity.destructible.surfaceId,
+                StringComparison.Ordinal)
+            && discharged.Discharge.Damage != null,
+            "Direct-fire candidate did not use authoritative prop surface damage.");
+        var liveAdapter = new GameplayAttackSession(gameplay, destructibles);
+        Require(liveAdapter.TryPrepareDischarge(
+                activeActorId,
+                selected.Candidate.SubjectId,
+                discharged.Discharge.AimPoint,
+                discharged.Discharge.Impact,
+                out GameplayPreparedTransition<GameplayActionRecord>
+                    livePrepared,
+                out AttackResolutionFailure liveFailure)
+            && string.Equals(
+                GameplayCanonicalValueDigest.Calculate(livePrepared.Record),
+                GameplayCanonicalValueDigest.Calculate(weaponPayload.Action),
+                StringComparison.Ordinal),
+            "Live direct-fire adapter diverged from pure preparation: "
+                + liveFailure);
+
+        var runtime = new GameplaySimulationRuntime(
+            new GameplayExecutionIdentity(
+                new GameplayContentIdentity(
+                    assembly.Scenario.Id,
+                    scenarioSchemaVersion: 1,
+                    rulesSchemaVersion: 1,
+                    new string('7', 64)),
+                spatialIdentity,
+                gameplay.RunIdentity),
+            initial,
+            reducers,
+            capabilities);
+        runtime.Execute(transition);
+        Require(runtime.CurrentState.Destructibles.Count
+                == initial.Destructibles.Count
+            && runtime.CurrentState.CanonicalHash
+                != initial.CanonicalHash
+            && GameplayExactReplay.Verify(
+                initial,
+                runtime.Trajectory,
+                reducers).IsExact,
+            "Direct-fire prop candidate did not reduce and replay exactly.");
+    }
+
     private static void VerifyConcreteGroundedMoveCandidateRoute()
     {
         GameplaySession gameplay = CreateEncounterGameplay();
@@ -3403,11 +3543,61 @@ internal static class SimulationChecks
                         },
                     },
                 },
+                new LevelEntity
+                {
+                    id = "blocked-prop",
+                    archetypeId = "prop.crate.standard",
+                    transform = new LevelTransformData(
+                        new Float3Data(0f, 0f, 2f),
+                        yawDegrees: 0f),
+                    coverVolumes = new List<CoverVolumeData>
+                    {
+                        new CoverVolumeData
+                        {
+                            id = "primary",
+                            localCenter = new Float3Data(0f, 1f, 0f),
+                            size = new Float3Data(1f, 2f, 1f),
+                        },
+                    },
+                    destructible = new DestructibleInstanceData
+                    {
+                        enabled = true,
+                        initialState = "intact",
+                        integrity = 10f,
+                        surfaceId = "surface.wood",
+                    },
+                },
+                new LevelEntity
+                {
+                    id = "open-prop",
+                    archetypeId = "prop.crate.standard",
+                    transform = new LevelTransformData(
+                        new Float3Data(3f, 0f, 2f),
+                        yawDegrees: 0f),
+                    coverVolumes = new List<CoverVolumeData>
+                    {
+                        new CoverVolumeData
+                        {
+                            id = "primary",
+                            localCenter = new Float3Data(0f, 1f, 0f),
+                            size = new Float3Data(1f, 2f, 1f),
+                        },
+                    },
+                    destructible = new DestructibleInstanceData
+                    {
+                        enabled = true,
+                        initialState = "intact",
+                        integrity = 10f,
+                        surfaceId = "surface.wood",
+                    },
+                },
             },
         };
         level.Normalize();
+        GameplaySession gameplay = CreateGameplay(CreateRifle());
         GameplayCombatStateSnapshot state = GameplayCombatStateCapture.Capture(
-            CreateGameplay(CreateRifle()));
+            gameplay,
+            DestructiblePropSession.FromLevel(level, gameplay.Journal));
         var spatial = new GameplayHeadlessSpatialEvidence(
             level,
             new SpatialContentIdentity(
@@ -3427,8 +3617,25 @@ internal static class SimulationChecks
         Require(!spatial.BlocksLineOfSight(
                 state,
                 new GameplayPosition(3f, 1f, -2f),
-                new GameplayPosition(3f, 1f, 2f)),
+                new GameplayPosition(3f, 1f, 1f)),
             "Static headless obstruction extended beyond its authored volume.");
+        Require(!spatial.TryResolveDestructibleDirectFireImpact(
+                state,
+                origin,
+                "blocked-prop",
+                out _)
+            && spatial.TryResolveDestructibleDirectFireImpact(
+                state,
+                new GameplayPosition(3f, 1f, -2f),
+                "open-prop",
+                out DirectFireImpactRecord openImpact)
+            && string.Equals(
+                openImpact.SurfaceId,
+                "surface.wood",
+                StringComparison.Ordinal)
+            && openImpact.WorldStateRevision
+                == state.Session.JournalSequence,
+            "Portable direct-fire evidence did not enforce first-hit obstruction and authored material.");
     }
 
     private static void VerifyPortableGroundSurfaces()
