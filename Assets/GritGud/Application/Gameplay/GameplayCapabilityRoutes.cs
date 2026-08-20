@@ -39,7 +39,8 @@ namespace GritGud.Application.Gameplay
         public GameplayCandidate Build(
             GameplayReachableInput input,
             GameplaySubjectReference subject,
-            object intent)
+            object intent,
+            string candidateId = null)
         {
             if (input == null) throw new ArgumentNullException(nameof(input));
             if (subject.Kind != input.SubjectKind)
@@ -47,8 +48,9 @@ namespace GritGud.Application.Gameplay
                     "Candidate subjects must match their reachable input route.",
                     nameof(subject));
             var candidate = new GameplayCandidate(
-                "reachable." + input.ActorId + "." + input.SourceId + "."
-                    + subject.Id,
+                candidateId ?? (
+                    "reachable." + input.ActorId + "." + input.SourceId + "."
+                        + subject.Id),
                 input.Profile,
                 input.ActorId,
                 subject,

@@ -21,6 +21,7 @@ internal static class SimulationChecks
             VerifyAtomicLiveInstallation();
             VerifyPortableGroundSurfaces();
             VerifyStaticHeadlessSpatialGeometry();
+            VerifyConcreteGroundedMoveCandidateRoute();
             VerifyConcreteActorAttackCandidateRoute();
             VerifyAllCurrentContentCoverage();
             VerifyTacticalDestructibleSimulation();
@@ -1787,6 +1788,130 @@ internal static class SimulationChecks
                 runtime.Trajectory,
                 reducers).IsExact,
             "Concrete actor attack route did not execute and replay exactly.");
+    }
+
+    private static void VerifyConcreteGroundedMoveCandidateRoute()
+    {
+        GameplaySession gameplay = CreateEncounterGameplay();
+        var level = new LevelDocument
+        {
+            levelId = "grounded-move-route-check",
+            schemaVersion = LevelDocument.CurrentSchemaVersion,
+            entities = new List<LevelEntity>
+            {
+                new LevelEntity
+                {
+                    id = "movement-floor",
+                    archetypeId = "structure.floor.standard",
+                    transform = new LevelTransformData(
+                        new Float3Data(0f, 0f, 0f),
+                        yawDegrees: 0f),
+                    placementSurface = new LevelPlacementSurfaceData
+                    {
+                        kind = LevelPlacementSurfaceData.FlatKind,
+                        size = new Float3Data(40f, 0f, 40f),
+                    },
+                },
+            },
+        };
+        level.Normalize();
+        var spatialIdentity = new SpatialContentIdentity(
+            level.levelId,
+            level.schemaVersion,
+            evidenceAlgorithmVersion: 1,
+            new string('9', 64));
+        var spatial = new GameplayHeadlessSpatialEvidence(
+            level,
+            spatialIdentity);
+        Require(gameplay.BeginEncounter(),
+            "Concrete movement route encounter did not begin.");
+        GameplayCombatStateSnapshot initial = GameplayCombatStateCapture.Capture(
+            gameplay,
+            DestructiblePropSession.FromLevel(level, gameplay.Journal));
+        IReadOnlyList<GameplayReachableInput> inputs =
+            GameplayReachableInputEnumerator.Enumerate(
+                gameplay.Scenario,
+                level);
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
+        GameplayCapabilityRegistry capabilities =
+            GameplayCurrentCapabilityCatalog.Create(reducers, inputs);
+        var routes = new GameplayCandidateExecutionRouteRegistry(capabilities);
+        routes.Register(new GameplayGroundedMoveCandidateExecutionRoute(
+            gameplay.Scenario));
+        var builder = new GameplayHeadlessCandidateBuilder(
+            capabilities,
+            spatial);
+        IReadOnlyList<GameplayCandidate> built = builder.Build(
+            initial,
+            inputs,
+            initial.Session.ActiveActorId);
+        var moveCandidates = new List<GameplayCandidate>();
+        var candidateIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (GameplayCandidate candidate in built)
+        {
+            if (!candidate.Profile.Equals(
+                    GameplayCapabilityProfiles.GroundedMove()))
+                continue;
+            moveCandidates.Add(candidate);
+            candidateIds.Add(candidate.CandidateId);
+        }
+        Require(moveCandidates.Count > 1
+            && candidateIds.Count == moveCandidates.Count,
+            "One semantic Move input did not expand into stable distinct grounded routes.");
+
+        var context = new GameplayDecisionContext(
+            initial,
+            GameplayObservationSnapshot.FullState(
+                initial.Session.ActiveActorId,
+                initial));
+        GameplayExecutableCandidateEvaluation evaluation = routes.Evaluate(
+            context,
+            moveCandidates[0]);
+        Require(evaluation.IsLegal
+            && evaluation.ExpectedOutcome.GetValue("move.distance") > 0f
+            && evaluation.Evidence.Count == 1,
+            "Concrete grounded movement route was not legal and evidence-backed.");
+        GameplaySemanticTransition transition = routes.Prepare(
+            context,
+            evaluation);
+        var runtime = new GameplaySimulationRuntime(
+            new GameplayExecutionIdentity(
+                new GameplayContentIdentity(
+                    gameplay.Scenario.Id,
+                    scenarioSchemaVersion: 1,
+                    rulesSchemaVersion: 1,
+                    new string('8', 64)),
+                spatialIdentity,
+                gameplay.RunIdentity),
+            initial,
+            reducers,
+            capabilities);
+        runtime.Execute(transition);
+        Require(runtime.CurrentState.Session.GetActor(
+                    initial.Session.ActiveActorId).Pose.Position.DistanceTo(
+                    initial.Session.GetActor(
+                        initial.Session.ActiveActorId).Pose.Position) > 0f
+            && GameplayExactReplay.Verify(
+                initial,
+                runtime.Trajectory,
+                reducers).IsExact,
+            "Concrete grounded movement route did not execute and replay exactly.");
+
+        var changedContext = new GameplayDecisionContext(
+            runtime.CurrentState,
+            GameplayObservationSnapshot.FullState(
+                runtime.CurrentState.Session.ActiveActorId,
+                runtime.CurrentState));
+        GameplayExecutableCandidateEvaluation stale = routes.Evaluate(
+            changedContext,
+            moveCandidates[0]);
+        Require(!stale.IsLegal
+            && string.Equals(
+                stale.FailureCode,
+                "movement-evidence-stale",
+                StringComparison.Ordinal),
+            "Grounded movement accepted evidence frozen against an older state.");
     }
 
     private static void VerifyStaticHeadlessSpatialGeometry()
