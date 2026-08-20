@@ -30,6 +30,7 @@ namespace GritGud.Application.Gameplay
         MovementControl,
         StanceControl,
         EquippedAttack,
+        ReloadControl,
         InventoryWeapon,
         InventoryConsumable,
         CharacterAbility,
@@ -573,6 +574,24 @@ namespace GritGud.Application.Gameplay
                                 StringComparison.Ordinal),
                             hasDestructibles,
                             hasVehicles);
+                        if (item.Ammunition != null
+                            && (playerControlled
+                                || aiControlled && string.Equals(
+                                    item.Id,
+                                    actor.InitiallyEquippedItemId,
+                                    StringComparison.Ordinal)))
+                            Add(result,
+                                playerControlled
+                                    ? GameplayReachableInputKind.ReloadControl
+                                    : GameplayReachableInputKind.EnemyDecision,
+                                playerControlled
+                                    ? "control.reload." + item.Id
+                                    : "ai." + actor.Combat.EnemyBehavior
+                                        .BehaviorId + ".reload." + item.Id,
+                                actor.Id,
+                                GameplayCapabilityProfiles.Reload(
+                                    item.Ammunition),
+                                item.Id);
                     }
                     else if (playerControlled && item.ConsumablePower
                         is ThrownExplosiveDefinition explosive)

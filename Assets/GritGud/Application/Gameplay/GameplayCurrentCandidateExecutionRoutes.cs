@@ -1,4 +1,5 @@
 using System;
+using GritGud.Domain.Gameplay;
 
 namespace GritGud.Application.Gameplay
 {
@@ -36,6 +37,9 @@ namespace GritGud.Application.Gameplay
             routes.Register(new GameplayStanceCandidateExecutionRoute());
             routes.Register(new GameplayEquipmentCandidateExecutionRoute(
                 assembly.Scenario));
+            if (HasAmmunition(assembly.Scenario))
+                routes.Register(new GameplayReloadCandidateExecutionRoute(
+                    assembly.Scenario));
             routes.Register(new GameplayActorAttackCandidateExecutionRoute(
                 assembly,
                 spatial));
@@ -73,6 +77,14 @@ namespace GritGud.Application.Gameplay
             routes.Register(new GameplayLifecycleCandidateExecutionRoute(
                 assembly.Scenario));
             return routes;
+        }
+
+        private static bool HasAmmunition(ScenarioDefinition scenario)
+        {
+            foreach (ScenarioActorDefinition actor in scenario.Actors)
+            foreach (InventoryItemDefinition item in actor.Inventory)
+                if (item.Ammunition != null) return true;
+            return false;
         }
     }
 }

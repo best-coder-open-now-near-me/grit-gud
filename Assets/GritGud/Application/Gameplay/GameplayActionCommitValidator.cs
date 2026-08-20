@@ -23,6 +23,7 @@ namespace GritGud.Application.Gameplay
                 new GameplayWeaponDischargeOutcomeValidator(session),
                 new GameplayProjectileLaunchOutcomeValidator(session),
                 new GameplayAmmunitionSpentOutcomeValidator(session),
+                new GameplayWeaponReloadedOutcomeValidator(session),
                 new GameplayEquipmentOutcomeValidator(session),
                 new GameplayThrownExplosiveOutcomeValidator(session),
                 new GameplayInventoryQuantityOutcomeValidator(session),
@@ -68,6 +69,18 @@ namespace GritGud.Application.Gameplay
             }
 
             TurnBudget expectedBudget = actor.TurnBudget.SpendAction(record.Cost);
+            if (record.Outcomes.Count == 1
+                && record.Outcomes[0] is WeaponReloadedActionOutcome
+                && session.Mode == GameplaySessionMode.TurnBased)
+            {
+                InventoryItemDefinition weapon = session.GetInventoryItem(
+                    actor.ActorId,
+                    record.Request.TargetId);
+                if (weapon?.Ammunition?.ConsumesRemainingMovement == true)
+                    expectedBudget = new TurnBudget(
+                        expectedBudget.ActionPoints,
+                        0f);
+            }
             if (!GameplayActionValidationRules.TurnBudgetsMatch(
                     expectedBudget,
                     record.ResultingBudget))

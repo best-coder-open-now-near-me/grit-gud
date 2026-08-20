@@ -252,4 +252,39 @@ namespace GritGud.Application.Gameplay
                     "Ammunition spend no longer begins at canonical actor state.");
         }
     }
+
+    internal sealed class GameplayWeaponReloadedOutcomeValidator :
+        GameplayActionOutcomeValidator<WeaponReloadedActionOutcome>
+    {
+        private readonly GameplaySession session;
+
+        public GameplayWeaponReloadedOutcomeValidator(GameplaySession gameplay)
+        {
+            session = gameplay ?? throw new ArgumentNullException(
+                nameof(gameplay));
+        }
+
+        protected override void Validate(
+            GameplayActionRecord action,
+            WeaponReloadedActionOutcome outcome)
+        {
+            GameplaySessionStateSnapshot state =
+                GameplayCombatStateCapture.Capture(session).Session;
+            if (!GameplayReloadPreparation.TryPrepare(
+                    session.Scenario,
+                    state,
+                    action.Request.ActorId,
+                    action.Request.TargetId,
+                    out GameplayResolvedActionTransitionPayload expected,
+                    out GameplayReloadFailure failure)
+                || !ReferenceEquals(outcome, action.Outcomes[0])
+                || action.Outcomes.Count != 1
+                || !string.Equals(
+                    GameplayCanonicalValueDigest.Calculate(action),
+                    GameplayCanonicalValueDigest.Calculate(expected.Action),
+                    StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    $"Reload action is not canonical ({failure}).");
+        }
+    }
 }

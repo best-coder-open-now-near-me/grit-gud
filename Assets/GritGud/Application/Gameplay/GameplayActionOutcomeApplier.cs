@@ -28,6 +28,7 @@ namespace GritGud.Application.Gameplay
                 [typeof(WeaponDischargedActionOutcome)] = ApplyWeaponDischarge,
                 [typeof(ProjectileLaunchedActionOutcome)] = ApplyProjectileLaunch,
                 [typeof(AmmunitionSpentActionOutcome)] = ApplyAmmunitionSpent,
+                [typeof(WeaponReloadedActionOutcome)] = ApplyWeaponReloaded,
                 [typeof(EquipmentChangedActionOutcome)] = ApplyEquipment,
                 [typeof(ThrownExplosiveActionOutcome)] = ApplyThrownExplosive,
                 [typeof(InventoryQuantityChangedActionOutcome)] =
@@ -139,6 +140,18 @@ namespace GritGud.Application.Gameplay
         {
             WeaponAmmunitionDelta change =
                 ((AmmunitionSpentActionOutcome)outcome).Change;
+            session.ApplyAmmunitionChange(change, notifications);
+        }
+
+        private void ApplyWeaponReloaded(
+            GameplayActorState actingActor,
+            GameplayActionOutcome outcome,
+            GameplayNotificationBatch notifications,
+            Action<string> actorCapabilityChanged,
+            Action<EquipmentChangeRecord> equipmentChanged)
+        {
+            WeaponAmmunitionDelta change =
+                ((WeaponReloadedActionOutcome)outcome).Change;
             session.ApplyAmmunitionChange(change, notifications);
         }
 

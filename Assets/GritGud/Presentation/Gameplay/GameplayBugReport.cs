@@ -774,6 +774,28 @@ namespace GritGud.Presentation.Gameplay
                             .AppendLine(ammo.ResultingReserveRounds.ToString(
                                 CultureInfo.InvariantCulture));
                         break;
+                    case WeaponReloadedActionOutcome reloaded:
+                        WeaponAmmunitionDelta reload = reloaded.Change;
+                        report.Append("    WeaponReloaded | weapon=")
+                            .Append(reload.WeaponItemId)
+                            .Append(" | type=")
+                            .Append(reload.AmmoTypeId)
+                            .Append(" | loaded=")
+                            .Append(reload.PreviousLoadedRounds.ToString(
+                                CultureInfo.InvariantCulture))
+                            .Append(" + ")
+                            .Append(reload.ChangedRounds.ToString(
+                                CultureInfo.InvariantCulture))
+                            .Append(" = ")
+                            .Append(reload.ResultingLoadedRounds.ToString(
+                                CultureInfo.InvariantCulture))
+                            .Append(" | reserve=")
+                            .Append(reload.PreviousReserveRounds.ToString(
+                                CultureInfo.InvariantCulture))
+                            .Append(" -> ")
+                            .AppendLine(reload.ResultingReserveRounds.ToString(
+                                CultureInfo.InvariantCulture));
+                        break;
                     default:
                         report.Append("    ")
                             .Append(outcome.GetType().Name)

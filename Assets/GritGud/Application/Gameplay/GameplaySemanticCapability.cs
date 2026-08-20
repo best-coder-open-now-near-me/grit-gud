@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using GritGud.Domain.Gameplay;
 
@@ -14,6 +15,7 @@ namespace GritGud.Application.Gameplay
         ThrowExplosive,
         Displace,
         Equip,
+        Reload,
         Interact,
         EndTurn,
         AdvanceProjectile,
@@ -331,6 +333,32 @@ namespace GritGud.Application.Gameplay
             Subject(GameplaySemanticSubjectKind.InventoryItem),
             Trait("resource", "inventory-equipment"),
             Trait("mode", "equip-or-unequip"));
+
+        public static GameplayCapabilityProfile Reload(
+            WeaponAmmunitionDefinition ammunition)
+        {
+            if (ammunition == null)
+                throw new ArgumentNullException(nameof(ammunition));
+            return Profile(
+                GameplaySemanticCapability.Reload,
+                Subject(GameplaySemanticSubjectKind.InventoryItem),
+                Trait("resource", "actor-ammunition"),
+                Trait("equipment", "equipped-only"),
+                Trait("transfer", "bounded-reserve"),
+                Trait("turn-action-points", ammunition.ReloadTurnCost
+                    .ActionPoints.ToString(CultureInfo.InvariantCulture)),
+                Trait("turn-movement-opportunity", ammunition.ReloadTurnCost
+                    .MovementOpportunity.ToString(
+                        "R",
+                        CultureInfo.InvariantCulture)),
+                Trait("turn-mobility", ammunition.ReloadTurnCost.Mobility
+                    .ToString()),
+                Trait("movement-after", ammunition.ConsumesRemainingMovement
+                    ? "zero"
+                    : "preserve"),
+                Trait("policy-version", ammunition.ReloadPolicyVersion
+                    .ToString(CultureInfo.InvariantCulture)));
+        }
 
         public static GameplayCapabilityProfile Interact() => Profile(
             GameplaySemanticCapability.Interact,

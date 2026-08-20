@@ -38,6 +38,7 @@ namespace GritGud.Application.Gameplay
             ThrownExplosiveActionOutcome explosive = null;
             DisplacementActionOutcome displacement = null;
             EquipmentChangedActionOutcome equipment = null;
+            WeaponReloadedActionOutcome reload = null;
             ObjectiveCompletedActionOutcome interaction = null;
             foreach (GameplayActionOutcome outcome in action.Outcomes)
             {
@@ -67,6 +68,10 @@ namespace GritGud.Application.Gameplay
                         RequireSingle(equipment, nameof(EquipmentChangedActionOutcome));
                         equipment = value;
                         break;
+                    case WeaponReloadedActionOutcome value:
+                        RequireSingle(reload, nameof(WeaponReloadedActionOutcome));
+                        reload = value;
+                        break;
                     case ObjectiveCompletedActionOutcome value:
                         RequireSingle(interaction, nameof(ObjectiveCompletedActionOutcome));
                         interaction = value;
@@ -74,9 +79,11 @@ namespace GritGud.Application.Gameplay
                 }
             }
 
-            AttackDefinition equippedAttack = GetEquippedAttack(
-                actorDefinition,
-                actor);
+            AttackDefinition equippedAttack = attack != null
+                    || discharge != null
+                    || projectile != null
+                ? GetEquippedAttack(actorDefinition, actor)
+                : null;
             if (attack != null)
             {
                 ValidateFiringOutcomes(
@@ -174,6 +181,29 @@ namespace GritGud.Application.Gameplay
                     GameplayCapabilityProfiles.Equip(),
                     action,
                     effects);
+            }
+
+            if (reload != null)
+            {
+                RequireOnlyOutcome(action, reload, "Reload actions");
+                if (!GameplayReloadPreparation.TryPrepare(
+                        scenario,
+                        state.Session,
+                        actor.ActorId,
+                        action.Request.TargetId,
+                        out GameplayResolvedActionTransitionPayload expected,
+                        out GameplayReloadFailure failure))
+                    throw new InvalidOperationException(
+                        $"Reload action is not canonical ({failure}).");
+                if (!string.Equals(
+                        GameplayCanonicalValueDigest.Calculate(action),
+                        GameplayCanonicalValueDigest.Calculate(expected.Action),
+                        StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        "Reload action differs from its canonical preparation.");
+                return new GameplayResolvedActionTransitionPayload(
+                    expected.Profile,
+                    action);
             }
 
             if (interaction != null)

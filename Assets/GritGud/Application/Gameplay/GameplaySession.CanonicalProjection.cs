@@ -146,13 +146,19 @@ namespace GritGud.Application.Gameplay
                 {
                     resolvedActions.Add(action);
                     notifications.Add(ActionResolved, action);
-                    AmmunitionSpentActionOutcome spend =
-                        GameplayWeaponActionOutcomes.GetAmmunitionSpend(
-                            action);
-                    if (spend != null)
-                        notifications.Add(
-                            AmmunitionChanged,
-                            spend.Change);
+                    foreach (GameplayActionOutcome outcome in action.Outcomes)
+                    {
+                        WeaponAmmunitionDelta ammunition = outcome
+                            is AmmunitionSpentActionOutcome spend
+                                ? spend.Change
+                                : outcome is WeaponReloadedActionOutcome reload
+                                    ? reload.Change
+                                    : null;
+                        if (ammunition != null)
+                            notifications.Add(
+                                AmmunitionChanged,
+                                ammunition);
+                    }
                 }
                 else
                 {

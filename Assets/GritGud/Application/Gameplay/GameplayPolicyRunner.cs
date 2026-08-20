@@ -251,6 +251,12 @@ namespace GritGud.Application.Gameplay
                 new GameplayOutcomeFeatureWeight(
                     "projectile.launch", 12f),
                 new GameplayOutcomeFeatureWeight(
+                    "ammunition.reload-readiness", 100f),
+                new GameplayOutcomeFeatureWeight(
+                    "ammunition.reload-rounds", 1f),
+                new GameplayOutcomeFeatureWeight(
+                    "ammunition.reserve-depletion", -2f),
+                new GameplayOutcomeFeatureWeight(
                     "displacement.pinned", 8f),
                 new GameplayOutcomeFeatureWeight(
                     "displacement.succeeded", 6f),
@@ -294,7 +300,7 @@ namespace GritGud.Application.Gameplay
                     "hazard.fire-traversal", -20f),
                 new GameplayOutcomeFeatureWeight(
                     "drone.move-distance", -0.01f),
-            }, "policy.baseline-combat", policyVersion: 1);
+            }, "policy.baseline-combat", policyVersion: 2);
             return scenario == null
                 ? weighted
                 : new AuthoredEnemyPolicy(scenario, weighted);
@@ -318,7 +324,7 @@ namespace GritGud.Application.Gameplay
             }
 
             public string PolicyId => "policy.baseline-combat";
-            public int PolicyVersion => 1;
+            public int PolicyVersion => 2;
 
             public GameplayPolicyScore Score(
                 GameplayDecisionContext context,

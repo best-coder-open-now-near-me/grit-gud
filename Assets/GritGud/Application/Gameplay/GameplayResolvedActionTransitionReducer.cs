@@ -32,7 +32,10 @@ namespace GritGud.Application.Gameplay
         public bool Supports(GameplayCapabilityProfile profile) =>
             profile != null
             && (profile.Equals(GameplayCapabilityProfiles.Equip())
-                || profile.Equals(GameplayCapabilityProfiles.Interact()));
+                || profile.Equals(GameplayCapabilityProfiles.Interact())
+                || GameplayReloadPreparation.TryReadProfile(
+                    profile,
+                    out _));
 
         public GameplayReductionResult Reduce(
             GameplayCombatStateSnapshot state,
@@ -62,10 +65,35 @@ namespace GritGud.Application.Gameplay
                     "Resolved action actor is not active.");
             GameplayActorSnapshot acting = session.GetActor(
                 action.Request.ActorId);
+            TurnBudget expectedBudget = action.PreviousBudget.SpendAction(
+                action.Cost);
+            if (payload.Profile.Capability
+                == GameplaySemanticCapability.Reload)
+            {
+                if (!GameplayReloadPreparation.TryReadProfile(
+                        payload.Profile,
+                        out GameplayReloadProfileSemantics semantics))
+                    throw new ArgumentException(
+                        "Reload capability profile is malformed.",
+                        nameof(transition));
+                ActionCost expectedCost = session.Mode
+                        == GameplaySessionMode.TurnBased
+                    ? semantics.TurnCost
+                    : new ActionCost(
+                        0,
+                        0f,
+                        semantics.TurnCost.Mobility);
+                if (!CostsMatch(action.Cost, expectedCost))
+                    throw new InvalidOperationException(
+                        "Reload action cost does not match its capability profile.");
+                if (session.Mode == GameplaySessionMode.TurnBased
+                    && semantics.ConsumesRemainingMovement)
+                    expectedBudget = new TurnBudget(
+                        expectedBudget.ActionPoints,
+                        0f);
+            }
             if (!BudgetsMatch(acting.TurnBudget, action.PreviousBudget)
-                || !BudgetsMatch(
-                    action.PreviousBudget.SpendAction(action.Cost),
-                    action.ResultingBudget))
+                || !BudgetsMatch(expectedBudget, action.ResultingBudget))
                 throw new InvalidOperationException(
                     "Resolved action budget does not match canonical state.");
 
@@ -80,6 +108,9 @@ namespace GritGud.Application.Gameplay
                     break;
                 case GameplaySemanticCapability.Interact:
                     ApplyInteraction(mutation, payload);
+                    break;
+                case GameplaySemanticCapability.Reload:
+                    ApplyReload(mutation, payload);
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(transition));
@@ -151,6 +182,66 @@ namespace GritGud.Application.Gameplay
                 isCompleted: true));
         }
 
+        private static void ApplyReload(
+            GameplayCanonicalStateMutation mutation,
+            GameplayResolvedActionTransitionPayload payload)
+        {
+            GameplayActionRecord action = payload.Action;
+            if (action.Outcomes.Count != 1
+                || !(action.Outcomes[0]
+                    is WeaponReloadedActionOutcome reloaded)
+                || !string.Equals(
+                    action.Request.ActionId,
+                    AmmunitionActionIds.Reload,
+                    StringComparison.Ordinal))
+                throw new ArgumentException(
+                    "Reload transitions require one reload outcome.",
+                    nameof(payload));
+            WeaponAmmunitionDelta change = reloaded.Change;
+            GameplayActorSnapshot actor = mutation.GetActor(
+                action.Request.ActorId);
+            if (change.Kind != WeaponAmmunitionChangeKind.Reload
+                || change.ActionSequence != action.Sequence
+                || !string.Equals(
+                    change.ActorId,
+                    actor.ActorId,
+                    StringComparison.Ordinal)
+                || !string.Equals(
+                    change.WeaponItemId,
+                    action.Request.TargetId,
+                    StringComparison.Ordinal)
+                || !string.Equals(
+                    actor.EquippedItemId,
+                    change.WeaponItemId,
+                    StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "Reload outcome does not match its action identity.");
+            WeaponMagazineSnapshot magazine = actor.Ammunition.GetMagazine(
+                change.WeaponItemId);
+            int reserve = actor.Ammunition.GetReserve(change.AmmoTypeId);
+            int expectedTransfer = Math.Min(
+                magazine.Capacity - magazine.LoadedRounds,
+                reserve);
+            if (expectedTransfer <= 0
+                || change.MagazineCapacity != magazine.Capacity
+                || !string.Equals(
+                    change.AmmoTypeId,
+                    magazine.AmmoTypeId,
+                    StringComparison.Ordinal)
+                || change.PreviousLoadedRounds != magazine.LoadedRounds
+                || change.PreviousReserveRounds != reserve
+                || change.ChangedRounds != expectedTransfer)
+                throw new InvalidOperationException(
+                    "Reload outcome is not the exact bounded canonical transfer.");
+            ActorAmmunitionSnapshot ammunition =
+                GameplayAmmunitionPreparation.Apply(
+                    actor.Ammunition,
+                    change);
+            mutation.ReplaceActor(GameplayCanonicalStateMutation.CopyActor(
+                actor,
+                ammunition: ammunition));
+        }
+
         private static IReadOnlyList<GameplayDomainEvent> CreateEvents(
             GameplaySemanticTransition transition,
             GameplayActionRecord action) => Array.AsReadOnly(
@@ -165,5 +256,10 @@ namespace GritGud.Application.Gameplay
         private static bool BudgetsMatch(TurnBudget left, TurnBudget right) =>
             left.ActionPoints == right.ActionPoints
             && left.MovementOpportunity == right.MovementOpportunity;
+
+        private static bool CostsMatch(ActionCost left, ActionCost right) =>
+            left.ActionPoints == right.ActionPoints
+            && left.MovementOpportunity == right.MovementOpportunity
+            && left.Mobility == right.Mobility;
     }
 }

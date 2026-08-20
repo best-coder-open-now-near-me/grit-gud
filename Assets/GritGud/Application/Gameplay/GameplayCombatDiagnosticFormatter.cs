@@ -550,9 +550,13 @@ namespace GritGud.Application.Gameplay
         {
             lines.Add("AMMUNITION - " + change.WeaponItemId
                 + " - LOADED " + change.PreviousLoadedRounds
-                + " - " + change.ChangedRounds
+                + (change.Kind == WeaponAmmunitionChangeKind.Reload
+                    ? " + "
+                    : " - ")
+                + change.ChangedRounds
                 + " = " + change.ResultingLoadedRounds
-                + " - RESERVE " + change.ResultingReserveRounds);
+                + " - RESERVE " + change.PreviousReserveRounds
+                + " -> " + change.ResultingReserveRounds);
         }
 
         private static void AppendDisplacement(
