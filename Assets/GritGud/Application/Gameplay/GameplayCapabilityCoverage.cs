@@ -707,7 +707,7 @@ namespace GritGud.Application.Gameplay
                     playerControlled,
                     aiControlled,
                     GameplaySemanticSubjectKind.DestructibleProp);
-            if (hasVehicles)
+            if (hasVehicles && attack.Projectile == null)
                 AddAttackSubject(
                     result,
                     actor,

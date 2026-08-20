@@ -100,6 +100,10 @@ namespace GritGud.Application.Gameplay
             if (payload.Advance.Sequence != transition.Identity.Sequence)
                 throw new InvalidOperationException(
                     "Projectile advance must share its canonical transition sequence.");
+            if (payload.Advance.WorldStateRevision
+                != state.Session.JournalSequence)
+                throw new InvalidOperationException(
+                    "Projectile advance spatial evidence is stale.");
             GameplayCombatStateSnapshot projected =
                 GameplayProjectileAdvanceStateProjector.Project(
                     state,

@@ -29,6 +29,7 @@ internal static class SimulationChecks
             VerifyCanonicalActionOwnedRecordSequences();
             VerifyConcreteActorAttackCandidateRoute();
             VerifyConcreteDirectFireCandidateRoute();
+            VerifyConcreteProjectileCandidateRoutes();
             VerifyConcreteThrownExplosiveCandidateRoutes();
             VerifyPermanentPolicyRunner();
             VerifyLogicalExecutionGuards();
@@ -2552,7 +2553,7 @@ internal static class SimulationChecks
             resultingFlight,
             requestedTurnTime: 1f,
             segmentEnd: resultingFlight.Position,
-            worldStateRevision: 0L,
+            worldStateRevision: live.CurrentState.Session.JournalSequence,
             collisionFraction: null);
         var advancePayload = new GameplayProjectileAdvanceTransitionPayload(
             droneControllerId,
@@ -3659,6 +3660,190 @@ internal static class SimulationChecks
                 reducers).IsExact,
             "Direct-fire prop candidate did not reduce and replay exactly.");
 
+    }
+
+    private static void VerifyConcreteProjectileCandidateRoutes()
+    {
+        LoadDepotContent(
+            out GameplayScenarioAssembly authored,
+            out LevelDocument level);
+        var spatialIdentity = new SpatialContentIdentity(
+            level.levelId,
+            level.schemaVersion,
+            evidenceAlgorithmVersion: 1,
+            new string('e', 64));
+        var spatial = new GameplayHeadlessSpatialEvidence(
+            level,
+            spatialIdentity);
+        GameplayScenarioAssembly assembly = GameplayHeadlessScenarioGrounding
+            .Resolve(authored, spatial);
+        var gameplay = new GameplaySession(
+            assembly.Scenario,
+            scenarioSeed: assembly.RandomSeed);
+        Require(gameplay.BeginEncounter(),
+            "Projectile route fixture encounter did not begin.");
+        int turnGuard = 0;
+        while (!string.Equals(
+            gameplay.ActiveActorId,
+            "player",
+            StringComparison.Ordinal))
+        {
+            Require(turnGuard++ < assembly.Scenario.Actors.Count
+                && gameplay.TryEndTurn(gameplay.ActiveActorId, out _),
+                "Projectile route fixture could not reach the player turn.");
+        }
+        var equipment = new GameplayEquipmentSession(gameplay);
+        Require(equipment.TryResolveSwitch(
+                "player",
+                "weapon.rocket-launcher",
+                out _,
+                out _,
+                out EquipmentChangeFailure equipmentFailure),
+            "Projectile route fixture could not equip the launcher: "
+                + equipmentFailure);
+        DestructiblePropSession destructibles =
+            DestructiblePropSession.FromLevel(level, gameplay.Journal);
+        var projectiles = new GameplayProjectileSession(
+            gameplay,
+            new AlwaysClearProjectileQuery(),
+            new GameplayBlastConsequenceResolver(gameplay, destructibles));
+        var drones = new GameplayDroneSession(
+            gameplay,
+            assembly.Drones,
+            destructibles);
+        GameplayCombatStateSnapshot initial = GameplayCombatStateCapture.Capture(
+            gameplay,
+            destructibles,
+            projectiles: projectiles,
+            drones: drones);
+        IReadOnlyList<GameplayReachableInput> inputs =
+            GameplayReachableInputEnumerator.Enumerate(assembly, level);
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
+        GameplayCapabilityRegistry capabilities =
+            GameplayCurrentCapabilityCatalog.Create(reducers, inputs);
+        var routes = new GameplayCandidateExecutionRouteRegistry(capabilities);
+        routes.Register(new GameplayProjectileLaunchCandidateExecutionRoute(
+            assembly,
+            spatial));
+        routes.Register(new GameplayProjectileAdvanceCandidateExecutionRoute(
+            spatial));
+        var projectileInputs = new List<GameplayReachableInput>();
+        foreach (GameplayReachableInput input in inputs)
+            if (input.Profile.Capability
+                    == GameplaySemanticCapability.LaunchProjectile
+                || input.Profile.Capability
+                    == GameplaySemanticCapability.AdvanceProjectile)
+                projectileInputs.Add(input);
+        GameplayExecutableRouteCoverageValidator.Validate(
+            projectileInputs,
+            routes).RequireComplete();
+
+        var builder = new GameplayHeadlessCandidateBuilder(
+            capabilities,
+            spatial,
+            scenarioDefinition: assembly.Scenario);
+        var context = new GameplayDecisionContext(
+            initial,
+            GameplayObservationSnapshot.FullState("player", initial));
+        GameplayExecutableCandidateEvaluation launchEvaluation = null;
+        var launchFailures = new List<string>();
+        foreach (GameplayCandidate candidate in builder.Build(
+            initial,
+            inputs,
+            "player"))
+        {
+            if (candidate.Profile.Capability
+                != GameplaySemanticCapability.LaunchProjectile)
+                continue;
+            GameplayExecutableCandidateEvaluation evaluated = routes.Evaluate(
+                context,
+                candidate);
+            if (!evaluated.IsLegal)
+            {
+                launchFailures.Add(
+                    candidate.SubjectId + ":" + evaluated.FailureCode);
+                continue;
+            }
+            launchEvaluation = evaluated;
+            if (candidate.SubjectKind == GameplaySemanticSubjectKind.Actor)
+                break;
+        }
+        Require(launchEvaluation != null,
+            "Depot supplied no legal reducer-owned projectile launch: "
+                + string.Join(", ", launchFailures));
+        GameplaySemanticTransition launchTransition = routes.Prepare(
+            context,
+            launchEvaluation);
+        GameplayExecutableCandidateEvaluation repeatedLaunch = routes.Evaluate(
+            context,
+            launchEvaluation.Candidate);
+        Require(string.Equals(
+            GameplayTransitionPayloadDigest.Calculate(launchTransition),
+            GameplayTransitionPayloadDigest.Calculate(routes.Prepare(
+                context,
+                repeatedLaunch)),
+            StringComparison.Ordinal),
+            "Projectile launch preparation was not deterministic.");
+
+        var runtime = new GameplaySimulationRuntime(
+            new GameplayExecutionIdentity(
+                new GameplayContentIdentity(
+                    assembly.Scenario.Id,
+                    scenarioSchemaVersion: 1,
+                    rulesSchemaVersion: 1,
+                    new string('f', 64)),
+                spatialIdentity,
+                gameplay.RunIdentity),
+            initial,
+            reducers,
+            capabilities);
+        runtime.Execute(launchTransition);
+        Require(runtime.CurrentState.Projectiles.Count == 1
+            && runtime.CurrentState.Projectiles[0].Status
+                == ProjectileFlightStatus.InFlight,
+            "Projectile launch did not install one canonical in-flight state.");
+
+        GameplayCombatStateSnapshot afterLaunch = runtime.CurrentState;
+        var advanceContext = new GameplayDecisionContext(
+            afterLaunch,
+            GameplayObservationSnapshot.FullState("player", afterLaunch));
+        GameplayExecutableCandidateEvaluation advanceEvaluation = null;
+        foreach (GameplayCandidate candidate in builder.Build(
+            afterLaunch,
+            inputs,
+            "player"))
+        {
+            if (!candidate.Profile.Equals(
+                GameplayCapabilityProfiles.AdvanceProjectile()))
+                continue;
+            GameplayExecutableCandidateEvaluation evaluated = routes.Evaluate(
+                advanceContext,
+                candidate);
+            if (evaluated.IsLegal)
+            {
+                advanceEvaluation = evaluated;
+                break;
+            }
+        }
+        Require(advanceEvaluation != null,
+            "An in-flight projectile produced no mandatory advance candidate.");
+        GameplaySemanticTransition advanceTransition = routes.Prepare(
+            advanceContext,
+            advanceEvaluation);
+        var advancePayload = (GameplayProjectileAdvanceTransitionPayload)
+            advanceTransition.Payload;
+        Require(advancePayload.Advance.WorldStateRevision
+                == afterLaunch.Session.JournalSequence
+            && advancePayload.Advance.Resulting.DistanceTraveled
+                > advancePayload.Advance.Previous.DistanceTraveled,
+            "Projectile advance did not freeze current spatial evidence and flight progress.");
+        runtime.Execute(advanceTransition);
+        Require(GameplayExactReplay.Verify(
+                initial,
+                runtime.Trajectory,
+                reducers).IsExact,
+            "Projectile launch and advance did not replay exactly.");
     }
 
     private static void VerifyConcreteThrownExplosiveCandidateRoutes()

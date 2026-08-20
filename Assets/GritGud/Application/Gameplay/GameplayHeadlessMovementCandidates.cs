@@ -238,6 +238,12 @@ namespace GritGud.Application.Gameplay
                         result.AddRange(BuildDroneMoves(state, input));
                     continue;
                 }
+                if (input.Profile.Equals(
+                    GameplayCapabilityProfiles.AdvanceProjectile()))
+                {
+                    result.AddRange(BuildProjectileAdvances(state, input));
+                    continue;
+                }
                 if (input.SubjectKind
                         == GameplaySemanticSubjectKind.WorldPosition
                     && scenario != null
@@ -259,6 +265,35 @@ namespace GritGud.Application.Gameplay
                 left.CandidateId,
                 right.CandidateId));
             return result.AsReadOnly();
+        }
+
+        private IEnumerable<GameplayCandidate> BuildProjectileAdvances(
+            GameplayCombatStateSnapshot state,
+            GameplayReachableInput input)
+        {
+            var ordered = new List<ProjectileFlightSnapshot>();
+            foreach (ProjectileFlightSnapshot projectile in state.Projectiles)
+                if (projectile.Status == ProjectileFlightStatus.InFlight)
+                    ordered.Add(projectile);
+            ordered.Sort((left, right) => StringComparer.Ordinal.Compare(
+                left.ProjectileId,
+                right.ProjectileId));
+            foreach (ProjectileFlightSnapshot projectile in ordered)
+            {
+                float remainingTurnTime = (projectile.Launch.Definition
+                        .MaximumRange - projectile.DistanceTraveled)
+                    / projectile.Launch.Definition.SpeedPerTurn;
+                float turnTime = Math.Min(1f, remainingTurnTime);
+                if (turnTime <= 0f) continue;
+                yield return candidates.Build(
+                    input,
+                    new GameplaySubjectReference(
+                        GameplaySemanticSubjectKind.Projectile,
+                        projectile.ProjectileId),
+                    new GameplayProjectileAdvanceIntent(turnTime),
+                    "advance." + projectile.ProjectileId + "."
+                        + GameplayNumericPolicy.FormatCanonical(turnTime));
+            }
         }
 
         private IEnumerable<GameplayCandidate> BuildWorldPositions(

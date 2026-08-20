@@ -169,7 +169,7 @@ namespace GritGud.Application.Gameplay
         }
     }
 
-    public sealed class GameplayHeadlessSpatialEvidence
+    public sealed partial class GameplayHeadlessSpatialEvidence
     {
         private sealed class ObstacleDefinition
         {
@@ -752,14 +752,38 @@ namespace GritGud.Application.Gameplay
             out string entityId,
             out GameplayPosition point,
             out GameplayPosition normal,
-            out int fractureChunkIndex)
+            out int fractureChunkIndex) => TryFindFirstObstacleHit(
+                state,
+                origin,
+                destination,
+                expansion: 0f,
+                out entityId,
+                out point,
+                out normal,
+                out fractureChunkIndex,
+                out _);
+
+        private bool TryFindFirstObstacleHit(
+            GameplayCombatStateSnapshot state,
+            GameplayPosition origin,
+            GameplayPosition destination,
+            float expansion,
+            out string entityId,
+            out GameplayPosition point,
+            out GameplayPosition normal,
+            out int fractureChunkIndex,
+            out float hitFraction)
         {
+            GameplayNumericPolicy.RequireFinite(expansion, nameof(expansion));
+            if (expansion < 0f)
+                throw new ArgumentOutOfRangeException(nameof(expansion));
             if (origin.DistanceTo(destination) <= 0.000001f)
             {
                 entityId = null;
                 point = default;
                 normal = default;
                 fractureChunkIndex = -1;
+                hitFraction = 0f;
                 return false;
             }
             if (hasDestructibleObstacles)
@@ -787,6 +811,7 @@ namespace GritGud.Application.Gameplay
                                 volume.size.x,
                                 volume.size.y,
                                 volume.size.z),
+                            expansion,
                             -1,
                             ref bestFraction,
                             ref bestId,
@@ -817,6 +842,7 @@ namespace GritGud.Application.Gameplay
                             pose,
                             chunk.Center,
                             chunk.Size,
+                            expansion,
                             index,
                             ref bestFraction,
                             ref bestId,
@@ -839,6 +865,7 @@ namespace GritGud.Application.Gameplay
                             volume.size.x,
                             volume.size.y,
                             volume.size.z),
+                        expansion,
                         -1,
                         ref bestFraction,
                         ref bestId,
@@ -851,12 +878,14 @@ namespace GritGud.Application.Gameplay
                 point = default;
                 normal = default;
                 fractureChunkIndex = -1;
+                hitFraction = 0f;
                 return false;
             }
             entityId = bestId;
             point = Lerp(origin, destination, bestFraction);
             normal = bestNormal;
             fractureChunkIndex = bestChunk;
+            hitFraction = bestFraction;
             return true;
         }
 
@@ -947,6 +976,7 @@ namespace GritGud.Application.Gameplay
             GameplayPropPose pose,
             GameplayPosition localCenter,
             GameplayPosition size,
+            float expansion,
             int fractureChunkIndex,
             ref float bestFraction,
             ref string bestId,
@@ -958,7 +988,10 @@ namespace GritGud.Application.Gameplay
                     destination,
                     pose,
                     localCenter,
-                    size,
+                    new GameplayPosition(
+                        size.X + (expansion * 2f),
+                        size.Y + (expansion * 2f),
+                        size.Z + (expansion * 2f)),
                     out float fraction,
                     out GameplayPosition normal)
                 || fraction >= bestFraction)

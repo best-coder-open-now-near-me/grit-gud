@@ -312,7 +312,10 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(second.Resulting.Position.Z, Is.EqualTo(6f));
             Assert.That(second.Resulting.ElapsedTurnTime, Is.EqualTo(1.5f));
             Assert.That(second.Resulting.Impact.HitEntityId, Is.EqualTo("target"));
-            Assert.That(second.Resulting.Impact.WorldStateRevision, Is.EqualTo(101));
+            Assert.That(second.Resulting.Impact.WorldStateRevision,
+                Is.EqualTo(second.WorldStateRevision));
+            Assert.That(second.WorldStateRevision,
+                Is.GreaterThan(first.WorldStateRevision));
             Assert.That(query.Queries, Has.Count.EqualTo(2));
             Assert.That(query.Queries[0].StartingTurnTime, Is.EqualTo(0f));
             Assert.That(query.Queries[0].ArrivalTurnTime, Is.EqualTo(1f));
@@ -358,7 +361,8 @@ namespace GritGud.Domain.Tests.Gameplay
                 Is.EqualTo(ProjectileFlightStatus.Impacted));
             Assert.That(replayed.Position.Z, Is.EqualTo(3f));
             Assert.That(replayed.Impact.HitEntityId, Is.EqualTo("cover.wall"));
-            Assert.That(replayed.Impact.WorldStateRevision, Is.EqualTo(22));
+            Assert.That(replayed.Impact.WorldStateRevision,
+                Is.EqualTo(advance.WorldStateRevision));
             Assert.That(replayGameplay.GetActor("player").TurnBudget.ActionPoints,
                 Is.EqualTo(2));
         }
@@ -616,6 +620,7 @@ namespace GritGud.Domain.Tests.Gameplay
         private sealed class QueuedSegmentQuery : IProjectileSegmentQuery
         {
             private readonly Queue<ProjectileSegmentQueryResult> results;
+            private Func<long> worldStateRevision;
 
             public QueuedSegmentQuery(
                 params ProjectileSegmentQueryResult[] queuedResults)
@@ -626,17 +631,35 @@ namespace GritGud.Domain.Tests.Gameplay
             public List<ProjectileSegmentQuery> Queries { get; } =
                 new List<ProjectileSegmentQuery>();
 
+            public void BindWorldStateRevision(Func<long> revision)
+            {
+                if (worldStateRevision != null)
+                    throw new InvalidOperationException(
+                        "Projectile query revision is already bound.");
+                worldStateRevision = revision ?? throw new ArgumentNullException(
+                    nameof(revision));
+            }
+
             public ProjectileSegmentQueryResult Query(
                 ProjectileSegmentQuery query)
             {
                 Queries.Add(query);
+                long revision = worldStateRevision?.Invoke()
+                    ?? throw new InvalidOperationException(
+                        "Projectile query revision is not bound.");
                 if (results.Count == 0)
                 {
                     return ProjectileSegmentQueryResult.Clear(
-                        worldStateRevision: Queries.Count);
+                        revision);
                 }
-
-                return results.Dequeue();
+                ProjectileSegmentQueryResult queued = results.Dequeue();
+                return queued.HasCollision
+                    ? ProjectileSegmentQueryResult.Collision(
+                        revision,
+                        queued.HitEntityId,
+                        queued.CollisionFraction,
+                        queued.BlastEffects)
+                    : ProjectileSegmentQueryResult.Clear(revision);
             }
         }
 
@@ -654,6 +677,9 @@ namespace GritGud.Domain.Tests.Gameplay
             IProjectileSegmentQuery query,
             DestructiblePropSession destructibles)
         {
+            if (query is QueuedSegmentQuery queued)
+                queued.BindWorldStateRevision(
+                    () => gameplay.Journal.LastEntry?.Sequence ?? 0L);
             return new GameplayProjectileSession(
                 gameplay,
                 query,

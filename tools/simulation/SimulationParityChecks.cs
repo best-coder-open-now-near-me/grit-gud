@@ -689,7 +689,8 @@ internal static class SimulationParityChecks
             gameplay.Journal);
         var live = new GameplayProjectileSession(
             gameplay,
-            new ClearThenImpactProjectileQuery(),
+            new ClearThenImpactProjectileQuery(
+                () => gameplay.Journal.LastEntry?.Sequence ?? 0L),
             new GameplayBlastConsequenceResolver(gameplay, destructibles));
         GameplayCombatStateSnapshot launchPrevious =
             GameplayCombatStateCapture.Capture(
@@ -1701,7 +1702,15 @@ internal static class SimulationParityChecks
     private sealed class ClearThenImpactProjectileQuery :
         IProjectileSegmentQuery
     {
+        private readonly Func<long> worldStateRevision;
         private int queryCount;
+
+        public ClearThenImpactProjectileQuery(Func<long> worldStateRevision)
+        {
+            this.worldStateRevision = worldStateRevision
+                ?? throw new ArgumentNullException(
+                    nameof(worldStateRevision));
+        }
 
         public ProjectileSegmentQueryResult Query(
             ProjectileSegmentQuery query)
@@ -1709,9 +1718,9 @@ internal static class SimulationParityChecks
             queryCount++;
             if (queryCount == 1)
                 return ProjectileSegmentQueryResult.Clear(
-                    worldStateRevision: 0L);
+                    worldStateRevision());
             return ProjectileSegmentQueryResult.Collision(
-                worldStateRevision: 0L,
+                worldStateRevision(),
                 hitEntityId: "enemy",
                 collisionFraction: 0.25f,
                 blastEffects: new[]
