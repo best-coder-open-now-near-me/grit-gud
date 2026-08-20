@@ -205,6 +205,51 @@ namespace GritGud.Application.Gameplay
                 TurnBudget.MovementOpportunity);
         }
 
+        internal void ValidateCanonicalSnapshot(GameplayActorSnapshot snapshot)
+        {
+            if (!string.Equals(
+                    snapshot.ActorId,
+                    ActorId,
+                    StringComparison.Ordinal))
+                throw new ArgumentException(
+                    "Canonical actor projection has a different identity.",
+                    nameof(snapshot));
+            if (snapshot.MaximumWounds != MaximumWounds
+                || snapshot.ActionPointEconomy.StartingActionPoints
+                    != actionPointEconomy.StartingActionPoints
+                || snapshot.ActionPointEconomy.IncomePerPersonalTurn
+                    != actionPointEconomy.IncomePerPersonalTurn
+                || snapshot.ActionPointEconomy.MaximumHeldActionPoints
+                    != actionPointEconomy.MaximumHeldActionPoints
+                || snapshot.TurnMovementAllowance
+                    != turnBudgetAllowance.MovementOpportunity)
+                throw new InvalidOperationException(
+                    $"Canonical actor '{ActorId}' changed authored allowances.");
+        }
+
+        internal void InstallCanonicalSnapshot(GameplayActorSnapshot snapshot)
+        {
+            ValidateCanonicalSnapshot(snapshot);
+
+            pose = snapshot.Pose;
+            turnBudget = snapshot.TurnBudget;
+            wounds = snapshot.Wounds;
+            EquippedItemId = snapshot.EquippedItemId;
+            EquipmentEffects = snapshot.EquipmentEffects;
+            pinState = snapshot.PinState;
+            EmergencyActionPointAllowance =
+                snapshot.EmergencyActionPointAllowance;
+            suspendedTurnBudget = snapshot.SuspendedTurnBudget;
+            inventoryQuantities.Clear();
+            foreach (InventoryQuantitySnapshot quantity in
+                snapshot.Inventory.Quantities)
+                inventoryQuantities.Add(quantity.ItemId, quantity.Quantity);
+            cachedInventory = snapshot.Inventory;
+            cachedSnapshot = snapshot;
+            inventorySnapshotDirty = false;
+            actorSnapshotDirty = false;
+        }
+
         public void FaceToward(GameplayPosition target)
         {
             double deltaX = (double)target.X - Pose.Position.X;
@@ -319,6 +364,31 @@ namespace GritGud.Application.Gameplay
         public GameplayInteractionDefinition Interaction { get; }
 
         public bool IsCompleted { get; set; }
+
+        internal void ValidateCanonicalSnapshot(
+            GameplayObjectiveSnapshot snapshot)
+        {
+            if (!string.Equals(
+                    snapshot.ObjectiveId,
+                    ObjectiveId,
+                    StringComparison.Ordinal)
+                || snapshot.Position.DistanceTo(Position) > 0f
+                || snapshot.InteractionRadius != InteractionRadius
+                || !string.Equals(
+                    GameplayCanonicalValueDigest.Calculate(
+                        snapshot.Interaction),
+                    GameplayCanonicalValueDigest.Calculate(Interaction),
+                    StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "Canonical objective projection changed authored identity or geometry.");
+        }
+
+        internal void InstallCanonicalSnapshot(
+            GameplayObjectiveSnapshot snapshot)
+        {
+            ValidateCanonicalSnapshot(snapshot);
+            IsCompleted = snapshot.IsCompleted;
+        }
 
         public GameplayObjectiveSnapshot CreateSnapshot() =>
             new GameplayObjectiveSnapshot(

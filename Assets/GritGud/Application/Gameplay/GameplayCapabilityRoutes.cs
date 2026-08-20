@@ -260,15 +260,39 @@ namespace GritGud.Application.Gameplay
             RequireValid(reduction.Resulting);
 
             current = reduction.Resulting;
-            afterRootSwap?.Invoke(reduction);
-            PublishAll(reduction.DomainEvents);
+            var failures = new List<Exception>();
+            if (afterRootSwap != null)
+            {
+                foreach (Delegate listener in
+                    afterRootSwap.GetInvocationList())
+                {
+                    try
+                    {
+                        ((Action<GameplayReductionResult>)listener)(reduction);
+                    }
+                    catch (AggregateException aggregate)
+                    {
+                        failures.AddRange(aggregate.Flatten().InnerExceptions);
+                    }
+                    catch (Exception exception)
+                    {
+                        failures.Add(exception);
+                    }
+                }
+            }
+            PublishAll(reduction.DomainEvents, failures);
+            if (failures.Count > 0)
+                throw new AggregateException(
+                    "Authoritative state was installed, but one or more projections failed.",
+                    failures);
         }
 
-        private void PublishAll(IReadOnlyList<GameplayDomainEvent> events)
+        private void PublishAll(
+            IReadOnlyList<GameplayDomainEvent> events,
+            List<Exception> failures)
         {
             Delegate[] listeners = DomainEventPublished?.GetInvocationList();
             if (listeners == null) return;
-            var failures = new List<Exception>();
             foreach (GameplayDomainEvent domainEvent in events)
                 foreach (Delegate listener in listeners)
                     try
@@ -279,10 +303,6 @@ namespace GritGud.Application.Gameplay
                     {
                         failures.Add(exception);
                     }
-            if (failures.Count > 0)
-                throw new AggregateException(
-                    "Authoritative state was installed, but presentation projection failed.",
-                    failures);
         }
 
         private static void RequireValid(GameplayCombatStateSnapshot state)

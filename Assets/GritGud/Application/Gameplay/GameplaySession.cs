@@ -467,6 +467,7 @@ namespace GritGud.Application.Gameplay
             turnLifecycle = new GameplayTurnLifecycle(this);
             actionCommitValidator = new GameplayActionCommitValidator(this);
             actionOutcomeApplier = new GameplayActionOutcomeApplier(this);
+            canonicalJournalSequence = Journal.LastEntry?.Sequence ?? 0L;
             var awareness = new List<EnemyAwarenessSnapshot>();
             foreach (ScenarioActorDefinition actor in scenario.Actors)
             {
@@ -705,8 +706,11 @@ namespace GritGud.Application.Gameplay
         public bool TryExitTurnMode(out TurnModeExitFailure failure) =>
             turnLifecycle.TryExitTurnMode(out failure);
 
-        public bool TryEndTurn(string actorId, out TurnEndFailure failure) =>
-            turnLifecycle.TryEndTurn(actorId, out failure);
+        public bool TryEndTurn(string actorId, out TurnEndFailure failure)
+        {
+            RequireLegacyMutationAllowed(nameof(TryEndTurn));
+            return turnLifecycle.TryEndTurn(actorId, out failure);
+        }
 
         public void BeginEmergencyReaction(
             string attackerId,
@@ -937,6 +941,7 @@ namespace GritGud.Application.Gameplay
 
         public void CommitMovementRoute(MovementRouteRecord route)
         {
+            RequireLegacyMutationAllowed(nameof(CommitMovementRoute));
             if (route == null)
             {
                 throw new ArgumentNullException(nameof(route));
@@ -1041,6 +1046,7 @@ namespace GritGud.Application.Gameplay
 
         public void CompleteMovementResolution()
         {
+            RequireLegacyMutationAllowed(nameof(CompleteMovementResolution));
             if (Operation != GameplaySessionOperation.ResolvingMovement
                 || pendingMovementRoute == null)
             {

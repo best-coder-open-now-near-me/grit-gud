@@ -100,6 +100,100 @@ namespace GritGud.Application.Gameplay
 
         public event Action<GameplayModeChange> ModeChanged;
 
+        internal void ValidateCanonicalSnapshot(
+            GameplaySessionStateSnapshot snapshot,
+            object semanticRecord)
+        {
+            if (snapshot == null)
+                throw new ArgumentNullException(nameof(snapshot));
+            if (snapshot.LastTurnSequence != (LastEndedTurn?.Sequence ?? 0L))
+            {
+                if (!(semanticRecord is TurnEndRecord turn)
+                    || turn.Sequence != snapshot.LastTurnSequence)
+                {
+                    throw new InvalidOperationException(
+                        "A canonical turn sequence can only advance with its TurnEndRecord.");
+                }
+            }
+            if (snapshot.LastVoluntaryTurnCycleSequence
+                != (LastCompletedVoluntaryTurnCycle?.Sequence ?? 0L))
+            {
+                if (!(semanticRecord is VoluntaryTurnCycleRecord cycle)
+                    || cycle.Sequence
+                        != snapshot.LastVoluntaryTurnCycleSequence)
+                {
+                    throw new InvalidOperationException(
+                        "A canonical voluntary cycle can only advance with its cycle record.");
+                }
+            }
+        }
+
+        internal void InstallCanonicalSnapshot(
+            GameplaySessionStateSnapshot snapshot,
+            object semanticRecord,
+            GameplayNotificationBatch notifications)
+        {
+            if (notifications == null)
+                throw new ArgumentNullException(nameof(notifications));
+            ValidateCanonicalSnapshot(snapshot, semanticRecord);
+
+            GameplaySessionMode previousMode = Mode;
+            string previousActorId = activeActorId;
+            Mode = snapshot.Mode;
+            TurnContext = snapshot.TurnContext;
+            EncounterActive = snapshot.EncounterActive;
+            EncounterCompletionRequested =
+                snapshot.EncounterCompletionRequested;
+            activeActorId = string.IsNullOrWhiteSpace(snapshot.ActiveActorId)
+                ? null
+                : snapshot.ActiveActorId;
+            TurnPhase = snapshot.TurnPhase;
+            emergencyResponders = snapshot.EmergencyResponders.Count == 0
+                ? null
+                : snapshot.EmergencyResponders;
+            emergencyResponderIndex = snapshot.EmergencyResponderIndex;
+            emergencyResumeActorId = string.IsNullOrWhiteSpace(
+                snapshot.EmergencyResumeActorId)
+                    ? null
+                    : snapshot.EmergencyResumeActorId;
+            voluntaryTurnReentrySecondsRemaining =
+                snapshot.VoluntaryTurnReentrySecondsRemaining;
+            pendingVoluntaryTurnCycle = snapshot.PendingVoluntaryTurnCycle;
+
+            if (semanticRecord is TurnEndRecord turn
+                && turn.Sequence == snapshot.LastTurnSequence
+                && turn.Sequence != (LastEndedTurn?.Sequence ?? 0L))
+            {
+                LastEndedTurn = turn;
+                notifications.Add(TurnEnded, turn);
+            }
+            if (semanticRecord is VoluntaryTurnCycleRecord cycle
+                && cycle.Sequence == snapshot.LastVoluntaryTurnCycleSequence
+                && cycle.Sequence
+                    != (LastCompletedVoluntaryTurnCycle?.Sequence ?? 0L))
+            {
+                LastCompletedVoluntaryTurnCycle = cycle;
+                notifications.Add(VoluntaryTurnCycleCompleted, cycle);
+            }
+            if (!string.Equals(
+                    previousActorId,
+                    activeActorId,
+                    StringComparison.Ordinal))
+            {
+                notifications.Add(
+                    ActiveActorChanged,
+                    new GameplayActiveActorChange(
+                        previousActorId,
+                        activeActorId));
+            }
+            if (previousMode != Mode)
+            {
+                notifications.Add(
+                    ModeChanged,
+                    new GameplayModeChange(previousMode, Mode));
+            }
+        }
+
         public bool TryEnterTurnMode(out TurnModeEntryFailure failure)
         {
             if (Mode == GameplaySessionMode.TurnBased)

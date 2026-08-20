@@ -47,6 +47,8 @@ namespace GritGud.Application.Gameplay
 
         public event Action<GameplayDomainEvent> DomainEventPublished;
 
+        public event Action<GameplayReductionResult> StateInstalled;
+
         public GameplayReductionResult Execute(
             GameplaySemanticTransition transition)
         {
@@ -65,7 +67,11 @@ namespace GritGud.Application.Gameplay
                 eventTypes);
             stateStore.Install(
                 reduction,
-                _ => trajectory.Add(step));
+                installed =>
+                {
+                    trajectory.Add(step);
+                    PublishStateInstalled(installed);
+                });
             return reduction;
         }
 
@@ -84,5 +90,25 @@ namespace GritGud.Application.Gameplay
 
         private void PublishDomainEvent(GameplayDomainEvent domainEvent) =>
             DomainEventPublished?.Invoke(domainEvent);
+
+        private void PublishStateInstalled(GameplayReductionResult reduction)
+        {
+            Delegate[] listeners = StateInstalled?.GetInvocationList();
+            if (listeners == null) return;
+            var failures = new List<Exception>();
+            foreach (Delegate listener in listeners)
+                try
+                {
+                    ((Action<GameplayReductionResult>)listener)(reduction);
+                }
+                catch (Exception exception)
+                {
+                    failures.Add(exception);
+                }
+            if (failures.Count > 0)
+                throw new AggregateException(
+                    "Canonical state was installed, but a live projection failed.",
+                    failures);
+        }
     }
 }

@@ -19,6 +19,7 @@ internal static class SimulationChecks
             VerifyCapabilityCoverageFailsClosed();
             VerifyTacticalRuleCoverageAndOutcomeProjection();
             VerifyAtomicLiveInstallation();
+            VerifyLiveSessionReducerProjection();
             VerifyPortableGroundSurfaces();
             VerifyStaticHeadlessSpatialGeometry();
             VerifyConcreteGroundedMoveCandidateRoute();
@@ -1649,6 +1650,181 @@ internal static class SimulationChecks
                 .LastTransitionSequence == 1L
             && failingPresentationRuntime.Trajectory.Count == 1,
             "Presentation failure rolled back or orphaned authoritative installation.");
+
+        var failingProjectionRuntime = new GameplaySimulationRuntime(
+            executionIdentity,
+            initial,
+            reducers,
+            capabilities);
+        bool domainEventSurvivedProjectionFailure = false;
+        failingProjectionRuntime.StateInstalled += _ =>
+            throw new InvalidOperationException("projection check failure");
+        failingProjectionRuntime.DomainEventPublished += _ =>
+            domainEventSurvivedProjectionFailure = true;
+        bool projectionFailed = false;
+        try
+        {
+            failingProjectionRuntime.Execute(transition);
+        }
+        catch (AggregateException)
+        {
+            projectionFailed = true;
+        }
+        Require(projectionFailed
+            && domainEventSurvivedProjectionFailure
+            && failingProjectionRuntime.CurrentState.Session
+                .LastTransitionSequence == 1L
+            && failingProjectionRuntime.Trajectory.Count == 1,
+            "A failed live projection rolled back authority or suppressed reducer domain events.");
+    }
+
+    private static void VerifyLiveSessionReducerProjection()
+    {
+        GameplaySession gameplay = CreateEncounterGameplay();
+        Require(gameplay.BeginEncounter(),
+            "Live projection fixture encounter did not begin.");
+        GameplayCombatStateSnapshot initial =
+            GameplayCombatStateCapture.Capture(gameplay);
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
+        GameplayCapabilityRegistry capabilities =
+            GameplayCurrentCapabilityCatalog.Create(
+                reducers,
+                Array.Empty<GameplayReachableInput>());
+        var executionIdentity = new GameplayExecutionIdentity(
+            new GameplayContentIdentity(
+                initial.Session.ScenarioId,
+                scenarioSchemaVersion: 1,
+                rulesSchemaVersion: 1,
+                new string('6', 64)),
+            new SpatialContentIdentity(
+                "live-projection-check",
+                levelSchemaVersion: 1,
+                evidenceAlgorithmVersion: 1,
+                new string('7', 64)),
+            initial.Session.RunIdentity);
+        using var live = new GameplayLiveSessionRuntime(
+            gameplay,
+            executionIdentity,
+            initial,
+            reducers,
+            capabilities);
+
+        int capabilityNotifications = 0;
+        int activeActorNotifications = 0;
+        int turnNotifications = 0;
+        bool domainEventSawProjectedState = false;
+        gameplay.ActorCapabilityChanged += _ => capabilityNotifications++;
+        gameplay.ActiveActorChanged += _ => activeActorNotifications++;
+        gameplay.TurnEnded += _ => turnNotifications++;
+        live.DomainEventPublished += _ =>
+            domainEventSawProjectedState = string.Equals(
+                GameplayCombatStateCapture.Capture(gameplay).CanonicalHash,
+                new GameplayCombatStateSnapshot(live.CurrentState.Session)
+                    .CanonicalHash,
+                StringComparison.Ordinal);
+
+        GameplayActorSnapshot actor = initial.Session.GetActor(
+            initial.Session.ActiveActorId);
+        var route = new MovementRouteRecord(
+            actor.ActorId,
+            actor.Pose,
+            actor.TurnBudget,
+            new[]
+            {
+                new MovementRouteSegmentRecord(
+                    actor.Pose.Position,
+                    new GameplayPosition(
+                        actor.Pose.Position.X + 1f,
+                        actor.Pose.Position.Y,
+                        actor.Pose.Position.Z),
+                    movementCost: 1f,
+                    playbackDurationSeconds: 0.25f),
+            });
+        var movePayload = new GameplayMoveTransitionPayload(
+            GameplayCapabilityProfiles.GroundedMove(),
+            route);
+        var move = new GameplaySemanticTransition(
+            new GameplayTransitionIdentity(
+                1L,
+                GameplaySemanticCapability.Move.ToString(),
+                movePayload.ActorId,
+                movePayload.SubjectId),
+            initial.CanonicalHash,
+            movePayload);
+        live.Execute(move);
+
+        GameplayCombatStateSnapshot projectedMove =
+            GameplayCombatStateCapture.Capture(gameplay);
+        Require(string.Equals(
+                projectedMove.CanonicalHash,
+                new GameplayCombatStateSnapshot(live.CurrentState.Session)
+                    .CanonicalHash,
+                StringComparison.Ordinal)
+            && gameplay.Operation == GameplaySessionOperation.None
+            && capabilityNotifications == 1
+            && domainEventSawProjectedState,
+            "Reducer-owned movement was not installed as the live session projection before presentation events.");
+
+        bool legacyMovementRejected = false;
+        try
+        {
+            gameplay.CommitMovementRoute(route);
+        }
+        catch (InvalidOperationException)
+        {
+            legacyMovementRejected = true;
+        }
+        Require(legacyMovementRejected,
+            "A projection-bound live session still allowed duplicate movement mutation.");
+
+        string endingActorId = gameplay.ActiveActorId;
+        var endPayload = new GameplayEndTurnTransitionPayload(
+            endingActorId,
+            emergency: false,
+            gameplay.Scenario.Timing.MinimumVoluntaryTurnSeconds);
+        var endTurn = new GameplaySemanticTransition(
+            new GameplayTransitionIdentity(
+                2L,
+                GameplaySemanticCapability.EndTurn.ToString(),
+                endPayload.ActorId,
+                endPayload.SubjectId),
+            live.CurrentState.CanonicalHash,
+            endPayload);
+        live.Execute(endTurn);
+
+        GameplayCombatStateSnapshot projectedTurn =
+            GameplayCombatStateCapture.Capture(gameplay);
+        Require(string.Equals(
+                projectedTurn.CanonicalHash,
+                new GameplayCombatStateSnapshot(live.CurrentState.Session)
+                    .CanonicalHash,
+                StringComparison.Ordinal)
+            && !string.Equals(
+                gameplay.ActiveActorId,
+                endingActorId,
+                StringComparison.Ordinal)
+            && activeActorNotifications == 1
+            && turnNotifications == 1
+            && gameplay.LastEndedTurn?.Sequence == 1L,
+            "Reducer-owned turn completion did not install state and lifecycle notifications exactly once.");
+        Require(GameplayExactReplay.Verify(
+                initial,
+                live.Trajectory,
+                reducers).IsExact,
+            "The reducer-owned live projection trajectory did not replay exactly.");
+
+        bool legacyTurnRejected = false;
+        try
+        {
+            gameplay.TryEndTurn(gameplay.ActiveActorId, out _);
+        }
+        catch (InvalidOperationException)
+        {
+            legacyTurnRejected = true;
+        }
+        Require(legacyTurnRejected,
+            "A projection-bound live session still allowed duplicate turn mutation.");
     }
 
     private static void VerifyConcreteActorAttackCandidateRoute()

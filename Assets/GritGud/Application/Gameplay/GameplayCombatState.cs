@@ -338,7 +338,7 @@ namespace GritGud.Application.Gameplay
                 gameplay.EmergencyResumeActorId,
                 gameplay.LastActionSequence,
                 gameplay.LastEndedTurn?.Sequence ?? 0L,
-                gameplay.Journal.LastEntry?.Sequence ?? 0L,
+                gameplay.JournalSequence,
                 gameplay.RunIdentity,
                 gameplay.Revision,
                 gameplay.VoluntaryTurnReentrySecondsRemaining,
