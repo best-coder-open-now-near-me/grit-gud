@@ -579,6 +579,8 @@ namespace GritGud.Application.Gameplay
         {
             string previousHash = InitialStateHash;
             long priorSequence = -1L;
+            var decisionTransitions = new GameplayBattleArtifactTransition[
+                Decisions.Count];
             for (int index = 0; index < Transitions.Count; index++)
             {
                 GameplayBattleArtifactTransition transition = Transitions[index]
@@ -594,6 +596,19 @@ namespace GritGud.Application.Gameplay
                     throw new ArgumentException(
                         "Battle artifact transitions are not contiguous.",
                         nameof(Transitions));
+                if (transition.DecisionIndex.HasValue)
+                {
+                    int decisionIndex = transition.DecisionIndex.Value;
+                    if (decisionIndex >= Decisions.Count)
+                        throw new ArgumentException(
+                            "Battle artifact transitions cannot reference an absent decision.",
+                            nameof(Transitions));
+                    if (decisionTransitions[decisionIndex] != null)
+                        throw new ArgumentException(
+                            "Battle artifact decisions must identify exactly one transition.",
+                            nameof(Transitions));
+                    decisionTransitions[decisionIndex] = transition;
+                }
                 previousHash = transition.ResultingStateHash;
                 priorSequence = transition.Sequence;
             }
@@ -603,6 +618,11 @@ namespace GritGud.Application.Gameplay
                     StringComparison.Ordinal))
                 throw new ArgumentException(
                     "Battle artifact terminal hash does not end its trajectory.",
+                    nameof(Terminal));
+            if (Transitions.Count > 0
+                && Terminal.TransitionSequence != priorSequence)
+                throw new ArgumentException(
+                    "Battle artifact terminal sequence does not identify its final transition.",
                     nameof(Terminal));
             for (int index = 0; index < Decisions.Count; index++)
             {
@@ -614,7 +634,37 @@ namespace GritGud.Application.Gameplay
                     throw new ArgumentException(
                         "Battle artifact decision indexes must be contiguous.",
                         nameof(Decisions));
+                GameplayBattleArtifactTransition transition =
+                    decisionTransitions[index]
+                    ?? throw new ArgumentException(
+                        "Battle artifact decisions must identify an artifact transition.",
+                        nameof(Decisions));
+                if (decision.TransitionSequence != transition.Sequence
+                    || !string.Equals(
+                        decision.ActorId,
+                        transition.ActorId,
+                        StringComparison.Ordinal)
+                    || !string.Equals(
+                        decision.PreviousStateHash,
+                        transition.PreviousStateHash,
+                        StringComparison.Ordinal)
+                    || !string.Equals(
+                        decision.TransitionPayloadDigest,
+                        transition.TransitionPayloadDigest,
+                        StringComparison.Ordinal)
+                    || !string.Equals(
+                        decision.ResultingStateHash,
+                        transition.ResultingStateHash,
+                        StringComparison.Ordinal))
+                    throw new ArgumentException(
+                        "Battle artifact decisions do not match their transitions.",
+                        nameof(Decisions));
             }
+            if (Scoreboard.Decisions != Decisions.Count
+                || Scoreboard.Transitions != Transitions.Count)
+                throw new ArgumentException(
+                    "Battle artifact scoreboard counts do not match its trajectory.",
+                    nameof(Scoreboard));
         }
     }
 
