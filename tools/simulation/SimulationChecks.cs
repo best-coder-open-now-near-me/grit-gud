@@ -4331,9 +4331,10 @@ internal static class SimulationChecks
         GameplayCapabilityRegistry capabilities =
             GameplayCurrentCapabilityCatalog.Create(reducers, inputs);
         var routes = new GameplayCandidateExecutionRouteRegistry(capabilities);
-        routes.Register(new GameplayProjectileLaunchCandidateExecutionRoute(
+        var launchRoute = new GameplayProjectileLaunchCandidateExecutionRoute(
             assembly,
-            spatial));
+            spatial);
+        routes.Register(launchRoute);
         routes.Register(new GameplayProjectileAdvanceCandidateExecutionRoute(
             spatial));
         var projectileInputs = new List<GameplayReachableInput>();
@@ -4380,6 +4381,10 @@ internal static class SimulationChecks
         Require(launchEvaluation != null,
             "Depot supplied no legal reducer-owned projectile launch: "
                 + string.Join(", ", launchFailures));
+        VerifyProjectileNearMatchRejection(
+            launchRoute,
+            context,
+            launchEvaluation.Candidate);
         GameplaySemanticTransition launchTransition = routes.Prepare(
             context,
             launchEvaluation);
@@ -4452,6 +4457,116 @@ internal static class SimulationChecks
                 runtime.Trajectory,
                 reducers).IsExact,
             "Projectile launch and advance did not replay exactly.");
+    }
+
+    private static void VerifyProjectileNearMatchRejection(
+        GameplayProjectileLaunchCandidateExecutionRoute route,
+        GameplayDecisionContext context,
+        GameplayCandidate canonical)
+    {
+        GameplayCapabilityProfile profile = canonical.Profile;
+        string consequence = profile.GetTrait("consequence");
+        string emergency = profile.GetTrait("emergency");
+        GameplayCapabilityProfile[] nearMatches =
+        {
+            ReplaceCapabilityTrait(
+                profile,
+                "consequence",
+                string.Equals(
+                    consequence,
+                    "impact",
+                    StringComparison.Ordinal)
+                        ? "blast-actor-and-destructible"
+                        : "impact"),
+            ReplaceCapabilityTrait(
+                profile,
+                "emergency",
+                string.Equals(
+                    emergency,
+                    "opens",
+                    StringComparison.Ordinal)
+                        ? "none"
+                        : "opens"),
+            new GameplayCapabilityProfile(
+                profile.Capability,
+                checked(profile.SemanticVersion + 1),
+                profile.Traits),
+            AddCapabilityTrait(profile, "near-match", "unsupported"),
+        };
+        string stateHash = context.State.CanonicalHash;
+        for (int index = 0; index < nearMatches.Length; index++)
+        {
+            GameplayCapabilityProfile nearMatch = nearMatches[index];
+            Require(route.Supports(nearMatch),
+                "Projectile near-match fixture no longer reaches the broad "
+                    + "route predicate: " + nearMatch.Signature);
+            var candidate = new GameplayCandidate(
+                canonical.CandidateId + ".near-match." + index,
+                nearMatch,
+                canonical.ActorId,
+                canonical.SubjectId,
+                canonical.Intent);
+            GameplayExecutableCandidateEvaluation evaluation = route.Evaluate(
+                context,
+                candidate);
+            Require(!evaluation.IsLegal
+                && string.Equals(
+                    evaluation.FailureCode,
+                    "equipped-profile-mismatch",
+                    StringComparison.Ordinal)
+                && string.Equals(
+                    context.State.CanonicalHash,
+                    stateHash,
+                    StringComparison.Ordinal),
+                "Projectile route executed a superficially compatible "
+                    + "near-match profile: " + nearMatch.Signature);
+        }
+    }
+
+    private static GameplayCapabilityProfile ReplaceCapabilityTrait(
+        GameplayCapabilityProfile source,
+        string traitName,
+        string value)
+    {
+        var traits = new List<GameplayCapabilityTrait>(source.Traits.Count);
+        bool replaced = false;
+        foreach (GameplayCapabilityTrait trait in source.Traits)
+        {
+            if (string.Equals(
+                    trait.Name,
+                    traitName,
+                    StringComparison.Ordinal))
+            {
+                traits.Add(new GameplayCapabilityTrait(traitName, value));
+                replaced = true;
+            }
+            else
+            {
+                traits.Add(trait);
+            }
+        }
+        Require(replaced,
+            "Near-match fixture could not replace capability trait '"
+                + traitName + "'.");
+        return new GameplayCapabilityProfile(
+            source.Capability,
+            source.SemanticVersion,
+            traits);
+    }
+
+    private static GameplayCapabilityProfile AddCapabilityTrait(
+        GameplayCapabilityProfile source,
+        string traitName,
+        string value)
+    {
+        var traits = new List<GameplayCapabilityTrait>(source.Traits)
+        {
+            new GameplayCapabilityTrait(traitName, value),
+        };
+        return new GameplayCapabilityProfile(
+            source.Capability,
+            source.SemanticVersion,
+            traits);
     }
 
     private static void VerifyConcreteThrownExplosiveCandidateRoutes()
