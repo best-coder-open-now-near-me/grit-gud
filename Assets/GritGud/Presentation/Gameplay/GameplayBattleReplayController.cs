@@ -76,6 +76,8 @@ namespace GritGud.Presentation.Gameplay
                 {
                     Resources.UnloadAsset(asset);
                 }
+                GameplayCombatStateSnapshot initial =
+                    GameplayHeadlessBattleStateFactory.Create(assembly, level);
                 GameplayExecutionIdentity identity = expected.Content
                     .ExecutionIdentity;
                 GameplayExecutionIdentity liveIdentity = liveRuntime
