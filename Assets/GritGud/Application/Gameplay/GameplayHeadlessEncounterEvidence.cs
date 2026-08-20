@@ -29,26 +29,15 @@ namespace GritGud.Application.Gameplay
                 ActorTargetProfileCatalog.CreateWorldSamples(
                     target.Pose,
                     target.IsPinned);
-            var regions = new List<TargetRegionExposure>(targetSamples.Count);
-            foreach (TargetRegionSample sample in targetSamples)
-            {
-                bool blocked = spatial.BlocksLineOfSight(
-                        state,
-                        observerHead.Center,
-                        sample.Center)
-                    || IsObscuredBySmoke(
-                        state,
-                        observerHead.Center,
-                        sample.Center);
-                regions.Add(new TargetRegionExposure(
-                    sample.Id,
-                    blocked ? 0 : 1,
-                    totalSampleCount: 1));
-            }
-            return new TargetExposureSnapshot(
+            return GameplayTargetExposureRaster.Capture(
                 observerId,
+                observerHead.Center,
                 targetId,
-                regions);
+                targetSamples,
+                new HeadlessExposureObstruction(
+                    state,
+                    spatial,
+                    forceBlocked: false));
         }
 
         public static TargetExposureSnapshot CaptureDroneSight(
@@ -66,27 +55,18 @@ namespace GritGud.Application.Gameplay
                 ActorTargetProfileCatalog.CreateWorldSamples(
                     target.Pose,
                     target.IsPinned);
-            var regions = new List<TargetRegionExposure>(samples.Count);
             bool withinSensor = DroneSensorRules.CanObserve(
                 drone,
                 target.Pose.Position);
-            foreach (TargetRegionSample sample in samples)
-            {
-                bool visible = withinSensor
-                    && !spatial.BlocksLineOfSight(
-                        state,
-                        drone.Position,
-                        sample.Center)
-                    && !IsObscuredBySmoke(
-                        state,
-                        drone.Position,
-                        sample.Center);
-                regions.Add(new TargetRegionExposure(
-                    sample.Id,
-                    visible ? 1 : 0,
-                    totalSampleCount: 1));
-            }
-            return new TargetExposureSnapshot(droneId, targetActorId, regions);
+            return GameplayTargetExposureRaster.Capture(
+                droneId,
+                drone.Position,
+                targetActorId,
+                samples,
+                new HeadlessExposureObstruction(
+                    state,
+                    spatial,
+                    forceBlocked: !withinSensor));
         }
 
         private static bool IsObscuredBySmoke(
@@ -116,26 +96,25 @@ namespace GritGud.Application.Gameplay
             GameplayHeadlessSpatialEvidence spatial,
             string observerId,
             string sourceId,
-            float loudness)
+            float loudness,
+            float hearingRange)
         {
             if (state == null) throw new ArgumentNullException(nameof(state));
             if (spatial == null) throw new ArgumentNullException(nameof(spatial));
-            if (float.IsNaN(loudness) || float.IsInfinity(loudness)
-                || loudness < 0f || loudness > 1f)
-            {
-                throw new ArgumentOutOfRangeException(nameof(loudness));
-            }
-
             GameplayActorSnapshot observer = state.Session.GetActor(observerId);
             GameplayActorSnapshot source = state.Session.GetActor(sourceId);
             bool obstructed = spatial.BlocksLineOfSight(
                 state,
                 observer.Pose.Position,
                 source.Pose.Position);
-            return new EncounterSoundEvidence(
+            return GameplaySoundEvidenceRules.Capture(
+                observerId,
+                observer.Pose.Position,
                 sourceId,
                 source.Pose.Position,
-                obstructed ? loudness * 0.5f : loudness);
+                loudness,
+                hearingRange,
+                obstructed);
         }
 
         public static EncounterObservation CaptureObservation(
@@ -144,7 +123,8 @@ namespace GritGud.Application.Gameplay
             string observerId,
             string targetId,
             string soundSourceId = null,
-            float soundLoudness = 0f)
+            float soundLoudness = 0f,
+            float hearingRange = 0f)
         {
             TargetExposureSnapshot sight = CaptureSight(
                 state,
@@ -159,7 +139,8 @@ namespace GritGud.Application.Gameplay
                     spatial,
                     observerId,
                     soundSourceId,
-                    soundLoudness);
+                    soundLoudness,
+                    hearingRange);
             return new EncounterObservation(
                 observerId,
                 sight,
@@ -192,6 +173,30 @@ namespace GritGud.Application.Gameplay
                     StringComparison.Ordinal)) return drone;
             throw new KeyNotFoundException(
                 $"Drone '{droneId}' is absent from canonical state.");
+        }
+
+        private sealed class HeadlessExposureObstruction :
+            ITargetExposureObstructionQuery
+        {
+            private readonly GameplayCombatStateSnapshot state;
+            private readonly GameplayHeadlessSpatialEvidence spatial;
+            private readonly bool forceBlocked;
+
+            public HeadlessExposureObstruction(
+                GameplayCombatStateSnapshot canonicalState,
+                GameplayHeadlessSpatialEvidence spatialEvidence,
+                bool forceBlocked)
+            {
+                state = canonicalState;
+                spatial = spatialEvidence;
+                this.forceBlocked = forceBlocked;
+            }
+
+            public bool Blocks(
+                GameplayPosition origin,
+                GameplayPosition targetSurface) => forceBlocked
+                || spatial.BlocksLineOfSight(state, origin, targetSurface)
+                || IsObscuredBySmoke(state, origin, targetSurface);
         }
 
     }

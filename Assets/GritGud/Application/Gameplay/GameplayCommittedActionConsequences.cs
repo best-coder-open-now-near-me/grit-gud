@@ -88,7 +88,9 @@ namespace GritGud.Application.Gameplay
                             spatial,
                             observer.Id,
                             action.Request.ActorId,
-                            signature);
+                            signature,
+                            observer.Combat.EnemyBehavior.AwarenessPolicy
+                                .HearingRange);
                     var observation = new EncounterObservation(
                         observer.Id,
                         sight: null,

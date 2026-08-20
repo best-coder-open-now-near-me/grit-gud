@@ -47,6 +47,28 @@ visualization reducer. Live gameplay may continue to have adapters around the
 same application services, but simulation authority belongs to the semantic
 runtime above.
 
+## Authority convergence gate
+
+The first battle cannot be accepted while live play, replay, or AI retains an
+independent implementation of an authoritative rule. Before the runner is
+trusted:
+
+- live commands prepare semantic payloads, execute reducers, atomically install
+  the resulting root, and project presentation from installed state/events;
+- mutable gameplay, explosive, drone, smoke, movement, and turn sessions no
+  longer apply a second copy of those consequences;
+- replay samples reducer-produced boundary states and events, with only visual
+  interpolation remaining presentation-owned;
+- Unity and headless evidence use the same projected target raster and sound
+  attenuation rules, differing only in their spatial-obstruction backend;
+- action and consequence identities derive from canonical transition/action
+  identity rather than private collection counts; and
+- live and replay movement/projectile playback use shared pure samplers.
+
+The live enemy executor becomes an adapter over the same candidate/policy
+runner. It may pace and present decisions, but cannot select or commit actions
+through a second AI implementation.
+
 Only the selected candidate may resolve addressed random samples. Candidate
 evaluation uses expected outcomes and frozen public evidence, so visiting or
 sorting candidates cannot change the result.
@@ -88,6 +110,15 @@ victory, objective completion/failure, or authored draw. The runner also has
 hard safeguards for maximum transitions, repeated canonical states, repeated
 no-progress turns, unresolved mandatory reactions/projectiles, and absence of
 a legal end-turn route. Safeguard exits are failures, not draws.
+
+Candidate construction, evidence, scoring, preparation, reduction, and
+installation each have monotonic stage timing plus per-decision, per-turn, and
+whole-battle deadlines. AI/search runs behind a cancellable worker boundary;
+optimizer batches use process isolation when cooperative cancellation cannot
+guarantee termination. A timeout emits a typed failure and partial diagnostic
+artifact without a fallback mutation. Timing telemetry never enters canonical
+hashes or deterministic artifact equality. Contract tests include a policy
+that deliberately fails to return.
 
 ## Authoritative artifact
 

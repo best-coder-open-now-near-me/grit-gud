@@ -2398,17 +2398,44 @@ internal static class SimulationChecks
                 "observer",
                 "target");
         Require(openedSight.VisibleSampleCount == openedSight.TotalSampleCount
-            && openedSight.TotalSampleCount == 6,
+            && openedSight.TotalSampleCount > 6,
             "Headless encounter sight retained a toppled obstruction.");
+        TargetExposureSnapshot sharedRaster = GameplayTargetExposureRaster
+            .Capture(
+                "raster-observer",
+                new GameplayPosition(0f, 1.62f, -5f),
+                "raster-target",
+                ActorTargetProfileCatalog.CreateWorldSamples(
+                    new GameplayActorPose(
+                        new GameplayPosition(0f, 0f, 0f),
+                        0f),
+                    pinned: false),
+                new PredicateExposureObstruction(
+                    (_, destination) => destination.Y < 1f));
+        Require(sharedRaster.VisibleSampleCount > 0
+            && sharedRaster.VisibleSampleCount < sharedRaster.TotalSampleCount
+            && sharedRaster.TotalSampleCount > 6,
+            "Portable exposure raster did not preserve partial silhouette cover.");
         EncounterSoundEvidence muffledSound =
             GameplayHeadlessEncounterEvidence.CaptureSound(
                 sensingState,
                 spatial,
                 "observer",
                 "target",
-                loudness: 1f);
-        Require(muffledSound.Audibility == 0.5f,
-            "Headless encounter sound did not account for tactical obstruction.");
+                loudness: 1f,
+                hearingRange: 12f);
+        EncounterSoundEvidence outOfRangeSound =
+            GameplayHeadlessEncounterEvidence.CaptureSound(
+                sensingState,
+                spatial,
+                "observer",
+                "target",
+                loudness: 1f,
+                hearingRange: 3f);
+        Require(muffledSound.Audibility > 0f
+            && muffledSound.Audibility < 0.5f
+            && outOfRangeSound.Audibility == 0f,
+            "Headless encounter sound diverged from shared range and obstruction attenuation.");
         var pitchedProp = new DestructiblePropSnapshot(
             "cover-wall",
             DestructiblePropState.Intact,
@@ -2872,6 +2899,23 @@ internal static class SimulationChecks
     private static void Require(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException(message);
+    }
+
+    private sealed class PredicateExposureObstruction :
+        ITargetExposureObstructionQuery
+    {
+        private readonly Func<GameplayPosition, GameplayPosition, bool> blocks;
+
+        public PredicateExposureObstruction(
+            Func<GameplayPosition, GameplayPosition, bool> obstruction)
+        {
+            blocks = obstruction ?? throw new ArgumentNullException(
+                nameof(obstruction));
+        }
+
+        public bool Blocks(
+            GameplayPosition origin,
+            GameplayPosition targetSurface) => blocks(origin, targetSurface);
     }
 
     private sealed class IntegratedExplosiveEvidence :

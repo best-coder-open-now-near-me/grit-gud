@@ -6,12 +6,13 @@ using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
 {
-    public sealed class UnityTargetExposureQuery : ITargetExposureQuery
+    public sealed class UnityTargetExposureQuery : ITargetExposureQuery,
+        ITargetExposureObstructionQuery
     {
-        internal const int RasterLongAxisCellCount = 32;
+        internal const int RasterLongAxisCellCount =
+            GameplayTargetExposureRaster.LongAxisCellCount;
 
         private const float EndpointTolerance = 0.005f;
-        private const float MinimumProjectionSpan = 0.0001f;
 
         private readonly Transform observerRoot;
         private readonly Transform targetRoot;
@@ -62,17 +63,7 @@ namespace GritGud.Presentation.Gameplay
             IReadOnlyList<TargetRegionSample> targetRegions)
         {
             if (targetRegions == null)
-            {
                 throw new ArgumentNullException(nameof(targetRegions));
-            }
-
-            if (targetRegions.Count == 0)
-            {
-                throw new ArgumentException(
-                    "Target exposure requires at least one body region.",
-                    nameof(targetRegions));
-            }
-
             bool cacheEnabled = worldStateRevision != null
                 || sightObscurance != null;
             long revision = worldStateRevision != null
@@ -80,11 +71,8 @@ namespace GritGud.Presentation.Gameplay
                 : 0L;
             long obscuranceRevision = sightObscurance?.Revision ?? 0L;
             if (cacheEnabled && revision < 0L)
-            {
                 throw new InvalidOperationException(
                     "Target-exposure world revisions cannot be negative.");
-            }
-
             if (cacheEnabled && CanReuseSnapshot(
                     observerId,
                     observerOrigin,
@@ -92,74 +80,16 @@ namespace GritGud.Presentation.Gameplay
                     targetRegions,
                     revision,
                     obscuranceRevision))
-            {
                 return cachedSnapshot;
-            }
 
-            Vector3 origin = ToVector3(observerOrigin);
-            ProjectedRegion[] regions = BuildProjection(
-                origin,
-                targetRegions,
-                out Vector3 forward,
-                out Vector3 horizontal,
-                out Vector3 vertical,
-                out Rect projectionBounds,
-                out int rasterWidth,
-                out int rasterHeight);
+            TargetExposureSnapshot snapshot = GameplayTargetExposureRaster
+                .Capture(
+                    observerId,
+                    observerOrigin,
+                    targetId,
+                    targetRegions,
+                    this);
             RasterEvaluationCount++;
-            var visibleCounts = new int[regions.Length];
-            var totalCounts = new int[regions.Length];
-
-            for (int row = 0; row < rasterHeight; row++)
-            {
-                float projectedY = Mathf.Lerp(
-                    projectionBounds.yMin,
-                    projectionBounds.yMax,
-                    (row + 0.5f) / rasterHeight);
-                for (int column = 0; column < rasterWidth; column++)
-                {
-                    float projectedX = Mathf.Lerp(
-                        projectionBounds.xMin,
-                        projectionBounds.xMax,
-                        (column + 0.5f) / rasterWidth);
-                    Vector3 direction = (
-                        forward
-                        + (horizontal * projectedX)
-                        + (vertical * projectedY)).normalized;
-                    int paintedRegion = FindNearestRegion(
-                        origin,
-                        direction,
-                        regions,
-                        out float surfaceDistance);
-                    if (paintedRegion < 0)
-                    {
-                        continue;
-                    }
-
-                    totalCounts[paintedRegion]++;
-                    if (IsWorldVisible(
-                            origin,
-                            direction,
-                            surfaceDistance))
-                    {
-                        visibleCounts[paintedRegion]++;
-                    }
-                }
-            }
-
-            var exposures = new List<TargetRegionExposure>(regions.Length);
-            for (int index = 0; index < regions.Length; index++)
-            {
-                exposures.Add(new TargetRegionExposure(
-                    regions[index].Id,
-                    visibleCounts[index],
-                    totalCounts[index]));
-            }
-
-            TargetExposureSnapshot snapshot = new TargetExposureSnapshot(
-                observerId,
-                targetId,
-                exposures);
             if (cacheEnabled)
             {
                 cachedSnapshot = snapshot;
@@ -170,12 +100,44 @@ namespace GritGud.Presentation.Gameplay
                 cachedSightObscuranceRevision = obscuranceRevision;
                 cachedRegions = new TargetRegionSample[targetRegions.Count];
                 for (int index = 0; index < targetRegions.Count; index++)
-                {
                     cachedRegions[index] = targetRegions[index];
-                }
             }
-
             return snapshot;
+        }
+
+        public bool Blocks(
+            GameplayPosition origin,
+            GameplayPosition targetSurface)
+        {
+            if (sightObscurance != null
+                && sightObscurance.BlocksSight(origin, targetSurface))
+                return true;
+            Vector3 rayOrigin = ToVector3(origin);
+            Vector3 displacement = ToVector3(targetSurface) - rayOrigin;
+            float surfaceDistance = displacement.magnitude;
+            if (surfaceDistance <= EndpointTolerance) return false;
+            Vector3 direction = displacement / surfaceDistance;
+            float rayDistance = Mathf.Max(
+                0f,
+                surfaceDistance - EndpointTolerance);
+            int hitCount = Physics.RaycastNonAlloc(
+                rayOrigin,
+                direction,
+                hitBuffer,
+                rayDistance,
+                layerMask,
+                QueryTriggerInteraction.Ignore);
+            if (ContainsWorldOccluder(hitBuffer, hitCount)) return true;
+            if (hitCount != hitBuffer.Length) return false;
+            RaycastHit[] overflowHits = Physics.RaycastAll(
+                rayOrigin,
+                direction,
+                rayDistance,
+                layerMask,
+                QueryTriggerInteraction.Ignore);
+            return ContainsWorldOccluder(
+                overflowHits,
+                overflowHits.Length);
         }
 
         private bool CanReuseSnapshot(
@@ -200,10 +162,7 @@ namespace GritGud.Presentation.Gameplay
                 || !PositionsMatch(cachedObserverOrigin, observerOrigin)
                 || cachedRegions == null
                 || cachedRegions.Length != targetRegions.Count)
-            {
                 return false;
-            }
-
             for (int index = 0; index < cachedRegions.Length; index++)
             {
                 TargetRegionSample cached = cachedRegions[index];
@@ -211,218 +170,8 @@ namespace GritGud.Presentation.Gameplay
                 if (cached.Id != current.Id
                     || cached.Radius != current.Radius
                     || !PositionsMatch(cached.Center, current.Center))
-                {
                     return false;
-                }
             }
-
-            return true;
-        }
-
-        private static bool PositionsMatch(
-            GameplayPosition left,
-            GameplayPosition right) =>
-            left.X == right.X
-            && left.Y == right.Y
-            && left.Z == right.Z;
-
-        private static ProjectedRegion[] BuildProjection(
-            Vector3 origin,
-            IReadOnlyList<TargetRegionSample> targetRegions,
-            out Vector3 forward,
-            out Vector3 horizontal,
-            out Vector3 vertical,
-            out Rect projectionBounds,
-            out int rasterWidth,
-            out int rasterHeight)
-        {
-            var identifiers = new HashSet<TargetRegionId>();
-            var regions = new ProjectedRegion[targetRegions.Count];
-            Vector3 targetCenter = Vector3.zero;
-            for (int index = 0; index < targetRegions.Count; index++)
-            {
-                TargetRegionSample source = targetRegions[index];
-                if (!identifiers.Add(source.Id))
-                {
-                    throw new ArgumentException(
-                        $"Target exposure cannot repeat region '{source.Id}'.",
-                        nameof(targetRegions));
-                }
-
-                Vector3 center = ToVector3(source.Center);
-                targetCenter += center;
-                regions[index] = new ProjectedRegion(
-                    source.Id,
-                    center,
-                    source.Radius);
-            }
-
-            targetCenter /= regions.Length;
-            forward = targetCenter - origin;
-            if (forward.sqrMagnitude <= EndpointTolerance * EndpointTolerance)
-            {
-                throw new ArgumentException(
-                    "Observer and target centers cannot occupy the same point.",
-                    nameof(targetRegions));
-            }
-
-            forward.Normalize();
-            horizontal = Vector3.Cross(Vector3.up, forward);
-            if (horizontal.sqrMagnitude <= MinimumProjectionSpan)
-            {
-                horizontal = Vector3.Cross(Vector3.forward, forward);
-            }
-            horizontal.Normalize();
-            vertical = Vector3.Cross(forward, horizontal).normalized;
-
-            float minimumX = float.PositiveInfinity;
-            float maximumX = float.NegativeInfinity;
-            float minimumY = float.PositiveInfinity;
-            float maximumY = float.NegativeInfinity;
-            for (int index = 0; index < regions.Length; index++)
-            {
-                ProjectedRegion region = regions[index];
-                Vector3 offset = region.Center - origin;
-                float depth = Vector3.Dot(offset, forward);
-                if (depth <= region.Radius + EndpointTolerance)
-                {
-                    throw new ArgumentException(
-                        $"Observer is inside or behind target region '{region.Id}'.",
-                        nameof(targetRegions));
-                }
-
-                float projectedX = Vector3.Dot(offset, horizontal) / depth;
-                float projectedY = Vector3.Dot(offset, vertical) / depth;
-                float projectedRadius = region.Radius
-                    / Mathf.Max(EndpointTolerance, depth - region.Radius);
-                minimumX = Mathf.Min(minimumX, projectedX - projectedRadius);
-                maximumX = Mathf.Max(maximumX, projectedX + projectedRadius);
-                minimumY = Mathf.Min(minimumY, projectedY - projectedRadius);
-                maximumY = Mathf.Max(maximumY, projectedY + projectedRadius);
-            }
-
-            float spanX = Mathf.Max(MinimumProjectionSpan, maximumX - minimumX);
-            float spanY = Mathf.Max(MinimumProjectionSpan, maximumY - minimumY);
-            if (spanX >= spanY)
-            {
-                rasterWidth = RasterLongAxisCellCount;
-                rasterHeight = Mathf.Max(
-                    1,
-                    Mathf.CeilToInt(
-                        RasterLongAxisCellCount * (spanY / spanX)));
-            }
-            else
-            {
-                rasterHeight = RasterLongAxisCellCount;
-                rasterWidth = Mathf.Max(
-                    1,
-                    Mathf.CeilToInt(
-                        RasterLongAxisCellCount * (spanX / spanY)));
-            }
-
-            projectionBounds = Rect.MinMaxRect(
-                minimumX,
-                minimumY,
-                maximumX,
-                maximumY);
-            return regions;
-        }
-
-        private static int FindNearestRegion(
-            Vector3 origin,
-            Vector3 direction,
-            IReadOnlyList<ProjectedRegion> regions,
-            out float surfaceDistance)
-        {
-            int nearestRegion = -1;
-            surfaceDistance = float.PositiveInfinity;
-            for (int index = 0; index < regions.Count; index++)
-            {
-                if (!TryIntersectSphere(
-                        origin,
-                        direction,
-                        regions[index],
-                        out float candidateDistance)
-                    || candidateDistance >= surfaceDistance)
-                {
-                    continue;
-                }
-
-                nearestRegion = index;
-                surfaceDistance = candidateDistance;
-            }
-
-            return nearestRegion;
-        }
-
-        private static bool TryIntersectSphere(
-            Vector3 origin,
-            Vector3 direction,
-            ProjectedRegion region,
-            out float distance)
-        {
-            Vector3 fromCenter = origin - region.Center;
-            float projected = Vector3.Dot(fromCenter, direction);
-            float discriminant = (projected * projected)
-                - (fromCenter.sqrMagnitude - (region.Radius * region.Radius));
-            if (discriminant < 0f)
-            {
-                distance = 0f;
-                return false;
-            }
-
-            float root = Mathf.Sqrt(discriminant);
-            distance = -projected - root;
-            if (distance <= EndpointTolerance)
-            {
-                distance = -projected + root;
-            }
-
-            return distance > EndpointTolerance;
-        }
-
-        private bool IsWorldVisible(
-            Vector3 origin,
-            Vector3 direction,
-            float surfaceDistance)
-        {
-            if (sightObscurance != null
-                && sightObscurance.BlocksSight(
-                    ToGameplayPosition(origin),
-                    ToGameplayPosition(
-                        origin + (direction * surfaceDistance))))
-            {
-                return false;
-            }
-
-            float rayDistance = Mathf.Max(
-                0f,
-                surfaceDistance - EndpointTolerance);
-            int hitCount = Physics.RaycastNonAlloc(
-                origin,
-                direction,
-                hitBuffer,
-                rayDistance,
-                layerMask,
-                QueryTriggerInteraction.Ignore);
-            if (ContainsWorldOccluder(hitBuffer, hitCount))
-            {
-                return false;
-            }
-
-            if (hitCount == hitBuffer.Length)
-            {
-                RaycastHit[] overflowHits = Physics.RaycastAll(
-                    origin,
-                    direction,
-                    rayDistance,
-                    layerMask,
-                    QueryTriggerInteraction.Ignore);
-                return !ContainsWorldOccluder(
-                    overflowHits,
-                    overflowHits.Length);
-            }
-
             return true;
         }
 
@@ -435,13 +184,17 @@ namespace GritGud.Presentation.Gameplay
                     : null;
                 if (!BelongsTo(hitTransform, observerRoot)
                     && !BelongsTo(hitTransform, targetRoot))
-                {
                     return true;
-                }
             }
-
             return false;
         }
+
+        private static bool PositionsMatch(
+            GameplayPosition left,
+            GameplayPosition right) =>
+            left.X == right.X
+            && left.Y == right.Y
+            && left.Z == right.Z;
 
         private static bool BelongsTo(Transform candidate, Transform root) =>
             candidate != null
@@ -450,27 +203,5 @@ namespace GritGud.Presentation.Gameplay
 
         private static Vector3 ToVector3(GameplayPosition position) =>
             new Vector3(position.X, position.Y, position.Z);
-
-        private static GameplayPosition ToGameplayPosition(Vector3 position) =>
-            new GameplayPosition(position.x, position.y, position.z);
-
-        private readonly struct ProjectedRegion
-        {
-            public ProjectedRegion(
-                TargetRegionId id,
-                Vector3 center,
-                float radius)
-            {
-                Id = id;
-                Center = center;
-                Radius = radius;
-            }
-
-            public TargetRegionId Id { get; }
-
-            public Vector3 Center { get; }
-
-            public float Radius { get; }
-        }
     }
 }

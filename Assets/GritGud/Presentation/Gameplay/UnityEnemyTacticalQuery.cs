@@ -109,20 +109,14 @@ namespace GritGud.Presentation.Gameplay
 
             EncounterAwarenessPolicyDefinition policy = definition.Combat
                 .EnemyBehavior.AwarenessPolicy;
-            float distance = session.GetActor(definition.Id).Pose.Position
-                .DistanceTo(origin);
-            if (distance > policy.HearingRange + 0.0001f)
-                return new EncounterSoundEvidence(sourceId, origin, 0f);
-            float rangeFraction = policy.HearingRange <= 0.001f
-                ? 1f
-                : Mathf.Clamp01(distance / policy.HearingRange);
-            // A source at the edge of hearing remains meaningful, but weaker
-            // than one nearby. A current physical obstruction muffles the
-            // frozen evidence rather than making it disappear outright.
-            float occlusion = IsSoundObstructed(sourceId, origin) ? 0.5f : 1f;
-            float audibility = loudness * occlusion
-                * Mathf.Lerp(1f, 0.5f, rangeFraction);
-            return new EncounterSoundEvidence(sourceId, origin, audibility);
+            return GameplaySoundEvidenceRules.Capture(
+                definition.Id,
+                session.GetActor(definition.Id).Pose.Position,
+                sourceId,
+                origin,
+                loudness,
+                policy.HearingRange,
+                IsSoundObstructed(sourceId, origin));
         }
 
         public IReadOnlyList<EnemyMovementOption> BuildMovementOptions(
