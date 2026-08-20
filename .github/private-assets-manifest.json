@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "best-coder-open-now-near-me/private-assets",
+    "revision": "d42cca740f1ea0ec42eebaca79c5d2bdccc15060",
+    "sentinel": {
+      "path": "grit-gud/.grit-gud-private-assets",
+      "gitBlob": "778c7094bd4fff235f428ae3fc8d826e50f67acf"
+    },
+    "assetTree": {
+      "path": "grit-gud/Assets",
+      "gitTree": "b9af9fc6cfc8f8e19d91b63356d8726e12a82964"
+    }
+  },
+  "entries": [
+    {
+      "destination": "Assets/Basic Shooter Pack",
+      "kind": "directory",
+      "gitObject": "71eb5f0c2b89f78594f166ed2faf19f6510896c6"
+    },
+    {
+      "destination": "Assets/Basic Shooter Pack.meta",
+      "kind": "file",
+      "gitObject": "53a1e9a3526e930fc76438e4eca7de2b755f6fc7"
+    },
+    {
+      "destination": "Assets/DoubleL",
+      "kind": "directory",
+      "gitObject": "83da0327536af6a402fa6791aa02acc160a5349d"
+    },
+    {
+      "destination": "Assets/DoubleL.meta",
+      "kind": "file",
+      "gitObject": "b49953b884cc0be7cb95b85baee14ac9e0de2bcc"
+    },
+    {
+      "destination": "Assets/Input Sprites for TextMesh Pro",
+      "kind": "directory",
+      "gitObject": "3f41e8d2cea494efa07e1e1f1d38a44bb412650e"
+    },
+    {
+      "destination": "Assets/Input Sprites for TextMesh Pro.meta",
+      "kind": "file",
+      "gitObject": "013cbfe180816cb4fa88e5514f4e0237d6836af4"
+    },
+    {
+      "destination": "Assets/Kevin Iglesias",
+      "kind": "directory",
+      "gitObject": "b193462060829b4f3754037f8f2b8f2b6176e838"
+    },
+    {
+      "destination": "Assets/Kevin Iglesias.meta",
+      "kind": "file",
+      "gitObject": "cefadcd337322b53be2effa26e72b83659c21ce8"
+    },
+    {
+      "destination": "Assets/Mixamo",
+      "kind": "directory",
+      "gitObject": "79d1b3bb6b59f6f1ce24c11a5a6424fb170af2c1"
+    },
+    {
+      "destination": "Assets/Mixamo.meta",
+      "kind": "file",
+      "gitObject": "3777004290e4983478cfb019bb74c16f9158c51d"
+    },
+    {
+      "destination": "Assets/Modern GDR - Free icons pack",
+      "kind": "directory",
+      "gitObject": "9654d3ef146d0103cacc69480e394e91c310849d"
+    },
+    {
+      "destination": "Assets/Modern GDR - Free icons pack.meta",
+      "kind": "file",
+      "gitObject": "623ec5a261e1af9194d5ed62864968214fc9e86b"
+    },
+    {
+      "destination": "Assets/Synty",
+      "kind": "directory",
+      "gitObject": "dda91df0aa769821f46e17dbf11116bb71ffa338"
+    },
+    {
+      "destination": "Assets/Synty.meta",
+      "kind": "file",
+      "gitObject": "cbb989734346eb5d592562a57604d0af2d67b157"
+    },
+    {
+      "destination": "Assets/UCLAGameLab",
+      "kind": "directory",
+      "gitObject": "2b246730ae5983f28c1a13b49f5548ee3aad50fc"
+    },
+    {
+      "destination": "Assets/UCLAGameLab.meta",
+      "kind": "file",
+      "gitObject": "b1c2600b093a25c5fbed7b72e00c4edc4eac207e"
+    }
+  ]
+}

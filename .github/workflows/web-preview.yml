@@ -98,19 +98,18 @@ jobs:
         id: licensed_assets
         shell: bash
         run: |
-          if [ ! -f .private-assets/grit-gud/.grit-gud-private-assets ]; then
-            echo "The private repository does not contain the Grit Gud asset source." >&2
-            exit 1
-          fi
-          if [ ! -d .private-assets/grit-gud/Assets ]; then
-            echo "The Grit Gud private asset source must contain an Assets directory." >&2
-            exit 1
-          fi
-
           revision="$(git -C .private-assets rev-parse HEAD)"
+          python tools/private-assets-manifest.py preinstall \
+            --manifest .github/private-assets-manifest.json \
+            --checkout .private-assets \
+            --workspace .
           # Licensed assets supplement the tracked project. They must never
           # replace newer authored gameplay/content files from this commit.
           rsync -a --ignore-existing --exclude='.git*' .private-assets/grit-gud/Assets/ Assets/
+          python tools/private-assets-manifest.py installed \
+            --manifest .github/private-assets-manifest.json \
+            --checkout .private-assets \
+            --workspace .
           echo "revision=$revision" >> "$GITHUB_OUTPUT"
           rm -rf .private-assets
 

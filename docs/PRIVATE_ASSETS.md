@@ -65,7 +65,10 @@ Configure this value in **Settings > Secrets and variables > Actions**:
 
 The tracked `.github/private-assets-ref` file selects the asset branch, tag, or
 commit. It is pinned to the reviewed private-asset commit used by this source
-branch so the build is reproducible.
+branch so the build is reproducible. The adjacent
+`.github/private-assets-manifest.json` pins the same commit, the sentinel blob,
+the complete `grit-gud/Assets` tree, and every permitted top-level destination.
+Advance the ref and manifest together whenever the private overlay changes.
 
 The token must not have access to unrelated repositories or write permission.
 Because the preview workflow runs on trusted branch pushes rather than fork pull
@@ -75,11 +78,14 @@ During a build, the workflow:
 
 1. checks out public source normally;
 2. checks out the configured private repository into a temporary hidden folder;
-3. validates its sentinel and `Assets` layout;
-4. overlays its `Assets` contents into the Unity project;
-5. removes the temporary checkout, including its Git metadata and credentials;
-6. keys Unity's import cache with the installed asset revision; and
-7. publishes only the generated `Builds/Web` output.
+3. verifies the exact private revision, sentinel, asset-tree hash, permitted
+   destinations, regular-file modes, and clean tracked worktree;
+4. rejects any existing destination that would shadow a private file or folder;
+5. overlays its `Assets` contents with `rsync --ignore-existing`;
+6. byte-verifies every installed file and rejects missing or extra entries;
+7. removes the temporary checkout, including its Git metadata and credentials;
+8. keys Unity's import cache with the installed asset revision; and
+9. publishes only the generated `Builds/Web` output.
 
 ## Local development
 
