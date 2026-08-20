@@ -268,7 +268,7 @@ Work resumes in this order:
    text embedded in the shapes;
    this does not introduce an HP pool or aimed body-part selection.
 8. Return to shared blast policy, finite consumable quantities, durable party
-   equipment/wound persistence, and only then the deployable drone. **Shared blast
+   equipment persistence, and only then the deployable drone. **Shared blast
    policy is complete:** grenades and projectiles record the same distance,
    occlusion, falloff, exposure, subject-kind, and regional-injury evidence and
    resolve actor/prop consequences through one Application service. **Finite
@@ -288,7 +288,9 @@ Work resumes in this order:
    runtime state. A dedicated roster surface supports click or Tab selection
    during exploration and communicates initiative-owned control during combat.
    **Durable party persistence is complete and corrected:** the versioned local
-   save restores identity-bound equipment and regional wounds. Character
+   save restores identity-bound equipment only. Regional wounds and action
+   budgets are mission-transient and restart from the authored scenario.
+   Character
    Creator defines appearance, attributes, skills, talents, and starting loadout
    before a level; there is no runtime progression, point budget, or advancement
    drawer. These character-system prerequisites no longer make the drone
@@ -338,12 +340,13 @@ Work resumes in this order:
    supports click and Tab switching in exploration; combat follows Dexterity-
    derived friendly initiative and disables manual selection. Automated boot,
    selection, retargeting, and alternating-friendly-turn coverage is green.
-   **The durable-party follow-up is complete:** schema 1 saves are keyed by
+   **The durable-party follow-up is complete:** schema 3 saves are keyed by
    stable character identity, require an exact authored roster, validate
-   equipment, and restore equipment and regional wounds before gameplay systems bind.
+   equipment, and restore only equipment before gameplay systems bind. Explicit
+   schema 1/2 migration discards legacy wounds and action budgets.
    PlayerPrefs supplies the browser/desktop adapter while Application owns the
-   versioned save contract and validation. Authoritative equipment and wound
-   changes flush immediately. Runtime progression and player-side spending are
+   versioned save contract and validation. Authoritative equipment changes flush
+   immediately. Runtime progression and player-side spending are
    explicitly outside the product model.
    **Next: complete the existing-system verification sequence below.**
 
@@ -762,10 +765,11 @@ their data-derived tooltip.
   appearance, attributes, skills, talents, and starting loadout are authored
   before a level. No runtime XP, points, bonuses, advancement options, or
   player-side spending UI exists.
-- Persist equipment, wounds, and fixed identity separately. **Complete:** a
+- Persist equipment separately from authored identity and mission combat state. **Complete:** a
   versioned Application-owned party save validates the exact identity roster
   and equipped-item ownership, while a PlayerPrefs adapter persists equipped
-  item and regional wounds across launches without rewriting authored identity.
+  items across launches without rewriting authored identity. Wounds and action
+  budgets are deliberately not durable, including when legacy saves are loaded.
 - Complete the close-quarters action family before companion deployment:
   - Replace `pushCost` and other verb-specific actor shortcuts with an authored
     displacement-action collection containing stable ID, intent, cost, accepted

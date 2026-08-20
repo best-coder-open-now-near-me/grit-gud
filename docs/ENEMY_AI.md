@@ -22,14 +22,17 @@ presents the committed result.
    receive a tactical turn.
 4. During an enemy turn, every capable hostile party member is evaluated. The
    enemy selects the highest-chance shot, then prefers a more wounded target and
-   shorter distance for deterministic ties. This prevents a nearby concealed
-   actor from hiding a clearly exposed threat farther away.
+   shorter distance for deterministic ties, with stable actor identity as the
+   final tie-breaker. This prevents a nearby concealed actor from hiding a
+   clearly exposed threat farther away and makes exact ties independent of input
+   enumeration order.
 5. The equipped attack, current exposure, accuracy decay, distance, action
    budget, reach, and authored per-turn attack limit determine whether a shot is
    available.
 6. A shot below the behavior's authored minimum hit chance triggers a bounded
    movement search. The enemy moves only when a candidate produces a strictly
-   better hit chance; route cost, preferred range, and visibility break ties.
+   better hit chance; route cost, preferred range, and visibility break ties,
+   followed by lexicographic route geometry for an order-independent result.
 7. If no route improves a legal low-confidence shot, the enemy takes the best
    available shot instead of wasting its turn. If neither attack nor movement is
    legal, it records an end-turn decision with an explicit rationale.
@@ -37,6 +40,10 @@ presents the committed result.
    encounter changes are immutable records. Replay and diagnostics consume
    frozen target, exposure, sound, route, and rationale rather than repeating
    Unity queries.
+9. A selected projectile attack launches through the shared authoritative
+   projectile session and impact-cycle controller. Enemy delivery therefore
+   records and presents the same flight, emergency reaction, collision,
+   diagnostics, and journal evidence as the equivalent player launch.
 
 The depot rifleman's minimum attack hit chance is 35%. The value is authored per
 behavior so a reckless suppressive unit can accept poor shots while a marksman

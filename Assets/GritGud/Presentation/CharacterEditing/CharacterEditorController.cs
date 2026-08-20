@@ -587,7 +587,9 @@ namespace GritGud.Presentation.CharacterEditing
         private void DrawStartingLoadout(CharacterDocument document)
         {
             GUILayout.Label("STARTING LOADOUT", styles.SectionHeader);
-            GUILayout.Label("Starting choices only—live quantities, wounds, and equipment state are saved separately.", styles.MutedLabel);
+            GUILayout.Label(
+                "Starting choices only—equipment changes persist; quantities, wounds, and action budgets reset for each mission.",
+                styles.MutedLabel);
             accessoryScroll = GUILayout.BeginScrollView(accessoryScroll);
             foreach (CharacterLoadoutItemData item in document.startingLoadout.items.ToArray())
             {

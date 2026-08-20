@@ -132,7 +132,9 @@ locomotion without animation changing the actor root.
       restoration of the menu/editor camera.
 - [x] Toggle between a tight, left-shoulder third-person composition and a
       stance-aware first-person view with `V`, while keeping one shared look
-      controller and excluding only the local player renderers in first person.
+      controller and applying an owner-counted renderer visibility override only
+      to the local player in first person. The actor's layer, collider layers,
+      and camera culling mask remain untouched.
 - [x] Preserve the intended shoulder distance through walls and clip a small,
       feathered screen-space opening only from wall color, depth, normal, and
       outline passes when a wall covers the player.
@@ -256,7 +258,7 @@ core gameplay or animation-driver code.
 | Mixed packs look incoherent | Select one locomotion family per stance and treat other packs as action candidates. |
 | Camera clips during animated motion | Obstruction queries use a camera collision radius and are tested through stairs, doors, and tight cover. |
 | A nearby wall collapses or blocks the shoulder view | Wall colliders remain authoritative for gameplay but do not shorten the camera arm; wall-only shader passes open a soft player-centered view whose right boundary remains circular while its left side extends one-sixth of the viewport through the shoulder-camera corridor, without hiding floors, props, or actors. |
-| First person exposes or disables the local actor incorrectly | A camera-only layer excludes local renderers while preserving physics, world shadows, stance state, and third-person restoration. |
+| First person exposes or disables the local actor incorrectly | An owner-counted renderer visibility override hides the local actor without changing actor/collider layers or camera culling masks, tracks newly attached equipment renderers, and restores visibility only after the last owner releases it. |
 | Animation state leaks into rules | One-way application-to-presentation data flow; no Animator reads in domain code. |
 | Repository and build bloat | Curate raw packages, avoid vendor demo dependencies, and audit referenced build assets. |
 | WebGL input traps the player | Gameplay never requests cursor lock; `Esc` may release host/browser capture without triggering application navigation. |

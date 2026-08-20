@@ -15,7 +15,8 @@ documents. It does not publish community levels or carry multiplayer traffic.
    history, and soft deletion. Migration `006` removes the legacy slot mutation
    API and makes the checked RPC functions the only level-draft write boundary.
    Migration `007` makes every returned summary complete and returns the copied
-   document from duplicate in the same committed RPC response.
+   document from duplicate in the same committed RPC response. Migration
+   `202608200001` requires a non-null expected revision for every draft save.
 4. In Unity, create **Assets > Create > Grit Gud > Supabase Configuration** and
    place the asset at `Assets/GritGud/Content/Resources/SupabaseConfiguration.asset`.
    Enter the project HTTPS URL and its **publishable** key from Supabase's
@@ -34,7 +35,9 @@ mutation sequencing for the menu and editor.
 
 Each cloud draft has an immutable UUID, an editable unique-per-account name,
 and an optimistic revision. Saves fail visibly instead of overwriting a newer
-revision. Rename changes only the name; duplicate creates a new UUID; delete
+revision. The save RPC rejects a missing/null `expected_revision` as a conflict;
+callers cannot opt out of concurrency control. Rename changes only the name;
+duplicate creates a new UUID; delete
 soft-archives the row. Immutable revision rows retain saved snapshots.
 
 Every level-draft mutation response is authoritative. Create, save, and rename

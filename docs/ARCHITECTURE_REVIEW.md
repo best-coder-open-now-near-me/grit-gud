@@ -1,7 +1,7 @@
 # Architecture and Separation-of-Concerns Review
 
 **Reviewed:** 2026-08-11; follow-up audits 2026-08-12, 2026-08-14, 2026-08-15,
-2026-08-17, and 2026-08-18
+2026-08-17, 2026-08-18, and 2026-08-20
 **Scope:** the repository as a whole, with additional attention on the recent
 emergency-reaction, projectile, explosive, party-persistence, displacement, and HUD
 work.
@@ -93,7 +93,9 @@ The current risk profile is bounded and executable:
   gates.
 
 No architecture blocker requires reverting the current editor slice. Durable
-party equipment/wound save/load is complete. The earlier advancement UI and
+party equipment save/load is complete; wounds and action budgets are transient
+mission state and deliberately start from authored scenario defaults. The
+earlier advancement UI and
 point model were removed on 2026-08-17 after product clarification: Character
 Creator authors the starting character before a level, and there is no runtime
 progression or player-side spending. The drone is not
@@ -391,6 +393,12 @@ diagnostics, weapon catalog, humanoid pose, and muzzle-origin path as player
 shots. Incapacitation remains authoritative session state; initiative and
 emergency responder selection skip actors that can no longer act.
 
+Exact tactical ties finish with stable actor identity for target selection and
+lexicographic route geometry for movement, so caller enumeration order cannot
+change the recorded decision. Projectile attacks use the same authoritative
+projectile session, journal, impact-cycle, diagnostics, and presentation path as
+player launches rather than being silently excluded from enemy affordability.
+
 The first tactical-confidence extension preserves that boundary. Application
 scores frozen exposure for every capable party target and owns an authored
 minimum acceptable hit chance. Unity supplies bounded route/exposure options
@@ -475,12 +483,15 @@ action while keeping preview and cancellation side-effect free.
 
 **Priority: medium**
 
-**Status: corrected 2026-08-17.** `GameplayPartySave` is a versioned,
+**Status: corrected 2026-08-20.** `GameplayPartySave` is a versioned,
 exact-roster Application contract keyed by the stable identities authored in the
 pre-level Character Creator. It validates equipped-item ownership and captures
-only mutable runtime equipment and wound state; `GameplaySession` rebinds saved
-wounds to the current scenario actor. The PlayerPrefs adapter supplies local
-browser/desktop durability, and equipment/wound changes flush immediately.
+only mutable equipment state. Schema 3 and the explicit schema 1/2 migration
+path discard legacy wounds and action budgets, so every mission starts with the
+scenario's authored combat state. The PlayerPrefs adapter supplies local
+browser/desktop durability, and equipment changes flush immediately. Persistence
+observers are isolated from storage outcomes, so a subscriber exception cannot
+turn a successful read or write into a reported storage failure.
 The previously implemented points, bonuses, advancement options, progression
 session, save fields, diagnostics, and runtime drawer were based on a mistaken
 product assumption and have been removed. Authored attributes, skills, talents,
@@ -786,8 +797,9 @@ turn. The current full EditMode gate passes 854 tests.
 7. Add authored knife attacks.
 8. Generalize blast effects and consumable quantities. **Complete.**
 9. Integrate party persistence. **Corrected and complete:** versioned,
-   identity-bound equipment/wound storage is live; runtime progression and its
-   advancement surface do not exist.
+   identity-bound equipment-only storage is live; combat wounds and budgets are
+   mission-transient, and runtime progression and its advancement surface do not
+   exist.
 10. Complete live toppling resolution, authored prop eligibility, and the
     published destructible-pile verification fixture. **Implemented
     2026-08-16; full Unity runner and hands-on fixture acceptance remain.**
