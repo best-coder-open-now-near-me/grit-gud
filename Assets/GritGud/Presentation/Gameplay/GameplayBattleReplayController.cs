@@ -76,18 +76,21 @@ namespace GritGud.Presentation.Gameplay
                 {
                     Resources.UnloadAsset(asset);
                 }
-                GameplayCombatStateSnapshot initial =
-                    GameplayHeadlessBattleStateFactory.Create(assembly, level);
-                GameplayExecutionIdentity identity = liveRuntime
+                GameplayExecutionIdentity identity = expected.Content
                     .ExecutionIdentity;
-                if (!identity.HasSameIdentity(
-                        expected.Content.ExecutionIdentity)
+                GameplayExecutionIdentity liveIdentity = liveRuntime
+                    .ExecutionIdentity;
+                if (!liveIdentity.Run.HasSameIdentity(identity.Run)
                     || !string.Equals(
-                        initial.CanonicalHash,
-                        expected.Content.InitialStateHash,
+                        assembly.Scenario.Id,
+                        identity.Gameplay.ScenarioId,
+                        StringComparison.Ordinal)
+                    || !string.Equals(
+                        level.levelId,
+                        identity.Spatial.LevelId,
                         StringComparison.Ordinal))
                     throw new InvalidOperationException(
-                        "First-sim artifact does not match loaded content.");
+                        "First-sim artifact targets different gameplay content.");
                 var runner = new GameplayBattleRunner(
                     assembly,
                     level,
@@ -107,7 +110,7 @@ namespace GritGud.Presentation.Gameplay
                     GameplayBattleArtifactVerifier.VerifyRun(run, expected);
                 if (!ReferenceEquals(cancellation, owner))
                     return;
-                hud.SetExternalReplay(timeline, expected);
+                hud.SetVerifiedExternalReplay(timeline, expected);
                 GameplayBattleScoreboard score = expected.Content.Scoreboard;
                 status = "FIRST SIM READY — "
                     + expected.Content.Terminal.Kind.ToString().ToUpperInvariant()

@@ -15,14 +15,12 @@ namespace GritGud.Domain.Tests.Gameplay
             GameplaySession gameplay = CreateGameplay(
                 emergencyEligible: true,
                 responderCount: 1);
-            var query = new SequencedSegmentQuery(
-                ProjectileSegmentQueryResult.Clear(1),
-                ProjectileSegmentQueryResult.Collision(
-                    2,
+            var query = new SequencedSegmentQuery(gameplay,
+                SegmentOutcome.Clear(),
+                SegmentOutcome.Collision(
                     "cover.wall",
                     0.5f),
-                ProjectileSegmentQueryResult.Collision(
-                    3,
+                SegmentOutcome.Collision(
                     "cover.wall",
                     1f));
             var projectiles = CreateProjectileSession(gameplay, query);
@@ -64,14 +62,12 @@ namespace GritGud.Domain.Tests.Gameplay
             GameplaySession gameplay = CreateGameplay(
                 emergencyEligible: true,
                 responderCount: 2);
-            var query = new SequencedSegmentQuery(
-                ProjectileSegmentQueryResult.Clear(1),
-                ProjectileSegmentQueryResult.Collision(
-                    2,
+            var query = new SequencedSegmentQuery(gameplay,
+                SegmentOutcome.Clear(),
+                SegmentOutcome.Collision(
                     "cover.wall",
                     0.25f),
-                ProjectileSegmentQueryResult.Collision(
-                    3,
+                SegmentOutcome.Collision(
                     "moved.cover",
                     1f));
             var projectiles = CreateProjectileSession(gameplay, query);
@@ -106,7 +102,7 @@ namespace GritGud.Domain.Tests.Gameplay
                 responderCount: 1);
             var projectiles = CreateProjectileSession(
                 gameplay,
-                new ClearSegmentQuery());
+                new ClearSegmentQuery(gameplay));
             var cycle = new GameplayImpactCycleSession(gameplay, projectiles);
             gameplay.BeginEncounter();
             ProjectileLaunchRecord launch = Launch(projectiles);
@@ -128,13 +124,11 @@ namespace GritGud.Domain.Tests.Gameplay
                 responderCount: 1);
             gameplay.BeginEncounter();
             SpendActionPoints(gameplay, 2);
-            var query = new SequencedSegmentQuery(
-                ProjectileSegmentQueryResult.Collision(
-                    1,
+            var query = new SequencedSegmentQuery(gameplay,
+                SegmentOutcome.Collision(
                     "cover.wall",
                     0.5f),
-                ProjectileSegmentQueryResult.Collision(
-                    2,
+                SegmentOutcome.Collision(
                     "cover.wall",
                     1f));
             var projectiles = CreateProjectileSession(gameplay, query);
@@ -159,7 +153,7 @@ namespace GritGud.Domain.Tests.Gameplay
                 responderCount: 1);
             var projectiles = CreateProjectileSession(
                 gameplay,
-                new ClearSegmentQuery());
+                new ClearSegmentQuery(gameplay));
             var cycle = new GameplayImpactCycleSession(gameplay, projectiles);
             gameplay.BeginEncounter();
             ProjectileLaunchRecord launch = Launch(projectiles);
@@ -182,8 +176,8 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(gameplay.EnterTurnMode(), Is.True);
             var projectiles = CreateProjectileSession(
                 gameplay,
-                new SequencedSegmentQuery(
-                    ProjectileSegmentQueryResult.Clear(1)));
+                new SequencedSegmentQuery(gameplay,
+                    SegmentOutcome.Clear()));
             var cycle = new GameplayImpactCycleSession(gameplay, projectiles);
             ProjectileLaunchRecord launch = Launch(projectiles);
 
@@ -201,7 +195,7 @@ namespace GritGud.Domain.Tests.Gameplay
                 responderCount: 1);
             var projectiles = CreateProjectileSession(
                 gameplay,
-                new ClearSegmentQuery());
+                new ClearSegmentQuery(gameplay));
             var sharedCycle = new GameplayEmergencyCycleSession(gameplay);
             var cycle = new GameplayImpactCycleSession(
                 gameplay,
@@ -310,21 +304,32 @@ namespace GritGud.Domain.Tests.Gameplay
 
         private sealed class ClearSegmentQuery : IProjectileSegmentQuery
         {
-            private long revision;
+            private readonly GameplaySession gameplay;
+
+            public ClearSegmentQuery(GameplaySession currentGameplay)
+            {
+                gameplay = currentGameplay ?? throw new ArgumentNullException(
+                    nameof(currentGameplay));
+            }
 
             public ProjectileSegmentQueryResult Query(
                 ProjectileSegmentQuery query) =>
-                ProjectileSegmentQueryResult.Clear(++revision);
+                ProjectileSegmentQueryResult.Clear(
+                    CurrentRevision(gameplay));
         }
 
         private sealed class SequencedSegmentQuery : IProjectileSegmentQuery
         {
-            private readonly Queue<ProjectileSegmentQueryResult> results;
+            private readonly Queue<SegmentOutcome> results;
+            private readonly GameplaySession gameplay;
 
             public SequencedSegmentQuery(
-                params ProjectileSegmentQueryResult[] queryResults)
+                GameplaySession currentGameplay,
+                params SegmentOutcome[] queryResults)
             {
-                results = new Queue<ProjectileSegmentQueryResult>(
+                gameplay = currentGameplay ?? throw new ArgumentNullException(
+                    nameof(currentGameplay));
+                results = new Queue<SegmentOutcome>(
                     queryResults);
             }
 
@@ -337,8 +342,45 @@ namespace GritGud.Domain.Tests.Gameplay
                         "The test did not author enough segment results.");
                 }
 
-                return results.Dequeue();
+                SegmentOutcome authored = results.Dequeue();
+                return authored.HasCollision
+                    ? ProjectileSegmentQueryResult.Collision(
+                        CurrentRevision(gameplay),
+                        authored.HitEntityId,
+                        authored.CollisionFraction)
+                    : ProjectileSegmentQueryResult.Clear(
+                        CurrentRevision(gameplay));
             }
+        }
+
+        private static long CurrentRevision(GameplaySession gameplay) =>
+            GameplayCombatStateCapture.Capture(gameplay)
+                .Session
+                .JournalSequence;
+
+        private readonly struct SegmentOutcome
+        {
+            private SegmentOutcome(
+                string hitEntityId,
+                float collisionFraction)
+            {
+                HitEntityId = hitEntityId ?? string.Empty;
+                CollisionFraction = collisionFraction;
+            }
+
+            public bool HasCollision => !string.IsNullOrEmpty(HitEntityId);
+            public string HitEntityId { get; }
+            public float CollisionFraction { get; }
+
+            public static SegmentOutcome Clear() => new SegmentOutcome(
+                string.Empty,
+                0f);
+
+            public static SegmentOutcome Collision(
+                string hitEntityId,
+                float collisionFraction) => new SegmentOutcome(
+                    hitEntityId,
+                    collisionFraction);
         }
 
         private sealed class PendingResolution : IEmergencyCycleResolution

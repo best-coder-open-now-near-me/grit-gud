@@ -368,8 +368,9 @@ namespace GritGud.Application.Gameplay
                     && profile.GetTrait("delivery") == "turn-flight"
                     && profile.GetTrait("targeting") == "semantic-subject"
                     && profile.GetTrait("resource") == "equipped-weapon"
-                    && profile.GetTrait("consequence")
-                        == "blast-actor-and-destructible"
+                    && (profile.GetTrait("consequence") == "impact"
+                        || profile.GetTrait("consequence")
+                            == "blast-actor-and-destructible")
                     && (profile.GetTrait("emergency") == "opens"
                         || profile.GetTrait("emergency") == "none");
             }

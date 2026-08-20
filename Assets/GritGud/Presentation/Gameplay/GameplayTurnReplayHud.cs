@@ -77,7 +77,7 @@ namespace GritGud.Presentation.Gameplay
             enabled = false;
         }
 
-        internal void SetExternalReplay(
+        internal void SetVerifiedExternalReplay(
             GameplaySemanticReplayTimeline timeline,
             GameplayBattleArtifact artifact)
         {
@@ -87,11 +87,6 @@ namespace GritGud.Presentation.Gameplay
             GameplayBattleArtifact nextArtifact = artifact
                 ?? throw new ArgumentNullException(
                 nameof(artifact));
-            if (!nextArtifact.Content.ExecutionIdentity.HasSameIdentity(
-                    runtime?.ExecutionIdentity))
-                throw new ArgumentException(
-                    "External replay identity does not match the live content.",
-                    nameof(artifact));
             externalReplay = nextReplay;
             externalArtifactId = nextArtifact.ArtifactId;
             externalTerminal = nextArtifact.Content.Terminal;
