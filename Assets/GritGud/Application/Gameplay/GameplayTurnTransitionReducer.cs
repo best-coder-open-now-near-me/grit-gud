@@ -101,6 +101,9 @@ namespace GritGud.Application.Gameplay
                     session.Actors);
                 mutation.EncounterActive = false;
                 mutation.EncounterCompletionRequested = false;
+                mutation.InitiativeOrder = session.AllInitiativeOrder;
+                mutation.EncounterState = session.EncounterState
+                    .WithParticipants(Array.Empty<string>());
                 mutation.Mode = GameplaySessionMode.Exploration;
                 mutation.TurnContext = TurnModeContext.None;
                 mutation.VoluntaryTurnReentrySecondsRemaining =

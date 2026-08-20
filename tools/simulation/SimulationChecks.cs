@@ -31,6 +31,7 @@ internal static class SimulationChecks
             VerifyPermanentPolicyRunner();
             VerifyLogicalExecutionGuards();
             VerifyBasicExecutableCandidateRoutes();
+            VerifyLifecycleExecutableCandidateRoutes();
             VerifyAllCurrentContentCoverage();
             VerifyTacticalDestructibleSimulation();
             executedFixtureChecks.Add("sim-destructible-cover");
@@ -1130,6 +1131,101 @@ internal static class SimulationChecks
         GameplayCombatStateSnapshot initial = GameplayCombatStateCapture.Capture(live);
         GameplayTransitionReducerRegistry reducers =
             GameplaySimulationReducers.CreateCurrent();
+        var routeLevel = new LevelDocument
+        {
+            levelId = "encounter-route-level",
+            schemaVersion = LevelDocument.CurrentSchemaVersion,
+            entities = new List<LevelEntity>
+            {
+                new LevelEntity
+                {
+                    id = "encounter-route-floor",
+                    archetypeId = "structure.floor.standard",
+                    transform = new LevelTransformData(
+                        new Float3Data(0f, 0f, 0f),
+                        yawDegrees: 0f),
+                    placementSurface = new LevelPlacementSurfaceData
+                    {
+                        kind = LevelPlacementSurfaceData.FlatKind,
+                        size = new Float3Data(40f, 0f, 40f),
+                    },
+                },
+            },
+        };
+        routeLevel.Normalize();
+        var routeSpatialIdentity = new SpatialContentIdentity(
+            routeLevel.levelId,
+            routeLevel.schemaVersion,
+            evidenceAlgorithmVersion: 1,
+            new string('2', 64));
+        var routeSpatial = new GameplayHeadlessSpatialEvidence(
+            routeLevel,
+            routeSpatialIdentity);
+        IReadOnlyList<GameplayReachableInput> routeInputs =
+            GameplayReachableInputEnumerator.Enumerate(
+                live.Scenario,
+                routeLevel);
+        GameplayCapabilityRegistry routeCapabilities =
+            GameplayCurrentCapabilityCatalog.Create(reducers, routeInputs);
+        var executableRoutes = new GameplayCandidateExecutionRouteRegistry(
+            routeCapabilities);
+        executableRoutes.Register(
+            new GameplayEncounterObservationCandidateExecutionRoute(
+                live.Scenario,
+                routeSpatial));
+        executableRoutes.Register(new GameplayPatrolCandidateExecutionRoute(
+            live.Scenario,
+            routeSpatial));
+        IReadOnlyList<GameplayCandidate> routeCandidates =
+            new GameplayTacticalCandidateBuilder(routeCapabilities).Build(
+                initial,
+                routeInputs);
+        GameplayCandidate observationCandidate = FindCandidate(
+            routeCandidates,
+            "enemy",
+            GameplaySemanticCapability.ObserveEncounter,
+            "enemy");
+        GameplayCandidate patrolCandidate = FindCandidate(
+            routeCandidates,
+            "enemy",
+            GameplaySemanticCapability.Patrol,
+            "enemy");
+        var observationRuntime = new GameplaySimulationRuntime(
+            new GameplayExecutionIdentity(
+                new GameplayContentIdentity(
+                    live.Scenario.Id,
+                    scenarioSchemaVersion: 1,
+                    rulesSchemaVersion: 1,
+                    new string('1', 64)),
+                routeSpatialIdentity,
+                live.RunIdentity),
+            initial,
+            reducers,
+            routeCapabilities);
+        ExecuteCandidate(
+            observationRuntime,
+            executableRoutes,
+            observationCandidate);
+        Require(observationRuntime.Trajectory.Count == 1
+            && GameplayExactReplay.Verify(
+                initial,
+                observationRuntime.Trajectory,
+                reducers).IsExact,
+            "Encounter observation route did not reduce and replay exactly.");
+        var patrolRuntime = new GameplaySimulationRuntime(
+            observationRuntime.ExecutionIdentity,
+            initial,
+            reducers,
+            routeCapabilities);
+        ExecuteCandidate(patrolRuntime, executableRoutes, patrolCandidate);
+        Require(patrolRuntime.CurrentState.Session.GetActor("enemy")
+                .Pose.Position.DistanceTo(
+                    initial.Session.GetActor("enemy").Pose.Position) > 0f
+            && GameplayExactReplay.Verify(
+                initial,
+                patrolRuntime.Trajectory,
+                reducers).IsExact,
+            "Patrol route did not reduce and replay exactly.");
         var trajectory = new List<GameplaySemanticTransition>();
         GameplayCombatStateSnapshot reduced = initial;
         EnemyBehaviorDefinition behavior = live.Scenario.GetActor("enemy")
@@ -2881,6 +2977,204 @@ internal static class SimulationChecks
                 runtime.Trajectory,
                 reducers).IsExact,
             "Basic executable routes did not form one exact semantic trajectory.");
+    }
+
+    private static void VerifyLifecycleExecutableCandidateRoutes()
+    {
+        GameplaySession gameplay = CreateGameplay(CreateRifle());
+        GameplayCombatStateSnapshot initial = GameplayCombatStateCapture.Capture(
+            gameplay);
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
+        var inputs = new List<GameplayReachableInput>
+        {
+            new GameplayReachableInput(
+                GameplayReachableInputKind.SystemContinuation,
+                "system.world.continuous-time",
+                "player",
+                GameplayCapabilityProfiles.AdvanceWorld("continuous-time")),
+            new GameplayReachableInput(
+                GameplayReachableInputKind.SystemContinuation,
+                "system.world.voluntary-cycle",
+                "player",
+                GameplayCapabilityProfiles.AdvanceWorld("voluntary-cycle")),
+            new GameplayReachableInput(
+                GameplayReachableInputKind.SessionControl,
+                "control.turn-mode.enter",
+                "player",
+                GameplayCapabilityProfiles.ChangeTurnMode("enter")),
+            new GameplayReachableInput(
+                GameplayReachableInputKind.SessionControl,
+                "control.turn-mode.exit",
+                "player",
+                GameplayCapabilityProfiles.ChangeTurnMode("exit")),
+            new GameplayReachableInput(
+                GameplayReachableInputKind.SystemContinuation,
+                "system.encounter.begin",
+                "player",
+                GameplayCapabilityProfiles.ChangeEncounter("begin")),
+            new GameplayReachableInput(
+                GameplayReachableInputKind.SystemContinuation,
+                "system.encounter.request-completion",
+                "player",
+                GameplayCapabilityProfiles.ChangeEncounter(
+                    "request-completion")),
+            new GameplayReachableInput(
+                GameplayReachableInputKind.SystemContinuation,
+                "system.emergency.begin",
+                "player",
+                GameplayCapabilityProfiles.EmergencyReaction("begin")),
+            new GameplayReachableInput(
+                GameplayReachableInputKind.SystemContinuation,
+                "system.emergency.complete",
+                "player",
+                GameplayCapabilityProfiles.EmergencyReaction("complete")),
+            new GameplayReachableInput(
+                GameplayReachableInputKind.EndTurnControl,
+                "control.end-turn",
+                "player",
+                GameplayCapabilityProfiles.EndTurn(emergency: false)),
+            new GameplayReachableInput(
+                GameplayReachableInputKind.EmergencyControl,
+                "control.end-emergency-turn",
+                "enemy",
+                GameplayCapabilityProfiles.EndTurn(emergency: true)),
+        };
+        GameplayCapabilityRegistry capabilities =
+            GameplayCurrentCapabilityCatalog.Create(reducers, inputs);
+        var routes = new GameplayCandidateExecutionRouteRegistry(capabilities);
+        routes.Register(new GameplayLifecycleCandidateExecutionRoute(
+            gameplay.Scenario,
+            continuousTimeStepSeconds: 0.25f));
+        routes.Register(new GameplayEndTurnCandidateExecutionRoute(
+            gameplay.Scenario));
+        var candidates = new GameplayReachableCandidateBuilder(capabilities);
+        var executionIdentity = new GameplayExecutionIdentity(
+            new GameplayContentIdentity(
+                gameplay.Scenario.Id,
+                scenarioSchemaVersion: 1,
+                rulesSchemaVersion: 1,
+                new string('0', 64)),
+            new SpatialContentIdentity(
+                "lifecycle-route-level",
+                levelSchemaVersion: 1,
+                evidenceAlgorithmVersion: 1,
+                new string('f', 64)),
+            gameplay.RunIdentity);
+
+        var encounterRuntime = new GameplaySimulationRuntime(
+            executionIdentity,
+            initial,
+            reducers,
+            capabilities);
+        GameplayCandidate continuous = candidates.Build(inputs[0]);
+        ExecuteCandidate(encounterRuntime, routes, continuous);
+        GameplayCandidate scopedBegin = candidates.Build(
+            inputs[4],
+            new GameplaySubjectReference(
+                GameplaySemanticSubjectKind.System,
+                GameplaySessionControlTransitionPayload.Subject),
+            new GameplayLifecycleCandidateIntent(
+                inputs[4],
+                participantIds: new[] { "player", "enemy" }));
+        ExecuteCandidate(encounterRuntime, routes, scopedBegin);
+        ExecuteCandidate(
+            encounterRuntime,
+            routes,
+            candidates.Build(inputs[5]));
+        ExecuteCandidate(
+            encounterRuntime,
+            routes,
+            candidates.Build(inputs[8]));
+        Require(encounterRuntime.CurrentState.Session.Mode
+                == GameplaySessionMode.Exploration
+            && !encounterRuntime.CurrentState.Session.EncounterActive
+            && encounterRuntime.CurrentState.Session
+                .VoluntaryTurnReentrySecondsRemaining
+                == gameplay.Scenario.Timing.MinimumVoluntaryTurnSeconds
+            && GameplayExactReplay.Verify(
+                initial,
+                encounterRuntime.Trajectory,
+                reducers).IsExact,
+            "Scoped encounter lifecycle routes did not complete and replay exactly.");
+
+        var modeRuntime = new GameplaySimulationRuntime(
+            executionIdentity,
+            initial,
+            reducers,
+            capabilities);
+        ExecuteCandidate(modeRuntime, routes, candidates.Build(inputs[2]));
+        ExecuteCandidate(modeRuntime, routes, candidates.Build(inputs[3]));
+        Require(modeRuntime.CurrentState.Session.Mode
+                == GameplaySessionMode.Exploration
+            && GameplayExactReplay.Verify(
+                initial,
+                modeRuntime.Trajectory,
+                reducers).IsExact,
+            "Voluntary turn-mode enter/exit routes did not replay exactly.");
+
+        var voluntaryRuntime = new GameplaySimulationRuntime(
+            executionIdentity,
+            initial,
+            reducers,
+            capabilities);
+        ExecuteCandidate(
+            voluntaryRuntime,
+            routes,
+            candidates.Build(inputs[2]));
+        ExecuteCandidate(
+            voluntaryRuntime,
+            routes,
+            candidates.Build(inputs[8]));
+        ExecuteCandidate(
+            voluntaryRuntime,
+            routes,
+            candidates.Build(inputs[1]));
+        Require(voluntaryRuntime.CurrentState.Session.Operation
+                == GameplaySessionOperation.None
+            && voluntaryRuntime.CurrentState.Session
+                .PendingVoluntaryTurnCycle == null
+            && GameplayExactReplay.Verify(
+                initial,
+                voluntaryRuntime.Trajectory,
+                reducers).IsExact,
+            "Mandatory voluntary world-cycle route did not replay exactly.");
+
+        var emergencyRuntime = new GameplaySimulationRuntime(
+            executionIdentity,
+            initial,
+            reducers,
+            capabilities);
+        ExecuteCandidate(emergencyRuntime, routes, scopedBegin);
+        GameplayCandidate emergencyBegin = candidates.Build(
+            inputs[6],
+            new GameplaySubjectReference(
+                GameplaySemanticSubjectKind.Actor,
+                "player"),
+            new GameplayLifecycleCandidateIntent(
+                inputs[6],
+                responderIds: new[] { "enemy" },
+                emergencyActionPointAllowance: 1));
+        ExecuteCandidate(emergencyRuntime, routes, emergencyBegin);
+        ExecuteCandidate(
+            emergencyRuntime,
+            routes,
+            candidates.Build(inputs[9]));
+        ExecuteCandidate(
+            emergencyRuntime,
+            routes,
+            candidates.Build(inputs[7]));
+        Require(emergencyRuntime.CurrentState.Session.TurnPhase
+                == GameplayTurnPhase.Normal
+            && string.Equals(
+                emergencyRuntime.CurrentState.Session.ActiveActorId,
+                "player",
+                StringComparison.Ordinal)
+            && GameplayExactReplay.Verify(
+                initial,
+                emergencyRuntime.Trajectory,
+                reducers).IsExact,
+            "Emergency lifecycle routes did not restore and replay the suspended turn.");
     }
 
     private static void ExecuteCandidate(

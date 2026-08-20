@@ -29,12 +29,28 @@ namespace GritGud.Application.Gameplay
                 input,
                 new GameplaySubjectReference(
                     input.SubjectKind,
-                    input.SubjectIdHint
-                        ?? (input.SubjectKind
-                                == GameplaySemanticSubjectKind.Actor
-                            ? input.ActorId
-                            : input.SourceId)),
+                    ResolveDefaultSubjectId(input)),
                 new GameplayReachableIntent(input));
+
+        private static string ResolveDefaultSubjectId(
+            GameplayReachableInput input)
+        {
+            if (input.SubjectIdHint != null) return input.SubjectIdHint;
+            if (input.SubjectKind == GameplaySemanticSubjectKind.Actor)
+                return input.ActorId;
+            if (input.SubjectKind == GameplaySemanticSubjectKind.System)
+            {
+                if (input.Profile.Capability
+                    == GameplaySemanticCapability.AdvanceWorld)
+                    return GameplayWorldAdvanceTransitionPayload.Subject;
+                if (input.Profile.Capability
+                        == GameplaySemanticCapability.ChangeTurnMode
+                    || input.Profile.Capability
+                        == GameplaySemanticCapability.ChangeEncounter)
+                    return GameplaySessionControlTransitionPayload.Subject;
+            }
+            return input.SourceId;
+        }
 
         public GameplayCandidate Build(
             GameplayReachableInput input,

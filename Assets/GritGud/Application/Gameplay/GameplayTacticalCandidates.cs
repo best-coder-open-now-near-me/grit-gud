@@ -242,6 +242,8 @@ namespace GritGud.Application.Gameplay
                 case GameplaySemanticCapability.ChangeStance:
                 case GameplaySemanticCapability.EndTurn:
                 case GameplaySemanticCapability.EmergencyReaction:
+                case GameplaySemanticCapability.ObserveEncounter:
+                case GameplaySemanticCapability.Patrol:
                     return string.Equals(
                         input.ActorId,
                         subject.Subject.Id,

@@ -415,8 +415,10 @@ namespace GritGud.Application.Gameplay
 
         public bool Supports(GameplayCapabilityProfile profile) =>
             profile != null
-            && profile.Equals(GameplayCapabilityProfiles.EndTurn(
-                emergency: false));
+            && (profile.Equals(GameplayCapabilityProfiles.EndTurn(
+                    emergency: false))
+                || profile.Equals(GameplayCapabilityProfiles.EndTurn(
+                    emergency: true)));
 
         public GameplayExecutableCandidateEvaluation Evaluate(
             GameplayDecisionContext context,
@@ -424,6 +426,8 @@ namespace GritGud.Application.Gameplay
         {
             if (context == null) throw new ArgumentNullException(nameof(context));
             GameplaySessionStateSnapshot session = context.State.Session;
+            bool emergency = candidate.Profile.Equals(
+                GameplayCapabilityProfiles.EndTurn(emergency: true));
             string failure = session.Mode != GameplaySessionMode.TurnBased
                 ? "turn-mode-required"
                 : session.Operation != GameplaySessionOperation.None
@@ -433,9 +437,15 @@ namespace GritGud.Application.Gameplay
                         candidate.ActorId,
                         StringComparison.Ordinal)
                         ? "actor-not-active"
-                        : session.GetActor(candidate.ActorId).IsIncapacitated
-                            ? "actor-incapacitated"
-                            : string.Empty;
+                        : emergency
+                            && session.TurnPhase
+                                != GameplayTurnPhase.EmergencyReaction
+                            ? "emergency-phase-required"
+                            : !emergency
+                                && session.TurnPhase
+                                    == GameplayTurnPhase.EmergencyReaction
+                                ? "normal-phase-required"
+                                : string.Empty;
             bool legal = failure.Length == 0;
             return new GameplayExecutableCandidateEvaluation(
                 Id,
@@ -460,7 +470,8 @@ namespace GritGud.Application.Gameplay
             GameplayExecutableCandidateEvaluation evaluation) =>
             new GameplayEndTurnTransitionPayload(
                 evaluation.Candidate.ActorId,
-                emergency: false,
+                evaluation.Candidate.Profile.Equals(
+                    GameplayCapabilityProfiles.EndTurn(emergency: true)),
                 minimumVoluntaryTurnSeconds);
     }
 }

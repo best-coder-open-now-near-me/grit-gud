@@ -67,8 +67,6 @@ namespace GritGud.Application.Gameplay
     public sealed class GameplayEndTurnTransitionPayload :
         GameplayTransitionPayload
     {
-        public const string Subject = "turn";
-
         public GameplayEndTurnTransitionPayload(
             string actorId,
             bool emergency,
@@ -76,7 +74,7 @@ namespace GritGud.Application.Gameplay
             : base(
                 GameplayCapabilityProfiles.EndTurn(emergency),
                 actorId,
-                Subject)
+                actorId)
         {
             GameplayNumericPolicy.RequireFinite(
                 minimumVoluntaryTurnSeconds,

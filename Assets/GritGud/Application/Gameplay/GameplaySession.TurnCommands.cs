@@ -37,7 +37,15 @@ namespace GritGud.Application.Gameplay
         public bool TryEndTurn(string actorId, out TurnEndFailure failure)
         {
             RequireLegacyMutationAllowed(nameof(TryEndTurn));
-            return turnLifecycle.TryEndTurn(actorId, out failure);
+            bool encounterWasActive = EncounterActive;
+            bool ended = turnLifecycle.TryEndTurn(actorId, out failure);
+            if (ended && encounterWasActive && !EncounterActive)
+            {
+                ReplaceInitiativeScope(allInitiativeOrder);
+                encounterState = encounterState.WithParticipants(
+                    System.Array.Empty<string>());
+            }
+            return ended;
         }
 
         public void BeginEmergencyReaction(
