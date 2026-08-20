@@ -278,7 +278,7 @@ internal static class SimulationParityChecks
                 distance: 0.5f,
                 occlusionExposure: 1f,
                 distanceFalloff: 1f),
-        });
+        }, () => gameplay.Journal.LastEntry?.Sequence ?? 0L);
         var live = new GameplayThrownExplosiveSession(
             gameplay,
             evidence,
@@ -350,7 +350,8 @@ internal static class SimulationParityChecks
         using (var smokeFields = new GameplaySmokeFieldSession(gameplay))
         {
             var evidence = new FixedExplosiveEvidence(
-                Array.Empty<BlastEffectRecord>());
+                Array.Empty<BlastEffectRecord>(),
+                () => gameplay.Journal.LastEntry?.Sequence ?? 0L);
             var live = new GameplayThrownExplosiveSession(
                 gameplay,
                 evidence,
@@ -464,7 +465,7 @@ internal static class SimulationParityChecks
                 distance: 1f,
                 occlusionExposure: 1f,
                 distanceFalloff: 0.5f),
-        });
+        }, () => gameplay.Journal.LastEntry?.Sequence ?? 0L);
         var live = new GameplayThrownExplosiveSession(
             gameplay,
             evidence,
@@ -569,7 +570,8 @@ internal static class SimulationParityChecks
             destructibles))
         {
             var evidence = new FixedExplosiveEvidence(
-                Array.Empty<BlastEffectRecord>());
+                Array.Empty<BlastEffectRecord>(),
+                () => gameplay.Journal.LastEntry?.Sequence ?? 0L);
             var live = new GameplayThrownExplosiveSession(
                 gameplay,
                 evidence,
@@ -1659,11 +1661,17 @@ internal static class SimulationParityChecks
         IBlastWorldQuery
     {
         private readonly BlastEffectRecord[] effects;
+        private readonly Func<long> worldStateRevision;
 
-        public FixedExplosiveEvidence(BlastEffectRecord[] resolvedEffects)
+        public FixedExplosiveEvidence(
+            BlastEffectRecord[] resolvedEffects,
+            Func<long> worldStateRevision)
         {
             effects = resolvedEffects ?? throw new ArgumentNullException(
                 nameof(resolvedEffects));
+            this.worldStateRevision = worldStateRevision
+                ?? throw new ArgumentNullException(
+                    nameof(worldStateRevision));
         }
 
         public ThrownExplosiveLandingResult Resolve(
@@ -1671,12 +1679,12 @@ internal static class SimulationParityChecks
             GameplayPosition sampledLanding) =>
             new ThrownExplosiveLandingResult(
                 sampledLanding,
-                worldStateRevision: 0L);
+                worldStateRevision());
 
         public BlastWorldQueryResult Query(BlastWorldQuery query) =>
             new BlastWorldQueryResult(
                 query,
-                worldStateRevision: 0L,
+                worldStateRevision(),
                 effects);
     }
 

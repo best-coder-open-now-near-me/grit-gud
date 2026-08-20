@@ -184,12 +184,14 @@ namespace GritGud.Application.Gameplay
         private readonly GameplayReachableCandidateBuilder candidates;
         private readonly GameplayTacticalCandidateBuilder tacticalCandidates;
         private readonly GameplayHeadlessSpatialEvidence spatial;
+        private readonly ScenarioDefinition scenario;
         private readonly float maximumCandidateDistance;
 
         public GameplayHeadlessCandidateBuilder(
             GameplayCapabilityRegistry capabilities,
             GameplayHeadlessSpatialEvidence spatialEvidence,
-            float maximumMovementCandidateDistance = 6f)
+            float maximumMovementCandidateDistance = 6f,
+            ScenarioDefinition scenarioDefinition = null)
         {
             candidates = new GameplayReachableCandidateBuilder(
                 capabilities ?? throw new ArgumentNullException(
@@ -198,6 +200,7 @@ namespace GritGud.Application.Gameplay
                 capabilities);
             spatial = spatialEvidence ?? throw new ArgumentNullException(
                 nameof(spatialEvidence));
+            scenario = scenarioDefinition;
             GameplayNumericPolicy.RequireFinite(
                 maximumMovementCandidateDistance,
                 nameof(maximumMovementCandidateDistance));
@@ -235,6 +238,19 @@ namespace GritGud.Application.Gameplay
                         result.AddRange(BuildDroneMoves(state, input));
                     continue;
                 }
+                if (input.SubjectKind
+                        == GameplaySemanticSubjectKind.WorldPosition
+                    && scenario != null
+                    && (input.Profile.Capability
+                            == GameplaySemanticCapability.ThrowExplosive
+                        || input.Profile.Capability
+                            == GameplaySemanticCapability.LaunchProjectile
+                        || input.Profile.Capability
+                            == GameplaySemanticCapability.DirectAttack))
+                {
+                    result.AddRange(BuildWorldPositions(state, input));
+                    continue;
+                }
                 result.AddRange(tacticalCandidates.Build(
                     state,
                     new[] { input }));
@@ -243,6 +259,103 @@ namespace GritGud.Application.Gameplay
                 left.CandidateId,
                 right.CandidateId));
             return result.AsReadOnly();
+        }
+
+        private IEnumerable<GameplayCandidate> BuildWorldPositions(
+            GameplayCombatStateSnapshot state,
+            GameplayReachableInput input)
+        {
+            GameplayActorSnapshot actor = state.Session.GetActor(input.ActorId);
+            if (actor.IsIncapacitated || actor.IsPinned) yield break;
+            float maximumRange = ResolveMaximumRange(actor, input);
+            if (maximumRange <= 0f) yield break;
+            var requested = new List<GameplayPosition>();
+            float[] distances = maximumRange <= 0.2f
+                ? new[] { maximumRange }
+                : new[] { maximumRange * 0.5f, maximumRange };
+            foreach (float distance in distances)
+            foreach (GameplayPosition direction in Directions)
+            {
+                double length = Math.Sqrt(
+                    (direction.X * direction.X)
+                    + (direction.Z * direction.Z));
+                requested.Add(new GameplayPosition(
+                    actor.Pose.Position.X
+                        + (float)((direction.X / length) * distance),
+                    actor.Pose.Position.Y,
+                    actor.Pose.Position.Z
+                        + (float)((direction.Z / length) * distance)));
+            }
+            if (input.Profile.Capability
+                == GameplaySemanticCapability.ThrowExplosive)
+                foreach (GameplayTacticalSubject subject in
+                    GameplayTacticalSubjectCatalog.Discover(state))
+                    if (!string.Equals(
+                            subject.Subject.Id,
+                            actor.ActorId,
+                            StringComparison.Ordinal)
+                        && actor.Pose.Position.DistanceTo(subject.Position)
+                            <= maximumRange + 0.0001f)
+                        requested.Add(subject.Position);
+
+            var destinations = new HashSet<string>(StringComparer.Ordinal);
+            foreach (GameplayPosition value in requested)
+            {
+                var atActorHeight = new GameplayPosition(
+                    value.X,
+                    actor.Pose.Position.Y,
+                    value.Z);
+                if (!spatial.TryResolveMovementPosition(
+                    actor.Pose.Position,
+                    atActorHeight,
+                    maximumVerticalReach: 12f,
+                    out GameplayPosition grounded))
+                    continue;
+                if (actor.Pose.Position.DistanceTo(grounded)
+                    > maximumRange + 0.0001f)
+                    continue;
+                string key = Format(grounded);
+                if (!destinations.Add(key)) continue;
+                var intent = new GameplayWorldPositionIntent(grounded);
+                yield return candidates.Build(
+                    input,
+                    new GameplaySubjectReference(
+                        GameplaySemanticSubjectKind.WorldPosition,
+                        "world." + key),
+                    intent,
+                    input.Profile.Capability.ToString().ToLowerInvariant()
+                        + "." + actor.ActorId + "." + key);
+            }
+        }
+
+        private float ResolveMaximumRange(
+            GameplayActorSnapshot actor,
+            GameplayReachableInput input)
+        {
+            ScenarioActorDefinition definition = scenario.GetActor(
+                actor.ActorId);
+            if (input.Profile.Capability
+                == GameplaySemanticCapability.ThrowExplosive)
+            {
+                foreach (InventoryItemDefinition item in definition.Inventory)
+                    if (item.ConsumablePower
+                            is ThrownExplosiveDefinition explosive
+                        && input.Profile.Equals(
+                            GameplayCapabilityProfiles.ThrowExplosive(
+                                explosive)))
+                        return explosive.MaximumRange;
+                return 0f;
+            }
+            AttackDefinition attack = definition.Inventory.Count == 0
+                ? definition.Attack
+                : actor.EquippedItemId == null
+                    ? null
+                    : definition.GetInventoryItem(actor.EquippedItemId)?.Attack;
+            if (attack == null) return 0f;
+            if (input.Profile.Capability
+                == GameplaySemanticCapability.LaunchProjectile)
+                return attack.Projectile?.MaximumRange ?? 0f;
+            return 12f;
         }
 
         private IEnumerable<GameplayCandidate> BuildGroundedMoves(

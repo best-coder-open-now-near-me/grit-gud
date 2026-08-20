@@ -29,6 +29,7 @@ internal static class SimulationChecks
             VerifyCanonicalActionOwnedRecordSequences();
             VerifyConcreteActorAttackCandidateRoute();
             VerifyConcreteDirectFireCandidateRoute();
+            VerifyConcreteThrownExplosiveCandidateRoutes();
             VerifyPermanentPolicyRunner();
             VerifyLogicalExecutionGuards();
             VerifyBasicExecutableCandidateRoutes();
@@ -657,7 +658,8 @@ internal static class SimulationChecks
         {
             var evidence = new IntegratedExplosiveEvidence(
                 "oren-vale",
-                "depot-rifleman");
+                "depot-rifleman",
+                () => gameplay.Journal.LastEntry?.Sequence ?? 0L);
             var explosives = new GameplayThrownExplosiveSession(
                 gameplay,
                 evidence,
@@ -3659,6 +3661,170 @@ internal static class SimulationChecks
 
     }
 
+    private static void VerifyConcreteThrownExplosiveCandidateRoutes()
+    {
+        LoadDepotContent(
+            out GameplayScenarioAssembly authored,
+            out LevelDocument level);
+        var spatialIdentity = new SpatialContentIdentity(
+            level.levelId,
+            level.schemaVersion,
+            evidenceAlgorithmVersion: 1,
+            new string('c', 64));
+        var spatial = new GameplayHeadlessSpatialEvidence(
+            level,
+            spatialIdentity);
+        GameplayScenarioAssembly assembly = GameplayHeadlessScenarioGrounding
+            .Resolve(authored, spatial);
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
+        int executedProfiles = 0;
+        var consequences = new HashSet<string>(StringComparer.Ordinal);
+        foreach (ScenarioActorDefinition owner in assembly.Scenario.Actors)
+        foreach (InventoryItemDefinition item in owner.Inventory)
+        {
+            if (item.ConsumablePower
+                is not ThrownExplosiveDefinition explosive)
+                continue;
+            var gameplay = new GameplaySession(
+                assembly.Scenario,
+                scenarioSeed: assembly.RandomSeed);
+            Require(gameplay.BeginEncounter(),
+                "Explosive route fixture encounter did not begin.");
+            int turnGuard = 0;
+            while (!string.Equals(
+                gameplay.ActiveActorId,
+                owner.Id,
+                StringComparison.Ordinal))
+            {
+                Require(turnGuard++ < assembly.Scenario.Actors.Count
+                    && gameplay.TryEndTurn(gameplay.ActiveActorId, out _),
+                    $"Could not advance to explosive owner '{owner.Id}'.");
+            }
+            var destructibles = DestructiblePropSession.FromLevel(
+                level,
+                gameplay.Journal);
+            using var smokeFields = new GameplaySmokeFieldSession(gameplay);
+            using var fireFields = new GameplayFireFieldSession(
+                gameplay,
+                destructibles);
+            GameplayCombatStateSnapshot initial =
+                GameplayCombatStateCapture.Capture(
+                    gameplay,
+                    destructibles,
+                    smokeFields: smokeFields,
+                    fireFields: fireFields);
+            IReadOnlyList<GameplayReachableInput> inputs =
+                GameplayReachableInputEnumerator.Enumerate(
+                    assembly.Scenario,
+                    level);
+            GameplayCapabilityRegistry capabilities =
+                GameplayCurrentCapabilityCatalog.Create(reducers, inputs);
+            var routes = new GameplayCandidateExecutionRouteRegistry(
+                capabilities);
+            routes.Register(
+                new GameplayThrownExplosiveCandidateExecutionRoute(
+                    assembly,
+                    spatial));
+            IReadOnlyList<GameplayCandidate> candidates =
+                new GameplayHeadlessCandidateBuilder(
+                    capabilities,
+                    spatial,
+                    scenarioDefinition: assembly.Scenario).Build(
+                        initial,
+                        inputs,
+                        owner.Id);
+            GameplayCapabilityProfile expectedProfile =
+                GameplayCapabilityProfiles.ThrowExplosive(explosive);
+            var context = new GameplayDecisionContext(
+                initial,
+                GameplayObservationSnapshot.FullState(owner.Id, initial));
+            GameplayExecutableCandidateEvaluation selected = null;
+            float selectedValue = float.NegativeInfinity;
+            var failures = new List<string>();
+            foreach (GameplayCandidate candidate in candidates)
+            {
+                if (!candidate.Profile.Equals(expectedProfile)) continue;
+                GameplayExecutableCandidateEvaluation evaluated =
+                    routes.Evaluate(context, candidate);
+                if (!evaluated.IsLegal)
+                {
+                    failures.Add(evaluated.FailureCode);
+                    continue;
+                }
+                float value = evaluated.ExpectedOutcome.GetValue(
+                        "blast.affected-actors")
+                    + evaluated.ExpectedOutcome.GetValue(
+                        "blast.affected-destructibles");
+                if (selected == null || value > selectedValue)
+                {
+                    selected = evaluated;
+                    selectedValue = value;
+                }
+            }
+            Require(selected != null,
+                $"Explosive '{explosive.Id}' supplied no legal world candidate: "
+                    + string.Join(", ", failures));
+            if (explosive.IsConcussive)
+                Require(selected.ExpectedOutcome.GetValue(
+                        "concussive.affected-actors") > 0f,
+                    "Concussive candidate did not freeze any authoritative AP effect.");
+            GameplaySemanticTransition transition = routes.Prepare(
+                context,
+                selected);
+            GameplayExecutableCandidateEvaluation repeatedEvaluation =
+                routes.Evaluate(context, selected.Candidate);
+            GameplaySemanticTransition repeatedTransition = routes.Prepare(
+                context,
+                repeatedEvaluation);
+            Require(string.Equals(
+                GameplayTransitionPayloadDigest.Calculate(transition),
+                GameplayTransitionPayloadDigest.Calculate(repeatedTransition),
+                StringComparison.Ordinal),
+                $"Explosive '{explosive.Id}' preparation was not deterministic.");
+            var runtime = new GameplaySimulationRuntime(
+                new GameplayExecutionIdentity(
+                    new GameplayContentIdentity(
+                        assembly.Scenario.Id,
+                        scenarioSchemaVersion: 1,
+                        rulesSchemaVersion: 1,
+                        new string('d', 64)),
+                    spatialIdentity,
+                    gameplay.RunIdentity),
+                initial,
+                reducers,
+                capabilities);
+            runtime.Execute(transition);
+            GameplayActorSnapshot resultingOwner = runtime.CurrentState.Session
+                .GetActor(owner.Id);
+            Require(resultingOwner.Inventory.GetQuantity(explosive.Id)
+                    == initial.Session.GetActor(owner.Id).Inventory
+                        .GetQuantity(explosive.Id) - 1
+                && GameplayExactReplay.Verify(
+                    initial,
+                    runtime.Trajectory,
+                    reducers).IsExact,
+                $"Explosive '{explosive.Id}' did not reduce and replay exactly.");
+            if (explosive.DeploysSmoke)
+                Require(runtime.CurrentState.SmokeFields.Count == 1,
+                    "Smoke grenade did not install one canonical smoke field.");
+            if (explosive.DeploysFire)
+                Require(runtime.CurrentState.FireFields.Count == 1,
+                    "Incendiary grenade did not install one canonical fire field.");
+            consequences.Add(expectedProfile.GetTrait("consequence"));
+            executedProfiles++;
+        }
+        Require(executedProfiles >= 4
+            && consequences.SetEquals(new[]
+            {
+                "blast-actor-and-destructible",
+                "smoke-field",
+                "fire-field",
+                "concussive-actor-ap",
+            }),
+            "Depot explosive execution did not cover frag, smoke, fire, and concussive semantics.");
+    }
+
     private static void VerifyConcreteGroundedMoveCandidateRoute()
     {
         GameplaySession gameplay = CreateEncounterGameplay();
@@ -4880,13 +5046,18 @@ internal static class SimulationChecks
     {
         private readonly string firstActorId;
         private readonly string secondActorId;
+        private readonly Func<long> worldStateRevision;
 
         public IntegratedExplosiveEvidence(
             string firstActorId,
-            string secondActorId)
+            string secondActorId,
+            Func<long> worldStateRevision)
         {
             this.firstActorId = firstActorId;
             this.secondActorId = secondActorId;
+            this.worldStateRevision = worldStateRevision
+                ?? throw new ArgumentNullException(
+                    nameof(worldStateRevision));
         }
 
         public ThrownExplosiveLandingResult Resolve(
@@ -4894,12 +5065,12 @@ internal static class SimulationChecks
             GameplayPosition sampledLanding) =>
             new ThrownExplosiveLandingResult(
                 sampledLanding,
-                worldStateRevision: 0L);
+                worldStateRevision());
 
         public BlastWorldQueryResult Query(BlastWorldQuery query) =>
             new BlastWorldQueryResult(
                 query,
-                worldStateRevision: 0L,
+                worldStateRevision(),
                 query.Radius <= 0f
                     ? Array.Empty<BlastEffectRecord>()
                     : new[]

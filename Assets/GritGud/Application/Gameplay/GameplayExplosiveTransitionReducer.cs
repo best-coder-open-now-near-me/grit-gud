@@ -52,6 +52,11 @@ namespace GritGud.Application.Gameplay
                 out ThrownExplosiveActionOutcome thrown,
                 out InventoryQuantityChangedActionOutcome quantity);
             ThrownExplosiveRecord record = thrown.Record;
+            if (!payload.Profile.Equals(
+                    GameplayCapabilityProfiles.ThrowExplosive(
+                        record.Definition)))
+                throw new InvalidOperationException(
+                    "Thrown explosive definition does not match its exact capability profile.");
             if (!string.Equals(
                     record.ThrowerId,
                     action.Request.ActorId,
@@ -62,6 +67,9 @@ namespace GritGud.Application.Gameplay
                     StringComparison.Ordinal))
                 throw new InvalidOperationException(
                     "Thrown explosive outcomes do not describe one item use.");
+            if (record.WorldStateRevision != state.Session.JournalSequence)
+                throw new InvalidOperationException(
+                    "Thrown explosive spatial evidence is stale.");
 
             var mutation = new GameplayCanonicalStateMutation(state);
             GameplayActorSnapshot acting = mutation.GetActor(record.ThrowerId);
@@ -156,6 +164,13 @@ namespace GritGud.Application.Gameplay
                     "Explosive action actor is not active.");
             GameplayActorSnapshot actor = session.GetActor(
                 action.Request.ActorId);
+            if (actor.IsIncapacitated || actor.IsPinned)
+                throw new InvalidOperationException(
+                    "An incapacitated or pinned actor cannot throw explosives.");
+            if (session.Mode == GameplaySessionMode.TurnBased
+                && !CostsMatch(action.Cost, FindDefinition(action).TurnCost))
+                throw new InvalidOperationException(
+                    "Explosive action cost does not match its authored turn cost.");
             if (!BudgetsMatch(actor.TurnBudget, action.PreviousBudget)
                 || !BudgetsMatch(
                     action.PreviousBudget.SpendAction(action.Cost),
@@ -163,6 +178,22 @@ namespace GritGud.Application.Gameplay
                 throw new InvalidOperationException(
                     "Explosive action budget is not canonical.");
         }
+
+        private static ThrownExplosiveDefinition FindDefinition(
+            GameplayActionRecord action)
+        {
+            foreach (GameplayActionOutcome outcome in action.Outcomes)
+                if (outcome is ThrownExplosiveActionOutcome thrown)
+                    return thrown.Record.Definition;
+            throw new ArgumentException(
+                "Explosive action has no thrown definition.",
+                nameof(action));
+        }
+
+        private static bool CostsMatch(ActionCost left, ActionCost right) =>
+            left.ActionPoints == right.ActionPoints
+            && left.MovementOpportunity == right.MovementOpportunity
+            && left.Mobility == right.Mobility;
 
         private static void FindOutcomes(
             GameplayActionRecord action,

@@ -389,6 +389,120 @@ namespace GritGud.Application.Gameplay
             return impact != null;
         }
 
+        public ThrownExplosiveLandingResult ResolveThrownExplosiveLanding(
+            GameplayCombatStateSnapshot state,
+            GameplayPosition launchOrigin,
+            GameplayPosition sampledLanding)
+        {
+            if (state == null) throw new ArgumentNullException(nameof(state));
+            GameplayPosition resolved = TryFindFirstObstacleHit(
+                    state,
+                    launchOrigin,
+                    sampledLanding,
+                    out _,
+                    out GameplayPosition point,
+                    out _,
+                    out _)
+                ? point
+                : sampledLanding;
+            return new ThrownExplosiveLandingResult(
+                resolved,
+                state.Session.JournalSequence);
+        }
+
+        public IReadOnlyList<BlastEffectRecord> CaptureBlastEffects(
+            GameplayCombatStateSnapshot state,
+            GameplayPosition origin,
+            float radius)
+        {
+            if (state == null) throw new ArgumentNullException(nameof(state));
+            GameplayNumericPolicy.RequireFinite(radius, nameof(radius));
+            if (radius <= 0f)
+                throw new ArgumentOutOfRangeException(nameof(radius));
+            var effects = new List<BlastEffectRecord>();
+            foreach (GameplayActorSnapshot actor in state.Session.Actors)
+            {
+                TargetRegionSample nearest = default;
+                float nearestDistance = float.PositiveInfinity;
+                bool foundCandidate = false;
+                bool foundExposed = false;
+                foreach (TargetRegionSample sample in
+                    ActorTargetProfileCatalog.CreateWorldSamples(
+                        actor.Pose,
+                        actor.IsPinned))
+                {
+                    float distance = Math.Max(
+                        0f,
+                        origin.DistanceTo(sample.Center) - sample.Radius);
+                    if (distance > radius) continue;
+                    bool exposed = !BlocksLineOfSight(
+                        state,
+                        origin,
+                        sample.Center);
+                    if ((exposed && !foundExposed)
+                        || (exposed == foundExposed
+                            && distance < nearestDistance))
+                    {
+                        nearest = sample;
+                        nearestDistance = distance;
+                        foundCandidate = true;
+                        foundExposed = exposed;
+                    }
+                }
+                if (!foundCandidate) continue;
+                effects.Add(new BlastEffectRecord(
+                    actor.ActorId,
+                    BlastSubjectKind.Actor,
+                    nearestDistance,
+                    foundExposed ? 1f : 0f,
+                    EvaluateFalloff(nearestDistance, radius),
+                    foundExposed ? nearest.Id : (TargetRegionId?)null));
+            }
+
+            if (destructibleSurfaceIds.Count > 0)
+                state.RequireCoverage(GameplayCombatStateCoverage.Destructibles);
+            foreach (ObstacleDefinition obstacle in obstacles)
+            {
+                if (!obstacle.IsDestructible) continue;
+                DestructiblePropSnapshot prop = FindProp(
+                    state.Destructibles,
+                    obstacle.EntityId);
+                if (prop.State == DestructiblePropState.Destroyed
+                    || !TryGetClosestActivePoint(
+                        obstacle,
+                        prop,
+                        origin,
+                        out GameplayPosition target,
+                        out float distance)
+                    || distance > radius)
+                    continue;
+                bool exposed = origin.DistanceTo(target) <= 0.0001f;
+                if (!exposed)
+                    exposed = !TryFindFirstObstacleHit(
+                            state,
+                            origin,
+                            target,
+                            out string hitId,
+                            out _,
+                            out _,
+                            out _)
+                        || string.Equals(
+                            hitId,
+                            obstacle.EntityId,
+                            StringComparison.Ordinal);
+                effects.Add(new BlastEffectRecord(
+                    obstacle.EntityId,
+                    BlastSubjectKind.DestructibleProp,
+                    distance,
+                    exposed ? 1f : 0f,
+                    EvaluateFalloff(distance, radius)));
+            }
+            effects.Sort((left, right) => StringComparer.Ordinal.Compare(
+                left.EntityId,
+                right.EntityId));
+            return effects.AsReadOnly();
+        }
+
         /// <summary>
         /// Mirrors authored spawn grounding without Unity physics. The highest
         /// portable placement or terrain surface intersected by the same
@@ -640,6 +754,14 @@ namespace GritGud.Application.Gameplay
             out GameplayPosition normal,
             out int fractureChunkIndex)
         {
+            if (origin.DistanceTo(destination) <= 0.000001f)
+            {
+                entityId = null;
+                point = default;
+                normal = default;
+                fractureChunkIndex = -1;
+                return false;
+            }
             if (hasDestructibleObstacles)
                 state.RequireCoverage(GameplayCombatStateCoverage.Destructibles);
             float bestFraction = float.PositiveInfinity;
@@ -736,6 +858,86 @@ namespace GritGud.Application.Gameplay
             normal = bestNormal;
             fractureChunkIndex = bestChunk;
             return true;
+        }
+
+        private static bool TryGetClosestActivePoint(
+            ObstacleDefinition obstacle,
+            DestructiblePropSnapshot prop,
+            GameplayPosition origin,
+            out GameplayPosition closest,
+            out float distance)
+        {
+            bool found = false;
+            closest = default;
+            distance = float.PositiveInfinity;
+            if (prop.DetachedFractureChunks != 0UL)
+            {
+                GameplayFractureSpatialProfile profile =
+                    RequireFractureProfile(obstacle, prop);
+                for (int index = 0; index < profile.ChunkCount; index++)
+                {
+                    if ((prop.DetachedFractureChunks & (1UL << index)) != 0UL)
+                        continue;
+                    GameplayLocalSpatialVolume chunk =
+                        profile.ChunkVolumes[index];
+                    ConsiderClosestPoint(
+                        origin,
+                        prop.Pose,
+                        chunk.Center,
+                        chunk.Size,
+                        ref found,
+                        ref closest,
+                        ref distance);
+                }
+                return found;
+            }
+            foreach (CoverVolumeData volume in obstacle.Volumes)
+                ConsiderClosestPoint(
+                    origin,
+                    prop.Pose,
+                    new GameplayPosition(
+                        volume.localCenter.x,
+                        volume.localCenter.y,
+                        volume.localCenter.z),
+                    new GameplayPosition(
+                        volume.size.x,
+                        volume.size.y,
+                        volume.size.z),
+                    ref found,
+                    ref closest,
+                    ref distance);
+            return found;
+        }
+
+        private static void ConsiderClosestPoint(
+            GameplayPosition origin,
+            GameplayPropPose pose,
+            GameplayPosition localCenter,
+            GameplayPosition size,
+            ref bool found,
+            ref GameplayPosition closest,
+            ref float closestDistance)
+        {
+            GameplayPosition localOrigin = ToPropLocal(origin, pose);
+            var localClosest = new GameplayPosition(
+                Clamp(
+                    localOrigin.X,
+                    localCenter.X - (size.X * 0.5f),
+                    localCenter.X + (size.X * 0.5f)),
+                Clamp(
+                    localOrigin.Y,
+                    localCenter.Y - (size.Y * 0.5f),
+                    localCenter.Y + (size.Y * 0.5f)),
+                Clamp(
+                    localOrigin.Z,
+                    localCenter.Z - (size.Z * 0.5f),
+                    localCenter.Z + (size.Z * 0.5f)));
+            GameplayPosition worldClosest = ToWorld(localClosest, pose);
+            float distance = origin.DistanceTo(worldClosest);
+            if (found && distance >= closestDistance) return;
+            found = true;
+            closest = worldClosest;
+            closestDistance = distance;
         }
 
         private static void ConsiderHit(
@@ -903,6 +1105,12 @@ namespace GritGud.Application.Gameplay
 
         private static float Lerp(float from, float to, float fraction) =>
             from + ((to - from) * fraction);
+
+        private static float Clamp(float value, float minimum, float maximum) =>
+            Math.Max(minimum, Math.Min(maximum, value));
+
+        private static float EvaluateFalloff(float distance, float radius) =>
+            Clamp(1f - (distance / radius), 0f, 1f);
 
         private static GameplayFractureSpatialProfile ResolveFractureProfile(
             string archetypeId,
