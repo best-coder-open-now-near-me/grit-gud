@@ -14,6 +14,7 @@ namespace GritGud.Application.Gameplay
         private readonly List<DestructibleDamageRecord> damageRecords =
             new List<DestructibleDamageRecord>();
         private readonly IReadOnlyList<DestructibleDamageRecord> readOnlyDamageRecords;
+        private bool canonicalProjectionBound;
 
         public DestructiblePropSession(
             IEnumerable<DestructiblePropDefinition> definitions,
@@ -60,6 +61,75 @@ namespace GritGud.Application.Gameplay
             readOnlyDamageRecords;
 
         public event Action<DestructibleDamageRecord> Damaged;
+
+        internal void BindCanonicalProjection(
+            IReadOnlyList<DestructiblePropSnapshot> snapshots)
+        {
+            if (canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Destructibles already have a canonical runtime projection.");
+            ValidateCanonicalProjection(snapshots);
+            foreach (DestructiblePropSnapshot snapshot in snapshots)
+                if (!SnapshotsMatch(props[snapshot.PropId], snapshot))
+                    throw new InvalidOperationException(
+                        "Destructible session does not match the initial canonical state.");
+            canonicalProjectionBound = true;
+        }
+
+        internal void ValidateCanonicalProjection(
+            IReadOnlyList<DestructiblePropSnapshot> snapshots)
+        {
+            if (snapshots == null)
+                throw new ArgumentNullException(nameof(snapshots));
+            if (snapshots.Count != props.Count)
+                throw new InvalidOperationException(
+                    "Canonical projection changed the destructible set.");
+            foreach (DestructiblePropSnapshot snapshot in snapshots)
+            {
+                if (!props.TryGetValue(
+                        snapshot.PropId,
+                        out DestructiblePropSnapshot current)
+                    || !Approximately(
+                        current.MaximumIntegrity,
+                        snapshot.MaximumIntegrity)
+                    || current.FractureChunkCount
+                        != snapshot.FractureChunkCount)
+                {
+                    throw new InvalidOperationException(
+                        $"Canonical destructible '{snapshot.PropId}' changed authored identity.");
+                }
+            }
+        }
+
+        internal void InstallCanonicalProjection(
+            IReadOnlyList<DestructiblePropSnapshot> snapshots,
+            long causalSequence,
+            GameplayNotificationBatch notifications)
+        {
+            if (!canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Destructibles are not bound to a canonical runtime.");
+            if (causalSequence <= 0L)
+                throw new ArgumentOutOfRangeException(nameof(causalSequence));
+            if (notifications == null)
+                throw new ArgumentNullException(nameof(notifications));
+            ValidateCanonicalProjection(snapshots);
+            foreach (DestructiblePropSnapshot snapshot in snapshots)
+            {
+                DestructiblePropSnapshot previous = props[snapshot.PropId];
+                props[snapshot.PropId] = snapshot;
+                float appliedDamage = previous.RemainingIntegrity
+                    - snapshot.RemainingIntegrity;
+                if (appliedDamage <= IntegrityTolerance) continue;
+                var record = new DestructibleDamageRecord(
+                    causalSequence,
+                    appliedDamage,
+                    previous,
+                    snapshot);
+                damageRecords.Add(record);
+                notifications.Add(Damaged, record);
+            }
+        }
 
         public static DestructiblePropSession FromLevel(
             LevelDocument level,
@@ -239,6 +309,7 @@ namespace GritGud.Application.Gameplay
             DestructibleDamageRecord record,
             GameplayNotificationBatch notifications)
         {
+            RequireLegacyMutationAllowed(nameof(CommitDamage));
             if (notifications == null)
             {
                 throw new ArgumentNullException(nameof(notifications));
@@ -306,6 +377,7 @@ namespace GritGud.Application.Gameplay
 
         public void CommitDisplacement(DisplacementRecord record)
         {
+            RequireLegacyMutationAllowed(nameof(CommitDisplacement));
             if (record == null)
             {
                 throw new ArgumentNullException(nameof(record));
@@ -403,5 +475,12 @@ namespace GritGud.Application.Gameplay
 
         private static bool Approximately(float left, float right) =>
             Math.Abs(left - right) <= IntegrityTolerance;
+
+        private void RequireLegacyMutationAllowed(string operation)
+        {
+            if (canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    $"Legacy destructible mutation '{operation}' is disabled while the semantic runtime owns state.");
+        }
     }
 }

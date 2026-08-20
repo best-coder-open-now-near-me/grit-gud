@@ -500,6 +500,7 @@ namespace GritGud.Application.Gameplay
         public void RecordSemanticTransition(
             GameplayTransitionIdentity identity)
         {
+            RequireLegacyMutationAllowed(nameof(RecordSemanticTransition));
             if (!actors.ContainsKey(identity.ActorId))
                 throw new InvalidOperationException(
                     "Semantic transition actors must belong to the session.");
@@ -689,53 +690,6 @@ namespace GritGud.Application.Gameplay
         /// </summary>
         public event Action<GameplayActionRecord> ActionResolved;
 
-        public bool EnterTurnMode()
-        {
-            return TryEnterTurnMode(out _);
-        }
-
-        public bool TryEnterTurnMode(out TurnModeEntryFailure failure) =>
-            turnLifecycle.TryEnterTurnMode(out failure);
-
-        public void AdvanceContinuousTime(float elapsedSeconds) =>
-            turnLifecycle.AdvanceContinuousTime(elapsedSeconds);
-
-        public bool RequestEncounterCompletionAtTurnEnd() =>
-            turnLifecycle.RequestEncounterCompletionAtTurnEnd();
-
-        public bool TryExitTurnMode(out TurnModeExitFailure failure) =>
-            turnLifecycle.TryExitTurnMode(out failure);
-
-        public bool TryEndTurn(string actorId, out TurnEndFailure failure)
-        {
-            RequireLegacyMutationAllowed(nameof(TryEndTurn));
-            return turnLifecycle.TryEndTurn(actorId, out failure);
-        }
-
-        public void BeginEmergencyReaction(
-            string attackerId,
-            IReadOnlyList<string> responderIds,
-            int actionPointAllowance) =>
-            turnLifecycle.BeginEmergencyReaction(
-                attackerId,
-                responderIds,
-                actionPointAllowance);
-
-        public bool TryEndEmergencyTurn(
-            string actorId,
-            out bool responsePassCompleted,
-            out TurnEndFailure failure) =>
-            turnLifecycle.TryEndEmergencyTurn(
-                actorId,
-                out responsePassCompleted,
-                out failure);
-
-        public void CompleteEmergencyReaction(string resumeActorId) =>
-            turnLifecycle.CompleteEmergencyReaction(resumeActorId);
-
-        public bool CompleteVoluntaryWorldTurn() =>
-            turnLifecycle.CompleteVoluntaryWorldTurn();
-
         public GameplayActorSnapshot GetActor(string actorId)
         {
             return RequireActor(actorId).CreateSnapshot();
@@ -879,6 +833,7 @@ namespace GritGud.Application.Gameplay
             string actorId,
             GameplayActorPose pose)
         {
+            RequireLegacyMutationAllowed(nameof(UpdateExplorationPose));
             if (Mode != GameplaySessionMode.Exploration)
             {
                 throw new InvalidOperationException(
@@ -897,6 +852,7 @@ namespace GritGud.Application.Gameplay
 
         public void SpendMovement(string actorId, float amount)
         {
+            RequireLegacyMutationAllowed(nameof(SpendMovement));
             GameplayActorState actor = RequireActiveActor(actorId);
             if (actor.PinState != null)
             {
@@ -915,6 +871,7 @@ namespace GritGud.Application.Gameplay
 
         public void CommitStanceChange(StanceChangeRecord record)
         {
+            RequireLegacyMutationAllowed(nameof(CommitStanceChange));
             if (record == null)
             {
                 throw new ArgumentNullException(nameof(record));
@@ -983,6 +940,7 @@ namespace GritGud.Application.Gameplay
 
         public void CommitForcedDisplacement(DisplacementRecord record)
         {
+            RequireLegacyMutationAllowed(nameof(CommitForcedDisplacement));
             if (record == null)
             {
                 throw new ArgumentNullException(nameof(record));
@@ -1029,6 +987,7 @@ namespace GritGud.Application.Gameplay
             GameplayNotificationBatch notifications,
             bool validatePrevious = true)
         {
+            RequireLegacyMutationAllowed(nameof(CommitPinTransition));
             if (transition == null)
                 return;
 
@@ -1077,6 +1036,7 @@ namespace GritGud.Application.Gameplay
             GameplayActionRecord record,
             GameplayNotificationBatch notifications)
         {
+            RequireLegacyMutationAllowed(nameof(CommitAction));
             if (notifications == null)
             {
                 throw new ArgumentNullException(nameof(notifications));
@@ -1179,6 +1139,7 @@ namespace GritGud.Application.Gameplay
             TargetRegionId? region,
             float woundMovementPenalty)
         {
+            RequireLegacyMutationAllowed(nameof(ApplyBlastInjury));
             var notifications = new GameplayNotificationBatch();
             ApplyBlastInjury(
                 actorId,
@@ -1194,6 +1155,7 @@ namespace GritGud.Application.Gameplay
             float woundMovementPenalty,
             GameplayNotificationBatch notifications)
         {
+            RequireLegacyMutationAllowed(nameof(ApplyBlastInjury));
             if (notifications == null)
             {
                 throw new ArgumentNullException(nameof(notifications));
@@ -1210,6 +1172,7 @@ namespace GritGud.Application.Gameplay
             float woundMovementPenalty,
             GameplayNotificationBatch notifications)
         {
+            RequireLegacyMutationAllowed(nameof(ApplyEnvironmentalInjury));
             if (notifications == null)
                 throw new ArgumentNullException(nameof(notifications));
             GameplayActorState actor = RequireActor(actorId);
@@ -1223,6 +1186,7 @@ namespace GritGud.Application.Gameplay
             ConcussiveActionPointEffectRecord effect,
             GameplayNotificationBatch notifications)
         {
+            RequireLegacyMutationAllowed(nameof(ApplyConcussion));
             if (effect == null) throw new ArgumentNullException(nameof(effect));
             if (notifications == null)
                 throw new ArgumentNullException(nameof(notifications));

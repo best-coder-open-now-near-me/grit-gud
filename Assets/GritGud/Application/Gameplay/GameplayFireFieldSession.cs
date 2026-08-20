@@ -17,6 +17,7 @@ namespace GritGud.Application.Gameplay
         private readonly Dictionary<string, FireFieldSnapshot> active =
             new Dictionary<string, FireFieldSnapshot>(StringComparer.Ordinal);
         private bool disposed;
+        private bool canonicalProjectionBound;
 
         public GameplayFireFieldSession(
             GameplaySession gameplaySession,
@@ -35,6 +36,45 @@ namespace GritGud.Application.Gameplay
         public event Action<FireFieldSnapshot> FieldDeployed;
         public event Action<FireFieldSnapshot> FieldChanged;
         public event Action<FireFieldRecord> FieldExpired;
+
+        internal void BindCanonicalProjection(
+            IReadOnlyList<FireFieldSnapshot> snapshots)
+        {
+            if (canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Fire fields already have a canonical runtime projection.");
+            ValidateCanonicalProjection(snapshots);
+            if (!Matches(snapshots))
+                throw new InvalidOperationException(
+                    "Fire field session does not match the initial canonical state.");
+            canonicalProjectionBound = true;
+        }
+
+        internal void ValidateCanonicalProjection(
+            IReadOnlyList<FireFieldSnapshot> snapshots)
+        {
+            ThrowIfDisposed();
+            if (snapshots == null)
+                throw new ArgumentNullException(nameof(snapshots));
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (FireFieldSnapshot snapshot in snapshots)
+            {
+                if (!ids.Add(snapshot.Field.Id))
+                    throw new InvalidOperationException(
+                        $"Canonical fire field '{snapshot.Field.Id}' is duplicated.");
+                if (active.TryGetValue(
+                        snapshot.Field.Id,
+                        out FireFieldSnapshot current)
+                    && !string.Equals(
+                        GameplayCanonicalValueDigest.Calculate(current.Field),
+                        GameplayCanonicalValueDigest.Calculate(snapshot.Field),
+                        StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Canonical fire field '{snapshot.Field.Id}' changed its definition.");
+                }
+            }
+        }
 
         public IReadOnlyList<FireFieldSnapshot> CaptureActiveFields()
         {
@@ -65,6 +105,7 @@ namespace GritGud.Application.Gameplay
             FireFieldRecord field,
             GameplayNotificationBatch notifications)
         {
+            RequireLegacyMutationAllowed(nameof(Deploy));
             ThrowIfDisposed();
             if (field == null) throw new ArgumentNullException(nameof(field));
             if (notifications == null)
@@ -81,9 +122,30 @@ namespace GritGud.Application.Gameplay
 
         public void Install(IReadOnlyList<FireFieldSnapshot> snapshots)
         {
-            ThrowIfDisposed();
-            if (snapshots == null)
-                throw new ArgumentNullException(nameof(snapshots));
+            RequireLegacyMutationAllowed(nameof(Install));
+            var notifications = new GameplayNotificationBatch();
+            InstallSnapshots(snapshots, notifications);
+            notifications.Publish();
+        }
+
+        internal void InstallCanonicalProjection(
+            IReadOnlyList<FireFieldSnapshot> snapshots,
+            GameplayNotificationBatch notifications)
+        {
+            if (!canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Fire fields are not bound to a canonical runtime.");
+            InstallSnapshots(snapshots, notifications);
+        }
+
+        private void InstallSnapshots(
+            IReadOnlyList<FireFieldSnapshot> snapshots,
+            GameplayNotificationBatch notifications)
+        {
+            ValidateCanonicalProjection(snapshots);
+            if (notifications == null)
+                throw new ArgumentNullException(nameof(notifications));
+            if (Matches(snapshots)) return;
             var next = new Dictionary<string, FireFieldSnapshot>(
                 StringComparer.Ordinal);
             foreach (FireFieldSnapshot snapshot in snapshots)
@@ -94,7 +156,6 @@ namespace GritGud.Application.Gameplay
                         nameof(snapshots));
             }
 
-            var notifications = new GameplayNotificationBatch();
             foreach (KeyValuePair<string, FireFieldSnapshot> entry in active)
                 if (!next.ContainsKey(entry.Key))
                     notifications.Add(FieldExpired, entry.Value.Field);
@@ -110,11 +171,11 @@ namespace GritGud.Application.Gameplay
             foreach (KeyValuePair<string, FireFieldSnapshot> entry in next)
                 active.Add(entry.Key, entry.Value);
             Revision++;
-            notifications.Publish();
         }
 
         public void AdvanceContinuousTime(float elapsedSeconds)
         {
+            RequireLegacyMutationAllowed(nameof(AdvanceContinuousTime));
             ThrowIfDisposed();
             GameplayNumericPolicy.RequireFinite(
                 elapsedSeconds,
@@ -170,7 +231,23 @@ namespace GritGud.Application.Gameplay
 
         private void HandleTurnEnded(TurnEndRecord _)
         {
+            if (canonicalProjectionBound) return;
             Advance(GameplayFireFieldEvolution.AdvanceTurnEnd);
+        }
+
+        private bool Matches(IReadOnlyList<FireFieldSnapshot> snapshots)
+        {
+            if (snapshots.Count != active.Count) return false;
+            foreach (FireFieldSnapshot snapshot in snapshots)
+                if (!active.TryGetValue(
+                        snapshot.Field.Id,
+                        out FireFieldSnapshot current)
+                    || !string.Equals(
+                        GameplayCanonicalValueDigest.Calculate(current),
+                        GameplayCanonicalValueDigest.Calculate(snapshot),
+                        StringComparison.Ordinal))
+                    return false;
+            return true;
         }
 
         private void Advance(
@@ -248,6 +325,13 @@ namespace GritGud.Application.Gameplay
             if (disposed)
                 throw new ObjectDisposedException(
                     nameof(GameplayFireFieldSession));
+        }
+
+        private void RequireLegacyMutationAllowed(string operation)
+        {
+            if (canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    $"Legacy fire mutation '{operation}' is disabled while the semantic runtime owns state.");
         }
     }
 }

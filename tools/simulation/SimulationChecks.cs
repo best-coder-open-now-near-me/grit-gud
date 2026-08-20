@@ -20,6 +20,7 @@ internal static class SimulationChecks
             VerifyTacticalRuleCoverageAndOutcomeProjection();
             VerifyAtomicLiveInstallation();
             VerifyLiveSessionReducerProjection();
+            VerifyFullLiveCombatProjection();
             VerifyPortableGroundSurfaces();
             VerifyStaticHeadlessSpatialGeometry();
             VerifyConcreteGroundedMoveCandidateRoute();
@@ -1521,7 +1522,7 @@ internal static class SimulationChecks
         var transition = new GameplaySemanticTransition(
             new GameplayTransitionIdentity(
                 1L,
-                GameplaySemanticCapability.Move.ToString(),
+                payload.Profile.Capability.ToString(),
                 payload.ActorId,
                 payload.SubjectId),
             initial.CanonicalHash,
@@ -1747,7 +1748,7 @@ internal static class SimulationChecks
         var move = new GameplaySemanticTransition(
             new GameplayTransitionIdentity(
                 1L,
-                GameplaySemanticCapability.Move.ToString(),
+                movePayload.Profile.Capability.ToString(),
                 movePayload.ActorId,
                 movePayload.SubjectId),
             initial.CanonicalHash,
@@ -1825,6 +1826,342 @@ internal static class SimulationChecks
         }
         Require(legacyTurnRejected,
             "A projection-bound live session still allowed duplicate turn mutation.");
+    }
+
+    private static void VerifyFullLiveCombatProjection()
+    {
+        GameplaySession gameplay = CreateEncounterGameplay();
+        Require(gameplay.BeginEncounter(),
+            "Full live projection encounter did not begin.");
+        var destructibles = new DestructiblePropSession(
+            new[]
+            {
+                new DestructiblePropDefinition(
+                    "projection-crate",
+                    maximumIntegrity: 3f,
+                    DestructiblePropState.Intact,
+                    new GameplayPosition(2f, 0f, 2f)),
+            },
+            gameplay.Journal);
+        using var smokeFields = new GameplaySmokeFieldSession(gameplay);
+        using var fireFields = new GameplayFireFieldSession(
+            gameplay,
+            destructibles);
+        smokeFields.Deploy(new SmokeFieldRecord(
+            "smoke.projection",
+            "player",
+            "item.smoke",
+            new GameplayPosition(20f, 0f, 20f),
+            new SmokeFieldDefinition(
+                radius: 2f,
+                height: 2f,
+                explorationDurationSeconds: 8f,
+                durationTurnEnds: 4,
+                minimumObscuredPath: 0.5f)));
+        fireFields.Deploy(new FireFieldRecord(
+            "fire.projection",
+            "player",
+            "item.incendiary",
+            new GameplayPosition(2f, 0f, 2f),
+            new FireFieldDefinition(
+                initialRadius: 1f,
+                maximumRadius: 2f,
+                height: 2f,
+                explorationDurationSeconds: 12f,
+                durationTurnEnds: 6,
+                explorationPulseSeconds: 2f,
+                actorWoundMovementPenalty: 1f,
+                destructibleIntegrityDamage: 1f,
+                minimumHazardPath: 0.5f)));
+
+        var projectiles = new GameplayProjectileSession(
+            gameplay,
+            new AlwaysClearProjectileQuery(),
+            new GameplayBlastConsequenceResolver(
+                gameplay,
+                destructibles));
+        var vehicle = new VehicleMomentumSession(
+            new VehicleMomentumProfile(
+                maximumSpeed: 4f,
+                accelerationPerTurn: 1f,
+                brakingPerTurn: 1f,
+                lowSpeedTurnDegrees: 90f,
+                highSpeedTurnDegrees: 30f,
+                baseTurningRadius: 0.25f,
+                speedTurningRadiusFactor: 0.1f),
+            new VehicleMomentumState(
+                "vehicle.projection",
+                new GameplayPosition(12f, 0f, 12f),
+                forwardDegrees: 0f,
+                speed: 0f),
+            gameplay.Journal);
+        string droneControllerId = gameplay.InitiativeOrder[1];
+        var droneDefinition = new DroneDefinition(
+            "drone.projection",
+            droneControllerId,
+            new GameplayPosition(0f, 2f, 5f),
+            startingFacingDegrees: 0f,
+            maximumIntegrity: 5f,
+            maximumMoveDistance: 5f,
+            new ActionCost(1, 0f, ActionMobility.Mobile),
+            new DroneSensorDefinition(16f, 120f),
+            CreateRifle());
+        var drones = new GameplayDroneSession(
+            gameplay,
+            new[] { droneDefinition },
+            destructibles);
+        var projection = new GameplayLiveCombatProjection(
+            gameplay,
+            destructibles,
+            new[] { vehicle },
+            projectiles,
+            smokeFields,
+            fireFields,
+            drones);
+        GameplayCombatStateSnapshot initial = projection.Capture();
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
+        var projectileDefinition = new ProjectileFlightDefinition(
+            "projectile.projection",
+            speedPerTurn: 2f,
+            radius: 0.1f,
+            maximumRange: 10f,
+            standingLaunchHeight: 1f,
+            crouchedLaunchHeight: 0.7f);
+        var launcher = new AttackDefinition(
+            "attack.projection-launcher",
+            "Projection launcher",
+            new ActionCost(1, 0f, ActionMobility.Set),
+            woundMovementPenalty: 1f,
+            projectileDefinition);
+        GameplayCapabilityProfile launcherProfile =
+            GameplayCapabilityProfiles.Attack(
+                launcher,
+                GameplaySemanticSubjectKind.Actor);
+        GameplayCapabilityRegistry capabilities =
+            GameplayCurrentCapabilityCatalog.Create(
+                reducers,
+                new[]
+                {
+                    new GameplayReachableInput(
+                        GameplayReachableInputKind.CharacterAbility,
+                        "projection.launcher",
+                        droneControllerId,
+                        launcherProfile),
+                });
+        var identity = new GameplayExecutionIdentity(
+            new GameplayContentIdentity(
+                initial.Session.ScenarioId,
+                scenarioSchemaVersion: 1,
+                rulesSchemaVersion: 1,
+                new string('4', 64)),
+            new SpatialContentIdentity(
+                "full-live-projection-check",
+                levelSchemaVersion: 1,
+                evidenceAlgorithmVersion: 1,
+                new string('5', 64)),
+            initial.Session.RunIdentity);
+        using var live = new GameplayLiveSessionRuntime(
+            projection,
+            identity,
+            initial,
+            reducers,
+            capabilities);
+
+        int damaged = 0;
+        int fireChanged = 0;
+        int turnEnded = 0;
+        destructibles.Damaged += _ => damaged++;
+        fireFields.FieldChanged += _ => fireChanged++;
+        gameplay.TurnEnded += _ => turnEnded++;
+        string actorId = initial.Session.ActiveActorId;
+        var payload = new GameplayEndTurnTransitionPayload(
+            actorId,
+            emergency: false,
+            gameplay.Scenario.Timing.MinimumVoluntaryTurnSeconds);
+        var transition = new GameplaySemanticTransition(
+            new GameplayTransitionIdentity(
+                1L,
+                GameplaySemanticCapability.EndTurn.ToString(),
+                payload.ActorId,
+                payload.SubjectId),
+            initial.CanonicalHash,
+            payload);
+        live.Execute(transition);
+
+        GameplayCombatStateSnapshot installed = projection.Capture();
+        Require(string.Equals(
+                installed.CanonicalHash,
+                live.CurrentState.CanonicalHash,
+                StringComparison.Ordinal)
+            && installed.SmokeFields[0].RemainingFraction == 0.75f
+            && installed.FireFields[0].RemainingFraction
+                == 1f - (1f / 6f)
+            && installed.Destructibles[0].RemainingIntegrity == 2f
+            && damaged == 1
+            && fireChanged == 1
+            && turnEnded == 1,
+            "Full live projection did not install fire, smoke, destructible, and turn state exactly once.");
+
+        GameplayActorSnapshot controller = live.CurrentState.Session.GetActor(
+            droneControllerId);
+        DroneSnapshot drone = live.CurrentState.Drones[0];
+        var droneMove = new DroneMoveRecord(
+            droneControllerId,
+            drone.DroneId,
+            drone.Position,
+            new GameplayPosition(
+                drone.Position.X + 1f,
+                drone.Position.Y,
+                drone.Position.Z),
+            resultingFacingDegrees: 90f,
+            drone.Definition.MoveCost,
+            controller.TurnBudget,
+            controller.TurnBudget.SpendAction(
+                drone.Definition.MoveCost));
+        var dronePayload = new GameplayDroneMoveTransitionPayload(droneMove);
+        live.Execute(new GameplaySemanticTransition(
+            new GameplayTransitionIdentity(
+                2L,
+                dronePayload.Profile.Capability.ToString(),
+                dronePayload.ActorId,
+                dronePayload.SubjectId),
+            live.CurrentState.CanonicalHash,
+            dronePayload));
+        Require(drones.GetDrone(drone.DroneId).Position.DistanceTo(
+                droneMove.Destination) == 0f,
+            "Reducer-owned drone movement was not installed live.");
+
+        VehicleMomentumState previousVehicle = vehicle.State;
+        var resultingVehicle = new VehicleMomentumState(
+            previousVehicle.VehicleId,
+            new GameplayPosition(
+                previousVehicle.Position.X,
+                previousVehicle.Position.Y,
+                previousVehicle.Position.Z + 0.5f),
+            forwardDegrees: 0f,
+            speed: 1f);
+        var vehicleMove = new VehicleMomentumRecord(
+            3L,
+            previousVehicle,
+            resultingVehicle,
+            new[]
+            {
+                previousVehicle.Position,
+                resultingVehicle.Position,
+            });
+        var vehiclePayload = new GameplayVehicleMoveTransitionPayload(
+            droneControllerId,
+            vehicleMove);
+        live.Execute(new GameplaySemanticTransition(
+            new GameplayTransitionIdentity(
+                3L,
+                vehiclePayload.Profile.Capability.ToString(),
+                vehiclePayload.ActorId,
+                vehiclePayload.SubjectId),
+            live.CurrentState.CanonicalHash,
+            vehiclePayload));
+        Require(vehicle.State.Position.DistanceTo(
+                resultingVehicle.Position) == 0f
+            && vehicle.Records.Count == 1,
+            "Reducer-owned vehicle movement was not installed live.");
+
+        controller = live.CurrentState.Session.GetActor(droneControllerId);
+        string projectileId = "projectile.projection.1";
+        GameplayPosition launchOrigin = projectileDefinition.GetLaunchOrigin(
+            controller.Pose);
+        GameplayPosition aimPoint = new GameplayPosition(
+            launchOrigin.X,
+            launchOrigin.Y,
+            launchOrigin.Z + 8f);
+        TurnBudget launchBudget = controller.TurnBudget.SpendAction(
+            launcher.TurnCost);
+        var launch = new ProjectileLaunchRecord(
+            sequence: 1L,
+            projectileId,
+            droneControllerId,
+            "enemy",
+            launcher.ActionId,
+            launchOrigin,
+            aimPoint,
+            projectileDefinition,
+            controller.ActionPointEconomy.IncomePerPersonalTurn,
+            launchBudget.ActionPoints);
+        var launchAction = new GameplayActionRecord(
+            sequence: 1L,
+            new GameplayActionRequest(
+                droneControllerId,
+                launcher.ActionId,
+                "enemy"),
+            launcher.TurnCost,
+            controller.TurnBudget,
+            launchBudget,
+            new[] { new ProjectileLaunchedActionOutcome(launch) });
+        var launchPayload = new GameplayWeaponTransitionPayload(
+            launcherProfile,
+            launchAction);
+        live.Execute(new GameplaySemanticTransition(
+            new GameplayTransitionIdentity(
+                4L,
+                launchPayload.Profile.Capability.ToString(),
+                launchPayload.ActorId,
+                launchPayload.SubjectId),
+            live.CurrentState.CanonicalHash,
+            launchPayload));
+        Require(projectiles.ProjectileIds.Count == 1
+            && projectiles.Launches.Count == 1,
+            "Reducer-owned projectile launch was not installed live.");
+
+        ProjectileFlightSnapshot previousFlight =
+            projectiles.GetProjectile(projectileId);
+        float advanceDistance = projectileDefinition.SpeedPerTurn;
+        var resultingFlight = new ProjectileFlightSnapshot(
+            launch,
+            launch.GetPosition(advanceDistance),
+            advanceDistance,
+            elapsedTurnTime: 1f,
+            ProjectileFlightStatus.InFlight);
+        var advance = new ProjectileAdvanceRecord(
+            sequence: 5L,
+            previousFlight,
+            resultingFlight,
+            requestedTurnTime: 1f,
+            segmentEnd: resultingFlight.Position,
+            worldStateRevision: 0L,
+            collisionFraction: null);
+        var advancePayload = new GameplayProjectileAdvanceTransitionPayload(
+            droneControllerId,
+            advance,
+            destructiblesShareGameplayJournal: true);
+        live.Execute(new GameplaySemanticTransition(
+            new GameplayTransitionIdentity(
+                5L,
+                advancePayload.Profile.Capability.ToString(),
+                advancePayload.ActorId,
+                advancePayload.SubjectId),
+            live.CurrentState.CanonicalHash,
+            advancePayload));
+        Require(projectiles.Advances.Count == 1
+            && projectiles.GetProjectile(projectileId).DistanceTraveled
+                == advanceDistance,
+            "Reducer-owned projectile advance was not installed live.");
+        Require(GameplayExactReplay.Verify(
+                initial,
+                live.Trajectory,
+                reducers).IsExact,
+            "Full live combat projection trajectory did not replay exactly.");
+
+        bool duplicateFireAdvanceRejected = false;
+        try
+        {
+            fireFields.AdvanceContinuousTime(1f);
+        }
+        catch (InvalidOperationException)
+        {
+            duplicateFireAdvanceRejected = true;
+        }
+        Require(duplicateFireAdvanceRejected,
+            "Projection-bound fire still allowed its independent mutable path.");
     }
 
     private static void VerifyConcreteActorAttackCandidateRoute()
@@ -3131,6 +3468,15 @@ internal static class SimulationChecks
         public bool Blocks(
             GameplayPosition origin,
             GameplayPosition targetSurface) => blocks(origin, targetSurface);
+    }
+
+    private sealed class AlwaysClearProjectileQuery :
+        IProjectileSegmentQuery
+    {
+        public ProjectileSegmentQueryResult Query(
+            ProjectileSegmentQuery query) =>
+            ProjectileSegmentQueryResult.Clear(
+                worldStateRevision: 0L);
     }
 
     private sealed class IntegratedExplosiveEvidence :

@@ -7,6 +7,7 @@ namespace GritGud.Application.Gameplay
     {
         internal void CommitDroneMoveBudget(DroneMoveRecord record)
         {
+            RequireLegacyMutationAllowed(nameof(CommitDroneMoveBudget));
             if (record == null) throw new ArgumentNullException(nameof(record));
             GameplayActorState actor = RequireActiveActor(
                 record.ControllerActorId);
@@ -21,6 +22,7 @@ namespace GritGud.Application.Gameplay
 
         internal void CommitDroneAttackBudget(DroneAttackRecord record)
         {
+            RequireLegacyMutationAllowed(nameof(CommitDroneAttackBudget));
             if (record == null) throw new ArgumentNullException(nameof(record));
             GameplayActorState actor = RequireActiveActor(
                 record.ControllerActorId);
@@ -37,6 +39,7 @@ namespace GritGud.Application.Gameplay
             DroneAttackRecord record,
             AttackResolutionRecord resolution)
         {
+            RequireLegacyMutationAllowed(nameof(CommitDroneActorAttack));
             if (record == null) throw new ArgumentNullException(nameof(record));
             if (resolution == null) throw new ArgumentNullException(
                 nameof(resolution));
@@ -80,6 +83,7 @@ namespace GritGud.Application.Gameplay
 
         internal void CommitActorDroneAttack(ActorDroneAttackRecord record)
         {
+            RequireLegacyMutationAllowed(nameof(CommitActorDroneAttack));
             if (record == null) throw new ArgumentNullException(nameof(record));
             GameplayActorState actor = RequireActiveActor(record.AttackerId);
             if (record.Sequence != NextActionSequence)

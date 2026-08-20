@@ -23,6 +23,7 @@ namespace GritGud.Application.Gameplay
         private readonly List<VehicleMomentumRecord> records =
             new List<VehicleMomentumRecord>();
         private readonly IReadOnlyList<VehicleMomentumRecord> readOnlyRecords;
+        private bool canonicalProjectionBound;
 
         public VehicleMomentumSession(
             VehicleMomentumProfile profile,
@@ -47,6 +48,56 @@ namespace GritGud.Application.Gameplay
         public GameplayJournal Journal { get; }
 
         public IReadOnlyList<VehicleMomentumRecord> Records => readOnlyRecords;
+
+        internal void BindCanonicalProjection(VehicleMomentumState snapshot)
+        {
+            if (canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Vehicle already has a canonical runtime projection.");
+            if (!StatesMatch(State, snapshot))
+                throw new InvalidOperationException(
+                    "Vehicle session does not match the initial canonical state.");
+            canonicalProjectionBound = true;
+        }
+
+        internal void ValidateCanonicalProjection(
+            VehicleMomentumState snapshot)
+        {
+            if (!string.Equals(
+                    State.VehicleId,
+                    snapshot.VehicleId,
+                    StringComparison.Ordinal)
+                || snapshot.Speed > Profile.MaximumSpeed)
+                throw new InvalidOperationException(
+                    "Canonical vehicle projection changed identity or exceeded its authored speed.");
+        }
+
+        internal void ValidateCanonicalProjection(
+            VehicleMomentumState snapshot,
+            object semanticRecord)
+        {
+            ValidateCanonicalProjection(snapshot);
+            if (StatesMatch(State, snapshot)) return;
+            if (!(semanticRecord is VehicleMomentumRecord movement)
+                || !StatesMatch(movement.Previous, State)
+                || !StatesMatch(movement.Resulting, snapshot))
+                throw new InvalidOperationException(
+                    "A changed canonical vehicle requires its exact movement record.");
+        }
+
+        internal void InstallCanonicalProjection(
+            VehicleMomentumState snapshot,
+            object semanticRecord)
+        {
+            if (!canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Vehicle is not bound to a canonical runtime.");
+            ValidateCanonicalProjection(snapshot, semanticRecord);
+            if (StatesMatch(State, snapshot)) return;
+            var movement = (VehicleMomentumRecord)semanticRecord;
+            State = snapshot;
+            records.Add(movement);
+        }
 
         public VehicleMovementEnvelope CreateEnvelope()
         {
@@ -185,6 +236,7 @@ namespace GritGud.Application.Gameplay
 
         public void Commit(VehicleMomentumRecord record)
         {
+            RequireLegacyMutationAllowed(nameof(Commit));
             if (record == null)
             {
                 throw new ArgumentNullException(nameof(record));
@@ -285,5 +337,12 @@ namespace GritGud.Application.Gameplay
             && left.Position.DistanceTo(right.Position) <= DistanceTolerance
             && Math.Abs(left.ForwardDegrees - right.ForwardDegrees) <= DistanceTolerance
             && Math.Abs(left.Speed - right.Speed) <= DistanceTolerance;
+
+        private void RequireLegacyMutationAllowed(string operation)
+        {
+            if (canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    $"Legacy vehicle mutation '{operation}' is disabled while the semantic runtime owns state.");
+        }
     }
 }

@@ -20,6 +20,7 @@ namespace GritGud.Application.Gameplay
 
         public bool BeginEncounter(IEnumerable<string> participantIds)
         {
+            RequireLegacyMutationAllowed(nameof(BeginEncounter));
             if (EncounterActive)
                 return false;
             IReadOnlyList<string> scope = NormalizeEncounterScope(
@@ -38,6 +39,7 @@ namespace GritGud.Application.Gameplay
 
         public bool BeginEncounterFromAction(GameplayActionRecord action)
         {
+            RequireLegacyMutationAllowed(nameof(BeginEncounterFromAction));
             if (action == null)
                 throw new ArgumentNullException(nameof(action));
             if (EncounterActive
@@ -54,6 +56,7 @@ namespace GritGud.Application.Gameplay
 
         public bool CompleteEncounter()
         {
+            RequireLegacyMutationAllowed(nameof(CompleteEncounter));
             if (!turnLifecycle.CompleteEncounter())
                 return false;
             ReplaceInitiativeScope(allInitiativeOrder);
@@ -162,6 +165,7 @@ namespace GritGud.Application.Gameplay
         public void CommitAwarenessTransition(
             EnemyAwarenessTransitionRecord transition)
         {
+            RequireLegacyMutationAllowed(nameof(CommitAwarenessTransition));
             if (transition == null)
                 throw new ArgumentNullException(nameof(transition));
             EnemyAwarenessSnapshot current = encounterState.GetAwareness(
@@ -240,6 +244,7 @@ namespace GritGud.Application.Gameplay
 
         public void CommitPatrolAdvance(PatrolAdvanceRecord advance)
         {
+            RequireLegacyMutationAllowed(nameof(CommitPatrolAdvance));
             if (advance == null) throw new ArgumentNullException(nameof(advance));
             if (advance.Sequence != encounterState.LastTransitionSequence + 1L)
             {

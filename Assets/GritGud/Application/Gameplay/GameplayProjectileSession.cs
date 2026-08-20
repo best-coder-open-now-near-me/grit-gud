@@ -117,6 +117,7 @@ namespace GritGud.Application.Gameplay
             new Dictionary<string, ProjectileFlightSnapshot>(StringComparer.Ordinal);
         private readonly IReadOnlyList<ProjectileLaunchRecord> readOnlyLaunches;
         private readonly IReadOnlyList<ProjectileAdvanceRecord> readOnlyAdvances;
+        private bool canonicalProjectionBound;
 
         public GameplayProjectileSession(
             GameplaySession gameplaySession,
@@ -137,6 +138,126 @@ namespace GritGud.Application.Gameplay
         public IReadOnlyList<ProjectileLaunchRecord> Launches => readOnlyLaunches;
 
         public IReadOnlyList<ProjectileAdvanceRecord> Advances => readOnlyAdvances;
+
+        internal void BindCanonicalProjection(
+            IReadOnlyList<ProjectileFlightSnapshot> snapshots)
+        {
+            if (canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Projectiles already have a canonical runtime projection.");
+            ValidateCanonicalProjection(snapshots);
+            if (snapshots.Count != flights.Count)
+                throw new InvalidOperationException(
+                    "Projectile session does not match the initial canonical state.");
+            foreach (ProjectileFlightSnapshot snapshot in snapshots)
+                if (!SnapshotsMatch(flights[snapshot.ProjectileId], snapshot))
+                    throw new InvalidOperationException(
+                        "Projectile session does not match the initial canonical state.");
+            canonicalProjectionBound = true;
+        }
+
+        internal void ValidateCanonicalProjection(
+            IReadOnlyList<ProjectileFlightSnapshot> snapshots)
+        {
+            if (snapshots == null)
+                throw new ArgumentNullException(nameof(snapshots));
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (ProjectileFlightSnapshot snapshot in snapshots)
+            {
+                if (!ids.Add(snapshot.ProjectileId))
+                    throw new InvalidOperationException(
+                        $"Canonical projectile '{snapshot.ProjectileId}' is duplicated.");
+                if (flights.TryGetValue(
+                        snapshot.ProjectileId,
+                        out ProjectileFlightSnapshot current)
+                    && !string.Equals(
+                        GameplayCanonicalValueDigest.Calculate(current.Launch),
+                        GameplayCanonicalValueDigest.Calculate(snapshot.Launch),
+                        StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Canonical projectile '{snapshot.ProjectileId}' changed its launch identity.");
+                }
+            }
+            foreach (string projectileId in flights.Keys)
+                if (!ids.Contains(projectileId))
+                    throw new InvalidOperationException(
+                        $"Canonical projection removed projectile '{projectileId}'.");
+        }
+
+        internal void ValidateCanonicalProjection(
+            IReadOnlyList<ProjectileFlightSnapshot> snapshots,
+            object semanticRecord)
+        {
+            ValidateCanonicalProjection(snapshots);
+            foreach (ProjectileFlightSnapshot snapshot in snapshots)
+            {
+                if (!flights.TryGetValue(
+                        snapshot.ProjectileId,
+                        out ProjectileFlightSnapshot previous))
+                {
+                    if (!TryGetLaunch(semanticRecord, out ProjectileLaunchRecord launch)
+                        || !string.Equals(
+                            GameplayCanonicalValueDigest.Calculate(launch),
+                            GameplayCanonicalValueDigest.Calculate(snapshot.Launch),
+                            StringComparison.Ordinal))
+                        throw new InvalidOperationException(
+                            "A new canonical projectile requires its exact launch action.");
+                    continue;
+                }
+                if (SnapshotsMatch(previous, snapshot)) continue;
+                if (!(semanticRecord is ProjectileAdvanceRecord advance)
+                    || !string.Equals(
+                        advance.ProjectileId,
+                        snapshot.ProjectileId,
+                        StringComparison.Ordinal)
+                    || !SnapshotsMatch(advance.Previous, previous)
+                    || !SnapshotsMatch(advance.Resulting, snapshot))
+                    throw new InvalidOperationException(
+                        "A changed canonical projectile requires its exact advance record.");
+            }
+        }
+
+        internal void InstallCanonicalProjection(
+            IReadOnlyList<ProjectileFlightSnapshot> snapshots,
+            object semanticRecord)
+        {
+            if (!canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Projectiles are not bound to a canonical runtime.");
+            ValidateCanonicalProjection(snapshots, semanticRecord);
+            foreach (ProjectileFlightSnapshot snapshot in snapshots)
+            {
+                if (!flights.TryGetValue(
+                        snapshot.ProjectileId,
+                        out ProjectileFlightSnapshot previous))
+                {
+                    flights.Add(snapshot.ProjectileId, snapshot);
+                    launches.Add(snapshot.Launch);
+                    continue;
+                }
+                if (SnapshotsMatch(previous, snapshot)) continue;
+                var advance = (ProjectileAdvanceRecord)semanticRecord;
+                flights[snapshot.ProjectileId] = snapshot;
+                advances.Add(advance);
+            }
+        }
+
+        private static bool TryGetLaunch(
+            object semanticRecord,
+            out ProjectileLaunchRecord launch)
+        {
+            if (semanticRecord is GameplayActionRecord action
+                && action.Outcomes.Count == 1
+                && action.Outcomes[0]
+                    is ProjectileLaunchedActionOutcome launched)
+            {
+                launch = launched.Launch;
+                return true;
+            }
+            launch = null;
+            return false;
+        }
 
         public IReadOnlyList<string> ProjectileIds
         {
@@ -268,6 +389,7 @@ namespace GritGud.Application.Gameplay
 
         public void CommitLaunch(GameplayActionRecord action)
         {
+            RequireLegacyMutationAllowed(nameof(CommitLaunch));
             if (action == null)
             {
                 throw new ArgumentNullException(nameof(action));
@@ -444,6 +566,7 @@ namespace GritGud.Application.Gameplay
 
         public void CommitAdvance(ProjectileAdvanceRecord record)
         {
+            RequireLegacyMutationAllowed(nameof(CommitAdvance));
             if (record == null)
             {
                 throw new ArgumentNullException(nameof(record));
@@ -508,6 +631,13 @@ namespace GritGud.Application.Gameplay
                 gameplay,
                 consequences.Destructibles,
                 projectiles: this);
+
+        private void RequireLegacyMutationAllowed(string operation)
+        {
+            if (canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    $"Legacy projectile mutation '{operation}' is disabled while the semantic runtime owns state.");
+        }
 
         private bool TryPrepareLaunch(
             string actorId,

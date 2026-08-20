@@ -40,11 +40,14 @@ namespace GritGud.Application.Gameplay
 
         internal void InstallCanonicalProjection(
             GameplaySessionStateSnapshot snapshot,
-            object semanticRecord)
+            object semanticRecord,
+            GameplayNotificationBatch notifications)
         {
             if (!canonicalProjectionBound)
                 throw new InvalidOperationException(
                     "Canonical state cannot be projected into an unbound gameplay session.");
+            if (notifications == null)
+                throw new ArgumentNullException(nameof(notifications));
             ValidateCanonicalProjection(snapshot, semanticRecord);
 
             var changedActors = new List<string>();
@@ -77,7 +80,6 @@ namespace GritGud.Application.Gameplay
             LastTransitionSequence = snapshot.LastTransitionSequence;
             canonicalJournalSequence = snapshot.JournalSequence;
 
-            var notifications = new GameplayNotificationBatch();
             if (snapshot.LastActionSequence > previousActionSequence)
             {
                 if (semanticRecord is GameplayActionRecord action)
@@ -98,22 +100,9 @@ namespace GritGud.Application.Gameplay
             foreach (string actorId in changedActors)
                 notifications.Add(ActorCapabilityChanged, actorId);
 
-            GameplayCombatStateSnapshot installed =
-                GameplayCombatStateCapture.Capture(this);
-            GameplayCombatStateSnapshot expected =
-                new GameplayCombatStateSnapshot(snapshot);
-            if (!string.Equals(
-                    installed.CanonicalHash,
-                    expected.CanonicalHash,
-                    StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "The live gameplay projection does not match the installed canonical session state.");
-            }
-            notifications.Publish();
         }
 
-        private void ValidateCanonicalProjection(
+        internal void ValidateCanonicalProjection(
             GameplaySessionStateSnapshot snapshot,
             object semanticRecord)
         {

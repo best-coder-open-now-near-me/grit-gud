@@ -11,6 +11,7 @@ namespace GritGud.Application.Gameplay
         private readonly DestructiblePropSession destructibles;
         private readonly Dictionary<string, DroneSnapshot> drones =
             new Dictionary<string, DroneSnapshot>(StringComparer.Ordinal);
+        private bool canonicalProjectionBound;
 
         public GameplayDroneSession(
             GameplaySession gameplaySession,
@@ -39,6 +40,57 @@ namespace GritGud.Application.Gameplay
             result.Sort((left, right) => StringComparer.Ordinal.Compare(
                 left.DroneId, right.DroneId));
             return result.AsReadOnly();
+        }
+
+        internal void BindCanonicalProjection(
+            IReadOnlyList<DroneSnapshot> snapshots)
+        {
+            if (canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Drones already have a canonical runtime projection.");
+            ValidateCanonicalProjection(snapshots);
+            foreach (DroneSnapshot snapshot in snapshots)
+                if (!StatesMatch(drones[snapshot.DroneId], snapshot))
+                    throw new InvalidOperationException(
+                        "Drone session does not match the initial canonical state.");
+            canonicalProjectionBound = true;
+        }
+
+        internal void ValidateCanonicalProjection(
+            IReadOnlyList<DroneSnapshot> snapshots)
+        {
+            if (snapshots == null)
+                throw new ArgumentNullException(nameof(snapshots));
+            if (snapshots.Count != drones.Count)
+                throw new InvalidOperationException(
+                    "Canonical projection changed the drone set.");
+            foreach (DroneSnapshot snapshot in snapshots)
+            {
+                if (!drones.TryGetValue(
+                        snapshot.DroneId,
+                        out DroneSnapshot current)
+                    || !string.Equals(
+                        GameplayCanonicalValueDigest.Calculate(
+                            current.Definition),
+                        GameplayCanonicalValueDigest.Calculate(
+                            snapshot.Definition),
+                        StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Canonical drone '{snapshot.DroneId}' changed its definition.");
+                }
+            }
+        }
+
+        internal void InstallCanonicalProjection(
+            IReadOnlyList<DroneSnapshot> snapshots)
+        {
+            if (!canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Drones are not bound to a canonical runtime.");
+            ValidateCanonicalProjection(snapshots);
+            foreach (DroneSnapshot snapshot in snapshots)
+                drones[snapshot.DroneId] = snapshot;
         }
 
         public DroneSnapshot GetDrone(string droneId) =>
@@ -76,6 +128,7 @@ namespace GritGud.Application.Gameplay
 
         public void CommitMove(DroneMoveRecord record)
         {
+            RequireLegacyMutationAllowed(nameof(CommitMove));
             if (record == null) throw new ArgumentNullException(nameof(record));
             DroneSnapshot drone = GetDrone(record.DroneId);
             RequireControllerTurn(drone);
@@ -121,6 +174,7 @@ namespace GritGud.Application.Gameplay
 
         public void CommitAttack(DroneAttackRecord record)
         {
+            RequireLegacyMutationAllowed(nameof(CommitAttack));
             if (record == null) throw new ArgumentNullException(nameof(record));
             DroneSnapshot drone = GetDrone(record.DroneId);
             RequireControllerTurn(drone);
@@ -156,6 +210,7 @@ namespace GritGud.Application.Gameplay
 
         public void ApplyIntegrityDamage(DroneIntegrityDamageRecord damage)
         {
+            RequireLegacyMutationAllowed(nameof(ApplyIntegrityDamage));
             if (damage == null) throw new ArgumentNullException(nameof(damage));
             DroneSnapshot current = GetDrone(damage.DroneId);
             if (!StatesMatch(current, damage.Previous))
@@ -197,6 +252,7 @@ namespace GritGud.Application.Gameplay
 
         public void CommitActorAttack(ActorDroneAttackRecord record)
         {
+            RequireLegacyMutationAllowed(nameof(CommitActorAttack));
             if (record == null) throw new ArgumentNullException(nameof(record));
             DroneSnapshot drone = GetDrone(record.DroneId);
             if (record.Damage != null
@@ -225,5 +281,12 @@ namespace GritGud.Application.Gameplay
             && left.Position.DistanceTo(right.Position) == 0f
             && left.FacingDegrees == right.FacingDegrees
             && left.RemainingIntegrity == right.RemainingIntegrity;
+
+        private void RequireLegacyMutationAllowed(string operation)
+        {
+            if (canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    $"Legacy drone mutation '{operation}' is disabled while the semantic runtime owns state.");
+        }
     }
 }

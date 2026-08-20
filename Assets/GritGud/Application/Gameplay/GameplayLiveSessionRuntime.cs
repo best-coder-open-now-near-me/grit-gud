@@ -10,7 +10,7 @@ namespace GritGud.Application.Gameplay
     /// </summary>
     public sealed class GameplayLiveSessionRuntime : IDisposable
     {
-        private readonly GameplaySession session;
+        private readonly GameplayLiveCombatProjection projection;
         private readonly GameplaySimulationRuntime runtime;
         private bool disposed;
 
@@ -20,15 +20,30 @@ namespace GritGud.Application.Gameplay
             GameplayCombatStateSnapshot initialState,
             GameplayTransitionReducerRegistry reducers,
             GameplayCapabilityRegistry capabilities)
+            : this(
+                new GameplayLiveCombatProjection(gameplay),
+                executionIdentity,
+                initialState,
+                reducers,
+                capabilities)
         {
-            session = gameplay ?? throw new ArgumentNullException(
-                nameof(gameplay));
+        }
+
+        public GameplayLiveSessionRuntime(
+            GameplayLiveCombatProjection liveProjection,
+            GameplayExecutionIdentity executionIdentity,
+            GameplayCombatStateSnapshot initialState,
+            GameplayTransitionReducerRegistry reducers,
+            GameplayCapabilityRegistry capabilities)
+        {
+            projection = liveProjection ?? throw new ArgumentNullException(
+                nameof(liveProjection));
             runtime = new GameplaySimulationRuntime(
                 executionIdentity,
                 initialState,
                 reducers,
                 capabilities);
-            session.BindCanonicalProjection(initialState.Session);
+            projection.Bind(initialState);
             runtime.StateInstalled += ProjectInstalledState;
         }
 
@@ -80,31 +95,12 @@ namespace GritGud.Application.Gameplay
         }
 
         private void ProjectInstalledState(GameplayReductionResult reduction)
-        {
-            GameplayTransitionReducedEvent semanticEvent = null;
-            foreach (GameplayDomainEvent domainEvent in reduction.DomainEvents)
-            {
-                if (!(domainEvent is GameplayTransitionReducedEvent reduced))
-                    continue;
-                if (semanticEvent != null)
-                    throw new InvalidOperationException(
-                        "A semantic transition produced more than one authoritative record.");
-                semanticEvent = reduced;
-            }
-            if (semanticEvent == null)
-                throw new InvalidOperationException(
-                    "A semantic transition produced no authoritative record.");
-            session.InstallCanonicalProjection(
-                reduction.Resulting.Session,
-                semanticEvent.SemanticRecord);
-        }
+            => projection.Install(reduction);
 
         private void RequireProjectionMatchesAuthority()
         {
-            GameplayCombatStateSnapshot projected =
-                GameplayCombatStateCapture.Capture(session);
-            GameplayCombatStateSnapshot authoritative =
-                new GameplayCombatStateSnapshot(runtime.CurrentState.Session);
+            GameplayCombatStateSnapshot projected = projection.Capture();
+            GameplayCombatStateSnapshot authoritative = runtime.CurrentState;
             if (!string.Equals(
                     projected.CanonicalHash,
                     authoritative.CanonicalHash,
