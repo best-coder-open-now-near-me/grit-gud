@@ -384,18 +384,10 @@ namespace GritGud.Application.Gameplay
                     beforeIndex.Remove(target.ProjectileId);
                     continue;
                 }
-                float distance = source.DistanceTraveled
-                    + ((target.DistanceTraveled - source.DistanceTraveled)
-                        * progress);
-                ProjectileFlightStatus status = progress >= 1f
-                    ? target.Status
-                    : ProjectileFlightStatus.InFlight;
-                result.Add(new ProjectileFlightSnapshot(
-                    target.Launch,
-                    target.Launch.GetPosition(distance),
-                    distance,
-                    distance / target.Launch.Definition.SpeedPerTurn,
-                    status));
+                result.Add(GameplayProjectilePresentationSampler.Sample(
+                    source,
+                    target,
+                    progress));
                 beforeIndex.Remove(target.ProjectileId);
             }
             foreach (ProjectileFlightSnapshot unchanged in beforeIndex.Values)

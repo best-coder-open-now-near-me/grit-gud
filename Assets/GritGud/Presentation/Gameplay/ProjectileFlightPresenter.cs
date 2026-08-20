@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -349,25 +350,10 @@ namespace GritGud.Presentation.Gameplay
 
         internal static float CalculateAcceleratedProgress(
             float linearProgress,
-            float accelerationFraction)
-        {
-            float progress = Mathf.Clamp01(linearProgress);
-            float acceleration = Mathf.Clamp01(accelerationFraction);
-            if (acceleration <= 0.0001f)
-            {
-                return progress;
-            }
-
-            float normalizedDistance = 1f - (acceleration * 0.5f);
-            if (progress < acceleration)
-            {
-                return (0.5f * progress * progress / acceleration)
-                    / normalizedDistance;
-            }
-
-            return (progress - (acceleration * 0.5f))
-                / normalizedDistance;
-        }
+            float accelerationFraction) =>
+            GameplayProjectilePresentationSampler.EvaluateProgress(
+                linearProgress,
+                accelerationFraction);
 
         private void Spin(Transform pivot, float deltaTime)
         {

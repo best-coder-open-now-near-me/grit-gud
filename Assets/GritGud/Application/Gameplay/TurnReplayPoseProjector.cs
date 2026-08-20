@@ -176,34 +176,15 @@ namespace GritGud.Application.Gameplay
             MovementRouteRecord route,
             float progress)
         {
-            float targetSeconds = route.TotalPlaybackDurationSeconds
-                * progress;
-            float traversedSeconds = 0f;
-            foreach (MovementRouteSegmentRecord segment in route.Segments)
-            {
-                float duration = segment.PlaybackDurationSeconds;
-                if (traversedSeconds + duration <= targetSeconds
-                    && !ReferenceEquals(segment, route.Segments[
-                        route.Segments.Count - 1]))
-                {
-                    traversedSeconds += duration;
-                    continue;
-                }
-                float segmentProgress = duration <= 0f
-                    ? 1f
-                    : (targetSeconds - traversedSeconds) / duration;
-                float facing = CalculateFacing(
-                    segment.From,
-                    segment.To,
-                    route.OriginPose.FacingDegrees);
-                return new GameplayActorPose(
-                    segment.Sample(segmentProgress),
-                    facing,
-                    route.OriginPose.Stance);
-            }
+            if (!GameplayMovementPresentationSampler.TrySample(
+                    route,
+                    route.TotalPlaybackDurationSeconds
+                        * Math.Max(0f, Math.Min(1f, progress)),
+                    out GameplayMovementPresentationSample sample))
+                return route.OriginPose;
             return new GameplayActorPose(
-                route.Destination,
-                route.FinalFacingDegrees,
+                sample.Position,
+                sample.FacingDegrees,
                 route.OriginPose.Stance);
         }
 
@@ -221,17 +202,5 @@ namespace GritGud.Application.Gameplay
                 from.Y + ((to.Y - from.Y) * progress),
                 from.Z + ((to.Z - from.Z) * progress));
 
-        private static float CalculateFacing(
-            GameplayPosition from,
-            GameplayPosition to,
-            float fallback)
-        {
-            double x = to.X - from.X;
-            double z = to.Z - from.Z;
-            if (Math.Abs(x) <= 0.0001 && Math.Abs(z) <= 0.0001)
-                return fallback;
-            float degrees = (float)(Math.Atan2(x, z) * (180d / Math.PI));
-            return degrees < 0f ? degrees + 360f : degrees;
-        }
     }
 }

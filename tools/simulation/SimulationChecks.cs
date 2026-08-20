@@ -21,6 +21,7 @@ internal static class SimulationChecks
             VerifyAtomicLiveInstallation();
             VerifyLiveSessionReducerProjection();
             VerifyFullLiveCombatProjection();
+            VerifySharedPresentationSampling();
             VerifyPortableGroundSurfaces();
             VerifyStaticHeadlessSpatialGeometry();
             VerifyConcreteGroundedMoveCandidateRoute();
@@ -2162,6 +2163,85 @@ internal static class SimulationChecks
         }
         Require(duplicateFireAdvanceRejected,
             "Projection-bound fire still allowed its independent mutable path.");
+    }
+
+    private static void VerifySharedPresentationSampling()
+    {
+        var route = new MovementRouteRecord(
+            "presentation.actor",
+            new GameplayActorPose(
+                new GameplayPosition(0f, 0f, 0f),
+                facingDegrees: 0f),
+            new TurnBudget(4, 8f),
+            new[]
+            {
+                new MovementRouteSegmentRecord(
+                    new GameplayPosition(0f, 0f, 0f),
+                    new GameplayPosition(0f, 0f, 2f),
+                    MovementRouteSegmentKind.Jump,
+                    "jump.presentation",
+                    "traversal.jump",
+                    movementCost: 2f,
+                    actionPointCost: 0,
+                    arcHeight: 1.25f,
+                    playbackDurationSeconds: 0.8f),
+            });
+        Require(GameplayMovementPresentationSampler.TrySample(
+                route,
+                elapsedSeconds: 0.4f,
+                out GameplayMovementPresentationSample movement)
+            && movement.SegmentIndex == 0
+            && Math.Abs(movement.SegmentProgress - 0.5f) < 0.001f
+            && Math.Abs(movement.Position.Y - 1.25f) < 0.001f
+            && Math.Abs(movement.Position.Z - 1f) < 0.001f
+            && movement.FacingDegrees == 0f,
+            "Shared movement presentation sampling lost frozen arc, timing, or facing evidence.");
+
+        var definition = new ProjectileFlightDefinition(
+            "projectile.presentation",
+            speedPerTurn: 4f,
+            radius: 0.1f,
+            maximumRange: 12f,
+            standingLaunchHeight: 1f,
+            crouchedLaunchHeight: 0.7f);
+        var launch = new ProjectileLaunchRecord(
+            1L,
+            "projectile.presentation.1",
+            "presentation.actor",
+            "target",
+            "attack.presentation",
+            new GameplayPosition(0f, 1f, 0f),
+            new GameplayPosition(0f, 1f, 12f),
+            definition,
+            turnActionPointTimeScale: 4,
+            remainingActionPointsAfterLaunch: 3);
+        var previous = new ProjectileFlightSnapshot(
+            launch,
+            launch.Origin,
+            distanceTraveled: 0f,
+            elapsedTurnTime: 0f,
+            ProjectileFlightStatus.InFlight);
+        var resulting = new ProjectileFlightSnapshot(
+            launch,
+            launch.GetPosition(4f),
+            distanceTraveled: 4f,
+            elapsedTurnTime: 1f,
+            ProjectileFlightStatus.InFlight);
+        ProjectileFlightSnapshot early =
+            GameplayProjectilePresentationSampler.Sample(
+                previous,
+                resulting,
+                linearProgress: 0.14f);
+        ProjectileFlightSnapshot complete =
+            GameplayProjectilePresentationSampler.Sample(
+                previous,
+                resulting,
+                linearProgress: 1f);
+        Require(early.DistanceTraveled > 0f
+            && early.DistanceTraveled < 4f * 0.14f
+            && complete.DistanceTraveled == 4f
+            && complete.Position.DistanceTo(resulting.Position) == 0f,
+            "Shared projectile sampling lost acceleration or exact endpoint installation.");
     }
 
     private static void VerifyConcreteActorAttackCandidateRoute()

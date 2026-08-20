@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using GritGud.Application.Gameplay;
 using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
@@ -26,7 +27,8 @@ namespace GritGud.Presentation.Gameplay
         [Tooltip(
             "Fraction of each playback spent accelerating before reaching "
             + "constant travel speed.")]
-        private float playbackAccelerationFraction = 0.28f;
+        private float playbackAccelerationFraction =
+            GameplayProjectilePresentationSampler.DefaultAccelerationFraction;
 
         [SerializeField]
         private GameObject trailEffectPrefab;
@@ -64,7 +66,8 @@ namespace GritGud.Presentation.Gameplay
             Vector3 modelRotationEuler,
             float modelScale,
             float spinSpeed,
-            float accelerationFraction = 0.28f,
+            float accelerationFraction = GameplayProjectilePresentationSampler
+                .DefaultAccelerationFraction,
             GameObject trailPrefab = null,
             Vector3? trailPosition = null,
             Vector3? trailRotationEuler = null,

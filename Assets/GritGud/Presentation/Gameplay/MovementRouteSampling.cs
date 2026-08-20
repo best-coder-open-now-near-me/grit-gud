@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using UnityEngine;
 
@@ -61,32 +62,18 @@ namespace GritGud.Presentation.Gameplay
             out int segmentIndex,
             out float segmentProgress)
         {
-            position = default;
-            direction = Vector3.forward;
-            segmentIndex = -1;
-            segmentProgress = 0f;
-            if (segments == null || segments.Count == 0)
-                return false;
-
-            float remaining = Mathf.Max(0f, elapsedSeconds);
-            for (int index = 0; index < segments.Count; index++)
-            {
-                MovementRouteSegmentRecord segment = segments[index];
-                float duration = Mathf.Max(
-                    0.0001f,
-                    segment.PlaybackDurationSeconds);
-                if (remaining < duration || index == segments.Count - 1)
-                {
-                    float progress = Mathf.Clamp01(remaining / duration);
-                    position = ToVector3(segment.Sample(progress));
-                    direction = SampleDirection(segment, progress);
-                    segmentIndex = index;
-                    segmentProgress = progress;
-                    return true;
-                }
-                remaining -= duration;
-            }
-            return false;
+            bool sampled = GameplayMovementPresentationSampler.TrySample(
+                segments,
+                elapsedSeconds,
+                fallbackFacingDegrees: 0f,
+                out GameplayMovementPresentationSample result);
+            position = sampled ? ToVector3(result.Position) : default;
+            direction = sampled
+                ? ToVector3(result.Direction)
+                : Vector3.forward;
+            segmentIndex = sampled ? result.SegmentIndex : -1;
+            segmentProgress = sampled ? result.SegmentProgress : 0f;
+            return sampled;
         }
 
         public static bool TrySample(
@@ -95,29 +82,19 @@ namespace GritGud.Presentation.Gameplay
             out Vector3 position,
             out Vector3 direction,
             out int segmentIndex,
-            out float segmentProgress) => TrySample(
-                route?.Segments,
-                elapsedSeconds,
-                out position,
-                out direction,
-                out segmentIndex,
-                out segmentProgress);
-
-        private static Vector3 SampleDirection(
-            MovementRouteSegmentRecord segment,
-            float progress)
+            out float segmentProgress)
         {
-            const float sampleOffset = 0.01f;
-            float fromProgress = Mathf.Max(0f, progress - sampleOffset);
-            float toProgress = Mathf.Min(1f, progress + sampleOffset);
-            Vector3 direction = ToVector3(segment.Sample(toProgress))
-                - ToVector3(segment.Sample(fromProgress));
-            if (direction.sqrMagnitude <= MinimumSegmentDistance
-                    * MinimumSegmentDistance)
-                direction = ToVector3(segment.To) - ToVector3(segment.From);
-            return direction.sqrMagnitude > 0f
-                ? direction.normalized
+            bool sampled = GameplayMovementPresentationSampler.TrySample(
+                route,
+                elapsedSeconds,
+                out GameplayMovementPresentationSample result);
+            position = sampled ? ToVector3(result.Position) : default;
+            direction = sampled
+                ? ToVector3(result.Direction)
                 : Vector3.forward;
+            segmentIndex = sampled ? result.SegmentIndex : -1;
+            segmentProgress = sampled ? result.SegmentProgress : 0f;
+            return sampled;
         }
 
         public static Vector3 ToVector3(GameplayPosition position)
