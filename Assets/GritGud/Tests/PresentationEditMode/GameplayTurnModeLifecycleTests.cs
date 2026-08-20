@@ -97,11 +97,14 @@ namespace GritGud.Presentation.Tests
             float activePartyMovementOpportunity = gameplay.Session
                 .GetActor("oren-vale")
                 .TurnBudget.MovementOpportunity;
-            gameplay.Session.SpendMovement(
-                "oren-vale",
-                activePartyMovementOpportunity);
+            Assert.Throws<System.InvalidOperationException>(() =>
+                gameplay.Session.SpendMovement(
+                    "oren-vale",
+                    activePartyMovementOpportunity));
             Assert.That(turnMovement.SynchronizePlanningState(), Is.True);
-            Assert.That(turnMovement.PlanningMaximumCost, Is.Zero);
+            Assert.That(
+                turnMovement.PlanningMaximumCost,
+                Is.EqualTo(activePartyMovementOpportunity));
             Assert.That(turnMovement.PlanPointCount, Is.EqualTo(1));
             Assert.That(actions.TryEndTurn(), Is.True);
             Assert.That(actions.LastTurnEndFailure, Is.EqualTo(TurnEndFailure.None));

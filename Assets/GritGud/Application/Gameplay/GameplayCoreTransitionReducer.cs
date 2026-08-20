@@ -192,7 +192,7 @@ namespace GritGud.Application.Gameplay
             GameplayStanceTransitionPayload payload)
         {
             GameplaySessionStateSnapshot session = state.Session;
-            RequireIdleActiveActor(session, payload.ActorId);
+            RequireIdleStanceActor(session, payload.ActorId);
             GameplayActorSnapshot actor = session.GetActor(payload.ActorId);
             if (actor.IsPinned)
                 throw new InvalidOperationException(
@@ -507,6 +507,22 @@ namespace GritGud.Application.Gameplay
                 StringComparison.Ordinal))
                 throw new InvalidOperationException(
                     "Only the active actor can reduce this transition.");
+        }
+
+        private static void RequireIdleStanceActor(
+            GameplaySessionStateSnapshot session,
+            string actorId)
+        {
+            if (session.Operation != GameplaySessionOperation.None)
+                throw new InvalidOperationException(
+                    "The core reducer requires an idle session.");
+            if (session.Mode == GameplaySessionMode.TurnBased
+                && !string.Equals(
+                    session.ActiveActorId,
+                    actorId,
+                    StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "Only the active actor can reduce this transition in turn mode.");
         }
 
         private static int IndexOf(
