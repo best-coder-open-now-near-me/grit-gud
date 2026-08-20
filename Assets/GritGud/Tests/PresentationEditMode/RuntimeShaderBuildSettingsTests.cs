@@ -17,6 +17,7 @@ namespace GritGud.Presentation.Tests
             "GritGud/EmissiveSurface",
             "GritGud/TacticalWireframe",
             "GritGud/Portable Gradient Skybox",
+            "Hidden/GritGud/PlayerSilhouetteMask",
         };
 
         [Test]
