@@ -24,8 +24,6 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplayPartyControlSession partyControl;
         private readonly GameplayDroneController drones;
         private readonly GameplayDialogueLog dialogue;
-        private readonly GameplaySmokeFieldSession smokeFields;
-        private readonly IEnumerable<LevelTraversalLinkData> traversalLinks;
         private readonly GameplayCombatReactionPresenter combatReactions;
         private readonly GameplayTacticalTransitionPresenter tacticalTransition;
         private readonly Action<GameplayPartyPresentationSession>
@@ -46,8 +44,6 @@ namespace GritGud.Presentation.Gameplay
             GameplayPartyControlSession partyControl,
             GameplayDroneController drones,
             GameplayDialogueLog dialogue,
-            GameplaySmokeFieldSession smokeFields,
-            IEnumerable<LevelTraversalLinkData> traversalLinks,
             GameplayCombatReactionPresenter combatReactions,
             GameplayTacticalTransitionPresenter tacticalTransition,
             Action<GameplayPartyPresentationSession> capturePartyPresentation)
@@ -73,9 +69,6 @@ namespace GritGud.Presentation.Gameplay
             this.drones = drones ?? throw new ArgumentNullException(
                 nameof(drones));
             this.dialogue = dialogue ?? throw new ArgumentNullException(nameof(dialogue));
-            this.smokeFields = smokeFields ?? throw new ArgumentNullException(
-                nameof(smokeFields));
-            this.traversalLinks = traversalLinks;
             this.combatReactions = combatReactions
                 ?? throw new ArgumentNullException(nameof(combatReactions));
             this.tacticalTransition = tacticalTransition
@@ -113,9 +106,7 @@ namespace GritGud.Presentation.Gameplay
                 drones,
                 dialogue,
                 sessionPresenter.TryBeginEncounter,
-                tacticalTransition,
-                obscuranceQuery: smokeFields,
-                traversalLinks: traversalLinks);
+                tacticalTransition);
             combatReactions.Bind(session, worldRegistry, attacks);
         }
     }

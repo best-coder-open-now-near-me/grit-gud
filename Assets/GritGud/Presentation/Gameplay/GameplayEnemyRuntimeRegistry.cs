@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
-using GritGud.Domain.Levels;
 
 namespace GritGud.Presentation.Gameplay
 {
@@ -33,7 +32,6 @@ namespace GritGud.Presentation.Gameplay
             public MovementRoutePlaybackPresenter Playback =>
                 Presentation.Playback;
 
-            public PatrolAdvanceRecord PendingPatrolAdvance { get; set; }
         }
 
         private readonly Dictionary<string, Entry> enemies =
@@ -45,9 +43,7 @@ namespace GritGud.Presentation.Gameplay
             GameplayWorldRegistry worldRegistry,
             GameplayAttackController attackController,
             GameplayProjectileController projectileController,
-            EnemyPresentationCatalog presentationCatalog,
-            ISightObscuranceQuery obscuranceQuery,
-            IEnumerable<LevelTraversalLinkData> traversalLinks)
+            EnemyPresentationCatalog presentationCatalog)
         {
             if (session == null)
                 throw new ArgumentNullException(nameof(session));
@@ -78,9 +74,7 @@ namespace GritGud.Presentation.Gameplay
                     session,
                     worldRegistry,
                     definition,
-                    view,
-                    obscuranceQuery,
-                    traversalLinks);
+                    view);
                 enemies.Add(
                     definition.Id,
                     new Entry(definition, view, presentation, query));
@@ -108,7 +102,6 @@ namespace GritGud.Presentation.Gameplay
         {
             foreach (Entry enemy in enemies.Values)
             {
-                enemy.PendingPatrolAdvance = null;
                 enemy.Presentation.Dispose();
             }
             enemies.Clear();

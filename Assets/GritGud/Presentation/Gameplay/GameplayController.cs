@@ -483,8 +483,6 @@ namespace GritGud.Presentation.Gameplay
                     partyControl,
                     droneController,
                     dialogueLog,
-                    smokeFieldSession,
-                    content.Level.traversalLinks,
                     combatReactionPresenter,
                     tacticalTransitionPresenter,
                     installed => partyPresentation = installed),

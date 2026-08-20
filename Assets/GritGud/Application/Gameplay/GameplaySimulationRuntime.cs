@@ -3,6 +3,22 @@ using System.Collections.Generic;
 
 namespace GritGud.Application.Gameplay
 {
+    public sealed class GameplayStaleDecisionStateException :
+        InvalidOperationException
+    {
+        public GameplayStaleDecisionStateException(
+            string preparedStateHash,
+            string currentStateHash)
+            : base("Prepared decision state is stale and cannot be installed.")
+        {
+            PreparedStateHash = preparedStateHash ?? string.Empty;
+            CurrentStateHash = currentStateHash ?? string.Empty;
+        }
+
+        public string PreparedStateHash { get; }
+        public string CurrentStateHash { get; }
+    }
+
     /// <summary>
     /// Owns the immutable authoritative root used by live semantic execution.
     /// Presentation observes domain events only after the new root is installed.
@@ -83,6 +99,13 @@ namespace GritGud.Application.Gameplay
             if (reduction == null)
                 throw new ArgumentNullException(nameof(reduction));
             capabilities.RequireCompleteRoute(transition.Profile);
+            if (!string.Equals(
+                    stateStore.Current.CanonicalHash,
+                    reduction.Previous.CanonicalHash,
+                    StringComparison.Ordinal))
+                throw new GameplayStaleDecisionStateException(
+                    reduction.Previous.CanonicalHash,
+                    stateStore.Current.CanonicalHash);
             if (!string.Equals(
                     transition.PreviousStateHash,
                     reduction.Previous.CanonicalHash,

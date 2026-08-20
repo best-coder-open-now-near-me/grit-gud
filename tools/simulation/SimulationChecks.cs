@@ -2000,6 +2000,37 @@ internal static class SimulationChecks
         runtime.Execute(transition);
         Require(runtimeEventSawInstalledTrajectory,
             "Live runtime published before state and trajectory installation.");
+
+        var staleRuntime = new GameplaySimulationRuntime(
+            executionIdentity,
+            initial,
+            reducers,
+            capabilities);
+        GameplayReductionResult staleReduction = staleRuntime
+            .PrepareReduction(transition);
+        staleRuntime.Execute(transition);
+        GameplayStaleDecisionStateException staleFailure = null;
+        try
+        {
+            staleRuntime.InstallPreparedReduction(
+                transition,
+                staleReduction);
+        }
+        catch (GameplayStaleDecisionStateException exception)
+        {
+            staleFailure = exception;
+        }
+        Require(staleFailure != null
+            && string.Equals(
+                staleFailure.PreparedStateHash,
+                initial.CanonicalHash,
+                StringComparison.Ordinal)
+            && string.Equals(
+                staleFailure.CurrentStateHash,
+                staleRuntime.CurrentState.CanonicalHash,
+                StringComparison.Ordinal),
+            "A stale prepared reduction did not fail with typed canonical endpoints.");
+
         GameplayReproBundle repro = runtime.CreateRepro(
             "atomic movement check");
         Require(repro.Trajectory.Count == 1
@@ -3066,6 +3097,39 @@ internal static class SimulationChecks
                 GameplayTransitionPayloadDigest.Calculate(first.Transition),
                 StringComparison.Ordinal),
             "Permanent baseline policy did not select the deterministic combat route used by live enemies.");
+
+        var staleRunner = new GameplayPolicyDecisionRunner(
+            candidateSource,
+            routes,
+            policy,
+            installationBoundary: new StaleInstallationBoundary());
+        var staleScope = new GameplayExecutionDeadlineScope();
+        staleScope.BeginTurn();
+        GameplayDecisionFailureException staleDecision = null;
+        try
+        {
+            staleRunner.ExecuteAsync(
+                    new GameplaySimulationRuntime(
+                        executionIdentity,
+                        initial,
+                        reducers,
+                        capabilities),
+                    GameplayObservationSnapshot.FullState("player", initial),
+                    staleScope)
+                .GetAwaiter().GetResult();
+        }
+        catch (GameplayDecisionFailureException exception)
+        {
+            staleDecision = exception;
+        }
+        Require(staleDecision != null
+            && staleDecision.Kind
+                == GameplayDecisionFailureKind.StaleDecisionState
+            && staleDecision.Diagnostic.ActiveStage
+                == GameplayDecisionStage.Installation
+            && staleDecision.InnerException
+                is GameplayStaleDecisionStateException,
+            "The policy runner did not preserve typed stale-installation diagnostics.");
 
         GameplayActorSnapshot enemy = initial.Session.GetActor("enemy");
         EnemyBehaviorDefinition enemyBehavior = gameplay.Scenario.GetActor(
@@ -5856,6 +5920,20 @@ internal static class SimulationChecks
             throw new InvalidOperationException(
                 "A cancelled hanging policy cannot produce a score.");
         }
+    }
+
+    private sealed class StaleInstallationBoundary :
+        IGameplayRuntimeInstallationBoundary
+    {
+        public System.Threading.Tasks.Task<GameplayReductionResult> InstallAsync(
+            GameplaySimulationRuntime runtime,
+            GameplaySemanticTransition transition,
+            GameplayReductionResult reduction,
+            CancellationToken cancellationToken) =>
+            System.Threading.Tasks.Task.FromException<GameplayReductionResult>(
+                new GameplayStaleDecisionStateException(
+                    reduction.Previous.CanonicalHash,
+                    runtime.CurrentState.CanonicalHash));
     }
 
     private sealed class SimulationFixtureManifest

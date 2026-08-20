@@ -97,8 +97,7 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplayDisplacementController displacementController;
         private readonly GameplayDroneController drones;
         private readonly GameplayDialogueLog dialogue;
-        private readonly GameplayExecutionDeadlineScope deadlineScope =
-            new GameplayExecutionDeadlineScope();
+        private GameplayExecutionDeadlineScope deadlineScope;
         private readonly GameplayExecutionLogicalGuard logicalGuard;
         private readonly CancellationTokenSource lifetime =
             new CancellationTokenSource();
@@ -186,6 +185,15 @@ namespace GritGud.Presentation.Gameplay
             disposed = true;
             lifetime.Cancel();
             lifetime.Dispose();
+        }
+
+        public void ResetBattleScope()
+        {
+            if (pendingDecision != null || disposed) return;
+            deadlineScope = null;
+            observedActiveActorId = string.Empty;
+            observedTurnSequence = -1L;
+            failureLatched = false;
         }
 
         private void StartDecision(string actorId)
@@ -397,6 +405,7 @@ namespace GritGud.Presentation.Gameplay
                     observedActiveActorId,
                     out GameplayEnemyRuntimeRegistry.Entry enemy))
             {
+                deadlineScope ??= new GameplayExecutionDeadlineScope();
                 deadlineScope.BeginTurn();
                 logicalGuard.BeginTurn(
                     observedActiveActorId,

@@ -463,6 +463,14 @@ namespace GritGud.Application.Gameplay
             {
                 throw;
             }
+            catch (GameplayStaleDecisionStateException exception)
+            {
+                throw new GameplayDecisionFailureException(
+                    GameplayDecisionFailureKind.StaleDecisionState,
+                    "Decision was prepared from a stale canonical state.",
+                    diagnostic.Build(),
+                    exception);
+            }
             catch (OperationCanceledException exception)
             {
                 throw new GameplayDecisionFailureException(

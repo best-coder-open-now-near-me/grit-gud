@@ -25,6 +25,7 @@ namespace GritGud.Application.Gameplay
         PreparationFailed,
         ReductionFailed,
         InstallationFailed,
+        StaleDecisionState,
         MaximumTransitionsExceeded,
         RepeatedCanonicalState,
         NoProgressTurn,

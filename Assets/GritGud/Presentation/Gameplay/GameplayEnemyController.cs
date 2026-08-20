@@ -33,9 +33,7 @@ namespace GritGud.Presentation.Gameplay
             GameplayDialogueLog dialogueLog,
             Func<IReadOnlyList<string>, bool> onEncounterStartRequested,
             GameplayTacticalTransitionPresenter tacticalTransition,
-            EnemyPresentationCatalog enemyPresentationCatalog = null,
-            ISightObscuranceQuery obscuranceQuery = null,
-            IEnumerable<LevelTraversalLinkData> traversalLinks = null)
+            EnemyPresentationCatalog enemyPresentationCatalog = null)
         {
             Unbind();
             session = gameplaySession ?? throw new ArgumentNullException(
@@ -69,9 +67,7 @@ namespace GritGud.Presentation.Gameplay
                 registry,
                 attackController,
                 projectileController,
-                presentationCatalog,
-                obscuranceQuery,
-                traversalLinks);
+                presentationCatalog);
             committedConsequences =
                 new GameplayCommittedActionConsequenceCoordinator(
                     session,
@@ -82,7 +78,7 @@ namespace GritGud.Presentation.Gameplay
                 enemies,
                 sessionPresenter,
                 actionController,
-                partyControl,
+                dialogue,
                 beginEncounter,
                 tacticalTransition,
                 presentationCatalog.DetectionIntervalSeconds);
@@ -132,21 +128,23 @@ namespace GritGud.Presentation.Gameplay
                     assembly,
                     spatial,
                     capabilities);
+            var candidateBuilder = new GameplayHeadlessCandidateBuilder(
+                capabilities,
+                spatial,
+                scenarioDefinition: assembly.Scenario,
+                authoredTraversalLinks: level.traversalLinks);
             var source = new GameplayHeadlessDecisionCandidateSource(
-                new GameplayHeadlessCandidateBuilder(
-                    capabilities,
-                    spatial,
-                    scenarioDefinition: assembly.Scenario,
-                    authoredTraversalLinks: level.traversalLinks),
+                candidateBuilder,
                 reachable,
                 routes);
+            var installationBoundary =
+                new GameplaySynchronizationContextRuntimeInstallationBoundary(
+                    SynchronizationContext.Current);
             var runner = new GameplayPolicyDecisionRunner(
                 source,
                 routes,
                 GameplayBaselineCombatPolicy.Create(assembly.Scenario),
-                installationBoundary:
-                    new GameplaySynchronizationContextRuntimeInstallationBoundary(
-                        SynchronizationContext.Current));
+                installationBoundary: installationBoundary);
             combatTurns = new GameplayEnemyCombatTurnExecutor(
                 session,
                 runtime,
@@ -159,10 +157,43 @@ namespace GritGud.Presentation.Gameplay
                 displacementController,
                 droneController,
                 dialogue);
+
+            var observationInputs = new List<GameplayReachableInput>();
+            var patrolInputs = new List<GameplayReachableInput>();
+            foreach (GameplayReachableInput input in reachable)
+            {
+                if (input.Profile.Equals(
+                        GameplayCapabilityProfiles.ObserveEncounter()))
+                    observationInputs.Add(input);
+                else if (input.Profile.Equals(
+                        GameplayCapabilityProfiles.Patrol()))
+                    patrolInputs.Add(input);
+            }
+            var neutralPolicy = new GameplayWeightedOutcomePolicy(
+                Array.Empty<GameplayOutcomeFeatureWeight>());
+            exploration.BindSemanticRuntime(
+                runtime,
+                new GameplayPolicyDecisionRunner(
+                    new GameplayHeadlessDecisionCandidateSource(
+                        candidateBuilder,
+                        observationInputs,
+                        routes),
+                    routes,
+                    neutralPolicy,
+                    installationBoundary: installationBoundary),
+                new GameplayPolicyDecisionRunner(
+                    new GameplayHeadlessDecisionCandidateSource(
+                        candidateBuilder,
+                        patrolInputs,
+                        routes),
+                    routes,
+                    neutralPolicy,
+                    installationBoundary: installationBoundary));
         }
 
         internal void Unbind()
         {
+            exploration?.Dispose();
             combatTurns?.Dispose();
             committedConsequences?.Dispose();
             enemies?.Dispose();
@@ -190,6 +221,7 @@ namespace GritGud.Presentation.Gameplay
 
             if (session.Mode == GameplaySessionMode.Exploration)
             {
+                combatTurns?.ResetBattleScope();
                 exploration.Tick(Time.unscaledDeltaTime);
                 return;
             }
