@@ -122,6 +122,50 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void ExactTargetTiesUseStableActorIdentifiers()
+        {
+            GameplaySession gameplay = CreateMultiTargetSession();
+            gameplay.UpdateExplorationPose(
+                "player",
+                new GameplayActorPose(
+                    new GameplayPosition(-1f, 0f, 0f),
+                    0f));
+            gameplay.UpdateExplorationPose(
+                "ally",
+                new GameplayActorPose(
+                    new GameplayPosition(1f, 0f, 0f),
+                    0f));
+            var decisions = new GameplayEnemyDecisionSession(gameplay);
+
+            foreach (string[] candidates in new[]
+                {
+                    new[] { "player", "ally" },
+                    new[] { "ally", "player" },
+                })
+            {
+                EnemyTacticalDecisionRecord detection =
+                    decisions.EvaluateBestDetection(
+                        "enemy",
+                        candidates,
+                        targetId => CreateExposure(
+                            visibleSamples: 6,
+                            targetId: targetId));
+                EnemyTargetSelection target = decisions.SelectBestTarget(
+                    "enemy",
+                    candidates,
+                    targetId => CreateExposure(
+                        visibleSamples: 6,
+                        targetId: targetId));
+
+                Assert.That(detection.TargetId, Is.EqualTo("ally"));
+                Assert.That(target.TargetId, Is.EqualTo("ally"));
+                Assert.That(
+                    decisions.SelectNearestCapableHostile("enemy"),
+                    Is.EqualTo("ally"));
+            }
+        }
+
+        [Test]
         public void ExposedAffordableTargetProducesAttackDecisionAndJournalEntry()
         {
             GameplaySession gameplay = CreateSession();
@@ -145,6 +189,25 @@ namespace GritGud.Domain.Tests.Gameplay
                 ((EnemyDecisionCommittedJournalEntry)gameplay.Journal.LastEntry)
                     .Decision,
                 Is.SameAs(decision));
+        }
+
+        [Test]
+        public void ExposedAffordableProjectileProducesAttackDecision()
+        {
+            GameplaySession gameplay = CreateSession(
+                enemyAttack: CreateRocket());
+            Assert.That(gameplay.BeginEncounter(), Is.True);
+            var decisions = new GameplayEnemyDecisionSession(gameplay);
+
+            EnemyTacticalDecisionRecord decision = decisions.EvaluateTurn(
+                "enemy",
+                "player",
+                CreateExposure(visibleSamples: 6),
+                Array.Empty<EnemyMovementOption>(),
+                attacksCommittedThisTurn: 0);
+
+            Assert.That(decision.Kind,
+                Is.EqualTo(EnemyTacticalDecisionKind.Attack));
         }
 
         [Test]
@@ -349,6 +412,52 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void ExactMovementTiesUseStableRouteGeometry()
+        {
+            GameplaySession gameplay = CreateSession();
+            Assert.That(gameplay.BeginEncounter(), Is.True);
+            var decisions = new GameplayEnemyDecisionSession(gameplay);
+            GameplayActorSnapshot enemy = gameplay.GetActor("enemy");
+            var positiveRoute = new MovementRouteRecord(
+                "enemy",
+                enemy.Pose,
+                new[] { new GameplayPosition(1f, 0f, 10f) });
+            var negativeRoute = new MovementRouteRecord(
+                "enemy",
+                enemy.Pose,
+                new[] { new GameplayPosition(-1f, 0f, 10f) });
+
+            foreach (MovementRouteRecord[] routes in new[]
+                {
+                    new[] { positiveRoute, negativeRoute },
+                    new[] { negativeRoute, positiveRoute },
+                })
+            {
+                EnemyTacticalDecisionRecord decision = decisions.EvaluateTurn(
+                    "enemy",
+                    "player",
+                    CreateExposure(visibleSamples: 0),
+                    new[]
+                    {
+                        new EnemyMovementOption(
+                            routes[0],
+                            CreateExposure(visibleSamples: 6),
+                            resultingTargetDistance: 8f),
+                        new EnemyMovementOption(
+                            routes[1],
+                            CreateExposure(visibleSamples: 6),
+                            resultingTargetDistance: 8f),
+                    },
+                    attacksCommittedThisTurn: 0);
+
+                Assert.That(decision.Kind,
+                    Is.EqualTo(EnemyTacticalDecisionKind.Move));
+                Assert.That(decision.MovementRoute,
+                    Is.SameAs(negativeRoute));
+            }
+        }
+
+        [Test]
         public void AuthoredAttackLimitEndsTurnWithoutRepositioning()
         {
             GameplaySession gameplay = CreateSession();
@@ -527,6 +636,20 @@ namespace GritGud.Domain.Tests.Gameplay
                 new ActionCost(1, 0f, ActionMobility.Mobile),
                 woundMovementPenalty: 2f,
                 contact: new ContactAttackDefinition(2f));
+
+        private static AttackDefinition CreateRocket() =>
+            new AttackDefinition(
+                "attack.rocket",
+                "Launch rocket",
+                new ActionCost(1, 0f, ActionMobility.Set),
+                woundMovementPenalty: 2f,
+                projectile: new ProjectileFlightDefinition(
+                    "projectile.rocket",
+                    speedPerTurn: 12f,
+                    radius: 0.1f,
+                    maximumRange: 30f,
+                    standingLaunchHeight: 1.2f,
+                    crouchedLaunchHeight: 0.9f));
 
         private static TargetExposureSnapshot CreateExposure(
             int visibleSamples,

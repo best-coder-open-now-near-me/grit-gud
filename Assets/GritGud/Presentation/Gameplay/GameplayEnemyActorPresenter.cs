@@ -61,6 +61,11 @@ namespace GritGud.Presentation.Gameplay
 
         public MovementRoutePlaybackPresenter Playback { get; }
 
+        public Vector3? ProjectileLaunchOrigin =>
+            weaponPresenter.Muzzle != null
+                ? weaponPresenter.Muzzle.position
+                : (Vector3?)null;
+
         public bool PresentIncapacitation()
         {
             if (IncapacitationPresented)

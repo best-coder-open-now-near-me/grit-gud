@@ -19,6 +19,7 @@ namespace GritGud.Application.Gameplay
             TurnSequence = turnSequence;
             ActorId = actorId;
             Entries = CopyEntries(entries);
+            ValidateBoundary();
         }
 
         public long TurnSequence { get; }
@@ -32,12 +33,47 @@ namespace GritGud.Application.Gameplay
         {
             if (entries == null)
                 throw new ArgumentNullException(nameof(entries));
+            if (entries.Count == 0)
+            {
+                throw new ArgumentException(
+                    "Replay segments require at least one journal entry.",
+                    nameof(entries));
+            }
             var copy = new List<GameplayJournalEntry>(entries.Count);
             for (int index = 0; index < entries.Count; index++)
-                copy.Add(entries[index] ?? throw new ArgumentException(
-                    "Replay segment entries cannot contain null.",
-                    nameof(entries)));
+            {
+                GameplayJournalEntry entry = entries[index]
+                    ?? throw new ArgumentException(
+                        "Replay segment entries cannot contain null.",
+                        nameof(entries));
+                if (index > 0
+                    && entry.Sequence != copy[index - 1].Sequence + 1L)
+                {
+                    throw new ArgumentException(
+                        "Replay segment journal entries must be contiguous.",
+                        nameof(entries));
+                }
+                copy.Add(entry);
+            }
             return copy.AsReadOnly();
+        }
+
+        private void ValidateBoundary()
+        {
+            if (!(Entries[Entries.Count - 1]
+                    is TurnEndedJournalEntry ended)
+                || ended.Turn.Kind != GameplayTurnKind.Normal
+                || ended.Turn.Sequence != TurnSequence
+                || !string.Equals(
+                    ended.Turn.EndingActorId,
+                    ActorId,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Replay segments must end at their matching completed "
+                    + "normal turn.",
+                    nameof(Entries));
+            }
         }
     }
 
@@ -57,10 +93,45 @@ namespace GritGud.Application.Gameplay
                     nameof(segments));
             ActorId = actorId;
             var copy = new List<TurnReplaySegment>(segments.Count);
+            long previousTurnSequence = 0L;
+            long previousJournalSequence = 0L;
             for (int index = 0; index < segments.Count; index++)
-                copy.Add(segments[index] ?? throw new ArgumentException(
-                    "Replay windows cannot contain null segments.",
-                    nameof(segments)));
+            {
+                TurnReplaySegment segment = segments[index]
+                    ?? throw new ArgumentException(
+                        "Replay windows cannot contain null segments.",
+                        nameof(segments));
+                if (index == 0
+                    && !string.Equals(
+                        segment.ActorId,
+                        actorId,
+                        StringComparison.Ordinal))
+                {
+                    throw new ArgumentException(
+                        "Replay windows must begin with the requested actor's "
+                        + "completed turn.",
+                        nameof(segments));
+                }
+                if (segment.TurnSequence <= previousTurnSequence)
+                {
+                    throw new ArgumentException(
+                        "Replay segment turn sequences must increase.",
+                        nameof(segments));
+                }
+                if (index > 0
+                    && segment.Entries[0].Sequence
+                        != previousJournalSequence + 1L)
+                {
+                    throw new ArgumentException(
+                        "Replay segment journal boundaries must be contiguous.",
+                        nameof(segments));
+                }
+
+                copy.Add(segment);
+                previousTurnSequence = segment.TurnSequence;
+                previousJournalSequence =
+                    segment.Entries[segment.Entries.Count - 1].Sequence;
+            }
             Segments = copy.AsReadOnly();
         }
 

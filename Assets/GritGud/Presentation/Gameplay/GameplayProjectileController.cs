@@ -274,7 +274,10 @@ namespace GritGud.Presentation.Gameplay
 
             string targetId = acquisition?.CurrentTargetActorId
                 ?? WorldAimReferenceId;
-            if (!TryGetAimPoint(targetId, out GameplayPosition aimPoint))
+            if (!TryGetAimPoint(
+                    actorId,
+                    targetId,
+                    out GameplayPosition aimPoint))
             {
                 return Fail(ProjectileLaunchFailure.TargetNotFound);
             }
@@ -284,8 +287,54 @@ namespace GritGud.Presentation.Gameplay
                 return Fail(ProjectileLaunchFailure.TurnModeRequired);
             }
 
+            return TryLaunchResolved(
+                actorId,
+                targetId,
+                aimPoint,
+                getVisualLaunchOrigin?.Invoke());
+        }
+
+        internal bool TryLaunchActorAtTarget(
+            string attackerId,
+            string targetId,
+            Vector3? visualLaunchOrigin = null)
+        {
+            if (projectiles == null
+                || string.IsNullOrWhiteSpace(attackerId)
+                || Session.GetEquippedAttack(attackerId)?.Projectile == null)
+            {
+                return Fail(ProjectileLaunchFailure.ProjectileUnavailable);
+            }
+
+            if (!TryGetAimPoint(
+                    attackerId,
+                    targetId,
+                    out GameplayPosition aimPoint))
+            {
+                return Fail(ProjectileLaunchFailure.TargetNotFound);
+            }
+
+            if (projectiles.GetLaunchModeRequirement(targetId)
+                != ProjectileLaunchModeRequirement.None)
+            {
+                return Fail(ProjectileLaunchFailure.TurnModeRequired);
+            }
+
+            return TryLaunchResolved(
+                attackerId,
+                targetId,
+                aimPoint,
+                visualLaunchOrigin);
+        }
+
+        private bool TryLaunchResolved(
+            string attackerId,
+            string targetId,
+            GameplayPosition aimPoint,
+            Vector3? visualLaunchOrigin)
+        {
             if (!projectiles.TryLaunch(
-                    actorId,
+                    attackerId,
                     targetId,
                     aimPoint,
                     out GameplayActionRecord action,
@@ -315,7 +364,7 @@ namespace GritGud.Presentation.Gameplay
                 flight,
                 presentation,
                 transform,
-                getVisualLaunchOrigin?.Invoke());
+                visualLaunchOrigin);
             presenters.Add(launch.ProjectileId, presenter);
             bool reactionOpened = impactCycle.ObserveLaunch(launch);
             ProjectileFlightSnapshot stagedFlight = projectiles.GetProjectile(
@@ -496,6 +545,7 @@ namespace GritGud.Presentation.Gameplay
         }
 
         private bool TryGetAimPoint(
+            string attackerId,
             string targetId,
             out GameplayPosition aimPoint)
         {
@@ -503,7 +553,8 @@ namespace GritGud.Presentation.Gameplay
             {
                 if (acquisition != null
                     && acquisition.TryGetPresentationAimPoint(
-                        Session.GetEquippedAttack(actorId).Projectile.MaximumRange,
+                        Session.GetEquippedAttack(attackerId)
+                            .Projectile.MaximumRange,
                         out Vector3 worldAimPoint))
                 {
                     aimPoint = ToGameplayPosition(worldAimPoint);

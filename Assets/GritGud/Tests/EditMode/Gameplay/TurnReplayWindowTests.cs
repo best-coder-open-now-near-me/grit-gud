@@ -10,6 +10,65 @@ namespace GritGud.Domain.Tests.Gameplay
     public sealed class TurnReplayWindowTests
     {
         [Test]
+        public void ReplayConstructorsRejectMalformedSegmentBoundaries()
+        {
+            Assert.Throws<System.ArgumentException>(() =>
+                new TurnReplaySegment(
+                    1,
+                    "mara",
+                    System.Array.Empty<GameplayJournalEntry>()));
+            Assert.Throws<System.ArgumentException>(() =>
+                new TurnReplaySegment(
+                    1,
+                    "mara",
+                    new GameplayJournalEntry[]
+                    {
+                        new TurnEndedJournalEntry(
+                            2,
+                            new TurnEndRecord(1, "mara", "raider")),
+                        new TurnEndedJournalEntry(
+                            4,
+                            new TurnEndRecord(1, "mara", "raider")),
+                    }));
+            Assert.Throws<System.ArgumentException>(() =>
+                new TurnReplaySegment(
+                    1,
+                    "mara",
+                    new GameplayJournalEntry[]
+                    {
+                        new TurnEndedJournalEntry(
+                            1,
+                            new TurnEndRecord(2, "raider", "mara")),
+                    }));
+
+            var mara = new TurnReplaySegment(
+                1,
+                "mara",
+                new GameplayJournalEntry[]
+                {
+                    new TurnEndedJournalEntry(
+                        1,
+                        new TurnEndRecord(1, "mara", "raider")),
+                });
+            var raiderWithGap = new TurnReplaySegment(
+                2,
+                "raider",
+                new GameplayJournalEntry[]
+                {
+                    new TurnEndedJournalEntry(
+                        3,
+                        new TurnEndRecord(2, "raider", "mara")),
+                });
+
+            Assert.Throws<System.ArgumentException>(() =>
+                new TurnReplayWindow("raider", new[] { mara }));
+            Assert.Throws<System.ArgumentException>(() =>
+                new TurnReplayWindow(
+                    "mara",
+                    new[] { mara, raiderWithGap }));
+        }
+
+        [Test]
         public void EventTimelineUsesRecordedDurationsAndRoundTripsBoundaries()
         {
             var route = new MovementRouteRecord(
@@ -370,6 +429,9 @@ namespace GritGud.Domain.Tests.Gameplay
                         {
                             new ActionResolvedJournalEntry(1, action),
                             new DisplacementResolvedJournalEntry(2, record),
+                            new TurnEndedJournalEntry(
+                                3,
+                                new TurnEndRecord(1, "mara", "raider")),
                         }),
                 });
             var timeline = new TurnReplayEventTimeline(replay);
@@ -453,18 +515,21 @@ namespace GritGud.Domain.Tests.Gameplay
                         new GameplayJournalEntry[]
                         {
                             new DisplacementResolvedJournalEntry(1, record),
+                            new TurnEndedJournalEntry(
+                                2,
+                                new TurnEndRecord(1, "mara", "raider")),
                         }),
                 });
             GameplayCombatStateSnapshot endState = WithJournalSequence(
                 startState,
-                1,
+                2,
                 new[] { resulting });
             var states = new TurnReplayStateWindow(
                 replay,
                 new GameplayCombatStateCheckpoint(0, startState),
                 new[]
                 {
-                    new GameplayCombatStateCheckpoint(1, endState),
+                    new GameplayCombatStateCheckpoint(2, endState),
                 });
             var timeline = new TurnReplayEventTimeline(replay);
 
@@ -679,7 +744,13 @@ namespace GritGud.Domain.Tests.Gameplay
                     new TurnReplaySegment(
                         1,
                         "mara",
-                        new GameplayJournalEntry[] { committed }),
+                        new GameplayJournalEntry[]
+                        {
+                            committed,
+                            new TurnEndedJournalEntry(
+                                2,
+                                new TurnEndRecord(1, "mara", "raider")),
+                        }),
                 });
             var finalPoses = new Dictionary<string, GameplayActorPose>
             {

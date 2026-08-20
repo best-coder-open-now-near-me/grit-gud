@@ -13,6 +13,7 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplaySessionPresenter sessionPresenter;
         private readonly GameplayActionController actionController;
         private readonly GameplayAttackController attackController;
+        private readonly GameplayProjectileController projectileController;
         private readonly GameplayDisplacementController displacementController;
         private readonly GameplayEmergencyCycleSession emergencyCycle;
         private readonly GameplayPartyControlSession partyControl;
@@ -29,6 +30,7 @@ namespace GritGud.Presentation.Gameplay
             GameplaySessionPresenter sessionPresenter,
             GameplayActionController actionController,
             GameplayAttackController attackController,
+            GameplayProjectileController projectileController,
             GameplayDisplacementController displacementController,
             GameplayEmergencyCycleSession emergencyCycle,
             GameplayPartyControlSession partyControl,
@@ -46,6 +48,8 @@ namespace GritGud.Presentation.Gameplay
                 ?? throw new ArgumentNullException(nameof(actionController));
             this.attackController = attackController
                 ?? throw new ArgumentNullException(nameof(attackController));
+            this.projectileController = projectileController
+                ?? throw new ArgumentNullException(nameof(projectileController));
             this.displacementController = displacementController
                 ?? throw new ArgumentNullException(nameof(displacementController));
             this.emergencyCycle = emergencyCycle
@@ -226,6 +230,14 @@ namespace GritGud.Presentation.Gameplay
             GameplayEnemyRuntimeRegistry.Entry enemy,
             EnemyTacticalDecisionRecord decision)
         {
+            AttackDefinition attack = session.GetEquippedAttack(
+                enemy.Definition.Id);
+            if (attack?.Projectile != null)
+            {
+                ExecuteProjectileAttack(enemy, decision);
+                return;
+            }
+
             if (attackController.TryResolveActorAttack(
                     enemy.Definition.Id,
                     decision.Exposure,
@@ -247,6 +259,31 @@ namespace GritGud.Presentation.Gameplay
             actionController.PresentExternalStatus(
                 $"{enemy.Definition.Id} attack failed: {failure}.");
             EndActiveTurn(enemy, $"attack failed: {failure}");
+        }
+
+        private void ExecuteProjectileAttack(
+            GameplayEnemyRuntimeRegistry.Entry enemy,
+            EnemyTacticalDecisionRecord decision)
+        {
+            if (projectileController.TryLaunchActorAtTarget(
+                    enemy.Definition.Id,
+                    decision.TargetId,
+                    enemy.Presentation.ProjectileLaunchOrigin))
+            {
+                enemy.AttacksCommittedThisTurn++;
+                actionController.PresentExternalStatus(
+                    $"{enemy.Definition.Id} launched a projectile at "
+                    + $"{decision.TargetId}.");
+                decisionDelaySeconds = enemy.Presentation
+                    .PresentationDefinition.PostAttackDelaySeconds;
+                return;
+            }
+
+            ProjectileLaunchFailure failure =
+                projectileController.LastFailure;
+            actionController.PresentExternalStatus(
+                $"{enemy.Definition.Id} projectile launch failed: {failure}.");
+            EndActiveTurn(enemy, $"projectile launch failed: {failure}");
         }
 
         private void ExecuteDroneAttack(

@@ -138,7 +138,10 @@ namespace GritGud.Application.Gameplay
                 if (best == null
                     || visibleFraction > bestVisibleFraction
                     || (visibleFraction == bestVisibleFraction
-                        && distance < bestDistance))
+                        && distance < bestDistance)
+                    || (visibleFraction == bestVisibleFraction
+                        && distance == bestDistance
+                        && string.CompareOrdinal(targetId, best.TargetId) < 0))
                 {
                     best = detection;
                     bestVisibleFraction = visibleFraction;
@@ -164,7 +167,9 @@ namespace GritGud.Application.Gameplay
 
                 float distance = observer.DistanceTo(
                     gameplay.GetActor(candidateId).Pose.Position);
-                if (distance < nearestDistance)
+                if (distance < nearestDistance
+                    || (distance == nearestDistance
+                        && string.CompareOrdinal(candidateId, nearest) < 0))
                 {
                     nearest = candidateId;
                     nearestDistance = distance;
@@ -207,7 +212,11 @@ namespace GritGud.Application.Gameplay
                     || hitChance > best.HitChancePercent
                     || (hitChance == best.HitChancePercent && wounds > bestWounds)
                     || (hitChance == best.HitChancePercent && wounds == bestWounds
-                        && distance < bestDistance))
+                        && distance < bestDistance)
+                    || (hitChance == best.HitChancePercent
+                        && wounds == bestWounds
+                        && distance == bestDistance
+                        && string.CompareOrdinal(targetId, best.TargetId) < 0))
                 {
                     best = new EnemyTargetSelection(targetId, exposure, hitChance);
                     bestWounds = wounds;
@@ -250,7 +259,6 @@ namespace GritGud.Application.Gameplay
                 target.Pose.Position);
             AttackDefinition attack = gameplay.GetEquippedAttack(actorId);
             bool attackAffordable = attack != null
-                && attack.Projectile == null
                 && actor.TurnBudget.ActionPoints
                     >= attack.TurnCost.ActionPoints
                 && actor.TurnBudget.MovementOpportunity
@@ -481,7 +489,12 @@ namespace GritGud.Application.Gameplay
                     || (hitChance == bestHitChance
                         && visibleFraction == bestVisibleFraction
                         && rangeError == bestRangeError
-                        && cost < bestCost))
+                        && cost < bestCost)
+                    || (hitChance == bestHitChance
+                        && visibleFraction == bestVisibleFraction
+                        && rangeError == bestRangeError
+                        && cost == bestCost
+                        && CompareRoutes(option.Route, best?.Route) < 0))
                 {
                     best = option;
                     bestHitChance = hitChance;
@@ -492,6 +505,45 @@ namespace GritGud.Application.Gameplay
             }
 
             return best;
+        }
+
+        private static int CompareRoutes(
+            MovementRouteRecord left,
+            MovementRouteRecord right)
+        {
+            if (ReferenceEquals(left, right))
+                return 0;
+            if (left == null)
+                return -1;
+            if (right == null)
+                return 1;
+
+            int count = Math.Min(left.Points.Count, right.Points.Count);
+            for (int index = 0; index < count; index++)
+            {
+                int positionComparison = ComparePositions(
+                    left.Points[index],
+                    right.Points[index]);
+                if (positionComparison != 0)
+                    return positionComparison;
+            }
+
+            int pointCountComparison =
+                left.Points.Count.CompareTo(right.Points.Count);
+            if (pointCountComparison != 0)
+                return pointCountComparison;
+            return string.CompareOrdinal(left.ActorId, right.ActorId);
+        }
+
+        private static int ComparePositions(
+            GameplayPosition left,
+            GameplayPosition right)
+        {
+            int x = left.X.CompareTo(right.X);
+            if (x != 0)
+                return x;
+            int y = left.Y.CompareTo(right.Y);
+            return y != 0 ? y : left.Z.CompareTo(right.Z);
         }
 
         private static int CalculateHitChance(
