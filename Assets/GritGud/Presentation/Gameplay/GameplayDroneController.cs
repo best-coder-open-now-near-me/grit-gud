@@ -26,7 +26,6 @@ namespace GritGud.Presentation.Gameplay
         private GameplaySmokeFieldSession smoke;
         private GameplayDialogueLog dialogue;
         private Func<Vector2, bool> pointerBlocked;
-        private uint scenarioSeed;
         private string commandDroneId;
         private CommandMode mode;
 
@@ -53,7 +52,6 @@ namespace GritGud.Presentation.Gameplay
             dialogue = dialogueLog ?? throw new ArgumentNullException(
                 nameof(dialogueLog));
             pointerBlocked = isPointerBlocked;
-            scenarioSeed = randomSeed;
             var copied = new List<DroneDefinition>(definitions
                 ?? throw new ArgumentNullException(nameof(definitions)));
             drones = new GameplayDroneSession(gameplay, copied, destructibles);
@@ -195,9 +193,14 @@ namespace GritGud.Presentation.Gameplay
                     drone.DroneId,
                     exposure,
                     origin.DistanceTo(drone.Position),
-                    AttackResolutionRules.DeriveResolutionSeed(
-                        scenarioSeed,
-                        sequence));
+                    GameplayAddressedRandom.SampleUInt32(
+                        gameplay.RunIdentity,
+                        new GameplayTransitionIdentity(
+                            sequence,
+                            GameplaySemanticCapability.DirectAttack.ToString(),
+                            attackingActorId,
+                            drone.DroneId),
+                        "resolution"));
                 drones.CommitActorAttack(record);
                 RecordTransition(
                     new GameplayActorDroneAttackTransitionPayload(
@@ -228,23 +231,20 @@ namespace GritGud.Presentation.Gameplay
         {
             GameplayActorView observer = registry.GetActor(attackingActorId);
             GameObject targetRoot = roots[drone.DroneId];
-            GameplayPosition origin = ToGameplayPosition(
-                observer.Stance.FirstPersonEyePosition);
-            var samples = new List<TargetRegionSample>
+            GameplayActorSnapshot observerState = gameplay.GetActor(
+                attackingActorId);
+            GameplayPosition origin = observerState.Pose.Position;
+            foreach (TargetRegionSample sample in
+                ActorTargetProfileCatalog.CreateWorldSamples(
+                    observerState.Pose,
+                    observerState.IsPinned))
             {
-                DroneSample(TargetRegionId.Head, targetRoot.transform,
-                    new Vector3(0f, 0.2f, 0f)),
-                DroneSample(TargetRegionId.Torso, targetRoot.transform,
-                    Vector3.zero),
-                DroneSample(TargetRegionId.LeftArm, targetRoot.transform,
-                    new Vector3(-0.55f, 0f, 0f)),
-                DroneSample(TargetRegionId.RightArm, targetRoot.transform,
-                    new Vector3(0.55f, 0f, 0f)),
-                DroneSample(TargetRegionId.LeftLeg, targetRoot.transform,
-                    new Vector3(0f, 0f, -0.55f)),
-                DroneSample(TargetRegionId.RightLeg, targetRoot.transform,
-                    new Vector3(0f, 0f, 0.55f)),
-            };
+                if (sample.Id != TargetRegionId.Head) continue;
+                origin = sample.Center;
+                break;
+            }
+            IReadOnlyList<TargetRegionSample> samples =
+                GameplayDroneTargetProfile.CreateWorldSamples(drone);
             var query = new UnityTargetExposureQuery(
                 observer.Transform,
                 targetRoot.transform,
@@ -464,14 +464,6 @@ namespace GritGud.Presentation.Gameplay
             result = default;
             return false;
         }
-
-        private static TargetRegionSample DroneSample(
-            TargetRegionId id,
-            Transform root,
-            Vector3 localPosition) => new TargetRegionSample(
-                id,
-                ToGameplayPosition(root.TransformPoint(localPosition)),
-                0.15f);
 
         private static GameplayPosition ToGameplayPosition(Vector3 value) =>
             new GameplayPosition(value.x, value.y, value.z);

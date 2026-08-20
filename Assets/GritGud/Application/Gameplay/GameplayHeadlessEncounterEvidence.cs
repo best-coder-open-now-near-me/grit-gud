@@ -69,6 +69,37 @@ namespace GritGud.Application.Gameplay
                     forceBlocked: !withinSensor));
         }
 
+        public static DroneExposureSnapshot CaptureActorSightOfDrone(
+            GameplayCombatStateSnapshot state,
+            GameplayHeadlessSpatialEvidence spatial,
+            string observerActorId,
+            string droneId)
+        {
+            if (state == null) throw new ArgumentNullException(nameof(state));
+            if (spatial == null) throw new ArgumentNullException(nameof(spatial));
+            state.RequireCoverage(GameplayCombatStateCoverage.Drones);
+            GameplayActorSnapshot observer = state.Session.GetActor(
+                observerActorId);
+            TargetRegionSample observerHead = GetRegionSample(
+                observer,
+                TargetRegionId.Head);
+            DroneSnapshot drone = FindDrone(state.Drones, droneId);
+            TargetExposureSnapshot raster = GameplayTargetExposureRaster.Capture(
+                observerActorId,
+                observerHead.Center,
+                droneId,
+                GameplayDroneTargetProfile.CreateWorldSamples(drone),
+                new HeadlessExposureObstruction(
+                    state,
+                    spatial,
+                    forceBlocked: false));
+            return new DroneExposureSnapshot(
+                observerActorId,
+                droneId,
+                raster.VisibleSampleCount,
+                raster.TotalSampleCount);
+        }
+
         private static bool IsObscuredBySmoke(
             GameplayCombatStateSnapshot state,
             GameplayPosition origin,
@@ -199,5 +230,50 @@ namespace GritGud.Application.Gameplay
                 || IsObscuredBySmoke(state, origin, targetSurface);
         }
 
+    }
+
+    public static class GameplayDroneTargetProfile
+    {
+        private const float SampleRadius = 0.15f;
+
+        public static IReadOnlyList<TargetRegionSample> CreateWorldSamples(
+            DroneSnapshot drone)
+        {
+            var result = new List<TargetRegionSample>(6)
+            {
+                Sample(drone, TargetRegionId.Head,
+                    new GameplayPosition(0f, 0.2f, 0f)),
+                Sample(drone, TargetRegionId.Torso,
+                    new GameplayPosition(0f, 0f, 0f)),
+                Sample(drone, TargetRegionId.LeftArm,
+                    new GameplayPosition(-0.55f, 0f, 0f)),
+                Sample(drone, TargetRegionId.RightArm,
+                    new GameplayPosition(0.55f, 0f, 0f)),
+                Sample(drone, TargetRegionId.LeftLeg,
+                    new GameplayPosition(0f, 0f, -0.55f)),
+                Sample(drone, TargetRegionId.RightLeg,
+                    new GameplayPosition(0f, 0f, 0.55f)),
+            };
+            return result.AsReadOnly();
+        }
+
+        private static TargetRegionSample Sample(
+            DroneSnapshot drone,
+            TargetRegionId id,
+            GameplayPosition local)
+        {
+            double radians = drone.FacingDegrees * Math.PI / 180d;
+            double cosine = Math.Cos(radians);
+            double sine = Math.Sin(radians);
+            float x = (float)((cosine * local.X) + (sine * local.Z));
+            float z = (float)((-sine * local.X) + (cosine * local.Z));
+            return new TargetRegionSample(
+                id,
+                new GameplayPosition(
+                    drone.Position.X + x,
+                    drone.Position.Y + local.Y,
+                    drone.Position.Z + z),
+                SampleRadius);
+        }
     }
 }

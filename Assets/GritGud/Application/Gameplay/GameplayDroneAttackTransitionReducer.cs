@@ -108,7 +108,12 @@ namespace GritGud.Application.Gameplay
             mutation.ReplaceActor(GameplayCanonicalStateMutation.CopyActor(
                 controller,
                 budget: action.ResultingBudget));
-            ApplyConsequence(state, mutation, payload.SubjectKind, action);
+            ApplyConsequence(
+                state,
+                mutation,
+                transition.Identity,
+                payload.SubjectKind,
+                action);
             GameplayCombatStateSnapshot resulting = mutation.Build();
             return new GameplayReductionResult(
                 state,
@@ -125,6 +130,7 @@ namespace GritGud.Application.Gameplay
         private static void ApplyConsequence(
             GameplayCombatStateSnapshot state,
             GameplayCanonicalStateMutation mutation,
+            GameplayTransitionIdentity transitionIdentity,
             GameplaySemanticSubjectKind targetKind,
             DroneAttackRecord action)
         {
@@ -132,6 +138,17 @@ namespace GritGud.Application.Gameplay
             {
                 case GameplaySemanticSubjectKind.Actor
                     when action.Consequence is AttackResolutionRecord resolution:
+                    if (resolution.Sequence != transitionIdentity.Sequence
+                        || !string.Equals(
+                            resolution.AttackerId,
+                            action.DroneId,
+                            StringComparison.Ordinal)
+                        || !string.Equals(
+                            resolution.TargetId,
+                            action.TargetId,
+                            StringComparison.Ordinal))
+                        throw new InvalidOperationException(
+                            "Drone attack resolution has a different causal identity.");
                     GameplayActorSnapshot target = state.Session.GetActor(
                         action.TargetId);
                     if (!target.Wounds.HasSameState(
@@ -159,6 +176,9 @@ namespace GritGud.Application.Gameplay
                     return;
                 case GameplaySemanticSubjectKind.DestructibleProp
                     when action.Consequence is DestructibleDamageRecord damage:
+                    if (damage.Sequence != transitionIdentity.Sequence)
+                        throw new InvalidOperationException(
+                            "Drone prop damage has a different causal identity.");
                     state.RequireCoverage(
                         GameplayCombatStateCoverage.Destructibles);
                     DestructiblePropSnapshot prop = mutation.GetDestructible(

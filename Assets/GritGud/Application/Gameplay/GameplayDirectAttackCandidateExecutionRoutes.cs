@@ -175,7 +175,7 @@ namespace GritGud.Application.Gameplay
                 : definition.GetInventoryItem(actor.EquippedItemId)?.Attack;
         }
 
-        private static DestructibleDamageRecord PrepareDirectFireDamage(
+        public static DestructibleDamageRecord PrepareDirectFireDamage(
             GameplayCombatStateSnapshot state,
             AttackDefinition attack,
             string targetId,

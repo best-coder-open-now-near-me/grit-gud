@@ -68,7 +68,7 @@ internal static class SimulationChecks
 
     private static void VerifyDroneHeadlessTrajectory()
     {
-        GameplaySession gameplay = CreateGameplay(CreateRifle());
+        GameplaySession gameplay = CreateHostileGameplay(CreateRifle());
         Require(gameplay.BeginEncounter(),
             "Drone fixture encounter did not begin.");
         GameplayCombatStateSnapshot captured = GameplayCombatStateCapture.Capture(
@@ -82,7 +82,7 @@ internal static class SimulationChecks
             5f,
             new ActionCost(1, 0f, ActionMobility.Mobile),
             new DroneSensorDefinition(16f, 120f),
-            CreateRifle());
+            CreateDroneRifle());
         Require(DroneSensorRules.CanObserve(
                 droneDefinition.CreateInitialSnapshot(),
                 new GameplayPosition(0f, 2f, 8f))
@@ -93,20 +93,61 @@ internal static class SimulationChecks
                 droneDefinition.CreateInitialSnapshot(),
                 new GameplayPosition(0f, 2f, 17f)),
             "Drone perception did not enforce its canonical range and facing cone.");
+        var sensorLevel = new LevelDocument
+        {
+            levelId = "drone-sensor-fixture",
+            schemaVersion = LevelDocument.CurrentSchemaVersion,
+            entities = new List<LevelEntity>
+            {
+                new LevelEntity
+                {
+                    id = "drone-target-prop",
+                    archetypeId = "prop.crate.standard",
+                    transform = new LevelTransformData(
+                        new Float3Data(-3f, 0f, 4f),
+                        yawDegrees: 0f),
+                    coverVolumes = new List<CoverVolumeData>
+                    {
+                        new CoverVolumeData
+                        {
+                            id = "primary",
+                            localCenter = new Float3Data(0f, 1f, 0f),
+                            size = new Float3Data(1f, 2f, 1f),
+                        },
+                    },
+                    destructible = new DestructibleInstanceData
+                    {
+                        enabled = true,
+                        initialState = "intact",
+                        integrity = 4f,
+                        surfaceId = "surface.wood",
+                    },
+                },
+            },
+        };
+        sensorLevel.Normalize();
+        var targetProp = new DestructiblePropSnapshot(
+            "drone-target-prop",
+            DestructiblePropState.Intact,
+            maximumIntegrity: 4f,
+            remainingIntegrity: 4f,
+            new GameplayPropPose(
+                new GameplayPosition(-3f, 0f, 4f),
+                pitchDegrees: 0f,
+                yawDegrees: 0f,
+                rollDegrees: 0f),
+            DestructiblePropPosture.Upright,
+            fractureChunkCount: 0,
+            detachedFractureChunks: 0UL);
         var initial = new GameplayCombatStateSnapshot(
             captured.Session,
             coverage: GameplayCombatStateCoverage.Session
                 | GameplayCombatStateCoverage.Drones
                 | GameplayCombatStateCoverage.Destructibles
                 | GameplayCombatStateCoverage.SmokeFields,
-            destructibles: Array.Empty<DestructiblePropSnapshot>(),
+            destructibles: new[] { targetProp },
             smokeFields: Array.Empty<SmokeFieldSnapshot>(),
             drones: new[] { droneDefinition.CreateInitialSnapshot() });
-        var sensorLevel = new LevelDocument
-        {
-            levelId = "drone-sensor-fixture",
-            schemaVersion = 1,
-        };
         var sensorSpatial = new GameplayHeadlessSpatialEvidence(
             sensorLevel,
             new SpatialContentIdentity(
@@ -126,7 +167,7 @@ internal static class SimulationChecks
                 | GameplayCombatStateCoverage.Drones
                 | GameplayCombatStateCoverage.Destructibles
                 | GameplayCombatStateCoverage.SmokeFields,
-            destructibles: Array.Empty<DestructiblePropSnapshot>(),
+            destructibles: new[] { targetProp },
             smokeFields: Array.Empty<SmokeFieldSnapshot>(),
             drones: new[]
             {
@@ -160,13 +201,188 @@ internal static class SimulationChecks
                 new[] { droneAttackInput });
         var droneCandidates = new GameplayTacticalCandidateBuilder(
             droneCapabilities);
-        Require(droneCandidates.Build(
-                    initial,
-                    new[] { droneAttackInput }).Count == 1
+        IReadOnlyList<GameplayCandidate> forwardAttackCandidates =
+            droneCandidates.Build(initial, new[] { droneAttackInput });
+        Require(forwardAttackCandidates.Count == 1
             && droneCandidates.Build(
                     reversed,
                     new[] { droneAttackInput }).Count == 0,
             "Drone candidate generation ignored its canonical sensor envelope.");
+        var droneAttackRoutes = new GameplayCandidateExecutionRouteRegistry(
+            droneCapabilities);
+        droneAttackRoutes.Register(
+            new GameplayDroneAttackCandidateExecutionRoute(
+                gameplay.Scenario,
+                sensorSpatial));
+        var droneAttackContext = new GameplayDecisionContext(
+            initial,
+            GameplayObservationSnapshot.FullState("player", initial));
+        GameplayExecutableCandidateEvaluation droneAttackEvaluation =
+            droneAttackRoutes.Evaluate(
+                droneAttackContext,
+                forwardAttackCandidates[0]);
+        Require(droneAttackEvaluation.IsLegal
+            && droneAttackEvaluation.Evidence.Count == 1,
+            "Drone-to-actor candidate was not legal and evidence-backed: "
+                + droneAttackEvaluation.FailureCode);
+        var droneAttackRuntime = new GameplaySimulationRuntime(
+            new GameplayExecutionIdentity(
+                new GameplayContentIdentity(
+                    gameplay.Scenario.Id,
+                    scenarioSchemaVersion: 1,
+                    rulesSchemaVersion: 1,
+                    new string('4', 64)),
+                new SpatialContentIdentity(
+                    sensorLevel.levelId,
+                    sensorLevel.schemaVersion,
+                    evidenceAlgorithmVersion: 1,
+                    new string('d', 64)),
+                gameplay.RunIdentity),
+            initial,
+            reducers,
+            droneCapabilities);
+        droneAttackRuntime.Execute(droneAttackRoutes.Prepare(
+            droneAttackContext,
+            droneAttackEvaluation));
+        Require(droneAttackRuntime.CurrentState.Session.GetActor("player")
+                .TurnBudget.ActionPoints
+                < initial.Session.GetActor("player").TurnBudget.ActionPoints
+            && GameplayExactReplay.Verify(
+                initial,
+                droneAttackRuntime.Trajectory,
+                reducers).IsExact,
+            "Drone-to-actor candidate did not reduce and replay exactly.");
+
+        var dronePropInput = new GameplayReachableInput(
+            GameplayReachableInputKind.CharacterAbility,
+            "fixture.drone.attack-prop",
+            "player",
+            GameplayCapabilityProfiles.DroneAttack(
+                droneDefinition.Attack,
+                GameplaySemanticSubjectKind.DestructibleProp),
+            sourceSubjectId: droneDefinition.Id);
+        GameplayCapabilityRegistry dronePropCapabilities =
+            GameplayCurrentCapabilityCatalog.Create(
+                reducers,
+                new[] { dronePropInput });
+        IReadOnlyList<GameplayCandidate> dronePropCandidates =
+            new GameplayTacticalCandidateBuilder(dronePropCapabilities).Build(
+                initial,
+                new[] { dronePropInput });
+        Require(dronePropCandidates.Count == 1,
+            "Drone-to-prop candidate generation omitted the tactical prop.");
+        var dronePropRoutes = new GameplayCandidateExecutionRouteRegistry(
+            dronePropCapabilities);
+        dronePropRoutes.Register(
+            new GameplayDroneAttackCandidateExecutionRoute(
+                gameplay.Scenario,
+                sensorSpatial));
+        GameplayExecutableCandidateEvaluation dronePropEvaluation =
+            dronePropRoutes.Evaluate(
+                droneAttackContext,
+                dronePropCandidates[0]);
+        Require(dronePropEvaluation.IsLegal
+            && dronePropEvaluation.Evidence.Count == 1,
+            "Drone-to-prop candidate was not legal and evidence-backed: "
+                + dronePropEvaluation.FailureCode);
+        var dronePropRuntime = new GameplaySimulationRuntime(
+            new GameplayExecutionIdentity(
+                new GameplayContentIdentity(
+                    gameplay.Scenario.Id,
+                    scenarioSchemaVersion: 1,
+                    rulesSchemaVersion: 1,
+                    new string('b', 64)),
+                new SpatialContentIdentity(
+                    sensorLevel.levelId,
+                    sensorLevel.schemaVersion,
+                    evidenceAlgorithmVersion: 1,
+                    new string('d', 64)),
+                gameplay.RunIdentity),
+            initial,
+            reducers,
+            dronePropCapabilities);
+        dronePropRuntime.Execute(dronePropRoutes.Prepare(
+            droneAttackContext,
+            dronePropEvaluation));
+        Require(dronePropRuntime.CurrentState.Destructibles[0]
+                .RemainingIntegrity < targetProp.RemainingIntegrity
+            && GameplayExactReplay.Verify(
+                initial,
+                dronePropRuntime.Trajectory,
+                reducers).IsExact,
+            "Drone-to-prop candidate did not reduce and replay exactly.");
+
+        Require(gameplay.TryEndTurn("player", out _),
+            "Actor-drone route could not advance to the hostile actor turn.");
+        GameplayCombatStateSnapshot hostileTurnSession =
+            GameplayCombatStateCapture.Capture(gameplay);
+        var hostileTurn = new GameplayCombatStateSnapshot(
+            hostileTurnSession.Session,
+            coverage: GameplayCombatStateCoverage.Session
+                | GameplayCombatStateCoverage.Drones
+                | GameplayCombatStateCoverage.Destructibles
+                | GameplayCombatStateCoverage.SmokeFields,
+            destructibles: new[] { targetProp },
+            smokeFields: Array.Empty<SmokeFieldSnapshot>(),
+            drones: new[] { droneDefinition.CreateInitialSnapshot() });
+        var actorDroneInput = new GameplayReachableInput(
+            GameplayReachableInputKind.EnemyDecision,
+            "fixture.enemy.attack-drone",
+            "enemy",
+            GameplayCapabilityProfiles.AttackDrone(CreateRifle()));
+        GameplayCapabilityRegistry actorDroneCapabilities =
+            GameplayCurrentCapabilityCatalog.Create(
+                reducers,
+                new[] { actorDroneInput });
+        IReadOnlyList<GameplayCandidate> actorDroneCandidates =
+            new GameplayTacticalCandidateBuilder(actorDroneCapabilities).Build(
+                hostileTurn,
+                new[] { actorDroneInput });
+        Require(actorDroneCandidates.Count == 1,
+            "Actor-to-drone candidate generation omitted the damageable drone.");
+        var actorDroneRoutes = new GameplayCandidateExecutionRouteRegistry(
+            actorDroneCapabilities);
+        actorDroneRoutes.Register(
+            new GameplayActorDroneAttackCandidateExecutionRoute(
+                gameplay.Scenario,
+                sensorSpatial));
+        var actorDroneContext = new GameplayDecisionContext(
+            hostileTurn,
+            GameplayObservationSnapshot.FullState("enemy", hostileTurn));
+        GameplayExecutableCandidateEvaluation actorDroneEvaluation =
+            actorDroneRoutes.Evaluate(
+                actorDroneContext,
+                actorDroneCandidates[0]);
+        Require(actorDroneEvaluation.IsLegal
+            && actorDroneEvaluation.Evidence.Count == 1,
+            "Actor-to-drone candidate was not legal and evidence-backed: "
+                + actorDroneEvaluation.FailureCode);
+        var actorDroneRuntime = new GameplaySimulationRuntime(
+            new GameplayExecutionIdentity(
+                new GameplayContentIdentity(
+                    gameplay.Scenario.Id,
+                    scenarioSchemaVersion: 1,
+                    rulesSchemaVersion: 1,
+                    new string('5', 64)),
+                new SpatialContentIdentity(
+                    sensorLevel.levelId,
+                    sensorLevel.schemaVersion,
+                    evidenceAlgorithmVersion: 1,
+                    new string('d', 64)),
+                gameplay.RunIdentity),
+            hostileTurn,
+            reducers,
+            actorDroneCapabilities);
+        actorDroneRuntime.Execute(actorDroneRoutes.Prepare(
+            actorDroneContext,
+            actorDroneEvaluation));
+        Require(actorDroneRuntime.CurrentState.Session.LastActionSequence
+                == hostileTurn.Session.LastActionSequence + 1L
+            && GameplayExactReplay.Verify(
+                hostileTurn,
+                actorDroneRuntime.Trajectory,
+                reducers).IsExact,
+            "Actor-to-drone candidate did not reduce and replay exactly.");
         var droneMoveInput = new GameplayReachableInput(
             GameplayReachableInputKind.MovementControl,
             "fixture.drone.move",
@@ -249,7 +465,7 @@ internal static class SimulationChecks
                 new TargetRegionExposure(TargetRegionId.Torso, 1, 1),
             });
         AttackResolutionRecord resolution = AttackResolutionRules.Resolve(
-            1L,
+            2L,
             7u,
             exposure,
             droneDefinition.Attack.AccuracyDecay,
@@ -327,7 +543,7 @@ internal static class SimulationChecks
                 new TargetRegionExposure(TargetRegionId.Torso, 1, 1),
             });
         AttackResolutionRecord liveResolution = AttackResolutionRules.Resolve(
-            1L,
+            2L,
             7u,
             liveExposure,
             droneDefinition.Attack.AccuracyDecay,
@@ -376,7 +592,14 @@ internal static class SimulationChecks
             liveDroneTarget.DroneId,
             droneExposure,
             distance: 3f,
-            resolutionSeed: 9u);
+            resolutionSeed: GameplayAddressedRandom.SampleUInt32(
+                actualAttack.Session.RunIdentity,
+                new GameplayTransitionIdentity(
+                    actualAttack.Session.LastActionSequence + 1L,
+                    GameplaySemanticCapability.DirectAttack.ToString(),
+                    "player",
+                    liveDroneTarget.DroneId),
+                "resolution"));
         var incomingPayload = new GameplayActorDroneAttackTransitionPayload(
             CreateRifle(),
             incoming);
@@ -396,7 +619,9 @@ internal static class SimulationChecks
         Require(GameplayCombatStateDiffer.Compare(
                 predictedIncoming,
                 actualIncoming).Count == 0
-            && actualIncoming.Drones[0].RemainingIntegrity == 4f,
+            && actualIncoming.Drones[0].RemainingIntegrity
+                == (incoming.Damage?.Resulting.RemainingIntegrity
+                    ?? liveDroneTarget.RemainingIntegrity),
             "Incoming drone damage diverged across live and pure reduction.");
     }
 
@@ -556,13 +781,19 @@ internal static class SimulationChecks
                 {
                     new TargetRegionExposure(TargetRegionId.Torso, 1, 1),
                 });
-            long attackSequence = gameplay.LastActionSequence + 1L;
+            long attackSequence = checked(
+                predicted.Session.LastTransitionSequence + 1L);
             AttackResolutionRecord droneResolution =
                 AttackResolutionRules.Resolve(
                     attackSequence,
-                    AttackResolutionRules.DeriveResolutionSeed(
-                        assembly.RandomSeed,
-                        attackSequence),
+                    GameplayAddressedRandom.SampleUInt32(
+                        gameplay.RunIdentity,
+                        new GameplayTransitionIdentity(
+                            attackSequence,
+                            GameplaySemanticCapability.DirectAttack.ToString(),
+                            droneDefinition.ControllerActorId,
+                            droneTarget.ActorId),
+                        "resolution"),
                     droneExposure,
                     droneDefinition.Attack.AccuracyDecay,
                     droneDestination.DistanceTo(droneTarget.Pose.Position),
@@ -1120,6 +1351,39 @@ internal static class SimulationChecks
             rifle);
         var scenario = new ScenarioDefinition(
             "simulation-check",
+            new ScenarioTimingDefinition(1f),
+            new[] { player, enemy },
+            Array.Empty<ScenarioObjectiveDefinition>());
+        return new GameplaySession(scenario, scenarioSeed: 0xC0FFEEu);
+    }
+
+    private static GameplaySession CreateHostileGameplay(
+        AttackDefinition rifle)
+    {
+        var player = new ScenarioActorDefinition(
+            "player",
+            10,
+            new GameplayActorPose(new GameplayPosition(0f, 0f, 0f), 0f),
+            new TurnBudget(4, 8f),
+            rifle,
+            combat: new ActorCombatDefinition(
+                "player",
+                new[] { "raider" },
+                maximumWounds: 2));
+        var enemy = new ScenarioActorDefinition(
+            "enemy",
+            0,
+            new GameplayActorPose(
+                new GameplayPosition(1f, 0f, 5f),
+                180f),
+            new TurnBudget(4, 8f),
+            rifle,
+            combat: new ActorCombatDefinition(
+                "raider",
+                new[] { "player" },
+                maximumWounds: 2));
+        var scenario = new ScenarioDefinition(
+            "hostile-simulation-check",
             new ScenarioTimingDefinition(1f),
             new[] { player, enemy },
             Array.Empty<ScenarioObjectiveDefinition>());
@@ -3392,6 +3656,7 @@ internal static class SimulationChecks
                 runtime.Trajectory,
                 reducers).IsExact,
             "Direct-fire prop candidate did not reduce and replay exactly.");
+
     }
 
     private static void VerifyConcreteGroundedMoveCandidateRoute()
@@ -4555,6 +4820,17 @@ internal static class SimulationChecks
         new ActionCost(1, 0f, ActionMobility.Set),
         woundMovementPenalty: 2f,
         accuracyDecay: AccuracyDecayDefinition.None,
+        directVehicleIntegrityDamage: 1f);
+
+    private static AttackDefinition CreateDroneRifle() => new AttackDefinition(
+        "attack.drone-rifle",
+        "Fire drone rifle",
+        new ActionCost(1, 0f, ActionMobility.Set),
+        woundMovementPenalty: 1f,
+        accuracyDecay: AccuracyDecayDefinition.None,
+        directFireDamage: new DirectFireDamageDefinition(
+            "damage.drone-ballistic",
+            baseIntegrityDamage: 1f),
         directVehicleIntegrityDamage: 1f);
 
     private static bool ContainsActor(

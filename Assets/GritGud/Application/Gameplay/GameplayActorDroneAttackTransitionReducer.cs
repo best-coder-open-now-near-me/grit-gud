@@ -74,10 +74,22 @@ namespace GritGud.Application.Gameplay
                     "Only the idle active actor can attack a drone.");
             GameplayActorSnapshot attacker = session.GetActor(action.AttackerId);
             if (attacker.IsIncapacitated
+                || attacker.IsPinned
                 || !BudgetsMatch(attacker.TurnBudget, action.PreviousBudget)
                 || action.Sequence != session.LastActionSequence + 1L)
                 throw new InvalidOperationException(
                     "Actor-drone attack starts from stale actor state.");
+            uint expectedSeed = GameplayAddressedRandom.SampleUInt32(
+                session.RunIdentity,
+                new GameplayTransitionIdentity(
+                    action.Sequence,
+                    GameplaySemanticCapability.DirectAttack.ToString(),
+                    action.AttackerId,
+                    action.DroneId),
+                "resolution");
+            if (action.ResolutionSeed != expectedSeed)
+                throw new InvalidOperationException(
+                    "Actor-drone attack seed does not match its canonical action identity.");
             DroneSnapshot drone = FindDrone(state.Drones, action.DroneId);
             if (!drone.IsOperational)
                 throw new InvalidOperationException(

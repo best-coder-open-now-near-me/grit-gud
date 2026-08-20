@@ -253,12 +253,20 @@ namespace GritGud.Application.Gameplay
                     if (subject.Subject.Kind
                             == GameplaySemanticSubjectKind.Vehicle
                         && subject.Affords(GameplayTacticalAffordance.Damage))
-                        return input.Profile.GetTrait("consequence")
-                            == "drone-integrity";
+                        return !string.Equals(
+                                input.SourceSubjectId,
+                                subject.Subject.Id,
+                                StringComparison.Ordinal)
+                            && (input.Profile.GetTrait("consequence")
+                                    == "drone-integrity"
+                                || input.Profile.GetTrait("consequence")
+                                    == "vehicle-integrity");
                     if (subject.Subject.Kind
                             == GameplaySemanticSubjectKind.Vehicle
-                        && input.Profile.GetTrait("consequence")
-                            == "drone-integrity")
+                        && (input.Profile.GetTrait("consequence")
+                                == "drone-integrity"
+                            || input.Profile.GetTrait("consequence")
+                                == "vehicle-integrity"))
                         return false;
                     return !string.Equals(
                             input.ActorId,

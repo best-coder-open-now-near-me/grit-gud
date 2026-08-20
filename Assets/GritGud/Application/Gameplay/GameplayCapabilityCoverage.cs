@@ -409,13 +409,14 @@ namespace GritGud.Application.Gameplay
                             drone.Attack,
                             GameplaySemanticSubjectKind.DestructibleProp),
                         sourceSubjectId: drone.Id);
-                Add(result, GameplayReachableInputKind.EquippedAttack,
-                    drone.Id + ".attack->Vehicle",
-                    drone.ControllerActorId,
-                    GameplayCapabilityProfiles.DroneAttack(
-                        drone.Attack,
-                        GameplaySemanticSubjectKind.Vehicle),
-                    sourceSubjectId: drone.Id);
+                if (assembly.Drones.Count > 1)
+                    Add(result, GameplayReachableInputKind.EquippedAttack,
+                        drone.Id + ".attack->Vehicle",
+                        drone.ControllerActorId,
+                        GameplayCapabilityProfiles.DroneAttack(
+                            drone.Attack,
+                            GameplaySemanticSubjectKind.Vehicle),
+                        sourceSubjectId: drone.Id);
             }
             if (assembly.Drones.Count > 0)
             {
