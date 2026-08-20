@@ -61,64 +61,43 @@ namespace GritGud.Presentation.Gameplay
             CancellationToken token = owner.Token;
             try
             {
-                await Task.Yield();
-                token.ThrowIfCancellationRequested();
-                TextAsset asset = Resources.Load<TextAsset>(ArtifactResource);
-                if (asset == null)
-                    throw new InvalidOperationException(
-                        "First-sim artifact resource was not found.");
-                GameplayBattleArtifact expected;
-                try
-                {
-                    expected = GameplayBattleArtifactCodec.Read(asset.text);
-                }
-                finally
-                {
-                    Resources.UnloadAsset(asset);
-                }
-                GameplayExecutionIdentity identity = expected.Content
-                    .ExecutionIdentity;
-                GameplayExecutionIdentity liveIdentity = liveRuntime
-                    .ExecutionIdentity;
-                if (!liveIdentity.Run.HasSameIdentity(identity.Run)
-                    || !string.Equals(
-                        assembly.Scenario.Id,
-                        identity.Gameplay.ScenarioId,
-                        StringComparison.Ordinal)
-                    || !string.Equals(
-                        level.levelId,
-                        identity.Spatial.LevelId,
-                        StringComparison.Ordinal))
+                GameplayBattleReplayPreparationResult<
+                    GameplayBattleArtifact,
+                    GameplaySemanticReplayTimeline> result =
+                    await GameplayBattleReplayPreparationWorkflow
+                        .PrepareAsync(
+                            LoadArtifact,
+                            expected => MatchesLoadedContent(
+                                assembly,
+                                level,
+                                liveRuntime,
+                                expected),
+                            () => GameplayHeadlessBattleStateFactory.Create(
+                                assembly,
+                                level),
+                            (initial, expected, cancellationToken) =>
+                                RunBattleAsync(
+                                    assembly,
+                                    level,
+                                    initial,
+                                    expected.Content.ExecutionIdentity,
+                                    cancellationToken),
+                            GameplayBattleArtifactVerifier.VerifyRun,
+                            token);
+                if (!result.IsReady)
                 {
                     if (ReferenceEquals(cancellation, owner))
                         status = "FIRST SIM UNAVAILABLE FOR THIS SCENARIO";
                     return;
                 }
-                GameplayCombatStateSnapshot initial =
-                    GameplayHeadlessBattleStateFactory.Create(assembly, level);
-                var runner = new GameplayBattleRunner(
-                    assembly,
-                    level,
-                    identity,
-                    logicalGuardPolicy:
-                        new GameplayExecutionLogicalGuardPolicy(
-                            maximumTransitions: 2000,
-                            maximumRepeatedMaterialStates: 4,
-                            maximumNoProgressTurns: 4),
-                    workerBoundary:
-                        new GameplayCooperativeDecisionWorkerBoundary());
-                GameplayBattleRunResult run = await runner.RunAsync(
-                    initial,
-                    token);
-                token.ThrowIfCancellationRequested();
-                GameplaySemanticReplayTimeline timeline =
-                    GameplayBattleArtifactVerifier.VerifyRun(run, expected);
                 if (!ReferenceEquals(cancellation, owner))
                     return;
-                hud.SetVerifiedExternalReplay(timeline, expected);
-                GameplayBattleScoreboard score = expected.Content.Scoreboard;
+                hud.SetVerifiedExternalReplay(result.Replay, result.Artifact);
+                GameplayBattleScoreboard score = result.Artifact.Content
+                    .Scoreboard;
                 status = "FIRST SIM READY — "
-                    + expected.Content.Terminal.Kind.ToString().ToUpperInvariant()
+                    + result.Artifact.Content.Terminal.Kind.ToString()
+                        .ToUpperInvariant()
                     + " · " + score.TurnsCompleted + " TURNS — CLICK WATCH";
             }
             catch (OperationCanceledException)
@@ -140,6 +119,64 @@ namespace GritGud.Presentation.Gameplay
                     cancellation = null;
                 owner.Dispose();
             }
+        }
+
+        private static GameplayBattleArtifact LoadArtifact()
+        {
+            TextAsset asset = Resources.Load<TextAsset>(ArtifactResource);
+            if (asset == null)
+                throw new InvalidOperationException(
+                    "First-sim artifact resource was not found.");
+            try
+            {
+                return GameplayBattleArtifactCodec.Read(asset.text);
+            }
+            finally
+            {
+                Resources.UnloadAsset(asset);
+            }
+        }
+
+        private static bool MatchesLoadedContent(
+            GameplayScenarioAssembly assembly,
+            LevelDocument level,
+            GameplayLiveSessionRuntime liveRuntime,
+            GameplayBattleArtifact expected)
+        {
+            GameplayExecutionIdentity identity = expected.Content
+                .ExecutionIdentity;
+            GameplayExecutionIdentity liveIdentity = liveRuntime
+                .ExecutionIdentity;
+            return liveIdentity.Run.HasSameIdentity(identity.Run)
+                && string.Equals(
+                    assembly.Scenario.Id,
+                    identity.Gameplay.ScenarioId,
+                    StringComparison.Ordinal)
+                && string.Equals(
+                    level.levelId,
+                    identity.Spatial.LevelId,
+                    StringComparison.Ordinal);
+        }
+
+        private static Task<GameplayBattleRunResult> RunBattleAsync(
+            GameplayScenarioAssembly assembly,
+            LevelDocument level,
+            GameplayCombatStateSnapshot initial,
+            GameplayExecutionIdentity resultIdentity,
+            CancellationToken cancellationToken)
+        {
+            var runner = new GameplayBattleRunner(
+                assembly,
+                level,
+                resultIdentity,
+                logicalGuardPolicy:
+                    new GameplayExecutionLogicalGuardPolicy(
+                        maximumTransitions: 2000,
+                        maximumRepeatedMaterialStates: 4,
+                        maximumNoProgressTurns: 4),
+                workerBoundary:
+                    new GameplayCooperativeDecisionWorkerBoundary());
+            return runner.RunAsync(initial, cancellationToken);
         }
 
         private void OnGUI()
