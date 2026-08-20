@@ -865,6 +865,19 @@ progression model.
 5. After the contract is stable, decide which generated roster families are
    retained as regression cases and which are disposable battle branches.
 
+## Pre-release human pacing and battle review
+
+- Add a human-facing dead-time compression policy for live AI turns and visual
+  battle review. Skip or accelerate intervals with no meaningful movement,
+  decision, reaction opportunity, threat change, or visible consequence, and
+  provide a clear speed/skip control for the remaining playback. Preserve the
+  complete authoritative transition order, causal timing, replay coordinates,
+  and scoreboard data underneath; this is presentation-time compression, not
+  simulation-time deletion. Validate that compression never hides a player
+  reaction window, awareness change, projectile arrival, fire/world-state
+  change, or other tactically relevant event, and that uncompressed playback
+  remains available for debugging.
+
 ## 8. Continuous delivery loop
 
 - Build WebGL previews and Windows artifacts from repository changes.
