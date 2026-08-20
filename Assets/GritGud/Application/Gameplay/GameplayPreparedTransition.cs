@@ -289,7 +289,8 @@ namespace GritGud.Application.Gameplay
                 actor.PinState,
                 actor.EmergencyActionPointAllowance,
                 actor.SuspendedTurnBudget,
-                attacksCommittedThisTurn);
+                attacksCommittedThisTurn,
+                actor.Ammunition);
         }
 
         private static GameplayActorPose FaceToward(

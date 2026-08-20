@@ -38,7 +38,8 @@ namespace GritGud.Application.Gameplay
                         item.attackCapability),
                     CreateConsumablePowerDefinition(item),
                     ResolveOccupiedHands(item),
-                    item.quantity));
+                    item.quantity,
+                    CreateAmmunitionDefinition(item.ammunition)));
             }
 
             return definitions.AsReadOnly();
@@ -108,6 +109,7 @@ namespace GritGud.Application.Gameplay
                     GameplayActorCombatAssembler.ValidateAttack(
                         actor.id,
                         item.attackCapability);
+                    ValidateAmmunition(actor.id, item);
                 }
                 else
                 {
@@ -122,8 +124,13 @@ namespace GritGud.Application.Gameplay
                             || !item.attackCapability.enabled,
                         $"Actor '{actor.id}' consumable '{item.id}' cannot author a weapon attack.");
                     ValidateConsumablePower(actor.id, item);
+                    Require(
+                        item.ammunition == null,
+                        $"Actor '{actor.id}' consumable '{item.id}' cannot author ammunition.");
                 }
             }
+
+            ValidateAmmunitionReserves(actor, inventory);
 
             string initiallyEquipped = NormalizeOptionalId(
                 actor.initiallyEquippedItemId);
@@ -330,6 +337,112 @@ namespace GritGud.Application.Gameplay
             Require(
                 data.minimumObscuredPath <= data.radius * 2f,
                 $"Actor '{actorId}' consumable '{itemId}' minimum obscured path cannot exceed its diameter.");
+        }
+
+        internal static IReadOnlyList<AmmunitionReserveDefinition>
+            CreateAmmunitionReserves(ScenarioActorContentData actor)
+        {
+            var result = new List<AmmunitionReserveDefinition>();
+            foreach (ScenarioAmmunitionReserveData reserve in
+                actor.ammunitionReserves
+                    ?? new List<ScenarioAmmunitionReserveData>())
+            {
+                result.Add(new AmmunitionReserveDefinition(
+                    reserve.ammoTypeId,
+                    reserve.rounds));
+            }
+            return result.AsReadOnly();
+        }
+
+        private static WeaponAmmunitionDefinition CreateAmmunitionDefinition(
+            ScenarioWeaponAmmunitionData data)
+        {
+            if (data == null) return null;
+            ScenarioActionCostData reloadCost = data.reloadCost
+                ?? throw new InvalidOperationException(
+                    "Weapon ammunition requires a reload cost.");
+            return new WeaponAmmunitionDefinition(
+                data.ammoTypeId,
+                data.magazineCapacity,
+                data.initialLoadedRounds,
+                data.roundsPerUse,
+                new ActionCost(
+                    reloadCost.actionPoints,
+                    reloadCost.movementOpportunity,
+                    ParseMobility(reloadCost.mobility)),
+                data.consumesRemainingMovement,
+                data.reloadPolicyVersion);
+        }
+
+        private static void ValidateAmmunition(
+            string actorId,
+            ScenarioInventoryItemData item)
+        {
+            ScenarioWeaponAmmunitionData ammunition = item.ammunition;
+            if (ammunition == null) return;
+            string prefix = $"Actor '{actorId}' weapon '{item.id}' ammunition";
+            Require(
+                item.attackCapability.contact == null
+                    || !item.attackCapability.contact.enabled,
+                prefix + " cannot be authored for a contact weapon.");
+            RequireText(ammunition.ammoTypeId, prefix + " type ID");
+            Require(
+                ammunition.magazineCapacity > 0,
+                prefix + " magazine capacity must be positive.");
+            Require(
+                ammunition.initialLoadedRounds >= 0
+                    && ammunition.initialLoadedRounds
+                        <= ammunition.magazineCapacity,
+                prefix + " initial loaded rounds must fit its magazine.");
+            Require(
+                ammunition.roundsPerUse > 0
+                    && ammunition.roundsPerUse
+                        <= ammunition.magazineCapacity,
+                prefix + " rounds per use must fit its magazine.");
+            Require(
+                ammunition.reloadCost != null,
+                prefix + " requires a reload cost.");
+            ParseMobility(ammunition.reloadCost.mobility);
+            Require(
+                ammunition.reloadPolicyVersion > 0,
+                prefix + " reload policy version must be positive.");
+        }
+
+        private static void ValidateAmmunitionReserves(
+            ScenarioActorContentData actor,
+            IReadOnlyList<ScenarioInventoryItemData> inventory)
+        {
+            var requiredTypes = new HashSet<string>(StringComparer.Ordinal);
+            foreach (ScenarioInventoryItemData item in inventory)
+                if (item?.ammunition != null)
+                    requiredTypes.Add(item.ammunition.ammoTypeId);
+
+            var authoredTypes = new HashSet<string>(StringComparer.Ordinal);
+            foreach (ScenarioAmmunitionReserveData reserve in
+                actor.ammunitionReserves
+                    ?? new List<ScenarioAmmunitionReserveData>())
+            {
+                Require(
+                    reserve != null,
+                    $"Actor '{actor.id}' ammunition reserves cannot contain null entries.");
+                RequireText(
+                    reserve.ammoTypeId,
+                    $"Actor '{actor.id}' ammunition reserve type ID");
+                Require(
+                    reserve.rounds >= 0,
+                    $"Actor '{actor.id}' ammunition reserve '{reserve.ammoTypeId}' cannot be negative.");
+                Require(
+                    authoredTypes.Add(reserve.ammoTypeId),
+                    $"Actor '{actor.id}' ammunition reserve '{reserve.ammoTypeId}' is duplicated.");
+                Require(
+                    requiredTypes.Contains(reserve.ammoTypeId),
+                    $"Actor '{actor.id}' ammunition reserve '{reserve.ammoTypeId}' has no matching weapon.");
+            }
+
+            foreach (string ammoTypeId in requiredTypes)
+                Require(
+                    authoredTypes.Contains(ammoTypeId),
+                    $"Actor '{actor.id}' ammunition type '{ammoTypeId}' requires a reserve.");
         }
 
         private static void ValidateFireField(

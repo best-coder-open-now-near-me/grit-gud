@@ -190,7 +190,8 @@ namespace GritGud.Application.Gameplay
                 actor.PinState,
                 actor.EmergencyActionPointAllowance,
                 actor.SuspendedTurnBudget,
-                actor.AttacksCommittedThisTurn);
+                actor.AttacksCommittedThisTurn,
+                actor.Ammunition);
 
         private static int FindActorIndex(
             IList<GameplayActorSnapshot> actors,

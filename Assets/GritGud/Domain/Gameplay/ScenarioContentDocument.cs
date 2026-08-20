@@ -179,7 +179,27 @@ namespace GritGud.Domain.Gameplay
         public ScenarioEquipmentEffectData equippedEffects =
             new ScenarioEquipmentEffectData();
         public ScenarioAttackCapabilityData attackCapability;
+        public ScenarioWeaponAmmunitionData ammunition;
         public ScenarioConsumablePowerData consumablePower;
+    }
+
+    [Serializable]
+    public sealed class ScenarioWeaponAmmunitionData
+    {
+        public string ammoTypeId = string.Empty;
+        public int magazineCapacity;
+        public int initialLoadedRounds;
+        public int roundsPerUse = 1;
+        public ScenarioActionCostData reloadCost = new ScenarioActionCostData();
+        public bool consumesRemainingMovement = true;
+        public int reloadPolicyVersion = 1;
+    }
+
+    [Serializable]
+    public sealed class ScenarioAmmunitionReserveData
+    {
+        public string ammoTypeId = string.Empty;
+        public int rounds;
     }
 
     [Serializable]
@@ -302,6 +322,8 @@ namespace GritGud.Domain.Gameplay
         public string initiallyEquippedItemId = string.Empty;
         public List<ScenarioInventoryItemData> inventory =
             new List<ScenarioInventoryItemData>();
+        public List<ScenarioAmmunitionReserveData> ammunitionReserves =
+            new List<ScenarioAmmunitionReserveData>();
         public ScenarioCharacterProfileData characterProfile;
     }
 
@@ -421,7 +443,7 @@ namespace GritGud.Domain.Gameplay
     [Serializable]
     public sealed class ScenarioContentDocument
     {
-        public const int CurrentSchemaVersion = 18;
+        public const int CurrentSchemaVersion = 19;
 
         public int schemaVersion = CurrentSchemaVersion;
         public string scenarioId = string.Empty;

@@ -133,7 +133,9 @@ namespace GritGud.Application.Gameplay
                     characterProfile,
                     GameplayDisplacementAssembler.CreateAbility(actor),
                     GameplayActorCombatAssembler.CreateCombatDefinition(
-                        actor.combat));
+                        actor.combat),
+                    GameplayInventoryAssembler.CreateAmmunitionReserves(
+                        actor));
         }
 
         private static CharacterProfileDefinition CreateCharacterProfile(

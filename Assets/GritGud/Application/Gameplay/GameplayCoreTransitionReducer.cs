@@ -462,7 +462,8 @@ namespace GritGud.Application.Gameplay
                 actor.EmergencyActionPointAllowance,
                 actor.SuspendedTurnBudget,
                 attacksCommittedThisTurn
-                    ?? actor.AttacksCommittedThisTurn);
+                    ?? actor.AttacksCommittedThisTurn,
+                actor.Ammunition);
 
         private static IReadOnlyList<GameplayActorSnapshot> ReplaceActor(
             IReadOnlyList<GameplayActorSnapshot> actors,

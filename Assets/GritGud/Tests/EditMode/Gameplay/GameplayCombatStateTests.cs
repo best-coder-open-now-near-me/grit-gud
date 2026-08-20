@@ -90,6 +90,41 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void CanonicalStateIncludesLoadedAndReserveAmmunition()
+        {
+            ActorAmmunitionSnapshot loaded = CreateAmmunition(
+                loadedRounds: 6,
+                reserveRounds: 18);
+            ActorAmmunitionSnapshot spent = CreateAmmunition(
+                loadedRounds: 5,
+                reserveRounds: 18);
+            ActorAmmunitionSnapshot reloaded = CreateAmmunition(
+                loadedRounds: 6,
+                reserveRounds: 17);
+
+            GameplayCombatStateSnapshot baseline = CreateState(
+                CreateActor("alpha", 1f, 4, ammunition: loaded));
+            GameplayCombatStateSnapshot afterSpend = CreateState(
+                CreateActor("alpha", 1f, 4, ammunition: spent));
+            GameplayCombatStateSnapshot afterReload = CreateState(
+                CreateActor("alpha", 1f, 4, ammunition: reloaded));
+
+            Assert.That(afterSpend.CanonicalHash,
+                Is.Not.EqualTo(baseline.CanonicalHash));
+            Assert.That(afterReload.CanonicalHash,
+                Is.Not.EqualTo(baseline.CanonicalHash));
+            Assert.That(
+                GameplayCombatStateDiffer.Compare(baseline, afterSpend),
+                Has.Some.Property(nameof(GameplayStateDifference.Path))
+                    .EqualTo(
+                        "actor.alpha.ammunition.magazine.weapon.rifle.loaded"));
+            Assert.That(
+                GameplayCombatStateDiffer.Compare(baseline, afterReload),
+                Has.Some.Property(nameof(GameplayStateDifference.Path))
+                    .EqualTo("actor.alpha.ammunition.reserve.ammo.rifle"));
+        }
+
+        [Test]
         public void CanonicalCoverageDistinguishesAbsentFromPresentButEmpty()
         {
             GameplayCombatStateSnapshot absent = CreateState(
@@ -265,7 +300,8 @@ namespace GritGud.Domain.Tests.Gameplay
             string actorId,
             float positionX,
             int actionPoints,
-            ActorPinState pinState = null)
+            ActorPinState pinState = null,
+            ActorAmmunitionSnapshot ammunition = null)
         {
             return new GameplayActorSnapshot(
                 actorId,
@@ -280,7 +316,27 @@ namespace GritGud.Domain.Tests.Gameplay
                 inventory: null,
                 actionPointEconomy: new TurnActionPointEconomy(4, 4, 6),
                 turnMovementAllowance: 8f,
-                pinState: pinState);
+                pinState: pinState,
+                ammunition: ammunition);
         }
+
+        private static ActorAmmunitionSnapshot CreateAmmunition(
+            int loadedRounds,
+            int reserveRounds) => new ActorAmmunitionSnapshot(
+                "alpha",
+                new[]
+                {
+                    new WeaponMagazineSnapshot(
+                        "weapon.rifle",
+                        "ammo.rifle",
+                        6,
+                        loadedRounds),
+                },
+                new[]
+                {
+                    new AmmunitionReserveSnapshot(
+                        "ammo.rifle",
+                        reserveRounds),
+                });
     }
 }

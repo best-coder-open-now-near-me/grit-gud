@@ -133,7 +133,8 @@ namespace GritGud.Application.Gameplay
             ActorPinState pinState = null,
             int emergencyActionPointAllowance = 0,
             TurnBudget? suspendedTurnBudget = null,
-            int attacksCommittedThisTurn = 0)
+            int attacksCommittedThisTurn = 0,
+            ActorAmmunitionSnapshot ammunition = null)
         {
             if (!string.Equals(actorId, wounds.ActorId, StringComparison.Ordinal))
             {
@@ -161,6 +162,20 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentException(
                     "Actor snapshots and inventory state must share an identifier.",
                     nameof(inventory));
+            }
+            ActorAmmunitionSnapshot resolvedAmmunition = ammunition
+                ?? new ActorAmmunitionSnapshot(
+                    actorId,
+                    Array.Empty<WeaponMagazineSnapshot>(),
+                    Array.Empty<AmmunitionReserveSnapshot>());
+            if (!string.Equals(
+                    actorId,
+                    resolvedAmmunition.ActorId,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Actor snapshots and ammunition state must share an identifier.",
+                    nameof(ammunition));
             }
             if (pinState != null
                 && !string.Equals(
@@ -193,6 +208,7 @@ namespace GritGud.Application.Gameplay
             EmergencyActionPointAllowance = emergencyActionPointAllowance;
             SuspendedTurnBudget = suspendedTurnBudget;
             AttacksCommittedThisTurn = attacksCommittedThisTurn;
+            Ammunition = resolvedAmmunition;
             if (float.IsNaN(TurnMovementAllowance)
                 || float.IsInfinity(TurnMovementAllowance)
                 || ActionPointEconomy.MaximumHeldActionPoints
@@ -230,6 +246,8 @@ namespace GritGud.Application.Gameplay
         public TurnBudget? SuspendedTurnBudget { get; }
 
         public int AttacksCommittedThisTurn { get; }
+
+        public ActorAmmunitionSnapshot Ammunition { get; }
 
         public bool IsPinned => PinState != null;
 

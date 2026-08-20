@@ -22,7 +22,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplaySessionStateSnapshot
     {
-        public const int CurrentSchemaVersion = 7;
+        public const int CurrentSchemaVersion = 8;
 
         public GameplaySessionStateSnapshot(
             string scenarioId,
@@ -207,7 +207,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplayCombatStateSnapshot
     {
-        public const int CurrentSchemaVersion = 7;
+        public const int CurrentSchemaVersion = 8;
 
         public GameplayCombatStateSnapshot(
             GameplaySessionStateSnapshot session,
@@ -748,6 +748,21 @@ namespace GritGud.Application.Gameplay
                 left.ItemId, right.ItemId));
             foreach (InventoryQuantitySnapshot quantity in quantities)
                 Append(text, root + ".inventory." + quantity.ItemId, quantity.Quantity);
+            foreach (WeaponMagazineSnapshot magazine in
+                actor.Ammunition.Magazines)
+            {
+                string magazineRoot = root + ".ammunition.magazine."
+                    + magazine.WeaponItemId;
+                Append(text, magazineRoot + ".type", magazine.AmmoTypeId);
+                Append(text, magazineRoot + ".capacity", magazine.Capacity);
+                Append(text, magazineRoot + ".loaded", magazine.LoadedRounds);
+            }
+            foreach (AmmunitionReserveSnapshot reserve in
+                actor.Ammunition.Reserves)
+                Append(
+                    text,
+                    root + ".ammunition.reserve." + reserve.AmmoTypeId,
+                    reserve.Rounds);
         }
 
         private static void Append(StringBuilder text, string key, object value)

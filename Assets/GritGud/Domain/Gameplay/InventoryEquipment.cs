@@ -63,7 +63,8 @@ namespace GritGud.Domain.Gameplay
             AttackDefinition attack = null,
             ConsumablePowerDefinition consumablePower = null,
             int occupiedHands = -1,
-            int initialQuantity = 0)
+            int initialQuantity = 0,
+            WeaponAmmunitionDefinition ammunition = null)
         {
             if (string.IsNullOrWhiteSpace(id))
             {
@@ -113,6 +114,18 @@ namespace GritGud.Domain.Gameplay
                 throw new ArgumentException(
                     "Consumable inventory items cannot author weapon attacks.",
                     nameof(attack));
+            }
+            if (kind != InventoryItemKind.Weapon && ammunition != null)
+            {
+                throw new ArgumentException(
+                    "Only weapon inventory items can author ammunition.",
+                    nameof(ammunition));
+            }
+            if (ammunition != null && attack.Contact != null)
+            {
+                throw new ArgumentException(
+                    "Contact weapons cannot author ammunition.",
+                    nameof(ammunition));
             }
             if (consumablePower != null
                 && !string.Equals(
@@ -169,6 +182,7 @@ namespace GritGud.Domain.Gameplay
             ConsumablePower = consumablePower;
             OccupiedHands = resolvedOccupiedHands;
             InitialQuantity = initialQuantity;
+            Ammunition = ammunition;
         }
 
         public string Id { get; }
@@ -190,6 +204,8 @@ namespace GritGud.Domain.Gameplay
         public int OccupiedHands { get; }
 
         public int InitialQuantity { get; }
+
+        public WeaponAmmunitionDefinition Ammunition { get; }
 
         public bool HasPower => Attack != null || ConsumablePower != null;
 

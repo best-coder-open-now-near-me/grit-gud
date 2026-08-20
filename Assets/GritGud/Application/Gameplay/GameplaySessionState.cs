@@ -9,7 +9,14 @@ namespace GritGud.Application.Gameplay
     {
         private readonly TurnBudget turnBudgetAllowance;
         private readonly TurnActionPointEconomy actionPointEconomy;
+        private readonly ScenarioActorDefinition definition;
         private readonly Dictionary<string, int> inventoryQuantities =
+            new Dictionary<string, int>(StringComparer.Ordinal);
+        private readonly Dictionary<string, WeaponMagazineSnapshot>
+            weaponMagazines =
+                new Dictionary<string, WeaponMagazineSnapshot>(
+                    StringComparer.Ordinal);
+        private readonly Dictionary<string, int> ammunitionReserves =
             new Dictionary<string, int>(StringComparer.Ordinal);
         private GameplayActorPose pose;
         private TurnBudget turnBudget;
@@ -18,8 +25,10 @@ namespace GritGud.Application.Gameplay
         private TurnBudget? suspendedTurnBudget;
         private int attacksCommittedThisTurn;
         private ActorInventorySnapshot cachedInventory;
+        private ActorAmmunitionSnapshot cachedAmmunition;
         private GameplayActorSnapshot cachedSnapshot;
         private bool inventorySnapshotDirty = true;
+        private bool ammunitionSnapshotDirty = true;
         private bool actorSnapshotDirty = true;
 
         public GameplayActorState(
@@ -27,6 +36,8 @@ namespace GritGud.Application.Gameplay
             ScenarioTimingDefinition timing,
             GameplayPartyCharacterSave restoredCharacter = null)
         {
+            this.definition = definition ?? throw new ArgumentNullException(
+                nameof(definition));
             ActorId = definition.Id;
             pose = definition.StartingPose;
             MaximumWounds = definition.Combat.MaximumWounds;
@@ -44,7 +55,20 @@ namespace GritGud.Application.Gameplay
             {
                 if (item.Kind == InventoryItemKind.Consumable)
                     inventoryQuantities.Add(item.Id, item.InitialQuantity);
+                if (item.Ammunition != null)
+                {
+                    weaponMagazines.Add(
+                        item.Id,
+                        new WeaponMagazineSnapshot(
+                            item.Id,
+                            item.Ammunition.AmmoTypeId,
+                            item.Ammunition.MagazineCapacity,
+                            item.Ammunition.InitialLoadedRounds));
+                }
             }
+            foreach (AmmunitionReserveDefinition reserve in
+                definition.AmmunitionReserves)
+                ammunitionReserves.Add(reserve.AmmoTypeId, reserve.Rounds);
             turnBudgetAllowance = definition.StartingTurnBudget;
             actionPointEconomy = new TurnActionPointEconomy(
                 definition.StartingTurnBudget.ActionPoints,
@@ -125,6 +149,40 @@ namespace GritGud.Application.Gameplay
         {
             inventoryQuantities[change.ItemId] = change.ResultingQuantity;
             inventorySnapshotDirty = true;
+            actorSnapshotDirty = true;
+        }
+
+        public void ApplyAmmunition(WeaponAmmunitionDelta change)
+        {
+            if (change == null) throw new ArgumentNullException(nameof(change));
+            if (!string.Equals(change.ActorId, ActorId, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "Ammunition change actor does not match this actor state.");
+            if (!weaponMagazines.TryGetValue(
+                    change.WeaponItemId,
+                    out WeaponMagazineSnapshot magazine)
+                || !string.Equals(
+                    magazine.AmmoTypeId,
+                    change.AmmoTypeId,
+                    StringComparison.Ordinal)
+                || magazine.Capacity != change.MagazineCapacity
+                || magazine.LoadedRounds != change.PreviousLoadedRounds
+                || !ammunitionReserves.TryGetValue(
+                    change.AmmoTypeId,
+                    out int reserve)
+                || reserve != change.PreviousReserveRounds)
+                throw new InvalidOperationException(
+                    "Ammunition change no longer matches canonical actor state.");
+
+            weaponMagazines[change.WeaponItemId] =
+                new WeaponMagazineSnapshot(
+                    change.WeaponItemId,
+                    change.AmmoTypeId,
+                    change.MagazineCapacity,
+                    change.ResultingLoadedRounds);
+            ammunitionReserves[change.AmmoTypeId] =
+                change.ResultingReserveRounds;
+            ammunitionSnapshotDirty = true;
             actorSnapshotDirty = true;
         }
 
@@ -235,6 +293,7 @@ namespace GritGud.Application.Gameplay
                     != turnBudgetAllowance.MovementOpportunity)
                 throw new InvalidOperationException(
                     $"Canonical actor '{ActorId}' changed authored allowances.");
+            ValidateAmmunitionShape(snapshot.Ammunition);
         }
 
         internal void InstallCanonicalSnapshot(GameplayActorSnapshot snapshot)
@@ -255,9 +314,19 @@ namespace GritGud.Application.Gameplay
             foreach (InventoryQuantitySnapshot quantity in
                 snapshot.Inventory.Quantities)
                 inventoryQuantities.Add(quantity.ItemId, quantity.Quantity);
+            weaponMagazines.Clear();
+            foreach (WeaponMagazineSnapshot magazine in
+                snapshot.Ammunition.Magazines)
+                weaponMagazines.Add(magazine.WeaponItemId, magazine);
+            ammunitionReserves.Clear();
+            foreach (AmmunitionReserveSnapshot reserve in
+                snapshot.Ammunition.Reserves)
+                ammunitionReserves.Add(reserve.AmmoTypeId, reserve.Rounds);
             cachedInventory = snapshot.Inventory;
+            cachedAmmunition = snapshot.Ammunition;
             cachedSnapshot = snapshot;
             inventorySnapshotDirty = false;
+            ammunitionSnapshotDirty = false;
             actorSnapshotDirty = false;
         }
 
@@ -305,6 +374,23 @@ namespace GritGud.Application.Gameplay
                 inventorySnapshotDirty = false;
             }
 
+            if (ammunitionSnapshotDirty)
+            {
+                var magazines = new List<WeaponMagazineSnapshot>(
+                    weaponMagazines.Values);
+                var reserves = new List<AmmunitionReserveSnapshot>(
+                    ammunitionReserves.Count);
+                foreach (KeyValuePair<string, int> entry in ammunitionReserves)
+                    reserves.Add(new AmmunitionReserveSnapshot(
+                        entry.Key,
+                        entry.Value));
+                cachedAmmunition = new ActorAmmunitionSnapshot(
+                    ActorId,
+                    magazines,
+                    reserves);
+                ammunitionSnapshotDirty = false;
+            }
+
             cachedSnapshot = new GameplayActorSnapshot(
                 ActorId,
                 Pose,
@@ -319,7 +405,8 @@ namespace GritGud.Application.Gameplay
                 PinState,
                 EmergencyActionPointAllowance,
                 suspendedTurnBudget,
-                attacksCommittedThisTurn);
+                attacksCommittedThisTurn,
+                cachedAmmunition);
             actorSnapshotDirty = false;
             return cachedSnapshot;
         }
@@ -342,6 +429,49 @@ namespace GritGud.Application.Gameplay
             0f,
             turnBudgetAllowance.MovementOpportunity
                 - Wounds.MovementPenalty);
+
+        private void ValidateAmmunitionShape(
+            ActorAmmunitionSnapshot ammunition)
+        {
+            if (ammunition == null
+                || !string.Equals(
+                    ammunition.ActorId,
+                    ActorId,
+                    StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    $"Canonical actor '{ActorId}' has invalid ammunition identity.");
+
+            int expectedMagazineCount = 0;
+            foreach (InventoryItemDefinition item in definition.Inventory)
+            {
+                WeaponAmmunitionDefinition authored = item.Ammunition;
+                if (authored == null) continue;
+                expectedMagazineCount++;
+                if (!ammunition.TryGetMagazine(
+                        item.Id,
+                        out WeaponMagazineSnapshot magazine)
+                    || !string.Equals(
+                        magazine.AmmoTypeId,
+                        authored.AmmoTypeId,
+                        StringComparison.Ordinal)
+                    || magazine.Capacity != authored.MagazineCapacity)
+                    throw new InvalidOperationException(
+                        $"Canonical actor '{ActorId}' changed authored magazine '{item.Id}'.");
+            }
+            if (ammunition.Magazines.Count != expectedMagazineCount)
+                throw new InvalidOperationException(
+                    $"Canonical actor '{ActorId}' changed its authored magazine set.");
+
+            if (ammunition.Reserves.Count
+                != definition.AmmunitionReserves.Count)
+                throw new InvalidOperationException(
+                    $"Canonical actor '{ActorId}' changed its authored reserve set.");
+            foreach (AmmunitionReserveDefinition reserve in
+                definition.AmmunitionReserves)
+                if (!ammunition.TryGetReserve(reserve.AmmoTypeId, out _))
+                    throw new InvalidOperationException(
+                        $"Canonical actor '{ActorId}' removed reserve '{reserve.AmmoTypeId}'.");
+        }
 
         private static ActorWoundSnapshot RebindWounds(
             ActorWoundSnapshot wounds,

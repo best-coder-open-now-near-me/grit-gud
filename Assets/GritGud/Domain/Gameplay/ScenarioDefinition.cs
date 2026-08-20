@@ -70,7 +70,8 @@ namespace GritGud.Domain.Gameplay
             string initiallyEquippedItemId,
             CharacterProfileDefinition characterProfile = null,
             DisplacementAbilityDefinition displacementAbility = null,
-            ActorCombatDefinition combat = null)
+            ActorCombatDefinition combat = null,
+            IEnumerable<AmmunitionReserveDefinition> ammunitionReserves = null)
             : this(
                 id,
                 initiative,
@@ -81,7 +82,8 @@ namespace GritGud.Domain.Gameplay
                 initiallyEquippedItemId,
                 characterProfile,
                 displacementAbility,
-                combat)
+                combat,
+                ammunitionReserves)
         {
         }
 
@@ -95,7 +97,8 @@ namespace GritGud.Domain.Gameplay
             string initiallyEquippedItemId,
             CharacterProfileDefinition characterProfile = null,
             DisplacementAbilityDefinition displacementAbility = null,
-            ActorCombatDefinition combat = null)
+            ActorCombatDefinition combat = null,
+            IEnumerable<AmmunitionReserveDefinition> ammunitionReserves = null)
         {
             Id = RequireId(id, nameof(id));
             Initiative = initiative;
@@ -132,6 +135,9 @@ namespace GritGud.Domain.Gameplay
             DerivedStatistics = characterProfile?.DerivedStatistics;
             DisplacementAbility = displacementAbility;
             Combat = combat ?? ActorCombatDefinition.CreateLegacyNeutral();
+            AmmunitionReserves = CopyAmmunitionReserves(
+                Inventory,
+                ammunitionReserves);
             ValidateHotbarAssignments(Inventory, DisplacementAbility);
         }
 
@@ -158,6 +164,9 @@ namespace GritGud.Domain.Gameplay
         public DisplacementAbilityDefinition DisplacementAbility { get; }
 
         public ActorCombatDefinition Combat { get; }
+
+        public IReadOnlyList<AmmunitionReserveDefinition>
+            AmmunitionReserves { get; }
 
         public IReadOnlyList<DisplacementActionDefinition>
             DisplacementActions => DisplacementAbility?.Actions
@@ -215,7 +224,8 @@ namespace GritGud.Domain.Gameplay
                     InitiallyEquippedItemId,
                     CharacterProfile,
                     DisplacementAbility,
-                    Combat);
+                    Combat,
+                    AmmunitionReserves);
 
         private static string RequireId(string value, string parameterName)
         {
@@ -259,6 +269,44 @@ namespace GritGud.Domain.Gameplay
                 copy.Add(item);
             }
 
+            return copy.AsReadOnly();
+        }
+
+        private static IReadOnlyList<AmmunitionReserveDefinition>
+            CopyAmmunitionReserves(
+                IReadOnlyList<InventoryItemDefinition> inventory,
+                IEnumerable<AmmunitionReserveDefinition> reserves)
+        {
+            var requiredTypes = new HashSet<string>(StringComparer.Ordinal);
+            foreach (InventoryItemDefinition item in inventory)
+                if (item.Ammunition != null)
+                    requiredTypes.Add(item.Ammunition.AmmoTypeId);
+
+            var copy = new List<AmmunitionReserveDefinition>();
+            var authoredTypes = new HashSet<string>(StringComparer.Ordinal);
+            foreach (AmmunitionReserveDefinition reserve in reserves
+                ?? Array.Empty<AmmunitionReserveDefinition>())
+            {
+                if (!authoredTypes.Add(reserve.AmmoTypeId))
+                    throw new ArgumentException(
+                        $"Ammunition reserve '{reserve.AmmoTypeId}' is duplicated.",
+                        nameof(reserves));
+                if (!requiredTypes.Contains(reserve.AmmoTypeId))
+                    throw new ArgumentException(
+                        $"Ammunition reserve '{reserve.AmmoTypeId}' has no matching weapon.",
+                        nameof(reserves));
+                copy.Add(reserve);
+            }
+
+            foreach (string ammoTypeId in requiredTypes)
+                if (!authoredTypes.Contains(ammoTypeId))
+                    throw new ArgumentException(
+                        $"Ammunition type '{ammoTypeId}' requires an actor reserve.",
+                        nameof(reserves));
+
+            copy.Sort((left, right) => StringComparer.Ordinal.Compare(
+                left.AmmoTypeId,
+                right.AmmoTypeId));
             return copy.AsReadOnly();
         }
 
