@@ -29,8 +29,7 @@ namespace GritGud.Application.Gameplay
         private readonly GameplaySession gameplay;
         private readonly DestructiblePropSession destructibles;
         private readonly ScenarioRunIdentity runIdentity;
-        private readonly IGameplayTacticalContextQuery contextQuery;
-        private readonly GameplayTacticalContextEvaluator contextEvaluator;
+        private readonly GameplayActorAttackTransitionPreparer attackPreparer;
         private readonly List<AttackResolutionRecord> records =
             new List<AttackResolutionRecord>();
         private readonly IReadOnlyList<AttackResolutionRecord> readOnlyRecords;
@@ -49,15 +48,10 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(gameplaySession));
             runIdentity = gameplay.RunIdentity;
             destructibles = destructibleSession;
-            if ((tacticalContextQuery == null)
-                != (tacticalContextEvaluator == null))
-            {
-                throw new ArgumentException(
-                    "Tactical evidence capture and rule evaluation must be installed together.",
-                    nameof(tacticalContextQuery));
-            }
-            contextQuery = tacticalContextQuery;
-            contextEvaluator = tacticalContextEvaluator;
+            attackPreparer = new GameplayActorAttackTransitionPreparer(
+                gameplay.Scenario,
+                tacticalContextQuery,
+                tacticalContextEvaluator);
             if (destructibles != null
                 && !ReferenceEquals(gameplay.Journal, destructibles.Journal))
             {
@@ -78,12 +72,12 @@ namespace GritGud.Application.Gameplay
             string actorId,
             TargetExposureSnapshot exposure)
         {
-            return TryPrepare(
+            GameplayCombatStateSnapshot state = CaptureCombatState();
+            return attackPreparer.TryEvaluate(
+                state,
                 actorId,
                 exposure,
-                out _,
-                out _,
-                out _,
+                gameplay.CanEnterTurnMode,
                 out _,
                 out AttackResolutionFailure failure)
                     ? AttackResolutionFailure.None
@@ -140,64 +134,18 @@ namespace GritGud.Application.Gameplay
             out AttackResolutionFailure failure)
         {
             prepared = null;
-            if (!TryPrepare(
+            GameplayCombatStateSnapshot previous = CaptureCombatState();
+            if (!attackPreparer.TryEvaluate(
+                    previous,
                     actorId,
                     exposure,
-                    out AttackDefinition attack,
-                    out GameplayActorSnapshot actor,
-                    out GameplayActorSnapshot target,
-                    out ActionCost cost,
+                    gameplay.CanEnterTurnMode,
+                    out GameplayActorAttackEvaluation evaluation,
                     out failure))
             {
                 return false;
             }
-
-            GameplayCombatStateSnapshot previous = CaptureCombatState();
-            long attackSequence = records.Count + 1L;
-            long actionSequence = gameplay.NextActionSequence;
-            var transition = new GameplayTransitionIdentity(
-                actionSequence,
-                GameplaySemanticCapability.DirectAttack.ToString(),
-                actorId,
-                target.ActorId);
-            uint resolutionSeed = GameplayAddressedRandom.SampleUInt32(
-                runIdentity,
-                transition,
-                "resolution");
-            ResolvedTacticalContext context = PrepareTacticalContext(
-                previous,
-                attack,
-                actorId,
-                target.ActorId,
-                out failure);
-            if (contextQuery != null && context == null)
-                return false;
-            AttackResolutionRecord resolution = AttackResolutionRules.Resolve(
-                attackSequence,
-                resolutionSeed,
-                exposure,
-                attack.AccuracyDecay,
-                actor.Pose.Position.DistanceTo(target.Pose.Position),
-                target.Wounds,
-                attack.WoundMovementPenalty,
-                attack.Contact,
-                context);
-            TurnBudget resultingBudget = actor.TurnBudget.SpendAction(cost);
-            var action = new GameplayActionRecord(
-                actionSequence,
-                new GameplayActionRequest(
-                    actorId,
-                    attack.ActionId,
-                    target.ActorId),
-                cost,
-                actor.TurnBudget,
-                resultingBudget,
-                new[] { new AttackResolvedActionOutcome(resolution) },
-                context);
-            prepared = new GameplayPreparedTransition<GameplayActionRecord>(
-                action,
-                previous,
-                GameplayWeaponActionStateProjector.Project(previous, action));
+            prepared = attackPreparer.Resolve(previous, evaluation);
             failure = AttackResolutionFailure.None;
             return true;
         }
@@ -359,11 +307,10 @@ namespace GritGud.Application.Gameplay
 
             AttackResolutionRecord attack = outcome.Attack;
             ValidateTacticalContext(action, attack);
-            long expectedSequence = records.Count + 1L;
-            if (attack.Sequence != expectedSequence)
+            if (attack.Sequence != action.Sequence)
             {
                 throw new InvalidOperationException(
-                    "The attack is not the next authoritative attack sequence.");
+                    "The attack does not share its authoritative action sequence.");
             }
 
             uint expectedSeed = GameplayAddressedRandom.SampleUInt32(
@@ -384,44 +331,6 @@ namespace GritGud.Application.Gameplay
             gameplay.CommitAction(action, notifications);
             records.Add(attack);
             notifications.Publish();
-        }
-
-        private ResolvedTacticalContext PrepareTacticalContext(
-            GameplayCombatStateSnapshot state,
-            AttackDefinition attack,
-            string attackerId,
-            string targetId,
-            out AttackResolutionFailure failure)
-        {
-            if (contextQuery == null)
-            {
-                failure = AttackResolutionFailure.None;
-                return null;
-            }
-
-            GameplayCapabilityProfile profile = GameplayCapabilityProfiles.Attack(
-                attack,
-                GameplaySemanticSubjectKind.Actor);
-            TacticalContextSnapshot snapshot = contextQuery.Capture(
-                state,
-                new GameplayTacticalContextRequest(
-                    profile,
-                    attackerId,
-                    new GameplaySubjectReference(
-                        GameplaySemanticSubjectKind.Actor,
-                        targetId),
-                    attack.SoundSignature));
-            if (snapshot == null)
-                throw new InvalidOperationException(
-                    "Tactical context queries must return frozen evidence.");
-            if (snapshot.StateRevision != state.Session.Revision)
-            {
-                failure = AttackResolutionFailure.WorldStateChanged;
-                return null;
-            }
-
-            failure = AttackResolutionFailure.None;
-            return contextEvaluator.Evaluate(snapshot);
         }
 
         private void ValidateTacticalContext(
@@ -530,69 +439,6 @@ namespace GritGud.Application.Gameplay
 
         private GameplayCombatStateSnapshot CaptureCombatState() =>
             GameplayCombatStateCapture.Capture(gameplay, destructibles);
-
-        private bool TryPrepare(
-            string actorId,
-            TargetExposureSnapshot exposure,
-            out AttackDefinition attack,
-            out GameplayActorSnapshot actor,
-            out GameplayActorSnapshot target,
-            out ActionCost cost,
-            out AttackResolutionFailure failure)
-        {
-            attack = null;
-            actor = default;
-            target = default;
-            cost = default;
-            bool startsEncounter = exposure != null
-                && !string.IsNullOrWhiteSpace(exposure.TargetId)
-                && gameplay.AttackStartsEncounter(exposure.TargetId);
-            if (!TryPrepareActor(
-                    actorId,
-                    startsEncounter,
-                    out attack,
-                    out actor,
-                    out cost,
-                    out failure))
-            {
-                return false;
-            }
-
-            if (exposure == null
-                || !string.Equals(
-                    exposure.ObserverId,
-                    actorId,
-                    StringComparison.Ordinal))
-            {
-                failure = AttackResolutionFailure.ExposureMismatch;
-                return false;
-            }
-
-            if (string.Equals(actorId, exposure.TargetId, StringComparison.Ordinal)
-                || !gameplay.TryGetActor(exposure.TargetId, out target))
-            {
-                failure = AttackResolutionFailure.TargetNotFound;
-                return false;
-            }
-
-            if (gameplay.IsActorIncapacitated(exposure.TargetId))
-            {
-                failure = AttackResolutionFailure.TargetIncapacitated;
-                return false;
-            }
-
-            float distance = actor.Pose.Position.DistanceTo(
-                target.Pose.Position);
-            if (attack.Contact != null
-                && distance > attack.Contact.MaximumReach + 0.0001f)
-            {
-                failure = AttackResolutionFailure.TargetOutOfReach;
-                return false;
-            }
-
-            failure = AttackResolutionFailure.None;
-            return true;
-        }
 
         private bool TryPrepareActor(
             string actorId,

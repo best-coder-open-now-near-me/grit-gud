@@ -18,6 +18,7 @@ internal static class SimulationChecks
             VerifyCapabilityCoverageFailsClosed();
             VerifyTacticalRuleCoverageAndOutcomeProjection();
             VerifyAtomicLiveInstallation();
+            VerifyConcreteActorAttackCandidateRoute();
             VerifyAllCurrentContentCoverage();
             VerifyTacticalDestructibleSimulation();
             executedFixtureChecks.Add("sim-destructible-cover");
@@ -1643,6 +1644,146 @@ internal static class SimulationChecks
                 .LastTransitionSequence == 1L
             && failingPresentationRuntime.Trajectory.Count == 1,
             "Presentation failure rolled back or orphaned authoritative installation.");
+    }
+
+    private static void VerifyConcreteActorAttackCandidateRoute()
+    {
+        GameplaySession gameplay = CreateEncounterGameplay();
+        var level = new LevelDocument
+        {
+            levelId = "candidate-route-check",
+            schemaVersion = 1,
+        };
+        level.Normalize();
+        DestructiblePropSession destructibles =
+            DestructiblePropSession.FromLevel(level, gameplay.Journal);
+        Require(gameplay.BeginEncounter(),
+            "Concrete candidate route encounter did not begin.");
+        GameplayCombatStateSnapshot initial = GameplayCombatStateCapture.Capture(
+            gameplay,
+            destructibles);
+        var spatialIdentity = new SpatialContentIdentity(
+            level.levelId,
+            level.schemaVersion,
+            evidenceAlgorithmVersion: 1,
+            new string('c', 64));
+        var spatial = new GameplayHeadlessSpatialEvidence(
+            level,
+            spatialIdentity);
+        IReadOnlyList<GameplayReachableInput> inputs =
+            GameplayReachableInputEnumerator.Enumerate(
+                gameplay.Scenario,
+                level);
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
+        GameplayCapabilityRegistry capabilities =
+            GameplayCurrentCapabilityCatalog.Create(reducers, inputs);
+        var routes = new GameplayCandidateExecutionRouteRegistry(capabilities);
+        routes.Register(new GameplayActorAttackCandidateExecutionRoute(
+            gameplay.Scenario,
+            Array.Empty<TacticalContextRuleDefinition>(),
+            spatial));
+        routes.Register(new GameplayEndTurnCandidateExecutionRoute(
+            gameplay.Scenario));
+
+        GameplayCandidate selected = null;
+        foreach (GameplayCandidate candidate in
+            new GameplayTacticalCandidateBuilder(capabilities).Build(
+                initial,
+                inputs))
+        {
+            if (candidate.Profile.Capability
+                    == GameplaySemanticCapability.DirectAttack
+                && string.Equals(
+                    candidate.ActorId,
+                    "player",
+                    StringComparison.Ordinal)
+                && string.Equals(
+                    candidate.SubjectId,
+                    "enemy",
+                    StringComparison.Ordinal)
+                && routes.Supports(candidate.Profile))
+            {
+                selected = candidate;
+                break;
+            }
+        }
+        Require(selected != null,
+            "Concrete route fixture did not construct the player attack candidate.");
+        var context = new GameplayDecisionContext(
+            initial,
+            GameplayObservationSnapshot.FullState("player", initial));
+        GameplayExecutableCandidateEvaluation first = routes.Evaluate(
+            context,
+            selected);
+        GameplayExecutableCandidateEvaluation repeated = routes.Evaluate(
+            context,
+            selected);
+        Require(first.IsLegal
+            && repeated.IsLegal
+            && first.ExpectedOutcome.GetValue("attack.hit-probability") > 0f
+            && string.Equals(
+                GameplayCanonicalValueDigest.Calculate(first.Evidence),
+                GameplayCanonicalValueDigest.Calculate(repeated.Evidence),
+                StringComparison.Ordinal),
+            "Policy-neutral attack evaluation was not stable and legal.");
+
+        GameplaySemanticTransition transition = routes.Prepare(context, first);
+        var semanticPayload = (GameplayWeaponTransitionPayload)
+            transition.Payload;
+        var liveAttacks = new GameplayAttackSession(
+            gameplay,
+            destructibles,
+            new GameplayHeadlessTacticalContextQuery(spatial),
+            new GameplayTacticalContextEvaluator(
+                Array.Empty<TacticalContextRuleDefinition>()));
+        TargetExposureSnapshot exposure =
+            GameplayHeadlessEncounterEvidence.CaptureSight(
+                initial,
+                spatial,
+                "player",
+                "enemy");
+        Require(liveAttacks.TryPrepareResolve(
+                "player",
+                exposure,
+                out GameplayPreparedTransition<GameplayActionRecord>
+                    livePrepared,
+                out AttackResolutionFailure liveFailure),
+            "Live adapter rejected the shared attack preparation: "
+                + liveFailure);
+        Require(string.Equals(
+                GameplayCanonicalValueDigest.Calculate(
+                    semanticPayload.Action),
+                GameplayCanonicalValueDigest.Calculate(livePrepared.Record),
+                StringComparison.Ordinal)
+            && string.Equals(
+                GameplayWeaponActionStateProjector.Project(
+                    initial,
+                    semanticPayload.Action).CanonicalHash,
+                livePrepared.Predicted.CanonicalHash,
+                StringComparison.Ordinal),
+            "Live and headless actor attack preparation diverged.");
+
+        var executionIdentity = new GameplayExecutionIdentity(
+            new GameplayContentIdentity(
+                gameplay.Scenario.Id,
+                scenarioSchemaVersion: 1,
+                rulesSchemaVersion: 1,
+                new string('a', 64)),
+            spatialIdentity,
+            gameplay.RunIdentity);
+        var runtime = new GameplaySimulationRuntime(
+            executionIdentity,
+            initial,
+            reducers,
+            capabilities);
+        runtime.Execute(transition);
+        Require(runtime.Trajectory.Count == 1
+            && GameplayExactReplay.Verify(
+                initial,
+                runtime.Trajectory,
+                reducers).IsExact,
+            "Concrete actor attack route did not execute and replay exactly.");
     }
 
     private static void VerifyAllCurrentContentCoverage()
