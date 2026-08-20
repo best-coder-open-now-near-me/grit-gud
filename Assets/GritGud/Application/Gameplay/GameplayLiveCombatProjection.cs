@@ -94,6 +94,22 @@ namespace GritGud.Application.Gameplay
                 fireFields,
                 drones);
 
+        internal void BindExecutor(
+            Func<
+                GameplayTransitionPayload,
+                IEnumerable<GameplayEvidenceRecord>,
+                GameplayReductionResult> executor,
+            Func<GameplayActionRecord, GameplayReductionResult> actionExecutor) =>
+            session.BindCanonicalExecutor(executor, actionExecutor);
+
+        internal GameplayTransitionPayload CreateActionPayload(
+            GameplayCombatStateSnapshot state,
+            GameplayActionRecord action) =>
+            GameplayActionSemanticPayloadFactory.Create(
+                session.Scenario,
+                state,
+                action);
+
         internal void Bind(GameplayCombatStateSnapshot initialState)
         {
             if (bound)

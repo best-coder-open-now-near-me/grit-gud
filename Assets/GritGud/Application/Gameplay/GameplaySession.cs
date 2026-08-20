@@ -871,11 +871,16 @@ namespace GritGud.Application.Gameplay
 
         public void CommitStanceChange(StanceChangeRecord record)
         {
-            RequireLegacyMutationAllowed(nameof(CommitStanceChange));
             if (record == null)
             {
                 throw new ArgumentNullException(nameof(record));
             }
+            if (IsCanonicalProjectionBound)
+            {
+                ExecuteCanonical(new GameplayStanceTransitionPayload(record));
+                return;
+            }
+            RequireLegacyMutationAllowed(nameof(CommitStanceChange));
 
             GameplayActorState actor = Mode == GameplaySessionMode.TurnBased
                 ? RequireActiveActor(record.ActorId)
@@ -898,11 +903,20 @@ namespace GritGud.Application.Gameplay
 
         public void CommitMovementRoute(MovementRouteRecord route)
         {
-            RequireLegacyMutationAllowed(nameof(CommitMovementRoute));
             if (route == null)
             {
                 throw new ArgumentNullException(nameof(route));
             }
+            if (IsCanonicalProjectionBound)
+            {
+                ExecuteCanonical(new GameplayMoveTransitionPayload(
+                    route.HasTraversal
+                        ? GameplayCapabilityProfiles.TraversalMove()
+                        : GameplayCapabilityProfiles.GroundedMove(),
+                    route));
+                return;
+            }
+            RequireLegacyMutationAllowed(nameof(CommitMovementRoute));
 
             GameplayActorState actor = RequireActiveActor(route.ActorId);
             if (actor.PinState != null)
@@ -1005,6 +1019,8 @@ namespace GritGud.Application.Gameplay
 
         public void CompleteMovementResolution()
         {
+            if (IsCanonicalProjectionBound)
+                return;
             RequireLegacyMutationAllowed(nameof(CompleteMovementResolution));
             if (Operation != GameplaySessionOperation.ResolvingMovement
                 || pendingMovementRoute == null)
@@ -1036,11 +1052,16 @@ namespace GritGud.Application.Gameplay
             GameplayActionRecord record,
             GameplayNotificationBatch notifications)
         {
-            RequireLegacyMutationAllowed(nameof(CommitAction));
             if (notifications == null)
             {
                 throw new ArgumentNullException(nameof(notifications));
             }
+            if (IsCanonicalProjectionBound)
+            {
+                ExecuteCanonical(record);
+                return;
+            }
+            RequireLegacyMutationAllowed(nameof(CommitAction));
 
             ValidateActionCommit(record);
 

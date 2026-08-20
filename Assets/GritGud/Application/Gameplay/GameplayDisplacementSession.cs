@@ -421,6 +421,13 @@ namespace GritGud.Application.Gameplay
             commitValidator.Validate(record, actionSequence);
             var notifications = new GameplayNotificationBatch();
             gameplay.CommitAction(action, notifications);
+            if (gameplay.IsCanonicalProjectionBound)
+            {
+                records.Add(record);
+                notifications.Publish();
+                failure = DisplacementResolutionFailure.None;
+                return true;
+            }
             Commit(
                 record,
                 validate: false,

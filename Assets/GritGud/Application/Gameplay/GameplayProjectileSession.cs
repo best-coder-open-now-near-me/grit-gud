@@ -359,7 +359,8 @@ namespace GritGud.Application.Gameplay
 
         public void CommitLaunch(GameplayActionRecord action)
         {
-            RequireLegacyMutationAllowed(nameof(CommitLaunch));
+            if (!canonicalProjectionBound)
+                RequireLegacyMutationAllowed(nameof(CommitLaunch));
             if (action == null)
             {
                 throw new ArgumentNullException(nameof(action));
@@ -387,6 +388,11 @@ namespace GritGud.Application.Gameplay
 
             var notifications = new GameplayNotificationBatch();
             gameplay.CommitAction(action, notifications);
+            if (canonicalProjectionBound)
+            {
+                notifications.Publish();
+                return;
+            }
             launches.Add(launch);
             flights.Add(
                 launch.ProjectileId,

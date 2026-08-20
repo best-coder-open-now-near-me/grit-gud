@@ -361,6 +361,12 @@ namespace GritGud.Application.Gameplay
                 destructibles.ValidateDamage(discharge.Damage);
             }
             gameplay.CommitAction(action, notifications);
+            if (gameplay.IsCanonicalProjectionBound)
+            {
+                discharges.Add(discharge);
+                notifications.Publish();
+                return;
+            }
             if (discharge.Damage != null)
             {
                 destructibles.CommitDamage(discharge.Damage, notifications);

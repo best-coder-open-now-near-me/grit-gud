@@ -354,6 +354,11 @@ namespace GritGud.Application.Gameplay
             var notifications = new GameplayNotificationBatch();
             gameplay.CommitAction(action, notifications);
             throws.Add(outcome.Record);
+            if (gameplay.IsCanonicalProjectionBound)
+            {
+                notifications.Publish();
+                return;
+            }
             consequences.Apply(
                 outcome.Record.BlastEffects,
                 outcome.Record.Definition.BlastWoundMovementPenalty,

@@ -8,6 +8,58 @@ namespace GritGud.Application.Gameplay
     {
         private long canonicalJournalSequence;
         private bool canonicalProjectionBound;
+        private Func<
+            GameplayTransitionPayload,
+            IEnumerable<GameplayEvidenceRecord>,
+            GameplayReductionResult> canonicalExecutor;
+        private Func<
+            GameplayActionRecord,
+            GameplayReductionResult> canonicalActionExecutor;
+
+        internal bool IsCanonicalProjectionBound => canonicalProjectionBound;
+
+        internal void BindCanonicalExecutor(
+            Func<
+                GameplayTransitionPayload,
+                IEnumerable<GameplayEvidenceRecord>,
+                GameplayReductionResult> executor,
+            Func<GameplayActionRecord, GameplayReductionResult> actionExecutor)
+        {
+            if (executor == null)
+                throw new ArgumentNullException(nameof(executor));
+            if (actionExecutor == null)
+                throw new ArgumentNullException(nameof(actionExecutor));
+            if (canonicalExecutor != null || canonicalActionExecutor != null)
+                throw new InvalidOperationException(
+                    "The gameplay session already has a canonical executor.");
+            if (canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Bind the canonical executor before binding its projection.");
+            canonicalExecutor = executor;
+            canonicalActionExecutor = actionExecutor;
+        }
+
+        internal GameplayReductionResult ExecuteCanonical(
+            GameplayActionRecord action)
+        {
+            if (!canonicalProjectionBound || canonicalActionExecutor == null)
+                throw new InvalidOperationException(
+                    "The semantic runtime does not own this gameplay session.");
+            return canonicalActionExecutor(
+                action ?? throw new ArgumentNullException(nameof(action)));
+        }
+
+        internal GameplayReductionResult ExecuteCanonical(
+            GameplayTransitionPayload payload,
+            IEnumerable<GameplayEvidenceRecord> evidence = null)
+        {
+            if (!canonicalProjectionBound || canonicalExecutor == null)
+                throw new InvalidOperationException(
+                    "The semantic runtime does not own this gameplay session.");
+            return canonicalExecutor(
+                payload ?? throw new ArgumentNullException(nameof(payload)),
+                evidence);
+        }
 
         internal long JournalSequence => canonicalProjectionBound
             ? canonicalJournalSequence

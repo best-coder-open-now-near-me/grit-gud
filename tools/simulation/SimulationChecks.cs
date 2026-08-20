@@ -2116,10 +2116,21 @@ internal static class SimulationChecks
             GameplayCombatStateCapture.Capture(gameplay);
         GameplayTransitionReducerRegistry reducers =
             GameplaySimulationReducers.CreateCurrent();
+        GameplayCapabilityProfile liveAttackProfile =
+            GameplayCapabilityProfiles.Attack(
+                gameplay.GetEquippedAttack(initial.Session.ActiveActorId),
+                GameplaySemanticSubjectKind.Actor);
         GameplayCapabilityRegistry capabilities =
             GameplayCurrentCapabilityCatalog.Create(
                 reducers,
-                Array.Empty<GameplayReachableInput>());
+                new[]
+                {
+                    new GameplayReachableInput(
+                        GameplayReachableInputKind.EquippedAttack,
+                        "live-projection-attack",
+                        initial.Session.ActiveActorId,
+                        liveAttackProfile),
+                });
         var executionIdentity = new GameplayExecutionIdentity(
             new GameplayContentIdentity(
                 initial.Session.ScenarioId,
@@ -2170,18 +2181,7 @@ internal static class SimulationChecks
                     movementCost: 1f,
                     playbackDurationSeconds: 0.25f),
             });
-        var movePayload = new GameplayMoveTransitionPayload(
-            GameplayCapabilityProfiles.GroundedMove(),
-            route);
-        var move = new GameplaySemanticTransition(
-            new GameplayTransitionIdentity(
-                1L,
-                movePayload.Profile.Capability.ToString(),
-                movePayload.ActorId,
-                movePayload.SubjectId),
-            initial.CanonicalHash,
-            movePayload);
-        live.Execute(move);
+        gameplay.CommitMovementRoute(route);
 
         GameplayCombatStateSnapshot projectedMove =
             GameplayCombatStateCapture.Capture(gameplay);
@@ -2207,6 +2207,33 @@ internal static class SimulationChecks
         Require(legacyMovementRejected,
             "A projection-bound live session still allowed duplicate movement mutation.");
 
+        var attacks = new GameplayAttackSession(gameplay);
+        var exposure = new TargetExposureSnapshot(
+            gameplay.ActiveActorId,
+            "enemy",
+            new[]
+            {
+                new TargetRegionExposure(
+                    TargetRegionId.Torso,
+                    visibleSampleCount: 1,
+                    totalSampleCount: 1),
+            });
+        Require(attacks.TryResolve(
+                gameplay.ActiveActorId,
+                exposure,
+                out GameplayActionRecord liveAction,
+                out AttackResolutionFailure liveActionFailure)
+            && liveAction.Sequence == 1L
+            && gameplay.LastActionSequence == 1L
+            && attacks.Records.Count == 1
+            && string.Equals(
+                GameplayCombatStateCapture.Capture(gameplay).CanonicalHash,
+                new GameplayCombatStateSnapshot(live.CurrentState.Session)
+                    .CanonicalHash,
+                StringComparison.Ordinal),
+            "A fresh live action did not execute exactly once through its semantic reducer: "
+                + liveActionFailure);
+
         string endingActorId = gameplay.ActiveActorId;
         var endPayload = new GameplayEndTurnTransitionPayload(
             endingActorId,
@@ -2214,7 +2241,7 @@ internal static class SimulationChecks
             gameplay.Scenario.Timing.MinimumVoluntaryTurnSeconds);
         var endTurn = new GameplaySemanticTransition(
             new GameplayTransitionIdentity(
-                2L,
+                3L,
                 GameplaySemanticCapability.EndTurn.ToString(),
                 endPayload.ActorId,
                 endPayload.SubjectId),

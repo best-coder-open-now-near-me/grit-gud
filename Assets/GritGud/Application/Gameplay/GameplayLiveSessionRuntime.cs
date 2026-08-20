@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using GritGud.Domain.Gameplay;
 
 namespace GritGud.Application.Gameplay
 {
@@ -43,6 +44,7 @@ namespace GritGud.Application.Gameplay
                 initialState,
                 reducers,
                 capabilities);
+            projection.BindExecutor(ExecutePayload, ExecuteAction);
             projection.Bind(initialState);
             runtime.StateInstalled += ProjectInstalledState;
         }
@@ -71,6 +73,50 @@ namespace GritGud.Application.Gameplay
             ThrowIfDisposed();
             RequireProjectionMatchesAuthority();
             return runtime.Execute(transition);
+        }
+
+        public GameplayReductionResult ExecutePayload(
+            GameplayTransitionPayload payload,
+            IEnumerable<GameplayEvidenceRecord> evidence = null)
+        {
+            ThrowIfDisposed();
+            if (payload == null)
+                throw new ArgumentNullException(nameof(payload));
+            RequireProjectionMatchesAuthority();
+            GameplayCombatStateSnapshot state = runtime.CurrentState;
+            var validatedEvidence = new List<GameplayEvidenceRecord>();
+            foreach (GameplayEvidenceRecord item in evidence
+                ?? Array.Empty<GameplayEvidenceRecord>())
+            {
+                if (item == null)
+                    throw new ArgumentException(
+                        "Transition evidence cannot contain null entries.",
+                        nameof(evidence));
+                if (item.WorldRevision > state.Session.Revision)
+                    throw new InvalidOperationException(
+                        $"Evidence '{item.EvidenceType}' comes from a future revision.");
+                validatedEvidence.Add(item);
+            }
+            var transition = new GameplaySemanticTransition(
+                new GameplayTransitionIdentity(
+                    checked(state.Session.LastTransitionSequence + 1L),
+                    payload.Profile.Capability.ToString(),
+                    payload.ActorId,
+                    payload.SubjectId),
+                state.CanonicalHash,
+                payload,
+                validatedEvidence);
+            return runtime.Execute(transition);
+        }
+
+        public GameplayReductionResult ExecuteAction(GameplayActionRecord action)
+        {
+            ThrowIfDisposed();
+            if (action == null) throw new ArgumentNullException(nameof(action));
+            RequireProjectionMatchesAuthority();
+            return ExecutePayload(projection.CreateActionPayload(
+                runtime.CurrentState,
+                action));
         }
 
         public GameplaySimulationBranch Fork(string branchId)
