@@ -15,6 +15,7 @@ namespace GritGud.Presentation.Gameplay
             "SimulationArtifacts/depot-first-sim";
 
         private CancellationTokenSource cancellation;
+        private Task preparation = Task.CompletedTask;
         private GameplayTurnReplayHud hud;
         private string status = string.Empty;
         private GUIStyle statusStyle;
@@ -35,7 +36,7 @@ namespace GritGud.Presentation.Gameplay
             cancellation = new CancellationTokenSource();
             status = "PREPARING FIRST SIM…";
             enabled = true;
-            PrepareAsync(
+            preparation = PrepareAsync(
                 assembly,
                 level,
                 liveRuntime,
@@ -51,7 +52,7 @@ namespace GritGud.Presentation.Gameplay
             enabled = false;
         }
 
-        private async void PrepareAsync(
+        private async Task PrepareAsync(
             GameplayScenarioAssembly assembly,
             LevelDocument level,
             GameplayLiveSessionRuntime liveRuntime,
