@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using GritGud.Domain.Levels;
 
 namespace GritGud.Application.Gameplay
@@ -33,6 +34,25 @@ namespace GritGud.Application.Gameplay
                 assembly,
                 level);
             report.RequireComplete(assembly.Scenario.Id);
+            IReadOnlyList<GameplayReachableInput> reachable =
+                GameplayReachableInputEnumerator.Enumerate(assembly, level);
+            GameplayTransitionReducerRegistry reducers =
+                GameplaySimulationReducers.CreateCurrent();
+            GameplayCapabilityRegistry capabilities =
+                GameplayCurrentCapabilityCatalog.Create(reducers, reachable);
+            var spatial = new GameplayHeadlessSpatialEvidence(
+                level,
+                new SpatialContentIdentity(
+                    level.levelId,
+                    level.schemaVersion,
+                    evidenceAlgorithmVersion: 1,
+                    new string('0', 64)));
+            GameplayExecutableRouteCoverageValidator.Validate(
+                reachable,
+                GameplayCurrentCandidateExecutionRoutes.Create(
+                    assembly,
+                    spatial,
+                    capabilities)).RequireComplete();
             GameplayTacticalRuleSupportRegistry tacticalSupport =
                 GameplayCurrentTacticalRuleSupport.Create(
                     assembly.TacticalRules,
@@ -40,9 +60,7 @@ namespace GritGud.Application.Gameplay
             GameplayTacticalRuleCoverageReport tacticalReport =
                 GameplayTacticalRuleCoverageValidator.Validate(
                     assembly.TacticalRules,
-                    GameplayReachableInputEnumerator.Enumerate(
-                        assembly,
-                        level),
+                    reachable,
                     tacticalSupport);
             tacticalReport.RequireComplete(assembly.Scenario.Id);
             return report;

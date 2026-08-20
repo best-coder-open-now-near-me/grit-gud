@@ -26,6 +26,7 @@ internal static class SimulationChecks
             VerifyPortableGroundSurfaces();
             VerifyStaticHeadlessSpatialGeometry();
             VerifyConcreteGroundedMoveCandidateRoute();
+            VerifyConcreteTraversalCandidateRoute();
             VerifyCanonicalActionOwnedRecordSequences();
             VerifyConcreteActorAttackCandidateRoute();
             VerifyConcreteDirectFireCandidateRoute();
@@ -4300,6 +4301,120 @@ internal static class SimulationChecks
             "Grounded movement accepted evidence frozen against an older state.");
     }
 
+    private static void VerifyConcreteTraversalCandidateRoute()
+    {
+        LoadDepotContent(
+            out GameplayScenarioAssembly authored,
+            out LevelDocument level);
+        LevelTraversalLinkData link = level.traversalLinks[0];
+        var resolvedPoses = new Dictionary<string, GameplayActorPose>(
+            StringComparer.Ordinal)
+        {
+            ["player"] = new GameplayActorPose(
+                new GameplayPosition(
+                    link.takeoff.x,
+                    link.takeoff.y,
+                    link.takeoff.z),
+                90f,
+                ActorStance.Standing),
+        };
+        var spatialIdentity = new SpatialContentIdentity(
+            level.levelId,
+            level.schemaVersion,
+            evidenceAlgorithmVersion: 1,
+            new string('7', 64));
+        var spatial = new GameplayHeadlessSpatialEvidence(
+            level,
+            spatialIdentity);
+        GameplayScenarioAssembly assembly = GameplayHeadlessScenarioGrounding
+            .Resolve(authored.WithResolvedActorPoses(resolvedPoses), spatial);
+        var gameplay = new GameplaySession(
+            assembly.Scenario,
+            scenarioSeed: assembly.RandomSeed);
+        Require(gameplay.BeginEncounter(),
+            "Traversal route fixture encounter did not begin.");
+        int turnGuard = 0;
+        while (!string.Equals(
+            gameplay.ActiveActorId,
+            "player",
+            StringComparison.Ordinal))
+        {
+            Require(turnGuard++ < assembly.Scenario.Actors.Count
+                && gameplay.TryEndTurn(gameplay.ActiveActorId, out _),
+                "Traversal route fixture could not reach the player turn.");
+        }
+        DestructiblePropSession destructibles =
+            DestructiblePropSession.FromLevel(level, gameplay.Journal);
+        GameplayCombatStateSnapshot initial = GameplayCombatStateCapture.Capture(
+            gameplay,
+            destructibles);
+        var traversalInputs = new List<GameplayReachableInput>();
+        foreach (GameplayReachableInput input in
+            GameplayReachableInputEnumerator.Enumerate(assembly, level))
+            if (string.Equals(
+                    input.ActorId,
+                    "player",
+                    StringComparison.Ordinal)
+                && input.Profile.Equals(
+                    GameplayCapabilityProfiles.TraversalMove()))
+                traversalInputs.Add(input);
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
+        GameplayCapabilityRegistry capabilities =
+            GameplayCurrentCapabilityCatalog.Create(
+                reducers,
+                traversalInputs);
+        var routes = new GameplayCandidateExecutionRouteRegistry(capabilities);
+        routes.Register(new GameplayTraversalCandidateExecutionRoute(
+            assembly.Scenario));
+        var builder = new GameplayHeadlessCandidateBuilder(
+            capabilities,
+            spatial,
+            scenarioDefinition: assembly.Scenario,
+            authoredTraversalLinks: level.traversalLinks);
+        IReadOnlyList<GameplayCandidate> candidates = builder.Build(
+            initial,
+            traversalInputs,
+            "player");
+        Require(candidates.Count > 0,
+            "An actor at an authored takeoff produced no traversal candidate.");
+        var context = new GameplayDecisionContext(
+            initial,
+            GameplayObservationSnapshot.FullState("player", initial));
+        GameplayExecutableCandidateEvaluation evaluation = routes.Evaluate(
+            context,
+            candidates[0]);
+        Require(evaluation.IsLegal
+                && evaluation.ExpectedOutcome.GetValue("move.traversal") == 1f
+                && evaluation.Evidence.Count == 1,
+            "Authored traversal was not legal and evidence-backed: "
+                + evaluation.FailureCode);
+        GameplaySemanticTransition transition = routes.Prepare(
+            context,
+            evaluation);
+        var runtime = new GameplaySimulationRuntime(
+            new GameplayExecutionIdentity(
+                new GameplayContentIdentity(
+                    assembly.Scenario.Id,
+                    scenarioSchemaVersion: 1,
+                    rulesSchemaVersion: 1,
+                    new string('5', 64)),
+                spatialIdentity,
+                gameplay.RunIdentity),
+            initial,
+            reducers,
+            capabilities);
+        runtime.Execute(transition);
+        Require(runtime.CurrentState.Session.GetActor("player")
+                .Pose.Position.DistanceTo(initial.Session.GetActor("player")
+                    .Pose.Position) > 1f
+            && GameplayExactReplay.Verify(
+                initial,
+                runtime.Trajectory,
+                reducers).IsExact,
+            "Authored traversal did not reduce and replay exactly.");
+    }
+
     private static void VerifyStaticHeadlessSpatialGeometry()
     {
         var level = new LevelDocument
@@ -4562,6 +4677,8 @@ internal static class SimulationChecks
         }
 
         var allInputs = new List<GameplayReachableInput>();
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
         int scenarioCount = 0;
         foreach (string path in Directory.GetFiles(
             Path.Combine(contentRoot, "Scenarios"),
@@ -4581,15 +4698,33 @@ internal static class SimulationChecks
             GameplayCapabilityCoverageReport report =
                 GameplayCapabilityCoverageGate.ValidateCurrent(assembly, level);
             report.RequireComplete(assembly.Scenario.Id);
-            allInputs.AddRange(
-                GameplayReachableInputEnumerator.Enumerate(assembly, level));
+            IReadOnlyList<GameplayReachableInput> scenarioInputs =
+                GameplayReachableInputEnumerator.Enumerate(assembly, level);
+            GameplayCapabilityRegistry scenarioCapabilities =
+                GameplayCurrentCapabilityCatalog.Create(
+                    reducers,
+                    scenarioInputs);
+            var spatial = new GameplayHeadlessSpatialEvidence(
+                level,
+                new SpatialContentIdentity(
+                    level.levelId,
+                    level.schemaVersion,
+                    evidenceAlgorithmVersion: 1,
+                    new string('0', 64)));
+            GameplayCandidateExecutionRouteRegistry scenarioRoutes =
+                GameplayCurrentCandidateExecutionRoutes.Create(
+                    assembly,
+                    spatial,
+                    scenarioCapabilities);
+            GameplayExecutableRouteCoverageValidator.Validate(
+                scenarioInputs,
+                scenarioRoutes).RequireComplete();
+            allInputs.AddRange(scenarioInputs);
             scenarioCount++;
         }
         Require(scenarioCount > 0,
             "The all-content coverage gate found no scenarios.");
 
-        GameplayTransitionReducerRegistry reducers =
-            GameplaySimulationReducers.CreateCurrent();
         GameplayCapabilityRegistry capabilities =
             GameplayCurrentCapabilityCatalog.Create(reducers, allInputs);
         GameplayCapabilityCoverageReport aggregate =

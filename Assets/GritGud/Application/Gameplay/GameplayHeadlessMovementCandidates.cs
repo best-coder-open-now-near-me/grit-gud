@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using GritGud.Domain.Gameplay;
+using GritGud.Domain.Levels;
 
 namespace GritGud.Application.Gameplay
 {
@@ -185,13 +186,15 @@ namespace GritGud.Application.Gameplay
         private readonly GameplayTacticalCandidateBuilder tacticalCandidates;
         private readonly GameplayHeadlessSpatialEvidence spatial;
         private readonly ScenarioDefinition scenario;
+        private readonly IReadOnlyList<LevelTraversalLinkData> traversalLinks;
         private readonly float maximumCandidateDistance;
 
         public GameplayHeadlessCandidateBuilder(
             GameplayCapabilityRegistry capabilities,
             GameplayHeadlessSpatialEvidence spatialEvidence,
             float maximumMovementCandidateDistance = 6f,
-            ScenarioDefinition scenarioDefinition = null)
+            ScenarioDefinition scenarioDefinition = null,
+            IEnumerable<LevelTraversalLinkData> authoredTraversalLinks = null)
         {
             candidates = new GameplayReachableCandidateBuilder(
                 capabilities ?? throw new ArgumentNullException(
@@ -201,6 +204,20 @@ namespace GritGud.Application.Gameplay
             spatial = spatialEvidence ?? throw new ArgumentNullException(
                 nameof(spatialEvidence));
             scenario = scenarioDefinition;
+            var links = new List<LevelTraversalLinkData>();
+            foreach (LevelTraversalLinkData link in authoredTraversalLinks
+                ?? Array.Empty<LevelTraversalLinkData>())
+            {
+                if (link == null)
+                    throw new ArgumentException(
+                        "Traversal links cannot contain null entries.",
+                        nameof(authoredTraversalLinks));
+                links.Add(link.DeepCopy());
+            }
+            links.Sort((left, right) => StringComparer.Ordinal.Compare(
+                left.id,
+                right.id));
+            traversalLinks = links.AsReadOnly();
             GameplayNumericPolicy.RequireFinite(
                 maximumMovementCandidateDistance,
                 nameof(maximumMovementCandidateDistance));
@@ -233,6 +250,9 @@ namespace GritGud.Application.Gameplay
                     if (input.Profile.Equals(
                         GameplayCapabilityProfiles.GroundedMove()))
                         result.AddRange(BuildGroundedMoves(state, input));
+                    else if (input.Profile.Equals(
+                        GameplayCapabilityProfiles.TraversalMove()))
+                        result.AddRange(BuildTraversals(state, input));
                     else if (input.Profile.Equals(
                         GameplayCapabilityProfiles.AerialDroneMove()))
                         result.AddRange(BuildDroneMoves(state, input));
@@ -273,6 +293,137 @@ namespace GritGud.Application.Gameplay
                 right.CandidateId));
             return result.AsReadOnly();
         }
+
+        private IEnumerable<GameplayCandidate> BuildTraversals(
+            GameplayCombatStateSnapshot state,
+            GameplayReachableInput input)
+        {
+            GameplayActorSnapshot actor = state.Session.GetActor(input.ActorId);
+            if (actor.IsPinned || actor.IsIncapacitated) yield break;
+            foreach (LevelTraversalLinkData link in traversalLinks)
+            {
+                foreach (bool reverse in link.bidirectional
+                    ? new[] { false, true }
+                    : new[] { false })
+                {
+                    GameplayPosition takeoff = ToPosition(
+                        reverse ? link.landing : link.takeoff);
+                    GameplayPosition landing = ToPosition(
+                        reverse ? link.takeoff : link.landing);
+                    if (actor.Pose.Position.DistanceTo(takeoff)
+                        > link.activationRadius + 0.0001f)
+                        continue;
+                    if (!spatial.TryResolveMovementPosition(
+                            takeoff,
+                            landing,
+                            maximumVerticalReach: 1.5f,
+                            out GameplayPosition supportedLanding)
+                        || supportedLanding.DistanceTo(landing) > 0.15f)
+                        continue;
+                    var segment = new MovementRouteSegmentRecord(
+                        actor.Pose.Position,
+                        landing,
+                        ParseTraversalKind(link.kind),
+                        link.id,
+                        link.actionId,
+                        link.movementCost,
+                        link.actionPointCost,
+                        link.arcHeight,
+                        link.playbackDurationSeconds);
+                    var route = new MovementRouteRecord(
+                        actor.ActorId,
+                        actor.Pose,
+                        actor.TurnBudget,
+                        new[] { segment });
+                    if (route.TotalActionPointCost
+                            > actor.TurnBudget.ActionPoints
+                        || route.TotalCost
+                            > actor.TurnBudget.MovementOpportunity + 0.0001f
+                        || !TraversalClears(state, segment, link))
+                        continue;
+                    bool actorBlocked = false;
+                    foreach (GameplayActorSnapshot other in
+                        state.Session.Actors)
+                        if (!string.Equals(
+                                other.ActorId,
+                                actor.ActorId,
+                                StringComparison.Ordinal)
+                            && !other.IsIncapacitated
+                            && other.Pose.Position.DistanceTo(landing) < 0.7f)
+                        {
+                            actorBlocked = true;
+                            break;
+                        }
+                    if (actorBlocked) continue;
+                    GameplayEvidenceRecord evidence = spatial.CaptureEvidence(
+                        "authored-traversal",
+                        state,
+                        actor.Pose.Position,
+                        landing,
+                        clearanceRadius: 0.3f + link.clearancePadding);
+                    float fireHazard = state.Covers(
+                            GameplayCombatStateCoverage.FireFields)
+                        ? spatial.EvaluateFireHazardTraversal(
+                            state,
+                            actor.Pose.Position,
+                            landing)
+                        : 0f;
+                    var intent = new GameplayHeadlessTraversalIntent(
+                        input,
+                        state.CanonicalHash,
+                        route,
+                        evidence,
+                        fireHazard);
+                    yield return candidates.Build(
+                        input,
+                        new GameplaySubjectReference(
+                            GameplaySemanticSubjectKind.Actor,
+                            actor.ActorId),
+                        intent,
+                        "traverse." + link.id + "."
+                            + (reverse ? "reverse" : "forward"));
+                }
+            }
+        }
+
+        private bool TraversalClears(
+            GameplayCombatStateSnapshot state,
+            MovementRouteSegmentRecord segment,
+            LevelTraversalLinkData link)
+        {
+            const int samples = 12;
+            GameplayPosition previous = segment.Sample(0f);
+            for (int index = 1; index <= samples; index++)
+            {
+                GameplayPosition current = segment.Sample(
+                    index / (float)samples);
+                if (spatial.BlocksPath(
+                    state,
+                    previous,
+                    current,
+                    0.3f + link.clearancePadding))
+                    return false;
+                previous = current;
+            }
+            return true;
+        }
+
+        private static MovementRouteSegmentKind ParseTraversalKind(
+            string kind)
+        {
+            switch (kind?.Trim().ToLowerInvariant())
+            {
+                case LevelTraversalLinkData.VaultKind:
+                    return MovementRouteSegmentKind.Vault;
+                case LevelTraversalLinkData.MantleKind:
+                    return MovementRouteSegmentKind.Mantle;
+                default:
+                    return MovementRouteSegmentKind.Jump;
+            }
+        }
+
+        private static GameplayPosition ToPosition(Float3Data value) =>
+            new GameplayPosition(value.x, value.y, value.z);
 
         private IEnumerable<GameplayCandidate> BuildDisplacements(
             GameplayCombatStateSnapshot state,
@@ -697,76 +848,16 @@ namespace GritGud.Application.Gameplay
                 ?? throw new ArgumentException(
                     "Grounded movement candidates require a frozen route intent.",
                     nameof(candidate));
-            GameplaySessionStateSnapshot session = context.State.Session;
-            GameplayActorSnapshot actor = session.GetActor(candidate.ActorId);
-            string failure = !string.Equals(
-                    intent.StateHash,
-                    context.State.CanonicalHash,
-                    StringComparison.Ordinal)
-                ? "movement-evidence-stale"
-                : session.Mode != GameplaySessionMode.TurnBased
-                    ? "turn-mode-required"
-                    : session.Operation != GameplaySessionOperation.None
-                        ? "operation-in-progress"
-                        : !string.Equals(
-                            session.ActiveActorId,
-                            candidate.ActorId,
-                            StringComparison.Ordinal)
-                            ? "actor-not-active"
-                            : actor.IsIncapacitated
-                                ? "actor-incapacitated"
-                                : actor.IsPinned
-                                    ? "actor-pinned"
-                                    : !PosesMatch(
-                                        actor.Pose,
-                                        intent.Route.OriginPose)
-                                        ? "movement-origin-stale"
-                                        : intent.Route.TotalCost
-                                            > actor.TurnBudget
-                                                .MovementOpportunity + 0.0001f
-                                            ? "movement-unaffordable"
-                                            : string.Empty;
-            bool legal = failure.Length == 0;
-            float beforeDistance = NearestHostileDistance(
-                session,
-                candidate.ActorId,
-                actor.Pose.Position);
-            float afterDistance = NearestHostileDistance(
-                session,
-                candidate.ActorId,
-                intent.Route.Destination);
-            return new GameplayExecutableCandidateEvaluation(
+            return GameplayMoveCandidateExecutionRouteUtility.Evaluate(
                 Id,
+                scenario,
+                context,
                 candidate,
-                context.State.CanonicalHash,
-                legal,
-                failure,
-                new GameplayCandidateOutcomeEstimate(new[]
-                {
-                    new GameplayCandidateOutcomeFeature(
-                        "move.distance",
-                        intent.Route.TotalCost),
-                    new GameplayCandidateOutcomeFeature(
-                        "cost.action-points",
-                        intent.Route.TotalActionPointCost),
-                    new GameplayCandidateOutcomeFeature(
-                        "cost.movement-opportunity",
-                        intent.Route.TotalCost),
-                    new GameplayCandidateOutcomeFeature(
-                        "hazard.fire-traversal",
-                        intent.FireHazardTraversal),
-                    new GameplayCandidateOutcomeFeature(
-                        "hostile.distance-before",
-                        beforeDistance),
-                    new GameplayCandidateOutcomeFeature(
-                        "hostile.distance-after",
-                        afterDistance),
-                    new GameplayCandidateOutcomeFeature(
-                        "hostile.distance-improvement",
-                        beforeDistance - afterDistance),
-                }),
-                new[] { intent.RouteEvidence },
-                legal ? intent.Route : null);
+                intent.StateHash,
+                intent.Route,
+                intent.RouteEvidence,
+                intent.FireHazardTraversal,
+                requiresTraversal: false);
         }
 
         public GameplayTransitionPayload PreparePayload(
@@ -779,38 +870,5 @@ namespace GritGud.Application.Gameplay
                         "Grounded movement route preparation is missing.",
                         nameof(evaluation)));
 
-        private float NearestHostileDistance(
-            GameplaySessionStateSnapshot session,
-            string actorId,
-            GameplayPosition position)
-        {
-            ScenarioActorDefinition observer = scenario.GetActor(actorId);
-            float nearest = 100000f;
-            foreach (GameplayActorSnapshot candidate in session.Actors)
-            {
-                if (candidate.IsIncapacitated
-                    || string.Equals(
-                        candidate.ActorId,
-                        actorId,
-                        StringComparison.Ordinal))
-                    continue;
-                ScenarioActorDefinition target = scenario.GetActor(
-                    candidate.ActorId);
-                if (!observer.Combat.IsHostileTo(target.Combat.AllegianceId))
-                    continue;
-                nearest = Math.Min(
-                    nearest,
-                    position.DistanceTo(candidate.Pose.Position));
-            }
-            return nearest;
-        }
-
-        private static bool PosesMatch(
-            GameplayActorPose left,
-            GameplayActorPose right) => left.Stance == right.Stance
-            && GameplayNumericPolicy.AreEquivalent(
-                left.FacingDegrees,
-                right.FacingDegrees)
-            && left.Position.DistanceTo(right.Position) <= 0.0001f;
     }
 }
