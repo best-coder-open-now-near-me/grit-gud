@@ -406,15 +406,60 @@ namespace GritGud.Application.Gameplay
             ThrownExplosiveRecord record = FindRecord(action);
             int affectedActors = 0;
             int affectedProps = 0;
+            int hostileActors = 0;
+            int friendlyActors = 0;
+            ScenarioActorDefinition thrower = scenario.GetActor(
+                candidate.ActorId);
             foreach (BlastEffectRecord effect in record.BlastEffects)
             {
                 if (effect.Exposure <= 0f) continue;
                 if (effect.SubjectKind == BlastSubjectKind.Actor)
+                {
                     affectedActors++;
+                    ScenarioActorDefinition affected = scenario.GetActor(
+                        effect.EntityId);
+                    if (thrower.Combat.IsHostileTo(
+                            affected.Combat.AllegianceId))
+                        hostileActors++;
+                    else
+                        friendlyActors++;
+                }
                 else if (effect.SubjectKind
                     == BlastSubjectKind.DestructibleProp)
                     affectedProps++;
             }
+            int concussiveHostiles = 0;
+            int concussiveFriendlies = 0;
+            foreach (ConcussiveActionPointEffectRecord effect in
+                record.ConcussiveEffects)
+            {
+                ScenarioActorDefinition affected = scenario.GetActor(
+                    effect.ActorId);
+                if (thrower.Combat.IsHostileTo(
+                        affected.Combat.AllegianceId))
+                    concussiveHostiles++;
+                else
+                    concussiveFriendlies++;
+            }
+            int fieldHostiles = 0;
+            int fieldFriendlies = 0;
+            if (record.FireField != null)
+                foreach (GameplayActorSnapshot affected in
+                    context.State.Session.Actors)
+                {
+                    if (affected.IsIncapacitated
+                        || affected.Pose.Position.DistanceTo(
+                            record.FireField.Origin)
+                            > record.FireField.Definition.MaximumRadius)
+                        continue;
+                    ScenarioActorDefinition affectedDefinition =
+                        scenario.GetActor(affected.ActorId);
+                    if (thrower.Combat.IsHostileTo(
+                            affectedDefinition.Combat.AllegianceId))
+                        fieldHostiles++;
+                    else
+                        fieldFriendlies++;
+                }
             return new GameplayExecutableCandidateEvaluation(
                 Id,
                 candidate,
@@ -430,14 +475,32 @@ namespace GritGud.Application.Gameplay
                         "blast.affected-destructibles",
                         affectedProps),
                     new GameplayCandidateOutcomeFeature(
+                        "blast.hostile-actors",
+                        hostileActors),
+                    new GameplayCandidateOutcomeFeature(
+                        "blast.friendly-actors",
+                        friendlyActors),
+                    new GameplayCandidateOutcomeFeature(
                         "field.smoke",
                         record.SmokeField == null ? 0f : 1f),
                     new GameplayCandidateOutcomeFeature(
                         "field.fire",
                         record.FireField == null ? 0f : 1f),
                     new GameplayCandidateOutcomeFeature(
+                        "field.fire-hostile-actors",
+                        fieldHostiles),
+                    new GameplayCandidateOutcomeFeature(
+                        "field.fire-friendly-actors",
+                        fieldFriendlies),
+                    new GameplayCandidateOutcomeFeature(
                         "concussive.affected-actors",
                         record.ConcussiveEffects.Count),
+                    new GameplayCandidateOutcomeFeature(
+                        "concussive.hostile-actors",
+                        concussiveHostiles),
+                    new GameplayCandidateOutcomeFeature(
+                        "concussive.friendly-actors",
+                        concussiveFriendlies),
                     new GameplayCandidateOutcomeFeature(
                         "cost.action-points",
                         action.Cost.ActionPoints),

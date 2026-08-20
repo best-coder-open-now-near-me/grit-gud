@@ -50,8 +50,11 @@ namespace GritGud.Application.Gameplay
             MovementRouteRecord route,
             GameplayEvidenceRecord evidence,
             float fireHazardTraversal,
-            bool requiresTraversal)
+            bool requiresTraversal,
+            GameplayHeadlessSpatialEvidence spatial)
         {
+            if (spatial == null) throw new ArgumentNullException(
+                nameof(spatial));
             GameplaySessionStateSnapshot session = context.State.Session;
             GameplayActorSnapshot actor = session.GetActor(candidate.ActorId);
             string failure = !string.Equals(
@@ -105,6 +108,38 @@ namespace GritGud.Application.Gameplay
                 session,
                 candidate.ActorId,
                 route.Destination);
+            float concussiveRange = MaximumAvailableConcussiveRange(
+                scenario,
+                actor);
+            int concussiveHostilesBefore = CountHostilesWithinRange(
+                scenario,
+                session,
+                candidate.ActorId,
+                actor.Pose.Position,
+                concussiveRange);
+            int concussiveHostilesAfter = CountHostilesWithinRange(
+                scenario,
+                session,
+                candidate.ActorId,
+                route.Destination,
+                concussiveRange);
+            float visibilityBefore = CaptureHostileVisibility(
+                scenario,
+                context.State,
+                spatial,
+                candidate.ActorId);
+            var movedState = new GameplayCanonicalStateMutation(context.State);
+            movedState.ReplaceActor(GameplayCanonicalStateMutation.CopyActor(
+                actor,
+                pose: new GameplayActorPose(
+                    route.Destination,
+                    route.FinalFacingDegrees,
+                    actor.Pose.Stance)));
+            float visibilityAfter = CaptureHostileVisibility(
+                scenario,
+                movedState.Build(),
+                spatial,
+                candidate.ActorId);
             return new GameplayExecutableCandidateEvaluation(
                 routeId,
                 candidate,
@@ -137,6 +172,27 @@ namespace GritGud.Application.Gameplay
                     new GameplayCandidateOutcomeFeature(
                         "hostile.distance-improvement",
                         beforeDistance - afterDistance),
+                    new GameplayCandidateOutcomeFeature(
+                        "concussive.hostiles-in-range-before",
+                        concussiveHostilesBefore),
+                    new GameplayCandidateOutcomeFeature(
+                        "concussive.hostiles-in-range-after",
+                        concussiveHostilesAfter),
+                    new GameplayCandidateOutcomeFeature(
+                        "concussive.hostile-range-gain",
+                        Math.Max(
+                            0,
+                            concussiveHostilesAfter
+                                - concussiveHostilesBefore)),
+                    new GameplayCandidateOutcomeFeature(
+                        "hostile.visibility-before",
+                        visibilityBefore),
+                    new GameplayCandidateOutcomeFeature(
+                        "hostile.visibility-after",
+                        visibilityAfter),
+                    new GameplayCandidateOutcomeFeature(
+                        "hostile.visibility-gain",
+                        Math.Max(0f, visibilityAfter - visibilityBefore)),
                 }),
                 new[] { evidence },
                 legal ? route : null);
@@ -169,6 +225,86 @@ namespace GritGud.Application.Gameplay
             return nearest;
         }
 
+        private static float MaximumAvailableConcussiveRange(
+            ScenarioDefinition scenario,
+            GameplayActorSnapshot actor)
+        {
+            float maximum = 0f;
+            foreach (InventoryItemDefinition item in scenario.GetActor(
+                actor.ActorId).Inventory)
+            {
+                if (!(item.ConsumablePower
+                        is ThrownExplosiveDefinition explosive)
+                    || !explosive.IsConcussive
+                    || !actor.Inventory.TryGetQuantity(
+                        item.Id,
+                        out int quantity)
+                    || quantity <= 0)
+                    continue;
+                maximum = Math.Max(maximum, explosive.MaximumRange);
+            }
+            return maximum;
+        }
+
+        private static int CountHostilesWithinRange(
+            ScenarioDefinition scenario,
+            GameplaySessionStateSnapshot session,
+            string actorId,
+            GameplayPosition position,
+            float maximumRange)
+        {
+            if (maximumRange <= 0f) return 0;
+            ScenarioActorDefinition observer = scenario.GetActor(actorId);
+            int count = 0;
+            foreach (GameplayActorSnapshot candidate in session.Actors)
+            {
+                if (candidate.IsIncapacitated
+                    || string.Equals(
+                        candidate.ActorId,
+                        actorId,
+                        StringComparison.Ordinal))
+                    continue;
+                ScenarioActorDefinition target = scenario.GetActor(
+                    candidate.ActorId);
+                if (observer.Combat.IsHostileTo(
+                        target.Combat.AllegianceId)
+                    && position.DistanceTo(candidate.Pose.Position)
+                        <= maximumRange + 0.0001f)
+                    count++;
+            }
+            return count;
+        }
+
+        private static float CaptureHostileVisibility(
+            ScenarioDefinition scenario,
+            GameplayCombatStateSnapshot state,
+            GameplayHeadlessSpatialEvidence spatial,
+            string actorId)
+        {
+            ScenarioActorDefinition observer = scenario.GetActor(actorId);
+            float visibility = 0f;
+            foreach (GameplayActorSnapshot candidate in state.Session.Actors)
+            {
+                if (candidate.IsIncapacitated
+                    || string.Equals(
+                        candidate.ActorId,
+                        actorId,
+                        StringComparison.Ordinal))
+                    continue;
+                ScenarioActorDefinition target = scenario.GetActor(
+                    candidate.ActorId);
+                if (!observer.Combat.IsHostileTo(
+                        target.Combat.AllegianceId))
+                    continue;
+                visibility += GameplayHeadlessEncounterEvidence.CaptureSight(
+                    state,
+                    spatial,
+                    actorId,
+                    candidate.ActorId).VisibleFraction;
+            }
+            return GameplayNumericPolicy.Normalize(visibility);
+        }
+
         private static bool PosesMatch(
             GameplayActorPose left,
             GameplayActorPose right) => left.Stance == right.Stance
@@ -183,12 +319,16 @@ namespace GritGud.Application.Gameplay
     {
         public const string Id = "authored-traversal.v1";
         private readonly ScenarioDefinition scenario;
+        private readonly GameplayHeadlessSpatialEvidence spatial;
 
         public GameplayTraversalCandidateExecutionRoute(
-            ScenarioDefinition scenarioDefinition)
+            ScenarioDefinition scenarioDefinition,
+            GameplayHeadlessSpatialEvidence spatialEvidence)
         {
             scenario = scenarioDefinition ?? throw new ArgumentNullException(
                 nameof(scenarioDefinition));
+            spatial = spatialEvidence ?? throw new ArgumentNullException(
+                nameof(spatialEvidence));
         }
 
         public string RouteId => Id;
@@ -220,7 +360,8 @@ namespace GritGud.Application.Gameplay
                 intent.Route,
                 intent.RouteEvidence,
                 intent.FireHazardTraversal,
-                requiresTraversal: true);
+                requiresTraversal: true,
+                spatial);
         }
 
         public GameplayTransitionPayload PreparePayload(

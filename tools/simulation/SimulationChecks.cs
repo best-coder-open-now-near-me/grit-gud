@@ -35,6 +35,7 @@ internal static class SimulationChecks
             VerifyConcreteThrownExplosiveCandidateRoutes();
             VerifyConcreteDisplacementCandidateRoute();
             VerifyPermanentPolicyRunner();
+            VerifyPermanentBattleRunner();
             VerifyLogicalExecutionGuards();
             VerifyBasicExecutableCandidateRoutes();
             VerifyLifecycleExecutableCandidateRoutes();
@@ -401,7 +402,9 @@ internal static class SimulationChecks
                 new[] { droneMoveInput });
         var moveRoutes = new GameplayCandidateExecutionRouteRegistry(
             moveCapabilities);
-        moveRoutes.Register(new GameplayDroneMoveCandidateExecutionRoute());
+        moveRoutes.Register(new GameplayDroneMoveCandidateExecutionRoute(
+            gameplay.Scenario,
+            sensorSpatial));
         IReadOnlyList<GameplayCandidate> builtDroneMoves =
             new GameplayHeadlessCandidateBuilder(
                 moveCapabilities,
@@ -3284,6 +3287,93 @@ internal static class SimulationChecks
             "Hanging policy did not fail with a typed partial artifact before mutation.");
     }
 
+    private static void VerifyPermanentBattleRunner()
+    {
+        LoadDepotContent(
+            out GameplayScenarioAssembly assembly,
+            out LevelDocument level);
+        GameplayCombatStateSnapshot initial =
+            GameplayHeadlessBattleStateFactory.Create(assembly, level);
+        var identity = new GameplayExecutionIdentity(
+            new GameplayContentIdentity(
+                assembly.Scenario.Id,
+                ScenarioContentDocument.CurrentSchemaVersion,
+                GameplayCombatStateSnapshot.CurrentSchemaVersion,
+                GameplayCanonicalValueDigest.Calculate(assembly.Scenario)),
+            new SpatialContentIdentity(
+                level.levelId,
+                level.schemaVersion,
+                evidenceAlgorithmVersion: 1,
+                GameplayCanonicalValueDigest.Calculate(level)),
+            initial.Session.RunIdentity);
+        var runner = new GameplayBattleRunner(
+            assembly,
+            level,
+            identity,
+            logicalGuardPolicy: new GameplayExecutionLogicalGuardPolicy(
+                maximumTransitions: 2000,
+                maximumRepeatedMaterialStates: 4,
+                maximumNoProgressTurns: 4));
+        GameplayBattleRunResult result = runner.RunAsync(initial)
+            .GetAwaiter().GetResult();
+        Console.WriteLine(
+            "Permanent Depot battle: " + result.Terminal.Kind
+            + ", decisions=" + result.Decisions.Count
+            + ", transitions=" + result.Transitions.Count
+            + ", failure=" + result.Terminal.FailureKind);
+        Require(result.Terminal.IsSuccessful,
+            "Permanent Depot battle failed: "
+                + result.Terminal.FailureKind + " "
+                + result.Terminal.FailureMessage);
+        Require(result.Decisions.Count > 0
+            && result.Transitions.Count == result.Decisions.Count + 1,
+            "Permanent battle did not retain setup plus policy decisions.");
+        int fireDeployments = 0;
+        int concussiveThrows = 0;
+        int droneMoves = 0;
+        int droneAttacks = 0;
+        foreach (GameplayBattleTransitionRecord transition in
+            result.Transitions)
+            foreach (GameplayDomainEvent domainEvent in transition.DomainEvents)
+            {
+                if (!(domainEvent is GameplayTransitionReducedEvent reduced))
+                    continue;
+                if (reduced.SemanticRecord is DroneMoveRecord) droneMoves++;
+                if (reduced.SemanticRecord is DroneAttackRecord
+                    || reduced.SemanticRecord is ActorDroneAttackRecord)
+                    droneAttacks++;
+                if (!(reduced.SemanticRecord is GameplayActionRecord action))
+                    continue;
+                foreach (GameplayActionOutcome outcome in action.Outcomes)
+                    if (outcome is ThrownExplosiveActionOutcome thrown)
+                    {
+                        if (thrown.Record.FireField != null) fireDeployments++;
+                        if (thrown.Record.ConcussiveEffects.Count > 0)
+                            concussiveThrows++;
+                    }
+            }
+        Console.WriteLine(
+            "First-sim mechanics: fire=" + fireDeployments
+            + ", concussive=" + concussiveThrows
+            + ", drone-moves=" + droneMoves
+            + ", drone-attacks=" + droneAttacks);
+        Require(fireDeployments > 0
+            && concussiveThrows > 0
+            && droneMoves > 0
+            && droneAttacks > 0,
+            "Permanent battle did not exercise every first-sim mechanic.");
+        GameplayExactReplayResult replay = GameplayExactReplay.Verify(
+            initial,
+            result.CreateTrajectory(),
+            GameplaySimulationReducers.CreateCurrent());
+        Require(replay.IsExact
+            && string.Equals(
+                replay.FinalState.CanonicalHash,
+                result.FinalState.CanonicalHash,
+                StringComparison.Ordinal),
+            "Permanent battle trajectory did not replay exactly.");
+    }
+
     private static void VerifyLogicalExecutionGuards()
     {
         GameplaySession gameplay = CreateEncounterGameplay();
@@ -4546,7 +4636,8 @@ internal static class SimulationChecks
             GameplayCurrentCapabilityCatalog.Create(reducers, inputs);
         var routes = new GameplayCandidateExecutionRouteRegistry(capabilities);
         routes.Register(new GameplayGroundedMoveCandidateExecutionRoute(
-            gameplay.Scenario));
+            gameplay.Scenario,
+            spatial));
         var builder = new GameplayHeadlessCandidateBuilder(
             capabilities,
             spatial);
@@ -4687,7 +4778,8 @@ internal static class SimulationChecks
                 traversalInputs);
         var routes = new GameplayCandidateExecutionRouteRegistry(capabilities);
         routes.Register(new GameplayTraversalCandidateExecutionRoute(
-            assembly.Scenario));
+            assembly.Scenario,
+            spatial));
         var builder = new GameplayHeadlessCandidateBuilder(
             capabilities,
             spatial,

@@ -240,55 +240,89 @@ namespace GritGud.Application.Gameplay
             foreach (GameplayReachableInput input in reachableInputs
                 ?? throw new ArgumentNullException(nameof(reachableInputs)))
             {
+                // Encounter onset/completion requires an external causal fact
+                // (detection, committed hostile action, or no capable hostile).
+                // A generic actor policy may never manufacture that fact from
+                // the mere existence of a system control input.
+                if (input.Kind
+                        == GameplayReachableInputKind.SystemContinuation
+                    && input.Profile.Capability
+                        == GameplaySemanticCapability.ChangeEncounter)
+                    continue;
+                GameplayReachableInput effectiveInput = input;
                 if (!string.Equals(
                         input.ActorId,
                         decidingActorId,
                         StringComparison.Ordinal))
-                    continue;
-                if (HasReachedAuthoredAttackLimit(state, input))
-                    continue;
-                if (input.Profile.Capability == GameplaySemanticCapability.Move)
                 {
-                    if (input.Profile.Equals(
+                    if (input.Kind
+                        != GameplayReachableInputKind.SystemContinuation)
+                        continue;
+                    effectiveInput = new GameplayReachableInput(
+                        input.Kind,
+                        input.SourceId,
+                        decidingActorId,
+                        input.Profile,
+                        input.SubjectIdHint,
+                        input.SourceSubjectId);
+                }
+                if (HasReachedAuthoredAttackLimit(state, effectiveInput))
+                    continue;
+                if (effectiveInput.Profile.Capability
+                    == GameplaySemanticCapability.Move)
+                {
+                    if (effectiveInput.Profile.Equals(
                         GameplayCapabilityProfiles.GroundedMove()))
-                        result.AddRange(BuildGroundedMoves(state, input));
-                    else if (input.Profile.Equals(
+                        result.AddRange(BuildGroundedMoves(
+                            state,
+                            effectiveInput));
+                    else if (effectiveInput.Profile.Equals(
                         GameplayCapabilityProfiles.TraversalMove()))
-                        result.AddRange(BuildTraversals(state, input));
-                    else if (input.Profile.Equals(
+                        result.AddRange(BuildTraversals(
+                            state,
+                            effectiveInput));
+                    else if (effectiveInput.Profile.Equals(
                         GameplayCapabilityProfiles.AerialDroneMove()))
-                        result.AddRange(BuildDroneMoves(state, input));
+                        result.AddRange(BuildDroneMoves(
+                            state,
+                            effectiveInput));
                     continue;
                 }
-                if (input.Profile.Equals(
+                if (effectiveInput.Profile.Equals(
                     GameplayCapabilityProfiles.AdvanceProjectile()))
                 {
-                    result.AddRange(BuildProjectileAdvances(state, input));
+                    result.AddRange(BuildProjectileAdvances(
+                        state,
+                        effectiveInput));
                     continue;
                 }
-                if (input.Profile.Capability
+                if (effectiveInput.Profile.Capability
                         == GameplaySemanticCapability.Displace
                     && scenario != null)
                 {
-                    result.AddRange(BuildDisplacements(state, input));
+                    result.AddRange(BuildDisplacements(
+                        state,
+                        effectiveInput));
                     continue;
                 }
-                if (input.SubjectKind
+                if (effectiveInput.SubjectKind
                         == GameplaySemanticSubjectKind.WorldPosition
                     && scenario != null
-                    && (input.Profile.Capability
+                    && (effectiveInput.Profile.Capability
                             == GameplaySemanticCapability.ThrowExplosive
-                        || input.Profile.Capability
+                        || effectiveInput.Profile.Capability
                             == GameplaySemanticCapability.LaunchProjectile
-                        || input.Profile.Capability
+                        || effectiveInput.Profile.Capability
                             == GameplaySemanticCapability.DirectAttack))
                 {
-                    result.AddRange(BuildWorldPositions(state, input));
+                    result.AddRange(BuildWorldPositions(
+                        state,
+                        effectiveInput));
                     continue;
                 }
                 result.AddRange(tacticalCandidates.Build(
                     state,
-                    new[] { input }));
+                    new[] { effectiveInput }));
             }
             result.Sort((left, right) => StringComparer.Ordinal.Compare(
                 left.CandidateId,
@@ -560,6 +594,10 @@ namespace GritGud.Application.Gameplay
             }
             if (input.Profile.Capability
                 == GameplaySemanticCapability.ThrowExplosive)
+            {
+                ThrownExplosiveDefinition explosive = ResolveThrownExplosive(
+                    actor,
+                    input);
                 foreach (GameplayTacticalSubject subject in
                     GameplayTacticalSubjectCatalog.Discover(state))
                     if (!string.Equals(
@@ -568,7 +606,25 @@ namespace GritGud.Application.Gameplay
                             StringComparison.Ordinal)
                         && actor.Pose.Position.DistanceTo(subject.Position)
                             <= maximumRange + 0.0001f)
+                    {
                         requested.Add(subject.Position);
+                        float tacticalOffset = ResolveTacticalThrowOffset(
+                            explosive);
+                        if (tacticalOffset <= 0f) continue;
+                        foreach (GameplayPosition direction in Directions)
+                        {
+                            double length = Math.Sqrt(
+                                (direction.X * direction.X)
+                                + (direction.Z * direction.Z));
+                            requested.Add(new GameplayPosition(
+                                subject.Position.X + (float)(
+                                    (direction.X / length) * tacticalOffset),
+                                subject.Position.Y,
+                                subject.Position.Z + (float)(
+                                    (direction.Z / length) * tacticalOffset)));
+                        }
+                    }
+            }
 
             var destinations = new HashSet<string>(StringComparer.Ordinal);
             foreach (GameplayPosition value in requested)
@@ -596,7 +652,8 @@ namespace GritGud.Application.Gameplay
                         "world." + key),
                     intent,
                     input.Profile.Capability.ToString().ToLowerInvariant()
-                        + "." + actor.ActorId + "." + key);
+                        + "." + actor.ActorId + "." + input.SourceId
+                        + "." + key);
             }
         }
 
@@ -608,16 +665,8 @@ namespace GritGud.Application.Gameplay
                 actor.ActorId);
             if (input.Profile.Capability
                 == GameplaySemanticCapability.ThrowExplosive)
-            {
-                foreach (InventoryItemDefinition item in definition.Inventory)
-                    if (item.ConsumablePower
-                            is ThrownExplosiveDefinition explosive
-                        && input.Profile.Equals(
-                            GameplayCapabilityProfiles.ThrowExplosive(
-                                explosive)))
-                        return explosive.MaximumRange;
-                return 0f;
-            }
+                return ResolveThrownExplosive(actor, input)?.MaximumRange
+                    ?? 0f;
             AttackDefinition attack = definition.Inventory.Count == 0
                 ? definition.Attack
                 : actor.EquippedItemId == null
@@ -628,6 +677,36 @@ namespace GritGud.Application.Gameplay
                 == GameplaySemanticCapability.LaunchProjectile)
                 return attack.Projectile?.MaximumRange ?? 0f;
             return 12f;
+        }
+
+        private ThrownExplosiveDefinition ResolveThrownExplosive(
+            GameplayActorSnapshot actor,
+            GameplayReachableInput input)
+        {
+            foreach (InventoryItemDefinition item in scenario.GetActor(
+                actor.ActorId).Inventory)
+                if (item.ConsumablePower
+                        is ThrownExplosiveDefinition explosive
+                    && input.Profile.Equals(
+                        GameplayCapabilityProfiles.ThrowExplosive(explosive)))
+                    return explosive;
+            return null;
+        }
+
+        private static float ResolveTacticalThrowOffset(
+            ThrownExplosiveDefinition explosive)
+        {
+            if (explosive == null) return 0f;
+            float effectRadius = explosive.BlastRadius;
+            if (explosive.SmokeField != null)
+                effectRadius = Math.Max(
+                    effectRadius,
+                    explosive.SmokeField.Radius);
+            if (explosive.FireField != null)
+                effectRadius = Math.Max(
+                    effectRadius,
+                    explosive.FireField.MaximumRadius);
+            return Math.Min(2f, effectRadius * 0.5f);
         }
 
         private IEnumerable<GameplayCandidate> BuildGroundedMoves(
@@ -656,7 +735,10 @@ namespace GritGud.Application.Gameplay
                 state,
                 spatial);
             foreach (float distance in distances)
-            foreach (GameplayPosition direction in Directions)
+            foreach (GameplayPosition direction in EnumerateTacticalDirections(
+                state,
+                actor.ActorId,
+                actor.Pose.Position))
             {
                 double length = Math.Sqrt(
                     (direction.X * direction.X)
@@ -724,8 +806,12 @@ namespace GritGud.Application.Gameplay
             float[] distances = maximumDistance <= 0.2f
                 ? new[] { maximumDistance }
                 : new[] { maximumDistance * 0.5f, maximumDistance };
+            var destinations = new HashSet<string>(StringComparer.Ordinal);
             foreach (float distance in distances)
-            foreach (GameplayPosition direction in Directions)
+            foreach (GameplayPosition direction in EnumerateTacticalDirections(
+                state,
+                drone.Definition.ControllerActorId,
+                drone.Position))
             {
                 double length = Math.Sqrt(
                     (direction.X * direction.X)
@@ -736,38 +822,187 @@ namespace GritGud.Application.Gameplay
                     drone.Position.Y,
                     drone.Position.Z
                         + (float)((direction.Z / length) * distance));
+                string destinationKey = Format(destination);
+                if (!destinations.Add(destinationKey)) continue;
                 if (spatial.BlocksPath(
                     state,
                     drone.Position,
                     destination,
-                    clearanceRadius: 0.2f)) continue;
-                float facing = (float)(Math.Atan2(
+                    clearanceRadius: 0.2f)
+                    || !DroneRouteClearsActors(
+                        state,
+                        drone.Position,
+                        destination))
+                    continue;
+                float travelFacing = NormalizeFacing((float)(Math.Atan2(
                     destination.X - drone.Position.X,
-                    destination.Z - drone.Position.Z) * 180d / Math.PI);
-                if (facing < 0f) facing += 360f;
+                    destination.Z - drone.Position.Z) * 180d / Math.PI));
                 GameplayEvidenceRecord evidence = spatial.CaptureEvidence(
                     "drone-route",
                     state,
                     drone.Position,
                     destination,
                     clearanceRadius: 0.2f);
-                var intent = new GameplayHeadlessDroneMoveIntent(
-                    input,
-                    state.CanonicalHash,
-                    drone.DroneId,
-                    drone.Position,
+                var facings = new HashSet<string>(StringComparer.Ordinal);
+                foreach (float facing in EnumerateDroneFacings(
+                    state,
+                    drone,
                     destination,
-                    facing,
-                    evidence);
-                yield return candidates.Build(
-                    input,
-                    new GameplaySubjectReference(
-                        GameplaySemanticSubjectKind.Vehicle,
-                        drone.DroneId),
-                    intent,
-                    "drone-move." + drone.DroneId + "."
-                        + Format(destination));
+                    travelFacing))
+                {
+                    string facingKey = GameplayNumericPolicy.FormatCanonical(
+                        facing);
+                    if (!facings.Add(facingKey)) continue;
+                    var intent = new GameplayHeadlessDroneMoveIntent(
+                        input,
+                        state.CanonicalHash,
+                        drone.DroneId,
+                        drone.Position,
+                        destination,
+                        facing,
+                        evidence);
+                    yield return candidates.Build(
+                        input,
+                        new GameplaySubjectReference(
+                            GameplaySemanticSubjectKind.Vehicle,
+                            drone.DroneId),
+                        intent,
+                        "drone-move." + drone.DroneId + "."
+                            + destinationKey + ".f" + facingKey);
+                }
             }
+        }
+
+        private IEnumerable<float> EnumerateDroneFacings(
+            GameplayCombatStateSnapshot state,
+            DroneSnapshot drone,
+            GameplayPosition destination,
+            float travelFacing)
+        {
+            yield return travelFacing;
+            if (scenario == null) yield break;
+            ScenarioActorDefinition controller = scenario.GetActor(
+                drone.Definition.ControllerActorId);
+            foreach (GameplayActorSnapshot actor in state.Session.Actors)
+            {
+                if (actor.IsIncapacitated) continue;
+                ScenarioActorDefinition target = scenario.GetActor(
+                    actor.ActorId);
+                if (!controller.Combat.IsHostileTo(
+                        target.Combat.AllegianceId))
+                    continue;
+                yield return NormalizeFacing((float)(Math.Atan2(
+                    actor.Pose.Position.X - destination.X,
+                    actor.Pose.Position.Z - destination.Z)
+                    * 180d / Math.PI));
+            }
+        }
+
+        private static float NormalizeFacing(float facing)
+        {
+            float normalized = facing % 360f;
+            if (normalized < 0f) normalized += 360f;
+            return GameplayNumericPolicy.Normalize(normalized);
+        }
+
+        private IEnumerable<GameplayPosition> EnumerateTacticalDirections(
+            GameplayCombatStateSnapshot state,
+            string actorId,
+            GameplayPosition origin)
+        {
+            var result = new List<GameplayPosition>(Directions);
+            if (scenario != null)
+            {
+                ScenarioActorDefinition observer = scenario.GetActor(actorId);
+                foreach (GameplayActorSnapshot actor in state.Session.Actors)
+                {
+                    if (actor.IsIncapacitated
+                        || string.Equals(
+                            actor.ActorId,
+                            actorId,
+                            StringComparison.Ordinal))
+                        continue;
+                    ScenarioActorDefinition target = scenario.GetActor(
+                        actor.ActorId);
+                    if (!observer.Combat.IsHostileTo(
+                            target.Combat.AllegianceId))
+                        continue;
+                    float x = actor.Pose.Position.X - origin.X;
+                    float z = actor.Pose.Position.Z - origin.Z;
+                    double length = Math.Sqrt((x * x) + (z * z));
+                    if (length <= 0.0001d) continue;
+                    var toward = new GameplayPosition(
+                        (float)(x / length),
+                        0f,
+                        (float)(z / length));
+                    var left = new GameplayPosition(
+                        -toward.Z,
+                        0f,
+                        toward.X);
+                    var right = new GameplayPosition(
+                        toward.Z,
+                        0f,
+                        -toward.X);
+                    result.Add(toward);
+                    result.Add(left);
+                    result.Add(right);
+                    result.Add(NormalizeDirection(toward, left));
+                    result.Add(NormalizeDirection(toward, right));
+                }
+            }
+            var unique = new HashSet<string>(StringComparer.Ordinal);
+            foreach (GameplayPosition direction in result)
+            {
+                string key = GameplayNumericPolicy.FormatCanonical(
+                        direction.X)
+                    + "," + GameplayNumericPolicy.FormatCanonical(direction.Z);
+                if (unique.Add(key)) yield return direction;
+            }
+        }
+
+        private static GameplayPosition NormalizeDirection(
+            GameplayPosition first,
+            GameplayPosition second)
+        {
+            float x = first.X + second.X;
+            float z = first.Z + second.Z;
+            double length = Math.Sqrt((x * x) + (z * z));
+            return length <= 0.0001d
+                ? first
+                : new GameplayPosition(
+                    (float)(x / length),
+                    0f,
+                    (float)(z / length));
+        }
+
+        private static bool DroneRouteClearsActors(
+            GameplayCombatStateSnapshot state,
+            GameplayPosition origin,
+            GameplayPosition destination)
+        {
+            const float separation = 0.65f;
+            foreach (GameplayActorSnapshot actor in state.Session.Actors)
+            {
+                if (actor.IsIncapacitated) continue;
+                GameplayPosition position = actor.Pose.Position;
+                double x = destination.X - origin.X;
+                double y = destination.Y - origin.Y;
+                double z = destination.Z - origin.Z;
+                double lengthSquared = (x * x) + (y * y) + (z * z);
+                double projection = lengthSquared <= 0.00000001d
+                    ? 0d
+                    : (((position.X - origin.X) * x)
+                        + ((position.Y - origin.Y) * y)
+                        + ((position.Z - origin.Z) * z)) / lengthSquared;
+                projection = Math.Max(0d, Math.Min(1d, projection));
+                var nearest = new GameplayPosition(
+                    (float)(origin.X + (x * projection)),
+                    (float)(origin.Y + (y * projection)),
+                    (float)(origin.Z + (z * projection)));
+                if (position.DistanceTo(nearest) < separation)
+                    return false;
+            }
+            return true;
         }
 
         private static DroneSnapshot FindDrone(
@@ -863,12 +1098,16 @@ namespace GritGud.Application.Gameplay
         public const string Id = "grounded-move.v1";
 
         private readonly ScenarioDefinition scenario;
+        private readonly GameplayHeadlessSpatialEvidence spatial;
 
         public GameplayGroundedMoveCandidateExecutionRoute(
-            ScenarioDefinition scenarioDefinition)
+            ScenarioDefinition scenarioDefinition,
+            GameplayHeadlessSpatialEvidence spatialEvidence)
         {
             scenario = scenarioDefinition ?? throw new ArgumentNullException(
                 nameof(scenarioDefinition));
+            spatial = spatialEvidence ?? throw new ArgumentNullException(
+                nameof(spatialEvidence));
         }
 
         public string RouteId => Id;
@@ -896,7 +1135,8 @@ namespace GritGud.Application.Gameplay
                 intent.Route,
                 intent.RouteEvidence,
                 intent.FireHazardTraversal,
-                requiresTraversal: false);
+                requiresTraversal: false,
+                spatial);
         }
 
         public GameplayTransitionPayload PreparePayload(

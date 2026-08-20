@@ -56,16 +56,70 @@ namespace GritGud.Application.Gameplay
     {
         public GameplayPolicyScore(
             GameplayExecutableCandidateEvaluation evaluation,
-            float value)
+            float value,
+            IEnumerable<GameplayPolicyScoreComponent> components = null)
         {
             Evaluation = evaluation ?? throw new ArgumentNullException(
                 nameof(evaluation));
             GameplayNumericPolicy.RequireFinite(value, nameof(value));
             Value = GameplayNumericPolicy.Normalize(value);
+            var copied = new List<GameplayPolicyScoreComponent>(
+                components ?? Array.Empty<GameplayPolicyScoreComponent>());
+            copied.Sort((left, right) => StringComparer.Ordinal.Compare(
+                left.FeatureId,
+                right.FeatureId));
+            for (int index = 0; index < copied.Count; index++)
+            {
+                if (copied[index] == null)
+                    throw new ArgumentException(
+                        "Policy score components cannot contain null entries.",
+                        nameof(components));
+                if (index > 0 && string.Equals(
+                    copied[index - 1].FeatureId,
+                    copied[index].FeatureId,
+                    StringComparison.Ordinal))
+                    throw new ArgumentException(
+                        $"Policy score component '{copied[index].FeatureId}' is duplicated.",
+                        nameof(components));
+            }
+            Components = copied.AsReadOnly();
         }
 
         public GameplayExecutableCandidateEvaluation Evaluation { get; }
         public float Value { get; }
+        public IReadOnlyList<GameplayPolicyScoreComponent> Components { get; }
+    }
+
+    public sealed class GameplayPolicyScoreComponent
+    {
+        public GameplayPolicyScoreComponent(
+            string featureId,
+            float featureValue,
+            float weight)
+        {
+            FeatureId = GameplayContentIdentity.RequireText(
+                featureId,
+                nameof(featureId));
+            GameplayNumericPolicy.RequireFinite(
+                featureValue,
+                nameof(featureValue));
+            GameplayNumericPolicy.RequireFinite(weight, nameof(weight));
+            FeatureValue = GameplayNumericPolicy.Normalize(featureValue);
+            Weight = GameplayNumericPolicy.Normalize(weight);
+            Contribution = GameplayNumericPolicy.Normalize(
+                FeatureValue * Weight);
+        }
+
+        public string FeatureId { get; }
+        public float FeatureValue { get; }
+        public float Weight { get; }
+        public float Contribution { get; }
+    }
+
+    public interface IGameplayIdentifiedCandidatePolicy
+    {
+        string PolicyId { get; }
+        int PolicyVersion { get; }
     }
 
     public interface IGameplayCandidatePolicy
@@ -95,12 +149,16 @@ namespace GritGud.Application.Gameplay
     /// A deterministic baseline policy over reducer-route outcome features.
     /// Feature weights tune valuation without changing authoritative rules.
     /// </summary>
-    public sealed class GameplayWeightedOutcomePolicy : IGameplayCandidatePolicy
+    public sealed class GameplayWeightedOutcomePolicy :
+        IGameplayCandidatePolicy,
+        IGameplayIdentifiedCandidatePolicy
     {
         private readonly IReadOnlyList<GameplayOutcomeFeatureWeight> weights;
 
         public GameplayWeightedOutcomePolicy(
-            IEnumerable<GameplayOutcomeFeatureWeight> featureWeights)
+            IEnumerable<GameplayOutcomeFeatureWeight> featureWeights,
+            string policyId = "policy.weighted-outcome",
+            int policyVersion = 1)
         {
             var copy = new List<GameplayOutcomeFeatureWeight>(
                 featureWeights ?? throw new ArgumentNullException(
@@ -123,7 +181,16 @@ namespace GritGud.Application.Gameplay
                         nameof(featureWeights));
             }
             weights = copy.AsReadOnly();
+            PolicyId = GameplayContentIdentity.RequireText(
+                policyId,
+                nameof(policyId));
+            if (policyVersion <= 0)
+                throw new ArgumentOutOfRangeException(nameof(policyVersion));
+            PolicyVersion = policyVersion;
         }
+
+        public string PolicyId { get; }
+        public int PolicyVersion { get; }
 
         public GameplayPolicyScore Score(
             GameplayDecisionContext context,
@@ -139,13 +206,21 @@ namespace GritGud.Application.Gameplay
                     nameof(evaluation));
             cancellationToken.ThrowIfCancellationRequested();
             float value = 0f;
+            var components = new List<GameplayPolicyScoreComponent>(
+                weights.Count);
             foreach (GameplayOutcomeFeatureWeight weight in weights)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                value += evaluation.ExpectedOutcome.GetValue(weight.FeatureId)
-                    * weight.Weight;
+                float featureValue = evaluation.ExpectedOutcome.GetValue(
+                    weight.FeatureId);
+                var component = new GameplayPolicyScoreComponent(
+                    weight.FeatureId,
+                    featureValue,
+                    weight.Weight);
+                components.Add(component);
+                value += component.Contribution;
             }
-            return new GameplayPolicyScore(evaluation, value);
+            return new GameplayPolicyScore(evaluation, value, components);
         }
     }
 
@@ -182,7 +257,31 @@ namespace GritGud.Application.Gameplay
                 new GameplayOutcomeFeatureWeight(
                     "concussive.affected-actors", 2f),
                 new GameplayOutcomeFeatureWeight(
+                    "concussive.hostile-actors", 45f),
+                new GameplayOutcomeFeatureWeight(
+                    "concussive.friendly-actors", -40f),
+                new GameplayOutcomeFeatureWeight(
+                    "blast.hostile-actors", 10f),
+                new GameplayOutcomeFeatureWeight(
+                    "blast.friendly-actors", -40f),
+                new GameplayOutcomeFeatureWeight(
+                    "field.fire", 45f),
+                new GameplayOutcomeFeatureWeight(
+                    "field.fire-hostile-actors", 20f),
+                new GameplayOutcomeFeatureWeight(
+                    "field.fire-friendly-actors", -50f),
+                new GameplayOutcomeFeatureWeight(
+                    "attack.source-drone", 35f),
+                new GameplayOutcomeFeatureWeight(
+                    "drone.hostile-visibility-gain", 100f),
+                new GameplayOutcomeFeatureWeight(
+                    "drone.hostile-distance-improvement", 8f),
+                new GameplayOutcomeFeatureWeight(
                     "hostile.distance-improvement", 2f),
+                new GameplayOutcomeFeatureWeight(
+                    "hostile.visibility-gain", 50f),
+                new GameplayOutcomeFeatureWeight(
+                    "concussive.hostile-range-gain", 40f),
                 new GameplayOutcomeFeatureWeight(
                     "turn.saved-action-points", 0.5f),
                 new GameplayOutcomeFeatureWeight(
@@ -195,13 +294,15 @@ namespace GritGud.Application.Gameplay
                     "hazard.fire-traversal", -20f),
                 new GameplayOutcomeFeatureWeight(
                     "drone.move-distance", -0.01f),
-            });
+            }, "policy.baseline-combat", policyVersion: 1);
             return scenario == null
                 ? weighted
                 : new AuthoredEnemyPolicy(scenario, weighted);
         }
 
-        private sealed class AuthoredEnemyPolicy : IGameplayCandidatePolicy
+        private sealed class AuthoredEnemyPolicy :
+            IGameplayCandidatePolicy,
+            IGameplayIdentifiedCandidatePolicy
         {
             private readonly ScenarioDefinition scenario;
             private readonly GameplayWeightedOutcomePolicy weighted;
@@ -215,6 +316,9 @@ namespace GritGud.Application.Gameplay
                 weighted = weightedPolicy ?? throw new ArgumentNullException(
                     nameof(weightedPolicy));
             }
+
+            public string PolicyId => "policy.baseline-combat";
+            public int PolicyVersion => 1;
 
             public GameplayPolicyScore Score(
                 GameplayDecisionContext context,
@@ -234,13 +338,38 @@ namespace GritGud.Application.Gameplay
                         >= behavior.MaximumAttacksPerTurn
                     && !actor.IsPinned
                     && !GameplayMandatoryWorkRules.HasPending(context.State);
-                return shouldCloseTurn
+                var additions = new List<GameplayPolicyScoreComponent>();
+                if (shouldCloseTurn
                     && evaluation.Candidate.Profile.Capability
-                        == GameplaySemanticCapability.EndTurn
-                    ? new GameplayPolicyScore(
-                        evaluation,
-                        checked(score.Value + 100000f))
-                    : score;
+                        == GameplaySemanticCapability.EndTurn)
+                    additions.Add(new GameplayPolicyScoreComponent(
+                        "authored.attack-cap.end-turn",
+                        1f,
+                        100000f));
+                if (evaluation.ExpectedOutcome.GetValue("field.fire") > 0f
+                    && context.State.FireFields.Count > 0)
+                    additions.Add(new GameplayPolicyScoreComponent(
+                        "context.fire-field-already-active",
+                        1f,
+                        -100f));
+                if (additions.Count == 0) return score;
+                float adjusted = score.Value;
+                foreach (GameplayPolicyScoreComponent addition in additions)
+                    adjusted += addition.Contribution;
+                return new GameplayPolicyScore(
+                    evaluation,
+                    adjusted,
+                    AddComponents(score.Components, additions));
+            }
+
+            private static IEnumerable<GameplayPolicyScoreComponent>
+                AddComponents(
+                    IEnumerable<GameplayPolicyScoreComponent> existing,
+                    IEnumerable<GameplayPolicyScoreComponent> additions)
+            {
+                var result = new List<GameplayPolicyScoreComponent>(existing);
+                result.AddRange(additions);
+                return result;
             }
         }
     }
@@ -299,12 +428,18 @@ namespace GritGud.Application.Gameplay
     {
         internal GameplayDecisionExecutionResult(
             GameplayPolicyScore selection,
+            GameplayPolicySelectionReason selectionReason,
             GameplaySemanticTransition transition,
             GameplayReductionResult reduction,
             GameplayDecisionDiagnostic diagnostic)
         {
             Selection = selection ?? throw new ArgumentNullException(
                 nameof(selection));
+            if (!Enum.IsDefined(
+                    typeof(GameplayPolicySelectionReason),
+                    selectionReason))
+                throw new ArgumentOutOfRangeException(nameof(selectionReason));
+            SelectionReason = selectionReason;
             Transition = transition ?? throw new ArgumentNullException(
                 nameof(transition));
             Reduction = reduction ?? throw new ArgumentNullException(
@@ -314,9 +449,30 @@ namespace GritGud.Application.Gameplay
         }
 
         public GameplayPolicyScore Selection { get; }
+        public GameplayPolicySelectionReason SelectionReason { get; }
         public GameplaySemanticTransition Transition { get; }
         public GameplayReductionResult Reduction { get; }
         public GameplayDecisionDiagnostic Diagnostic { get; }
+    }
+
+    public enum GameplayPolicySelectionReason
+    {
+        HighestScore,
+        StableCandidateIdTieBreak,
+    }
+
+    internal sealed class GameplayPolicySelection
+    {
+        public GameplayPolicySelection(
+            GameplayPolicyScore score,
+            GameplayPolicySelectionReason reason)
+        {
+            Score = score ?? throw new ArgumentNullException(nameof(score));
+            Reason = reason;
+        }
+
+        public GameplayPolicyScore Score { get; }
+        public GameplayPolicySelectionReason Reason { get; }
     }
 
     /// <summary>
@@ -401,13 +557,14 @@ namespace GritGud.Application.Gameplay
                         "Decision produced no legal candidate.",
                         diagnostic);
 
-                GameplayPolicyScore selection = await RunWorker(
+                GameplayPolicySelection selected = await RunWorker(
                     GameplayDecisionStage.Scoring,
                     token => Select(context, legal, token),
                     diagnostic,
                     decisionClock,
                     deadlineScope,
                     cancellationToken).ConfigureAwait(false);
+                GameplayPolicyScore selection = selected.Score;
                 diagnostic.SelectedCandidateId = selection.Evaluation
                     .Candidate.CandidateId;
 
@@ -455,6 +612,7 @@ namespace GritGud.Application.Gameplay
                 diagnostic.ActiveStage = null;
                 return new GameplayDecisionExecutionResult(
                     selection,
+                    selected.Reason,
                     transition,
                     installed,
                     diagnostic.Build());
@@ -509,12 +667,13 @@ namespace GritGud.Application.Gameplay
             return legal.AsReadOnly();
         }
 
-        private GameplayPolicyScore Select(
+        private GameplayPolicySelection Select(
             GameplayDecisionContext context,
             IReadOnlyList<GameplayExecutableCandidateEvaluation> legal,
             CancellationToken cancellationToken)
         {
             GameplayPolicyScore best = null;
+            bool selectedByTieBreak = false;
             foreach (GameplayExecutableCandidateEvaluation evaluation in legal)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -525,16 +684,27 @@ namespace GritGud.Application.Gameplay
                 if (!ReferenceEquals(score.Evaluation, evaluation))
                     throw new InvalidOperationException(
                         "Policy returned a score for a different candidate evaluation.");
-                if (best == null
-                    || score.Value > best.Value
-                    || (score.Value == best.Value
-                        && StringComparer.Ordinal.Compare(
-                            score.Evaluation.Candidate.CandidateId,
-                            best.Evaluation.Candidate.CandidateId) < 0))
+                if (best == null || score.Value > best.Value)
+                {
                     best = score;
+                    selectedByTieBreak = false;
+                }
+                else if (score.Value == best.Value)
+                {
+                    selectedByTieBreak = true;
+                    if (StringComparer.Ordinal.Compare(
+                            score.Evaluation.Candidate.CandidateId,
+                            best.Evaluation.Candidate.CandidateId) < 0)
+                        best = score;
+                }
             }
-            return best ?? throw new InvalidOperationException(
-                "Policy selection requires a legal candidate.");
+            return new GameplayPolicySelection(
+                best ?? throw new InvalidOperationException(
+                    "Policy selection requires a legal candidate."),
+                selectedByTieBreak
+                    ? GameplayPolicySelectionReason
+                        .StableCandidateIdTieBreak
+                    : GameplayPolicySelectionReason.HighestScore);
         }
 
         private Task<T> RunWorker<T>(

@@ -441,6 +441,9 @@ namespace GritGud.Application.Gameplay
                         "attack.hit-probability",
                         hitProbability),
                     new GameplayCandidateOutcomeFeature(
+                        "attack.source-drone",
+                        1f),
+                    new GameplayCandidateOutcomeFeature(
                         "cost.action-points",
                         record.Cost.ActionPoints),
                 }),

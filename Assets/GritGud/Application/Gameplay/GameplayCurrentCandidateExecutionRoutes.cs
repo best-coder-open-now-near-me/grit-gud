@@ -25,10 +25,14 @@ namespace GritGud.Application.Gameplay
             var routes = new GameplayCandidateExecutionRouteRegistry(
                 capabilities);
             routes.Register(new GameplayGroundedMoveCandidateExecutionRoute(
-                assembly.Scenario));
+                assembly.Scenario,
+                spatial));
             routes.Register(new GameplayTraversalCandidateExecutionRoute(
-                assembly.Scenario));
-            routes.Register(new GameplayDroneMoveCandidateExecutionRoute());
+                assembly.Scenario,
+                spatial));
+            routes.Register(new GameplayDroneMoveCandidateExecutionRoute(
+                assembly.Scenario,
+                spatial));
             routes.Register(new GameplayStanceCandidateExecutionRoute());
             routes.Register(new GameplayEquipmentCandidateExecutionRoute(
                 assembly.Scenario));

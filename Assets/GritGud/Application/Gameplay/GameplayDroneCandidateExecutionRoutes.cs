@@ -9,6 +9,19 @@ namespace GritGud.Application.Gameplay
     {
         public const string Id = "drone-move.v1";
 
+        private readonly ScenarioDefinition scenario;
+        private readonly GameplayHeadlessSpatialEvidence spatial;
+
+        public GameplayDroneMoveCandidateExecutionRoute(
+            ScenarioDefinition scenarioDefinition,
+            GameplayHeadlessSpatialEvidence spatialEvidence)
+        {
+            scenario = scenarioDefinition ?? throw new ArgumentNullException(
+                nameof(scenarioDefinition));
+            spatial = spatialEvidence ?? throw new ArgumentNullException(
+                nameof(spatialEvidence));
+        }
+
         public string RouteId => Id;
 
         public bool Supports(GameplayCapabilityProfile profile) =>
@@ -92,6 +105,36 @@ namespace GritGud.Application.Gameplay
                     controller.TurnBudget.SpendAction(
                         drone.Definition.MoveCost))
                 : null;
+            float visibilityBefore = legal
+                ? CaptureHostileVisibility(context.State, drone)
+                : 0f;
+            float visibilityAfter = legal
+                ? CaptureHostileVisibility(
+                    ReplaceDrone(
+                        context.State,
+                        new DroneSnapshot(
+                            drone.Definition,
+                            intent.Destination,
+                            intent.FacingDegrees,
+                            drone.RemainingIntegrity)),
+                    new DroneSnapshot(
+                        drone.Definition,
+                        intent.Destination,
+                        intent.FacingDegrees,
+                        drone.RemainingIntegrity))
+                : 0f;
+            float hostileDistanceBefore = legal
+                ? NearestHostileDistance(
+                    context.State,
+                    drone,
+                    drone.Position)
+                : 0f;
+            float hostileDistanceAfter = legal
+                ? NearestHostileDistance(
+                    context.State,
+                    drone,
+                    intent.Destination)
+                : 0f;
             return new GameplayExecutableCandidateEvaluation(
                 Id,
                 candidate,
@@ -109,6 +152,24 @@ namespace GritGud.Application.Gameplay
                     new GameplayCandidateOutcomeFeature(
                         "cost.movement-opportunity",
                         drone.Definition.MoveCost.MovementOpportunity),
+                    new GameplayCandidateOutcomeFeature(
+                        "drone.visible-hostiles-before",
+                        visibilityBefore),
+                    new GameplayCandidateOutcomeFeature(
+                        "drone.visible-hostiles-after",
+                        visibilityAfter),
+                    new GameplayCandidateOutcomeFeature(
+                        "drone.hostile-visibility-gain",
+                        Math.Max(0f, visibilityAfter - visibilityBefore)),
+                    new GameplayCandidateOutcomeFeature(
+                        "drone.hostile-distance-before",
+                        hostileDistanceBefore),
+                    new GameplayCandidateOutcomeFeature(
+                        "drone.hostile-distance-after",
+                        hostileDistanceAfter),
+                    new GameplayCandidateOutcomeFeature(
+                        "drone.hostile-distance-improvement",
+                        hostileDistanceBefore - hostileDistanceAfter),
                 }),
                 new[] { intent.RouteEvidence },
                 movement);
@@ -134,6 +195,88 @@ namespace GritGud.Application.Gameplay
                     StringComparison.Ordinal)) return drone;
             throw new KeyNotFoundException(
                 $"Drone '{droneId}' is absent from canonical state.");
+        }
+
+        private float CaptureHostileVisibility(
+            GameplayCombatStateSnapshot state,
+            DroneSnapshot drone)
+        {
+            ScenarioActorDefinition controller = scenario.GetActor(
+                drone.Definition.ControllerActorId);
+            float result = 0f;
+            foreach (GameplayActorSnapshot actor in state.Session.Actors)
+            {
+                if (actor.IsIncapacitated) continue;
+                ScenarioActorDefinition target = scenario.GetActor(
+                    actor.ActorId);
+                if (!controller.Combat.IsHostileTo(
+                        target.Combat.AllegianceId))
+                    continue;
+                result += GameplayHeadlessEncounterEvidence.CaptureDroneSight(
+                    state,
+                    spatial,
+                    drone.DroneId,
+                    actor.ActorId).VisibleFraction;
+            }
+            return GameplayNumericPolicy.Normalize(result);
+        }
+
+        private float NearestHostileDistance(
+            GameplayCombatStateSnapshot state,
+            DroneSnapshot drone,
+            GameplayPosition position)
+        {
+            ScenarioActorDefinition controller = scenario.GetActor(
+                drone.Definition.ControllerActorId);
+            float nearest = 100000f;
+            foreach (GameplayActorSnapshot actor in state.Session.Actors)
+            {
+                if (actor.IsIncapacitated) continue;
+                ScenarioActorDefinition target = scenario.GetActor(
+                    actor.ActorId);
+                if (!controller.Combat.IsHostileTo(
+                        target.Combat.AllegianceId))
+                    continue;
+                nearest = Math.Min(
+                    nearest,
+                    position.DistanceTo(actor.Pose.Position));
+            }
+            return GameplayNumericPolicy.Normalize(nearest);
+        }
+
+        private static GameplayCombatStateSnapshot ReplaceDrone(
+            GameplayCombatStateSnapshot state,
+            DroneSnapshot replacement)
+        {
+            var drones = new List<DroneSnapshot>(state.Drones.Count);
+            bool replaced = false;
+            foreach (DroneSnapshot drone in state.Drones)
+            {
+                if (string.Equals(
+                        drone.DroneId,
+                        replacement.DroneId,
+                        StringComparison.Ordinal))
+                {
+                    drones.Add(replacement);
+                    replaced = true;
+                }
+                else
+                {
+                    drones.Add(drone);
+                }
+            }
+            if (!replaced)
+                throw new KeyNotFoundException(
+                    $"Drone '{replacement.DroneId}' is absent from canonical state.");
+            return new GameplayCombatStateSnapshot(
+                state.Session,
+                state.Destructibles,
+                state.Vehicles,
+                state.Projectiles,
+                state.SmokeFields,
+                state.Coverage,
+                state.FireFields,
+                drones);
         }
     }
 }
