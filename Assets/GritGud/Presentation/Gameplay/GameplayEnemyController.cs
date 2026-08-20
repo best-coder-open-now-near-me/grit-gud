@@ -17,8 +17,18 @@ namespace GritGud.Presentation.Gameplay
         private GameplayEnemyExplorationCoordinator exploration;
         private GameplayEnemyCombatTurnExecutor combatTurns;
         private GameplayEnemyOutcomePresenter outcomes;
+        private bool replayPaused;
 
         internal int EnemyCount => enemies?.Count ?? 0;
+
+        internal bool ReplayPaused => replayPaused;
+
+        internal void SetReplayPaused(bool paused)
+        {
+            replayPaused = paused;
+            exploration?.SetPaused(paused);
+            combatTurns?.SetPaused(paused);
+        }
 
         internal void Bind(
             GameplaySession gameplaySession,
@@ -204,12 +214,13 @@ namespace GritGud.Presentation.Gameplay
             enemies = null;
             partyControl = null;
             session = null;
+            replayPaused = false;
             enabled = false;
         }
 
         private void Update()
         {
-            if (session == null)
+            if (session == null || replayPaused)
                 return;
 
             outcomes.PresentNewIncapacitations();

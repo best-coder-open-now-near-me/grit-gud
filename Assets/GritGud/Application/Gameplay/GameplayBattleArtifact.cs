@@ -54,7 +54,7 @@ namespace GritGud.Application.Gameplay
             string previousStateHash,
             string resultingStateHash,
             string transitionPayloadDigest,
-            string transitionPayloadCanonical,
+            string transitionCanonical,
             int? decisionIndex,
             IEnumerable<string> domainEventTypes,
             IEnumerable<string> domainEventPayloadDigests,
@@ -82,9 +82,17 @@ namespace GritGud.Application.Gameplay
             TransitionPayloadDigest = GameplayContentIdentity.RequireDigest(
                 transitionPayloadDigest,
                 nameof(transitionPayloadDigest));
-            TransitionPayloadCanonical = RequireJson(
-                transitionPayloadCanonical,
-                nameof(transitionPayloadCanonical));
+            TransitionCanonical = RequireJson(
+                transitionCanonical,
+                nameof(transitionCanonical));
+            if (!string.Equals(
+                    TransitionPayloadDigest,
+                    GameplayCanonicalValueDigest.CalculateCanonicalJson(
+                        TransitionCanonical),
+                    StringComparison.Ordinal))
+                throw new ArgumentException(
+                    "Battle artifact transition canonical JSON does not match its digest.",
+                    nameof(transitionCanonical));
             DecisionIndex = decisionIndex;
             DomainEventTypes = CopyText(domainEventTypes, nameof(
                 domainEventTypes));
@@ -99,6 +107,15 @@ namespace GritGud.Application.Gameplay
                     != DomainEventPayloadsCanonical.Count)
                 throw new ArgumentException(
                     "Battle artifact event types, digests, and payloads must align.");
+            for (int index = 0; index < DomainEventPayloadDigests.Count; index++)
+                if (!string.Equals(
+                        DomainEventPayloadDigests[index],
+                        GameplayCanonicalValueDigest.CalculateCanonicalJson(
+                            DomainEventPayloadsCanonical[index]),
+                        StringComparison.Ordinal))
+                    throw new ArgumentException(
+                        "Battle artifact domain-event canonical JSON does not match its digest.",
+                        nameof(domainEventPayloadsCanonical));
             ResultingStateCanonical = RequireJson(
                 resultingStateCanonical,
                 nameof(resultingStateCanonical));
@@ -111,7 +128,7 @@ namespace GritGud.Application.Gameplay
         public string PreviousStateHash { get; }
         public string ResultingStateHash { get; }
         public string TransitionPayloadDigest { get; }
-        public string TransitionPayloadCanonical { get; }
+        public string TransitionCanonical { get; }
         public int? DecisionIndex { get; }
         public IReadOnlyList<string> DomainEventTypes { get; }
         public IReadOnlyList<string> DomainEventPayloadDigests { get; }
@@ -603,7 +620,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplayBattleArtifact
     {
-        public const int CurrentSchemaVersion = 1;
+        public const int CurrentSchemaVersion = 2;
         public const string FormatId = "grit-gud-battle-artifact";
 
         public GameplayBattleArtifact(
@@ -673,7 +690,7 @@ namespace GritGud.Application.Gameplay
                     source.Step.ResultingStateHash,
                     source.Step.TransitionPayloadDigest,
                     GameplayReproBundleFormatter.FormatCanonicalValue(
-                        source.Transition.Payload),
+                        source.Transition),
                     source.DecisionIndex,
                     source.Step.DomainEventTypes,
                     source.DomainEventPayloadDigests,
@@ -723,6 +740,192 @@ namespace GritGud.Application.Gameplay
                 GameplayBattleArtifact.CurrentSchemaVersion,
                 GameplayCanonicalValueDigest.Calculate(content),
                 content);
+        }
+    }
+
+    /// <summary>
+    /// Verifies a fresh permanent-run result against every authoritative field
+    /// in a strict artifact while retaining only one additional canonical state
+    /// string at a time. The returned timeline is the same exact reducer replay
+    /// consumed by live presentation.
+    /// </summary>
+    public static class GameplayBattleArtifactVerifier
+    {
+        public static GameplaySemanticReplayTimeline VerifyRun(
+            GameplayBattleRunResult run,
+            GameplayBattleArtifact expected)
+        {
+            if (run == null) throw new ArgumentNullException(nameof(run));
+            if (expected == null) throw new ArgumentNullException(
+                nameof(expected));
+            GameplayBattleArtifactContent content = expected.Content;
+            Require(
+                run.ExecutionIdentity.HasSameIdentity(
+                    content.ExecutionIdentity),
+                "execution identity");
+            Require(
+                content.NumericPolicyVersion
+                    == GameplayNumericPolicy.CurrentVersion,
+                "numeric policy version");
+            Require(
+                string.Equals(
+                    run.InitialState.CanonicalHash,
+                    content.InitialStateHash,
+                    StringComparison.Ordinal),
+                "initial state hash");
+            RequireCanonical(
+                run.InitialState,
+                content.InitialStateCanonical,
+                "initial state");
+            Require(
+                run.Transitions.Count == content.Transitions.Count,
+                "transition count");
+            Require(
+                run.Decisions.Count == content.Decisions.Count,
+                "decision count");
+
+            var replay = new GameplaySemanticReplayTimeline(
+                run.InitialState,
+                run.CreateTrajectory(),
+                GameplaySimulationReducers.CreateCurrent());
+            for (int index = 0; index < run.Transitions.Count; index++)
+            {
+                GameplayBattleTransitionRecord actual = run.Transitions[index];
+                GameplayBattleArtifactTransition recorded = content
+                    .Transitions[index];
+                GameplayTransitionIdentity identity = actual.Transition
+                    .Identity;
+                string path = "transition[" + index + "]";
+                Require(identity.Sequence == recorded.Sequence,
+                    path + ".sequence");
+                RequireEqual(identity.Kind, recorded.Kind,
+                    path + ".kind");
+                RequireEqual(identity.ActorId, recorded.ActorId,
+                    path + ".actor");
+                RequireEqual(identity.SubjectId, recorded.SubjectId,
+                    path + ".subject");
+                RequireEqual(
+                    actual.Transition.PreviousStateHash,
+                    recorded.PreviousStateHash,
+                    path + ".previous-state");
+                RequireEqual(
+                    actual.Step.ResultingStateHash,
+                    recorded.ResultingStateHash,
+                    path + ".resulting-state");
+                RequireEqual(
+                    actual.Step.TransitionPayloadDigest,
+                    recorded.TransitionPayloadDigest,
+                    path + ".digest");
+                Require(
+                    actual.DecisionIndex == recorded.DecisionIndex,
+                    path + ".decision-index");
+                RequireCanonical(
+                    actual.Transition,
+                    recorded.TransitionCanonical,
+                    path + ".canonical-transition");
+                Require(
+                    actual.DomainEvents.Count
+                        == recorded.DomainEventTypes.Count,
+                    path + ".event-count");
+                for (int eventIndex = 0;
+                    eventIndex < actual.DomainEvents.Count;
+                    eventIndex++)
+                {
+                    GameplayDomainEvent domainEvent = actual.DomainEvents[
+                        eventIndex];
+                    string eventPath = path + ".event[" + eventIndex + "]";
+                    RequireEqual(
+                        domainEvent.EventType,
+                        recorded.DomainEventTypes[eventIndex],
+                        eventPath + ".type");
+                    RequireEqual(
+                        actual.DomainEventPayloadDigests[eventIndex],
+                        recorded.DomainEventPayloadDigests[eventIndex],
+                        eventPath + ".digest");
+                    RequireCanonical(
+                        domainEvent,
+                        recorded.DomainEventPayloadsCanonical[eventIndex],
+                        eventPath + ".canonical");
+                }
+                RequireCanonical(
+                    replay.Frames[index].Resulting,
+                    recorded.ResultingStateCanonical,
+                    path + ".canonical-result");
+            }
+
+            for (int index = 0; index < run.Decisions.Count; index++)
+            {
+                GameplayBattleDecisionRecord source = run.Decisions[index];
+                var actual = new GameplayBattleArtifactDecision(
+                    source.DecisionIndex,
+                    source.PolicyId,
+                    source.PolicyVersion,
+                    source.ActorId,
+                    source.PreviousStateHash,
+                    source.CandidateSetDigest,
+                    source.CandidateIds,
+                    source.LegalCandidateIds,
+                    source.SelectedCandidateId,
+                    source.SelectionReason,
+                    source.Score,
+                    source.ScoreComponents,
+                    source.TransitionSequence,
+                    source.TransitionPayloadDigest,
+                    source.ResultingStateHash);
+                RequireCanonical(
+                    actual,
+                    GameplayReproBundleFormatter.FormatCanonicalValue(
+                        content.Decisions[index]),
+                    "decision[" + index + "]");
+            }
+
+            GameplayBattleTerminalResult terminal = run.Terminal;
+            var actualTerminal = new GameplayBattleArtifactTerminal(
+                terminal.Kind,
+                terminal.TransitionSequence,
+                terminal.FinalStateHash,
+                terminal.CapablePartyActorIds,
+                terminal.CapableHostileActorIds,
+                terminal.FailureKind,
+                terminal.FailureMessage);
+            RequireCanonical(
+                actualTerminal,
+                GameplayReproBundleFormatter.FormatCanonicalValue(
+                    content.Terminal),
+                "terminal");
+            RequireCanonical(
+                GameplayBattleScoreboardBuilder.Build(run),
+                GameplayReproBundleFormatter.FormatCanonicalValue(
+                    content.Scoreboard),
+                "scoreboard");
+            RequireEqual(
+                replay.FinalState.CanonicalHash,
+                content.Terminal.FinalStateHash,
+                "replay final state");
+            return replay;
+        }
+
+        private static void RequireCanonical(
+            object actual,
+            string expected,
+            string path) => RequireEqual(
+                GameplayReproBundleFormatter.FormatCanonicalValue(actual),
+                expected,
+                path);
+
+        private static void RequireEqual(
+            string actual,
+            string expected,
+            string path) => Require(
+                string.Equals(actual, expected, StringComparison.Ordinal),
+                path);
+
+        private static void Require(bool condition, string path)
+        {
+            if (!condition)
+                throw new InvalidOperationException(
+                    "Fresh battle execution diverged from artifact at '"
+                    + path + "'.");
         }
     }
 

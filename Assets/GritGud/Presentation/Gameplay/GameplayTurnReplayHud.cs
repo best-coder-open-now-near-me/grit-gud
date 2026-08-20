@@ -16,6 +16,10 @@ namespace GritGud.Presentation.Gameplay
         private GameplayLiveSessionRuntime runtime;
         private GameplaySemanticReplayTimeline replay;
         private GameplaySemanticReplayPlaybackTimeline playback;
+        private GameplaySemanticReplayTimeline externalReplay;
+        private string externalArtifactId;
+        private GameplayBattleArtifactTerminal externalTerminal;
+        private GameplayBattleScoreboard externalScoreboard;
         private bool isOpen;
         private bool isPlaying;
         private float playhead;
@@ -39,7 +43,11 @@ namespace GritGud.Presentation.Gameplay
         internal event Action<float> PlayheadChanged;
 
         public bool IsAvailable => runtime != null
-            && runtime.Trajectory.Count > 0;
+            && (externalReplay != null || runtime.Trajectory.Count > 0);
+
+        internal string ActionLabel => externalReplay == null
+            ? "REPLAY"
+            : "WATCH";
 
         public void Bind(
             GameplaySession session,
@@ -59,10 +67,44 @@ namespace GritGud.Presentation.Gameplay
             runtime = null;
             replay = null;
             playback = null;
+            externalReplay = null;
+            externalArtifactId = null;
+            externalTerminal = null;
+            externalScoreboard = null;
             isOpen = false;
             isPlaying = false;
             playhead = 0f;
             enabled = false;
+        }
+
+        internal void SetExternalReplay(
+            GameplaySemanticReplayTimeline timeline,
+            GameplayBattleArtifact artifact)
+        {
+            GameplaySemanticReplayTimeline nextReplay = timeline
+                ?? throw new ArgumentNullException(
+                nameof(timeline));
+            GameplayBattleArtifact nextArtifact = artifact
+                ?? throw new ArgumentNullException(
+                nameof(artifact));
+            if (!nextArtifact.Content.ExecutionIdentity.HasSameIdentity(
+                    runtime?.ExecutionIdentity))
+                throw new ArgumentException(
+                    "External replay identity does not match the live content.",
+                    nameof(artifact));
+            externalReplay = nextReplay;
+            externalArtifactId = nextArtifact.ArtifactId;
+            externalTerminal = nextArtifact.Content.Terminal;
+            externalScoreboard = nextArtifact.Content.Scoreboard;
+            replay = null;
+            playback = null;
+            if (isOpen)
+            {
+                RefreshPlayback();
+                isPlaying = playback != null;
+                playhead = 0f;
+                PlayheadChanged?.Invoke(playhead);
+            }
         }
 
         public void Toggle()
@@ -81,8 +123,10 @@ namespace GritGud.Presentation.Gameplay
             if (playback == null)
                 return;
             isOpen = true;
-            isPlaying = false;
-            playhead = playback.TotalDurationSeconds;
+            isPlaying = externalReplay != null;
+            playhead = externalReplay == null
+                ? playback.TotalDurationSeconds
+                : 0f;
             OpenChanged?.Invoke(true);
             PlayheadChanged?.Invoke(playhead);
         }
@@ -137,10 +181,25 @@ namespace GritGud.Presentation.Gameplay
             string displayName = ResolveDisplayName(actorId);
             string capability = position.Frame.Transition.Payload.Profile
                 .Capability.ToString();
+            string mode = externalArtifactId == null
+                ? "REPLAY"
+                : "SIM " + externalArtifactId.Substring(0, 8)
+                    .ToUpperInvariant();
+            string detail = displayName.ToUpperInvariant() + " · " + capability;
+            if (externalTerminal != null
+                && playhead >= playback.TotalDurationSeconds)
+            {
+                GameplayBattleScoreboard score = externalScoreboard;
+                detail = externalTerminal.Kind.ToString()
+                    .ToUpperInvariant()
+                    + " · " + score.TurnsCompleted + " TURNS"
+                    + " · " + score.Hits + "/" + score.Attacks + " HITS"
+                    + " · " + score.Wounds + " WOUNDS";
+            }
             GUI.Label(
                 new Rect(bar.x + 10f, bar.y + 5f, bar.width - 50f, 20f),
-                $"REPLAY  {selectedFrame + 1}/{playback.Frames.Count}  "
-                    + $"{displayName.ToUpperInvariant()} · {capability}",
+                $"{mode}  {selectedFrame + 1}/{playback.Frames.Count}  "
+                    + detail,
                 titleStyle);
             if (GUI.Button(
                 new Rect(bar.xMax - 30f, bar.y + 4f, 24f, 22f),
@@ -247,7 +306,7 @@ namespace GritGud.Presentation.Gameplay
                 playback = null;
                 return;
             }
-            replay = runtime.CreateReplayTimeline();
+            replay = externalReplay ?? runtime.CreateReplayTimeline();
             playback = new GameplaySemanticReplayPlaybackTimeline(replay);
             if (playback.Frames.Count == 0)
             {

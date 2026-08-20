@@ -220,8 +220,8 @@ namespace GritGud.Application.Gameplay
             string resultingHash = value.String("ResultingStateHash");
             long sequence = value.Int64("Sequence");
             string subjectId = value.String("SubjectId");
-            string payloadCanonical = value.String(
-                "TransitionPayloadCanonical");
+            string transitionCanonical = value.String(
+                "TransitionCanonical");
             string payloadDigest = value.String("TransitionPayloadDigest");
             value.Complete();
             return new GameplayBattleArtifactTransition(
@@ -232,7 +232,7 @@ namespace GritGud.Application.Gameplay
                 previousHash,
                 resultingHash,
                 payloadDigest,
-                payloadCanonical,
+                transitionCanonical,
                 decisionIndex,
                 eventTypes,
                 eventDigests,

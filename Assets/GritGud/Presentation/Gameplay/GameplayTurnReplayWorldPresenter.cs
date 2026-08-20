@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
+using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
 {
@@ -14,6 +15,10 @@ namespace GritGud.Presentation.Gameplay
         private readonly Dictionary<string, GameplayTurnReplayActorPresenter>
             actors = new Dictionary<string, GameplayTurnReplayActorPresenter>(
                 StringComparer.Ordinal);
+        private readonly List<Behaviour> liveBehaviours =
+            new List<Behaviour>();
+        private readonly List<bool> liveBehaviourEnabled =
+            new List<bool>();
         private GameplayWorldRegistry world;
         private GameplayInputController input;
         private GameplayTurnReplayHud hud;
@@ -23,6 +28,16 @@ namespace GritGud.Presentation.Gameplay
         private GameplaySmokeFieldController smoke;
         private GameplayFireFieldController fire;
         private GameplayDroneController drones;
+        private GameplayCameraRig cameraRig;
+        private GameplayReplayCameraCutPresenter cameraCuts;
+        private GameplaySession gameplay;
+        private GameplayHud gameplayHud;
+        private GameplayPartyHud partyHud;
+        private GameplayEnemyController enemies;
+        private bool gameplayHudWasVisible;
+        private bool partyHudWasSuppressed;
+        private bool enemiesWerePaused;
+        private float priorTimeScale;
         private bool presenting;
 
         public void Bind(
@@ -34,7 +49,14 @@ namespace GritGud.Presentation.Gameplay
             GameplayVehicleController vehicleController,
             GameplaySmokeFieldController smokeController,
             GameplayFireFieldController fireController,
-            GameplayDroneController droneController)
+            GameplayDroneController droneController,
+            GameplayCameraRig replayCameraRig,
+            GameplayReplayCameraCutPresenter replayCameraCuts,
+            GameplaySession session,
+            GameplayHud liveGameplayHud,
+            GameplayPartyHud livePartyHud,
+            GameplayEnemyController enemyController,
+            IEnumerable<Behaviour> behavioursToSuspend)
         {
             Dispose();
             world = registry ?? throw new ArgumentNullException(nameof(registry));
@@ -53,6 +75,28 @@ namespace GritGud.Presentation.Gameplay
                 nameof(fireController));
             drones = droneController ?? throw new ArgumentNullException(
                 nameof(droneController));
+            cameraRig = replayCameraRig ?? throw new ArgumentNullException(
+                nameof(replayCameraRig));
+            cameraCuts = replayCameraCuts ?? throw new ArgumentNullException(
+                nameof(replayCameraCuts));
+            gameplay = session ?? throw new ArgumentNullException(
+                nameof(session));
+            gameplayHud = liveGameplayHud ?? throw new ArgumentNullException(
+                nameof(liveGameplayHud));
+            partyHud = livePartyHud ?? throw new ArgumentNullException(
+                nameof(livePartyHud));
+            enemies = enemyController ?? throw new ArgumentNullException(
+                nameof(enemyController));
+            foreach (Behaviour behaviour in behavioursToSuspend
+                ?? throw new ArgumentNullException(nameof(behavioursToSuspend)))
+            {
+                if (behaviour == null)
+                    throw new ArgumentException(
+                        "Replay suspension cannot contain a null behaviour.",
+                        nameof(behavioursToSuspend));
+                if (!liveBehaviours.Contains(behaviour))
+                    liveBehaviours.Add(behaviour);
+            }
             hud.OpenChanged += HandleOpenChanged;
             hud.PlayheadChanged += HandlePlayheadChanged;
         }
@@ -74,6 +118,14 @@ namespace GritGud.Presentation.Gameplay
             smoke = null;
             fire = null;
             drones = null;
+            cameraRig = null;
+            cameraCuts = null;
+            gameplay = null;
+            gameplayHud = null;
+            partyHud = null;
+            enemies = null;
+            liveBehaviours.Clear();
+            liveBehaviourEnabled.Clear();
         }
 
         private void HandleOpenChanged(bool open)
@@ -90,6 +142,21 @@ namespace GritGud.Presentation.Gameplay
             presenting = true;
             try
             {
+                gameplayHudWasVisible = gameplayHud.IsVisible;
+                partyHudWasSuppressed = partyHud.IsPresentationSuppressed;
+                enemiesWerePaused = enemies.ReplayPaused;
+                priorTimeScale = Time.timeScale;
+                Time.timeScale = 0f;
+                gameplayHud.Hide();
+                partyHud.SetPresentationSuppressed(true);
+                input.SetCameraOnly(true);
+                enemies.SetReplayPaused(true);
+                liveBehaviourEnabled.Clear();
+                foreach (Behaviour behaviour in liveBehaviours)
+                {
+                    liveBehaviourEnabled.Add(behaviour.enabled);
+                    behaviour.enabled = false;
+                }
                 foreach (GameplayActorView actor in world.Actors)
                 {
                     var presenter = new GameplayTurnReplayActorPresenter(actor);
@@ -101,8 +168,8 @@ namespace GritGud.Presentation.Gameplay
                 smoke.BeginReplayPresentation();
                 fire.BeginReplayPresentation();
                 drones.BeginReplayPresentation();
+                cameraCuts.Begin(cameraRig, world);
                 destructibles.ClearReplayTransients();
-                input.SetCameraOnly(true);
                 Present();
             }
             catch
@@ -131,6 +198,27 @@ namespace GritGud.Presentation.Gameplay
                 GameplaySemanticReplaySampler.Sample(
                     position.Frame,
                     position.Progress);
+            string actorId = position.Frame.Transition.Payload.ActorId;
+            ScenarioActorDefinition definition = gameplay.Scenario.GetActor(
+                actorId);
+            string focusId = actorId;
+            string focusLabel = definition.CharacterProfile?.DisplayName
+                ?? actorId;
+            if (position.Frame.Transition.Payload
+                is GameplayDroneMoveTransitionPayload droneMove)
+            {
+                focusId = droneMove.Movement.DroneId;
+                focusLabel = FormatSubjectLabel(focusId);
+            }
+            else if (position.Frame.Transition.Payload
+                is GameplayDroneAttackTransitionPayload droneAttack)
+            {
+                focusId = droneAttack.Action.DroneId;
+                focusLabel = FormatSubjectLabel(focusId);
+            }
+            cameraCuts.Focus(
+                focusId,
+                focusLabel);
             PresentActors(sample, position);
             destructibles.PresentReplay(sample.Destructibles);
             projectiles.PresentReplay(sample.Projectiles);
@@ -200,7 +288,30 @@ namespace GritGud.Presentation.Gameplay
             TryRestore(
                 () => drones?.EndReplayPresentation(),
                 ref failure);
+            TryRestore(() => cameraCuts?.End(), ref failure);
             TryRestore(() => input?.SetCameraOnly(false), ref failure);
+            TryRestore(() => Time.timeScale = priorTimeScale, ref failure);
+            TryRestore(
+                () => partyHud?.SetPresentationSuppressed(
+                    partyHudWasSuppressed),
+                ref failure);
+            if (gameplayHudWasVisible)
+                TryRestore(() => gameplayHud?.Show(), ref failure);
+            for (int index = 0;
+                index < liveBehaviourEnabled.Count
+                    && index < liveBehaviours.Count;
+                index++)
+            {
+                int captured = index;
+                TryRestore(
+                    () => liveBehaviours[captured].enabled =
+                        liveBehaviourEnabled[captured],
+                    ref failure);
+            }
+            TryRestore(
+                () => enemies?.SetReplayPaused(enemiesWerePaused),
+                ref failure);
+            liveBehaviourEnabled.Clear();
             actors.Clear();
             presenting = false;
             if (failure != null)
@@ -218,5 +329,8 @@ namespace GritGud.Presentation.Gameplay
                 failure ??= exception;
             }
         }
+
+        private static string FormatSubjectLabel(string subjectId) =>
+            subjectId.Replace('-', ' ');
     }
 }

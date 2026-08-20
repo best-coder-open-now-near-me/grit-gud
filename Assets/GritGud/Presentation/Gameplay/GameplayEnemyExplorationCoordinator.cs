@@ -33,6 +33,7 @@ namespace GritGud.Presentation.Gameplay
             new List<GameplayEnemyRuntimeRegistry.Entry>();
         private readonly CancellationTokenSource lifetime =
             new CancellationTokenSource();
+        private CancellationTokenSource decisionCancellation;
         private GameplayLiveSessionRuntime runtime;
         private GameplayPolicyDecisionRunner observationRunner;
         private GameplayPolicyDecisionRunner patrolRunner;
@@ -46,6 +47,8 @@ namespace GritGud.Presentation.Gameplay
         private string pendingEncounterMessage = string.Empty;
         private bool failureLatched;
         private bool disposed;
+        private bool paused;
+        private bool decisionCancelledForPause;
         private int staleRetryCount;
 
         public GameplayEnemyExplorationCoordinator(
@@ -98,7 +101,7 @@ namespace GritGud.Presentation.Gameplay
 
         public void Tick(float unscaledDeltaTime)
         {
-            if (disposed || runtime == null || failureLatched) return;
+            if (disposed || paused || runtime == null || failureLatched) return;
             if (tacticalTransition.CombatEntryReady)
             {
                 IReadOnlyList<string> scope = pendingEncounterScope;
@@ -143,6 +146,7 @@ namespace GritGud.Presentation.Gameplay
         {
             if (disposed) return;
             disposed = true;
+            decisionCancellation?.Cancel();
             lifetime.Cancel();
             if (pendingDecision != null)
                 _ = pendingDecision.ContinueWith(
@@ -152,7 +156,20 @@ namespace GritGud.Presentation.Gameplay
                         | TaskContinuationOptions.ExecuteSynchronously,
                     TaskScheduler.Default);
             lifetime.Dispose();
+            decisionCancellation?.Dispose();
+            decisionCancellation = null;
             ClearScan();
+        }
+
+        public void SetPaused(bool isPaused)
+        {
+            if (disposed || paused == isPaused) return;
+            paused = isPaused;
+            if (paused && pendingDecision != null)
+            {
+                decisionCancelledForPause = true;
+                decisionCancellation?.Cancel();
+            }
         }
 
         private void BeginScan()
@@ -201,18 +218,26 @@ namespace GritGud.Presentation.Gameplay
             var scope = new GameplayExecutionDeadlineScope();
             scope.BeginTurn();
             pendingKind = kind;
+            decisionCancellation?.Dispose();
+            decisionCancellation = CancellationTokenSource
+                .CreateLinkedTokenSource(lifetime.Token);
             pendingDecision = runtime.ExecuteDecisionAsync(
                 runner,
                 GameplayObservationSnapshot.FullState(actorId, state),
                 scope,
                 logicalGuard: null,
-                lifetime.Token);
+                decisionCancellation.Token);
         }
 
         private void CompletePendingDecision()
         {
             Task<GameplayDecisionExecutionResult> completed = pendingDecision;
             pendingDecision = null;
+            CancellationTokenSource completedCancellation =
+                decisionCancellation;
+            decisionCancellation = null;
+            bool cancelledForPause = decisionCancelledForPause;
+            decisionCancelledForPause = false;
             try
             {
                 GameplayDecisionExecutionResult result = completed
@@ -228,6 +253,12 @@ namespace GritGud.Presentation.Gameplay
             }
             catch (GameplayDecisionFailureException failure)
             {
+                if (failure.Kind == GameplayDecisionFailureKind.Cancelled
+                    && cancelledForPause)
+                {
+                    ClearScan();
+                    return;
+                }
                 if (failure.Kind == GameplayDecisionFailureKind.Cancelled
                     && disposed)
                     return;
@@ -261,6 +292,10 @@ namespace GritGud.Presentation.Gameplay
                     exception.GetType().Name,
                     exception.Message,
                     stage: null);
+            }
+            finally
+            {
+                completedCancellation?.Dispose();
             }
         }
 

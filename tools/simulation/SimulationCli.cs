@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
@@ -81,7 +82,7 @@ internal static class SimulationCli
                 StringComparison.Ordinal))
             throw new InvalidOperationException(
                 "Persisted artifact identity changed after strict reading.");
-        PrintSummary(persisted, fullPath);
+        PrintSummary(persisted, fullPath, result);
         return 0;
     }
 
@@ -132,7 +133,7 @@ internal static class SimulationCli
                 StringComparison.Ordinal))
             throw new InvalidOperationException(
                 "Fresh execution diverged from the battle artifact.");
-        PrintSummary(actual, input);
+        PrintSummary(actual, input, rerun);
         Console.WriteLine("verification=exact");
         return 0;
     }
@@ -155,7 +156,8 @@ internal static class SimulationCli
 
     private static void PrintSummary(
         GameplayBattleArtifact artifact,
-        string path)
+        string path,
+        GameplayBattleRunResult run)
     {
         GameplayBattleScoreboard score = artifact.Content.Scoreboard;
         Console.WriteLine("artifact=" + artifact.ArtifactId);
@@ -174,6 +176,16 @@ internal static class SimulationCli
             + " fire=" + score.FireDeployments
             + " drone-moves=" + score.DroneMoves
             + " drone-attacks=" + score.DroneAttacks);
+        var replay = new GameplaySemanticReplayTimeline(
+            run.InitialState,
+            run.CreateTrajectory(),
+            GameplaySimulationReducers.CreateCurrent());
+        var playback = new GameplaySemanticReplayPlaybackTimeline(replay);
+        Console.WriteLine(
+            "presentation-seconds="
+            + playback.TotalDurationSeconds.ToString(
+                "0.###",
+                CultureInfo.InvariantCulture));
     }
 
     private static IReadOnlyDictionary<string, string> ParseOptions(

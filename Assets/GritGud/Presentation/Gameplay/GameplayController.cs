@@ -32,6 +32,8 @@ namespace GritGud.Presentation.Gameplay
         private GameplayPartyHud partyHud;
         private GameplayTurnReplayHud turnReplayHud;
         private GameplayTurnReplayWorldPresenter turnReplayWorldPresenter;
+        private GameplayReplayCameraCutPresenter replayCameraCutPresenter;
+        private GameplayBattleReplayController battleReplayController;
         private GameplayDialogueDrawer dialogueDrawer;
         private GameplaySessionPresenter sessionPresenter;
         private TurnMovementController turnMovementController;
@@ -92,6 +94,10 @@ namespace GritGud.Presentation.Gameplay
             partyHud = GetOrAddComponent<GameplayPartyHud>();
             turnReplayHud = GetOrAddComponent<GameplayTurnReplayHud>();
             turnReplayWorldPresenter ??= new GameplayTurnReplayWorldPresenter();
+            replayCameraCutPresenter =
+                GetOrAddComponent<GameplayReplayCameraCutPresenter>();
+            battleReplayController =
+                GetOrAddComponent<GameplayBattleReplayController>();
             dialogueDrawer = GetOrAddComponent<GameplayDialogueDrawer>();
             sessionPresenter = GetOrAddComponent<GameplaySessionPresenter>();
             turnMovementController = GetOrAddComponent<TurnMovementController>();
@@ -137,6 +143,9 @@ namespace GritGud.Presentation.Gameplay
 
         private void ResetPresentationBindings()
         {
+            battleReplayController?.Unbind();
+            turnReplayWorldPresenter?.Dispose();
+            turnReplayHud?.Unbind();
             enemyController?.Unbind();
             liveRuntime?.Dispose();
             liveRuntime = null;
@@ -144,8 +153,6 @@ namespace GritGud.Presentation.Gameplay
             controlRouter = null;
             hud?.Hide();
             partyHud?.Unbind();
-            turnReplayHud?.Unbind();
-            turnReplayWorldPresenter?.Dispose();
             hud?.UnbindSession();
             hud?.UnbindTurnMovement();
             hud?.UnbindGameplayActions();
@@ -528,6 +535,7 @@ namespace GritGud.Presentation.Gameplay
                     () => BindLiveSemanticRuntime(session)),
                 new GameplayReplayFeatureInstaller(
                     session,
+                    hud,
                     turnReplayHud,
                     turnReplayWorldPresenter,
                     inputController,
@@ -540,6 +548,23 @@ namespace GritGud.Presentation.Gameplay
                     fireFieldController,
                     droneController,
                     partyHud,
+                    scenarioAssembly,
+                    content.Level,
+                    cameraRig,
+                    replayCameraCutPresenter,
+                    battleReplayController,
+                    enemyController,
+                    new Behaviour[]
+                    {
+                        enemyController,
+                        actionController,
+                        turnMovementController,
+                        displacementController,
+                        thrownExplosiveController,
+                        droneController,
+                        combatReactionPresenter,
+                        tacticalTransitionPresenter,
+                    },
                     () => liveRuntime),
                 new GameplayHudFeatureInstaller(
                     hud,

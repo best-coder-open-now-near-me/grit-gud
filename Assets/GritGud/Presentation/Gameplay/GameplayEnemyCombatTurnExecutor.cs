@@ -101,12 +101,15 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplayExecutionLogicalGuard logicalGuard;
         private readonly CancellationTokenSource lifetime =
             new CancellationTokenSource();
+        private CancellationTokenSource decisionCancellation;
         private Task<GameplayDecisionExecutionResult> pendingDecision;
         private string observedActiveActorId = string.Empty;
         private long observedTurnSequence = -1L;
         private float decisionDelaySeconds;
         private bool failureLatched;
         private bool disposed;
+        private bool paused;
+        private bool decisionCancelledForPause;
 
         public GameplayEnemyCombatTurnExecutor(
             GameplaySession session,
@@ -149,7 +152,7 @@ namespace GritGud.Presentation.Gameplay
 
         public void Tick(float deltaTime, float unscaledDeltaTime)
         {
-            if (disposed) return;
+            if (disposed || paused) return;
             if (pendingDecision != null)
             {
                 if (!pendingDecision.IsCompleted) return;
@@ -183,8 +186,36 @@ namespace GritGud.Presentation.Gameplay
         {
             if (disposed) return;
             disposed = true;
+            decisionCancellation?.Cancel();
             lifetime.Cancel();
+            if (pendingDecision != null)
+                _ = pendingDecision.ContinueWith(
+                    completed => _ = completed.Exception,
+                    CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted
+                        | TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+            decisionCancellation?.Dispose();
+            decisionCancellation = null;
             lifetime.Dispose();
+        }
+
+        public void SetPaused(bool isPaused)
+        {
+            if (disposed || paused == isPaused) return;
+            paused = isPaused;
+            if (paused && pendingDecision != null)
+            {
+                decisionCancelledForPause = true;
+                decisionCancellation?.Cancel();
+            }
+            if (!paused)
+            {
+                deadlineScope = null;
+                observedActiveActorId = string.Empty;
+                observedTurnSequence = -1L;
+                decisionDelaySeconds = 0f;
+            }
         }
 
         public void ResetBattleScope()
@@ -199,18 +230,26 @@ namespace GritGud.Presentation.Gameplay
         private void StartDecision(string actorId)
         {
             GameplayCombatStateSnapshot state = runtime.CurrentState;
+            decisionCancellation?.Dispose();
+            decisionCancellation = CancellationTokenSource
+                .CreateLinkedTokenSource(lifetime.Token);
             pendingDecision = runtime.ExecuteDecisionAsync(
                 runner,
                 GameplayObservationSnapshot.FullState(actorId, state),
                 deadlineScope,
                 logicalGuard,
-                lifetime.Token);
+                decisionCancellation.Token);
         }
 
         private void CompletePendingDecision()
         {
             Task<GameplayDecisionExecutionResult> completed = pendingDecision;
             pendingDecision = null;
+            CancellationTokenSource completedCancellation =
+                decisionCancellation;
+            decisionCancellation = null;
+            bool cancelledForPause = decisionCancelledForPause;
+            decisionCancelledForPause = false;
             try
             {
                 GameplayDecisionExecutionResult result = completed
@@ -221,6 +260,12 @@ namespace GritGud.Presentation.Gameplay
             }
             catch (GameplayDecisionFailureException failure)
             {
+                if (failure.Kind == GameplayDecisionFailureKind.Cancelled
+                    && cancelledForPause)
+                {
+                    decisionDelaySeconds = 0f;
+                    return;
+                }
                 if (failure.Kind == GameplayDecisionFailureKind.Cancelled
                     && disposed)
                     return;
@@ -236,6 +281,10 @@ namespace GritGud.Presentation.Gameplay
                 dialogue.AppendCombatDiagnostic(
                     "ENEMY DECISION FAILURE",
                     exception.GetType().Name + " - " + exception.Message);
+            }
+            finally
+            {
+                completedCancellation?.Dispose();
             }
         }
 

@@ -41,8 +41,17 @@ namespace GritGud.Presentation.Gameplay
         private string status = string.Empty;
         private Func<bool> replayAvailable;
         private Action replayRequested;
+        private Func<string> replayLabel;
+        private bool presentationSuppressed;
 
-        public bool IsVisible => enabled;
+        public bool IsVisible => enabled && !presentationSuppressed;
+
+        internal bool IsPresentationSuppressed => presentationSuppressed;
+
+        internal void SetPresentationSuppressed(bool suppressed)
+        {
+            presentationSuppressed = suppressed;
+        }
 
         internal GameplayPartyHudModel CurrentModel =>
             gameplay == null || partyControl == null
@@ -54,7 +63,8 @@ namespace GritGud.Presentation.Gameplay
             GameplayPartyControlSession control,
             IGameplayInputSource authoritativeInputSource,
             Func<bool> canOpenReplay = null,
-            Action openReplay = null)
+            Action openReplay = null,
+            Func<string> getReplayLabel = null)
         {
             Unbind();
             gameplay = session ?? throw new ArgumentNullException(nameof(session));
@@ -63,6 +73,8 @@ namespace GritGud.Presentation.Gameplay
                 nameof(authoritativeInputSource));
             replayAvailable = canOpenReplay;
             replayRequested = openReplay;
+            replayLabel = getReplayLabel;
+            presentationSuppressed = false;
             status = string.Empty;
             partyControl.ControlChanged += HandleControlChanged;
             enabled = true;
@@ -78,6 +90,8 @@ namespace GritGud.Presentation.Gameplay
             inputSource = null;
             replayAvailable = null;
             replayRequested = null;
+            replayLabel = null;
+            presentationSuppressed = false;
             status = string.Empty;
             enabled = false;
         }
@@ -124,6 +138,8 @@ namespace GritGud.Presentation.Gameplay
 
         private void OnGUI()
         {
+            if (presentationSuppressed)
+                return;
             GameplayPartyHudModel model = CurrentModel;
             if (model == null)
                 return;
@@ -262,7 +278,7 @@ namespace GritGud.Presentation.Gameplay
                         rectangle.y + 5f,
                         58f,
                         18f),
-                    "REPLAY",
+                    replayLabel?.Invoke() ?? "REPLAY",
                     actionButtonStyle))
             {
                 replayRequested?.Invoke();

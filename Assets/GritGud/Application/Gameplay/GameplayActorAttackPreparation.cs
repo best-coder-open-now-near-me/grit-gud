@@ -84,9 +84,19 @@ namespace GritGud.Application.Gameplay
             if (value == null) throw new ArgumentNullException(nameof(value));
             string canonical = GameplayReproBundleFormatter
                 .FormatCanonicalValue(value);
+            return CalculateCanonicalJson(canonical);
+        }
+
+        internal static string CalculateCanonicalJson(string canonicalJson)
+        {
+            if (string.IsNullOrWhiteSpace(canonicalJson))
+                throw new ArgumentException(
+                    "Canonical JSON cannot be empty.",
+                    nameof(canonicalJson));
             using (SHA256 sha = SHA256.Create())
             {
-                byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(canonical));
+                byte[] hash = sha.ComputeHash(
+                    Encoding.UTF8.GetBytes(canonicalJson));
                 var text = new StringBuilder(hash.Length * 2);
                 foreach (byte item in hash) text.Append(item.ToString("x2"));
                 return text.ToString();

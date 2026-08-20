@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using GritGud.Application.Gameplay;
+using GritGud.Domain.Levels;
 using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
@@ -153,6 +154,7 @@ namespace GritGud.Presentation.Gameplay
         IGameplayFeatureInstaller
     {
         private readonly GameplaySession session;
+        private readonly GameplayHud gameplayHud;
         private readonly GameplayTurnReplayHud replayHud;
         private readonly GameplayTurnReplayWorldPresenter replayWorld;
         private readonly GameplayInputController input;
@@ -165,10 +167,18 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplayFireFieldController fireFieldPresenter;
         private readonly GameplayDroneController drones;
         private readonly GameplayPartyHud partyHud;
+        private readonly GameplayScenarioAssembly scenario;
+        private readonly LevelDocument level;
+        private readonly GameplayCameraRig cameraRig;
+        private readonly GameplayReplayCameraCutPresenter cameraCuts;
+        private readonly GameplayBattleReplayController battleReplay;
+        private readonly IReadOnlyList<Behaviour> liveBehaviours;
+        private readonly GameplayEnemyController enemies;
         private readonly Func<GameplayLiveSessionRuntime> resolveRuntime;
 
         public GameplayReplayFeatureInstaller(
             GameplaySession session,
+            GameplayHud gameplayHud,
             GameplayTurnReplayHud replayHud,
             GameplayTurnReplayWorldPresenter replayWorld,
             GameplayInputController input,
@@ -181,9 +191,18 @@ namespace GritGud.Presentation.Gameplay
             GameplayFireFieldController fireFieldPresenter,
             GameplayDroneController drones,
             GameplayPartyHud partyHud,
+            GameplayScenarioAssembly scenarioAssembly,
+            LevelDocument levelDocument,
+            GameplayCameraRig gameplayCameraRig,
+            GameplayReplayCameraCutPresenter replayCameraCuts,
+            GameplayBattleReplayController battleReplayController,
+            GameplayEnemyController enemyController,
+            IEnumerable<Behaviour> behavioursToSuspend,
             Func<GameplayLiveSessionRuntime> resolveRuntime)
         {
             this.session = session ?? throw new ArgumentNullException(nameof(session));
+            this.gameplayHud = gameplayHud ?? throw new ArgumentNullException(
+                nameof(gameplayHud));
             this.replayHud = replayHud ?? throw new ArgumentNullException(nameof(replayHud));
             this.replayWorld = replayWorld ?? throw new ArgumentNullException(
                 nameof(replayWorld));
@@ -203,6 +222,22 @@ namespace GritGud.Presentation.Gameplay
                 ?? throw new ArgumentNullException(nameof(fireFieldPresenter));
             this.drones = drones ?? throw new ArgumentNullException(nameof(drones));
             this.partyHud = partyHud ?? throw new ArgumentNullException(nameof(partyHud));
+            scenario = scenarioAssembly ?? throw new ArgumentNullException(
+                nameof(scenarioAssembly));
+            level = levelDocument ?? throw new ArgumentNullException(
+                nameof(levelDocument));
+            cameraRig = gameplayCameraRig ?? throw new ArgumentNullException(
+                nameof(gameplayCameraRig));
+            cameraCuts = replayCameraCuts ?? throw new ArgumentNullException(
+                nameof(replayCameraCuts));
+            battleReplay = battleReplayController
+                ?? throw new ArgumentNullException(
+                    nameof(battleReplayController));
+            enemies = enemyController ?? throw new ArgumentNullException(
+                nameof(enemyController));
+            liveBehaviours = new List<Behaviour>(behavioursToSuspend
+                ?? throw new ArgumentNullException(
+                    nameof(behavioursToSuspend))).AsReadOnly();
             this.resolveRuntime = resolveRuntime
                 ?? throw new ArgumentNullException(nameof(resolveRuntime));
         }
@@ -225,13 +260,26 @@ namespace GritGud.Presentation.Gameplay
                 vehicles,
                 smokeFieldPresenter,
                 fireFieldPresenter,
-                drones);
+                drones,
+                cameraRig,
+                cameraCuts,
+                session,
+                gameplayHud,
+                partyHud,
+                enemies,
+                liveBehaviours);
             partyHud.Bind(
                 session,
                 partyControl,
                 input,
                 () => replayHud.IsAvailable,
-                replayHud.Toggle);
+                replayHud.Toggle,
+                () => replayHud.ActionLabel);
+            battleReplay.Bind(
+                scenario,
+                level,
+                runtime,
+                replayHud);
         }
     }
 

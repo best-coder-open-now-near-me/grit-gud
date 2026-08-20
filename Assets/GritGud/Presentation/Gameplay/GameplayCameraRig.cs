@@ -12,6 +12,9 @@ namespace GritGud.Presentation.Gameplay
         private GameplayCameraController cameraController;
         private GameplayPlayerCutoutPresenter playerCutout;
         private ExplorationMovementInput movementInput;
+        private Transform replayOriginalTarget;
+        private GameplayCameraView replayOriginalView;
+        private bool replayPresenting;
         private readonly bool sceneCameraWasActive;
 
         private GameplayCameraRig(
@@ -142,8 +145,51 @@ namespace GritGud.Presentation.Gameplay
             OnViewChanged(cameraController.View);
         }
 
+        public void BeginReplayPresentation()
+        {
+            if (replayPresenting)
+                throw new InvalidOperationException(
+                    "Replay camera presentation is already active.");
+            if (cameraController == null || playerCutout == null)
+                throw new ObjectDisposedException(nameof(GameplayCameraRig));
+            replayOriginalTarget = cameraController.Target;
+            replayOriginalView = cameraController.View;
+            replayPresenting = true;
+            cameraController.SetView(GameplayCameraView.ThirdPerson);
+        }
+
+        public void FocusReplayTarget(Transform target)
+        {
+            if (!replayPresenting)
+                throw new InvalidOperationException(
+                    "Begin replay camera presentation before focusing it.");
+            if (target == null) throw new ArgumentNullException(nameof(target));
+            ActorStancePresenter stance = target.GetComponent<
+                ActorStancePresenter>();
+            cameraController.SetTarget(target, stance);
+            playerCutout.SetTarget(target, stance);
+        }
+
+        public void EndReplayPresentation()
+        {
+            if (!replayPresenting) return;
+            Transform restore = replayOriginalTarget;
+            GameplayCameraView view = replayOriginalView;
+            replayOriginalTarget = null;
+            replayPresenting = false;
+            if (restore != null)
+            {
+                ActorStancePresenter stance = restore.GetComponent<
+                    ActorStancePresenter>();
+                cameraController.SetTarget(restore, stance);
+                playerCutout.SetTarget(restore, stance);
+            }
+            cameraController.SetView(view);
+        }
+
         public void Dispose()
         {
+            EndReplayPresentation();
             if (movementInput != null)
             {
                 movementInput.BindView(null);

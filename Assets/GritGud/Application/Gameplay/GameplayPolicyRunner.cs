@@ -398,6 +398,29 @@ namespace GritGud.Application.Gameplay
         }
     }
 
+    /// <summary>
+    /// Cooperative scheduling boundary for single-threaded runtimes such as
+    /// WebGL. It preserves the permanent decision pipeline while yielding
+    /// between measured stages so the host can render and process cancellation.
+    /// Trusted work still runs synchronously after each yield; untrusted
+    /// optimizer policies require the process boundary described by the runner
+    /// contract.
+    /// </summary>
+    public sealed class GameplayCooperativeDecisionWorkerBoundary :
+        IGameplayDecisionWorkerBoundary
+    {
+        public async Task<T> RunAsync<T>(
+            Func<CancellationToken, T> work,
+            CancellationToken cancellationToken)
+        {
+            if (work == null) throw new ArgumentNullException(nameof(work));
+            cancellationToken.ThrowIfCancellationRequested();
+            await Task.Yield();
+            cancellationToken.ThrowIfCancellationRequested();
+            return work(cancellationToken);
+        }
+    }
+
     public interface IGameplayRuntimeInstallationBoundary
     {
         Task<GameplayReductionResult> InstallAsync(

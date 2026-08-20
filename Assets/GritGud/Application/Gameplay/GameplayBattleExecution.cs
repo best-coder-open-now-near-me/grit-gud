@@ -399,7 +399,8 @@ namespace GritGud.Application.Gameplay
             GameplayExecutionIdentity identity,
             IGameplayCandidatePolicy candidatePolicy = null,
             GameplayExecutionDeadlinePolicy deadlinePolicy = null,
-            GameplayExecutionLogicalGuardPolicy logicalGuardPolicy = null)
+            GameplayExecutionLogicalGuardPolicy logicalGuardPolicy = null,
+            IGameplayDecisionWorkerBoundary workerBoundary = null)
         {
             assembly = scenarioAssembly ?? throw new ArgumentNullException(
                 nameof(scenarioAssembly));
@@ -456,6 +457,7 @@ namespace GritGud.Application.Gameplay
                     routes),
                 routes,
                 selectedPolicy,
+                workerBoundary: workerBoundary,
                 deadlinePolicy: deadlinePolicy);
             guardPolicy = logicalGuardPolicy
                 ?? new GameplayExecutionLogicalGuardPolicy();

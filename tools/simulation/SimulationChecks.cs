@@ -3288,7 +3288,9 @@ internal static class SimulationChecks
             logicalGuardPolicy: new GameplayExecutionLogicalGuardPolicy(
                 maximumTransitions: 2000,
                 maximumRepeatedMaterialStates: 4,
-                maximumNoProgressTurns: 4));
+                maximumNoProgressTurns: 4),
+            workerBoundary:
+                new GameplayCooperativeDecisionWorkerBoundary());
         GameplayBattleRunResult result = runner.RunAsync(initial)
             .GetAwaiter().GetResult();
         Console.WriteLine(
@@ -3356,6 +3358,8 @@ internal static class SimulationChecks
         string artifactJson = artifact.ToPortableJson();
         GameplayBattleArtifact decoded = GameplayBattleArtifactCodec.Read(
             artifactJson);
+        GameplaySemanticReplayTimeline verifiedArtifactReplay =
+            GameplayBattleArtifactVerifier.VerifyRun(result, decoded);
         Require(string.Equals(
                 decoded.ToPortableJson(),
                 artifactJson,
@@ -3368,7 +3372,11 @@ internal static class SimulationChecks
                 == fireDeployments
             && decoded.Content.Scoreboard.ConcussiveTargets > 0
             && decoded.Content.Scoreboard.DroneMoves == droneMoves
-            && decoded.Content.Scoreboard.DroneAttacks > 0,
+            && decoded.Content.Scoreboard.DroneAttacks > 0
+            && string.Equals(
+                verifiedArtifactReplay.FinalState.CanonicalHash,
+                result.FinalState.CanonicalHash,
+                StringComparison.Ordinal),
             "Battle artifact was not byte-stable and scoreboard-complete.");
         GameplayBattleArtifactFormatException unknownFailure = null;
         try
