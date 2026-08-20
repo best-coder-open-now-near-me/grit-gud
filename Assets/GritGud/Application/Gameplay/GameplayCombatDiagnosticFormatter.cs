@@ -115,6 +115,16 @@ namespace GritGud.Application.Gameplay
                         AppendInventoryQuantity(lines, inventory.Change);
                         break;
 
+                    case AmmunitionSpentActionOutcome ammunition:
+                        AppendAmmunition(lines, ammunition.Change);
+                        break;
+
+                    case WeaponReloadedActionOutcome reload:
+                        title = reload.Change.ActorId + " RELOADS "
+                            + reload.Change.WeaponItemId;
+                        AppendAmmunition(lines, reload.Change);
+                        break;
+
                     case ObjectiveCompletedActionOutcome _:
                     case EquipmentChangedActionOutcome _:
                         break;
@@ -288,6 +298,8 @@ namespace GritGud.Application.Gameplay
                 || outcomeType == typeof(ProjectileLaunchedActionOutcome)
                 || outcomeType == typeof(ThrownExplosiveActionOutcome)
                 || outcomeType == typeof(InventoryQuantityChangedActionOutcome)
+                || outcomeType == typeof(AmmunitionSpentActionOutcome)
+                || outcomeType == typeof(WeaponReloadedActionOutcome)
                 || outcomeType == typeof(DisplacementActionOutcome))
             {
                 return GameplayDiagnosticPolicy.Formatted;
@@ -530,6 +542,17 @@ namespace GritGud.Application.Gameplay
                 + " - " + change.PreviousQuantity
                 + " - " + change.ConsumedQuantity
                 + " = " + change.ResultingQuantity);
+        }
+
+        private static void AppendAmmunition(
+            ICollection<string> lines,
+            WeaponAmmunitionDelta change)
+        {
+            lines.Add("AMMUNITION - " + change.WeaponItemId
+                + " - LOADED " + change.PreviousLoadedRounds
+                + " - " + change.ChangedRounds
+                + " = " + change.ResultingLoadedRounds
+                + " - RESERVE " + change.ResultingReserveRounds);
         }
 
         private static void AppendDisplacement(

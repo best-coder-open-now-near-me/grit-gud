@@ -62,7 +62,7 @@ namespace GritGud.Application.Gameplay
 
             return BeginEncounter(CreateEncounterScope(
                 action.Request.ActorId,
-                action.Outcomes[0].TargetId));
+                action.Request.TargetId));
         }
 
         public bool CompleteEncounter()

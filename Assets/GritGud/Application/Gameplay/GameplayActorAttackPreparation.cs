@@ -202,6 +202,14 @@ namespace GritGud.Application.Gameplay
                 failure = AttackResolutionFailure.AttackUnavailable;
                 return false;
             }
+            if (!GameplayAmmunitionPreparation.HasLoadedRounds(
+                    scenario,
+                    actor))
+            {
+                failure = AttackResolutionFailure
+                    .InsufficientLoadedAmmunition;
+                return false;
+            }
             ActionCost cost = session.Mode == GameplaySessionMode.TurnBased
                     || startsEncounter
                 ? attack.TurnCost
@@ -310,6 +318,18 @@ namespace GritGud.Application.Gameplay
                 evaluation.Context);
             TurnBudget resultingBudget = evaluation.Attacker.TurnBudget
                 .SpendAction(evaluation.Cost);
+            var outcomes = new List<GameplayActionOutcome>
+            {
+                new AttackResolvedActionOutcome(resolution),
+            };
+            if (!GameplayAmmunitionPreparation.TryPrepareSpend(
+                    scenario,
+                    evaluation.Attacker,
+                    actionSequence,
+                    out AmmunitionSpentActionOutcome spend))
+                throw new InvalidOperationException(
+                    "Evaluated actor attack no longer has loaded ammunition.");
+            if (spend != null) outcomes.Add(spend);
             var action = new GameplayActionRecord(
                 actionSequence,
                 new GameplayActionRequest(
@@ -319,7 +339,7 @@ namespace GritGud.Application.Gameplay
                 evaluation.Cost,
                 evaluation.Attacker.TurnBudget,
                 resultingBudget,
-                new[] { new AttackResolvedActionOutcome(resolution) },
+                outcomes,
                 evaluation.Context);
             return new GameplayPreparedTransition<GameplayActionRecord>(
                 action,

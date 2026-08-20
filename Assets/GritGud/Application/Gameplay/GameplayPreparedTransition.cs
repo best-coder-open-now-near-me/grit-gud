@@ -125,14 +125,16 @@ namespace GritGud.Application.Gameplay
             if (!BudgetsMatch(expectedBudget, action.ResultingBudget))
                 throw new InvalidOperationException(
                     "Weapon projection has an invalid resulting budget.");
-            if (action.Outcomes.Count != 1)
-                throw new ArgumentException(
-                    "Weapon projection requires exactly one outcome.", nameof(action));
-            if (action.Outcomes[0] is WeaponDischargedActionOutcome discharge
+            GameplayWeaponActionOutcomes.ValidateFiringGrammar(action, acting);
+            GameplayActionOutcome primary =
+                GameplayWeaponActionOutcomes.RequirePrimary(action);
+            AmmunitionSpentActionOutcome spend =
+                GameplayWeaponActionOutcomes.GetAmmunitionSpend(action);
+            if (primary is WeaponDischargedActionOutcome discharge
                 && discharge.Discharge.Sequence != action.Sequence)
                 throw new InvalidOperationException(
                     "Weapon discharge must share its canonical action sequence.");
-            if (action.Outcomes[0] is ProjectileLaunchedActionOutcome launch
+            if (primary is ProjectileLaunchedActionOutcome launch
                 && launch.Launch.Sequence != action.Sequence)
                 throw new InvalidOperationException(
                     "Projectile launch must share its canonical action sequence.");
@@ -140,10 +142,15 @@ namespace GritGud.Application.Gameplay
             var actors = new List<GameplayActorSnapshot>(
                 previous.Session.Actors.Count);
             foreach (GameplayActorSnapshot actor in previous.Session.Actors)
-                actors.Add(ProjectActor(previous, actor, action));
+                actors.Add(ProjectActor(
+                    previous,
+                    actor,
+                    action,
+                    primary,
+                    spend));
 
             DestructibleDamageRecord directFireDamage =
-                action.Outcomes[0] is WeaponDischargedActionOutcome discharged
+                primary is WeaponDischargedActionOutcome discharged
                     ? discharged.Discharge.Damage
                     : null;
             if (directFireDamage != null
@@ -182,7 +189,7 @@ namespace GritGud.Application.Gameplay
                 session.AllInitiativeOrder);
             var projectiles = new List<ProjectileFlightSnapshot>(
                 previous.Projectiles);
-            if (action.Outcomes[0] is ProjectileLaunchedActionOutcome launched)
+            if (primary is ProjectileLaunchedActionOutcome launched)
             {
                 foreach (ProjectileFlightSnapshot existing in projectiles)
                     if (string.Equals(
@@ -230,13 +237,15 @@ namespace GritGud.Application.Gameplay
         private static GameplayActorSnapshot ProjectActor(
             GameplayCombatStateSnapshot previous,
             GameplayActorSnapshot actor,
-            GameplayActionRecord action)
+            GameplayActionRecord action,
+            GameplayActionOutcome primary,
+            AmmunitionSpentActionOutcome spend)
         {
             GameplayActorPose pose = actor.Pose;
             TurnBudget budget = actor.TurnBudget;
             ActorWoundSnapshot wounds = actor.Wounds;
+            ActorAmmunitionSnapshot ammunition = actor.Ammunition;
             int attacksCommittedThisTurn = actor.AttacksCommittedThisTurn;
-            GameplayActionOutcome outcome = action.Outcomes[0];
             if (string.Equals(
                     actor.ActorId,
                     action.Request.ActorId,
@@ -246,21 +255,25 @@ namespace GritGud.Application.Gameplay
                 attacksCommittedThisTurn = checked(
                     attacksCommittedThisTurn + 1);
                 GameplayPosition facingTarget;
-                if (outcome is AttackResolvedActionOutcome attack)
+                if (primary is AttackResolvedActionOutcome attack)
                     facingTarget = previous.Session.GetActor(
                         attack.TargetId).Pose.Position;
-                else if (outcome is WeaponDischargedActionOutcome discharge)
+                else if (primary is WeaponDischargedActionOutcome discharge)
                     facingTarget = discharge.Discharge.AimPoint;
-                else if (outcome is ProjectileLaunchedActionOutcome projectile)
+                else if (primary is ProjectileLaunchedActionOutcome projectile)
                     facingTarget = projectile.Launch.AimPoint;
                 else
                     throw new ArgumentException(
                         "Weapon projection received a non-weapon outcome.",
                         nameof(action));
                 pose = FaceToward(pose, facingTarget);
+                if (spend != null)
+                    ammunition = GameplayAmmunitionPreparation.Apply(
+                        ammunition,
+                        spend.Change);
             }
 
-            if (outcome is AttackResolvedActionOutcome resolved
+            if (primary is AttackResolvedActionOutcome resolved
                 && string.Equals(
                     actor.ActorId,
                     resolved.TargetId,
@@ -290,7 +303,7 @@ namespace GritGud.Application.Gameplay
                 actor.EmergencyActionPointAllowance,
                 actor.SuspendedTurnBudget,
                 attacksCommittedThisTurn,
-                actor.Ammunition);
+                ammunition);
         }
 
         private static GameplayActorPose FaceToward(

@@ -195,7 +195,9 @@ namespace GritGud.Presentation.Gameplay
             }
 
             WeaponDischargeRecord discharge =
-                ((WeaponDischargedActionOutcome)action.Outcomes[0]).Discharge;
+                GameplayWeaponActionOutcomes
+                    .RequirePrimary<WeaponDischargedActionOutcome>(action)
+                    .Discharge;
             GameplayEncounterActionTransition.BeginAfterCommittedAction(
                 Session,
                 action,
@@ -287,7 +289,9 @@ namespace GritGud.Presentation.Gameplay
             }
 
             AttackResolutionRecord resolution =
-                ((AttackResolvedActionOutcome)action.Outcomes[0]).Attack;
+                GameplayWeaponActionOutcomes
+                    .RequirePrimary<AttackResolvedActionOutcome>(action)
+                    .Attack;
             GameplayEncounterActionTransition.BeginAfterCommittedAction(
                 Session,
                 action,
@@ -365,6 +369,8 @@ namespace GritGud.Presentation.Gameplay
                     return "Not enough AP remains for this attack.";
                 case AttackResolutionFailure.InsufficientMovementOpportunity:
                     return "Not enough movement remains for this attack.";
+                case AttackResolutionFailure.InsufficientLoadedAmmunition:
+                    return "The equipped weapon is empty. Reload before firing.";
                 case AttackResolutionFailure.None:
                     return string.Empty;
                 default:

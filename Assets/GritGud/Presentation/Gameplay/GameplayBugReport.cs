@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using GritGud.Application.Gameplay;
@@ -754,6 +755,25 @@ namespace GritGud.Presentation.Gameplay
                             .AppendLine(change.ResultingQuantity.ToString(
                                 CultureInfo.InvariantCulture));
                         break;
+                    case AmmunitionSpentActionOutcome ammunition:
+                        WeaponAmmunitionDelta ammo = ammunition.Change;
+                        report.Append("    AmmunitionSpent | weapon=")
+                            .Append(ammo.WeaponItemId)
+                            .Append(" | type=")
+                            .Append(ammo.AmmoTypeId)
+                            .Append(" | loaded=")
+                            .Append(ammo.PreviousLoadedRounds.ToString(
+                                CultureInfo.InvariantCulture))
+                            .Append(" - ")
+                            .Append(ammo.ChangedRounds.ToString(
+                                CultureInfo.InvariantCulture))
+                            .Append(" = ")
+                            .Append(ammo.ResultingLoadedRounds.ToString(
+                                CultureInfo.InvariantCulture))
+                            .Append(" | reserve=")
+                            .AppendLine(ammo.ResultingReserveRounds.ToString(
+                                CultureInfo.InvariantCulture));
+                        break;
                     default:
                         report.Append("    ")
                             .Append(outcome.GetType().Name)
@@ -817,6 +837,8 @@ namespace GritGud.Presentation.Gameplay
                 .Append(FormatBool(actor.IsIncapacitated))
                 .Append(" | inventory=")
                 .Append(FormatInventory(actor.Inventory))
+                .Append(" | ammunition=")
+                .Append(FormatAmmunition(actor.Ammunition))
                 .Append(" | wound-move-penalty=")
                 .AppendLine(FormatFloat(actor.Wounds.MovementPenalty));
         }
@@ -845,6 +867,22 @@ namespace GritGud.Presentation.Gameplay
             }
 
             return string.Join(",", values);
+        }
+
+        private static string FormatAmmunition(
+            ActorAmmunitionSnapshot ammunition)
+        {
+            var values = new List<string>();
+            foreach (WeaponMagazineSnapshot magazine in ammunition.Magazines)
+                values.Add(magazine.WeaponItemId + ":"
+                    + magazine.LoadedRounds.ToString(
+                        CultureInfo.InvariantCulture)
+                    + "/" + magazine.Capacity.ToString(
+                        CultureInfo.InvariantCulture));
+            foreach (AmmunitionReserveSnapshot reserve in ammunition.Reserves)
+                values.Add(reserve.AmmoTypeId + "-reserve:"
+                    + reserve.Rounds.ToString(CultureInfo.InvariantCulture));
+            return values.Count == 0 ? "<none>" : string.Join(",", values);
         }
 
         private static void AppendField(

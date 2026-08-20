@@ -22,6 +22,7 @@ namespace GritGud.Application.Gameplay
         WorldStateChanged,
         InsufficientActionPoints,
         InsufficientMovementOpportunity,
+        InsufficientLoadedAmmunition,
     }
 
     public sealed class GameplayAttackSession
@@ -242,21 +243,15 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(action));
             }
 
-            if (action.Outcomes.Count != 1)
-            {
-                throw new ArgumentException(
-                    "Recorded weapon actions require exactly one outcome.",
-                    nameof(action));
-            }
-
-
-            if (action.Outcomes[0] is WeaponDischargedActionOutcome discharge)
+            GameplayActionOutcome primary =
+                GameplayWeaponActionOutcomes.RequirePrimary(action);
+            if (primary is WeaponDischargedActionOutcome discharge)
             {
                 CommitDischarge(action, discharge.Discharge);
                 return;
             }
 
-            if (!(action.Outcomes[0] is AttackResolvedActionOutcome outcome))
+            if (!(primary is AttackResolvedActionOutcome outcome))
             {
                 throw new ArgumentException(
                     "Recorded weapon actions require an attack or discharge outcome.",

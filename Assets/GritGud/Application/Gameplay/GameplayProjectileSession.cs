@@ -19,6 +19,7 @@ namespace GritGud.Application.Gameplay
         InvalidAimPoint,
         InsufficientActionPoints,
         InsufficientMovementOpportunity,
+        InsufficientLoadedAmmunition,
     }
 
     public enum ProjectileLaunchModeRequirement
@@ -265,9 +266,9 @@ namespace GritGud.Application.Gameplay
             out ProjectileLaunchRecord launch)
         {
             if (semanticRecord is GameplayActionRecord action
-                && action.Outcomes.Count == 1
-                && action.Outcomes[0]
-                    is ProjectileLaunchedActionOutcome launched)
+                && GameplayWeaponActionOutcomes.TryGetPrimary(
+                    action,
+                    out ProjectileLaunchedActionOutcome launched))
             {
                 launch = launched.Launch;
                 return true;
@@ -383,13 +384,9 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(action));
             }
 
-            if (action.Outcomes.Count != 1
-                || !(action.Outcomes[0] is ProjectileLaunchedActionOutcome outcome))
-            {
-                throw new ArgumentException(
-                    "Projectile launches require exactly one launch outcome.",
-                    nameof(action));
-            }
+            ProjectileLaunchedActionOutcome outcome =
+                GameplayWeaponActionOutcomes
+                    .RequirePrimary<ProjectileLaunchedActionOutcome>(action);
 
             ProjectileLaunchRecord launch = outcome.Launch;
             if (launch.Sequence != action.Sequence

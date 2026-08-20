@@ -755,6 +755,8 @@ namespace GritGud.Application.Gameplay
                     + magazine.WeaponItemId;
                 Append(text, magazineRoot + ".type", magazine.AmmoTypeId);
                 Append(text, magazineRoot + ".capacity", magazine.Capacity);
+                Append(text, magazineRoot + ".roundsPerUse",
+                    magazine.RoundsPerUse);
                 Append(text, magazineRoot + ".loaded", magazine.LoadedRounds);
             }
             foreach (AmmunitionReserveSnapshot reserve in

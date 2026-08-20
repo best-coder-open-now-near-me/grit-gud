@@ -478,9 +478,9 @@ namespace GritGud.Presentation.Gameplay
             GameplayActionRecord action,
             out AttackResolutionRecord resolution)
         {
-            if (action != null
-                && action.Outcomes.Count == 1
-                && action.Outcomes[0] is AttackResolvedActionOutcome outcome)
+            if (GameplayWeaponActionOutcomes.TryGetPrimary(
+                    action,
+                    out AttackResolvedActionOutcome outcome))
             {
                 resolution = outcome.Attack;
                 return true;
@@ -494,9 +494,9 @@ namespace GritGud.Presentation.Gameplay
             GameplayActionRecord action,
             out ProjectileLaunchRecord launch)
         {
-            if (action != null
-                && action.Outcomes.Count == 1
-                && action.Outcomes[0] is ProjectileLaunchedActionOutcome outcome)
+            if (GameplayWeaponActionOutcomes.TryGetPrimary(
+                    action,
+                    out ProjectileLaunchedActionOutcome outcome))
             {
                 launch = outcome.Launch;
                 return true;
@@ -510,9 +510,9 @@ namespace GritGud.Presentation.Gameplay
             GameplayActionRecord action,
             out WeaponDischargeRecord discharge)
         {
-            if (action != null
-                && action.Outcomes.Count == 1
-                && action.Outcomes[0] is WeaponDischargedActionOutcome outcome)
+            if (GameplayWeaponActionOutcomes.TryGetPrimary(
+                    action,
+                    out WeaponDischargedActionOutcome outcome))
             {
                 discharge = outcome.Discharge;
                 return true;

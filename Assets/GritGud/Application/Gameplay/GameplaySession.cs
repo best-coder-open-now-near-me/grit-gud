@@ -698,6 +698,8 @@ namespace GritGud.Application.Gameplay
 
         public event Action<EquipmentChangeRecord> EquipmentChanged;
 
+        public event Action<WeaponAmmunitionDelta> AmmunitionChanged;
+
         public event Action<GameplayActiveActorChange> ActiveActorChanged
         {
             add => turnLifecycle.ActiveActorChanged += value;
@@ -1143,6 +1145,14 @@ namespace GritGud.Application.Gameplay
 
         internal void ValidateActionCommit(GameplayActionRecord record)
             => actionCommitValidator.Validate(record);
+
+        internal void ApplyAmmunitionChange(
+            WeaponAmmunitionDelta change,
+            GameplayNotificationBatch notifications)
+        {
+            RequireActor(change.ActorId).ApplyAmmunition(change);
+            notifications.Add(AmmunitionChanged, change);
+        }
 
         private static GameplayInitiativeResult ResolveInitiative(
             ScenarioActorDefinition actor,

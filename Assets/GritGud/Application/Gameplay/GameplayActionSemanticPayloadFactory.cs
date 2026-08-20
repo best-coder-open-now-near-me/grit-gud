@@ -79,10 +79,11 @@ namespace GritGud.Application.Gameplay
                 actor);
             if (attack != null)
             {
-                RequireOnlyOutcome(
+                ValidateFiringOutcomes(
+                    actorDefinition,
+                    actor,
                     action,
-                    attack,
-                    "Actor attacks");
+                    attack);
                 return new GameplayWeaponTransitionPayload(
                     GameplayCapabilityProfiles.Attack(
                         equippedAttack,
@@ -92,10 +93,11 @@ namespace GritGud.Application.Gameplay
 
             if (discharge != null)
             {
-                RequireOnlyOutcome(
+                ValidateFiringOutcomes(
+                    actorDefinition,
+                    actor,
                     action,
-                    discharge,
-                    "Direct-fire discharges");
+                    discharge);
                 GameplaySemanticSubjectKind subject = ResolveSubjectKind(
                     state,
                     discharge.Discharge.TargetId);
@@ -106,10 +108,11 @@ namespace GritGud.Application.Gameplay
 
             if (projectile != null)
             {
-                RequireOnlyOutcome(
+                ValidateFiringOutcomes(
+                    actorDefinition,
+                    actor,
                     action,
-                    projectile,
-                    "Projectile launches");
+                    projectile);
                 GameplaySemanticSubjectKind subject = ResolveSubjectKind(
                     state,
                     projectile.Launch.IntendedTargetId);
@@ -230,6 +233,37 @@ namespace GritGud.Application.Gameplay
             if (current != null)
                 throw new InvalidOperationException(
                     $"An action cannot contain multiple {label} outcomes.");
+        }
+
+        private static void ValidateFiringOutcomes(
+            ScenarioActorDefinition actorDefinition,
+            GameplayActorSnapshot actor,
+            GameplayActionRecord action,
+            GameplayActionOutcome expectedPrimary)
+        {
+            GameplayWeaponActionOutcomes.ValidateFiringGrammar(action, actor);
+            if (!ReferenceEquals(
+                    GameplayWeaponActionOutcomes.RequirePrimary(action),
+                    expectedPrimary))
+                throw new InvalidOperationException(
+                    "Weapon action primary outcome is ambiguous.");
+
+            InventoryItemDefinition weapon = actor.EquippedItemId == null
+                ? null
+                : actorDefinition.GetInventoryItem(actor.EquippedItemId);
+            WeaponAmmunitionDefinition ammunition = weapon?.Ammunition;
+            AmmunitionSpentActionOutcome spend =
+                GameplayWeaponActionOutcomes.GetAmmunitionSpend(action);
+            if (ammunition == null) return;
+            WeaponAmmunitionDelta change = spend.Change;
+            if (change.ChangedRounds != ammunition.RoundsPerUse
+                || change.MagazineCapacity != ammunition.MagazineCapacity
+                || !string.Equals(
+                    change.AmmoTypeId,
+                    ammunition.AmmoTypeId,
+                    StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "Weapon ammunition spend does not match authored consumption.");
         }
 
         private static void RequireOnlyOutcome(

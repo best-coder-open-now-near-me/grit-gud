@@ -137,6 +137,12 @@ namespace GritGud.Application.Gameplay
                 return Fail(
                     ProjectileLaunchFailure.ProjectileUnavailable,
                     out failure);
+            if (!GameplayAmmunitionPreparation.HasLoadedRounds(
+                    scenario,
+                    actor))
+                return Fail(
+                    ProjectileLaunchFailure.InsufficientLoadedAmmunition,
+                    out failure);
             GameplayPosition origin = weapon.Projectile.GetLaunchOrigin(
                 actor.Pose);
             if (origin.DistanceTo(aimPoint) <= ValueTolerance)
@@ -168,6 +174,18 @@ namespace GritGud.Application.Gameplay
                 weapon.Projectile,
                 actor.ActionPointEconomy.IncomePerPersonalTurn,
                 resultingBudget.ActionPoints);
+            var outcomes = new List<GameplayActionOutcome>
+            {
+                new ProjectileLaunchedActionOutcome(launch),
+            };
+            if (!GameplayAmmunitionPreparation.TryPrepareSpend(
+                    scenario,
+                    actor,
+                    sequence,
+                    out AmmunitionSpentActionOutcome spend))
+                throw new InvalidOperationException(
+                    "Prepared projectile launch no longer has loaded ammunition.");
+            if (spend != null) outcomes.Add(spend);
             action = new GameplayActionRecord(
                 sequence,
                 new GameplayActionRequest(
@@ -177,7 +195,7 @@ namespace GritGud.Application.Gameplay
                 weapon.TurnCost,
                 actor.TurnBudget,
                 resultingBudget,
-                new[] { new ProjectileLaunchedActionOutcome(launch) });
+                outcomes);
             failure = ProjectileLaunchFailure.None;
             return true;
         }

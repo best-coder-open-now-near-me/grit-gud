@@ -104,6 +104,12 @@ namespace GritGud.Application.Gameplay
                 return Fail(
                     AttackResolutionFailure.AttackUnavailable,
                     out failure);
+            if (!GameplayAmmunitionPreparation.HasLoadedRounds(
+                    scenario,
+                    actor))
+                return Fail(
+                    AttackResolutionFailure.InsufficientLoadedAmmunition,
+                    out failure);
             if (!attack.CanTargetWorldPoint)
                 return Fail(
                     AttackResolutionFailure.TargetRequired,
@@ -143,6 +149,18 @@ namespace GritGud.Application.Gameplay
                 aimPoint,
                 impact,
                 damage);
+            var outcomes = new List<GameplayActionOutcome>
+            {
+                new WeaponDischargedActionOutcome(discharge),
+            };
+            if (!GameplayAmmunitionPreparation.TryPrepareSpend(
+                    scenario,
+                    actor,
+                    sequence,
+                    out AmmunitionSpentActionOutcome spend))
+                throw new InvalidOperationException(
+                    "Prepared direct discharge no longer has loaded ammunition.");
+            if (spend != null) outcomes.Add(spend);
             var action = new GameplayActionRecord(
                 sequence,
                 new GameplayActionRequest(
@@ -152,7 +170,7 @@ namespace GritGud.Application.Gameplay
                 cost,
                 actor.TurnBudget,
                 actor.TurnBudget.SpendAction(cost),
-                new[] { new WeaponDischargedActionOutcome(discharge) });
+                outcomes);
             prepared = new GameplayPreparedTransition<GameplayActionRecord>(
                 action,
                 state,
@@ -352,8 +370,10 @@ namespace GritGud.Application.Gameplay
                     candidate,
                     "attack." + attackFailure);
             WeaponDischargeRecord discharge =
-                ((WeaponDischargedActionOutcome)prepared.Record.Outcomes[0])
-                .Discharge;
+                GameplayWeaponActionOutcomes
+                    .RequirePrimary<WeaponDischargedActionOutcome>(
+                        prepared.Record)
+                    .Discharge;
             var features = new List<GameplayCandidateOutcomeFeature>
             {
                 new GameplayCandidateOutcomeFeature(

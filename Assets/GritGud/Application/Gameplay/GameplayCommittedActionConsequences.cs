@@ -113,7 +113,7 @@ namespace GritGud.Application.Gameplay
             {
                 string trigger = alerted.Count > 0
                     ? alerted[0]
-                    : action.Outcomes[0].TargetId;
+                    : action.Request.TargetId;
                 IReadOnlyList<string> scope = CreateScope(
                     scenario,
                     branch.CurrentState.Session.AllInitiativeOrder,
@@ -301,7 +301,7 @@ namespace GritGud.Application.Gameplay
             {
                 IReadOnlyList<string> scope = session.CreateEncounterScope(
                     source.ActorId,
-                    action.Outcomes[0].TargetId);
+                    action.Request.TargetId);
                 if (!beginEncounter(scope))
                     throw new InvalidOperationException(
                         "Authored committed action could not begin its encounter.");

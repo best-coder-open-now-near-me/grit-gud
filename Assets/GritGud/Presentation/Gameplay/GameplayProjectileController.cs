@@ -670,6 +670,8 @@ namespace GritGud.Presentation.Gameplay
                     return "Not enough AP remains for this launch.";
                 case ProjectileLaunchFailure.InsufficientMovementOpportunity:
                     return "Not enough movement remains for this launch.";
+                case ProjectileLaunchFailure.InsufficientLoadedAmmunition:
+                    return "The equipped launcher is empty. Reload before launching.";
                 case ProjectileLaunchFailure.None:
                     return string.Empty;
                 default:

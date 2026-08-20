@@ -146,6 +146,13 @@ namespace GritGud.Application.Gameplay
                 {
                     resolvedActions.Add(action);
                     notifications.Add(ActionResolved, action);
+                    AmmunitionSpentActionOutcome spend =
+                        GameplayWeaponActionOutcomes.GetAmmunitionSpend(
+                            action);
+                    if (spend != null)
+                        notifications.Add(
+                            AmmunitionChanged,
+                            spend.Change);
                 }
                 else
                 {

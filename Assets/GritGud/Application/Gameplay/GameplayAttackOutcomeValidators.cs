@@ -199,4 +199,57 @@ namespace GritGud.Application.Gameplay
             }
         }
     }
+
+    internal sealed class GameplayAmmunitionSpentOutcomeValidator :
+        GameplayActionOutcomeValidator<AmmunitionSpentActionOutcome>
+    {
+        private readonly GameplaySession session;
+
+        public GameplayAmmunitionSpentOutcomeValidator(GameplaySession session)
+        {
+            this.session = session ?? throw new ArgumentNullException(
+                nameof(session));
+        }
+
+        protected override void Validate(
+            GameplayActionRecord action,
+            AmmunitionSpentActionOutcome outcome)
+        {
+            WeaponAmmunitionDelta change = outcome.Change;
+            GameplayActorSnapshot actor = session.GetActor(
+                action.Request.ActorId);
+            ScenarioActorDefinition actorDefinition =
+                session.Scenario.GetActor(actor.ActorId);
+            InventoryItemDefinition weapon = actor.EquippedItemId == null
+                ? null
+                : actorDefinition.GetInventoryItem(actor.EquippedItemId);
+            WeaponAmmunitionDefinition ammunition = weapon?.Ammunition;
+            if (ammunition == null
+                || change.ActionSequence != action.Sequence
+                || !string.Equals(
+                    change.ActorId,
+                    action.Request.ActorId,
+                    StringComparison.Ordinal)
+                || !string.Equals(
+                    change.WeaponItemId,
+                    actor.EquippedItemId,
+                    StringComparison.Ordinal)
+                || !string.Equals(
+                    change.AmmoTypeId,
+                    ammunition.AmmoTypeId,
+                    StringComparison.Ordinal)
+                || change.MagazineCapacity != ammunition.MagazineCapacity
+                || change.ChangedRounds != ammunition.RoundsPerUse)
+                throw new InvalidOperationException(
+                    "Ammunition spend does not match the equipped weapon definition.");
+
+            WeaponMagazineSnapshot magazine = actor.Ammunition.GetMagazine(
+                change.WeaponItemId);
+            int reserve = actor.Ammunition.GetReserve(change.AmmoTypeId);
+            if (magazine.LoadedRounds != change.PreviousLoadedRounds
+                || reserve != change.PreviousReserveRounds)
+                throw new InvalidOperationException(
+                    "Ammunition spend no longer begins at canonical actor state.");
+        }
+    }
 }

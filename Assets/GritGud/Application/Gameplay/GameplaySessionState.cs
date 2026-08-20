@@ -63,7 +63,8 @@ namespace GritGud.Application.Gameplay
                             item.Id,
                             item.Ammunition.AmmoTypeId,
                             item.Ammunition.MagazineCapacity,
-                            item.Ammunition.InitialLoadedRounds));
+                            item.Ammunition.InitialLoadedRounds,
+                            item.Ammunition.RoundsPerUse));
                 }
             }
             foreach (AmmunitionReserveDefinition reserve in
@@ -167,6 +168,8 @@ namespace GritGud.Application.Gameplay
                     StringComparison.Ordinal)
                 || magazine.Capacity != change.MagazineCapacity
                 || magazine.LoadedRounds != change.PreviousLoadedRounds
+                || (change.Kind == WeaponAmmunitionChangeKind.Spend
+                    && change.ChangedRounds != magazine.RoundsPerUse)
                 || !ammunitionReserves.TryGetValue(
                     change.AmmoTypeId,
                     out int reserve)
@@ -179,7 +182,8 @@ namespace GritGud.Application.Gameplay
                     change.WeaponItemId,
                     change.AmmoTypeId,
                     change.MagazineCapacity,
-                    change.ResultingLoadedRounds);
+                    change.ResultingLoadedRounds,
+                    magazine.RoundsPerUse);
             ammunitionReserves[change.AmmoTypeId] =
                 change.ResultingReserveRounds;
             ammunitionSnapshotDirty = true;
@@ -454,7 +458,8 @@ namespace GritGud.Application.Gameplay
                         magazine.AmmoTypeId,
                         authored.AmmoTypeId,
                         StringComparison.Ordinal)
-                    || magazine.Capacity != authored.MagazineCapacity)
+                    || magazine.Capacity != authored.MagazineCapacity
+                    || magazine.RoundsPerUse != authored.RoundsPerUse)
                     throw new InvalidOperationException(
                         $"Canonical actor '{ActorId}' changed authored magazine '{item.Id}'.");
             }

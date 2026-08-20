@@ -74,7 +74,8 @@ namespace GritGud.Domain.Gameplay
             string weaponItemId,
             string ammoTypeId,
             int capacity,
-            int loadedRounds)
+            int loadedRounds,
+            int roundsPerUse = 1)
         {
             if (string.IsNullOrWhiteSpace(weaponItemId))
                 throw new ArgumentException(
@@ -88,17 +89,21 @@ namespace GritGud.Domain.Gameplay
                 throw new ArgumentOutOfRangeException(nameof(capacity));
             if (loadedRounds < 0 || loadedRounds > capacity)
                 throw new ArgumentOutOfRangeException(nameof(loadedRounds));
+            if (roundsPerUse <= 0 || roundsPerUse > capacity)
+                throw new ArgumentOutOfRangeException(nameof(roundsPerUse));
 
             WeaponItemId = weaponItemId;
             AmmoTypeId = ammoTypeId;
             Capacity = capacity;
             LoadedRounds = loadedRounds;
+            RoundsPerUse = roundsPerUse;
         }
 
         public string WeaponItemId { get; }
         public string AmmoTypeId { get; }
         public int Capacity { get; }
         public int LoadedRounds { get; }
+        public int RoundsPerUse { get; }
     }
 
     public readonly struct AmmunitionReserveSnapshot

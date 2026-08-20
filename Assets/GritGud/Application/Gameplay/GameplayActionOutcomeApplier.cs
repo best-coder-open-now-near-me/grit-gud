@@ -27,6 +27,7 @@ namespace GritGud.Application.Gameplay
                 [typeof(AttackResolvedActionOutcome)] = ApplyAttack,
                 [typeof(WeaponDischargedActionOutcome)] = ApplyWeaponDischarge,
                 [typeof(ProjectileLaunchedActionOutcome)] = ApplyProjectileLaunch,
+                [typeof(AmmunitionSpentActionOutcome)] = ApplyAmmunitionSpent,
                 [typeof(EquipmentChangedActionOutcome)] = ApplyEquipment,
                 [typeof(ThrownExplosiveActionOutcome)] = ApplyThrownExplosive,
                 [typeof(InventoryQuantityChangedActionOutcome)] =
@@ -127,6 +128,18 @@ namespace GritGud.Application.Gameplay
                     .GetInventoryItem(change.ResultingEquippedItemId);
             actor.ApplyEquipment(item);
             notifications.Add(equipmentChanged, change);
+        }
+
+        private void ApplyAmmunitionSpent(
+            GameplayActorState actingActor,
+            GameplayActionOutcome outcome,
+            GameplayNotificationBatch notifications,
+            Action<string> actorCapabilityChanged,
+            Action<EquipmentChangeRecord> equipmentChanged)
+        {
+            WeaponAmmunitionDelta change =
+                ((AmmunitionSpentActionOutcome)outcome).Change;
+            session.ApplyAmmunitionChange(change, notifications);
         }
 
         private static void ApplyThrownExplosive(

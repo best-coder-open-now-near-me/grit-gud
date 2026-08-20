@@ -22,6 +22,7 @@ namespace GritGud.Application.Gameplay
                 new GameplayAttackOutcomeValidator(session),
                 new GameplayWeaponDischargeOutcomeValidator(session),
                 new GameplayProjectileLaunchOutcomeValidator(session),
+                new GameplayAmmunitionSpentOutcomeValidator(session),
                 new GameplayEquipmentOutcomeValidator(session),
                 new GameplayThrownExplosiveOutcomeValidator(session),
                 new GameplayInventoryQuantityOutcomeValidator(session),
@@ -76,6 +77,8 @@ namespace GritGud.Application.Gameplay
             }
 
             var outcomeKeys = new HashSet<string>(StringComparer.Ordinal);
+            bool hasFiringPrimary = false;
+            bool hasAmmunitionSpend = false;
             foreach (GameplayActionOutcome outcome in record.Outcomes)
             {
                 if (outcome == null)
@@ -102,7 +105,19 @@ namespace GritGud.Application.Gameplay
                 }
 
                 validator.Validate(record, outcome);
+                hasFiringPrimary |= outcome is AttackResolvedActionOutcome
+                    || outcome is WeaponDischargedActionOutcome
+                    || outcome is ProjectileLaunchedActionOutcome;
+                hasAmmunitionSpend |=
+                    outcome is AmmunitionSpentActionOutcome;
             }
+            if (hasFiringPrimary)
+                GameplayWeaponActionOutcomes.ValidateFiringGrammar(
+                    record,
+                    actor.CreateSnapshot());
+            else if (hasAmmunitionSpend)
+                throw new InvalidOperationException(
+                    "Ammunition cannot be spent without a firing outcome.");
         }
     }
 }
