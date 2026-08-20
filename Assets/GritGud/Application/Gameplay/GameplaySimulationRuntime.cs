@@ -88,6 +88,12 @@ namespace GritGud.Application.Gameplay
                 trajectory,
                 label);
 
+        public GameplaySemanticReplayTimeline CreateReplayTimeline() =>
+            new GameplaySemanticReplayTimeline(
+                InitialState,
+                trajectory,
+                reducers);
+
         private void PublishDomainEvent(GameplayDomainEvent domainEvent) =>
             DomainEventPublished?.Invoke(domainEvent);
 

@@ -87,6 +87,13 @@ namespace GritGud.Application.Gameplay
             return runtime.CreateRepro(label);
         }
 
+        public GameplaySemanticReplayTimeline CreateReplayTimeline()
+        {
+            ThrowIfDisposed();
+            RequireProjectionMatchesAuthority();
+            return runtime.CreateReplayTimeline();
+        }
+
         public void Dispose()
         {
             if (disposed) return;

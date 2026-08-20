@@ -2151,6 +2151,39 @@ internal static class SimulationChecks
                 live.Trajectory,
                 reducers).IsExact,
             "Full live combat projection trajectory did not replay exactly.");
+        GameplaySemanticReplayTimeline replay =
+            live.CreateReplayTimeline();
+        GameplayPresentationWorldStateSample droneSample =
+            GameplaySemanticReplaySampler.Sample(
+                replay.Frames[1],
+                linearProgress: 0.5f);
+        GameplayPresentationWorldStateSample vehicleSample =
+            GameplaySemanticReplaySampler.Sample(
+                replay.Frames[2],
+                linearProgress: 0.5f);
+        GameplayPresentationWorldStateSample projectileSample =
+            GameplaySemanticReplaySampler.Sample(
+                replay.Frames[4],
+                linearProgress: 0.5f);
+        Require(replay.Frames.Count == 5
+            && string.Equals(
+                replay.FinalState.CanonicalHash,
+                live.CurrentState.CanonicalHash,
+                StringComparison.Ordinal)
+            && droneSample.Drones[0].Position.DistanceTo(
+                new GameplayPosition(
+                    drone.Position.X + 0.5f,
+                    drone.Position.Y,
+                    drone.Position.Z)) < 0.001f
+            && vehicleSample.Vehicles[0].Position.DistanceTo(
+                new GameplayPosition(
+                    previousVehicle.Position.X,
+                    previousVehicle.Position.Y,
+                    previousVehicle.Position.Z + 0.25f)) < 0.001f
+            && projectileSample.Projectiles[0].DistanceTraveled > 0f
+            && projectileSample.Projectiles[0].DistanceTraveled
+                < advanceDistance * 0.5f,
+            "Semantic replay did not consume reducer endpoints with shared presentation interpolation.");
 
         bool duplicateFireAdvanceRejected = false;
         try
