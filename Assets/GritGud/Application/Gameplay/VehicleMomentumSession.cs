@@ -72,12 +72,25 @@ namespace GritGud.Application.Gameplay
         public bool TryResolvePath(
             IEnumerable<GameplayPosition> requestedPath,
             out VehicleMomentumRecord record,
+            out VehiclePathFailure failure) => TryResolvePath(
+                requestedPath,
+                records.Count + 1L,
+                out record,
+                out failure);
+
+        public bool TryResolvePath(
+            IEnumerable<GameplayPosition> requestedPath,
+            long transitionSequence,
+            out VehicleMomentumRecord record,
             out VehiclePathFailure failure)
         {
             if (requestedPath == null)
             {
                 throw new ArgumentNullException(nameof(requestedPath));
             }
+            if (transitionSequence <= 0L)
+                throw new ArgumentOutOfRangeException(
+                    nameof(transitionSequence));
 
             var path = new List<GameplayPosition>(requestedPath);
             if (path.Count < 2)
@@ -161,7 +174,7 @@ namespace GritGud.Application.Gameplay
                 headings[headings.Count - 1],
                 finalSpeed);
             record = new VehicleMomentumRecord(
-                records.Count + 1L,
+                transitionSequence,
                 State,
                 resulting,
                 path);
@@ -177,10 +190,11 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(record));
             }
 
-            if (record.Sequence != records.Count + 1L)
+            if (records.Count > 0
+                && record.Sequence <= records[records.Count - 1].Sequence)
             {
                 throw new InvalidOperationException(
-                    "The vehicle record is not the next authoritative sequence.");
+                    "Vehicle movement must advance its canonical transition sequence.");
             }
 
             if (!StatesMatch(State, record.Previous))

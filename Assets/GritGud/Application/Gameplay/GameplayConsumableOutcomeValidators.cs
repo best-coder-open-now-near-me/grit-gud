@@ -20,6 +20,7 @@ namespace GritGud.Application.Gameplay
         {
             ThrownExplosiveRecord thrown = outcome.Record;
             if (thrown == null
+                || thrown.Sequence != action.Sequence
                 || thrown.Definition == null
                 || !string.Equals(
                     action.Request.ActorId,

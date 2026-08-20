@@ -142,6 +142,11 @@ namespace GritGud.Application.Gameplay
             if (action.Sequence != session.LastActionSequence + 1L)
                 throw new InvalidOperationException(
                     "Explosive action is not the next action sequence.");
+            foreach (GameplayActionOutcome outcome in action.Outcomes)
+                if (outcome is ThrownExplosiveActionOutcome thrown
+                    && thrown.Record.Sequence != action.Sequence)
+                    throw new InvalidOperationException(
+                        "Thrown explosive must share its canonical action sequence.");
             if (session.Mode == GameplaySessionMode.TurnBased
                 && !string.Equals(
                     session.ActiveActorId,

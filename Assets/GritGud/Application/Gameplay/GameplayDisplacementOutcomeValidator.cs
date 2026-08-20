@@ -19,6 +19,10 @@ namespace GritGud.Application.Gameplay
             DisplacementActionOutcome outcome)
         {
             DisplacementRecord displacement = outcome.Displacement;
+            if (displacement != null
+                && displacement.Sequence != action.Sequence)
+                throw new InvalidOperationException(
+                    "Displacement records must share their canonical action sequence.");
             if (displacement == null)
             {
                 DisplacementActionCommitValidator.Validate(

@@ -164,6 +164,18 @@ namespace GritGud.Application.Gameplay
             string propId,
             float requestedDamage,
             int preferredFractureChunkIndex,
+            out DestructibleDamageRecord record) => TryPrepareDamage(
+                propId,
+                requestedDamage,
+                preferredFractureChunkIndex,
+                damageRecords.Count + 1L,
+                out record);
+
+        public bool TryPrepareDamage(
+            string propId,
+            float requestedDamage,
+            int preferredFractureChunkIndex,
+            long causalSequence,
             out DestructibleDamageRecord record)
         {
             if (float.IsNaN(requestedDamage)
@@ -172,6 +184,8 @@ namespace GritGud.Application.Gameplay
             {
                 throw new ArgumentOutOfRangeException(nameof(requestedDamage));
             }
+            if (causalSequence <= 0L)
+                throw new ArgumentOutOfRangeException(nameof(causalSequence));
 
             DestructiblePropSnapshot previous = GetProp(propId);
             if (previous.State == DestructiblePropState.Destroyed)
@@ -206,7 +220,7 @@ namespace GritGud.Application.Gameplay
                 previous.FractureChunkCount,
                 detachedChunks);
             record = new DestructibleDamageRecord(
-                damageRecords.Count + 1L,
+                causalSequence,
                 appliedDamage,
                 previous,
                 resulting,
@@ -245,11 +259,12 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(record));
             }
 
-            long expectedSequence = damageRecords.Count + 1L;
-            if (record.Sequence != expectedSequence)
+            if (damageRecords.Count > 0
+                && record.Sequence
+                    < damageRecords[damageRecords.Count - 1].Sequence)
             {
                 throw new InvalidOperationException(
-                    "The damage record is not the next authoritative sequence.");
+                    "Destructible damage cannot precede an installed causal sequence.");
             }
 
             DestructiblePropSnapshot current = GetProp(record.PropId);

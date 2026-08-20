@@ -22,6 +22,7 @@ internal static class SimulationChecks
             VerifyPortableGroundSurfaces();
             VerifyStaticHeadlessSpatialGeometry();
             VerifyConcreteGroundedMoveCandidateRoute();
+            VerifyCanonicalActionOwnedRecordSequences();
             VerifyConcreteActorAttackCandidateRoute();
             VerifyAllCurrentContentCoverage();
             VerifyTacticalDestructibleSimulation();
@@ -1788,6 +1789,44 @@ internal static class SimulationChecks
                 runtime.Trajectory,
                 reducers).IsExact,
             "Concrete actor attack route did not execute and replay exactly.");
+    }
+
+    private static void VerifyCanonicalActionOwnedRecordSequences()
+    {
+        GameplaySession gameplay = CreateEncounterGameplay();
+        Require(gameplay.BeginEncounter(),
+            "Causal sequence fixture encounter did not begin.");
+        var attacks = new GameplayAttackSession(gameplay);
+        var exposure = new TargetExposureSnapshot(
+            "player",
+            "enemy",
+            new[]
+            {
+                new TargetRegionExposure(
+                    TargetRegionId.Torso,
+                    visibleSampleCount: 1,
+                    totalSampleCount: 1),
+            });
+        Require(attacks.TryResolve(
+                "player",
+                exposure,
+                out GameplayActionRecord firstAction,
+                out AttackResolutionFailure firstFailure),
+            "Causal sequence setup attack failed: " + firstFailure);
+        Require(firstAction.Sequence == 1L,
+            "Causal sequence setup did not commit the first action.");
+        Require(attacks.TryPrepareDischarge(
+                "player",
+                GameplayTargetIds.WorldAimPoint,
+                new GameplayPosition(0f, 1f, -2f),
+                out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                out AttackResolutionFailure dischargeFailure),
+            "Causal discharge preparation failed: " + dischargeFailure);
+        var discharge = (WeaponDischargedActionOutcome)
+            prepared.Record.Outcomes[0];
+        Require(prepared.Record.Sequence == 2L
+            && discharge.Discharge.Sequence == prepared.Record.Sequence,
+            "A discharge used its private record count instead of the canonical action sequence.");
     }
 
     private static void VerifyConcreteGroundedMoveCandidateRoute()

@@ -220,6 +220,12 @@ namespace GritGud.Application.Gameplay
                     StringComparison.Ordinal))
                 throw new InvalidOperationException(
                     "Displacement action sequence or actor is stale.");
+            foreach (GameplayActionOutcome outcome in action.Outcomes)
+                if (outcome is DisplacementActionOutcome displaced
+                    && displaced.Displacement != null
+                    && displaced.Displacement.Sequence != action.Sequence)
+                    throw new InvalidOperationException(
+                        "Displacement must share its canonical action sequence.");
             GameplayActorSnapshot actor = session.GetActor(
                 action.Request.ActorId);
             if (!BudgetsMatch(actor.TurnBudget, action.PreviousBudget)

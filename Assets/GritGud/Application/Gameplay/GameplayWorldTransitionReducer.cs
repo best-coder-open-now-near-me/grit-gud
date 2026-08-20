@@ -97,6 +97,9 @@ namespace GritGud.Application.Gameplay
             GameplayProjectileAdvanceTransitionPayload payload)
         {
             state.RequireCoverage(GameplayCombatStateCoverage.Projectiles);
+            if (payload.Advance.Sequence != transition.Identity.Sequence)
+                throw new InvalidOperationException(
+                    "Projectile advance must share its canonical transition sequence.");
             GameplayCombatStateSnapshot projected =
                 GameplayProjectileAdvanceStateProjector.Project(
                     state,
@@ -117,6 +120,9 @@ namespace GritGud.Application.Gameplay
         {
             state.RequireCoverage(GameplayCombatStateCoverage.Vehicles);
             VehicleMomentumRecord movement = payload.Movement;
+            if (movement.Sequence != transition.Identity.Sequence)
+                throw new InvalidOperationException(
+                    "Vehicle movement must share its canonical transition sequence.");
             VehicleMomentumState current = FindVehicle(
                 state.Vehicles,
                 movement.Resulting.VehicleId);

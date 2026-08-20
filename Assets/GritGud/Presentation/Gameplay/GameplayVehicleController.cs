@@ -130,7 +130,11 @@ namespace GritGud.Presentation.Gameplay
                 path.Add(ToGameplayPosition(point));
             }
 
-            if (!runtime.Session.TryResolvePath(path, out record, out failure))
+            if (!runtime.Session.TryResolvePath(
+                    path,
+                    gameplaySession.LastTransitionSequence + 1L,
+                    out record,
+                    out failure))
             {
                 return false;
             }

@@ -93,6 +93,7 @@ namespace GritGud.Application.Gameplay
         {
             WeaponDischargeRecord discharge = outcome.Discharge;
             if (discharge == null
+                || discharge.Sequence != action.Sequence
                 || !string.Equals(
                     action.Request.ActorId,
                     discharge.AttackerId,
@@ -151,6 +152,7 @@ namespace GritGud.Application.Gameplay
         {
             ProjectileLaunchRecord launch = outcome.Launch;
             if (launch == null
+                || launch.Sequence != action.Sequence
                 || !string.Equals(
                     action.Request.ActorId,
                     launch.AttackerId,

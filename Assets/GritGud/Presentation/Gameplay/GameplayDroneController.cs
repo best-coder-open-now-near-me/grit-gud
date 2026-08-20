@@ -368,13 +368,18 @@ namespace GritGud.Presentation.Gameplay
                 target.ActorId,
                 samples);
             if (exposure.VisibleSampleCount == 0) return;
-            long resolutionSequence = gameplay.Journal.LastEntry?.Sequence + 1L
-                ?? 1L;
+            long resolutionSequence = gameplay.LastTransitionSequence + 1L;
+            var transitionIdentity = new GameplayTransitionIdentity(
+                resolutionSequence,
+                GameplaySemanticCapability.DirectAttack.ToString(),
+                drone.Definition.ControllerActorId,
+                target.ActorId);
             AttackResolutionRecord resolution = AttackResolutionRules.Resolve(
                 resolutionSequence,
-                AttackResolutionRules.DeriveResolutionSeed(
-                    scenarioSeed,
-                    resolutionSequence),
+                GameplayAddressedRandom.SampleUInt32(
+                    gameplay.RunIdentity,
+                    transitionIdentity,
+                    "resolution"),
                 exposure,
                 drone.Definition.Attack.AccuracyDecay,
                 drone.Position.DistanceTo(targetState.Pose.Position),

@@ -278,7 +278,7 @@ namespace GritGud.Application.Gameplay
                 actionId,
                 subjectId,
                 destination,
-                records.Count + 1L);
+                gameplay.NextActionSequence);
 
         public DisplacementDestinationEvaluation EvaluateIntentDestination(
             string actorId,
@@ -288,7 +288,7 @@ namespace GritGud.Application.Gameplay
                 actorId,
                 actionId,
                 subjectId,
-                records.Count + 1L);
+                gameplay.NextActionSequence);
 
         public DisplacementDestinationEvaluation
             EvaluateDirectionalPushOffDestination(
@@ -301,7 +301,7 @@ namespace GritGud.Application.Gameplay
                 actionId,
                 subjectId,
                 directionTarget,
-                records.Count + 1L);
+                gameplay.NextActionSequence);
 
         public bool TryDisplaceAction(
             string actorId,
@@ -358,6 +358,7 @@ namespace GritGud.Application.Gameplay
                 }
             }
             GameplayActorSnapshot actor = gameplay.GetActor(actorId);
+            long actionSequence = gameplay.NextActionSequence;
             ActionCost cost = availability.ResolvedCost;
             TurnBudget resultingBudget;
             try
@@ -377,7 +378,7 @@ namespace GritGud.Application.Gameplay
                     target.Subject,
                     destination,
                     definition,
-                    records.Count + 1L,
+                    actionSequence,
                     out record,
                     out failure)
                 : contestResolver.TryResolve(
@@ -386,7 +387,7 @@ namespace GritGud.Application.Gameplay
                     target.Subject.Mass,
                     destination,
                     definition,
-                    records.Count + 1L,
+                    actionSequence,
                     out record,
                     out failure);
             if (!resolved)
@@ -407,9 +408,7 @@ namespace GritGud.Application.Gameplay
             }
             outcomes.Add(new DisplacementActionOutcome(record));
             action = new GameplayActionRecord(
-                gameplay.LastResolvedAction == null
-                    ? 1L
-                    : gameplay.LastResolvedAction.Sequence + 1L,
+                actionSequence,
                 new GameplayActionRequest(
                     actorId,
                     definition.Id,
@@ -419,7 +418,7 @@ namespace GritGud.Application.Gameplay
                 resultingBudget,
                 outcomes);
             gameplay.ValidateActionCommit(action);
-            commitValidator.Validate(record, records.Count + 1L);
+            commitValidator.Validate(record, actionSequence);
             var notifications = new GameplayNotificationBatch();
             gameplay.CommitAction(action, notifications);
             Commit(

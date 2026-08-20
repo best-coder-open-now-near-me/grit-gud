@@ -149,7 +149,7 @@ namespace GritGud.Application.Gameplay
                     "Landing and blast evidence must describe one world revision.");
             }
 
-            long sequence = throws.Count + 1L;
+            long sequence = gameplay.NextActionSequence;
             SmokeFieldRecord smokeField = definition.SmokeField == null
                 ? null
                 : new SmokeFieldRecord(
@@ -215,10 +215,10 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(prepared));
             }
 
-            if (prepared.Sequence != throws.Count + 1L)
+            if (prepared.Sequence != gameplay.NextActionSequence)
             {
                 throw new InvalidOperationException(
-                    "The prepared explosive is not the next authoritative throw.");
+                    "The prepared explosive is not the next canonical action.");
             }
 
             bool startsEncounter = gameplay.ThrownExplosiveStartsEncounter(
@@ -270,7 +270,7 @@ namespace GritGud.Application.Gameplay
                 consumedQuantity: 1,
                 resultingQuantity: previousQuantity - 1);
             action = new GameplayActionRecord(
-                gameplay.LastResolvedAction == null ? 1L : gameplay.LastResolvedAction.Sequence + 1L,
+                prepared.Sequence,
                 new GameplayActionRequest(
                     prepared.ThrowerId,
                     prepared.Definition.Id,
@@ -323,9 +323,9 @@ namespace GritGud.Application.Gameplay
                 throw new InvalidOperationException(
                     "Thrown explosive actions must consume their matching inventory item.");
             }
-            if (outcome.Record.Sequence != throws.Count + 1L)
+            if (outcome.Record.Sequence != action.Sequence)
                 throw new InvalidOperationException(
-                    "The thrown explosive is not the next authoritative throw.");
+                    "The thrown explosive does not share its canonical action sequence.");
             consequences.Validate(
                 outcome.Record.BlastEffects,
                 outcome.Record.Definition.BlastWoundMovementPenalty,

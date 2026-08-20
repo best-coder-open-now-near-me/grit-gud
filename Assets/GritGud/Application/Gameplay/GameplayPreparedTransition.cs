@@ -128,6 +128,14 @@ namespace GritGud.Application.Gameplay
             if (action.Outcomes.Count != 1)
                 throw new ArgumentException(
                     "Weapon projection requires exactly one outcome.", nameof(action));
+            if (action.Outcomes[0] is WeaponDischargedActionOutcome discharge
+                && discharge.Discharge.Sequence != action.Sequence)
+                throw new InvalidOperationException(
+                    "Weapon discharge must share its canonical action sequence.");
+            if (action.Outcomes[0] is ProjectileLaunchedActionOutcome launch
+                && launch.Launch.Sequence != action.Sequence)
+                throw new InvalidOperationException(
+                    "Projectile launch must share its canonical action sequence.");
 
             var actors = new List<GameplayActorSnapshot>(
                 previous.Session.Actors.Count);
@@ -138,6 +146,10 @@ namespace GritGud.Application.Gameplay
                 action.Outcomes[0] is WeaponDischargedActionOutcome discharged
                     ? discharged.Discharge.Damage
                     : null;
+            if (directFireDamage != null
+                && directFireDamage.Sequence != action.Sequence)
+                throw new InvalidOperationException(
+                    "Direct-fire damage must share its canonical action sequence.");
 
             GameplaySessionStateSnapshot session = previous.Session;
             var resultingSession = new GameplaySessionStateSnapshot(

@@ -235,12 +235,14 @@ namespace GritGud.Application.Gameplay
             }
 
             GameplayCombatStateSnapshot previous = CaptureCombatState();
+            long actionSequence = gameplay.NextActionSequence;
             DestructibleDamageRecord damage = PrepareDirectFireDamage(
                 attack,
                 targetId,
-                impact);
+                impact,
+                actionSequence);
             var discharge = new WeaponDischargeRecord(
-                discharges.Count + 1L,
+                actionSequence,
                 actorId,
                 attack.ActionId,
                 targetId,
@@ -249,9 +251,6 @@ namespace GritGud.Application.Gameplay
                 impact,
                 damage);
             TurnBudget resultingBudget = actor.TurnBudget.SpendAction(cost);
-            long actionSequence = gameplay.LastResolvedAction == null
-                ? 1L
-                : gameplay.LastResolvedAction.Sequence + 1L;
             var action = new GameplayActionRecord(
                 actionSequence,
                 new GameplayActionRequest(
@@ -385,11 +384,10 @@ namespace GritGud.Application.Gameplay
             GameplayActionRecord action,
             WeaponDischargeRecord discharge)
         {
-            long expectedSequence = discharges.Count + 1L;
-            if (discharge.Sequence != expectedSequence)
+            if (discharge.Sequence != action.Sequence)
             {
                 throw new InvalidOperationException(
-                    "The discharge is not the next authoritative discharge sequence.");
+                    "The discharge does not share its canonical action sequence.");
             }
 
             var notifications = new GameplayNotificationBatch();
@@ -415,7 +413,8 @@ namespace GritGud.Application.Gameplay
         private DestructibleDamageRecord PrepareDirectFireDamage(
             AttackDefinition attack,
             string targetId,
-            DirectFireImpactRecord impact)
+            DirectFireImpactRecord impact,
+            long actionSequence)
         {
             if (destructibles == null
                 || impact == null
@@ -432,6 +431,7 @@ namespace GritGud.Application.Gameplay
                     targetId,
                     requestedDamage,
                     impact.PreferredFractureChunkIndex,
+                    actionSequence,
                     out DestructibleDamageRecord damage)
                 ? damage
                 : null;

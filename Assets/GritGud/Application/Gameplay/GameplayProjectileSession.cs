@@ -223,7 +223,7 @@ namespace GritGud.Application.Gameplay
 
             GameplayCombatStateSnapshot previous =
                 CaptureCombatState();
-            long launchSequence = launches.Count + 1L;
+            long launchSequence = gameplay.NextActionSequence;
             string projectileId = CreateProjectileId(launchSequence);
             GameplayPosition launchOrigin = weapon.Projectile.GetLaunchOrigin(
                 actor.Pose);
@@ -241,11 +241,8 @@ namespace GritGud.Application.Gameplay
                 gameplay.GetActionPointEconomy(actorId)
                     .IncomePerPersonalTurn,
                 resultingBudget.ActionPoints);
-            long actionSequence = gameplay.LastResolvedAction == null
-                ? 1L
-                : gameplay.LastResolvedAction.Sequence + 1L;
             var action = new GameplayActionRecord(
-                actionSequence,
+                launchSequence,
                 new GameplayActionRequest(
                     actorId,
                     weapon.ActionId,
@@ -285,16 +282,15 @@ namespace GritGud.Application.Gameplay
             }
 
             ProjectileLaunchRecord launch = outcome.Launch;
-            long expectedSequence = launches.Count + 1L;
-            if (launch.Sequence != expectedSequence
+            if (launch.Sequence != action.Sequence
                 || !string.Equals(
                     launch.ProjectileId,
-                    CreateProjectileId(expectedSequence),
+                    CreateProjectileId(action.Sequence),
                     StringComparison.Ordinal)
                 || flights.ContainsKey(launch.ProjectileId))
             {
                 throw new InvalidOperationException(
-                    "The projectile launch is not the next authoritative launch.");
+                    "The projectile launch does not share its canonical action identity.");
             }
 
             var notifications = new GameplayNotificationBatch();
@@ -379,7 +375,7 @@ namespace GritGud.Application.Gameplay
             }
 
             var record = new ProjectileAdvanceRecord(
-                advances.Count + 1L,
+                gameplay.LastTransitionSequence + 1L,
                 previous,
                 resulting,
                 turnTime,
@@ -453,10 +449,10 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(record));
             }
 
-            if (record.Sequence != advances.Count + 1L)
+            if (record.Sequence != gameplay.LastTransitionSequence + 1L)
             {
                 throw new InvalidOperationException(
-                    "The projectile advance is not the next authoritative advance.");
+                    "The projectile advance is not the next canonical transition.");
             }
 
             ProjectileFlightSnapshot current = GetProjectile(record.ProjectileId);
