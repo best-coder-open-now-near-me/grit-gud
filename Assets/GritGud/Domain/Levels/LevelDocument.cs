@@ -316,6 +316,34 @@ namespace GritGud.Domain.Levels
     }
 
     [Serializable]
+    public sealed class LevelPlacementSurfaceData
+    {
+        public const string FlatKind = "flat";
+        public const string RampZKind = "ramp-z";
+
+        public string kind = FlatKind;
+        public Float3Data localCenter;
+        public Float3Data size = new Float3Data(1f, 0f, 1f);
+        public float negativeZHeight;
+        public float positiveZHeight;
+
+        public void Normalize()
+        {
+            kind = kind?.Trim().ToLowerInvariant() ?? string.Empty;
+        }
+
+        public LevelPlacementSurfaceData DeepCopy() =>
+            new LevelPlacementSurfaceData
+            {
+                kind = kind ?? string.Empty,
+                localCenter = localCenter,
+                size = size,
+                negativeZHeight = negativeZHeight,
+                positiveZHeight = positiveZHeight,
+            };
+    }
+
+    [Serializable]
     public sealed class LevelEntity
     {
         public string id = string.Empty;
@@ -326,6 +354,7 @@ namespace GritGud.Domain.Levels
         public List<CoverVolumeData> coverVolumes = new List<CoverVolumeData>();
         public List<InteractionPointData> interactionPoints = new List<InteractionPointData>();
         public DestructibleInstanceData destructible;
+        public LevelPlacementSurfaceData placementSurface;
 
         public void Normalize()
         {
@@ -334,6 +363,7 @@ namespace GritGud.Domain.Levels
             groupId = groupId ?? string.Empty;
             coverVolumes = coverVolumes ?? new List<CoverVolumeData>();
             interactionPoints = interactionPoints ?? new List<InteractionPointData>();
+            placementSurface?.Normalize();
         }
 
         public LevelEntity DeepCopy()
@@ -346,6 +376,7 @@ namespace GritGud.Domain.Levels
                 transform = transform,
                 rotationPivot = rotationPivot?.DeepCopy(),
                 destructible = destructible?.DeepCopy(),
+                placementSurface = placementSurface?.DeepCopy(),
             };
 
             if (coverVolumes != null)
@@ -797,7 +828,7 @@ namespace GritGud.Domain.Levels
     [Serializable]
     public sealed class LevelDocument
     {
-        public const int CurrentSchemaVersion = 15;
+        public const int CurrentSchemaVersion = 16;
         public const int MaximumEntityGroupCount = 64;
         public const int MaximumTraversalLinkCount = 256;
 

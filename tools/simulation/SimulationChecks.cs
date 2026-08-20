@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using GritGud.Application.Gameplay;
+using GritGud.Application.Levels;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Levels;
 using GritGud.Domain.Turns;
@@ -18,6 +19,7 @@ internal static class SimulationChecks
             VerifyCapabilityCoverageFailsClosed();
             VerifyTacticalRuleCoverageAndOutcomeProjection();
             VerifyAtomicLiveInstallation();
+            VerifyPortableGroundSurfaces();
             VerifyStaticHeadlessSpatialGeometry();
             VerifyConcreteActorAttackCandidateRoute();
             VerifyAllCurrentContentCoverage();
@@ -707,7 +709,7 @@ internal static class SimulationChecks
         ScenarioContentDocument scenario = ReadJson<ScenarioContentDocument>(
             Path.Combine(contentRoot, "Scenarios", "depot-yard.json"),
             json);
-        level = ReadJson<LevelDocument>(
+        level = ReadCurrentLevel(
             Path.Combine(
                 contentRoot,
                 "Levels",
@@ -1840,6 +1842,119 @@ internal static class SimulationChecks
             "Static headless obstruction extended beyond its authored volume.");
     }
 
+    private static void VerifyPortableGroundSurfaces()
+    {
+        var legacy = new LevelDocument
+        {
+            schemaVersion = 15,
+            levelId = "portable-ground-check",
+            entities = new List<LevelEntity>
+            {
+                new LevelEntity
+                {
+                    id = "floor",
+                    archetypeId = "structure.floor.standard",
+                    transform = new LevelTransformData(
+                        new Float3Data(0f, 0f, 0f),
+                        yawDegrees: 0f),
+                },
+                new LevelEntity
+                {
+                    id = "stairs",
+                    archetypeId = "structure.stairs.standard",
+                    transform = new LevelTransformData(
+                        new Float3Data(0f, 0f, 0f),
+                        yawDegrees: 0f),
+                },
+            },
+            terrainSurfaces = new List<TerrainSurfaceData>
+            {
+                new TerrainSurfaceData
+                {
+                    id = "ground",
+                    origin = new Float3Data(-2f, -0.15f, -2f),
+                    sampleCountX = 3,
+                    sampleCountZ = 3,
+                    sampleSpacing = 2f,
+                    minimumElevation = 0f,
+                    elevationIncrement = 0.1f,
+                    heightSamples = new List<int>
+                    {
+                        0, 0, 0,
+                        0, 0, 0,
+                        0, 0, 0,
+                    },
+                },
+            },
+        };
+        LevelDocument level = new LevelDocumentMigrator().MigrateToCurrent(
+            legacy);
+        Require(level.schemaVersion == LevelDocument.CurrentSchemaVersion
+            && level.entities[0].placementSurface != null
+            && level.entities[1].placementSurface != null,
+            "Level migration did not materialize portable placement surfaces.");
+        var spatial = new GameplayHeadlessSpatialEvidence(
+            level,
+            new SpatialContentIdentity(
+                level.levelId,
+                level.schemaVersion,
+                evidenceAlgorithmVersion: 1,
+                new string('f', 64)));
+        GameplayPosition floor = spatial.ResolveSpawnPosition(
+            new GameplayPosition(-1f, 2f, 1f));
+        GameplayPosition stairTop = spatial.ResolveSpawnPosition(
+            new GameplayPosition(-1f, 2f, -2.5f));
+        Require(Math.Abs(floor.Y - 0.07f) <= 0.0001f
+            && Math.Abs(stairTop.Y - 1.52f) <= 0.0001f,
+            "Portable spawn grounding did not reproduce floor and ramp heights.");
+        Require(spatial.TryResolveMovementPosition(
+                new GameplayPosition(-1f, 0.02f, 0f),
+                new GameplayPosition(-1f, 0.02f, -0.5f),
+                maximumVerticalReach: 0.5f,
+                out GameplayPosition stairStep)
+            && Math.Abs(stairStep.Y - 0.32f) <= 0.0001f,
+            "Portable ramp grounding did not resolve a reachable stair step.");
+
+        LoadDepotContent(
+            out GameplayScenarioAssembly depot,
+            out LevelDocument depotLevel);
+        var depotSpatial = new GameplayHeadlessSpatialEvidence(
+            depotLevel,
+            new SpatialContentIdentity(
+                depotLevel.levelId,
+                depotLevel.schemaVersion,
+                evidenceAlgorithmVersion: 1,
+                new string('1', 64)));
+        GameplayScenarioAssembly groundedDepot =
+            GameplayHeadlessScenarioGrounding.Resolve(depot, depotSpatial);
+        float playerHeight = groundedDepot.GetActorDefinition("player")
+            .StartingPose.Position.Y;
+        float supportHeight = groundedDepot.GetActorDefinition(
+            "depot-yard-support").StartingPose.Position.Y;
+        Require(playerHeight < 0.2f
+            && supportHeight > playerHeight + 2.5f,
+            "Portable Depot grounding did not distinguish yard and raised-deck spawns.");
+        var depotGameplay = new GameplaySession(
+            groundedDepot.Scenario,
+            scenarioSeed: groundedDepot.RandomSeed);
+        DestructiblePropSession depotDestructibles =
+            DestructiblePropSession.FromLevel(
+                depotLevel,
+                depotGameplay.Journal);
+        GameplayCombatStateSnapshot depotState =
+            GameplayCombatStateCapture.Capture(
+                depotGameplay,
+                depotDestructibles);
+        TargetExposureSnapshot startingExposure =
+            GameplayHeadlessEncounterEvidence.CaptureSight(
+                depotState,
+                depotSpatial,
+                "player",
+                "depot-rifleman");
+        Require(startingExposure.VisibleSampleCount == 0,
+            "Portable Depot evidence did not preserve the authored hidden starting positions.");
+    }
+
     private static void VerifyAllCurrentContentCoverage()
     {
         string repositoryRoot = FindRepositoryRoot();
@@ -1861,8 +1976,7 @@ internal static class SimulationChecks
             "*.json",
             SearchOption.AllDirectories))
         {
-            LevelDocument level = ReadJson<LevelDocument>(path, json);
-            level.Normalize();
+            LevelDocument level = ReadCurrentLevel(path, json);
             if (string.IsNullOrWhiteSpace(level.levelId)) continue;
             if (!levels.TryAdd(level.levelId, level))
                 throw new InvalidOperationException(
@@ -1949,7 +2063,7 @@ internal static class SimulationChecks
                 "Scenarios",
                 "depot-yard.json"),
             json);
-        LevelDocument level = ReadJson<LevelDocument>(
+        LevelDocument level = ReadCurrentLevel(
             Path.Combine(
                 contentRoot,
                 "Resources",
@@ -2566,6 +2680,11 @@ internal static class SimulationChecks
                 return true;
         return false;
     }
+
+    private static LevelDocument ReadCurrentLevel(
+        string path,
+        JsonSerializerOptions options) => new LevelDocumentMigrator()
+            .MigrateToCurrent(ReadJson<LevelDocument>(path, options));
 
     private static T ReadJson<T>(
         string path,

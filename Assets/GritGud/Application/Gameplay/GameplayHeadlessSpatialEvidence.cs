@@ -194,8 +194,28 @@ namespace GritGud.Application.Gameplay
             public GameplayFractureSpatialProfile FractureProfile { get; }
         }
 
+        private sealed class PlacementSurfaceDefinition
+        {
+            public PlacementSurfaceDefinition(
+                string entityId,
+                GameplayPropPose pose,
+                LevelPlacementSurfaceData surface)
+            {
+                EntityId = entityId;
+                Pose = pose;
+                Surface = surface;
+            }
+
+            public string EntityId { get; }
+            public GameplayPropPose Pose { get; }
+            public LevelPlacementSurfaceData Surface { get; }
+        }
+
         private readonly SpatialContentIdentity spatialIdentity;
         private readonly IReadOnlyList<ObstacleDefinition> obstacles;
+        private readonly IReadOnlyList<PlacementSurfaceDefinition>
+            placementSurfaces;
+        private readonly IReadOnlyList<TerrainSurfaceData> terrainSurfaces;
         private readonly bool hasDestructibleObstacles;
 
         public GameplayHeadlessSpatialEvidence(
@@ -215,21 +235,28 @@ namespace GritGud.Application.Gameplay
                     "Spatial identity does not describe the supplied level.",
                     nameof(identity));
             var result = new List<ObstacleDefinition>();
+            var surfaces = new List<PlacementSurfaceDefinition>();
             foreach (LevelEntity entity in level.entities)
             {
-                if (entity == null || entity.coverVolumes.Count == 0)
-                    continue;
-                bool destructible = entity.destructible?.enabled == true;
-                result.Add(new ObstacleDefinition(
-                    entity.id,
-                    new GameplayPropPose(
+                if (entity == null) continue;
+                var pose = new GameplayPropPose(
                         new GameplayPosition(
                             entity.transform.position.x,
                             entity.transform.position.y,
                             entity.transform.position.z),
                         entity.transform.pitchDegrees,
                         entity.transform.yawDegrees,
-                        entity.transform.rollDegrees),
+                        entity.transform.rollDegrees);
+                if (entity.placementSurface != null)
+                    surfaces.Add(new PlacementSurfaceDefinition(
+                        entity.id,
+                        pose,
+                        entity.placementSurface.DeepCopy()));
+                if (entity.coverVolumes.Count == 0) continue;
+                bool destructible = entity.destructible?.enabled == true;
+                result.Add(new ObstacleDefinition(
+                    entity.id,
+                    pose,
                     destructible,
                     new List<CoverVolumeData>(
                         entity.coverVolumes).AsReadOnly(),
@@ -242,7 +269,18 @@ namespace GritGud.Application.Gameplay
             result.Sort((left, right) => StringComparer.Ordinal.Compare(
                 left.EntityId,
                 right.EntityId));
+            surfaces.Sort((left, right) => StringComparer.Ordinal.Compare(
+                left.EntityId,
+                right.EntityId));
             obstacles = result.AsReadOnly();
+            placementSurfaces = surfaces.AsReadOnly();
+            var terrain = new List<TerrainSurfaceData>();
+            foreach (TerrainSurfaceData surface in level.terrainSurfaces)
+                if (surface != null) terrain.Add(surface.DeepCopy());
+            terrain.Sort((left, right) => StringComparer.Ordinal.Compare(
+                left.id,
+                right.id));
+            terrainSurfaces = terrain.AsReadOnly();
             foreach (ObstacleDefinition obstacle in obstacles)
                 if (obstacle.IsDestructible)
                 {
@@ -257,6 +295,68 @@ namespace GritGud.Application.Gameplay
                 GameplayDynamicSpatialFingerprint.Hash(state),
                 state?.Session.Revision
                     ?? throw new ArgumentNullException(nameof(state)));
+
+        /// <summary>
+        /// Mirrors authored spawn grounding without Unity physics. The highest
+        /// portable placement or terrain surface intersected by the same
+        /// vertical probe wins, and the canonical actor root retains the live
+        /// controller's ground clearance.
+        /// </summary>
+        public GameplayPosition ResolveSpawnPosition(
+            GameplayPosition authoredPosition,
+            float rootGroundClearance = 0.02f)
+        {
+            GameplayNumericPolicy.RequireFinite(
+                rootGroundClearance,
+                nameof(rootGroundClearance));
+            if (rootGroundClearance < 0f)
+                throw new ArgumentOutOfRangeException(
+                    nameof(rootGroundClearance));
+            if (!TryResolveSurfaceHeight(
+                    authoredPosition,
+                    authoredPosition.Y + 8f,
+                    authoredPosition.Y - 12f,
+                    out float height))
+                throw new InvalidOperationException(
+                    $"Gameplay spawn at '{Format(authoredPosition)}' has no portable walkable surface below it.");
+            return new GameplayPosition(
+                authoredPosition.X,
+                height + rootGroundClearance,
+                authoredPosition.Z);
+        }
+
+        public bool TryResolveMovementPosition(
+            GameplayPosition from,
+            GameplayPosition requestedDestination,
+            float maximumVerticalReach,
+            out GameplayPosition resolved,
+            float rootGroundClearance = 0.02f)
+        {
+            GameplayNumericPolicy.RequireFinite(
+                maximumVerticalReach,
+                nameof(maximumVerticalReach));
+            GameplayNumericPolicy.RequireFinite(
+                rootGroundClearance,
+                nameof(rootGroundClearance));
+            if (maximumVerticalReach < 0f || rootGroundClearance < 0f)
+                throw new ArgumentOutOfRangeException(
+                    nameof(maximumVerticalReach));
+            float currentSurface = from.Y - rootGroundClearance;
+            if (!TryResolveSurfaceHeight(
+                    requestedDestination,
+                    currentSurface + maximumVerticalReach,
+                    currentSurface - maximumVerticalReach,
+                    out float height))
+            {
+                resolved = default;
+                return false;
+            }
+            resolved = new GameplayPosition(
+                requestedDestination.X,
+                height + rootGroundClearance,
+                requestedDestination.Z);
+            return true;
+        }
 
         public bool BlocksLineOfSight(
             GameplayCombatStateSnapshot state,
@@ -401,6 +501,143 @@ namespace GritGud.Application.Gameplay
             return false;
         }
 
+        private bool TryResolveSurfaceHeight(
+            GameplayPosition position,
+            float maximumHeight,
+            float minimumHeight,
+            out float resolvedHeight)
+        {
+            bool found = false;
+            resolvedHeight = float.NegativeInfinity;
+            foreach (TerrainSurfaceData terrain in terrainSurfaces)
+                if (TryEvaluateTerrainHeight(
+                        terrain,
+                        position,
+                        out float height)
+                    && height <= maximumHeight + 0.0001f
+                    && height >= minimumHeight - 0.0001f
+                    && (!found || height > resolvedHeight))
+                {
+                    resolvedHeight = height;
+                    found = true;
+                }
+            foreach (PlacementSurfaceDefinition surface in placementSurfaces)
+                if (TryEvaluatePlacementHeight(
+                        surface,
+                        position,
+                        out float height)
+                    && height <= maximumHeight + 0.0001f
+                    && height >= minimumHeight - 0.0001f
+                    && (!found || height > resolvedHeight))
+                {
+                    resolvedHeight = height;
+                    found = true;
+                }
+            return found;
+        }
+
+        private static bool TryEvaluateTerrainHeight(
+            TerrainSurfaceData surface,
+            GameplayPosition position,
+            out float height)
+        {
+            height = 0f;
+            if (surface.sampleCountX <= 0
+                || surface.sampleCountZ <= 0
+                || surface.sampleSpacing <= 0f
+                || surface.heightSamples == null
+                || surface.heightSamples.Count
+                    != surface.sampleCountX * surface.sampleCountZ)
+                return false;
+            float sampleX = (position.X - surface.origin.x)
+                / surface.sampleSpacing;
+            float sampleZ = (position.Z - surface.origin.z)
+                / surface.sampleSpacing;
+            if (sampleX < 0f
+                || sampleZ < 0f
+                || sampleX > surface.sampleCountX - 1
+                || sampleZ > surface.sampleCountZ - 1)
+                return false;
+            int lowerX = Math.Min(
+                (int)Math.Floor(sampleX),
+                surface.sampleCountX - 1);
+            int lowerZ = Math.Min(
+                (int)Math.Floor(sampleZ),
+                surface.sampleCountZ - 1);
+            int upperX = Math.Min(lowerX + 1, surface.sampleCountX - 1);
+            int upperZ = Math.Min(lowerZ + 1, surface.sampleCountZ - 1);
+            float fractionX = sampleX - lowerX;
+            float fractionZ = sampleZ - lowerZ;
+            float lower = Lerp(
+                TerrainHeight(surface, lowerX, lowerZ),
+                TerrainHeight(surface, upperX, lowerZ),
+                fractionX);
+            float upper = Lerp(
+                TerrainHeight(surface, lowerX, upperZ),
+                TerrainHeight(surface, upperX, upperZ),
+                fractionX);
+            height = Lerp(lower, upper, fractionZ);
+            return true;
+        }
+
+        private static bool TryEvaluatePlacementHeight(
+            PlacementSurfaceDefinition definition,
+            GameplayPosition position,
+            out float height)
+        {
+            height = 0f;
+            LevelPlacementSurfaceData surface = definition.Surface;
+            GameplayPosition local = ToPropLocal(position, definition.Pose);
+            float halfX = surface.size.x * 0.5f;
+            float halfZ = surface.size.z * 0.5f;
+            if (halfX <= 0f
+                || halfZ <= 0f
+                || local.X < surface.localCenter.x - halfX - 0.0001f
+                || local.X > surface.localCenter.x + halfX + 0.0001f
+                || local.Z < surface.localCenter.z - halfZ - 0.0001f
+                || local.Z > surface.localCenter.z + halfZ + 0.0001f)
+                return false;
+            float fraction = (local.Z - (surface.localCenter.z - halfZ))
+                / (halfZ * 2f);
+            float localHeight;
+            switch (surface.kind)
+            {
+                case LevelPlacementSurfaceData.FlatKind:
+                    if (!GameplayNumericPolicy.AreEquivalent(
+                        surface.negativeZHeight,
+                        surface.positiveZHeight))
+                        throw new InvalidOperationException(
+                            $"Flat placement surface '{definition.EntityId}' has mismatched endpoint heights.");
+                    localHeight = surface.negativeZHeight;
+                    break;
+                case LevelPlacementSurfaceData.RampZKind:
+                    localHeight = Lerp(
+                        surface.negativeZHeight,
+                        surface.positiveZHeight,
+                        fraction);
+                    break;
+                default:
+                    throw new NotSupportedException(
+                        $"Placement surface '{definition.EntityId}' uses unsupported kind '{surface.kind}'.");
+            }
+            GameplayPosition world = ToWorld(
+                new GameplayPosition(local.X, localHeight, local.Z),
+                definition.Pose);
+            height = world.Y;
+            return true;
+        }
+
+        private static float TerrainHeight(
+            TerrainSurfaceData surface,
+            int x,
+            int z) => surface.origin.y
+                + surface.minimumElevation
+                + surface.heightSamples[(z * surface.sampleCountX) + x]
+                    * surface.elevationIncrement;
+
+        private static float Lerp(float from, float to, float fraction) =>
+            from + ((to - from) * fraction);
+
         private static GameplayFractureSpatialProfile ResolveFractureProfile(
             string archetypeId,
             IReadOnlyDictionary<string, GameplayFractureSpatialProfile>
@@ -531,6 +768,22 @@ namespace GritGud.Application.Gameplay
             RotateX(ref y, ref z, -pose.PitchDegrees);
             RotateZ(ref x, ref y, -pose.RollDegrees);
             return new GameplayPosition((float)x, (float)y, (float)z);
+        }
+
+        private static GameplayPosition ToWorld(
+            GameplayPosition local,
+            GameplayPropPose pose)
+        {
+            double x = local.X;
+            double y = local.Y;
+            double z = local.Z;
+            RotateZ(ref x, ref y, pose.RollDegrees);
+            RotateX(ref y, ref z, pose.PitchDegrees);
+            RotateY(ref x, ref z, pose.YawDegrees);
+            return new GameplayPosition(
+                (float)(x + pose.Position.X),
+                (float)(y + pose.Position.Y),
+                (float)(z + pose.Position.Z));
         }
 
         private static void RotateX(

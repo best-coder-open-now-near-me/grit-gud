@@ -39,6 +39,7 @@ namespace GritGud.Application.Levels
                     new LevelDocumentV12ToV13Migration(),
                     new LevelDocumentV13ToV14Migration(),
                     new LevelDocumentV14ToV15Migration(),
+                    new LevelDocumentV15ToV16Migration(),
                 };
             }
 
@@ -428,6 +429,60 @@ namespace GritGud.Application.Levels
             migrated.schemaVersion = TargetVersion;
             return migrated;
         }
+    }
+
+    public sealed class LevelDocumentV15ToV16Migration : ILevelDocumentMigration
+    {
+        public int SourceVersion => 15;
+        public int TargetVersion => 16;
+
+        public LevelDocument Migrate(LevelDocument source)
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+            LevelDocument migrated = source.DeepCopy();
+            foreach (LevelEntity entity in migrated.entities
+                ?? new List<LevelEntity>())
+            {
+                if (entity == null || entity.placementSurface != null) continue;
+                if (string.Equals(
+                    entity.archetypeId,
+                    "structure.floor.standard",
+                    StringComparison.Ordinal))
+                {
+                    entity.placementSurface = CreateFloorSurface();
+                }
+                else if (string.Equals(
+                    entity.archetypeId,
+                    "structure.stairs.standard",
+                    StringComparison.Ordinal))
+                {
+                    entity.placementSurface = CreateStairSurface();
+                }
+            }
+            migrated.schemaVersion = TargetVersion;
+            return migrated;
+        }
+
+        private static LevelPlacementSurfaceData CreateFloorSurface() =>
+            new LevelPlacementSurfaceData
+            {
+                kind = LevelPlacementSurfaceData.FlatKind,
+                localCenter = new Float3Data(-1.25f, 0f, 1.25f),
+                size = new Float3Data(2.5f, 0f, 2.5f),
+                negativeZHeight = 0.05f,
+                positiveZHeight = 0.05f,
+            };
+
+        private static LevelPlacementSurfaceData CreateStairSurface() =>
+            new LevelPlacementSurfaceData
+            {
+                kind = LevelPlacementSurfaceData.RampZKind,
+                localCenter = new Float3Data(-1.25f, 0f, -1.25f),
+                size = new Float3Data(2.5f, 0f, 2.5f),
+                negativeZHeight = 1.5f,
+                positiveZHeight = 0f,
+            };
     }
 
 }
