@@ -52,15 +52,63 @@ namespace GritGud.Application.Gameplay
         public GameplayReductionResult Execute(
             GameplaySemanticTransition transition)
         {
+            GameplayReductionResult reduction = PrepareReduction(transition);
+            return InstallPreparedReduction(transition, reduction);
+        }
+
+        /// <summary>
+        /// Performs the pure reduction half of execution without mutating the
+        /// authoritative root. A caller may run this on a cancellable worker and
+        /// then marshal installation back to the live owner thread.
+        /// </summary>
+        public GameplayReductionResult PrepareReduction(
+            GameplaySemanticTransition transition)
+        {
             if (transition == null)
                 throw new ArgumentNullException(nameof(transition));
             capabilities.RequireCompleteRoute(transition.Profile);
-            GameplayReductionResult reduction = reducers.Reduce(
-                stateStore.Current,
-                transition);
+            return reducers.Reduce(stateStore.Current, transition);
+        }
+
+        /// <summary>
+        /// Atomically installs a previously reduced transition and records the
+        /// sole semantic trajectory step. The state store rejects stale roots.
+        /// </summary>
+        public GameplayReductionResult InstallPreparedReduction(
+            GameplaySemanticTransition transition,
+            GameplayReductionResult reduction)
+        {
+            if (transition == null)
+                throw new ArgumentNullException(nameof(transition));
+            if (reduction == null)
+                throw new ArgumentNullException(nameof(reduction));
+            capabilities.RequireCompleteRoute(transition.Profile);
+            if (!string.Equals(
+                    transition.PreviousStateHash,
+                    reduction.Previous.CanonicalHash,
+                    StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "Prepared reduction does not belong to the supplied transition.");
+            if (reduction.Resulting.Session.LastTransitionSequence
+                != transition.Identity.Sequence)
+                throw new InvalidOperationException(
+                    "Prepared reduction has a different canonical transition sequence.");
             var eventTypes = new List<string>(reduction.DomainEvents.Count);
+            int reducedEventCount = 0;
             foreach (GameplayDomainEvent domainEvent in reduction.DomainEvents)
+            {
+                if (!IdentitiesMatch(
+                        domainEvent.Transition,
+                        transition.Identity))
+                    throw new InvalidOperationException(
+                        "Prepared reduction contains an event for another transition.");
+                if (domainEvent is GameplayTransitionReducedEvent)
+                    reducedEventCount++;
                 eventTypes.Add(domainEvent.EventType);
+            }
+            if (reducedEventCount != 1)
+                throw new InvalidOperationException(
+                    "Prepared reduction must contain exactly one semantic reduced event.");
             var step = new GameplayTrajectoryStep(
                 transition,
                 reduction.Resulting.CanonicalHash,
@@ -96,6 +144,19 @@ namespace GritGud.Application.Gameplay
 
         private void PublishDomainEvent(GameplayDomainEvent domainEvent) =>
             DomainEventPublished?.Invoke(domainEvent);
+
+        private static bool IdentitiesMatch(
+            GameplayTransitionIdentity left,
+            GameplayTransitionIdentity right) => left.Sequence == right.Sequence
+            && string.Equals(left.Kind, right.Kind, StringComparison.Ordinal)
+            && string.Equals(
+                left.ActorId,
+                right.ActorId,
+                StringComparison.Ordinal)
+            && string.Equals(
+                left.SubjectId,
+                right.SubjectId,
+                StringComparison.Ordinal);
 
         private void PublishStateInstalled(GameplayReductionResult reduction)
         {

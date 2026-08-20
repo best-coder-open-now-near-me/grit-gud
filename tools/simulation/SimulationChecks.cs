@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Threading;
 using GritGud.Application.Gameplay;
 using GritGud.Application.Levels;
 using GritGud.Domain.Gameplay;
@@ -27,6 +28,8 @@ internal static class SimulationChecks
             VerifyConcreteGroundedMoveCandidateRoute();
             VerifyCanonicalActionOwnedRecordSequences();
             VerifyConcreteActorAttackCandidateRoute();
+            VerifyPermanentPolicyRunner();
+            VerifyLogicalExecutionGuards();
             VerifyAllCurrentContentCoverage();
             VerifyTacticalDestructibleSimulation();
             executedFixtureChecks.Add("sim-destructible-cover");
@@ -2417,6 +2420,267 @@ internal static class SimulationChecks
             "Concrete actor attack route did not execute and replay exactly.");
     }
 
+    private static void VerifyPermanentPolicyRunner()
+    {
+        GameplaySession gameplay = CreateEncounterGameplay();
+        var level = new LevelDocument
+        {
+            levelId = "policy-runner-check",
+            schemaVersion = LevelDocument.CurrentSchemaVersion,
+        };
+        level.Normalize();
+        Require(gameplay.BeginEncounter(),
+            "Policy runner fixture encounter did not begin.");
+        GameplayCombatStateSnapshot initial = GameplayCombatStateCapture.Capture(
+            gameplay,
+            DestructiblePropSession.FromLevel(level, gameplay.Journal));
+        var spatialIdentity = new SpatialContentIdentity(
+            level.levelId,
+            level.schemaVersion,
+            evidenceAlgorithmVersion: 1,
+            new string('7', 64));
+        var spatial = new GameplayHeadlessSpatialEvidence(
+            level,
+            spatialIdentity);
+        IReadOnlyList<GameplayReachableInput> allInputs =
+            GameplayReachableInputEnumerator.Enumerate(
+                gameplay.Scenario,
+                level);
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
+        GameplayCapabilityRegistry capabilities =
+            GameplayCurrentCapabilityCatalog.Create(reducers, allInputs);
+        var routes = new GameplayCandidateExecutionRouteRegistry(capabilities);
+        routes.Register(new GameplayActorAttackCandidateExecutionRoute(
+            gameplay.Scenario,
+            Array.Empty<TacticalContextRuleDefinition>(),
+            spatial));
+        routes.Register(new GameplayEndTurnCandidateExecutionRoute(
+            gameplay.Scenario));
+
+        var decisionInputs = new List<GameplayReachableInput>();
+        foreach (GameplayReachableInput input in allInputs)
+            if (string.Equals(input.ActorId, "player", StringComparison.Ordinal)
+                && routes.Supports(input.Profile))
+                decisionInputs.Add(input);
+        var candidateSource = new GameplayHeadlessDecisionCandidateSource(
+            new GameplayHeadlessCandidateBuilder(capabilities, spatial),
+            decisionInputs,
+            routes);
+        var policy = new GameplayWeightedOutcomePolicy(new[]
+        {
+            new GameplayOutcomeFeatureWeight(
+                "attack.hit-probability",
+                10f),
+            new GameplayOutcomeFeatureWeight("turn.end", -1f),
+        });
+        var runner = new GameplayPolicyDecisionRunner(
+            candidateSource,
+            routes,
+            policy);
+
+        GameplayExecutionIdentity executionIdentity =
+            new GameplayExecutionIdentity(
+                new GameplayContentIdentity(
+                    gameplay.Scenario.Id,
+                    scenarioSchemaVersion: 1,
+                    rulesSchemaVersion: 1,
+                    new string('6', 64)),
+                spatialIdentity,
+                gameplay.RunIdentity);
+        var firstRuntime = new GameplaySimulationRuntime(
+            executionIdentity,
+            initial,
+            reducers,
+            capabilities);
+        var firstScope = new GameplayExecutionDeadlineScope();
+        firstScope.BeginTurn();
+        GameplayDecisionExecutionResult first = runner.ExecuteAsync(
+                firstRuntime,
+                GameplayObservationSnapshot.FullState("player", initial),
+                firstScope)
+            .GetAwaiter().GetResult();
+        Require(first.Transition.Profile.Capability
+                == GameplaySemanticCapability.DirectAttack
+            && firstRuntime.Trajectory.Count == 1
+            && first.Diagnostic.Timings.Count == 6,
+            "Permanent policy runner did not traverse and time all six stages.");
+
+        var repeatedRuntime = new GameplaySimulationRuntime(
+            executionIdentity,
+            initial,
+            reducers,
+            capabilities);
+        var repeatedScope = new GameplayExecutionDeadlineScope();
+        repeatedScope.BeginTurn();
+        GameplayDecisionExecutionResult repeated = runner.ExecuteAsync(
+                repeatedRuntime,
+                GameplayObservationSnapshot.FullState("player", initial),
+                repeatedScope)
+            .GetAwaiter().GetResult();
+        Require(string.Equals(
+                GameplayTransitionPayloadDigest.Calculate(first.Transition),
+                GameplayTransitionPayloadDigest.Calculate(repeated.Transition),
+                StringComparison.Ordinal)
+            && string.Equals(
+                firstRuntime.CurrentState.CanonicalHash,
+                repeatedRuntime.CurrentState.CanonicalHash,
+                StringComparison.Ordinal),
+            "Policy timing or worker scheduling changed deterministic selection or reduction.");
+
+        var missingRouteInput = new GameplayReachableInput(
+            GameplayReachableInputKind.StanceControl,
+            "fixture.stance",
+            "player",
+            GameplayCapabilityProfiles.ChangeStance());
+        GameplayExecutableRouteCoverageReport missingCoverage =
+            GameplayExecutableRouteCoverageValidator.Validate(
+                new[] { missingRouteInput },
+                routes);
+        Require(!missingCoverage.IsComplete
+            && missingCoverage.Issues.Count == 1,
+            "Executable route coverage accepted capability metadata without a concrete route.");
+
+        var hangingRuntime = new GameplaySimulationRuntime(
+            executionIdentity,
+            initial,
+            reducers,
+            capabilities);
+        var timeoutPolicy = new GameplayExecutionDeadlinePolicy(
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromMilliseconds(30),
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromSeconds(2),
+            TimeSpan.FromSeconds(3),
+            TimeSpan.FromSeconds(4));
+        var hangingRunner = new GameplayPolicyDecisionRunner(
+            candidateSource,
+            routes,
+            new HangingCandidatePolicy(),
+            deadlinePolicy: timeoutPolicy);
+        var hangingScope = new GameplayExecutionDeadlineScope();
+        hangingScope.BeginTurn();
+        GameplayDecisionFailureException timeout = null;
+        try
+        {
+            hangingRunner.ExecuteAsync(
+                    hangingRuntime,
+                    GameplayObservationSnapshot.FullState("player", initial),
+                    hangingScope)
+                .GetAwaiter().GetResult();
+        }
+        catch (GameplayDecisionFailureException exception)
+        {
+            timeout = exception;
+        }
+        Require(timeout != null
+            && timeout.Kind == GameplayDecisionFailureKind.DeadlineExceeded
+            && timeout.Diagnostic.ActiveStage
+                == GameplayDecisionStage.Scoring
+            && timeout.Diagnostic.CandidateIds.Count > 0
+            && timeout.Diagnostic.LegalCandidateIds.Count > 0
+            && hangingRuntime.Trajectory.Count == 0
+            && string.Equals(
+                hangingRuntime.CurrentState.CanonicalHash,
+                initial.CanonicalHash,
+                StringComparison.Ordinal),
+            "Hanging policy did not fail with a typed partial artifact before mutation.");
+    }
+
+    private static void VerifyLogicalExecutionGuards()
+    {
+        GameplaySession gameplay = CreateEncounterGameplay();
+        Require(gameplay.BeginEncounter(),
+            "Logical guard fixture encounter did not begin.");
+        GameplayCombatStateSnapshot state = GameplayCombatStateCapture.Capture(
+            gameplay);
+        var noProgress = new GameplayExecutionLogicalGuard(
+            state,
+            new GameplayExecutionLogicalGuardPolicy(
+                maximumTransitions: 10,
+                maximumRepeatedMaterialStates: 10,
+                maximumNoProgressTurns: 2));
+        noProgress.BeginTurn(state.Session.ActiveActorId, state);
+        noProgress.CompleteTurn(state, mandatoryWorkRemaining: false);
+        noProgress.BeginTurn(state.Session.ActiveActorId, state);
+        GameplayDecisionFailureException noProgressFailure = null;
+        try
+        {
+            noProgress.CompleteTurn(state, mandatoryWorkRemaining: false);
+        }
+        catch (GameplayDecisionFailureException exception)
+        {
+            noProgressFailure = exception;
+        }
+        Require(noProgressFailure?.Kind
+                == GameplayDecisionFailureKind.NoProgressTurn,
+            "No-progress turn guard did not return a typed failure.");
+
+        var mandatory = new GameplayExecutionLogicalGuard(state);
+        mandatory.BeginTurn(state.Session.ActiveActorId, state);
+        GameplayDecisionFailureException mandatoryFailure = null;
+        try
+        {
+            mandatory.CompleteTurn(state, mandatoryWorkRemaining: true);
+        }
+        catch (GameplayDecisionFailureException exception)
+        {
+            mandatoryFailure = exception;
+        }
+        Require(mandatoryFailure?.Kind
+                == GameplayDecisionFailureKind.UnresolvedMandatoryWork,
+            "Unresolved mandatory work did not prevent turn completion.");
+
+        var repeated = new GameplayExecutionLogicalGuard(
+            state,
+            new GameplayExecutionLogicalGuardPolicy(
+                maximumTransitions: 10,
+                maximumRepeatedMaterialStates: 1,
+                maximumNoProgressTurns: 10));
+        GameplayDecisionFailureException repeatedFailure = null;
+        try
+        {
+            repeated.ValidatePreparedTransition(new GameplayReductionResult(
+                state,
+                state,
+                Array.Empty<GameplayDomainEvent>()));
+        }
+        catch (GameplayDecisionFailureException exception)
+        {
+            repeatedFailure = exception;
+        }
+        Require(repeatedFailure?.Kind
+                == GameplayDecisionFailureKind.RepeatedCanonicalState,
+            "Repeated material-state hash did not stop execution.");
+
+        var maximum = new GameplayExecutionLogicalGuard(
+            state,
+            new GameplayExecutionLogicalGuardPolicy(
+                maximumTransitions: 1,
+                maximumRepeatedMaterialStates: 10,
+                maximumNoProgressTurns: 10));
+        var unchanged = new GameplayReductionResult(
+            state,
+            state,
+            Array.Empty<GameplayDomainEvent>());
+        maximum.ValidatePreparedTransition(unchanged);
+        GameplayDecisionFailureException maximumFailure = null;
+        try
+        {
+            maximum.ValidatePreparedTransition(unchanged);
+        }
+        catch (GameplayDecisionFailureException exception)
+        {
+            maximumFailure = exception;
+        }
+        Require(maximumFailure?.Kind
+                == GameplayDecisionFailureKind.MaximumTransitionsExceeded,
+            "Maximum transition guard did not stop execution.");
+    }
+
     private static void VerifyCanonicalActionOwnedRecordSequences()
     {
         GameplaySession gameplay = CreateEncounterGameplay();
@@ -3646,6 +3910,20 @@ internal static class SimulationChecks
             ScenarioRunIdentity run,
             GameplayTransitionIdentity transition,
             string purpose) => center;
+    }
+
+    private sealed class HangingCandidatePolicy : IGameplayCandidatePolicy
+    {
+        public GameplayPolicyScore Score(
+            GameplayDecisionContext context,
+            GameplayExecutableCandidateEvaluation evaluation,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.WaitHandle.WaitOne();
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new InvalidOperationException(
+                "A cancelled hanging policy cannot produce a score.");
+        }
     }
 
     private sealed class SimulationFixtureManifest
