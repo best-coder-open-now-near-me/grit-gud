@@ -73,5 +73,22 @@ namespace GritGud.Presentation.Tests
                 outline.FindPropertyIndex("_OutlineScreenWidth"),
                 Is.GreaterThanOrEqualTo(0));
         }
+
+        [Test]
+        public void FractureInteriorsUseThePortableProjectShader()
+        {
+            string[] materialPaths =
+            {
+                "Assets/GritGud/Content/Generated/Fractures/CrateWood/CrateWoodInterior.mat",
+                "Assets/GritGud/Content/Generated/Fractures/BarrelMetal/BarrelMetalInterior.mat",
+            };
+            foreach (string path in materialPaths)
+            {
+                Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+                Assert.That(material, Is.Not.Null, path);
+                Assert.That(material.shader, Is.Not.Null, path);
+                Assert.That(material.shader.name, Is.EqualTo("GritGud/CelSurface"), path);
+            }
+        }
     }
 }

@@ -83,7 +83,6 @@ namespace GritGud.Editor
                 string folder = $"{OutputRoot}/{recipe.AssetName}";
                 EnsureFolder(folder);
                 Material interior = CreateOrUpdateInteriorMaterial(
-                    source.Materials[0],
                     recipe.InteriorTint,
                     $"{folder}/{recipe.AssetName}Interior.mat");
                 Material[] chunkMaterials = new Material[source.Materials.Length + 1];
@@ -548,19 +547,21 @@ namespace GritGud.Editor
         }
 
         private static Material CreateOrUpdateInteriorMaterial(
-            Material source,
             Color tint,
             string assetPath)
         {
+            Shader interiorShader = Shader.Find("GritGud/CelSurface")
+                ?? throw new InvalidOperationException(
+                    "Fracture interiors require the project-owned CelSurface shader.");
             Material existing = AssetDatabase.LoadAssetAtPath<Material>(assetPath);
             if (existing == null)
             {
-                existing = new Material(source);
+                existing = new Material(interiorShader);
                 AssetDatabase.CreateAsset(existing, assetPath);
             }
             else
             {
-                EditorUtility.CopySerialized(source, existing);
+                existing.shader = interiorShader;
             }
 
             if (existing.HasProperty("_BaseColor"))

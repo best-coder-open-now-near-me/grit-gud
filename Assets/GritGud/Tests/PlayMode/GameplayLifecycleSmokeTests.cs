@@ -95,6 +95,30 @@ namespace GritGud.PlayMode.Tests
         }
 
         [UnityTest]
+        public IEnumerator ExplorationCanSwitchFromRifleToLauncher()
+        {
+            EnsureBootstrap();
+            bootstrap.ReturnToMenu();
+            bootstrap.PlayMainLevel();
+            yield return WaitForMode(ApplicationMode.Gameplay);
+
+            GameplayController gameplay =
+                bootstrap.GetComponent<GameplayController>();
+            GameplayEquipmentController equipment =
+                bootstrap.GetComponent<GameplayEquipmentController>();
+            Assert.That(equipment.TryActivateItem("weapon.rocket-launcher"),
+                Is.True);
+            Assert.That(equipment.TryActivateItem("weapon.rocket-launcher"),
+                Is.True, equipment.LastFailure.ToString());
+            Assert.That(
+                gameplay.Session.GetActor("player").EquippedItemId,
+                Is.EqualTo("weapon.rocket-launcher"));
+
+            bootstrap.ReturnToMenu();
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator PublishedTopplingFixtureCommitsAndRestoresExactLivePose()
         {
             EnsureBootstrap();
