@@ -431,7 +431,7 @@ namespace GritGud.Application.Gameplay
             var initiative = new List<GameplayInitiativeResult>(participantCount);
             foreach (ScenarioActorDefinition actor in scenario.Actors)
             {
-                CharacterPersistenceSnapshot restoredCharacter = null;
+                GameplayPartyCharacterSave restoredCharacter = null;
                 if (restoredParty != null
                     && actor.CharacterProfile != null)
                 {

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using GritGud.Application.Gameplay;
-using GritGud.Domain.Gameplay;
 using UnityEngine;
 
 namespace GritGud.Presentation.Persistence
@@ -22,22 +21,6 @@ namespace GritGud.Presentation.Persistence
         {
             public string identityId;
             public string equippedItemId;
-            public bool hasCurrentActionPoints;
-            public int currentActionPoints;
-            public WoundDocument wounds = new WoundDocument();
-        }
-
-        [Serializable]
-        private sealed class WoundDocument
-        {
-            public int head;
-            public int torso;
-            public int leftArm;
-            public int rightArm;
-            public int leftLeg;
-            public int rightLeg;
-            public int unlocalized;
-            public float movementPenalty;
         }
 
         public const string StorageKey = "grit-gud.party-save";
@@ -78,7 +61,7 @@ namespace GritGud.Presentation.Persistence
                 throw new InvalidOperationException(
                     $"Party save schema {document.schemaVersion} is unsupported.");
 
-            var characters = new List<CharacterPersistenceSnapshot>(
+            var characters = new List<GameplayPartyCharacterSave>(
                 document.characters.Count);
             foreach (CharacterDocument character in document.characters)
             {
@@ -86,27 +69,9 @@ namespace GritGud.Presentation.Persistence
                     throw new InvalidOperationException(
                         "The local party save contains an empty character.");
 
-                WoundDocument wounds = character.wounds
-                    ?? throw new InvalidOperationException(
-                        "The local party save contains no wound state.");
-                var woundSnapshot = new ActorWoundSnapshot(
+                characters.Add(new GameplayPartyCharacterSave(
                     character.identityId,
-                    wounds.head,
-                    wounds.torso,
-                    wounds.leftArm,
-                    wounds.rightArm,
-                    wounds.leftLeg,
-                    wounds.rightLeg,
-                    wounds.unlocalized,
-                    wounds.movementPenalty);
-                characters.Add(new CharacterPersistenceSnapshot(
-                    character.identityId,
-                    NormalizeOptionalId(character.equippedItemId),
-                    woundSnapshot,
-                    document.schemaVersion >= 2
-                        && character.hasCurrentActionPoints
-                            ? character.currentActionPoints
-                            : (int?)null));
+                    NormalizeOptionalId(character.equippedItemId)));
             }
 
             save = new GameplayPartySave(
@@ -119,33 +84,23 @@ namespace GritGud.Presentation.Persistence
         {
             if (save == null)
                 throw new ArgumentNullException(nameof(save));
+            if (save.SchemaVersion != GameplayPartySave.CurrentSchemaVersion)
+            {
+                throw new InvalidOperationException(
+                    $"Party save schema {save.SchemaVersion} cannot be written.");
+            }
 
             var document = new SaveDocument
             {
                 schemaVersion = save.SchemaVersion,
             };
-            foreach (CharacterPersistenceSnapshot character in
+            foreach (GameplayPartyCharacterSave character in
                 save.Characters)
             {
                 var serializedCharacter = new CharacterDocument
                 {
                     identityId = character.IdentityId,
                     equippedItemId = character.EquippedItemId ?? string.Empty,
-                    hasCurrentActionPoints =
-                        character.CurrentActionPoints.HasValue,
-                    currentActionPoints =
-                        character.CurrentActionPoints ?? 0,
-                    wounds = new WoundDocument
-                    {
-                        head = character.Wounds.HeadWounds,
-                        torso = character.Wounds.TorsoWounds,
-                        leftArm = character.Wounds.LeftArmWounds,
-                        rightArm = character.Wounds.RightArmWounds,
-                        leftLeg = character.Wounds.LeftLegWounds,
-                        rightLeg = character.Wounds.RightLegWounds,
-                        unlocalized = character.Wounds.UnlocalizedWounds,
-                        movementPenalty = character.Wounds.MovementPenalty,
-                    },
                 };
                 document.characters.Add(serializedCharacter);
             }

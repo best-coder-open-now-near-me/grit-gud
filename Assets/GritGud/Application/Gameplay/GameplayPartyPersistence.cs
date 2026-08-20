@@ -13,16 +13,38 @@ namespace GritGud.Application.Gameplay
         void Delete();
     }
 
+    public sealed class GameplayPartyCharacterSave
+    {
+        public GameplayPartyCharacterSave(
+            string identityId,
+            string equippedItemId)
+        {
+            if (string.IsNullOrWhiteSpace(identityId))
+            {
+                throw new ArgumentException(
+                    "Persistent party equipment requires a character identity.",
+                    nameof(identityId));
+            }
+
+            IdentityId = identityId;
+            EquippedItemId = equippedItemId;
+        }
+
+        public string IdentityId { get; }
+
+        public string EquippedItemId { get; }
+    }
+
     public sealed class GameplayPartySave
     {
         public const int CurrentSchemaVersion = 3;
 
-        private readonly Dictionary<string, CharacterPersistenceSnapshot>
+        private readonly Dictionary<string, GameplayPartyCharacterSave>
             charactersByIdentity;
 
         public GameplayPartySave(
             int schemaVersion,
-            IEnumerable<CharacterPersistenceSnapshot> characters)
+            IEnumerable<GameplayPartyCharacterSave> characters)
         {
             if (schemaVersion <= 0)
                 throw new ArgumentOutOfRangeException(nameof(schemaVersion));
@@ -30,11 +52,11 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(characters));
 
             SchemaVersion = schemaVersion;
-            var copy = new List<CharacterPersistenceSnapshot>();
+            var copy = new List<GameplayPartyCharacterSave>();
             charactersByIdentity =
-                new Dictionary<string, CharacterPersistenceSnapshot>(
+                new Dictionary<string, GameplayPartyCharacterSave>(
                     StringComparer.Ordinal);
-            foreach (CharacterPersistenceSnapshot character in characters)
+            foreach (GameplayPartyCharacterSave character in characters)
             {
                 if (character == null)
                 {
@@ -64,11 +86,11 @@ namespace GritGud.Application.Gameplay
 
         public int SchemaVersion { get; }
 
-        public IReadOnlyList<CharacterPersistenceSnapshot> Characters { get; }
+        public IReadOnlyList<GameplayPartyCharacterSave> Characters { get; }
 
         public bool TryGetCharacter(
             string identityId,
-            out CharacterPersistenceSnapshot character) =>
+            out GameplayPartyCharacterSave character) =>
             charactersByIdentity.TryGetValue(
                 identityId ?? string.Empty,
                 out character);
@@ -80,7 +102,7 @@ namespace GritGud.Application.Gameplay
             PlayerPartyDefinition party = gameplay.Scenario.PlayerParty
                 ?? throw new InvalidOperationException(
                     "Party persistence requires an authored player party.");
-            var characters = new List<CharacterPersistenceSnapshot>(
+            var characters = new List<GameplayPartyCharacterSave>(
                 party.ActorIds.Count);
             foreach (string actorId in party.ActorIds)
             {
@@ -90,11 +112,9 @@ namespace GritGud.Application.Gameplay
                     ?? throw new InvalidOperationException(
                         $"Party actor '{actorId}' has no character identity.");
                 GameplayActorSnapshot actor = gameplay.GetActor(actorId);
-                characters.Add(new CharacterPersistenceSnapshot(
+                characters.Add(new GameplayPartyCharacterSave(
                     profile.IdentityId,
-                    actor.EquippedItemId,
-                    new ActorWoundSnapshot(actorId, 0, 0f),
-                    currentActionPoints: null));
+                    actor.EquippedItemId));
             }
             return new GameplayPartySave(
                 CurrentSchemaVersion,
@@ -136,18 +156,11 @@ namespace GritGud.Application.Gameplay
                         $"Party actor '{actorId}' has no character identity.");
                 if (!save.TryGetCharacter(
                         profile.IdentityId,
-                        out CharacterPersistenceSnapshot character))
+                        out GameplayPartyCharacterSave character))
                 {
                     throw new InvalidOperationException(
                         $"Party save is missing identity '{profile.IdentityId}'.");
                 }
-
-                if (character.CurrentActionPoints.HasValue
-                    && character.CurrentActionPoints.Value
-                        > scenario.Timing.ActionPointEconomy
-                            .MaximumHeldActionPoints)
-                    throw new InvalidOperationException(
-                        $"Saved AP for identity '{profile.IdentityId}' exceeds the scenario cap.");
 
                 if (character.EquippedItemId != null)
                 {
@@ -194,22 +207,24 @@ namespace GritGud.Application.Gameplay
                     "Party persistence must load before binding gameplay.");
             }
 
+            GameplayPartySave save;
             try
             {
-                if (!store.TryLoad(out GameplayPartySave save))
+                if (!store.TryLoad(out save))
                 {
                     Report("No saved party was found; using authored character state.");
                     return null;
                 }
                 GameplayPartySaveValidator.Validate(save, scenario);
-                Report("Loaded the saved party.");
-                return save;
             }
             catch (Exception exception)
             {
                 Report($"Ignored an invalid party save: {exception.Message}");
                 return null;
             }
+
+            Report("Loaded the saved party.");
+            return save;
         }
 
         public void Bind(GameplaySession gameplaySession)
@@ -234,27 +249,37 @@ namespace GritGud.Application.Gameplay
             {
                 store.Save(GameplayPartySave.Capture(gameplay));
                 dirty = false;
-                Report("Saved party equipment.");
-                return true;
             }
             catch (Exception exception)
             {
                 Report($"Party save failed: {exception.Message}");
                 return false;
             }
+
+            Report("Saved party equipment.");
+            return true;
         }
 
         public void Dispose()
         {
             if (disposed)
                 return;
-            if (gameplay != null)
+            GameplaySession boundGameplay = gameplay;
+            try
             {
-                Flush();
-                gameplay.EquipmentChanged -= HandleEquipmentChanged;
+                if (boundGameplay != null)
+                    Flush();
             }
-            gameplay = null;
-            disposed = true;
+            finally
+            {
+                if (boundGameplay != null)
+                {
+                    boundGameplay.EquipmentChanged -=
+                        HandleEquipmentChanged;
+                }
+                gameplay = null;
+                disposed = true;
+            }
         }
 
         private void HandleEquipmentChanged(EquipmentChangeRecord _) =>
@@ -269,7 +294,21 @@ namespace GritGud.Application.Gameplay
         private void Report(string value)
         {
             Status = value ?? string.Empty;
-            StatusChanged?.Invoke(Status);
+            Delegate[] observers = StatusChanged?.GetInvocationList();
+            if (observers == null)
+                return;
+
+            foreach (Action<string> observer in observers)
+            {
+                try
+                {
+                    observer(Status);
+                }
+                catch
+                {
+                    // Status observers must not alter persistence semantics.
+                }
+            }
         }
 
         private void RequireBound()

@@ -121,34 +121,4 @@ namespace GritGud.Domain.Gameplay
         }
     }
 
-    public sealed class CharacterPersistenceSnapshot
-    {
-        public CharacterPersistenceSnapshot(
-            string identityId,
-            string equippedItemId,
-            ActorWoundSnapshot wounds,
-            int? currentActionPoints = null)
-        {
-            if (string.IsNullOrWhiteSpace(identityId))
-            {
-                throw new ArgumentException(
-                    "Persistent character state requires an identity.",
-                    nameof(identityId));
-            }
-            IdentityId = identityId;
-            EquippedItemId = equippedItemId;
-            Wounds = wounds;
-            if (currentActionPoints < 0)
-                throw new ArgumentOutOfRangeException(nameof(currentActionPoints));
-            CurrentActionPoints = currentActionPoints;
-        }
-
-        public string IdentityId { get; }
-
-        public string EquippedItemId { get; }
-
-        public ActorWoundSnapshot Wounds { get; }
-
-        public int? CurrentActionPoints { get; }
-    }
 }

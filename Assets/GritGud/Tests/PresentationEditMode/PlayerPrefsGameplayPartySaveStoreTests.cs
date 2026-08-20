@@ -23,27 +23,16 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
-        public void StoreRoundTripsVersionedIdentityState()
+        public void StoreRoundTripsOnlyVersionedEquipmentState()
         {
             var store = new PlayerPrefsGameplayPartySaveStore();
             var save = new GameplayPartySave(
                 GameplayPartySave.CurrentSchemaVersion,
                 new[]
                 {
-                    new CharacterPersistenceSnapshot(
+                    new GameplayPartyCharacterSave(
                         "character.mara-vance",
-                        equippedItemId: null,
-                        wounds: new ActorWoundSnapshot(
-                            "mara",
-                            headWounds: 0,
-                            torsoWounds: 1,
-                            leftArmWounds: 0,
-                            rightArmWounds: 0,
-                            leftLegWounds: 0,
-                            rightLegWounds: 0,
-                            unlocalizedWounds: 0,
-                            movementPenalty: 1.25f),
-                        currentActionPoints: 2),
+                        equippedItemId: null),
                 });
 
             store.Save(save);
@@ -52,14 +41,15 @@ namespace GritGud.Presentation.Tests
             Assert.That(restored.SchemaVersion,
                 Is.EqualTo(GameplayPartySave.CurrentSchemaVersion));
             Assert.That(restored.Characters, Has.Count.EqualTo(1));
-            CharacterPersistenceSnapshot character = restored.Characters[0];
+            GameplayPartyCharacterSave character = restored.Characters[0];
             Assert.That(character.IdentityId,
                 Is.EqualTo("character.mara-vance"));
             Assert.That(character.EquippedItemId, Is.Null);
-            Assert.That(character.Wounds.TorsoWounds, Is.EqualTo(1));
-            Assert.That(character.Wounds.MovementPenalty,
-                Is.EqualTo(1.25f));
-            Assert.That(character.CurrentActionPoints, Is.EqualTo(2));
+            string serialized = PlayerPrefs.GetString(
+                PlayerPrefsGameplayPartySaveStore.StorageKey);
+            Assert.That(serialized, Does.Not.Contain("wounds"));
+            Assert.That(serialized,
+                Does.Not.Contain("currentActionPoints"));
         }
 
         [Test]
@@ -76,7 +66,7 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
-        public void LegacyPointFieldsAreIgnoredAndRemovedOnTheNextSave()
+        public void LegacyCombatAndProgressionFieldsAreDiscardedOnMigration()
         {
             const string legacy =
                 "{\"schemaVersion\":1,\"characters\":[{"
@@ -84,6 +74,7 @@ namespace GritGud.Presentation.Tests
                 + "\"unspentPoints\":4,"
                 + "\"bonuses\":[{\"skillId\":\"skill.demolitions\","
                 + "\"value\":2}],\"equippedItemId\":\"\","
+                + "\"hasCurrentActionPoints\":true,\"currentActionPoints\":2,"
                 + "\"wounds\":{\"head\":0,\"torso\":1,"
                 + "\"leftArm\":0,\"rightArm\":0,\"leftLeg\":0,"
                 + "\"rightLeg\":0,\"unlocalized\":0,"
@@ -100,7 +91,36 @@ namespace GritGud.Presentation.Tests
 
             Assert.That(normalized, Does.Not.Contain("unspentPoints"));
             Assert.That(normalized, Does.Not.Contain("bonuses"));
-            Assert.That(restored.Characters[0].Wounds.TorsoWounds, Is.EqualTo(1));
+            Assert.That(normalized, Does.Not.Contain("wounds"));
+            Assert.That(normalized,
+                Does.Not.Contain("currentActionPoints"));
+        }
+
+        [Test]
+        public void BuggySchemaThreeCombatFieldsAreAlsoDiscarded()
+        {
+            const string previousSchemaThree =
+                "{\"schemaVersion\":3,\"characters\":[{"
+                + "\"identityId\":\"character.mara-vance\","
+                + "\"equippedItemId\":\"\","
+                + "\"hasCurrentActionPoints\":true,"
+                + "\"currentActionPoints\":2,"
+                + "\"wounds\":{\"torso\":1,"
+                + "\"movementPenalty\":1.25}}]}";
+            PlayerPrefs.SetString(
+                PlayerPrefsGameplayPartySaveStore.StorageKey,
+                previousSchemaThree);
+            var store = new PlayerPrefsGameplayPartySaveStore();
+
+            Assert.That(store.TryLoad(out GameplayPartySave restored), Is.True);
+            Assert.That(restored.Characters[0].EquippedItemId, Is.Null);
+
+            store.Save(restored);
+            string normalized = PlayerPrefs.GetString(
+                PlayerPrefsGameplayPartySaveStore.StorageKey);
+            Assert.That(normalized, Does.Not.Contain("wounds"));
+            Assert.That(normalized,
+                Does.Not.Contain("currentActionPoints"));
         }
     }
 }

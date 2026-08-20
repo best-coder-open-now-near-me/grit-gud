@@ -18,42 +18,31 @@ namespace GritGud.Tests.EditMode.Gameplay
             Assert.That(save.Characters, Has.Count.EqualTo(2));
             Assert.That(save.TryGetCharacter(
                 "character.mara",
-                out CharacterPersistenceSnapshot mara), Is.True);
+                out GameplayPartyCharacterSave mara), Is.True);
             Assert.That(mara.EquippedItemId, Is.EqualTo("weapon.rifle"));
-            Assert.That(mara.Wounds.ActorId, Is.EqualTo("mara"));
-            Assert.That(mara.Wounds.WoundCount, Is.Zero);
-            Assert.That(mara.CurrentActionPoints, Is.Null);
             Assert.That(
-                typeof(CharacterPersistenceSnapshot).GetProperty("Progression"),
+                typeof(GameplayPartyCharacterSave).GetProperty("Wounds"),
+                Is.Null);
+            Assert.That(
+                typeof(GameplayPartyCharacterSave).GetProperty(
+                    "CurrentActionPoints"),
                 Is.Null);
         }
 
         [Test]
-        public void ValidPartySaveRestoresLegacyCombatStateOnlyWithinExplicitSnapshot()
+        public void ValidPartySaveRestoresEquipmentOntoFreshCombatState()
         {
             GameplaySession authored = CreateGameplay();
             var save = new GameplayPartySave(
                 GameplayPartySave.CurrentSchemaVersion,
                 new[]
                 {
-                    new CharacterPersistenceSnapshot(
+                    new GameplayPartyCharacterSave(
                         "character.mara",
-                        equippedItemId: null,
-                        wounds: new ActorWoundSnapshot(
-                            "previous-mara",
-                            headWounds: 0,
-                            torsoWounds: 1,
-                            leftArmWounds: 0,
-                            rightArmWounds: 0,
-                            leftLegWounds: 0,
-                            rightLegWounds: 0,
-                            unlocalizedWounds: 0,
-                            movementPenalty: 1.5f),
-                        currentActionPoints: 2),
-                    new CharacterPersistenceSnapshot(
+                        equippedItemId: null),
+                    new GameplayPartyCharacterSave(
                         "character.vale",
-                        "weapon.rifle",
-                        new ActorWoundSnapshot("previous-vale", 0, 0f)),
+                        "weapon.rifle"),
                 });
 
             var restored = new GameplaySession(
@@ -63,10 +52,10 @@ namespace GritGud.Tests.EditMode.Gameplay
             GameplayActorSnapshot mara = restored.GetActor("mara");
             Assert.That(mara.EquippedItemId, Is.Null);
             Assert.That(mara.Wounds.ActorId, Is.EqualTo("mara"));
-            Assert.That(mara.Wounds.TorsoWounds, Is.EqualTo(1));
+            Assert.That(mara.Wounds.WoundCount, Is.Zero);
             Assert.That(mara.TurnBudget.MovementOpportunity,
-                Is.EqualTo(6.5f));
-            Assert.That(mara.TurnBudget.ActionPoints, Is.EqualTo(2));
+                Is.EqualTo(8f));
+            Assert.That(mara.TurnBudget.ActionPoints, Is.EqualTo(4));
             Assert.That(restored.GetActor("vale").EquippedItemId,
                 Is.EqualTo("weapon.rifle"));
         }
@@ -91,7 +80,7 @@ namespace GritGud.Tests.EditMode.Gameplay
             Assert.That(store.SaveCount, Is.EqualTo(1));
             Assert.That(store.Saved.TryGetCharacter(
                 "character.mara",
-                out CharacterPersistenceSnapshot mara), Is.True);
+                out GameplayPartyCharacterSave mara), Is.True);
             Assert.That(mara.EquippedItemId, Is.Null);
             Assert.That(persistence.Status,
                 Is.EqualTo("Saved party equipment."));
@@ -113,9 +102,37 @@ namespace GritGud.Tests.EditMode.Gameplay
             Assert.That(store.SaveCount, Is.Zero);
         }
 
+        [Test]
+        public void ThrowingStatusObserverCannotReclassifySuccessfulLoadOrSave()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            var store = new MemoryPartySaveStore
+            {
+                Saved = GameplayPartySave.Capture(gameplay),
+            };
+            var persistence = new GameplayPartyPersistenceSession(store);
+            persistence.StatusChanged += _ =>
+                throw new InvalidOperationException("observer failed");
+
+            GameplayPartySave loaded = persistence.Load(gameplay.Scenario);
+            persistence.Bind(gameplay);
+            var equipment = new GameplayEquipmentSession(gameplay);
+
+            Assert.That(loaded, Is.SameAs(store.Saved));
+            Assert.That(equipment.TryResolve(
+                "mara",
+                "weapon.rifle",
+                equip: false,
+                out _,
+                out _), Is.True);
+            Assert.That(store.SaveCount, Is.EqualTo(1));
+            Assert.DoesNotThrow(persistence.Dispose);
+            Assert.Throws<ObjectDisposedException>(() => persistence.Flush());
+        }
+
         private sealed class MemoryPartySaveStore : IGameplayPartySaveStore
         {
-            public GameplayPartySave Saved { get; private set; }
+            public GameplayPartySave Saved { get; set; }
 
             public int SaveCount { get; private set; }
 

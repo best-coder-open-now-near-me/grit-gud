@@ -24,21 +24,15 @@ namespace GritGud.Application.Gameplay
         public GameplayActorState(
             ScenarioActorDefinition definition,
             ScenarioTimingDefinition timing,
-            CharacterPersistenceSnapshot restoredCharacter = null)
+            GameplayPartyCharacterSave restoredCharacter = null)
         {
             ActorId = definition.Id;
             pose = definition.StartingPose;
             MaximumWounds = definition.Combat.MaximumWounds;
-            wounds = restoredCharacter == null
-                ? new ActorWoundSnapshot(definition.Id, 0, 0f)
-                : RebindWounds(restoredCharacter.Wounds, definition.Id);
+            wounds = new ActorWoundSnapshot(definition.Id, 0, 0f);
             turnBudget = new TurnBudget(
-                restoredCharacter?.CurrentActionPoints
-                    ?? definition.StartingTurnBudget.ActionPoints,
-                Math.Max(
-                    0f,
-                    definition.StartingTurnBudget.MovementOpportunity
-                        - wounds.MovementPenalty));
+                definition.StartingTurnBudget.ActionPoints,
+                definition.StartingTurnBudget.MovementOpportunity);
             EquippedItemId = restoredCharacter != null
                 ? restoredCharacter.EquippedItemId
                 : definition.InitiallyEquippedItemId;
