@@ -216,38 +216,6 @@ namespace GritGud.Application.Gameplay
                 });
         }
 
-        public static GameplayDiagnosticProjection FormatEnemyDecision(
-            EnemyTacticalDecisionRecord decision)
-        {
-            if (decision == null)
-            {
-                throw new ArgumentNullException(nameof(decision));
-            }
-
-            var lines = new List<string>
-            {
-                "DECISION - " + decision.Kind,
-                "RATIONALE - " + decision.Rationale,
-            };
-            if (decision.Exposure != null)
-            {
-                lines.Add("LOS - " + decision.Exposure.VisibleSampleCount
-                    + " / " + decision.Exposure.TotalSampleCount
-                    + " samples visible");
-            }
-
-            if (decision.MovementRoute != null)
-            {
-                lines.Add("ROUTE - "
-                    + Format(decision.MovementRoute.TotalCost)
-                    + " m to " + decision.MovementRoute.Destination);
-            }
-
-            return new GameplayDiagnosticProjection(
-                decision.ActorId + " TACTICAL DECISION",
-                lines);
-        }
-
         public static bool TryFormatJournalEntry(
             GameplayJournalEntry entry,
             out GameplayDiagnosticProjection projection)
@@ -290,10 +258,6 @@ namespace GritGud.Application.Gameplay
 
                 case EmergencyReactionChangedJournalEntry reaction:
                     projection = FormatReactionWindow(reaction.Window);
-                    return true;
-
-                case EnemyDecisionCommittedJournalEntry enemy:
-                    projection = FormatEnemyDecision(enemy.Decision);
                     return true;
 
                 case TurnModeChangedJournalEntry _:
@@ -353,7 +317,6 @@ namespace GritGud.Application.Gameplay
                 case GameplayJournalEntryKind.ActorDroneAttackResolved:
                 case GameplayJournalEntryKind.ProjectileAdvanced:
                 case GameplayJournalEntryKind.EmergencyReactionChanged:
-                case GameplayJournalEntryKind.EnemyDecisionCommitted:
                     return GameplayDiagnosticPolicy.Formatted;
 
                 case GameplayJournalEntryKind.TurnModeChanged:

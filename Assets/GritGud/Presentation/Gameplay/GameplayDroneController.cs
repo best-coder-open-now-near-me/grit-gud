@@ -126,7 +126,7 @@ namespace GritGud.Presentation.Gameplay
             foreach (DroneSnapshot snapshot in snapshots)
             {
                 retained.Add(snapshot.DroneId);
-                ApplyReplaySnapshot(snapshot);
+                ApplySnapshot(snapshot);
             }
             foreach (KeyValuePair<string, GameObject> entry in roots)
                 entry.Value.SetActive(retained.Contains(entry.Key));
@@ -136,8 +136,16 @@ namespace GritGud.Presentation.Gameplay
         {
             if (!replayPresenting) return;
             replayPresenting = false;
+            RefreshAuthoritativePresentation();
+        }
+
+        internal void RefreshAuthoritativePresentation()
+        {
+            if (drones == null)
+                throw new InvalidOperationException(
+                    "Bind drones before refreshing their presentation.");
             foreach (DroneSnapshot snapshot in drones.CaptureDrones())
-                ApplyReplaySnapshot(snapshot);
+                ApplySnapshot(snapshot);
         }
 
         public bool TryAttackDroneAtPointer(
@@ -307,11 +315,11 @@ namespace GritGud.Presentation.Gameplay
             enabled = false;
         }
 
-        private void ApplyReplaySnapshot(DroneSnapshot snapshot)
+        private void ApplySnapshot(DroneSnapshot snapshot)
         {
             if (!roots.TryGetValue(snapshot.DroneId, out GameObject root))
                 throw new InvalidOperationException(
-                    $"Drone replay snapshot '{snapshot.DroneId}' has no visual.");
+                    $"Drone snapshot '{snapshot.DroneId}' has no visual.");
             root.SetActive(true);
             root.transform.SetPositionAndRotation(
                 new Vector3(

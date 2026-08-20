@@ -448,7 +448,7 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
-        public void PinnedEnemyCommitsPushOffDecisionBeforeResumingItsTurn()
+        public void PinnedEnemyCanPushOffBeforeResumingItsTurn()
         {
             GameplayDisplacementSession session = CreateSession(
                 new PinThenReleasePaths(),
@@ -472,17 +472,6 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(gameplay.TryEndTurn("player", out _), Is.True);
             Assert.That(gameplay.ActiveActorId, Is.EqualTo("target"));
 
-            var decisions = new GameplayEnemyDecisionSession(gameplay);
-            EnemyTacticalDecisionRecord decision = decisions.EvaluatePushOff(
-                "target",
-                "crate");
-            decisions.Commit(decision);
-
-            Assert.That(decision.Kind,
-                Is.EqualTo(EnemyTacticalDecisionKind.PushOff));
-            Assert.That(decision.TargetId, Is.EqualTo("crate"));
-            Assert.That(gameplay.Journal.LastEntry,
-                Is.TypeOf<EnemyDecisionCommittedJournalEntry>());
             DisplacementDestinationEvaluation destination =
                 session.EvaluateIntentDestination(
                     "target",

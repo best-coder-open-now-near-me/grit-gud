@@ -94,6 +94,7 @@ namespace GritGud.Application.Gameplay
                 record.PreviousBudget,
                 "integrity attack");
             actor.TurnBudget = record.ResultingBudget;
+            actor.CommitWeaponAttack();
             lastAuxiliaryActionSequence = record.Sequence;
             Journal.RecordActorDroneAttackResolved(record);
             MarkStateChanged();

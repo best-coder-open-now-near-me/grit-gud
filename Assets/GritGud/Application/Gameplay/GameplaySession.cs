@@ -132,7 +132,8 @@ namespace GritGud.Application.Gameplay
             float turnMovementAllowance = -1f,
             ActorPinState pinState = null,
             int emergencyActionPointAllowance = 0,
-            TurnBudget? suspendedTurnBudget = null)
+            TurnBudget? suspendedTurnBudget = null,
+            int attacksCommittedThisTurn = 0)
         {
             if (!string.Equals(actorId, wounds.ActorId, StringComparison.Ordinal))
             {
@@ -145,6 +146,9 @@ namespace GritGud.Application.Gameplay
             if (emergencyActionPointAllowance < 0)
                 throw new ArgumentOutOfRangeException(
                     nameof(emergencyActionPointAllowance));
+            if (attacksCommittedThisTurn < 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(attacksCommittedThisTurn));
             ActorInventorySnapshot resolvedInventory = inventory
                 ?? new ActorInventorySnapshot(
                     actorId,
@@ -188,6 +192,7 @@ namespace GritGud.Application.Gameplay
             PinState = pinState;
             EmergencyActionPointAllowance = emergencyActionPointAllowance;
             SuspendedTurnBudget = suspendedTurnBudget;
+            AttacksCommittedThisTurn = attacksCommittedThisTurn;
             if (float.IsNaN(TurnMovementAllowance)
                 || float.IsInfinity(TurnMovementAllowance)
                 || ActionPointEconomy.MaximumHeldActionPoints
@@ -224,6 +229,8 @@ namespace GritGud.Application.Gameplay
 
         public TurnBudget? SuspendedTurnBudget { get; }
 
+        public int AttacksCommittedThisTurn { get; }
+
         public bool IsPinned => PinState != null;
 
         public bool IsIncapacitated => Wounds.WoundCount >= MaximumWounds;
@@ -242,7 +249,8 @@ namespace GritGud.Application.Gameplay
             int maximumWounds,
             TurnActionPointEconomy actionPointEconomy,
             float turnMovementAllowance,
-            ActorPinState pinState)
+            ActorPinState pinState,
+            int attacksCommittedThisTurn)
         {
             ActorId = actorId;
             Pose = pose;
@@ -254,6 +262,7 @@ namespace GritGud.Application.Gameplay
             ActionPointEconomy = actionPointEconomy;
             TurnMovementAllowance = turnMovementAllowance;
             PinState = pinState;
+            AttacksCommittedThisTurn = attacksCommittedThisTurn;
         }
 
         public string ActorId { get; }
@@ -275,6 +284,8 @@ namespace GritGud.Application.Gameplay
         public float TurnMovementAllowance { get; }
 
         public ActorPinState PinState { get; }
+
+        public int AttacksCommittedThisTurn { get; }
 
         public bool IsPinned => PinState != null;
 
@@ -1088,6 +1099,14 @@ namespace GritGud.Application.Gameplay
                     $"Pinned actor '{record.Request.ActorId}' can only Push Off its pinning prop.");
             }
             actor.TurnBudget = record.ResultingBudget;
+            foreach (GameplayActionOutcome outcome in record.Outcomes)
+                if (outcome is AttackResolvedActionOutcome
+                    || outcome is WeaponDischargedActionOutcome
+                    || outcome is ProjectileLaunchedActionOutcome)
+                {
+                    actor.CommitWeaponAttack();
+                    break;
+                }
             foreach (GameplayActionOutcome outcome in record.Outcomes)
             {
                 actionOutcomeApplier.Apply(

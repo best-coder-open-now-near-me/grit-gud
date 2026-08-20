@@ -2,9 +2,29 @@ using System;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
+using GritGud.Domain.Gameplay;
 
 namespace GritGud.Application.Gameplay
 {
+    public static class GameplayMandatoryWorkRules
+    {
+        public static bool HasPending(GameplayCombatStateSnapshot state)
+        {
+            if (state == null) throw new ArgumentNullException(nameof(state));
+            GameplaySessionStateSnapshot session = state.Session;
+            if (session.Operation != GameplaySessionOperation.None
+                || session.PendingMovementRoute != null
+                || session.PendingVoluntaryTurnCycle != null)
+                return true;
+            if (state.Covers(GameplayCombatStateCoverage.Projectiles))
+                foreach (ProjectileFlightSnapshot projectile
+                    in state.Projectiles)
+                    if (projectile.Status == ProjectileFlightStatus.InFlight)
+                        return true;
+            return false;
+        }
+    }
+
     /// <summary>
     /// Hashes material battle state while deliberately excluding causal
     /// sequences, journal/revision counters, and timing telemetry. This makes

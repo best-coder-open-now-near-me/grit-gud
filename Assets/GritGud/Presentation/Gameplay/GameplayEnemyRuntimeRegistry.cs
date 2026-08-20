@@ -33,8 +33,6 @@ namespace GritGud.Presentation.Gameplay
             public MovementRoutePlaybackPresenter Playback =>
                 Presentation.Playback;
 
-            public int AttacksCommittedThisTurn { get; set; }
-
             public PatrolAdvanceRecord PendingPatrolAdvance { get; set; }
         }
 

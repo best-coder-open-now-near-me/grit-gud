@@ -593,7 +593,8 @@ namespace GritGud.Application.Gameplay
                 actor,
                 budget: new TurnBudget(
                     grant.ResultingActionPoints,
-                    movement)));
+                    movement),
+                attacksCommittedThisTurn: 0));
             return new PersonalTurnStartRecord(
                 actor.ActorId,
                 grant,

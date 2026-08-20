@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Levels;
 using UnityEngine;
@@ -27,7 +28,6 @@ namespace GritGud.Presentation.Gameplay
             GameplayAttackController attacks,
             GameplayProjectileController projectiles,
             GameplayDisplacementController displacements,
-            GameplayEmergencyCycleSession cycle,
             GameplayPartyControlSession controlledParty,
             GameplayDroneController droneController,
             GameplayDialogueLog dialogueLog,
@@ -53,8 +53,6 @@ namespace GritGud.Presentation.Gameplay
             GameplayDisplacementController displacementController =
                 displacements
                 ?? throw new ArgumentNullException(nameof(displacements));
-            GameplayEmergencyCycleSession emergencyCycle = cycle
-                ?? throw new ArgumentNullException(nameof(cycle));
             partyControl = controlledParty ?? throw new ArgumentNullException(
                 nameof(controlledParty));
             GameplayDialogueLog dialogue = dialogueLog
@@ -66,8 +64,6 @@ namespace GritGud.Presentation.Gameplay
             EnemyPresentationCatalog presentationCatalog =
                 enemyPresentationCatalog
                 ?? EnemyPresentationCatalog.LoadDefault();
-            var decisions = new GameplayEnemyDecisionSession(session);
-
             enemies = new GameplayEnemyRuntimeRegistry(
                 session,
                 registry,
@@ -90,19 +86,6 @@ namespace GritGud.Presentation.Gameplay
                 beginEncounter,
                 tacticalTransition,
                 presentationCatalog.DetectionIntervalSeconds);
-            combatTurns = new GameplayEnemyCombatTurnExecutor(
-                session,
-                enemies,
-                sessionPresenter,
-                actionController,
-                attackController,
-                projectileController,
-                displacementController,
-                emergencyCycle,
-                partyControl,
-                decisions,
-                droneController,
-                dialogue);
             outcomes = new GameplayEnemyOutcomePresenter(
                 session,
                 enemies,
@@ -113,8 +96,74 @@ namespace GritGud.Presentation.Gameplay
             enabled = true;
         }
 
+        internal void BindSemanticRuntime(
+            GameplayLiveSessionRuntime runtime,
+            GameplayScenarioAssembly assembly,
+            LevelDocument level,
+            GameplayCapabilityRegistry capabilities,
+            GameplaySessionPresenter sessionPresenter,
+            GameplayActionController actionController,
+            GameplayAttackController attackController,
+            GameplayProjectileController projectileController,
+            GameplayDisplacementController displacementController,
+            GameplayDroneController droneController,
+            GameplayDialogueLog dialogue)
+        {
+            if (session == null || enemies == null)
+                throw new InvalidOperationException(
+                    "Bind enemy presentation before its semantic runtime.");
+            if (combatTurns != null)
+                throw new InvalidOperationException(
+                    "Enemy semantic runtime is already bound.");
+            if (runtime == null) throw new ArgumentNullException(nameof(runtime));
+            if (assembly == null)
+                throw new ArgumentNullException(nameof(assembly));
+            if (level == null) throw new ArgumentNullException(nameof(level));
+            if (capabilities == null)
+                throw new ArgumentNullException(nameof(capabilities));
+
+            var spatial = new GameplayHeadlessSpatialEvidence(
+                level,
+                runtime.ExecutionIdentity.Spatial);
+            IReadOnlyList<GameplayReachableInput> reachable =
+                GameplayReachableInputEnumerator.Enumerate(assembly, level);
+            GameplayCandidateExecutionRouteRegistry routes =
+                GameplayCurrentCandidateExecutionRoutes.Create(
+                    assembly,
+                    spatial,
+                    capabilities);
+            var source = new GameplayHeadlessDecisionCandidateSource(
+                new GameplayHeadlessCandidateBuilder(
+                    capabilities,
+                    spatial,
+                    scenarioDefinition: assembly.Scenario,
+                    authoredTraversalLinks: level.traversalLinks),
+                reachable,
+                routes);
+            var runner = new GameplayPolicyDecisionRunner(
+                source,
+                routes,
+                GameplayBaselineCombatPolicy.Create(assembly.Scenario),
+                installationBoundary:
+                    new GameplaySynchronizationContextRuntimeInstallationBoundary(
+                        SynchronizationContext.Current));
+            combatTurns = new GameplayEnemyCombatTurnExecutor(
+                session,
+                runtime,
+                runner,
+                enemies,
+                sessionPresenter,
+                actionController,
+                attackController,
+                projectileController,
+                displacementController,
+                droneController,
+                dialogue);
+        }
+
         internal void Unbind()
         {
+            combatTurns?.Dispose();
             committedConsequences?.Dispose();
             enemies?.Dispose();
             outcomes = null;
@@ -154,7 +203,7 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            combatTurns.Tick(Time.deltaTime, Time.unscaledDeltaTime);
+            combatTurns?.Tick(Time.deltaTime, Time.unscaledDeltaTime);
         }
 
         private void OnDestroy()

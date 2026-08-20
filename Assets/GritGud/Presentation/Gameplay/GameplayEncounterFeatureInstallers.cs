@@ -109,7 +109,6 @@ namespace GritGud.Presentation.Gameplay
                 attacks,
                 projectiles,
                 displacement,
-                emergencyCycle,
                 partyControl,
                 drones,
                 dialogue,

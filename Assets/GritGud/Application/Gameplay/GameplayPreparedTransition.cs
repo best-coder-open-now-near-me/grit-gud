@@ -235,6 +235,7 @@ namespace GritGud.Application.Gameplay
             GameplayActorPose pose = actor.Pose;
             TurnBudget budget = actor.TurnBudget;
             ActorWoundSnapshot wounds = actor.Wounds;
+            int attacksCommittedThisTurn = actor.AttacksCommittedThisTurn;
             GameplayActionOutcome outcome = action.Outcomes[0];
             if (string.Equals(
                     actor.ActorId,
@@ -242,6 +243,8 @@ namespace GritGud.Application.Gameplay
                     StringComparison.Ordinal))
             {
                 budget = action.ResultingBudget;
+                attacksCommittedThisTurn = checked(
+                    attacksCommittedThisTurn + 1);
                 GameplayPosition facingTarget;
                 if (outcome is AttackResolvedActionOutcome attack)
                     facingTarget = previous.Session.GetActor(
@@ -285,7 +288,8 @@ namespace GritGud.Application.Gameplay
                 actor.TurnMovementAllowance,
                 actor.PinState,
                 actor.EmergencyActionPointAllowance,
-                actor.SuspendedTurnBudget);
+                actor.SuspendedTurnBudget,
+                attacksCommittedThisTurn);
         }
 
         private static GameplayActorPose FaceToward(

@@ -21,7 +21,6 @@ namespace GritGud.Application.Gameplay
         TurnEnded,
         VoluntaryTurnCycleCompleted,
         EmergencyReactionChanged,
-        EnemyDecisionCommitted,
         EnemyAwarenessChanged,
         PatrolAdvanced,
         DroneMoved,
@@ -66,21 +65,6 @@ namespace GritGud.Application.Gameplay
         }
 
         public ActorDroneAttackRecord Attack { get; }
-    }
-
-    public sealed class EnemyDecisionCommittedJournalEntry :
-        GameplayJournalEntry
-    {
-        public EnemyDecisionCommittedJournalEntry(
-            long sequence,
-            EnemyTacticalDecisionRecord decision)
-            : base(sequence, GameplayJournalEntryKind.EnemyDecisionCommitted)
-        {
-            Decision = decision ?? throw new ArgumentNullException(
-                nameof(decision));
-        }
-
-        public EnemyTacticalDecisionRecord Decision { get; }
     }
 
     public sealed class EnemyAwarenessChangedJournalEntry :
@@ -465,12 +449,6 @@ namespace GritGud.Application.Gameplay
             Append(new VoluntaryTurnCycleCompletedJournalEntry(
                 NextSequence,
                 cycle));
-
-        internal void RecordEnemyDecision(
-            EnemyTacticalDecisionRecord decision) =>
-            Append(new EnemyDecisionCommittedJournalEntry(
-                NextSequence,
-                decision));
 
         internal void RecordEnemyAwareness(
             EnemyAwarenessTransitionRecord transition) =>

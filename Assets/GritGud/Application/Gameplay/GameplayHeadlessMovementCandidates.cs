@@ -245,6 +245,8 @@ namespace GritGud.Application.Gameplay
                         decidingActorId,
                         StringComparison.Ordinal))
                     continue;
+                if (HasReachedAuthoredAttackLimit(state, input))
+                    continue;
                 if (input.Profile.Capability == GameplaySemanticCapability.Move)
                 {
                     if (input.Profile.Equals(
@@ -640,6 +642,12 @@ namespace GritGud.Application.Gameplay
             float maximumDistance = Math.Min(
                 maximumCandidateDistance,
                 actor.TurnBudget.MovementOpportunity);
+            EnemyBehaviorDefinition behavior = scenario?.GetActor(
+                actor.ActorId).Combat.EnemyBehavior;
+            if (behavior != null)
+                maximumDistance = Math.Min(
+                    maximumDistance,
+                    behavior.MovementSearchRadius);
             float[] distances = maximumDistance <= 0.2f
                 ? new[] { maximumDistance }
                 : new[] { maximumDistance * 0.5f, maximumDistance };
@@ -779,6 +787,37 @@ namespace GritGud.Application.Gameplay
             GameplayNumericPolicy.FormatCanonical(position.X) + ","
             + GameplayNumericPolicy.FormatCanonical(position.Y) + ","
             + GameplayNumericPolicy.FormatCanonical(position.Z);
+
+        private bool HasReachedAuthoredAttackLimit(
+            GameplayCombatStateSnapshot state,
+            GameplayReachableInput input)
+        {
+            if (scenario == null
+                || (input.Profile.Capability
+                        != GameplaySemanticCapability.DirectAttack
+                    && input.Profile.Capability
+                        != GameplaySemanticCapability.LaunchProjectile))
+                return false;
+            EnemyBehaviorDefinition behavior = scenario.GetActor(
+                input.ActorId).Combat.EnemyBehavior;
+            if (behavior == null)
+                return false;
+            try
+            {
+                if (!string.Equals(
+                        input.Profile.GetTrait("resource"),
+                        "equipped-weapon",
+                        StringComparison.Ordinal))
+                    return false;
+            }
+            catch (KeyNotFoundException)
+            {
+                return false;
+            }
+            return state.Session.GetActor(input.ActorId)
+                .AttacksCommittedThisTurn
+                >= behavior.MaximumAttacksPerTurn;
+        }
     }
 
     public sealed class GameplayHeadlessDroneMoveIntent

@@ -1027,6 +1027,12 @@ namespace GritGud.Presentation.Gameplay
                 selectedActionId).DisplayName;
         }
 
+        internal void PresentResolved(DisplacementRecord record)
+        {
+            if (record == null) throw new ArgumentNullException(nameof(record));
+            Present(record);
+        }
+
         private void Present(DisplacementRecord record)
         {
             if (!record.Succeeded)

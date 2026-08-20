@@ -259,7 +259,8 @@ namespace GritGud.Application.Gameplay
                         - actor.Wounds.MovementPenalty));
             mutation.ReplaceActor(GameplayCanonicalStateMutation.CopyActor(
                 actor,
-                budget: budget));
+                budget: budget,
+                attacksCommittedThisTurn: 0));
             return new PersonalTurnStartRecord(
                 actor.ActorId,
                 grant,

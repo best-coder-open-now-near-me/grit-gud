@@ -349,8 +349,37 @@ namespace GritGud.Presentation.Gameplay
                 beginEncounter,
                 "projectile launch");
 
-            ProjectileLaunchRecord launch =
-                ((ProjectileLaunchedActionOutcome)action.Outcomes[0]).Launch;
+            PresentResolvedAction(action, visualLaunchOrigin);
+            bool reactionOpened = impactCycle.ObserveLaunch(LastLaunch);
+            ProjectileFlightSnapshot stagedFlight = projectiles.GetProjectile(
+                LastLaunch.ProjectileId);
+            if (stagedFlight.Status == ProjectileFlightStatus.InFlight)
+            {
+                StatusMessage = reactionOpened
+                    ? $"{LastLaunch.ProjectileId} staged. "
+                        + $"{impactCycle.CurrentWindow.ActionPointAllowance} AP reaction armed."
+                    : $"{LastLaunch.ProjectileId} staged through remaining turn time.";
+            }
+            return true;
+        }
+
+        internal void PresentResolvedAction(
+            GameplayActionRecord action,
+            Vector3? visualLaunchOrigin = null)
+        {
+            if (action == null) throw new ArgumentNullException(nameof(action));
+            ProjectileLaunchRecord launch = null;
+            foreach (GameplayActionOutcome outcome in action.Outcomes)
+                if (outcome is ProjectileLaunchedActionOutcome launched)
+                {
+                    launch = launched.Launch;
+                    break;
+                }
+            if (launch == null)
+                throw new ArgumentException(
+                    "Projectile presentation requires a launch outcome.",
+                    nameof(action));
+
             LastFailure = ProjectileLaunchFailure.None;
             LastResolvedAction = action;
             LastLaunch = launch;
@@ -360,29 +389,28 @@ namespace GritGud.Presentation.Gameplay
                 launch.ProjectileId);
             ProjectilePresentationDefinition presentation =
                 presentationCatalog.Get(launch.Definition.Id);
-            var presenter = new ProjectileFlightPresenter(
-                flight,
-                presentation,
-                transform,
-                visualLaunchOrigin);
-            presenters.Add(launch.ProjectileId, presenter);
-            bool reactionOpened = impactCycle.ObserveLaunch(launch);
-            ProjectileFlightSnapshot stagedFlight = projectiles.GetProjectile(
-                launch.ProjectileId);
-            if (stagedFlight.Status == ProjectileFlightStatus.InFlight)
+            if (!presenters.ContainsKey(launch.ProjectileId))
             {
-                StatusMessage = reactionOpened
-                    ? $"{launch.ProjectileId} staged. "
-                        + $"{impactCycle.CurrentWindow.ActionPointAllowance} AP reaction armed."
-                    : $"{launch.ProjectileId} staged through remaining turn time.";
+                var presenter = new ProjectileFlightPresenter(
+                    flight,
+                    presentation,
+                    transform,
+                    visualLaunchOrigin);
+                presenters.Add(launch.ProjectileId, presenter);
             }
+            StatusMessage = $"{launch.ProjectileId} staged for canonical advance.";
             if (GameplayCombatDiagnosticFormatter.TryFormatAction(
                     action,
                     out GameplayDiagnosticProjection diagnostic))
             {
                 dialogue.AppendCombatDiagnostic(diagnostic);
             }
-            return true;
+        }
+
+        internal void PresentResolvedAdvance(ProjectileAdvanceRecord advance)
+        {
+            if (advance == null) throw new ArgumentNullException(nameof(advance));
+            HandleImpactCycleAdvance(advance);
         }
 
         private bool TryEnterRequiredLaunchMode(string targetId)

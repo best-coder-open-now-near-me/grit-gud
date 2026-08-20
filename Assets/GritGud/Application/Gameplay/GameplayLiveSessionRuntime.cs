@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using GritGud.Domain.Gameplay;
 
 namespace GritGud.Application.Gameplay
@@ -138,6 +140,27 @@ namespace GritGud.Application.Gameplay
             ThrowIfDisposed();
             RequireProjectionMatchesAuthority();
             return runtime.CreateReplayTimeline();
+        }
+
+        public async Task<GameplayDecisionExecutionResult>
+            ExecuteDecisionAsync(
+                GameplayPolicyDecisionRunner runner,
+                GameplayObservationSnapshot observation,
+                GameplayExecutionDeadlineScope deadlineScope,
+                GameplayExecutionLogicalGuard logicalGuard = null,
+                CancellationToken cancellationToken = default)
+        {
+            ThrowIfDisposed();
+            if (runner == null) throw new ArgumentNullException(nameof(runner));
+            RequireProjectionMatchesAuthority();
+            GameplayDecisionExecutionResult result = await runner.ExecuteAsync(
+                    runtime,
+                    observation,
+                    deadlineScope,
+                    logicalGuard,
+                    cancellationToken);
+            RequireProjectionMatchesAuthority();
+            return result;
         }
 
         public void Dispose()

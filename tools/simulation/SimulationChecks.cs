@@ -3016,8 +3016,10 @@ internal static class SimulationChecks
         Require(first.Transition.Profile.Capability
                 == GameplaySemanticCapability.DirectAttack
             && firstRuntime.Trajectory.Count == 1
+            && firstRuntime.CurrentState.Session.GetActor("player")
+                .AttacksCommittedThisTurn == 1
             && first.Diagnostic.Timings.Count == 6,
-            "Permanent policy runner did not traverse and time all six stages.");
+            "Permanent policy runner did not traverse all stages or record its canonical attack count.");
 
         var repeatedRuntime = new GameplaySimulationRuntime(
             executionIdentity,
@@ -3040,6 +3042,121 @@ internal static class SimulationChecks
                 repeatedRuntime.CurrentState.CanonicalHash,
                 StringComparison.Ordinal),
             "Policy timing or worker scheduling changed deterministic selection or reduction.");
+
+        var baselineRunner = new GameplayPolicyDecisionRunner(
+            candidateSource,
+            routes,
+            GameplayBaselineCombatPolicy.Create(gameplay.Scenario));
+        var baselineRuntime = new GameplaySimulationRuntime(
+            executionIdentity,
+            initial,
+            reducers,
+            capabilities);
+        var baselineScope = new GameplayExecutionDeadlineScope();
+        baselineScope.BeginTurn();
+        GameplayDecisionExecutionResult baseline = baselineRunner.ExecuteAsync(
+                baselineRuntime,
+                GameplayObservationSnapshot.FullState("player", initial),
+                baselineScope)
+            .GetAwaiter().GetResult();
+        Require(baseline.Transition.Profile.Capability
+                == GameplaySemanticCapability.DirectAttack
+            && string.Equals(
+                GameplayTransitionPayloadDigest.Calculate(baseline.Transition),
+                GameplayTransitionPayloadDigest.Calculate(first.Transition),
+                StringComparison.Ordinal),
+            "Permanent baseline policy did not select the deterministic combat route used by live enemies.");
+
+        GameplayActorSnapshot enemy = initial.Session.GetActor("enemy");
+        EnemyBehaviorDefinition enemyBehavior = gameplay.Scenario.GetActor(
+            "enemy").Combat.EnemyBehavior;
+        var cappedEnemy = new GameplayActorSnapshot(
+            enemy.ActorId,
+            enemy.Pose,
+            enemy.TurnBudget,
+            enemy.Wounds,
+            enemy.EquippedItemId,
+            enemy.EquipmentEffects,
+            enemy.MaximumWounds,
+            enemy.Inventory,
+            enemy.ActionPointEconomy,
+            enemy.TurnMovementAllowance,
+            enemy.PinState,
+            enemy.EmergencyActionPointAllowance,
+            enemy.SuspendedTurnBudget,
+            attacksCommittedThisTurn:
+                enemyBehavior.MaximumAttacksPerTurn);
+        var cappedActors = new List<GameplayActorSnapshot>();
+        foreach (GameplayActorSnapshot actor in initial.Session.Actors)
+            cappedActors.Add(string.Equals(
+                    actor.ActorId,
+                    enemy.ActorId,
+                    StringComparison.Ordinal)
+                ? cappedEnemy
+                : actor);
+        GameplaySessionStateSnapshot previousSession = initial.Session;
+        var cappedSession = new GameplaySessionStateSnapshot(
+            previousSession.ScenarioId,
+            previousSession.Mode,
+            previousSession.Operation,
+            previousSession.TurnContext,
+            previousSession.EncounterActive,
+            previousSession.EncounterCompletionRequested,
+            previousSession.ActiveActorId,
+            previousSession.TurnPhase,
+            cappedActors,
+            previousSession.InitiativeOrder,
+            previousSession.Objectives,
+            previousSession.EmergencyResponders,
+            previousSession.EmergencyResponderIndex,
+            previousSession.EmergencyResumeActorId,
+            previousSession.LastActionSequence,
+            previousSession.LastTurnSequence,
+            previousSession.JournalSequence,
+            previousSession.RunIdentity,
+            previousSession.Revision,
+            previousSession.VoluntaryTurnReentrySecondsRemaining,
+            previousSession.PendingMovementRoute,
+            previousSession.PendingVoluntaryTurnCycle,
+            previousSession.LastTransitionSequence,
+            previousSession.LastVoluntaryTurnCycleSequence,
+            previousSession.EncounterState,
+            previousSession.AllInitiativeOrder);
+        var cappedState = new GameplayCombatStateSnapshot(
+            cappedSession,
+            initial.Destructibles,
+            initial.Vehicles,
+            initial.Projectiles,
+            initial.SmokeFields,
+            initial.Coverage,
+            initial.FireFields,
+            initial.Drones);
+        IReadOnlyList<GameplayCandidate> cappedCandidates =
+            new GameplayHeadlessCandidateBuilder(
+                capabilities,
+                spatial,
+                scenarioDefinition: gameplay.Scenario)
+            .Build(cappedState, allInputs, "enemy");
+        bool retainedCappedWeaponAttack = false;
+        foreach (GameplayCandidate candidate in cappedCandidates)
+            if (candidate.Profile.Capability
+                    == GameplaySemanticCapability.DirectAttack
+                || candidate.Profile.Capability
+                    == GameplaySemanticCapability.LaunchProjectile)
+            {
+                try
+                {
+                    retainedCappedWeaponAttack |= string.Equals(
+                        candidate.Profile.GetTrait("resource"),
+                        "equipped-weapon",
+                        StringComparison.Ordinal);
+                }
+                catch (KeyNotFoundException)
+                {
+                }
+            }
+        Require(!retainedCappedWeaponAttack,
+            "Canonical per-turn attack cap did not remove authored enemy weapon candidates.");
 
         var missingRouteInput = new GameplayReachableInput(
             GameplayReachableInputKind.StanceControl,
@@ -3146,6 +3263,57 @@ internal static class SimulationChecks
         Require(mandatoryFailure?.Kind
                 == GameplayDecisionFailureKind.UnresolvedMandatoryWork,
             "Unresolved mandatory work did not prevent turn completion.");
+
+        var projectileDefinition = new ProjectileFlightDefinition(
+            "guard.projectile",
+            speedPerTurn: 4f,
+            radius: 0.1f,
+            maximumRange: 12f,
+            standingLaunchHeight: 1f,
+            crouchedLaunchHeight: 0.7f);
+        var launch = new ProjectileLaunchRecord(
+            1L,
+            "guard.projectile.1",
+            state.Session.ActiveActorId,
+            "enemy",
+            "guard.launch",
+            new GameplayPosition(0f, 1f, 0f),
+            new GameplayPosition(0f, 1f, 12f),
+            projectileDefinition,
+            turnActionPointTimeScale: 4,
+            remainingActionPointsAfterLaunch: 3);
+        var inFlight = new ProjectileFlightSnapshot(
+            launch,
+            launch.Origin,
+            distanceTraveled: 0f,
+            elapsedTurnTime: 0f,
+            ProjectileFlightStatus.InFlight);
+        var projectileState = new GameplayCombatStateSnapshot(
+            state.Session,
+            projectiles: new[] { inFlight },
+            coverage: GameplayCombatStateCoverage.Session
+                | GameplayCombatStateCoverage.Projectiles);
+        Require(GameplayMandatoryWorkRules.HasPending(projectileState),
+            "In-flight projectile was not recognized as mandatory work.");
+        var projectileGuard = new GameplayExecutionLogicalGuard(
+            projectileState);
+        projectileGuard.BeginTurn(
+            projectileState.Session.ActiveActorId,
+            projectileState);
+        GameplayDecisionFailureException projectileFailure = null;
+        try
+        {
+            projectileGuard.CompleteTurn(
+                projectileState,
+                GameplayMandatoryWorkRules.HasPending(projectileState));
+        }
+        catch (GameplayDecisionFailureException exception)
+        {
+            projectileFailure = exception;
+        }
+        Require(projectileFailure?.Kind
+                == GameplayDecisionFailureKind.UnresolvedMandatoryWork,
+            "An in-flight projectile did not fail closed at the end-turn guard.");
 
         var repeated = new GameplayExecutionLogicalGuard(
             state,

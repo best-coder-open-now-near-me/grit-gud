@@ -293,6 +293,25 @@ namespace GritGud.Presentation.Gameplay
                 action,
                 beginEncounter,
                 "attack");
+            PresentResolvedAction(action);
+            failure = AttackResolutionFailure.None;
+            return true;
+        }
+
+        internal void PresentResolvedAction(GameplayActionRecord action)
+        {
+            if (action == null) throw new ArgumentNullException(nameof(action));
+            AttackResolutionRecord resolution = null;
+            foreach (GameplayActionOutcome outcome in action.Outcomes)
+                if (outcome is AttackResolvedActionOutcome attack)
+                {
+                    resolution = attack.Attack;
+                    break;
+                }
+            if (resolution == null)
+                throw new ArgumentException(
+                    "Attack presentation requires an attack outcome.",
+                    nameof(action));
             LastFailure = AttackResolutionFailure.None;
             LastResolvedAction = action;
             LastResolution = resolution;
@@ -307,8 +326,6 @@ namespace GritGud.Presentation.Gameplay
                 dialogue.AppendCombatDiagnostic(diagnostic);
             }
             AttackResolved?.Invoke(action);
-            failure = AttackResolutionFailure.None;
-            return true;
         }
 
         public void ClearStatus()

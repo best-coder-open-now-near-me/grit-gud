@@ -16,6 +16,7 @@ namespace GritGud.Application.Gameplay
         private ActorWoundSnapshot wounds;
         private ActorPinState pinState;
         private TurnBudget? suspendedTurnBudget;
+        private int attacksCommittedThisTurn;
         private ActorInventorySnapshot cachedInventory;
         private GameplayActorSnapshot cachedSnapshot;
         private bool inventorySnapshotDirty = true;
@@ -129,6 +130,8 @@ namespace GritGud.Application.Gameplay
 
         public PersonalTurnStartRecord StartPersonalTurn()
         {
+            attacksCommittedThisTurn = 0;
+            actorSnapshotDirty = true;
             PersonalTurnActionPointGrant grant =
                 PersonalTurnActionPointRules.Grant(
                     TurnBudget.ActionPoints,
@@ -205,6 +208,13 @@ namespace GritGud.Application.Gameplay
                 TurnBudget.MovementOpportunity);
         }
 
+        public void CommitWeaponAttack()
+        {
+            attacksCommittedThisTurn = checked(
+                attacksCommittedThisTurn + 1);
+            actorSnapshotDirty = true;
+        }
+
         internal void ValidateCanonicalSnapshot(GameplayActorSnapshot snapshot)
         {
             if (!string.Equals(
@@ -240,6 +250,7 @@ namespace GritGud.Application.Gameplay
             EmergencyActionPointAllowance =
                 snapshot.EmergencyActionPointAllowance;
             suspendedTurnBudget = snapshot.SuspendedTurnBudget;
+            attacksCommittedThisTurn = snapshot.AttacksCommittedThisTurn;
             inventoryQuantities.Clear();
             foreach (InventoryQuantitySnapshot quantity in
                 snapshot.Inventory.Quantities)
@@ -307,7 +318,8 @@ namespace GritGud.Application.Gameplay
                 turnBudgetAllowance.MovementOpportunity,
                 PinState,
                 EmergencyActionPointAllowance,
-                suspendedTurnBudget);
+                suspendedTurnBudget,
+                attacksCommittedThisTurn);
             actorSnapshotDirty = false;
             return cachedSnapshot;
         }
@@ -323,7 +335,8 @@ namespace GritGud.Application.Gameplay
                 MaximumWounds,
                 actionPointEconomy,
                 turnBudgetAllowance.MovementOpportunity,
-                PinState);
+                PinState,
+                attacksCommittedThisTurn);
 
         private float WoundedMovementAllowance => Math.Max(
             0f,

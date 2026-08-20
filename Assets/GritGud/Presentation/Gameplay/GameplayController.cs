@@ -137,6 +137,7 @@ namespace GritGud.Presentation.Gameplay
 
         private void ResetPresentationBindings()
         {
+            enemyController?.Unbind();
             liveRuntime?.Dispose();
             liveRuntime = null;
             inputController?.End();
@@ -162,7 +163,6 @@ namespace GritGud.Presentation.Gameplay
             dialogueDrawer?.Unbind();
             turnMovementController?.Unbind();
             actionController?.Unbind();
-            enemyController?.Unbind();
             combatReactionPresenter?.Unbind();
             surfaceImpactPresenter?.Unbind();
             tacticalTransitionPresenter?.Unbind();
@@ -592,6 +592,18 @@ namespace GritGud.Presentation.Gameplay
                 initial,
                 reducers,
                 capabilities);
+            enemyController.BindSemanticRuntime(
+                liveRuntime,
+                scenarioAssembly,
+                content.Level,
+                capabilities,
+                sessionPresenter,
+                actionController,
+                attackController,
+                projectileController,
+                displacementController,
+                droneController,
+                dialogueLog);
         }
         private IReadOnlyList<VehicleMomentumSession> GetVehicleMomentumSessions()
         {

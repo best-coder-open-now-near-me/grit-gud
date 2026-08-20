@@ -1,45 +1,133 @@
 using System;
-using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
 {
-    internal sealed class GameplayEnemyCombatTurnExecutor
+    /// <summary>
+    /// Marshals the sole mutating stage of a live policy decision back to the
+    /// Unity owner thread. Candidate construction, evidence, scoring,
+    /// preparation, and pure reduction remain on the cancellable worker.
+    /// </summary>
+    internal sealed class GameplaySynchronizationContextRuntimeInstallationBoundary :
+        IGameplayRuntimeInstallationBoundary
+    {
+        private readonly SynchronizationContext ownerContext;
+        private readonly int ownerThreadId;
+
+        public GameplaySynchronizationContextRuntimeInstallationBoundary(
+            SynchronizationContext synchronizationContext)
+        {
+            ownerContext = synchronizationContext;
+            ownerThreadId = Thread.CurrentThread.ManagedThreadId;
+        }
+
+        public Task<GameplayReductionResult> InstallAsync(
+            GameplaySimulationRuntime runtime,
+            GameplaySemanticTransition transition,
+            GameplayReductionResult reduction,
+            CancellationToken cancellationToken)
+        {
+            if (runtime == null) throw new ArgumentNullException(nameof(runtime));
+            if (transition == null)
+                throw new ArgumentNullException(nameof(transition));
+            if (reduction == null)
+                throw new ArgumentNullException(nameof(reduction));
+            cancellationToken.ThrowIfCancellationRequested();
+            if (Thread.CurrentThread.ManagedThreadId == ownerThreadId)
+                return Task.FromResult(runtime.InstallPreparedReduction(
+                    transition,
+                    reduction));
+            if (ownerContext == null)
+                throw new InvalidOperationException(
+                    "Live decision installation requires the Unity synchronization context.");
+
+            var completion = new TaskCompletionSource<GameplayReductionResult>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            CancellationTokenRegistration cancellation = cancellationToken
+                .Register(() => completion.TrySetCanceled(cancellationToken));
+            _ = completion.Task.ContinueWith(
+                _ => cancellation.Dispose(),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+            ownerContext.Post(
+                _ =>
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        completion.TrySetCanceled(cancellationToken);
+                        return;
+                    }
+                    try
+                    {
+                        completion.TrySetResult(
+                            runtime.InstallPreparedReduction(
+                                transition,
+                                reduction));
+                    }
+                    catch (Exception exception)
+                    {
+                        completion.TrySetException(exception);
+                    }
+                },
+                null);
+            return completion.Task;
+        }
+    }
+
+    /// <summary>
+    /// Unity presentation adapter over the permanent policy-neutral runner.
+    /// It never chooses or mutates gameplay independently; it only schedules a
+    /// decision and presents the reducer-owned semantic record after install.
+    /// </summary>
+    internal sealed class GameplayEnemyCombatTurnExecutor : IDisposable
     {
         private readonly GameplaySession session;
+        private readonly GameplayLiveSessionRuntime runtime;
+        private readonly GameplayPolicyDecisionRunner runner;
         private readonly GameplayEnemyRuntimeRegistry enemies;
         private readonly GameplaySessionPresenter sessionPresenter;
         private readonly GameplayActionController actionController;
         private readonly GameplayAttackController attackController;
         private readonly GameplayProjectileController projectileController;
         private readonly GameplayDisplacementController displacementController;
-        private readonly GameplayEmergencyCycleSession emergencyCycle;
-        private readonly GameplayPartyControlSession partyControl;
-        private readonly GameplayEnemyDecisionSession decisions;
         private readonly GameplayDroneController drones;
         private readonly GameplayDialogueLog dialogue;
-        private string observedActiveActorId;
+        private readonly GameplayExecutionDeadlineScope deadlineScope =
+            new GameplayExecutionDeadlineScope();
+        private readonly GameplayExecutionLogicalGuard logicalGuard;
+        private readonly CancellationTokenSource lifetime =
+            new CancellationTokenSource();
+        private Task<GameplayDecisionExecutionResult> pendingDecision;
+        private string observedActiveActorId = string.Empty;
         private long observedTurnSequence = -1L;
         private float decisionDelaySeconds;
+        private bool failureLatched;
+        private bool disposed;
 
         public GameplayEnemyCombatTurnExecutor(
             GameplaySession session,
+            GameplayLiveSessionRuntime liveRuntime,
+            GameplayPolicyDecisionRunner decisionRunner,
             GameplayEnemyRuntimeRegistry enemies,
             GameplaySessionPresenter sessionPresenter,
             GameplayActionController actionController,
             GameplayAttackController attackController,
             GameplayProjectileController projectileController,
             GameplayDisplacementController displacementController,
-            GameplayEmergencyCycleSession emergencyCycle,
-            GameplayPartyControlSession partyControl,
-            GameplayEnemyDecisionSession decisions,
             GameplayDroneController droneController,
             GameplayDialogueLog dialogue)
         {
             this.session = session ?? throw new ArgumentNullException(
                 nameof(session));
+            runtime = liveRuntime ?? throw new ArgumentNullException(
+                nameof(liveRuntime));
+            runner = decisionRunner ?? throw new ArgumentNullException(
+                nameof(decisionRunner));
             this.enemies = enemies ?? throw new ArgumentNullException(
                 nameof(enemies));
             this.sessionPresenter = sessionPresenter
@@ -52,271 +140,238 @@ namespace GritGud.Presentation.Gameplay
                 ?? throw new ArgumentNullException(nameof(projectileController));
             this.displacementController = displacementController
                 ?? throw new ArgumentNullException(nameof(displacementController));
-            this.emergencyCycle = emergencyCycle
-                ?? throw new ArgumentNullException(nameof(emergencyCycle));
-            this.partyControl = partyControl ?? throw new ArgumentNullException(
-                nameof(partyControl));
-            this.decisions = decisions ?? throw new ArgumentNullException(
-                nameof(decisions));
             drones = droneController ?? throw new ArgumentNullException(
                 nameof(droneController));
             this.dialogue = dialogue ?? throw new ArgumentNullException(
                 nameof(dialogue));
+            logicalGuard = new GameplayExecutionLogicalGuard(
+                runtime.CurrentState);
         }
 
         public void Tick(float deltaTime, float unscaledDeltaTime)
         {
+            if (disposed) return;
+            if (pendingDecision != null)
+            {
+                if (!pendingDecision.IsCompleted) return;
+                CompletePendingDecision();
+                return;
+            }
+
             RefreshTurnIdentity();
             if (!enemies.TryGet(
                     session.ActiveActorId,
                     out GameplayEnemyRuntimeRegistry.Entry activeEnemy))
-            {
                 return;
-            }
 
             if (activeEnemy.Playback.IsPlaying)
             {
                 TickMovement(activeEnemy, deltaTime);
                 return;
             }
-
-            if (session.Operation != GameplaySessionOperation.None)
+            if (failureLatched
+                || session.Operation != GameplaySessionOperation.None)
                 return;
 
-            decisionDelaySeconds = Mathf.Max(
+            decisionDelaySeconds = Math.Max(
                 0f,
-                decisionDelaySeconds - unscaledDeltaTime);
-            if (decisionDelaySeconds > 0f)
-                return;
-
-            ExecuteDecision(activeEnemy);
+                decisionDelaySeconds - Math.Max(0f, unscaledDeltaTime));
+            if (decisionDelaySeconds > 0f) return;
+            StartDecision(activeEnemy.Definition.Id);
         }
 
-        private void ExecuteDecision(
-            GameplayEnemyRuntimeRegistry.Entry enemy)
+        public void Dispose()
         {
-            if (session.IsActorIncapacitated(enemy.Definition.Id))
-            {
-                EndActiveTurn(enemy, "incapacitated actor skipped");
-                return;
-            }
+            if (disposed) return;
+            disposed = true;
+            lifetime.Cancel();
+            lifetime.Dispose();
+        }
 
-            GameplayActorSnapshot actor = session.GetActor(
-                enemy.Definition.Id);
-            if (actor.IsPinned)
-            {
-                ExecutePushOff(enemy, actor.PinState.PropId);
-                return;
-            }
+        private void StartDecision(string actorId)
+        {
+            GameplayCombatStateSnapshot state = runtime.CurrentState;
+            pendingDecision = runtime.ExecuteDecisionAsync(
+                runner,
+                GameplayObservationSnapshot.FullState(actorId, state),
+                deadlineScope,
+                logicalGuard,
+                lifetime.Token);
+        }
 
-            EnemyTargetSelection target = decisions.SelectBestTarget(
-                enemy.Definition.Id,
-                partyControl.ActorIds,
-                enemy.TacticalQuery.CaptureExposure);
-            bool hasDroneTarget = drones.TrySelectActorAttackTarget(
-                enemy.Definition.Id,
-                out DroneExposureSnapshot droneExposure,
-                out int droneHitChance);
-            if (hasDroneTarget
-                && (target == null
-                    || droneHitChance > target.HitChancePercent))
+        private void CompletePendingDecision()
+        {
+            Task<GameplayDecisionExecutionResult> completed = pendingDecision;
+            pendingDecision = null;
+            try
             {
-                ExecuteDroneAttack(enemy, droneExposure);
-                return;
+                GameplayDecisionExecutionResult result = completed
+                    .GetAwaiter()
+                    .GetResult();
+                AppendDecisionDiagnostic(result);
+                PresentInstalledRecord(result);
             }
-            if (target == null)
+            catch (GameplayDecisionFailureException failure)
             {
-                EndActiveTurn(enemy, "no capable hostile target remains");
-                return;
+                if (failure.Kind == GameplayDecisionFailureKind.Cancelled
+                    && disposed)
+                    return;
+                failureLatched = true;
+                PresentFailure(failure);
             }
-
-            string targetId = target.TargetId;
-            TargetExposureSnapshot exposure = target.Exposure;
-            IReadOnlyList<EnemyMovementOption> movementOptions =
-                decisions.RequiresMovementSearch(
-                    enemy.Definition.Id,
-                    targetId,
-                    exposure)
-                    ? enemy.TacticalQuery.BuildMovementOptions(targetId)
-                    : Array.Empty<EnemyMovementOption>();
-            EnemyTacticalDecisionRecord decision = decisions.EvaluateTurn(
-                enemy.Definition.Id,
-                targetId,
-                exposure,
-                movementOptions,
-                enemy.AttacksCommittedThisTurn);
-            decisions.Commit(decision);
-            AppendDecisionDiagnostic(decision);
-
-            switch (decision.Kind)
+            catch (Exception exception)
             {
-                case EnemyTacticalDecisionKind.Attack:
-                    ExecuteAttack(enemy, decision);
-                    break;
-                case EnemyTacticalDecisionKind.Move:
-                    session.CommitMovementRoute(decision.MovementRoute);
-                    enemy.Playback.Begin(decision.MovementRoute);
+                failureLatched = true;
+                actionController.PresentExternalStatus(
+                    "Enemy decision installation failed: "
+                    + exception.Message);
+                dialogue.AppendCombatDiagnostic(
+                    "ENEMY DECISION FAILURE",
+                    exception.GetType().Name + " - " + exception.Message);
+            }
+        }
+
+        private void PresentInstalledRecord(
+            GameplayDecisionExecutionResult result)
+        {
+            object record = RequireSemanticRecord(result.Reduction);
+            string actorId = result.Transition.Payload.ActorId;
+            if (!enemies.TryGet(
+                    actorId,
+                    out GameplayEnemyRuntimeRegistry.Entry enemy))
+                throw new InvalidOperationException(
+                    $"Installed enemy decision belongs to unknown actor '{actorId}'.");
+
+            switch (record)
+            {
+                case MovementRouteRecord route:
+                    enemy.Playback.Begin(route);
                     actionController.PresentExternalStatus(
-                        $"{enemy.Definition.Id} is repositioning.");
-                    break;
-                case EnemyTacticalDecisionKind.PushOff:
-                    ExecutePushOff(
-                        enemy,
-                        decision.TargetId,
-                        recordDecision: false);
-                    break;
-                case EnemyTacticalDecisionKind.EndTurn:
-                    EndActiveTurn(enemy, decision.Rationale);
-                    break;
+                        $"{actorId} is repositioning.");
+                    return;
+                case TurnEndRecord turn:
+                    actionController.PresentExternalStatus(
+                        $"{turn.EndingActorId} ended its turn.");
+                    sessionPresenter.RefreshModePresentation();
+                    decisionDelaySeconds = enemy.Presentation
+                        .PresentationDefinition.PostDecisionDelaySeconds;
+                    return;
+                case GameplayActionRecord action:
+                    PresentAction(enemy, action);
+                    return;
+                case ProjectileAdvanceRecord advance:
+                    projectileController.PresentResolvedAdvance(advance);
+                    actionController.PresentExternalStatus(
+                        DescribeProjectileAdvance(advance));
+                    decisionDelaySeconds = enemy.Presentation
+                        .PresentationDefinition.PostAttackDelaySeconds;
+                    return;
+                case DroneMoveRecord move:
+                    drones.RefreshAuthoritativePresentation();
+                    actionController.PresentExternalStatus(
+                        $"{move.ControllerActorId} moved {move.DroneId}.");
+                    decisionDelaySeconds = enemy.Presentation
+                        .PresentationDefinition.PostDecisionDelaySeconds;
+                    return;
+                case DroneAttackRecord attack:
+                    drones.RefreshAuthoritativePresentation();
+                    actionController.PresentExternalStatus(
+                        $"{attack.DroneId} attacked {attack.TargetId}.");
+                    decisionDelaySeconds = enemy.Presentation
+                        .PresentationDefinition.PostAttackDelaySeconds;
+                    return;
+                case ActorDroneAttackRecord attack:
+                    drones.RefreshAuthoritativePresentation();
+                    actionController.PresentExternalStatus(
+                        attack.Hit
+                            ? $"{attack.AttackerId} hit {attack.DroneId}."
+                            : $"{attack.AttackerId} missed {attack.DroneId}.");
+                    decisionDelaySeconds = enemy.Presentation
+                        .PresentationDefinition.PostAttackDelaySeconds;
+                    return;
+                case StanceChangeRecord _:
+                case EnemyAwarenessTransitionRecord _:
+                case PatrolAdvanceRecord _:
+                    actionController.PresentExternalStatus(
+                        $"{actorId} completed {result.Transition.Profile.Capability}.");
+                    decisionDelaySeconds = enemy.Presentation
+                        .PresentationDefinition.PostDecisionDelaySeconds;
+                    return;
                 default:
-                    throw new InvalidOperationException(
-                        $"Decision '{decision.Kind}' cannot execute during a turn.");
+                    actionController.PresentExternalStatus(
+                        $"{actorId} completed {result.Transition.Profile.Capability}.");
+                    decisionDelaySeconds = enemy.Presentation
+                        .PresentationDefinition.PostDecisionDelaySeconds;
+                    return;
             }
         }
 
-        private void ExecutePushOff(
+        private void PresentAction(
             GameplayEnemyRuntimeRegistry.Entry enemy,
-            string propId,
-            bool recordDecision = true)
+            GameplayActionRecord action)
         {
-            DisplacementActionDefinition pushOff = null;
-            foreach (DisplacementActionDefinition candidate in
-                enemy.Definition.DisplacementActions)
+            string status = $"{action.Request.ActorId} used "
+                + action.Request.ActionId + ".";
+            bool attackPresented = false;
+            bool projectilePresented = false;
+            foreach (GameplayActionOutcome outcome in action.Outcomes)
             {
-                if (candidate.Intent == DisplacementActionKind.PushOff)
+                switch (outcome)
                 {
-                    pushOff = candidate;
-                    break;
+                    case AttackResolvedActionOutcome attack:
+                        if (!attackPresented)
+                        {
+                            attackController.PresentResolvedAction(action);
+                            attackPresented = true;
+                        }
+                        status = attack.Attack.Hit
+                            ? $"{attack.Attack.AttackerId} hit {attack.Attack.TargetId}."
+                            : $"{attack.Attack.AttackerId} missed {attack.Attack.TargetId}.";
+                        break;
+                    case ProjectileLaunchedActionOutcome launch:
+                        if (!projectilePresented)
+                        {
+                            projectileController.PresentResolvedAction(
+                                action,
+                                enemy.Presentation.ProjectileLaunchOrigin);
+                            projectilePresented = true;
+                        }
+                        status = $"{launch.Launch.AttackerId} launched "
+                            + launch.Launch.ProjectileId + ".";
+                        break;
+                    case DisplacementActionOutcome displacement:
+                        displacementController.PresentResolved(
+                            displacement.Displacement);
+                        status = $"{action.Request.ActorId} displaced "
+                            + displacement.Displacement.Request.SubjectId + ".";
+                        break;
+                    case ThrownExplosiveActionOutcome thrown:
+                        status = $"{thrown.Record.ThrowerId} threw "
+                            + thrown.Record.Definition.Id + ".";
+                        break;
                 }
             }
-            if (pushOff == null)
-            {
-                actionController.PresentExternalStatus(
-                    $"{enemy.Definition.Id} has no authored Push Off action.");
-                EndActiveTurn(enemy, "no authored push off action");
-                return;
-            }
-
-            if (recordDecision)
-            {
-                EnemyTacticalDecisionRecord decision =
-                    decisions.EvaluatePushOff(
-                        enemy.Definition.Id,
-                        propId);
-                decisions.Commit(decision);
-                AppendDecisionDiagnostic(decision);
-            }
-            if (displacementController.TryExecuteIntent(
-                    enemy.Definition.Id,
-                    pushOff.Id,
-                    propId,
-                    out _,
-                    out _,
-                    out DisplacementResolutionFailure failure))
-            {
-                actionController.PresentExternalStatus(
-                    $"{enemy.Definition.Id} pushed off the pinning prop.");
-                decisionDelaySeconds = enemy.Presentation
-                    .PresentationDefinition.PostDecisionDelaySeconds;
-                return;
-            }
-
-            actionController.PresentExternalStatus(
-                $"{enemy.Definition.Id} could not push off: {failure}.");
-            EndActiveTurn(enemy, $"push off failed: {failure}");
-        }
-
-        private void ExecuteAttack(
-            GameplayEnemyRuntimeRegistry.Entry enemy,
-            EnemyTacticalDecisionRecord decision)
-        {
-            AttackDefinition attack = session.GetEquippedAttack(
-                enemy.Definition.Id);
-            if (attack?.Projectile != null)
-            {
-                ExecuteProjectileAttack(enemy, decision);
-                return;
-            }
-
-            if (attackController.TryResolveActorAttack(
-                    enemy.Definition.Id,
-                    decision.Exposure,
-                    out GameplayActionRecord action,
-                    out AttackResolutionFailure failure))
-            {
-                enemy.AttacksCommittedThisTurn++;
-                AttackResolutionRecord resolution =
-                    ((AttackResolvedActionOutcome)action.Outcomes[0]).Attack;
-                actionController.PresentExternalStatus(
-                    resolution.Hit
-                        ? $"{enemy.Definition.Id} hit {resolution.TargetId}."
-                        : $"{enemy.Definition.Id} missed {resolution.TargetId}.");
-                decisionDelaySeconds = enemy.Presentation
-                    .PresentationDefinition.PostAttackDelaySeconds;
-                return;
-            }
-
-            actionController.PresentExternalStatus(
-                $"{enemy.Definition.Id} attack failed: {failure}.");
-            EndActiveTurn(enemy, $"attack failed: {failure}");
-        }
-
-        private void ExecuteProjectileAttack(
-            GameplayEnemyRuntimeRegistry.Entry enemy,
-            EnemyTacticalDecisionRecord decision)
-        {
-            if (projectileController.TryLaunchActorAtTarget(
-                    enemy.Definition.Id,
-                    decision.TargetId,
-                    enemy.Presentation.ProjectileLaunchOrigin))
-            {
-                enemy.AttacksCommittedThisTurn++;
-                actionController.PresentExternalStatus(
-                    $"{enemy.Definition.Id} launched a projectile at "
-                    + $"{decision.TargetId}.");
-                decisionDelaySeconds = enemy.Presentation
-                    .PresentationDefinition.PostAttackDelaySeconds;
-                return;
-            }
-
-            ProjectileLaunchFailure failure =
-                projectileController.LastFailure;
-            actionController.PresentExternalStatus(
-                $"{enemy.Definition.Id} projectile launch failed: {failure}.");
-            EndActiveTurn(enemy, $"projectile launch failed: {failure}");
-        }
-
-        private void ExecuteDroneAttack(
-            GameplayEnemyRuntimeRegistry.Entry enemy,
-            DroneExposureSnapshot exposure)
-        {
-            if (drones.TryResolveActorAttack(
-                    enemy.Definition.Id,
-                    exposure,
-                    out ActorDroneAttackRecord record))
-            {
-                enemy.AttacksCommittedThisTurn++;
-                actionController.PresentExternalStatus(
-                    record.Hit
-                        ? $"{enemy.Definition.Id} hit {record.DroneId}."
-                        : $"{enemy.Definition.Id} missed {record.DroneId}.");
-                decisionDelaySeconds = enemy.Presentation
-                    .PresentationDefinition.PostAttackDelaySeconds;
-                return;
-            }
-            actionController.PresentExternalStatus(
-                $"{enemy.Definition.Id} could not attack {exposure.DroneId}.");
-            EndActiveTurn(enemy, "drone attack failed");
+            if (!attackPresented
+                && !projectilePresented
+                && GameplayCombatDiagnosticFormatter.TryFormatAction(
+                    action,
+                    out GameplayDiagnosticProjection diagnostic))
+                dialogue.AppendCombatDiagnostic(diagnostic);
+            actionController.PresentExternalStatus(status);
+            decisionDelaySeconds = attackPresented || projectilePresented
+                ? enemy.Presentation.PresentationDefinition
+                    .PostAttackDelaySeconds
+                : enemy.Presentation.PresentationDefinition
+                    .PostDecisionDelaySeconds;
         }
 
         private void TickMovement(
             GameplayEnemyRuntimeRegistry.Entry enemy,
             float deltaTime)
         {
-            if (!enemy.Playback.Tick(deltaTime))
-                return;
-            session.CompleteMovementResolution();
-            GameplayActorSnapshot actor = session.GetActor(enemy.Definition.Id);
+            if (!enemy.Playback.Tick(deltaTime)) return;
+            GameplayActorSnapshot actor = runtime.CurrentState.Session.GetActor(
+                enemy.Definition.Id);
             enemy.View.Transform.SetPositionAndRotation(
                 MovementRouteSampling.ToVector3(actor.Pose.Position),
                 Quaternion.Euler(0f, actor.Pose.FacingDegrees, 0f));
@@ -324,55 +379,86 @@ namespace GritGud.Presentation.Gameplay
                 .PresentationDefinition.PostDecisionDelaySeconds;
         }
 
-        private void EndActiveTurn(
-            GameplayEnemyRuntimeRegistry.Entry enemy,
-            string rationale)
-        {
-            if (!emergencyCycle.TryEndTurn(
-                    enemy.Definition.Id,
-                    out TurnEndFailure failure))
-            {
-                actionController.PresentExternalStatus(
-                    $"Enemy turn could not end: {failure}.");
-                return;
-            }
-            actionController.PresentExternalStatus(
-                $"{enemy.Definition.Id} ended its turn - {rationale}.");
-            sessionPresenter.RefreshModePresentation();
-            decisionDelaySeconds = enemy.Presentation
-                .PresentationDefinition.PostDecisionDelaySeconds;
-        }
-
         private void RefreshTurnIdentity()
         {
-            long turnSequence = session.LastEndedTurn?.Sequence ?? 0L;
+            GameplaySessionStateSnapshot state = runtime.CurrentState.Session;
             if (string.Equals(
                     observedActiveActorId,
-                    session.ActiveActorId,
+                    state.ActiveActorId,
                     StringComparison.Ordinal)
-                && observedTurnSequence == turnSequence)
-            {
+                && observedTurnSequence == state.LastTurnSequence)
                 return;
-            }
-            observedActiveActorId = session.ActiveActorId;
-            observedTurnSequence = turnSequence;
+
+            observedActiveActorId = state.ActiveActorId;
+            observedTurnSequence = state.LastTurnSequence;
+            failureLatched = false;
             decisionDelaySeconds = 0f;
             if (enemies.TryGet(
                     observedActiveActorId,
                     out GameplayEnemyRuntimeRegistry.Entry enemy))
             {
-                enemy.AttacksCommittedThisTurn = 0;
+                deadlineScope.BeginTurn();
+                logicalGuard.BeginTurn(
+                    observedActiveActorId,
+                    runtime.CurrentState);
                 decisionDelaySeconds = enemy.Presentation
                     .PresentationDefinition.PostDecisionDelaySeconds;
             }
         }
 
         private void AppendDecisionDiagnostic(
-            EnemyTacticalDecisionRecord decision)
+            GameplayDecisionExecutionResult result)
         {
+            GameplayDecisionDiagnostic diagnostic = result.Diagnostic;
             dialogue.AppendCombatDiagnostic(
-                GameplayCombatDiagnosticFormatter.FormatEnemyDecision(
-                    decision));
+                "ENEMY POLICY DECISION",
+                "ACTOR - " + diagnostic.ActorId,
+                "CANDIDATES - " + diagnostic.CandidateIds.Count,
+                "LEGAL - " + diagnostic.LegalCandidateIds.Count,
+                "SELECTED - " + diagnostic.SelectedCandidateId,
+                "SCORE - " + GameplayNumericPolicy.FormatCanonical(
+                    result.Selection.Value),
+                "STATE - " + diagnostic.StateHash);
         }
+
+        private void PresentFailure(GameplayDecisionFailureException failure)
+        {
+            GameplayDecisionDiagnostic diagnostic = failure.Diagnostic;
+            string stage = diagnostic.ActiveStage?.ToString() ?? "logical-guard";
+            actionController.PresentExternalStatus(
+                $"Enemy decision stopped: {failure.Kind} during {stage}.");
+            dialogue.AppendCombatDiagnostic(
+                "ENEMY DECISION STOPPED",
+                "KIND - " + failure.Kind,
+                "STAGE - " + stage,
+                "ACTOR - " + diagnostic.ActorId,
+                "SELECTED - " + (diagnostic.SelectedCandidateId.Length == 0
+                    ? "none"
+                    : diagnostic.SelectedCandidateId),
+                "STATE - " + diagnostic.StateHash,
+                "MESSAGE - " + failure.Message);
+        }
+
+        private static object RequireSemanticRecord(
+            GameplayReductionResult reduction)
+        {
+            object record = null;
+            foreach (GameplayDomainEvent domainEvent in reduction.DomainEvents)
+                if (domainEvent is GameplayTransitionReducedEvent reduced)
+                {
+                    if (record != null)
+                        throw new InvalidOperationException(
+                            "A decision reduction produced multiple semantic records.");
+                    record = reduced.SemanticRecord;
+                }
+            return record ?? throw new InvalidOperationException(
+                "A decision reduction produced no semantic record.");
+        }
+
+        private static string DescribeProjectileAdvance(
+            ProjectileAdvanceRecord advance) => advance.Resulting.Impact == null
+                ? $"{advance.ProjectileId} advanced."
+                : $"{advance.ProjectileId} impacted "
+                    + advance.Resulting.Impact.HitEntityId + ".";
     }
 }

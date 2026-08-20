@@ -280,7 +280,11 @@ namespace GritGud.Application.Gameplay
                         - nextActor.Wounds.MovementPenalty));
             IReadOnlyList<GameplayActorSnapshot> actors = ReplaceActor(
                 session.Actors,
-                CopyActor(nextActor, nextActor.Pose, refreshed));
+                CopyActor(
+                    nextActor,
+                    nextActor.Pose,
+                    refreshed,
+                    attacksCommittedThisTurn: 0));
             long turnSequence = checked(session.LastTurnSequence + 1L);
             var record = new TurnEndRecord(
                 turnSequence,
@@ -442,7 +446,8 @@ namespace GritGud.Application.Gameplay
         private static GameplayActorSnapshot CopyActor(
             GameplayActorSnapshot actor,
             GameplayActorPose pose,
-            TurnBudget budget) => new GameplayActorSnapshot(
+            TurnBudget budget,
+            int? attacksCommittedThisTurn = null) => new GameplayActorSnapshot(
                 actor.ActorId,
                 pose,
                 budget,
@@ -455,7 +460,9 @@ namespace GritGud.Application.Gameplay
                 actor.TurnMovementAllowance,
                 actor.PinState,
                 actor.EmergencyActionPointAllowance,
-                actor.SuspendedTurnBudget);
+                actor.SuspendedTurnBudget,
+                attacksCommittedThisTurn
+                    ?? actor.AttacksCommittedThisTurn);
 
         private static IReadOnlyList<GameplayActorSnapshot> ReplaceActor(
             IReadOnlyList<GameplayActorSnapshot> actors,

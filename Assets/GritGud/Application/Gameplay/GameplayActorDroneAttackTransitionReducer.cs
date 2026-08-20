@@ -108,7 +108,9 @@ namespace GritGud.Application.Gameplay
             };
             mutation.ReplaceActor(GameplayCanonicalStateMutation.CopyActor(
                 attacker,
-                budget: action.ResultingBudget));
+                budget: action.ResultingBudget,
+                attacksCommittedThisTurn: checked(
+                    attacker.AttacksCommittedThisTurn + 1)));
             if (action.Damage != null)
                 mutation.ReplaceDrone(action.Damage.Resulting);
             GameplayCombatStateSnapshot resulting = mutation.Build();

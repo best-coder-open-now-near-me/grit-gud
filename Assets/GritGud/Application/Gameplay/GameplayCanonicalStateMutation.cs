@@ -237,7 +237,8 @@ namespace GritGud.Application.Gameplay
             bool replacePin = false,
             int? emergencyActionPointAllowance = null,
             GritGud.Domain.Turns.TurnBudget? suspendedTurnBudget = null,
-            bool replaceSuspendedTurnBudget = false) =>
+            bool replaceSuspendedTurnBudget = false,
+            int? attacksCommittedThisTurn = null) =>
             new GameplayActorSnapshot(
                 actor.ActorId,
                 pose ?? actor.Pose,
@@ -256,7 +257,9 @@ namespace GritGud.Application.Gameplay
                     ?? actor.EmergencyActionPointAllowance,
                 replaceSuspendedTurnBudget
                     ? suspendedTurnBudget
-                    : actor.SuspendedTurnBudget);
+                    : actor.SuspendedTurnBudget,
+                attacksCommittedThisTurn
+                    ?? actor.AttacksCommittedThisTurn);
 
         private static T Find<T>(
             IList<T> values,

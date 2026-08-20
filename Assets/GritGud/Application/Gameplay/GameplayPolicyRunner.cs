@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using GritGud.Domain.Gameplay;
 
 namespace GritGud.Application.Gameplay
 {
@@ -145,6 +146,102 @@ namespace GritGud.Application.Gameplay
                     * weight.Weight;
             }
             return new GameplayPolicyScore(evaluation, value);
+        }
+    }
+
+    /// <summary>
+    /// Permanent deterministic baseline shared by live enemies and initial
+    /// headless runs. These are valuation weights only; authoritative rules
+    /// and tactical context remain in candidate evaluation and reducers.
+    /// </summary>
+    public static class GameplayBaselineCombatPolicy
+    {
+        public static IGameplayCandidatePolicy Create(
+            ScenarioDefinition scenario = null)
+        {
+            var weighted = new GameplayWeightedOutcomePolicy(new[]
+            {
+                new GameplayOutcomeFeatureWeight(
+                    "lifecycle.mandatory", 10000f),
+                new GameplayOutcomeFeatureWeight(
+                    "displacement.released", 100f),
+                new GameplayOutcomeFeatureWeight(
+                    "attack.hit-probability", 30f),
+                new GameplayOutcomeFeatureWeight(
+                    "attack.wounds-on-hit", 10f),
+                new GameplayOutcomeFeatureWeight(
+                    "drone.integrity-damage", 10f),
+                new GameplayOutcomeFeatureWeight(
+                    "projectile.collision", 20f),
+                new GameplayOutcomeFeatureWeight(
+                    "projectile.launch", 12f),
+                new GameplayOutcomeFeatureWeight(
+                    "displacement.pinned", 8f),
+                new GameplayOutcomeFeatureWeight(
+                    "displacement.succeeded", 6f),
+                new GameplayOutcomeFeatureWeight(
+                    "concussive.affected-actors", 2f),
+                new GameplayOutcomeFeatureWeight(
+                    "hostile.distance-improvement", 2f),
+                new GameplayOutcomeFeatureWeight(
+                    "turn.saved-action-points", 0.5f),
+                new GameplayOutcomeFeatureWeight(
+                    "target.remaining-wound-capacity", -1f),
+                new GameplayOutcomeFeatureWeight(
+                    "cost.action-points", -1.5f),
+                new GameplayOutcomeFeatureWeight(
+                    "cost.movement-opportunity", -0.05f),
+                new GameplayOutcomeFeatureWeight(
+                    "hazard.fire-traversal", -20f),
+                new GameplayOutcomeFeatureWeight(
+                    "drone.move-distance", -0.01f),
+            });
+            return scenario == null
+                ? weighted
+                : new AuthoredEnemyPolicy(scenario, weighted);
+        }
+
+        private sealed class AuthoredEnemyPolicy : IGameplayCandidatePolicy
+        {
+            private readonly ScenarioDefinition scenario;
+            private readonly GameplayWeightedOutcomePolicy weighted;
+
+            public AuthoredEnemyPolicy(
+                ScenarioDefinition scenarioDefinition,
+                GameplayWeightedOutcomePolicy weightedPolicy)
+            {
+                scenario = scenarioDefinition ?? throw new ArgumentNullException(
+                    nameof(scenarioDefinition));
+                weighted = weightedPolicy ?? throw new ArgumentNullException(
+                    nameof(weightedPolicy));
+            }
+
+            public GameplayPolicyScore Score(
+                GameplayDecisionContext context,
+                GameplayExecutableCandidateEvaluation evaluation,
+                CancellationToken cancellationToken)
+            {
+                GameplayPolicyScore score = weighted.Score(
+                    context,
+                    evaluation,
+                    cancellationToken);
+                GameplayActorSnapshot actor = context.State.Session.GetActor(
+                    context.ActorId);
+                EnemyBehaviorDefinition behavior = scenario.GetActor(
+                    context.ActorId).Combat.EnemyBehavior;
+                bool shouldCloseTurn = behavior != null
+                    && actor.AttacksCommittedThisTurn
+                        >= behavior.MaximumAttacksPerTurn
+                    && !actor.IsPinned
+                    && !GameplayMandatoryWorkRules.HasPending(context.State);
+                return shouldCloseTurn
+                    && evaluation.Candidate.Profile.Capability
+                        == GameplaySemanticCapability.EndTurn
+                    ? new GameplayPolicyScore(
+                        evaluation,
+                        checked(score.Value + 100000f))
+                    : score;
+            }
         }
     }
 
@@ -337,6 +434,14 @@ namespace GritGud.Application.Gameplay
                     decisionClock,
                     deadlineScope,
                     cancellationToken).ConfigureAwait(false);
+                if (logicalGuard != null
+                    && transition.Profile.Capability
+                        == GameplaySemanticCapability.EndTurn)
+                {
+                    logicalGuard.CompleteTurn(
+                        state,
+                        GameplayMandatoryWorkRules.HasPending(state));
+                }
                 logicalGuard?.ValidatePreparedTransition(reduction);
 
                 GameplayReductionResult installed = await RunInstallation(

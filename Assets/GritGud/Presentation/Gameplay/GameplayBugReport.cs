@@ -376,36 +376,6 @@ namespace GritGud.Presentation.Gameplay
                         report.Append("EncounterChanged | active=")
                             .AppendLine(FormatBool(encounter.IsActive));
                         break;
-                    case EnemyDecisionCommittedJournalEntry enemy:
-                        EnemyTacticalDecisionRecord decision = enemy.Decision;
-                        report.Append("EnemyDecisionCommitted | actor=")
-                            .Append(decision.ActorId)
-                            .Append(" | target=")
-                            .Append(decision.TargetId)
-                            .Append(" | kind=")
-                            .Append(decision.Kind)
-                            .Append(" | rationale=")
-                            .Append(decision.Rationale);
-                        if (decision.Exposure != null)
-                        {
-                            report.Append(" | exposure=")
-                                .Append(decision.Exposure.VisibleSampleCount
-                                    .ToString(CultureInfo.InvariantCulture))
-                                .Append('/')
-                                .Append(decision.Exposure.TotalSampleCount
-                                    .ToString(CultureInfo.InvariantCulture));
-                        }
-                        if (decision.MovementRoute != null)
-                        {
-                            report.Append(" | route-cost=")
-                                .Append(FormatFloat(
-                                    decision.MovementRoute.TotalCost))
-                                .Append(" | destination=")
-                                .Append(FormatPosition(
-                                    decision.MovementRoute.Destination));
-                        }
-                        report.AppendLine();
-                        break;
                     case MovementBudgetSpentJournalEntry movementSpent:
                         report.Append("MovementBudgetSpent | actor=")
                             .Append(movementSpent.ActorId)
@@ -811,6 +781,9 @@ namespace GritGud.Presentation.Gameplay
                     CultureInfo.InvariantCulture))
                 .Append(" | move=")
                 .Append(FormatFloat(actor.TurnBudget.MovementOpportunity))
+                .Append(" | attacks-this-turn=")
+                .Append(actor.AttacksCommittedThisTurn.ToString(
+                    CultureInfo.InvariantCulture))
                 .Append(" | wounds=")
                 .Append(actor.Wounds.WoundCount.ToString(
                     CultureInfo.InvariantCulture))
