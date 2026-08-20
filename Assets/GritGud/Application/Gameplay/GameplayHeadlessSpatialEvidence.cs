@@ -174,22 +174,29 @@ namespace GritGud.Application.Gameplay
         private sealed class ObstacleDefinition
         {
             public ObstacleDefinition(
-                string propId,
+                string entityId,
+                GameplayPropPose staticPose,
+                bool isDestructible,
                 IReadOnlyList<CoverVolumeData> volumes,
                 GameplayFractureSpatialProfile fractureProfile)
             {
-                PropId = propId;
+                EntityId = entityId;
+                StaticPose = staticPose;
+                IsDestructible = isDestructible;
                 Volumes = volumes;
                 FractureProfile = fractureProfile;
             }
 
-            public string PropId { get; }
+            public string EntityId { get; }
+            public GameplayPropPose StaticPose { get; }
+            public bool IsDestructible { get; }
             public IReadOnlyList<CoverVolumeData> Volumes { get; }
             public GameplayFractureSpatialProfile FractureProfile { get; }
         }
 
         private readonly SpatialContentIdentity spatialIdentity;
         private readonly IReadOnlyList<ObstacleDefinition> obstacles;
+        private readonly bool hasDestructibleObstacles;
 
         public GameplayHeadlessSpatialEvidence(
             LevelDocument level,
@@ -210,21 +217,38 @@ namespace GritGud.Application.Gameplay
             var result = new List<ObstacleDefinition>();
             foreach (LevelEntity entity in level.entities)
             {
-                if (entity?.destructible?.enabled != true
-                    || entity.coverVolumes.Count == 0)
+                if (entity == null || entity.coverVolumes.Count == 0)
                     continue;
+                bool destructible = entity.destructible?.enabled == true;
                 result.Add(new ObstacleDefinition(
                     entity.id,
+                    new GameplayPropPose(
+                        new GameplayPosition(
+                            entity.transform.position.x,
+                            entity.transform.position.y,
+                            entity.transform.position.z),
+                        entity.transform.pitchDegrees,
+                        entity.transform.yawDegrees,
+                        entity.transform.rollDegrees),
+                    destructible,
                     new List<CoverVolumeData>(
                         entity.coverVolumes).AsReadOnly(),
-                    ResolveFractureProfile(
-                        entity.archetypeId,
-                        fractureProfilesByArchetype)));
+                    destructible
+                        ? ResolveFractureProfile(
+                            entity.archetypeId,
+                            fractureProfilesByArchetype)
+                        : null));
             }
             result.Sort((left, right) => StringComparer.Ordinal.Compare(
-                left.PropId,
-                right.PropId));
+                left.EntityId,
+                right.EntityId));
             obstacles = result.AsReadOnly();
+            foreach (ObstacleDefinition obstacle in obstacles)
+                if (obstacle.IsDestructible)
+                {
+                    hasDestructibleObstacles = true;
+                    break;
+                }
         }
 
         public GameplaySpatialEvidenceStamp Stamp(
@@ -325,12 +349,25 @@ namespace GritGud.Application.Gameplay
             float expansion)
         {
             if (state == null) throw new ArgumentNullException(nameof(state));
-            state.RequireCoverage(GameplayCombatStateCoverage.Destructibles);
+            if (hasDestructibleObstacles)
+                state.RequireCoverage(GameplayCombatStateCoverage.Destructibles);
             foreach (ObstacleDefinition obstacle in obstacles)
             {
+                if (!obstacle.IsDestructible)
+                {
+                    foreach (CoverVolumeData volume in obstacle.Volumes)
+                        if (Intersects(
+                            origin,
+                            destination,
+                            obstacle.StaticPose,
+                            volume,
+                            expansion))
+                            return true;
+                    continue;
+                }
                 DestructiblePropSnapshot prop = FindProp(
                     state.Destructibles,
-                    obstacle.PropId);
+                    obstacle.EntityId);
                 if (prop.State == DestructiblePropState.Destroyed) continue;
                 if (prop.DetachedFractureChunks != 0UL)
                 {

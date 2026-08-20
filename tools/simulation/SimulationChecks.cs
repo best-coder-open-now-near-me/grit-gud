@@ -18,6 +18,7 @@ internal static class SimulationChecks
             VerifyCapabilityCoverageFailsClosed();
             VerifyTacticalRuleCoverageAndOutcomeProjection();
             VerifyAtomicLiveInstallation();
+            VerifyStaticHeadlessSpatialGeometry();
             VerifyConcreteActorAttackCandidateRoute();
             VerifyAllCurrentContentCoverage();
             VerifyTacticalDestructibleSimulation();
@@ -1784,6 +1785,59 @@ internal static class SimulationChecks
                 runtime.Trajectory,
                 reducers).IsExact,
             "Concrete actor attack route did not execute and replay exactly.");
+    }
+
+    private static void VerifyStaticHeadlessSpatialGeometry()
+    {
+        var level = new LevelDocument
+        {
+            levelId = "static-spatial-check",
+            schemaVersion = 1,
+            entities = new List<LevelEntity>
+            {
+                new LevelEntity
+                {
+                    id = "static-wall",
+                    archetypeId = "structure.wall.standard",
+                    transform = new LevelTransformData(
+                        new Float3Data(0f, 0f, 0f),
+                        yawDegrees: 90f),
+                    coverVolumes = new List<CoverVolumeData>
+                    {
+                        new CoverVolumeData
+                        {
+                            id = "primary",
+                            localCenter = new Float3Data(0f, 1f, 0f),
+                            size = new Float3Data(4f, 2f, 0.25f),
+                        },
+                    },
+                },
+            },
+        };
+        level.Normalize();
+        GameplayCombatStateSnapshot state = GameplayCombatStateCapture.Capture(
+            CreateGameplay(CreateRifle()));
+        var spatial = new GameplayHeadlessSpatialEvidence(
+            level,
+            new SpatialContentIdentity(
+                level.levelId,
+                level.schemaVersion,
+                evidenceAlgorithmVersion: 1,
+                new string('e', 64)));
+        var origin = new GameplayPosition(0f, 1f, -2f);
+        var destination = new GameplayPosition(0f, 1f, 2f);
+        Require(spatial.BlocksLineOfSight(state, origin, destination)
+            && spatial.BlocksPath(
+                state,
+                origin,
+                destination,
+                clearanceRadius: 0.35f),
+            "Static authored cover was absent from headless sight or path evidence.");
+        Require(!spatial.BlocksLineOfSight(
+                state,
+                new GameplayPosition(3f, 1f, -2f),
+                new GameplayPosition(3f, 1f, 2f)),
+            "Static headless obstruction extended beyond its authored volume.");
     }
 
     private static void VerifyAllCurrentContentCoverage()
