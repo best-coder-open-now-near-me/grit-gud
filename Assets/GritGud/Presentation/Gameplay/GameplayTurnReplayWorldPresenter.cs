@@ -2,16 +2,18 @@ using System;
 using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
-using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
 {
+    /// <summary>
+    /// Presentation adapter over an exact reducer-verified trajectory. It
+    /// samples immutable before/result states and never reconstructs gameplay.
+    /// </summary>
     internal sealed class GameplayTurnReplayWorldPresenter : IDisposable
     {
         private readonly Dictionary<string, GameplayTurnReplayActorPresenter>
             actors = new Dictionary<string, GameplayTurnReplayActorPresenter>(
                 StringComparer.Ordinal);
-        private GameplaySession gameplay;
         private GameplayWorldRegistry world;
         private GameplayInputController input;
         private GameplayTurnReplayHud hud;
@@ -19,21 +21,22 @@ namespace GritGud.Presentation.Gameplay
         private GameplayDestructibleController destructibles;
         private GameplayVehicleController vehicles;
         private GameplaySmokeFieldController smoke;
-        private TurnReplayEventCrossingDetector crossings;
+        private GameplayFireFieldController fire;
+        private GameplayDroneController drones;
         private bool presenting;
 
         public void Bind(
-            GameplaySession session,
             GameplayWorldRegistry registry,
             GameplayInputController inputController,
             GameplayTurnReplayHud replayHud,
             GameplayProjectileController projectileController,
             GameplayDestructibleController destructibleController,
             GameplayVehicleController vehicleController,
-            GameplaySmokeFieldController smokeController)
+            GameplaySmokeFieldController smokeController,
+            GameplayFireFieldController fireController,
+            GameplayDroneController droneController)
         {
             Dispose();
-            gameplay = session ?? throw new ArgumentNullException(nameof(session));
             world = registry ?? throw new ArgumentNullException(nameof(registry));
             input = inputController ?? throw new ArgumentNullException(
                 nameof(inputController));
@@ -46,6 +49,10 @@ namespace GritGud.Presentation.Gameplay
                 nameof(vehicleController));
             smoke = smokeController ?? throw new ArgumentNullException(
                 nameof(smokeController));
+            fire = fireController ?? throw new ArgumentNullException(
+                nameof(fireController));
+            drones = droneController ?? throw new ArgumentNullException(
+                nameof(droneController));
             hud.OpenChanged += HandleOpenChanged;
             hud.PlayheadChanged += HandlePlayheadChanged;
         }
@@ -58,7 +65,6 @@ namespace GritGud.Presentation.Gameplay
                 hud.OpenChanged -= HandleOpenChanged;
                 hud.PlayheadChanged -= HandlePlayheadChanged;
             }
-            gameplay = null;
             world = null;
             input = null;
             hud = null;
@@ -66,6 +72,8 @@ namespace GritGud.Presentation.Gameplay
             destructibles = null;
             vehicles = null;
             smoke = null;
+            fire = null;
+            drones = null;
         }
 
         private void HandleOpenChanged(bool open)
@@ -75,11 +83,10 @@ namespace GritGud.Presentation.Gameplay
                 Restore();
                 return;
             }
+            if (hud.Playback == null)
+                return;
 
             actors.Clear();
-            TurnReplayStateWindow stateWindow = hud.StateWindow;
-            if (stateWindow == null)
-                return;
             presenting = true;
             try
             {
@@ -92,11 +99,10 @@ namespace GritGud.Presentation.Gameplay
                 projectiles.BeginReplayPresentation();
                 vehicles.BeginReplayPresentation();
                 smoke.BeginReplayPresentation();
+                fire.BeginReplayPresentation();
+                drones.BeginReplayPresentation();
                 destructibles.ClearReplayTransients();
                 input.SetCameraOnly(true);
-                crossings = new TurnReplayEventCrossingDetector(
-                    hud.EventTimeline,
-                    hud.TimeSeconds);
                 Present();
             }
             catch
@@ -110,62 +116,41 @@ namespace GritGud.Presentation.Gameplay
         {
             if (!presenting)
                 return;
-            IReadOnlyList<TurnReplayEventCrossing> crossed;
-            if (hud.IsPlaying)
-            {
-                crossed = crossings.Advance(hud.TimeSeconds);
-            }
-            else
-            {
-                crossings.Seek(hud.TimeSeconds);
-                crossed = Array.Empty<TurnReplayEventCrossing>();
-                ClearTransients();
-            }
-            PresentCrossings(crossed);
+            ClearTransients();
             Present();
         }
 
         private void Present()
         {
-            TurnReplayStateWindow window = hud.StateWindow;
-            if (window == null)
+            GameplaySemanticReplayPlaybackTimeline playback = hud.Playback;
+            if (playback == null)
                 return;
-            TurnReplayWorldStateSample sample =
-                TurnReplayWorldStateSampler.SampleAtTime(
-                    window,
-                    hud.EventTimeline,
-                    hud.TimeSeconds);
-            PresentActors(sample, hud.TimeSeconds);
+            GameplaySemanticReplayPlaybackPosition position = playback.Locate(
+                hud.TimeSeconds);
+            GameplayPresentationWorldStateSample sample =
+                GameplaySemanticReplaySampler.Sample(
+                    position.Frame,
+                    position.Progress);
+            PresentActors(sample, position);
             destructibles.PresentReplay(sample.Destructibles);
             projectiles.PresentReplay(sample.Projectiles);
             vehicles.PresentReplay(sample.Vehicles);
             smoke.PresentReplay(sample.SmokeFields);
-        }
-
-        private void PresentActorsAt(float timeSeconds)
-        {
-            TurnReplayStateWindow window = hud.StateWindow;
-            if (window == null)
-                return;
-            PresentActors(
-                TurnReplayWorldStateSampler.SampleAtTime(
-                    window,
-                    hud.EventTimeline,
-                    timeSeconds),
-                timeSeconds);
+            fire.PresentReplay(sample.FireFields);
+            drones.PresentReplay(sample.Drones);
         }
 
         private void PresentActors(
-            TurnReplayWorldStateSample sample,
-            float timeSeconds)
+            GameplayPresentationWorldStateSample sample,
+            GameplaySemanticReplayPlaybackPosition position)
         {
             var actionStates = new Dictionary<
                 string,
                 TurnReplayActorActionState>(StringComparer.Ordinal);
             foreach (TurnReplayActorActionState state in
                 TurnReplayActorActionProjector.Project(
-                    hud.EventTimeline,
-                    timeSeconds))
+                    position.Frame,
+                    position.Progress))
             {
                 actionStates[state.ActorId] = state;
             }
@@ -179,43 +164,7 @@ namespace GritGud.Presentation.Gameplay
                 actionStates.TryGetValue(
                     entry.Key,
                     out TurnReplayActorActionState action);
-                actor.Present(
-                    entry.Value,
-                    action,
-                    hud.EventTimeline,
-                    timeSeconds);
-            }
-        }
-
-        private void PresentCrossings(
-            IReadOnlyList<TurnReplayEventCrossing> values)
-        {
-            foreach (TurnReplayEventCrossing crossing in values)
-            {
-                if (crossing.Boundary == TurnReplayEventBoundary.Start
-                    && crossing.TimedEvent.Entry
-                        is DestructibleDamagedJournalEntry damage)
-                {
-                    destructibles.PresentReplayTransient(damage.Damage);
-                }
-                PresentActorsAt(crossing.TimeSeconds);
-                float progress = crossing.Boundary
-                    == TurnReplayEventBoundary.Start ? 0f : 1f;
-                foreach (TurnReplayActorActionState action in
-                    TurnReplayActorActionProjector.Project(
-                        crossing.TimedEvent,
-                        progress))
-                {
-                    if (!actors.TryGetValue(
-                            action.ActorId,
-                            out GameplayTurnReplayActorPresenter actor))
-                        continue;
-                    actor.PresentTransient(
-                        new GameplayTurnReplayTransientCue(
-                            action.ActorId,
-                            action.Kind,
-                            crossing));
-                }
+                actor.Present(entry.Value, action);
             }
         }
 
@@ -245,9 +194,14 @@ namespace GritGud.Presentation.Gameplay
             TryRestore(
                 () => smoke?.EndReplayPresentation(),
                 ref failure);
+            TryRestore(
+                () => fire?.EndReplayPresentation(),
+                ref failure);
+            TryRestore(
+                () => drones?.EndReplayPresentation(),
+                ref failure);
             TryRestore(() => input?.SetCameraOnly(false), ref failure);
             actors.Clear();
-            crossings = null;
             presenting = false;
             if (failure != null)
                 throw failure;

@@ -13,6 +13,7 @@ namespace GritGud.Presentation.Gameplay
         AimingPresentation,
         Objective,
         ControlRouting,
+        SemanticRuntime,
         ReplayPresentation,
         HudPresentation,
     }

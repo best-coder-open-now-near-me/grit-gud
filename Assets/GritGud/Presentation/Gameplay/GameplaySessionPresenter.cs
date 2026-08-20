@@ -8,12 +8,15 @@ namespace GritGud.Presentation.Gameplay
     [DisallowMultipleComponent]
     public sealed class GameplaySessionPresenter : MonoBehaviour
     {
+        private const float ExplorationSimulationStepSeconds = 0.1f;
+
         private ExplorationMovementInput explorationInput;
         private ThirdPersonMotor motor;
         private ActorStancePresenter stancePresenter;
         private StanceChangeResolver stanceResolver;
         private Transform actorTransform;
         private string actorId;
+        private float explorationElapsedSeconds;
 
         public GameplaySession Session { get; private set; }
 
@@ -100,13 +103,17 @@ namespace GritGud.Presentation.Gameplay
 
         private void LateUpdate()
         {
-            if (Session?.Mode == GameplaySessionMode.Exploration
-                && Session.VoluntaryTurnReentrySecondsRemaining > 0f)
+            if (Session?.Mode == GameplaySessionMode.Exploration)
             {
-                Session.AdvanceContinuousTime(Time.unscaledDeltaTime);
+                explorationElapsedSeconds += Mathf.Max(
+                    0f,
+                    Time.unscaledDeltaTime);
+                if (explorationElapsedSeconds
+                    >= ExplorationSimulationStepSeconds)
+                    SynchronizeExplorationPose();
+                return;
             }
-
-            SynchronizeExplorationPose();
+            explorationElapsedSeconds = 0f;
         }
 
         public bool EnterTurnMode()
@@ -252,6 +259,7 @@ namespace GritGud.Presentation.Gameplay
             stanceResolver = null;
             actorTransform = null;
             actorId = null;
+            explorationElapsedSeconds = 0f;
             Session = null;
             LastStanceFailure = StanceChangeFailure.None;
             LastStanceFailureCode = string.Empty;
@@ -307,11 +315,14 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            Session.UpdateExplorationPose(
+            float elapsed = explorationElapsedSeconds;
+            explorationElapsedSeconds = 0f;
+            Session.AdvanceExploration(
                 actorId,
                 GameplayPoseAdapter.FromTransform(
                     actorTransform,
-                    Session.GetActor(actorId).Pose.Stance));
+                    Session.GetActor(actorId).Pose.Stance),
+                elapsed);
         }
     }
 }

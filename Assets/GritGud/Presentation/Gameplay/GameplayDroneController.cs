@@ -28,6 +28,7 @@ namespace GritGud.Presentation.Gameplay
         private Func<Vector2, bool> pointerBlocked;
         private string commandDroneId;
         private CommandMode mode;
+        private bool replayPresenting;
 
         public bool IsTargeting => mode != CommandMode.None;
         public GameplayDroneSession Session => drones;
@@ -104,6 +105,39 @@ namespace GritGud.Presentation.Gameplay
         {
             mode = CommandMode.None;
             commandDroneId = null;
+        }
+
+        internal void BeginReplayPresentation()
+        {
+            if (drones == null)
+                throw new InvalidOperationException(
+                    "Bind drones before replay presentation.");
+            replayPresenting = true;
+        }
+
+        internal void PresentReplay(IReadOnlyList<DroneSnapshot> snapshots)
+        {
+            if (!replayPresenting)
+                throw new InvalidOperationException(
+                    "Begin drone replay presentation before sampling it.");
+            if (snapshots == null)
+                throw new ArgumentNullException(nameof(snapshots));
+            var retained = new HashSet<string>(StringComparer.Ordinal);
+            foreach (DroneSnapshot snapshot in snapshots)
+            {
+                retained.Add(snapshot.DroneId);
+                ApplyReplaySnapshot(snapshot);
+            }
+            foreach (KeyValuePair<string, GameObject> entry in roots)
+                entry.Value.SetActive(retained.Contains(entry.Key));
+        }
+
+        internal void EndReplayPresentation()
+        {
+            if (!replayPresenting) return;
+            replayPresenting = false;
+            foreach (DroneSnapshot snapshot in drones.CaptureDrones())
+                ApplyReplaySnapshot(snapshot);
         }
 
         public bool TryAttackDroneAtPointer(
@@ -202,10 +236,6 @@ namespace GritGud.Presentation.Gameplay
                             drone.DroneId),
                         "resolution"));
                 drones.CommitActorAttack(record);
-                RecordTransition(
-                    new GameplayActorDroneAttackTransitionPayload(
-                        attack,
-                        record));
                 GameplayDroneVisualPresenter visual = targetRoot.GetComponent<
                     GameplayDroneVisualPresenter>();
                 visual?.SetOperational(drones.GetDrone(drone.DroneId)
@@ -266,6 +296,7 @@ namespace GritGud.Presentation.Gameplay
         public void Unbind()
         {
             CancelTargeting();
+            replayPresenting = false;
             roots.Clear();
             drones = null;
             gameplay = null;
@@ -274,6 +305,22 @@ namespace GritGud.Presentation.Gameplay
             dialogue = null;
             pointerBlocked = null;
             enabled = false;
+        }
+
+        private void ApplyReplaySnapshot(DroneSnapshot snapshot)
+        {
+            if (!roots.TryGetValue(snapshot.DroneId, out GameObject root))
+                throw new InvalidOperationException(
+                    $"Drone replay snapshot '{snapshot.DroneId}' has no visual.");
+            root.SetActive(true);
+            root.transform.SetPositionAndRotation(
+                new Vector3(
+                    snapshot.Position.X,
+                    snapshot.Position.Y,
+                    snapshot.Position.Z),
+                Quaternion.Euler(0f, snapshot.FacingDegrees, 0f));
+            root.GetComponent<GameplayDroneVisualPresenter>()?
+                .SetOperational(snapshot.IsOperational);
         }
 
         private void Update()
@@ -311,7 +358,6 @@ namespace GritGud.Presentation.Gameplay
                     destination,
                     CalculateFacing(drone.Position, destination));
                 drones.CommitMove(record);
-                RecordTransition(new GameplayDroneMoveTransitionPayload(record));
                 GameObject root = roots[drone.DroneId];
                 root.transform.SetPositionAndRotation(
                     new Vector3(destination.X, destination.Y, destination.Z),
@@ -391,10 +437,6 @@ namespace GritGud.Presentation.Gameplay
                     drone.DroneId,
                     resolution);
                 drones.CommitAttack(record);
-                RecordTransition(new GameplayDroneAttackTransitionPayload(
-                    GameplaySemanticSubjectKind.Actor,
-                    drone.Definition.Attack,
-                    record));
                 dialogue.Append(GameplayDialogueChannel.System, "SCOUT DRONE",
                     resolution.Hit
                         ? $"Hit {target.ActorId}: {resolution.HitRegion} wounded; controller AP {record.ResultingBudget.ActionPoints}."
@@ -406,15 +448,6 @@ namespace GritGud.Presentation.Gameplay
                 dialogue.Append(GameplayDialogueChannel.System,
                     "DRONE COMMAND REJECTED", exception.Message);
             }
-        }
-
-        private void RecordTransition(GameplayTransitionPayload payload)
-        {
-            gameplay.RecordSemanticTransition(new GameplayTransitionIdentity(
-                gameplay.LastTransitionSequence + 1L,
-                payload.Profile.Capability.ToString(),
-                payload.ActorId,
-                payload.SubjectId));
         }
 
         private bool TryFindControllerDrone(

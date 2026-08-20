@@ -118,6 +118,10 @@ namespace GritGud.Application.Gameplay
         private readonly IReadOnlyList<ProjectileLaunchRecord> readOnlyLaunches;
         private readonly IReadOnlyList<ProjectileAdvanceRecord> readOnlyAdvances;
         private bool canonicalProjectionBound;
+        private Func<
+            GameplayTransitionPayload,
+            IEnumerable<GameplayEvidenceRecord>,
+            GameplayReductionResult> canonicalExecutor;
 
         public GameplayProjectileSession(
             GameplaySession gameplaySession,
@@ -138,6 +142,19 @@ namespace GritGud.Application.Gameplay
         public IReadOnlyList<ProjectileLaunchRecord> Launches => readOnlyLaunches;
 
         public IReadOnlyList<ProjectileAdvanceRecord> Advances => readOnlyAdvances;
+
+        internal void BindCanonicalExecutor(
+            Func<
+                GameplayTransitionPayload,
+                IEnumerable<GameplayEvidenceRecord>,
+                GameplayReductionResult> executor)
+        {
+            if (executor == null) throw new ArgumentNullException(nameof(executor));
+            if (canonicalExecutor != null || canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Projectile semantic executor is already bound or projection binding has started.");
+            canonicalExecutor = executor;
+        }
 
         internal void BindCanonicalProjection(
             IReadOnlyList<ProjectileFlightSnapshot> snapshots)
@@ -452,11 +469,23 @@ namespace GritGud.Application.Gameplay
 
         public void CommitAdvance(ProjectileAdvanceRecord record)
         {
-            RequireLegacyMutationAllowed(nameof(CommitAdvance));
             if (record == null)
             {
                 throw new ArgumentNullException(nameof(record));
             }
+            if (canonicalProjectionBound)
+            {
+                canonicalExecutor(new GameplayProjectileAdvanceTransitionPayload(
+                        !string.IsNullOrWhiteSpace(gameplay.ActiveActorId)
+                            ? gameplay.ActiveActorId
+                            : record.Previous.Launch.AttackerId,
+                        record,
+                        consequences.Destructibles.Journal
+                            == gameplay.Journal),
+                    null);
+                return;
+            }
+            RequireLegacyMutationAllowed(nameof(CommitAdvance));
 
             if (record.Sequence != gameplay.LastTransitionSequence + 1L)
             {

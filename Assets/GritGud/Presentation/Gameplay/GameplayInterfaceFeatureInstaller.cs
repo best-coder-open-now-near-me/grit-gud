@@ -132,6 +132,23 @@ namespace GritGud.Presentation.Gameplay
         }
     }
 
+    internal sealed class GameplaySemanticRuntimeFeatureInstaller :
+        IGameplayFeatureInstaller
+    {
+        private readonly Action install;
+
+        public GameplaySemanticRuntimeFeatureInstaller(Action installRuntime)
+        {
+            install = installRuntime ?? throw new ArgumentNullException(
+                nameof(installRuntime));
+        }
+
+        public GameplayFeatureStage Stage =>
+            GameplayFeatureStage.SemanticRuntime;
+
+        public void Install() => install();
+    }
+
     internal sealed class GameplayReplayFeatureInstaller :
         IGameplayFeatureInstaller
     {
@@ -141,15 +158,14 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplayInputController input;
         private readonly GameplayPartyControlSession partyControl;
         private readonly GameplayDestructibleController destructibles;
-        private readonly Func<IReadOnlyList<VehicleMomentumSession>>
-            resolveVehicleSessions;
         private readonly GameplayProjectileController projectiles;
-        private readonly GameplaySmokeFieldSession smokeFields;
         private readonly GameplayWorldRegistry worldRegistry;
         private readonly GameplayVehicleController vehicles;
         private readonly GameplaySmokeFieldController smokeFieldPresenter;
+        private readonly GameplayFireFieldController fireFieldPresenter;
+        private readonly GameplayDroneController drones;
         private readonly GameplayPartyHud partyHud;
-        private readonly Action<GameplayCombatStateTimeline> captureTimeline;
+        private readonly Func<GameplayLiveSessionRuntime> resolveRuntime;
 
         public GameplayReplayFeatureInstaller(
             GameplaySession session,
@@ -158,14 +174,14 @@ namespace GritGud.Presentation.Gameplay
             GameplayInputController input,
             GameplayPartyControlSession partyControl,
             GameplayDestructibleController destructibles,
-            Func<IReadOnlyList<VehicleMomentumSession>> resolveVehicleSessions,
             GameplayProjectileController projectiles,
-            GameplaySmokeFieldSession smokeFields,
             GameplayWorldRegistry worldRegistry,
             GameplayVehicleController vehicles,
             GameplaySmokeFieldController smokeFieldPresenter,
+            GameplayFireFieldController fireFieldPresenter,
+            GameplayDroneController drones,
             GameplayPartyHud partyHud,
-            Action<GameplayCombatStateTimeline> captureTimeline)
+            Func<GameplayLiveSessionRuntime> resolveRuntime)
         {
             this.session = session ?? throw new ArgumentNullException(nameof(session));
             this.replayHud = replayHud ?? throw new ArgumentNullException(nameof(replayHud));
@@ -176,20 +192,19 @@ namespace GritGud.Presentation.Gameplay
                 nameof(partyControl));
             this.destructibles = destructibles ?? throw new ArgumentNullException(
                 nameof(destructibles));
-            this.resolveVehicleSessions = resolveVehicleSessions
-                ?? throw new ArgumentNullException(nameof(resolveVehicleSessions));
             this.projectiles = projectiles ?? throw new ArgumentNullException(
                 nameof(projectiles));
-            this.smokeFields = smokeFields ?? throw new ArgumentNullException(
-                nameof(smokeFields));
             this.worldRegistry = worldRegistry ?? throw new ArgumentNullException(
                 nameof(worldRegistry));
             this.vehicles = vehicles ?? throw new ArgumentNullException(nameof(vehicles));
             this.smokeFieldPresenter = smokeFieldPresenter
                 ?? throw new ArgumentNullException(nameof(smokeFieldPresenter));
+            this.fireFieldPresenter = fireFieldPresenter
+                ?? throw new ArgumentNullException(nameof(fireFieldPresenter));
+            this.drones = drones ?? throw new ArgumentNullException(nameof(drones));
             this.partyHud = partyHud ?? throw new ArgumentNullException(nameof(partyHud));
-            this.captureTimeline = captureTimeline
-                ?? throw new ArgumentNullException(nameof(captureTimeline));
+            this.resolveRuntime = resolveRuntime
+                ?? throw new ArgumentNullException(nameof(resolveRuntime));
         }
 
         public GameplayFeatureStage Stage =>
@@ -197,25 +212,20 @@ namespace GritGud.Presentation.Gameplay
 
         public void Install()
         {
-            var timeline = new GameplayCombatStateTimeline(
-                session,
-                () => GameplayCombatStateCapture.Capture(
-                    session,
-                    destructibles.Session,
-                    resolveVehicleSessions(),
-                    projectiles.ProjectileSession,
-                    smokeFields));
-            captureTimeline(timeline);
-            replayHud.Bind(session, partyControl, timeline);
+            GameplayLiveSessionRuntime runtime = resolveRuntime()
+                ?? throw new InvalidOperationException(
+                    "Semantic runtime must install before replay presentation.");
+            replayHud.Bind(session, runtime);
             replayWorld.Bind(
-                session,
                 worldRegistry,
                 input,
                 replayHud,
                 projectiles,
                 destructibles,
                 vehicles,
-                smokeFieldPresenter);
+                smokeFieldPresenter,
+                fireFieldPresenter,
+                drones);
             partyHud.Bind(
                 session,
                 partyControl,

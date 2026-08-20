@@ -243,6 +243,65 @@ namespace GritGud.Application.Gameplay
         }
 
         public static IReadOnlyList<TurnReplayActorActionState> Project(
+            GameplaySemanticReplayFrame frame,
+            float normalizedProgress)
+        {
+            if (frame == null) throw new ArgumentNullException(nameof(frame));
+            if (float.IsNaN(normalizedProgress)
+                || float.IsInfinity(normalizedProgress))
+                throw new ArgumentOutOfRangeException(nameof(normalizedProgress));
+            float progress = Math.Max(
+                0f,
+                Math.Min(1f, normalizedProgress));
+            var states = new List<TurnReplayActorActionState>();
+            long sequence = frame.Transition.Identity.Sequence;
+            switch (frame.SemanticRecord)
+            {
+                case GameplayActionRecord action:
+                    ProjectAction(action, sequence, progress, states);
+                    break;
+                case MovementRouteRecord movement:
+                    ProjectTraversal(movement, sequence, progress, states);
+                    break;
+                case DroneAttackRecord attack:
+                    Add(
+                        states,
+                        attack.DroneId,
+                        TurnReplayActorActionKind.Attack,
+                        sequence,
+                        progress);
+                    if (attack.Consequence is AttackResolutionRecord resolved)
+                        ProjectAttackReaction(
+                            resolved,
+                            sequence,
+                            progress,
+                            states);
+                    break;
+                case ActorDroneAttackRecord attack:
+                    Add(
+                        states,
+                        attack.AttackerId,
+                        TurnReplayActorActionKind.Attack,
+                        sequence,
+                        progress);
+                    break;
+                case GameplayEmergencyReactionTransitionPayload emergency
+                    when emergency.Phase == "begin":
+                    foreach (string responderId in emergency.Responders)
+                        Add(
+                            states,
+                            responderId,
+                            TurnReplayActorActionKind.Reaction,
+                            sequence,
+                            progress);
+                    break;
+            }
+            return states.Count == 0
+                ? Array.Empty<TurnReplayActorActionState>()
+                : states.AsReadOnly();
+        }
+
+        public static IReadOnlyList<TurnReplayActorActionState> Project(
             TurnReplayTimedEvent timedEvent,
             float normalizedProgress)
         {
@@ -263,7 +322,11 @@ namespace GritGud.Application.Gameplay
             var states = new List<TurnReplayActorActionState>();
             if (entry is ActionResolvedJournalEntry resolved)
             {
-                ProjectAction(resolved, progress, states);
+                ProjectAction(
+                    resolved.Action,
+                    resolved.Sequence,
+                    progress,
+                    states);
             }
             else if (entry is DisplacementResolvedJournalEntry displaced)
             {
@@ -313,7 +376,11 @@ namespace GritGud.Application.Gameplay
             }
             else if (entry is MovementRouteCommittedJournalEntry movement)
             {
-                ProjectTraversal(movement, progress, states);
+                ProjectTraversal(
+                    movement.Route,
+                    movement.Sequence,
+                    progress,
+                    states);
             }
             return states.Count == 0
                 ? Array.Empty<TurnReplayActorActionState>()
@@ -321,11 +388,11 @@ namespace GritGud.Application.Gameplay
         }
 
         private static void ProjectTraversal(
-            MovementRouteCommittedJournalEntry movement,
+            MovementRouteRecord route,
+            long sequence,
             float progress,
             ICollection<TurnReplayActorActionState> states)
         {
-            MovementRouteRecord route = movement.Route;
             float targetSeconds = route.TotalPlaybackDurationSeconds
                 * progress;
             float elapsed = 0f;
@@ -348,7 +415,7 @@ namespace GritGud.Application.Gameplay
                     states,
                     route.ActorId,
                     MapTraversalKind(segment.Kind),
-                    movement.Sequence,
+                    sequence,
                     segmentProgress);
                 return;
             }
@@ -369,7 +436,8 @@ namespace GritGud.Application.Gameplay
         }
 
         private static void ProjectAction(
-            ActionResolvedJournalEntry resolved,
+            GameplayActionRecord action,
+            long sequence,
             float progress,
             ICollection<TurnReplayActorActionState> states)
         {
@@ -377,7 +445,7 @@ namespace GritGud.Application.Gameplay
             var reactions = new Dictionary<
                 string,
                 ReactionProjection>(StringComparer.Ordinal);
-            foreach (GameplayActionOutcome outcome in resolved.Action.Outcomes)
+            foreach (GameplayActionOutcome outcome in action.Outcomes)
             {
                 if (outcome is ThrownExplosiveActionOutcome)
                 {
@@ -406,13 +474,7 @@ namespace GritGud.Application.Gameplay
                 else if (outcome is AttackResolvedActionOutcome attack)
                 {
                     primary ??= TurnReplayActorActionKind.Attack;
-                    if (attack.Attack.Wound != null)
-                        reactions[attack.Attack.TargetId] =
-                            new ReactionProjection(
-                                TurnReplayActorActionKind.Reaction,
-                                attack.Attack.IsContactAttack,
-                                attack.Attack.TargetWoundsAfter.WoundCount,
-                                attack.Attack.HitRegion);
+                    AddAttackReaction(reactions, attack.Attack);
                 }
                 else if (outcome is WeaponDischargedActionOutcome
                     || outcome is ProjectileLaunchedActionOutcome)
@@ -429,9 +491,9 @@ namespace GritGud.Application.Gameplay
             {
                 Add(
                     states,
-                    resolved.Action.Request.ActorId,
+                    action.Request.ActorId,
                     primary.Value,
-                    resolved.Sequence,
+                    sequence,
                     progress);
             }
             foreach (KeyValuePair<string, ReactionProjection> reaction
@@ -440,12 +502,41 @@ namespace GritGud.Application.Gameplay
                 states.Add(new TurnReplayActorActionState(
                     reaction.Key,
                     reaction.Value.Kind,
-                    resolved.Sequence,
+                    sequence,
                     progress,
                     reaction.Value.ContactReaction,
                     reaction.Value.ResultingWoundCount,
                     reaction.Value.HitRegion));
             }
+        }
+
+        private static void AddAttackReaction(
+            IDictionary<string, ReactionProjection> reactions,
+            AttackResolutionRecord attack)
+        {
+            if (attack?.Wound == null) return;
+            reactions[attack.TargetId] = new ReactionProjection(
+                TurnReplayActorActionKind.Reaction,
+                attack.IsContactAttack,
+                attack.TargetWoundsAfter.WoundCount,
+                attack.HitRegion);
+        }
+
+        private static void ProjectAttackReaction(
+            AttackResolutionRecord attack,
+            long sequence,
+            float progress,
+            ICollection<TurnReplayActorActionState> states)
+        {
+            if (attack?.Wound == null) return;
+            states.Add(new TurnReplayActorActionState(
+                attack.TargetId,
+                TurnReplayActorActionKind.Reaction,
+                sequence,
+                progress,
+                attack.IsContactAttack,
+                attack.TargetWoundsAfter.WoundCount,
+                attack.HitRegion));
         }
 
         private static TurnReplayActorActionKind MapDisplacementKind(

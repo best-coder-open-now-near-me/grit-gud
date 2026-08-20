@@ -13,11 +13,9 @@ namespace GritGud.Presentation.Gameplay
         private const float MaximumBarWidth = 980f;
 
         private GameplaySession gameplay;
-        private GameplayPartyControlSession partyControl;
-        private GameplayCombatStateTimeline stateTimeline;
-        private TurnReplayWindow window;
-        private TurnReplayStateWindow stateWindow;
-        private TurnReplayEventTimeline eventTimeline;
+        private GameplayLiveSessionRuntime runtime;
+        private GameplaySemanticReplayTimeline replay;
+        private GameplaySemanticReplayPlaybackTimeline playback;
         private bool isOpen;
         private bool isPlaying;
         private float playhead;
@@ -28,17 +26,11 @@ namespace GritGud.Presentation.Gameplay
 
         public bool IsOpen => isOpen;
 
-        internal TurnReplayWindow Window => window;
+        internal GameplaySemanticReplayTimeline Replay => replay;
 
-        internal TurnReplayStateWindow StateWindow => stateWindow;
-
-        internal float Playhead => eventTimeline == null
-            ? 0f
-            : eventTimeline.ToSegmentPlayhead(playhead);
+        internal GameplaySemanticReplayPlaybackTimeline Playback => playback;
 
         internal float TimeSeconds => playhead;
-
-        internal TurnReplayEventTimeline EventTimeline => eventTimeline;
 
         internal bool IsPlaying => isPlaying;
 
@@ -46,36 +38,27 @@ namespace GritGud.Presentation.Gameplay
 
         internal event Action<float> PlayheadChanged;
 
-        public bool IsAvailable
-        {
-            get
-            {
-                RefreshWindow();
-                return window != null;
-            }
-        }
+        public bool IsAvailable => runtime != null
+            && runtime.Trajectory.Count > 0;
 
         public void Bind(
             GameplaySession session,
-            GameplayPartyControlSession control,
-            GameplayCombatStateTimeline timeline)
+            GameplayLiveSessionRuntime liveRuntime)
         {
             Unbind();
-            gameplay = session ?? throw new ArgumentNullException(nameof(session));
-            partyControl = control ?? throw new ArgumentNullException(nameof(control));
-            stateTimeline = timeline ?? throw new ArgumentNullException(
-                nameof(timeline));
+            gameplay = session ?? throw new ArgumentNullException(
+                nameof(session));
+            runtime = liveRuntime ?? throw new ArgumentNullException(
+                nameof(liveRuntime));
             enabled = true;
         }
 
         public void Unbind()
         {
             gameplay = null;
-            partyControl = null;
-            stateTimeline = null;
-            window = null;
-            stateWindow = null;
-            eventTimeline = null;
+            runtime = null;
+            replay = null;
+            playback = null;
             isOpen = false;
             isPlaying = false;
             playhead = 0f;
@@ -84,21 +67,29 @@ namespace GritGud.Presentation.Gameplay
 
         public void Toggle()
         {
-            RefreshWindow();
-            if (window == null)
+            if (isOpen)
+            {
+                isOpen = false;
+                isPlaying = false;
+                OpenChanged?.Invoke(false);
+                replay = null;
+                playback = null;
                 return;
-            isOpen = !isOpen;
+            }
+
+            RefreshPlayback();
+            if (playback == null)
+                return;
+            isOpen = true;
             isPlaying = false;
-            if (isOpen)
-                playhead = eventTimeline.DefaultTimeSeconds;
-            OpenChanged?.Invoke(isOpen);
-            if (isOpen)
-                PlayheadChanged?.Invoke(Playhead);
+            playhead = playback.TotalDurationSeconds;
+            OpenChanged?.Invoke(true);
+            PlayheadChanged?.Invoke(playhead);
         }
 
         internal bool ContainsInteractiveScreenPoint(Vector2 screenPoint)
         {
-            if (!isOpen || window == null)
+            if (!isOpen || playback == null)
                 return false;
             float scale = CalculateUiScale();
             Vector2 guiPoint = new Vector2(
@@ -111,19 +102,19 @@ namespace GritGud.Presentation.Gameplay
 
         private void Update()
         {
-            if (!isOpen || !isPlaying || window == null)
+            if (!isOpen || !isPlaying || playback == null)
                 return;
             playhead = Mathf.Min(
-                eventTimeline.TotalDurationSeconds,
+                playback.TotalDurationSeconds,
                 playhead + (Time.unscaledDeltaTime * speed));
-            PlayheadChanged?.Invoke(Playhead);
-            if (playhead >= eventTimeline.TotalDurationSeconds)
+            PlayheadChanged?.Invoke(playhead);
+            if (playhead >= playback.TotalDurationSeconds)
                 isPlaying = false;
         }
 
         private void OnGUI()
         {
-            if (!isOpen || window == null)
+            if (!isOpen || playback == null)
                 return;
             EnsureStyles();
             float scale = CalculateUiScale();
@@ -138,10 +129,18 @@ namespace GritGud.Presentation.Gameplay
         private void Draw(Rect bar)
         {
             float previousPlayhead = playhead;
+            GameplaySemanticReplayPlaybackPosition position = playback.Locate(
+                playhead);
+            int selectedFrame = position.Frame.Index;
             GUI.Box(bar, GUIContent.none);
+            string actorId = position.Frame.Transition.Payload.ActorId;
+            string displayName = ResolveDisplayName(actorId);
+            string capability = position.Frame.Transition.Payload.Profile
+                .Capability.ToString();
             GUI.Label(
-                new Rect(bar.x + 10f, bar.y + 5f, 150f, 20f),
-                "TURN REPLAY",
+                new Rect(bar.x + 10f, bar.y + 5f, bar.width - 50f, 20f),
+                $"REPLAY  {selectedFrame + 1}/{playback.Frames.Count}  "
+                    + $"{displayName.ToUpperInvariant()} · {capability}",
                 titleStyle);
             if (GUI.Button(
                 new Rect(bar.xMax - 30f, bar.y + 4f, 24f, 22f),
@@ -156,35 +155,36 @@ namespace GritGud.Presentation.Gameplay
                 bar.y + 28f,
                 bar.width - 20f,
                 24f);
-            int selectedSegment = eventTimeline.GetSegmentIndex(playhead);
-            for (int index = 0; index < window.Segments.Count; index++)
+            for (int index = 0; index < playback.Frames.Count; index++)
             {
-                TurnReplaySegment segment = window.Segments[index];
-                string displayName = gameplay.Scenario.GetActor(segment.ActorId)
-                    .CharacterProfile?.DisplayName ?? segment.ActorId;
-                Rect segmentRect = new Rect(
+                GameplaySemanticReplayPlaybackFrame frame =
+                    playback.Frames[index];
+                Rect segment = new Rect(
                     timeline.x + (timeline.width
-                        * eventTimeline.SegmentStarts[index]
-                        / eventTimeline.TotalDurationSeconds),
+                        * frame.StartSeconds
+                        / playback.TotalDurationSeconds),
                     timeline.y,
-                    timeline.width * eventTimeline.SegmentDurations[index]
-                        / eventTimeline.TotalDurationSeconds,
+                    timeline.width * frame.DurationSeconds
+                        / playback.TotalDurationSeconds,
                     timeline.height);
+                string label = segment.width >= 34f
+                    ? (index + 1).ToString()
+                    : string.Empty;
                 if (GUI.Button(
-                    segmentRect,
-                    displayName.ToUpperInvariant(),
-                    index == selectedSegment
+                    segment,
+                    label,
+                    index == selectedFrame
                         ? activeSegmentStyle
                         : segmentStyle))
                 {
-                    playhead = eventTimeline.SegmentStarts[index];
+                    playhead = frame.StartSeconds;
                     isPlaying = false;
                 }
-                DrawEventMarkers(index, segmentRect);
             }
 
             float railX = timeline.x + (timeline.width
-                * Mathf.Clamp01(playhead / eventTimeline.TotalDurationSeconds));
+                * Mathf.Clamp01(
+                    playhead / playback.TotalDurationSeconds));
             GUI.DrawTexture(
                 new Rect(railX - 1f, timeline.y, 2f, timeline.height),
                 Texture2D.whiteTexture);
@@ -194,23 +194,28 @@ namespace GritGud.Presentation.Gameplay
                 new Rect(bar.x + 10f, controlsY, 30f, 20f),
                 "|<"))
             {
-                int previous = Mathf.Max(0, selectedSegment - 1);
-                playhead = eventTimeline.SegmentStarts[previous];
+                int previous = Mathf.Max(0, selectedFrame - 1);
+                playhead = playback.GetFrameStartSeconds(previous);
                 isPlaying = false;
             }
             if (GUI.Button(
                 new Rect(bar.x + 44f, controlsY, 52f, 20f),
                 isPlaying ? "PAUSE" : "PLAY"))
             {
-                if (playhead >= eventTimeline.TotalDurationSeconds)
-                    playhead = eventTimeline.DefaultTimeSeconds;
+                if (playhead >= playback.TotalDurationSeconds)
+                    playhead = 0f;
                 isPlaying = !isPlaying;
             }
             if (GUI.Button(
                 new Rect(bar.x + 100f, controlsY, 30f, 20f),
                 ">|"))
             {
-                playhead = eventTimeline.GetSegmentEndSeconds(selectedSegment);
+                int next = Mathf.Min(
+                    playback.Frames.Count - 1,
+                    selectedFrame + 1);
+                playhead = next == selectedFrame
+                    ? playback.TotalDurationSeconds
+                    : playback.GetFrameStartSeconds(next);
                 isPlaying = false;
             }
             if (GUI.Button(
@@ -229,70 +234,37 @@ namespace GritGud.Presentation.Gameplay
                 scrubber,
                 playhead,
                 0f,
-                eventTimeline.TotalDurationSeconds);
+                playback.TotalDurationSeconds);
             if (!Mathf.Approximately(previousPlayhead, playhead))
-                PlayheadChanged?.Invoke(Playhead);
+                PlayheadChanged?.Invoke(playhead);
         }
 
-        private void RefreshWindow()
+        private void RefreshPlayback()
         {
-            string actorId = partyControl?.CommandActorId;
-            if (gameplay == null
-                || gameplay.Mode != GameplaySessionMode.TurnBased
+            if (!IsAvailable)
+            {
+                replay = null;
+                playback = null;
+                return;
+            }
+            replay = runtime.CreateReplayTimeline();
+            playback = new GameplaySemanticReplayPlaybackTimeline(replay);
+            if (playback.Frames.Count == 0)
+            {
+                replay = null;
+                playback = null;
+            }
+        }
+
+        private string ResolveDisplayName(string actorId)
+        {
+            if (gameplay?.Scenario == null
                 || string.IsNullOrWhiteSpace(actorId)
-                || !TurnReplayWindowProjector.TryProject(
-                    gameplay.Journal,
-                    actorId,
-                    out window)
-                || !window.IsAtJournalTip(gameplay.Journal)
-                || !TurnReplayStateWindowProjector.TryProject(
-                    window,
-                    stateTimeline,
-                    out stateWindow)
-                || !TurnReplayStateWindowProjector.VerifyCurrentEndpoint(
-                    stateWindow,
-                    stateTimeline).IsVerified)
-            {
-                window = null;
-                stateWindow = null;
-                eventTimeline = null;
-                isOpen = false;
-                isPlaying = false;
-            }
-            else
-            {
-                eventTimeline = new TurnReplayEventTimeline(window);
-            }
+                || !gameplay.TryGetActor(actorId, out _))
+                return actorId ?? string.Empty;
+            var actor = gameplay.Scenario.GetActor(actorId);
+            return actor.CharacterProfile?.DisplayName ?? actorId;
         }
-
-        private void DrawEventMarkers(
-            int segmentIndex,
-            Rect segmentRectangle)
-        {
-            float segmentStart = eventTimeline.SegmentStarts[segmentIndex];
-            float segmentDuration = eventTimeline.SegmentDurations[segmentIndex];
-            foreach (TurnReplayTimedEvent timedEvent in eventTimeline.Events)
-            {
-                if (timedEvent.SegmentIndex != segmentIndex
-                    || !IsVisibleEvent(timedEvent.Entry))
-                    continue;
-                float x = segmentRectangle.x
-                    + (segmentRectangle.width
-                        * ((timedEvent.StartSeconds - segmentStart)
-                            / segmentDuration));
-                GUI.DrawTexture(
-                    new Rect(x - 1f, segmentRectangle.yMax - 5f, 2f, 4f),
-                    Texture2D.whiteTexture);
-            }
-        }
-
-        private static bool IsVisibleEvent(GameplayJournalEntry entry) =>
-            entry is MovementRouteCommittedJournalEntry
-            || entry is StanceChangedJournalEntry
-            || entry is ActionResolvedJournalEntry
-            || entry is DisplacementResolvedJournalEntry
-            || entry is ProjectileAdvancedJournalEntry
-            || entry is DestructibleDamagedJournalEntry;
 
         private static Rect CalculateBarRectangle(
             float canvasWidth,

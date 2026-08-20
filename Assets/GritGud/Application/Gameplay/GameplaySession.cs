@@ -833,7 +833,6 @@ namespace GritGud.Application.Gameplay
             string actorId,
             GameplayActorPose pose)
         {
-            RequireLegacyMutationAllowed(nameof(UpdateExplorationPose));
             if (Mode != GameplaySessionMode.Exploration)
             {
                 throw new InvalidOperationException(
@@ -846,6 +845,20 @@ namespace GritGud.Application.Gameplay
                 throw new InvalidOperationException(
                     $"Pinned actor '{actorId}' cannot move in exploration.");
             }
+            if (PosesMatch(actor.Pose, pose))
+                return;
+            if (IsCanonicalProjectionBound)
+            {
+                ExecuteCanonical(new GameplayWorldAdvanceTransitionPayload(
+                    actorId,
+                    "continuous-time",
+                    explorationPose: new ExplorationPoseRecord(
+                        actorId,
+                        actor.Pose,
+                        pose)));
+                return;
+            }
+            RequireLegacyMutationAllowed(nameof(UpdateExplorationPose));
             actor.Pose = pose;
             MarkStateChanged();
         }

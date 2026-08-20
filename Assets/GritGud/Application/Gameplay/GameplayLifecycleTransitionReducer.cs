@@ -13,7 +13,8 @@ namespace GritGud.Application.Gameplay
         public GameplayWorldAdvanceTransitionPayload(
             string actorId,
             string mode,
-            float elapsedSeconds = 0f)
+            float elapsedSeconds = 0f,
+            ExplorationPoseRecord explorationPose = null)
             : base(
                 GameplayCapabilityProfiles.AdvanceWorld(mode),
                 actorId,
@@ -25,9 +26,19 @@ namespace GritGud.Application.Gameplay
             if (elapsedSeconds < 0f)
                 throw new ArgumentOutOfRangeException(nameof(elapsedSeconds));
             ElapsedSeconds = elapsedSeconds;
+            if (explorationPose != null
+                && !string.Equals(
+                    actorId,
+                    explorationPose.ActorId,
+                    StringComparison.Ordinal))
+                throw new ArgumentException(
+                    "World advance actor and exploration pose actor must match.",
+                    nameof(explorationPose));
+            ExplorationPose = explorationPose;
         }
 
         public float ElapsedSeconds { get; }
+        public ExplorationPoseRecord ExplorationPose { get; }
     }
 
     public sealed class GameplayEmergencyReactionTransitionPayload :
@@ -399,7 +410,11 @@ namespace GritGud.Application.Gameplay
             if (state.Session.Mode != GameplaySessionMode.Exploration)
                 throw new InvalidOperationException(
                     "Continuous world time advances only in exploration.");
-            if (payload.ElapsedSeconds > 0f)
+            bool poseChanged = ApplyExplorationPose(
+                state.Session,
+                mutation,
+                payload.ExplorationPose);
+            if (payload.ElapsedSeconds > 0f || poseChanged)
                 mutation.Revision = checked(mutation.Revision + 1L);
             bool changedGameplayClock = !state.Session.EncounterActive
                 && state.Session.VoluntaryTurnReentrySecondsRemaining > 0f
@@ -462,8 +477,39 @@ namespace GritGud.Application.Gameplay
                     mutation.Revision + actorInjuries);
                 fireAdvances = advances.AsReadOnly();
             }
-            return payload.ElapsedSeconds;
+            return payload;
         }
+
+        private static bool ApplyExplorationPose(
+            GameplaySessionStateSnapshot session,
+            GameplayCanonicalStateMutation mutation,
+            ExplorationPoseRecord record)
+        {
+            if (record == null) return false;
+            if (session.EncounterActive)
+                throw new InvalidOperationException(
+                    "Exploration pose cannot advance during an encounter.");
+            GameplayActorSnapshot actor = session.GetActor(record.ActorId);
+            if (actor.IsPinned || actor.IsIncapacitated)
+                throw new InvalidOperationException(
+                    "Pinned or incapacitated actors cannot advance exploration pose.");
+            if (!PosesMatch(actor.Pose, record.PreviousPose))
+                throw new InvalidOperationException(
+                    "Exploration pose no longer starts from canonical actor state.");
+            if (PosesMatch(record.PreviousPose, record.ResultingPose))
+                return false;
+            mutation.ReplaceActor(GameplayCanonicalStateMutation.CopyActor(
+                actor,
+                pose: record.ResultingPose));
+            return true;
+        }
+
+        private static bool PosesMatch(
+            GameplayActorPose left,
+            GameplayActorPose right) =>
+            left.Position.DistanceTo(right.Position) == 0f
+            && left.FacingDegrees == right.FacingDegrees
+            && left.Stance == right.Stance;
 
         private static object ReduceEmergency(
             GameplaySessionStateSnapshot session,

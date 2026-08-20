@@ -24,6 +24,9 @@ namespace GritGud.Application.Gameplay
             new List<VehicleMomentumRecord>();
         private readonly IReadOnlyList<VehicleMomentumRecord> readOnlyRecords;
         private bool canonicalProjectionBound;
+        private Func<VehicleMomentumRecord, GameplayReductionResult>
+            canonicalExecutor;
+        private Func<long> canonicalSequence;
 
         public VehicleMomentumSession(
             VehicleMomentumProfile profile,
@@ -48,6 +51,20 @@ namespace GritGud.Application.Gameplay
         public GameplayJournal Journal { get; }
 
         public IReadOnlyList<VehicleMomentumRecord> Records => readOnlyRecords;
+
+        internal void BindCanonicalExecutor(
+            Func<VehicleMomentumRecord, GameplayReductionResult> executor,
+            Func<long> nextSequence)
+        {
+            if (executor == null) throw new ArgumentNullException(nameof(executor));
+            if (nextSequence == null)
+                throw new ArgumentNullException(nameof(nextSequence));
+            if (canonicalExecutor != null || canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Vehicle semantic executor is already bound or projection binding has started.");
+            canonicalExecutor = executor;
+            canonicalSequence = nextSequence;
+        }
 
         internal void BindCanonicalProjection(VehicleMomentumState snapshot)
         {
@@ -125,7 +142,9 @@ namespace GritGud.Application.Gameplay
             out VehicleMomentumRecord record,
             out VehiclePathFailure failure) => TryResolvePath(
                 requestedPath,
-                records.Count + 1L,
+                canonicalProjectionBound
+                    ? canonicalSequence()
+                    : records.Count + 1L,
                 out record,
                 out failure);
 
@@ -236,11 +255,16 @@ namespace GritGud.Application.Gameplay
 
         public void Commit(VehicleMomentumRecord record)
         {
-            RequireLegacyMutationAllowed(nameof(Commit));
             if (record == null)
             {
                 throw new ArgumentNullException(nameof(record));
             }
+            if (canonicalProjectionBound)
+            {
+                canonicalExecutor(record);
+                return;
+            }
+            RequireLegacyMutationAllowed(nameof(Commit));
 
             if (records.Count > 0
                 && record.Sequence <= records[records.Count - 1].Sequence)

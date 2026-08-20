@@ -32,7 +32,6 @@ namespace GritGud.Presentation.Gameplay
         private GameplayPartyHud partyHud;
         private GameplayTurnReplayHud turnReplayHud;
         private GameplayTurnReplayWorldPresenter turnReplayWorldPresenter;
-        private GameplayCombatStateTimeline turnReplayStateTimeline;
         private GameplayDialogueDrawer dialogueDrawer;
         private GameplaySessionPresenter sessionPresenter;
         private TurnMovementController turnMovementController;
@@ -65,6 +64,7 @@ namespace GritGud.Presentation.Gameplay
         private GameplaySurfaceImpactPresenter surfaceImpactPresenter;
         private GameplayCombatReactionPresenter combatReactionPresenter;
         private GameplayControlRouter controlRouter;
+        private GameplayLiveSessionRuntime liveRuntime;
 
         public bool IsRunning => levelWorld != null && player != null;
 
@@ -137,14 +137,14 @@ namespace GritGud.Presentation.Gameplay
 
         private void ResetPresentationBindings()
         {
+            liveRuntime?.Dispose();
+            liveRuntime = null;
             inputController?.End();
             controlRouter = null;
             hud?.Hide();
             partyHud?.Unbind();
             turnReplayHud?.Unbind();
             turnReplayWorldPresenter?.Dispose();
-            turnReplayStateTimeline?.Dispose();
-            turnReplayStateTimeline = null;
             hud?.UnbindSession();
             hud?.UnbindTurnMovement();
             hud?.UnbindGameplayActions();
@@ -526,6 +526,8 @@ namespace GritGud.Presentation.Gameplay
                     HandlePartyControlChanged,
                     ApplyPartyControl,
                     installed => controlRouter = installed),
+                new GameplaySemanticRuntimeFeatureInstaller(
+                    () => BindLiveSemanticRuntime(session)),
                 new GameplayReplayFeatureInstaller(
                     session,
                     turnReplayHud,
@@ -533,14 +535,14 @@ namespace GritGud.Presentation.Gameplay
                     inputController,
                     partyControl,
                     destructibleController,
-                    GetVehicleMomentumSessions,
                     projectileController,
-                    smokeFieldSession,
                     worldRegistry,
                     vehicleController,
                     smokeFieldController,
+                    fireFieldController,
+                    droneController,
                     partyHud,
-                    installed => turnReplayStateTimeline = installed),
+                    () => liveRuntime),
                 new GameplayHudFeatureInstaller(
                     hud,
                     inputController,
@@ -552,6 +554,44 @@ namespace GritGud.Presentation.Gameplay
                     installers,
                     ResetPresentationBindings)
                 .InstallAll();
+        }
+
+        private void BindLiveSemanticRuntime(GameplaySession session)
+        {
+            GameplayTransitionReducerRegistry reducers =
+                GameplaySimulationReducers.CreateCurrent();
+            GameplayCapabilityRegistry capabilities =
+                GameplayCurrentCapabilityCatalog.Create(
+                    reducers,
+                    scenarioAssembly,
+                    content.Level);
+            var projection = new GameplayLiveCombatProjection(
+                session,
+                destructibleController.Session,
+                GetVehicleMomentumSessions(),
+                projectileController.ProjectileSession,
+                smokeFieldSession,
+                fireFieldSession,
+                droneController.Session);
+            GameplayCombatStateSnapshot initial = projection.Capture();
+            var identity = new GameplayExecutionIdentity(
+                new GameplayContentIdentity(
+                    scenarioAssembly.Scenario.Id,
+                    content.Scenario.schemaVersion,
+                    GameplayCombatStateSnapshot.CurrentSchemaVersion,
+                    GameplayCanonicalValueDigest.Calculate(content.Scenario)),
+                new SpatialContentIdentity(
+                    content.Level.levelId,
+                    content.Level.schemaVersion,
+                    evidenceAlgorithmVersion: 1,
+                    GameplayCanonicalValueDigest.Calculate(content.Level)),
+                session.RunIdentity);
+            liveRuntime = new GameplayLiveSessionRuntime(
+                projection,
+                identity,
+                initial,
+                reducers,
+                capabilities);
         }
         private IReadOnlyList<VehicleMomentumSession> GetVehicleMomentumSessions()
         {
@@ -589,6 +629,8 @@ namespace GritGud.Presentation.Gameplay
 
         public void EndSession()
         {
+            liveRuntime?.Dispose();
+            liveRuntime = null;
             ResetPresentationBindings();
             if (partyControl != null)
             {

@@ -20,6 +20,7 @@ internal static class SimulationChecks
             VerifyCapabilityCoverageFailsClosed();
             VerifyTacticalRuleCoverageAndOutcomeProjection();
             VerifyAtomicLiveInstallation();
+            VerifyLiveExplorationProjection();
             VerifyLiveSessionReducerProjection();
             VerifyFullLiveCombatProjection();
             VerifySharedPresentationSampling();
@@ -2235,19 +2236,12 @@ internal static class SimulationChecks
                 + liveActionFailure);
 
         string endingActorId = gameplay.ActiveActorId;
-        var endPayload = new GameplayEndTurnTransitionPayload(
-            endingActorId,
-            emergency: false,
-            gameplay.Scenario.Timing.MinimumVoluntaryTurnSeconds);
-        var endTurn = new GameplaySemanticTransition(
-            new GameplayTransitionIdentity(
-                3L,
-                GameplaySemanticCapability.EndTurn.ToString(),
-                endPayload.ActorId,
-                endPayload.SubjectId),
-            live.CurrentState.CanonicalHash,
-            endPayload);
-        live.Execute(endTurn);
+        Require(gameplay.TryEndTurn(
+                endingActorId,
+                out TurnEndFailure liveTurnFailure)
+            && liveTurnFailure == TurnEndFailure.None,
+            "The live end-turn adapter rejected a legal turn: "
+                + liveTurnFailure);
 
         GameplayCombatStateSnapshot projectedTurn =
             GameplayCombatStateCapture.Capture(gameplay);
@@ -2270,17 +2264,80 @@ internal static class SimulationChecks
                 reducers).IsExact,
             "The reducer-owned live projection trajectory did not replay exactly.");
 
-        bool legacyTurnRejected = false;
-        try
-        {
-            gameplay.TryEndTurn(gameplay.ActiveActorId, out _);
-        }
-        catch (InvalidOperationException)
-        {
-            legacyTurnRejected = true;
-        }
-        Require(legacyTurnRejected,
-            "A projection-bound live session still allowed duplicate turn mutation.");
+        int trajectoryCount = live.Trajectory.Count;
+        Require(!gameplay.TryEndTurn(
+                endingActorId,
+                out TurnEndFailure staleTurnFailure)
+            && staleTurnFailure == TurnEndFailure.ActorNotActive
+            && live.Trajectory.Count == trajectoryCount,
+            "A stale live turn command mutated canonical state.");
+    }
+
+    private static void VerifyLiveExplorationProjection()
+    {
+        GameplaySession gameplay = CreateEncounterGameplay();
+        GameplayCombatStateSnapshot initial =
+            GameplayCombatStateCapture.Capture(gameplay);
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
+        GameplayCapabilityRegistry capabilities =
+            GameplayCurrentCapabilityCatalog.Create(
+                reducers,
+                Array.Empty<GameplayReachableInput>());
+        var identity = new GameplayExecutionIdentity(
+            new GameplayContentIdentity(
+                initial.Session.ScenarioId,
+                scenarioSchemaVersion: 1,
+                rulesSchemaVersion: 1,
+                new string('8', 64)),
+            new SpatialContentIdentity(
+                "live-exploration-check",
+                levelSchemaVersion: 1,
+                evidenceAlgorithmVersion: 1,
+                new string('9', 64)),
+            gameplay.RunIdentity);
+        using var live = new GameplayLiveSessionRuntime(
+            gameplay,
+            identity,
+            initial,
+            reducers,
+            capabilities);
+        GameplayActorSnapshot actor = gameplay.GetActor(
+            gameplay.Scenario.PlayerParty.InitiallySelectedActorId);
+        var resultingPose = new GameplayActorPose(
+            new GameplayPosition(
+                actor.Pose.Position.X + 0.5f,
+                actor.Pose.Position.Y,
+                actor.Pose.Position.Z),
+            actor.Pose.FacingDegrees + 15f,
+            actor.Pose.Stance);
+        gameplay.AdvanceExploration(
+            actor.ActorId,
+            resultingPose,
+            elapsedSeconds: 0.1f);
+        Require(gameplay.GetActor(actor.ActorId).Pose.Position.DistanceTo(
+                    resultingPose.Position) == 0f
+                && live.Trajectory.Count == 1
+                && string.Equals(
+                    GameplayCombatStateCapture.Capture(gameplay).CanonicalHash,
+                    live.CurrentState.CanonicalHash,
+                    StringComparison.Ordinal),
+            "Exploration locomotion was not installed through the canonical world transition.");
+        gameplay.AdvanceExploration(
+            actor.ActorId,
+            resultingPose,
+            elapsedSeconds: 0.1f);
+        Require(live.Trajectory.Count == 1,
+            "Idle exploration emitted a duplicate transition without advancing world state.");
+        Require(gameplay.TryEnterTurnMode(out TurnModeEntryFailure failure)
+                && failure == TurnModeEntryFailure.None
+                && live.Trajectory.Count == 2
+                && GameplayExactReplay.Verify(
+                    initial,
+                    live.Trajectory,
+                    reducers).IsExact,
+            "Exploration-to-turn transition did not preserve exact semantic replay: "
+                + failure);
     }
 
     private static void VerifyFullLiveCombatProjection()
@@ -2430,19 +2487,12 @@ internal static class SimulationChecks
         fireFields.FieldChanged += _ => fireChanged++;
         gameplay.TurnEnded += _ => turnEnded++;
         string actorId = initial.Session.ActiveActorId;
-        var payload = new GameplayEndTurnTransitionPayload(
-            actorId,
-            emergency: false,
-            gameplay.Scenario.Timing.MinimumVoluntaryTurnSeconds);
-        var transition = new GameplaySemanticTransition(
-            new GameplayTransitionIdentity(
-                1L,
-                GameplaySemanticCapability.EndTurn.ToString(),
-                payload.ActorId,
-                payload.SubjectId),
-            initial.CanonicalHash,
-            payload);
-        live.Execute(transition);
+        Require(gameplay.TryEndTurn(
+                actorId,
+                out TurnEndFailure projectionTurnFailure)
+            && projectionTurnFailure == TurnEndFailure.None,
+            "Full live projection rejected a legal end-turn command: "
+                + projectionTurnFailure);
 
         GameplayCombatStateSnapshot installed = projection.Capture();
         Require(string.Equals(
@@ -2474,15 +2524,7 @@ internal static class SimulationChecks
             controller.TurnBudget,
             controller.TurnBudget.SpendAction(
                 drone.Definition.MoveCost));
-        var dronePayload = new GameplayDroneMoveTransitionPayload(droneMove);
-        live.Execute(new GameplaySemanticTransition(
-            new GameplayTransitionIdentity(
-                2L,
-                dronePayload.Profile.Capability.ToString(),
-                dronePayload.ActorId,
-                dronePayload.SubjectId),
-            live.CurrentState.CanonicalHash,
-            dronePayload));
+        drones.CommitMove(droneMove);
         Require(drones.GetDrone(drone.DroneId).Position.DistanceTo(
                 droneMove.Destination) == 0f,
             "Reducer-owned drone movement was not installed live.");
@@ -2497,7 +2539,7 @@ internal static class SimulationChecks
             forwardDegrees: 0f,
             speed: 1f);
         var vehicleMove = new VehicleMomentumRecord(
-            3L,
+            live.CurrentState.Session.LastTransitionSequence + 1L,
             previousVehicle,
             resultingVehicle,
             new[]
@@ -2505,17 +2547,7 @@ internal static class SimulationChecks
                 previousVehicle.Position,
                 resultingVehicle.Position,
             });
-        var vehiclePayload = new GameplayVehicleMoveTransitionPayload(
-            droneControllerId,
-            vehicleMove);
-        live.Execute(new GameplaySemanticTransition(
-            new GameplayTransitionIdentity(
-                3L,
-                vehiclePayload.Profile.Capability.ToString(),
-                vehiclePayload.ActorId,
-                vehiclePayload.SubjectId),
-            live.CurrentState.CanonicalHash,
-            vehiclePayload));
+        vehicle.Commit(vehicleMove);
         Require(vehicle.State.Position.DistanceTo(
                 resultingVehicle.Position) == 0f
             && vehicle.Records.Count == 1,
@@ -2584,18 +2616,7 @@ internal static class SimulationChecks
             segmentEnd: resultingFlight.Position,
             worldStateRevision: live.CurrentState.Session.JournalSequence,
             collisionFraction: null);
-        var advancePayload = new GameplayProjectileAdvanceTransitionPayload(
-            droneControllerId,
-            advance,
-            destructiblesShareGameplayJournal: true);
-        live.Execute(new GameplaySemanticTransition(
-            new GameplayTransitionIdentity(
-                5L,
-                advancePayload.Profile.Capability.ToString(),
-                advancePayload.ActorId,
-                advancePayload.SubjectId),
-            live.CurrentState.CanonicalHash,
-            advancePayload));
+        projectiles.CommitAdvance(advance);
         Require(projectiles.Advances.Count == 1
             && projectiles.GetProjectile(projectileId).DistanceTraveled
                 == advanceDistance,

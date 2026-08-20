@@ -152,7 +152,6 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            smokeFields.AdvanceContinuousTime(Time.unscaledDeltaTime);
             UpdateFades(Time.unscaledDeltaTime);
             UpdateCameraInterior(Camera.main);
         }

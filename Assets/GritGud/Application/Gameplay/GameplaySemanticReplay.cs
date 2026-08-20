@@ -173,6 +173,7 @@ namespace GritGud.Application.Gameplay
         internal GameplayPresentationWorldStateSample(
             GameplaySemanticReplayFrame frame,
             float progress,
+            GameplaySessionStateSnapshot session,
             IReadOnlyDictionary<string, GameplayActorSnapshot> actors,
             IReadOnlyList<DestructiblePropSnapshot> destructibles,
             IReadOnlyList<VehicleMomentumState> vehicles,
@@ -183,6 +184,8 @@ namespace GritGud.Application.Gameplay
         {
             Frame = frame ?? throw new ArgumentNullException(nameof(frame));
             Progress = progress;
+            Session = session ?? throw new ArgumentNullException(
+                nameof(session));
             Actors = actors;
             Destructibles = destructibles;
             Vehicles = vehicles;
@@ -194,7 +197,7 @@ namespace GritGud.Application.Gameplay
 
         public GameplaySemanticReplayFrame Frame { get; }
         public float Progress { get; }
-        public GameplaySessionStateSnapshot Session => Frame.Resulting.Session;
+        public GameplaySessionStateSnapshot Session { get; }
         public IReadOnlyDictionary<string, GameplayActorSnapshot> Actors { get; }
         public IReadOnlyList<DestructiblePropSnapshot> Destructibles { get; }
         public IReadOnlyList<VehicleMomentumState> Vehicles { get; }
@@ -202,6 +205,199 @@ namespace GritGud.Application.Gameplay
         public IReadOnlyList<SmokeFieldSnapshot> SmokeFields { get; }
         public IReadOnlyList<FireFieldSnapshot> FireFields { get; }
         public IReadOnlyList<DroneSnapshot> Drones { get; }
+    }
+
+    public sealed class GameplaySemanticReplayPlaybackFrame
+    {
+        internal GameplaySemanticReplayPlaybackFrame(
+            GameplaySemanticReplayFrame frame,
+            float startSeconds,
+            float durationSeconds)
+        {
+            Frame = frame ?? throw new ArgumentNullException(nameof(frame));
+            GameplayNumericPolicy.RequireFinite(
+                startSeconds,
+                nameof(startSeconds));
+            GameplayNumericPolicy.RequireFinite(
+                durationSeconds,
+                nameof(durationSeconds));
+            if (startSeconds < 0f)
+                throw new ArgumentOutOfRangeException(nameof(startSeconds));
+            if (durationSeconds <= 0f)
+                throw new ArgumentOutOfRangeException(nameof(durationSeconds));
+            StartSeconds = startSeconds;
+            DurationSeconds = durationSeconds;
+        }
+
+        public GameplaySemanticReplayFrame Frame { get; }
+        public float StartSeconds { get; }
+        public float DurationSeconds { get; }
+        public float EndSeconds => StartSeconds + DurationSeconds;
+    }
+
+    public readonly struct GameplaySemanticReplayPlaybackPosition
+    {
+        internal GameplaySemanticReplayPlaybackPosition(
+            GameplaySemanticReplayPlaybackFrame playbackFrame,
+            float progress)
+        {
+            PlaybackFrame = playbackFrame ?? throw new ArgumentNullException(
+                nameof(playbackFrame));
+            GameplayNumericPolicy.RequireFinite(progress, nameof(progress));
+            Progress = Math.Max(0f, Math.Min(1f, progress));
+        }
+
+        public GameplaySemanticReplayPlaybackFrame PlaybackFrame { get; }
+        public GameplaySemanticReplayFrame Frame => PlaybackFrame.Frame;
+        public float Progress { get; }
+    }
+
+    /// <summary>
+    /// Presentation-only clock over an exact semantic trajectory. Every
+    /// canonical transition retains one ordered frame; only its display
+    /// duration is compressed. Durations never enter state hashes or replay
+    /// equality.
+    /// </summary>
+    public sealed class GameplaySemanticReplayPlaybackTimeline
+    {
+        private readonly IReadOnlyList<GameplaySemanticReplayPlaybackFrame>
+            frames;
+
+        public GameplaySemanticReplayPlaybackTimeline(
+            GameplaySemanticReplayTimeline replay)
+        {
+            Replay = replay ?? throw new ArgumentNullException(nameof(replay));
+            var built = new List<GameplaySemanticReplayPlaybackFrame>(
+                replay.Frames.Count);
+            float cursor = 0f;
+            foreach (GameplaySemanticReplayFrame frame in replay.Frames)
+            {
+                float duration = GameplaySemanticReplayPresentationTiming
+                    .GetDurationSeconds(frame);
+                built.Add(new GameplaySemanticReplayPlaybackFrame(
+                    frame,
+                    cursor,
+                    duration));
+                cursor += duration;
+            }
+            frames = built.AsReadOnly();
+            TotalDurationSeconds = cursor;
+        }
+
+        public GameplaySemanticReplayTimeline Replay { get; }
+        public IReadOnlyList<GameplaySemanticReplayPlaybackFrame> Frames =>
+            frames;
+        public float TotalDurationSeconds { get; }
+
+        public GameplaySemanticReplayPlaybackPosition Locate(
+            float timeSeconds)
+        {
+            if (frames.Count == 0)
+                throw new InvalidOperationException(
+                    "An empty semantic trajectory has no playback position.");
+            GameplayNumericPolicy.RequireFinite(
+                timeSeconds,
+                nameof(timeSeconds));
+            float time = Math.Max(
+                0f,
+                Math.Min(TotalDurationSeconds, timeSeconds));
+            if (time >= TotalDurationSeconds)
+                return new GameplaySemanticReplayPlaybackPosition(
+                    frames[frames.Count - 1],
+                    1f);
+            for (int index = frames.Count - 1; index >= 0; index--)
+            {
+                GameplaySemanticReplayPlaybackFrame frame = frames[index];
+                if (time < frame.StartSeconds) continue;
+                return new GameplaySemanticReplayPlaybackPosition(
+                    frame,
+                    (time - frame.StartSeconds) / frame.DurationSeconds);
+            }
+            return new GameplaySemanticReplayPlaybackPosition(frames[0], 0f);
+        }
+
+        public float GetFrameStartSeconds(int index) => frames[index]
+            .StartSeconds;
+
+        public float GetFrameEndSeconds(int index) => frames[index]
+            .EndSeconds;
+    }
+
+    public static class GameplaySemanticReplayPresentationTiming
+    {
+        public const float ActionResolutionProgress = 0.65f;
+
+        public static float GetDurationSeconds(
+            GameplaySemanticReplayFrame frame)
+        {
+            if (frame == null) throw new ArgumentNullException(nameof(frame));
+            switch (frame.SemanticRecord)
+            {
+                case MovementRouteRecord movement:
+                    return Clamp(
+                        movement.TotalPlaybackDurationSeconds,
+                        0.3f,
+                        4f);
+                case ProjectileAdvanceRecord projectile:
+                    return Clamp(
+                        projectile.RequestedTurnTime * 0.65f,
+                        0.2f,
+                        1.2f);
+                case GameplayActionRecord action:
+                    return GetActionDuration(action);
+                case VehicleMomentumRecord _:
+                    return 0.65f;
+                case DroneMoveRecord movement:
+                    return Clamp(
+                        movement.Origin.DistanceTo(movement.Destination) / 6f,
+                        0.3f,
+                        1.2f);
+                case DroneAttackRecord _:
+                case ActorDroneAttackRecord _:
+                    return 0.8f;
+                case StanceChangeRecord _:
+                    return 0.3f;
+                case TurnEndRecord _:
+                    return 0.15f;
+                case EnemyAwarenessTransitionRecord _:
+                    return 0.35f;
+                case PatrolAdvanceRecord _:
+                    return 0.3f;
+                case GameplayWorldAdvanceTransitionPayload world:
+                    return world.ExplorationPose == null
+                        ? 0.08f
+                        : Clamp(world.ElapsedSeconds * 0.35f, 0.02f, 0.08f);
+                case GameplaySessionControlTransitionPayload _:
+                case GameplayEmergencyReactionTransitionPayload _:
+                    return 0.2f;
+                default:
+                    return 0.2f;
+            }
+        }
+
+        private static float GetActionDuration(GameplayActionRecord action)
+        {
+            foreach (GameplayActionOutcome outcome in action.Outcomes)
+            {
+                if (outcome is DisplacementActionOutcome displacement)
+                    return Math.Max(
+                        0.25f,
+                        GameplayDisplacementPresentationTiming
+                            .GetDurationSeconds(displacement.Displacement));
+            }
+            foreach (GameplayActionOutcome outcome in action.Outcomes)
+            {
+                if (outcome is ProjectileLaunchedActionOutcome) return 0.65f;
+                if (outcome is WeaponDischargedActionOutcome) return 0.65f;
+                if (outcome is AttackResolvedActionOutcome) return 0.8f;
+                if (outcome is ThrownExplosiveActionOutcome) return 0.8f;
+                if (outcome is EquipmentChangedActionOutcome) return 0.4f;
+            }
+            return 0.35f;
+        }
+
+        private static float Clamp(float value, float minimum, float maximum)
+            => Math.Max(minimum, Math.Min(maximum, value));
     }
 
     public static class GameplaySemanticReplaySampler
@@ -215,14 +411,22 @@ namespace GritGud.Application.Gameplay
                 linearProgress,
                 nameof(linearProgress));
             float progress = Clamp01(linearProgress);
-            GameplayCombatStateSnapshot resulting = frame.Resulting;
-            var actors = IndexActors(resulting.Session.Actors);
+            GameplayCombatStateSnapshot baseState = progress >= 1f
+                ? frame.Resulting
+                : frame.Previous;
+            if (frame.SemanticRecord is GameplayActionRecord
+                && progress >= GameplaySemanticReplayPresentationTiming
+                    .ActionResolutionProgress)
+            {
+                baseState = frame.Resulting;
+            }
+            var actors = IndexActors(baseState.Session.Actors);
             var destructibles = new List<DestructiblePropSnapshot>(
-                resulting.Destructibles);
-            var vehicles = new List<VehicleMomentumState>(resulting.Vehicles);
+                baseState.Destructibles);
+            var vehicles = new List<VehicleMomentumState>(baseState.Vehicles);
             var projectiles = new List<ProjectileFlightSnapshot>(
-                resulting.Projectiles);
-            var drones = new List<DroneSnapshot>(resulting.Drones);
+                baseState.Projectiles);
+            var drones = new List<DroneSnapshot>(baseState.Drones);
 
             switch (frame.SemanticRecord)
             {
@@ -248,18 +452,51 @@ namespace GritGud.Application.Gameplay
                 case DroneMoveRecord drone:
                     ReplaceDrone(drones, SampleDrone(frame, drone, progress));
                     break;
+                case GameplayWorldAdvanceTransitionPayload world
+                    when world.ExplorationPose != null:
+                    SampleExplorationPose(
+                        frame,
+                        world.ExplorationPose,
+                        progress,
+                        actors);
+                    break;
             }
 
             return new GameplayPresentationWorldStateSample(
                 frame,
                 progress,
+                baseState.Session,
                 actors,
                 destructibles.AsReadOnly(),
                 vehicles.AsReadOnly(),
                 projectiles.AsReadOnly(),
-                resulting.SmokeFields,
-                resulting.FireFields,
+                baseState.SmokeFields,
+                baseState.FireFields,
                 drones.AsReadOnly());
+        }
+
+        private static void SampleExplorationPose(
+            GameplaySemanticReplayFrame frame,
+            ExplorationPoseRecord movement,
+            float progress,
+            IDictionary<string, GameplayActorSnapshot> actors)
+        {
+            GameplayActorSnapshot actor = frame.Resulting.Session.GetActor(
+                movement.ActorId);
+            actors[movement.ActorId] = CopyActor(
+                actor,
+                new GameplayActorPose(
+                    Lerp(
+                        movement.PreviousPose.Position,
+                        movement.ResultingPose.Position,
+                        progress),
+                    Lerp(
+                        movement.PreviousPose.FacingDegrees,
+                        movement.ResultingPose.FacingDegrees,
+                        progress),
+                    progress >= 1f
+                        ? movement.ResultingPose.Stance
+                        : movement.PreviousPose.Stance));
         }
 
         private static void SampleMovement(
@@ -324,16 +561,19 @@ namespace GritGud.Application.Gameplay
             DisplacementRecord movement,
             float progress)
         {
-            DestructiblePropSnapshot resulting = FindDestructible(
-                frame.Resulting.Destructibles,
+            DestructiblePropSnapshot authoritative = FindDestructible(
+                progress >= GameplaySemanticReplayPresentationTiming
+                    .ActionResolutionProgress
+                    ? frame.Resulting.Destructibles
+                    : frame.Previous.Destructibles,
                 movement.Request.SubjectId);
             PropDisplacementState previous = movement.PreviousPropState;
             PropDisplacementState next = movement.ResultingPropState;
             return new DestructiblePropSnapshot(
-                resulting.PropId,
-                resulting.State,
-                resulting.MaximumIntegrity,
-                resulting.RemainingIntegrity,
+                authoritative.PropId,
+                authoritative.State,
+                authoritative.MaximumIntegrity,
+                authoritative.RemainingIntegrity,
                 new GameplayPropPose(
                     Lerp(previous.Pose.Position, next.Pose.Position, progress),
                     Lerp(previous.Pose.PitchDegrees,
@@ -342,9 +582,12 @@ namespace GritGud.Application.Gameplay
                         next.Pose.YawDegrees, progress),
                     Lerp(previous.Pose.RollDegrees,
                         next.Pose.RollDegrees, progress)),
-                progress >= 1f ? next.Posture : previous.Posture,
-                resulting.FractureChunkCount,
-                resulting.DetachedFractureChunks);
+                progress >= GameplaySemanticReplayPresentationTiming
+                    .ActionResolutionProgress
+                    ? next.Posture
+                    : previous.Posture,
+                authoritative.FractureChunkCount,
+                authoritative.DetachedFractureChunks);
         }
 
         private static VehicleMomentumState SampleVehicle(

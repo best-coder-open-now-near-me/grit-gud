@@ -100,7 +100,32 @@ namespace GritGud.Application.Gameplay
                 IEnumerable<GameplayEvidenceRecord>,
                 GameplayReductionResult> executor,
             Func<GameplayActionRecord, GameplayReductionResult> actionExecutor) =>
-            session.BindCanonicalExecutor(executor, actionExecutor);
+            BindExecutors(executor, actionExecutor);
+
+        private void BindExecutors(
+            Func<
+                GameplayTransitionPayload,
+                IEnumerable<GameplayEvidenceRecord>,
+                GameplayReductionResult> executor,
+            Func<GameplayActionRecord, GameplayReductionResult> actionExecutor)
+        {
+            session.BindCanonicalExecutor(
+                executor,
+                actionExecutor,
+                HasContinuousWorldState);
+            projectiles?.BindCanonicalExecutor(executor);
+            if (vehicles != null)
+                foreach (VehicleMomentumSession vehicle in vehicles)
+                    vehicle.BindCanonicalExecutor(
+                        movement => executor(
+                            new GameplayVehicleMoveTransitionPayload(
+                                ControlActorId(),
+                                movement),
+                            null),
+                        () => checked(
+                            session.LastTransitionSequence + 1L));
+            drones?.BindCanonicalExecutor(executor);
+        }
 
         internal GameplayTransitionPayload CreateActionPayload(
             GameplayCombatStateSnapshot state,
@@ -248,5 +273,14 @@ namespace GritGud.Application.Gameplay
                 ?? throw new InvalidOperationException(
                     "A semantic transition produced no authoritative record.");
         }
+
+        private string ControlActorId() =>
+            !string.IsNullOrWhiteSpace(session.ActiveActorId)
+                ? session.ActiveActorId
+                : session.InitiativeOrder[0];
+
+        private bool HasContinuousWorldState() =>
+            (smokeFields?.CaptureActiveFields().Count ?? 0) > 0
+            || (fireFields?.CaptureActiveFields().Count ?? 0) > 0;
     }
 }

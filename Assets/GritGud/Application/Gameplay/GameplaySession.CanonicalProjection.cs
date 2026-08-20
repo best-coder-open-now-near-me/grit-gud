@@ -15,6 +15,7 @@ namespace GritGud.Application.Gameplay
         private Func<
             GameplayActionRecord,
             GameplayReductionResult> canonicalActionExecutor;
+        private Func<bool> canonicalContinuousWorldState;
 
         internal bool IsCanonicalProjectionBound => canonicalProjectionBound;
 
@@ -23,12 +24,15 @@ namespace GritGud.Application.Gameplay
                 GameplayTransitionPayload,
                 IEnumerable<GameplayEvidenceRecord>,
                 GameplayReductionResult> executor,
-            Func<GameplayActionRecord, GameplayReductionResult> actionExecutor)
+            Func<GameplayActionRecord, GameplayReductionResult> actionExecutor,
+            Func<bool> hasContinuousWorldState)
         {
             if (executor == null)
                 throw new ArgumentNullException(nameof(executor));
             if (actionExecutor == null)
                 throw new ArgumentNullException(nameof(actionExecutor));
+            if (hasContinuousWorldState == null)
+                throw new ArgumentNullException(nameof(hasContinuousWorldState));
             if (canonicalExecutor != null || canonicalActionExecutor != null)
                 throw new InvalidOperationException(
                     "The gameplay session already has a canonical executor.");
@@ -37,7 +41,11 @@ namespace GritGud.Application.Gameplay
                     "Bind the canonical executor before binding its projection.");
             canonicalExecutor = executor;
             canonicalActionExecutor = actionExecutor;
+            canonicalContinuousWorldState = hasContinuousWorldState;
         }
+
+        private bool HasCanonicalContinuousWorldState() =>
+            canonicalContinuousWorldState?.Invoke() == true;
 
         internal GameplayReductionResult ExecuteCanonical(
             GameplayActionRecord action)
@@ -149,6 +157,10 @@ namespace GritGud.Application.Gameplay
                 snapshot,
                 semanticRecord,
                 notifications);
+            if (semanticRecord is EnemyAwarenessTransitionRecord awareness)
+                notifications.Add(EnemyAwarenessChanged, awareness);
+            if (semanticRecord is PatrolAdvanceRecord patrol)
+                notifications.Add(PatrolAdvanced, patrol);
             foreach (string actorId in changedActors)
                 notifications.Add(ActorCapabilityChanged, actorId);
 

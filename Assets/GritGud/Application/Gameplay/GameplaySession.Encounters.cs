@@ -20,11 +20,20 @@ namespace GritGud.Application.Gameplay
 
         public bool BeginEncounter(IEnumerable<string> participantIds)
         {
-            RequireLegacyMutationAllowed(nameof(BeginEncounter));
             if (EncounterActive)
                 return false;
             IReadOnlyList<string> scope = NormalizeEncounterScope(
                 participantIds);
+            if (IsCanonicalProjectionBound)
+            {
+                ExecuteCanonical(new GameplaySessionControlTransitionPayload(
+                    CanonicalControlActorId(),
+                    GameplaySemanticCapability.ChangeEncounter,
+                    "begin",
+                    encounterParticipantIds: scope));
+                return true;
+            }
+            RequireLegacyMutationAllowed(nameof(BeginEncounter));
             var previousScope = new List<string>(initiativeOrder);
             ReplaceInitiativeScope(scope);
             if (!turnLifecycle.BeginEncounter(scope))
@@ -39,7 +48,6 @@ namespace GritGud.Application.Gameplay
 
         public bool BeginEncounterFromAction(GameplayActionRecord action)
         {
-            RequireLegacyMutationAllowed(nameof(BeginEncounterFromAction));
             if (action == null)
                 throw new ArgumentNullException(nameof(action));
             if (EncounterActive
@@ -49,6 +57,9 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
+            if (!IsCanonicalProjectionBound)
+                RequireLegacyMutationAllowed(nameof(BeginEncounterFromAction));
+
             return BeginEncounter(CreateEncounterScope(
                 action.Request.ActorId,
                 action.Outcomes[0].TargetId));
@@ -56,6 +67,16 @@ namespace GritGud.Application.Gameplay
 
         public bool CompleteEncounter()
         {
+            if (IsCanonicalProjectionBound)
+            {
+                if (!EncounterActive)
+                    return false;
+                ExecuteCanonical(new GameplaySessionControlTransitionPayload(
+                    CanonicalControlActorId(),
+                    GameplaySemanticCapability.ChangeEncounter,
+                    "complete"));
+                return true;
+            }
             RequireLegacyMutationAllowed(nameof(CompleteEncounter));
             if (!turnLifecycle.CompleteEncounter())
                 return false;
@@ -165,9 +186,22 @@ namespace GritGud.Application.Gameplay
         public void CommitAwarenessTransition(
             EnemyAwarenessTransitionRecord transition)
         {
-            RequireLegacyMutationAllowed(nameof(CommitAwarenessTransition));
             if (transition == null)
                 throw new ArgumentNullException(nameof(transition));
+            if (IsCanonicalProjectionBound)
+            {
+                EnemyBehaviorDefinition behavior = Scenario.GetActor(
+                    transition.ActorId).Combat.EnemyBehavior
+                    ?? throw new InvalidOperationException(
+                        $"Actor '{transition.ActorId}' does not author encounter awareness.");
+                ExecuteCanonical(
+                    new GameplayEncounterObservationTransitionPayload(
+                        transition.ActorId,
+                        behavior,
+                        transition.Observation));
+                return;
+            }
+            RequireLegacyMutationAllowed(nameof(CommitAwarenessTransition));
             EnemyAwarenessSnapshot current = encounterState.GetAwareness(
                 transition.ActorId);
             if (transition.Sequence != encounterState.LastTransitionSequence + 1L
@@ -244,8 +278,20 @@ namespace GritGud.Application.Gameplay
 
         public void CommitPatrolAdvance(PatrolAdvanceRecord advance)
         {
-            RequireLegacyMutationAllowed(nameof(CommitPatrolAdvance));
             if (advance == null) throw new ArgumentNullException(nameof(advance));
+            if (IsCanonicalProjectionBound)
+            {
+                EnemyBehaviorDefinition behavior = Scenario.GetActor(
+                    advance.ActorId).Combat.EnemyBehavior
+                    ?? throw new InvalidOperationException(
+                        $"Actor '{advance.ActorId}' does not author patrol behavior.");
+                ExecuteCanonical(new GameplayPatrolTransitionPayload(
+                    advance.ActorId,
+                    behavior,
+                    advance));
+                return;
+            }
+            RequireLegacyMutationAllowed(nameof(CommitPatrolAdvance));
             if (advance.Sequence != encounterState.LastTransitionSequence + 1L)
             {
                 throw new InvalidOperationException(

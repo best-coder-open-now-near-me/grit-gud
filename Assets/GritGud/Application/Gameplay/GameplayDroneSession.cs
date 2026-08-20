@@ -12,6 +12,10 @@ namespace GritGud.Application.Gameplay
         private readonly Dictionary<string, DroneSnapshot> drones =
             new Dictionary<string, DroneSnapshot>(StringComparer.Ordinal);
         private bool canonicalProjectionBound;
+        private Func<
+            GameplayTransitionPayload,
+            IEnumerable<GameplayEvidenceRecord>,
+            GameplayReductionResult> canonicalExecutor;
 
         public GameplayDroneSession(
             GameplaySession gameplaySession,
@@ -40,6 +44,19 @@ namespace GritGud.Application.Gameplay
             result.Sort((left, right) => StringComparer.Ordinal.Compare(
                 left.DroneId, right.DroneId));
             return result.AsReadOnly();
+        }
+
+        internal void BindCanonicalExecutor(
+            Func<
+                GameplayTransitionPayload,
+                IEnumerable<GameplayEvidenceRecord>,
+                GameplayReductionResult> executor)
+        {
+            if (executor == null) throw new ArgumentNullException(nameof(executor));
+            if (canonicalExecutor != null || canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Drone semantic executor is already bound or projection binding has started.");
+            canonicalExecutor = executor;
         }
 
         internal void BindCanonicalProjection(
@@ -128,8 +145,15 @@ namespace GritGud.Application.Gameplay
 
         public void CommitMove(DroneMoveRecord record)
         {
-            RequireLegacyMutationAllowed(nameof(CommitMove));
             if (record == null) throw new ArgumentNullException(nameof(record));
+            if (canonicalProjectionBound)
+            {
+                canonicalExecutor(
+                    new GameplayDroneMoveTransitionPayload(record),
+                    null);
+                return;
+            }
+            RequireLegacyMutationAllowed(nameof(CommitMove));
             DroneSnapshot drone = GetDrone(record.DroneId);
             RequireControllerTurn(drone);
             gameplay.CommitDroneMoveBudget(record);
@@ -174,8 +198,23 @@ namespace GritGud.Application.Gameplay
 
         public void CommitAttack(DroneAttackRecord record)
         {
-            RequireLegacyMutationAllowed(nameof(CommitAttack));
             if (record == null) throw new ArgumentNullException(nameof(record));
+            if (canonicalProjectionBound)
+            {
+                if (!Enum.TryParse(
+                        record.TargetKind,
+                        out GameplaySemanticSubjectKind targetKind))
+                    throw new InvalidOperationException(
+                        $"Drone attack target kind '{record.TargetKind}' is not semantic.");
+                canonicalExecutor(
+                    new GameplayDroneAttackTransitionPayload(
+                        targetKind,
+                        GetDrone(record.DroneId).Definition.Attack,
+                        record),
+                    null);
+                return;
+            }
+            RequireLegacyMutationAllowed(nameof(CommitAttack));
             DroneSnapshot drone = GetDrone(record.DroneId);
             RequireControllerTurn(drone);
             if (!drone.IsOperational)
@@ -252,8 +291,17 @@ namespace GritGud.Application.Gameplay
 
         public void CommitActorAttack(ActorDroneAttackRecord record)
         {
-            RequireLegacyMutationAllowed(nameof(CommitActorAttack));
             if (record == null) throw new ArgumentNullException(nameof(record));
+            if (canonicalProjectionBound)
+            {
+                canonicalExecutor(
+                    new GameplayActorDroneAttackTransitionPayload(
+                        gameplay.GetEquippedAttack(record.AttackerId),
+                        record),
+                    null);
+                return;
+            }
+            RequireLegacyMutationAllowed(nameof(CommitActorAttack));
             DroneSnapshot drone = GetDrone(record.DroneId);
             if (record.Damage != null
                 && !StatesMatch(drone, record.Damage.Previous))

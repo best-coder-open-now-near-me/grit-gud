@@ -29,6 +29,7 @@ namespace GritGud.Presentation.Gameplay
             new Dictionary<string, FireVisual>(StringComparer.Ordinal);
         private GameplayFireFieldSession fireFields;
         private ConsumablePresentationCatalog presentationCatalog;
+        private bool replayPresenting;
 
         internal int ActiveVisualCount => visuals.Count;
 
@@ -61,24 +62,52 @@ namespace GritGud.Presentation.Gameplay
             visuals.Clear();
             fireFields = null;
             presentationCatalog = null;
+            replayPresenting = false;
             enabled = false;
-        }
-
-        private void Update()
-        {
-            fireFields?.AdvanceContinuousTime(Time.unscaledDeltaTime);
         }
 
         private void OnDestroy() => Unbind();
 
-        private void HandleFieldDeployed(FireFieldSnapshot snapshot) =>
-            CreateVisual(snapshot);
+        internal void BeginReplayPresentation()
+        {
+            if (fireFields == null)
+                throw new InvalidOperationException(
+                    "Bind fire fields before replay presentation.");
+            replayPresenting = true;
+            ReplaceVisuals(Array.Empty<FireFieldSnapshot>());
+        }
 
-        private void HandleFieldChanged(FireFieldSnapshot snapshot) =>
-            ApplyScale(snapshot);
+        internal void PresentReplay(IReadOnlyList<FireFieldSnapshot> snapshots)
+        {
+            if (!replayPresenting)
+                throw new InvalidOperationException(
+                    "Begin fire replay presentation before sampling it.");
+            SynchronizeVisuals(snapshots ?? throw new ArgumentNullException(
+                nameof(snapshots)));
+        }
+
+        internal void EndReplayPresentation()
+        {
+            if (!replayPresenting) return;
+            replayPresenting = false;
+            ReplaceVisuals(fireFields.CaptureActiveFields());
+        }
+
+        private void HandleFieldDeployed(FireFieldSnapshot snapshot)
+        {
+            if (!replayPresenting)
+                CreateVisual(snapshot);
+        }
+
+        private void HandleFieldChanged(FireFieldSnapshot snapshot)
+        {
+            if (!replayPresenting)
+                ApplyScale(snapshot);
+        }
 
         private void HandleFieldExpired(FireFieldRecord field)
         {
+            if (replayPresenting) return;
             if (!visuals.TryGetValue(field.Id, out FireVisual visual)) return;
             visuals.Remove(field.Id);
             GameplayObjectLifecycle.Destroy(visual.Root);
@@ -122,6 +151,38 @@ namespace GritGud.Presentation.Gameplay
             visual.Root.transform.localScale = Vector3.Scale(
                 visual.BaseScale,
                 new Vector3(scale, scale, scale));
+        }
+
+        private void ReplaceVisuals(
+            IReadOnlyList<FireFieldSnapshot> snapshots)
+        {
+            foreach (FireVisual visual in visuals.Values)
+                GameplayObjectLifecycle.Destroy(visual.Root);
+            visuals.Clear();
+            SynchronizeVisuals(snapshots);
+        }
+
+        private void SynchronizeVisuals(
+            IReadOnlyList<FireFieldSnapshot> snapshots)
+        {
+            var retained = new HashSet<string>(StringComparer.Ordinal);
+            foreach (FireFieldSnapshot snapshot in snapshots)
+            {
+                retained.Add(snapshot.Field.Id);
+                if (!visuals.ContainsKey(snapshot.Field.Id))
+                    CreateVisual(snapshot);
+                else
+                    ApplyScale(snapshot);
+            }
+            var removed = new List<string>();
+            foreach (string fieldId in visuals.Keys)
+                if (!retained.Contains(fieldId))
+                    removed.Add(fieldId);
+            foreach (string fieldId in removed)
+            {
+                GameplayObjectLifecycle.Destroy(visuals[fieldId].Root);
+                visuals.Remove(fieldId);
+            }
         }
 
         private static Vector3 ToVector3(GameplayPosition value) =>
