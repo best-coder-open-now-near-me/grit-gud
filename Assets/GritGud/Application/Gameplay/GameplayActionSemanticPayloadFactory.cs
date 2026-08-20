@@ -6,8 +6,9 @@ namespace GritGud.Application.Gameplay
     /// <summary>
     /// The sole live adapter from an already prepared authoritative action
     /// record to its exact semantic reducer payload. Subject resolution uses
-    /// the complete immutable combat root so a target can never silently fall
-    /// back to an enemy-only or world-position route.
+    /// the complete immutable combat root for canonical subjects; stable level
+    /// geometry that is intentionally absent from combat state uses the
+    /// world-position route.
     /// </summary>
     public static class GameplayActionSemanticPayloadFactory
     {
@@ -200,7 +201,7 @@ namespace GritGud.Application.Gameplay
                 $"Actor '{actor.ActorId}' has no equipped attack for this action.");
         }
 
-        private static GameplaySemanticSubjectKind ResolveSubjectKind(
+        internal static GameplaySemanticSubjectKind ResolveSubjectKind(
             GameplayCombatStateSnapshot state,
             string subjectId)
         {
@@ -221,8 +222,7 @@ namespace GritGud.Application.Gameplay
             foreach (DroneSnapshot drone in state.Drones)
                 if (string.Equals(drone.DroneId, subjectId, StringComparison.Ordinal))
                     return GameplaySemanticSubjectKind.Vehicle;
-            throw new InvalidOperationException(
-                $"Semantic action target '{subjectId}' is absent from canonical state.");
+            return GameplaySemanticSubjectKind.WorldPosition;
         }
 
         private static void RequireSingle(object current, string label)

@@ -118,6 +118,24 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void SemanticSubjectsTreatInertLevelGeometryAsWorldPositions()
+        {
+            GameplayCombatStateSnapshot state = CreateState(
+                CreateActor("alpha", 1f, 4));
+
+            Assert.That(
+                GameplayActionSemanticPayloadFactory.ResolveSubjectKind(
+                    state,
+                    "wall-north-03"),
+                Is.EqualTo(GameplaySemanticSubjectKind.WorldPosition));
+            Assert.That(
+                GameplayActionSemanticPayloadFactory.ResolveSubjectKind(
+                    state,
+                    "alpha"),
+                Is.EqualTo(GameplaySemanticSubjectKind.Actor));
+        }
+
+        [Test]
         public void ContentIdentityRejectsControlCharacters()
         {
             Assert.Throws<ArgumentException>(() => new GameplayContentIdentity(
