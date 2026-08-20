@@ -76,8 +76,6 @@ namespace GritGud.Presentation.Gameplay
                 {
                     Resources.UnloadAsset(asset);
                 }
-                GameplayCombatStateSnapshot initial =
-                    GameplayHeadlessBattleStateFactory.Create(assembly, level);
                 GameplayExecutionIdentity identity = expected.Content
                     .ExecutionIdentity;
                 GameplayExecutionIdentity liveIdentity = liveRuntime
@@ -91,8 +89,13 @@ namespace GritGud.Presentation.Gameplay
                         level.levelId,
                         identity.Spatial.LevelId,
                         StringComparison.Ordinal))
-                    throw new InvalidOperationException(
-                        "First-sim artifact targets different gameplay content.");
+                {
+                    if (ReferenceEquals(cancellation, owner))
+                        status = "FIRST SIM UNAVAILABLE FOR THIS SCENARIO";
+                    return;
+                }
+                GameplayCombatStateSnapshot initial =
+                    GameplayHeadlessBattleStateFactory.Create(assembly, level);
                 var runner = new GameplayBattleRunner(
                     assembly,
                     level,
