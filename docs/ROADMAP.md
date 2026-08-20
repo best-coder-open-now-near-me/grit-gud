@@ -839,6 +839,32 @@ their data-derived tooltip.
 **Exit:** the character can develop and change equipment without becoming a
 blank classless build or requiring a broad character creator.
 
+## Queued after the first headless battle export — character generation
+
+Once the first deterministic headless battle is exported and replayed outside
+the live Unity session, add a character-generation workstream. This is
+explicitly subsequent to that headless checkpoint, not a prerequisite for it.
+The workstream must preserve the existing boundary: generated characters are
+authored pre-level inputs with stable identities and starting capabilities;
+they do not introduce runtime XP, point spending, or a second mutable character
+progression model.
+
+1. Define a seedable character-generation contract that produces validated
+   character documents, appearance selections, attributes, skills, talents,
+   and starting loadouts from an explicit content/catalogue revision.
+2. Record generator seed, generator version, input catalogue hash, generated
+   roster hash, and any validation rejections in the battle/fixture provenance
+   so a headless encounter can recreate its exact roster.
+3. Add deterministic roster and scenario-population fixtures: same inputs must
+   generate the same roster; invalid combinations must fail closed; distinct
+   seeds must remain reviewable as named cases rather than anonymous random
+   output.
+4. Run generated rosters through the same reducer, replay, and eventual
+   scoreboard/battle-review route as authored rosters. Generator output is a
+   test and experimentation input, never an alternate gameplay authority.
+5. After the contract is stable, decide which generated roster families are
+   retained as regression cases and which are disposable battle branches.
+
 ## 8. Continuous delivery loop
 
 - Build WebGL previews and Windows artifacts from repository changes.
