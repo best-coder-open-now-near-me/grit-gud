@@ -31,6 +31,7 @@ internal static class SimulationChecks
             VerifyConcreteDirectFireCandidateRoute();
             VerifyConcreteProjectileCandidateRoutes();
             VerifyConcreteThrownExplosiveCandidateRoutes();
+            VerifyConcreteDisplacementCandidateRoute();
             VerifyPermanentPolicyRunner();
             VerifyLogicalExecutionGuards();
             VerifyBasicExecutableCandidateRoutes();
@@ -3660,6 +3661,171 @@ internal static class SimulationChecks
                 reducers).IsExact,
             "Direct-fire prop candidate did not reduce and replay exactly.");
 
+    }
+
+    private static void VerifyConcreteDisplacementCandidateRoute()
+    {
+        LoadDepotContent(
+            out GameplayScenarioAssembly authored,
+            out LevelDocument level);
+        var resolvedPoses = new Dictionary<string, GameplayActorPose>(
+            StringComparer.Ordinal)
+        {
+            ["player"] = new GameplayActorPose(
+                new GameplayPosition(-7.5f, 2f, 3f),
+                90f,
+                ActorStance.Standing),
+            ["oren-vale"] = new GameplayActorPose(
+                new GameplayPosition(-6f, 2f, 3f),
+                270f,
+                ActorStance.Standing),
+        };
+        var spatialIdentity = new SpatialContentIdentity(
+            level.levelId,
+            level.schemaVersion,
+            evidenceAlgorithmVersion: 1,
+            new string('b', 64));
+        var spatial = new GameplayHeadlessSpatialEvidence(
+            level,
+            spatialIdentity);
+        GameplayScenarioAssembly assembly = GameplayHeadlessScenarioGrounding
+            .Resolve(authored.WithResolvedActorPoses(resolvedPoses), spatial);
+        var gameplay = new GameplaySession(
+            assembly.Scenario,
+            scenarioSeed: assembly.RandomSeed);
+        Require(gameplay.BeginEncounter(),
+            "Displacement route fixture encounter did not begin.");
+        int turnGuard = 0;
+        while (!string.Equals(
+            gameplay.ActiveActorId,
+            "player",
+            StringComparison.Ordinal))
+        {
+            Require(turnGuard++ < assembly.Scenario.Actors.Count
+                && gameplay.TryEndTurn(gameplay.ActiveActorId, out _),
+                "Displacement route fixture could not reach the player turn.");
+        }
+        DestructiblePropSession destructibles =
+            DestructiblePropSession.FromLevel(level, gameplay.Journal);
+        GameplayCombatStateSnapshot initial = GameplayCombatStateCapture.Capture(
+            gameplay,
+            destructibles);
+        IReadOnlyList<GameplayReachableInput> inputs =
+            GameplayReachableInputEnumerator.Enumerate(assembly, level);
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
+        GameplayCapabilityRegistry capabilities =
+            GameplayCurrentCapabilityCatalog.Create(reducers, inputs);
+        var routes = new GameplayCandidateExecutionRouteRegistry(capabilities);
+        routes.Register(new GameplayDisplacementCandidateExecutionRoute(
+            assembly,
+            spatial));
+        var displacementInputs = new List<GameplayReachableInput>();
+        foreach (GameplayReachableInput input in inputs)
+            if (input.Profile.Capability
+                    == GameplaySemanticCapability.Displace)
+                displacementInputs.Add(input);
+        GameplayExecutableRouteCoverageValidator.Validate(
+            displacementInputs,
+            routes).RequireComplete();
+
+        var builder = new GameplayHeadlessCandidateBuilder(
+            capabilities,
+            spatial,
+            scenarioDefinition: assembly.Scenario);
+        var context = new GameplayDecisionContext(
+            initial,
+            GameplayObservationSnapshot.FullState("player", initial));
+        GameplayExecutableCandidateEvaluation selected = null;
+        var failures = new List<string>();
+        foreach (GameplayCandidate candidate in builder.Build(
+            initial,
+            displacementInputs,
+            "player"))
+        {
+            if (candidate.Profile.Capability
+                    != GameplaySemanticCapability.Displace
+                || candidate.SubjectKind
+                    != GameplaySemanticSubjectKind.Actor
+                || !string.Equals(
+                    candidate.SubjectId,
+                    "oren-vale",
+                    StringComparison.Ordinal)
+                || candidate.Profile.GetTrait("intent")
+                    != DisplacementActionKind.Push.ToString())
+                continue;
+            GameplayExecutableCandidateEvaluation evaluated = routes.Evaluate(
+                context,
+                candidate);
+            if (!evaluated.IsLegal)
+            {
+                failures.Add(evaluated.FailureCode);
+                continue;
+            }
+            selected = evaluated;
+            break;
+        }
+        Require(selected != null,
+            "Depot supplied no legal reducer-owned actor displacement: "
+                + string.Join(", ", failures));
+        GameplaySemanticTransition transition = routes.Prepare(
+            context,
+            selected);
+        GameplaySemanticTransition repeated = routes.Prepare(
+            context,
+            routes.Evaluate(context, selected.Candidate));
+        Require(string.Equals(
+            GameplayTransitionPayloadDigest.Calculate(transition),
+            GameplayTransitionPayloadDigest.Calculate(repeated),
+            StringComparison.Ordinal),
+            "Displacement contest preparation was not deterministic.");
+
+        var runtime = new GameplaySimulationRuntime(
+            new GameplayExecutionIdentity(
+                new GameplayContentIdentity(
+                    assembly.Scenario.Id,
+                    scenarioSchemaVersion: 1,
+                    rulesSchemaVersion: 1,
+                    new string('a', 64)),
+                spatialIdentity,
+                gameplay.RunIdentity),
+            initial,
+            reducers,
+            capabilities);
+        runtime.Execute(transition);
+        Require(runtime.CurrentState.Session.LastActionSequence
+                == initial.Session.LastActionSequence + 1L
+            && GameplayExactReplay.Verify(
+                initial,
+                runtime.Trajectory,
+                reducers).IsExact,
+            "Displacement did not reduce and replay exactly.");
+
+        DisplacementActionDefinition throwDefinition = assembly.GetActor(
+            "player").GameplayDefinition.GetDisplacementAction(
+                "close-quarters.throw");
+        var mismatchedPayload = new GameplayResolvedActionTransitionPayload(
+            GameplayCapabilityProfiles.Displace(
+                throwDefinition,
+                GameplaySemanticSubjectKind.Actor),
+            ((GameplayResolvedActionTransitionPayload)transition.Payload)
+                .Action);
+        var mismatched = new GameplaySemanticTransition(
+            transition.Identity,
+            initial.CanonicalHash,
+            mismatchedPayload,
+            transition.Evidence);
+        bool rejected = false;
+        try
+        {
+            reducers.Reduce(initial, mismatched);
+        }
+        catch (InvalidOperationException)
+        {
+            rejected = true;
+        }
+        Require(rejected,
+            "Displacement reducer accepted an action under a different exact semantic profile.");
     }
 
     private static void VerifyConcreteProjectileCandidateRoutes()

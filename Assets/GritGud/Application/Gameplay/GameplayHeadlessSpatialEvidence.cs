@@ -592,6 +592,28 @@ namespace GritGud.Application.Gameplay
                 clearanceRadius);
         }
 
+        public bool BlocksPathIgnoringEntity(
+            GameplayCombatStateSnapshot state,
+            GameplayPosition origin,
+            GameplayPosition destination,
+            float clearanceRadius,
+            string ignoredEntityId)
+        {
+            GameplayNumericPolicy.RequireFinite(
+                clearanceRadius,
+                nameof(clearanceRadius));
+            if (clearanceRadius < 0f)
+                throw new ArgumentOutOfRangeException(nameof(clearanceRadius));
+            return BlocksSegment(
+                state,
+                origin,
+                destination,
+                clearanceRadius,
+                GameplayContentIdentity.RequireText(
+                    ignoredEntityId,
+                    nameof(ignoredEntityId)));
+        }
+
         public float EvaluateBlastExposure(
             GameplayCombatStateSnapshot state,
             GameplayPosition blastOrigin,
@@ -653,13 +675,19 @@ namespace GritGud.Application.Gameplay
             GameplayCombatStateSnapshot state,
             GameplayPosition origin,
             GameplayPosition destination,
-            float expansion)
+            float expansion,
+            string ignoredEntityId = null)
         {
             if (state == null) throw new ArgumentNullException(nameof(state));
             if (hasDestructibleObstacles)
                 state.RequireCoverage(GameplayCombatStateCoverage.Destructibles);
             foreach (ObstacleDefinition obstacle in obstacles)
             {
+                if (string.Equals(
+                        obstacle.EntityId,
+                        ignoredEntityId,
+                        StringComparison.Ordinal))
+                    continue;
                 if (!obstacle.IsDestructible)
                 {
                     foreach (CoverVolumeData volume in obstacle.Volumes)

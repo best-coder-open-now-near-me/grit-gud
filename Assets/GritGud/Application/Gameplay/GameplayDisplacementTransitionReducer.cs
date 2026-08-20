@@ -71,6 +71,7 @@ namespace GritGud.Application.Gameplay
                 out EquipmentChangedActionOutcome equipment,
                 out DisplacementActionOutcome displaced);
             DisplacementRecord record = displaced.Displacement;
+            ValidateProfile(payload.Profile, action, record);
 
             var mutation = new GameplayCanonicalStateMutation(state);
             GameplayActorSnapshot acting = mutation.GetActor(
@@ -228,12 +229,58 @@ namespace GritGud.Application.Gameplay
                         "Displacement must share its canonical action sequence.");
             GameplayActorSnapshot actor = session.GetActor(
                 action.Request.ActorId);
+            if (actor.IsIncapacitated
+                || (actor.IsPinned && !HasPushOff(action)))
+                throw new InvalidOperationException(
+                    "The canonical actor cannot perform this displacement.");
             if (!BudgetsMatch(actor.TurnBudget, action.PreviousBudget)
                 || !BudgetsMatch(
                     action.PreviousBudget.SpendAction(action.Cost),
                     action.ResultingBudget))
                 throw new InvalidOperationException(
                     "Displacement action budget is stale.");
+        }
+
+        private static void ValidateProfile(
+            GameplayCapabilityProfile profile,
+            GameplayActionRecord action,
+            DisplacementRecord record)
+        {
+            if (!string.Equals(
+                    action.Request.ActionId,
+                    record.Request.ActionId,
+                    StringComparison.Ordinal)
+                || !string.Equals(
+                    action.Request.ActorId,
+                    record.Request.ActorId,
+                    StringComparison.Ordinal)
+                || !string.Equals(
+                    action.Request.TargetId,
+                    record.Request.SubjectId,
+                    StringComparison.Ordinal)
+                || !string.Equals(
+                    profile.GetTrait("intent"),
+                    record.Request.ActionKind.ToString(),
+                    StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "Displacement payload does not match its action request or exact intent profile.");
+            GameplaySemanticSubjectKind expected = record.Request.SubjectKind
+                    == DisplacementSubjectKind.Combatant
+                ? GameplaySemanticSubjectKind.Actor
+                : GameplaySemanticSubjectKind.DestructibleProp;
+            if (GameplayCapabilityProfiles.GetSubjectKind(profile) != expected)
+                throw new InvalidOperationException(
+                    "Displacement payload target kind is not exact.");
+        }
+
+        private static bool HasPushOff(GameplayActionRecord action)
+        {
+            foreach (GameplayActionOutcome outcome in action.Outcomes)
+                if (outcome is DisplacementActionOutcome displaced
+                    && displaced.Displacement.Request.ActionKind
+                        == DisplacementActionKind.PushOff)
+                    return true;
+            return false;
         }
 
         private static void FindOutcomes(

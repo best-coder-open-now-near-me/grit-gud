@@ -244,6 +244,13 @@ namespace GritGud.Application.Gameplay
                     result.AddRange(BuildProjectileAdvances(state, input));
                     continue;
                 }
+                if (input.Profile.Capability
+                        == GameplaySemanticCapability.Displace
+                    && scenario != null)
+                {
+                    result.AddRange(BuildDisplacements(state, input));
+                    continue;
+                }
                 if (input.SubjectKind
                         == GameplaySemanticSubjectKind.WorldPosition
                     && scenario != null
@@ -265,6 +272,83 @@ namespace GritGud.Application.Gameplay
                 left.CandidateId,
                 right.CandidateId));
             return result.AsReadOnly();
+        }
+
+        private IEnumerable<GameplayCandidate> BuildDisplacements(
+            GameplayCombatStateSnapshot state,
+            GameplayReachableInput input)
+        {
+            GameplayActorSnapshot actor = state.Session.GetActor(input.ActorId);
+            if (actor.IsIncapacitated) yield break;
+            GameplaySemanticSubjectKind requiredKind =
+                GameplayCapabilityProfiles.GetSubjectKind(input.Profile);
+            DisplacementActionDefinition action = null;
+            foreach (DisplacementActionDefinition candidate in scenario
+                .GetActor(input.ActorId).DisplacementActions)
+                if (input.Profile.Equals(
+                    GameplayCapabilityProfiles.Displace(
+                        candidate,
+                        requiredKind)))
+                {
+                    action = candidate;
+                    break;
+                }
+            if (action == null) yield break;
+
+            float minimumDistance = action.DistanceDecay?.MinimumDistance
+                ?? action.MaximumDistance * 0.5f;
+            float[] distances = Math.Abs(
+                    minimumDistance - action.MaximumDistance)
+                    <= 0.0001f
+                ? new[] { action.MaximumDistance }
+                : new[]
+                {
+                    minimumDistance,
+                    action.MaximumDistance * 0.5f,
+                    action.MaximumDistance,
+                };
+            var emitted = new HashSet<string>(StringComparer.Ordinal);
+            foreach (GameplayTacticalSubject subject in
+                GameplayTacticalSubjectCatalog.Discover(state))
+            {
+                if (subject.Subject.Kind != requiredKind
+                    || !subject.Affords(GameplayTacticalAffordance.Displace)
+                    || string.Equals(
+                        subject.Subject.Id,
+                        actor.ActorId,
+                        StringComparison.Ordinal)
+                    || (input.SubjectIdHint != null
+                        && !string.Equals(
+                            input.SubjectIdHint,
+                            subject.Subject.Id,
+                            StringComparison.Ordinal)))
+                    continue;
+                foreach (float distance in distances)
+                foreach (GameplayPosition direction in Directions)
+                {
+                    double length = Math.Sqrt(
+                        (direction.X * direction.X)
+                        + (direction.Z * direction.Z));
+                    var destination = new GameplayPosition(
+                        subject.Position.X
+                            + (float)((direction.X / length) * distance),
+                        subject.Position.Y,
+                        subject.Position.Z
+                            + (float)((direction.Z / length) * distance));
+                    string key = subject.Subject.Id + "." + Format(destination);
+                    if (!emitted.Add(key)) continue;
+                    var intent = new GameplayDisplacementIntent(
+                        input,
+                        state.CanonicalHash,
+                        subject.Position,
+                        destination);
+                    yield return candidates.Build(
+                        input,
+                        subject.Subject,
+                        intent,
+                        "displace." + action.Id + "." + key);
+                }
+            }
         }
 
         private IEnumerable<GameplayCandidate> BuildProjectileAdvances(
