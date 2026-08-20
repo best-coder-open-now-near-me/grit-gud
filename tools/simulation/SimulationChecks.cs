@@ -1000,34 +1000,9 @@ internal static class SimulationChecks
 
     private static void LoadDepotContent(
         out GameplayScenarioAssembly assembly,
-        out LevelDocument level)
-    {
-        string repositoryRoot = FindRepositoryRoot();
-        string contentRoot = Path.Combine(
-            repositoryRoot,
-            "Assets",
-            "GritGud",
-            "Content",
-            "Resources");
-        var json = new JsonSerializerOptions
-        {
-            IncludeFields = true,
-            PropertyNameCaseInsensitive = true,
-        };
-        ScenarioContentDocument scenario = ReadJson<ScenarioContentDocument>(
-            Path.Combine(contentRoot, "Scenarios", "depot-yard.json"),
-            json);
-        level = ReadCurrentLevel(
-            Path.Combine(
-                contentRoot,
-                "Levels",
-                "Published",
-                "main-level.json"),
-            json);
-        scenario.Normalize();
-        level.Normalize();
-        assembly = new GameplayScenarioAssembler().Assemble(scenario, level);
-    }
+        out LevelDocument level) => SimulationRepositoryContent.LoadDepot(
+            out assembly,
+            out level);
 
     private static void VerifyBankedActionPointEconomy()
     {
@@ -3372,6 +3347,53 @@ internal static class SimulationChecks
                 result.FinalState.CanonicalHash,
                 StringComparison.Ordinal),
             "Permanent battle trajectory did not replay exactly.");
+        GameplayBattleArtifact artifact = GameplayBattleArtifactFactory.Create(
+            result,
+            new GameplayBattleArtifactProvenance(
+                new string('a', 40),
+                "codex/artifact-contract",
+                "permanent-depot-contract"));
+        string artifactJson = artifact.ToPortableJson();
+        GameplayBattleArtifact decoded = GameplayBattleArtifactCodec.Read(
+            artifactJson);
+        Require(string.Equals(
+                decoded.ToPortableJson(),
+                artifactJson,
+                StringComparison.Ordinal)
+            && string.Equals(
+                decoded.ArtifactId,
+                artifact.ArtifactId,
+                StringComparison.Ordinal)
+            && decoded.Content.Scoreboard.FireDeployments
+                == fireDeployments
+            && decoded.Content.Scoreboard.ConcussiveTargets > 0
+            && decoded.Content.Scoreboard.DroneMoves == droneMoves
+            && decoded.Content.Scoreboard.DroneAttacks > 0,
+            "Battle artifact was not byte-stable and scoreboard-complete.");
+        GameplayBattleArtifactFormatException unknownFailure = null;
+        try
+        {
+            GameplayBattleArtifactCodec.Read(artifactJson.Replace(
+                "\"artifact\":",
+                "\"unknown\":0,\"artifact\":"));
+        }
+        catch (GameplayBattleArtifactFormatException exception)
+        {
+            unknownFailure = exception;
+        }
+        GameplayBattleArtifactFormatException digestFailure = null;
+        try
+        {
+            GameplayBattleArtifactCodec.Read(artifactJson.Replace(
+                artifact.ArtifactId,
+                new string('0', 64)));
+        }
+        catch (GameplayBattleArtifactFormatException exception)
+        {
+            digestFailure = exception;
+        }
+        Require(unknownFailure != null && digestFailure != null,
+            "Strict artifact reading accepted unknown or tampered content.");
     }
 
     private static void VerifyLogicalExecutionGuards()

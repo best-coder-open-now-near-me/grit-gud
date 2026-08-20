@@ -13,8 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="GritGud.Application.csproj" />
     <ProjectReference Include="GritGud.Domain.csproj" />
-    <Compile Include="SimulationChecks.cs" />
-    <Compile Include="SimulationParityChecks.cs" />
+    <Compile Include="SimulationCli.cs" />
     <Compile Include="SimulationRepositoryContent.cs" />
   </ItemGroup>
 </Project>

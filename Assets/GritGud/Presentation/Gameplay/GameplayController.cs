@@ -577,7 +577,8 @@ namespace GritGud.Presentation.Gameplay
                     scenarioAssembly.Scenario.Id,
                     content.Scenario.schemaVersion,
                     GameplayCombatStateSnapshot.CurrentSchemaVersion,
-                    GameplayCanonicalValueDigest.Calculate(content.Scenario)),
+                    GameplayCanonicalValueDigest.Calculate(
+                        scenarioAssembly.Scenario)),
                 new SpatialContentIdentity(
                     content.Level.levelId,
                     content.Level.schemaVersion,
