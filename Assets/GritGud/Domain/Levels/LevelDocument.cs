@@ -277,6 +277,7 @@ namespace GritGud.Domain.Levels
         public bool enabled;
         public string initialState = string.Empty;
         public float integrity;
+        public string surfaceId = "surface.concrete";
 
         public DestructibleInstanceData DeepCopy()
         {
@@ -285,6 +286,7 @@ namespace GritGud.Domain.Levels
                 enabled = enabled,
                 initialState = initialState,
                 integrity = integrity,
+                surfaceId = surfaceId ?? string.Empty,
             };
         }
     }
@@ -828,7 +830,7 @@ namespace GritGud.Domain.Levels
     [Serializable]
     public sealed class LevelDocument
     {
-        public const int CurrentSchemaVersion = 16;
+        public const int CurrentSchemaVersion = 17;
         public const int MaximumEntityGroupCount = 64;
         public const int MaximumTraversalLinkCount = 256;
 

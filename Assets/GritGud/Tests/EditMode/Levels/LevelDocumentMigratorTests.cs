@@ -278,5 +278,55 @@ namespace GritGud.Domain.Tests.Levels
             Assert.That(result.traversalLinks, Is.Not.Null.And.Empty);
         }
 
+        [Test]
+        public void VersionSixteenDestructiblesGainAuthoritativeSurfaceIds()
+        {
+            LevelDocument source = LevelDocumentFactory.CreateEmpty(
+                "Legacy destructible surfaces");
+            source.schemaVersion = 16;
+            source.entities.Add(new LevelEntity
+            {
+                id = "metal",
+                archetypeId = "prop.barrel.metal",
+                destructible = new DestructibleInstanceData
+                {
+                    enabled = true,
+                    surfaceId = "surface.concrete",
+                },
+            });
+            source.entities.Add(new LevelEntity
+            {
+                id = "wood",
+                archetypeId = "prop.crate.wood",
+                destructible = new DestructibleInstanceData
+                {
+                    enabled = true,
+                    surfaceId = string.Empty,
+                },
+            });
+            source.entities.Add(new LevelEntity
+            {
+                id = "other",
+                archetypeId = "prop.wall",
+                destructible = new DestructibleInstanceData
+                {
+                    enabled = true,
+                    surfaceId = "legacy.placeholder",
+                },
+            });
+
+            LevelDocument result = new LevelDocumentMigrator()
+                .MigrateToCurrent(source);
+
+            Assert.That(result.schemaVersion,
+                Is.EqualTo(LevelDocument.CurrentSchemaVersion));
+            Assert.That(result.entities[0].destructible.surfaceId,
+                Is.EqualTo("surface.metal"));
+            Assert.That(result.entities[1].destructible.surfaceId,
+                Is.EqualTo("surface.wood"));
+            Assert.That(result.entities[2].destructible.surfaceId,
+                Is.EqualTo("surface.concrete"));
+        }
+
     }
 }

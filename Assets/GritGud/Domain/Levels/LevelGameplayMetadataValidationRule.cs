@@ -143,6 +143,13 @@ namespace GritGud.Domain.Levels
                     "Destructible integrity must be finite and positive.",
                     entity.id);
             }
+            if (string.IsNullOrWhiteSpace(entity.destructible.surfaceId))
+            {
+                context.Error(
+                    "destructible.surface",
+                    "A destructible entity needs an authoritative surface ID.",
+                    entity.id);
+            }
         }
     }
 }

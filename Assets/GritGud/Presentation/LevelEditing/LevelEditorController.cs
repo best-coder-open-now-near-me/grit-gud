@@ -1189,6 +1189,8 @@ namespace GritGud.Presentation.LevelEditing
                 enabled = enabled,
                 initialState = state,
                 integrity = integrity,
+                surfaceId = entity.destructible?.surfaceId
+                    ?? "surface.concrete",
             };
             workspace.Execute(new SetDestructibleInstanceCommand(entity.id, entity.destructible, after));
             SetStatus("Updated destructible defaults.");

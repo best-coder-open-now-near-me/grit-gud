@@ -40,6 +40,7 @@ namespace GritGud.Application.Levels
                     new LevelDocumentV13ToV14Migration(),
                     new LevelDocumentV14ToV15Migration(),
                     new LevelDocumentV15ToV16Migration(),
+                    new LevelDocumentV16ToV17Migration(),
                 };
             }
 
@@ -483,6 +484,43 @@ namespace GritGud.Application.Levels
                 negativeZHeight = 1.5f,
                 positiveZHeight = 0f,
             };
+    }
+
+    public sealed class LevelDocumentV16ToV17Migration : ILevelDocumentMigration
+    {
+        public int SourceVersion => 16;
+        public int TargetVersion => 17;
+
+        public LevelDocument Migrate(LevelDocument source)
+        {
+            if (source == null)
+                throw new ArgumentNullException(nameof(source));
+            LevelDocument migrated = source.DeepCopy();
+            foreach (LevelEntity entity in migrated.entities
+                ?? new List<LevelEntity>())
+            {
+                if (entity?.destructible?.enabled != true) continue;
+                entity.destructible.surfaceId = LegacySurfaceId(
+                    entity.archetypeId);
+            }
+            migrated.schemaVersion = TargetVersion;
+            return migrated;
+        }
+
+        private static string LegacySurfaceId(string archetypeId)
+        {
+            if (!string.IsNullOrWhiteSpace(archetypeId)
+                && archetypeId.IndexOf(
+                    "barrel.metal",
+                    StringComparison.OrdinalIgnoreCase) >= 0)
+                return "surface.metal";
+            if (!string.IsNullOrWhiteSpace(archetypeId)
+                && archetypeId.IndexOf(
+                    "crate",
+                    StringComparison.OrdinalIgnoreCase) >= 0)
+                return "surface.wood";
+            return "surface.concrete";
+        }
     }
 
 }

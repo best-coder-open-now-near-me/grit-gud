@@ -50,6 +50,7 @@ namespace GritGud.Presentation.Levels.Runtime
         private readonly string destructibleState;
         private readonly float integrity;
         private readonly LevelPlacementSurfaceData placementSurface;
+        private readonly string surfaceId;
 
         public LevelArchetypeGameplayDefaults(
             bool providesCover,
@@ -58,7 +59,8 @@ namespace GritGud.Presentation.Levels.Runtime
             bool destructible,
             string destructibleState,
             float integrity,
-            LevelPlacementSurfaceData placementSurface)
+            LevelPlacementSurfaceData placementSurface,
+            string surfaceId = "surface.concrete")
         {
             this.providesCover = providesCover;
             this.coverCenter = coverCenter;
@@ -67,6 +69,9 @@ namespace GritGud.Presentation.Levels.Runtime
             this.destructibleState = destructibleState;
             this.integrity = integrity;
             this.placementSurface = placementSurface;
+            this.surfaceId = string.IsNullOrWhiteSpace(surfaceId)
+                ? "surface.concrete"
+                : surfaceId;
         }
 
         public void ApplyTo(LevelEntity entity)
@@ -78,6 +83,7 @@ namespace GritGud.Presentation.Levels.Runtime
                     enabled = true,
                     initialState = destructibleState,
                     integrity = integrity,
+                    surfaceId = surfaceId,
                 };
             }
             entity.placementSurface = placementSurface?.DeepCopy();
@@ -155,7 +161,8 @@ namespace GritGud.Presentation.Levels.Runtime
             destructible,
             initialDestructibleState,
             initialIntegrity,
-            CreatePlacementSurface());
+            CreatePlacementSurface(),
+            SurfacePresentationId);
 
         public LevelEntity CreateEntity(Vector3 position, float yawDegrees)
         {

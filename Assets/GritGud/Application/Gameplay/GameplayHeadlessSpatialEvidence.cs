@@ -216,6 +216,8 @@ namespace GritGud.Application.Gameplay
         private readonly IReadOnlyList<PlacementSurfaceDefinition>
             placementSurfaces;
         private readonly IReadOnlyList<TerrainSurfaceData> terrainSurfaces;
+        private readonly IReadOnlyDictionary<string, string>
+            destructibleSurfaceIds;
         private readonly bool hasDestructibleObstacles;
 
         public GameplayHeadlessSpatialEvidence(
@@ -236,6 +238,8 @@ namespace GritGud.Application.Gameplay
                     nameof(identity));
             var result = new List<ObstacleDefinition>();
             var surfaces = new List<PlacementSurfaceDefinition>();
+            var materialSurfaces = new Dictionary<string, string>(
+                StringComparer.Ordinal);
             foreach (LevelEntity entity in level.entities)
             {
                 if (entity == null) continue;
@@ -252,6 +256,15 @@ namespace GritGud.Application.Gameplay
                         entity.id,
                         pose,
                         entity.placementSurface.DeepCopy()));
+                if (entity.destructible?.enabled == true)
+                {
+                    string surfaceId = GameplayContentIdentity.RequireText(
+                        entity.destructible.surfaceId,
+                        $"destructible surface for '{entity.id}'");
+                    if (!materialSurfaces.TryAdd(entity.id, surfaceId))
+                        throw new InvalidOperationException(
+                            $"Destructible spatial entity '{entity.id}' is duplicated.");
+                }
                 if (entity.coverVolumes.Count == 0) continue;
                 bool destructible = entity.destructible?.enabled == true;
                 result.Add(new ObstacleDefinition(
@@ -274,6 +287,7 @@ namespace GritGud.Application.Gameplay
                 right.EntityId));
             obstacles = result.AsReadOnly();
             placementSurfaces = surfaces.AsReadOnly();
+            destructibleSurfaceIds = materialSurfaces;
             var terrain = new List<TerrainSurfaceData>();
             foreach (TerrainSurfaceData surface in level.terrainSurfaces)
                 if (surface != null) terrain.Add(surface.DeepCopy());
@@ -295,6 +309,17 @@ namespace GritGud.Application.Gameplay
                 GameplayDynamicSpatialFingerprint.Hash(state),
                 state?.Session.Revision
                     ?? throw new ArgumentNullException(nameof(state)));
+
+        public string GetDestructibleSurfaceId(string propId)
+        {
+            string id = GameplayContentIdentity.RequireText(
+                propId,
+                nameof(propId));
+            if (destructibleSurfaceIds.TryGetValue(id, out string surfaceId))
+                return surfaceId;
+            throw new InvalidOperationException(
+                $"Destructible prop '{id}' has no authoritative spatial surface metadata.");
+        }
 
         /// <summary>
         /// Mirrors authored spawn grounding without Unity physics. The highest
