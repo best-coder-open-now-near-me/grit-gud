@@ -215,10 +215,11 @@ namespace GritGud.Application.Gameplay
             GameplayActionRecord action)
         {
             if (action.Sequence != session.LastActionSequence + 1L
-                || !string.Equals(
-                    action.Request.ActorId,
-                    session.ActiveActorId,
-                    StringComparison.Ordinal))
+                || (session.Mode == GameplaySessionMode.TurnBased
+                    && !string.Equals(
+                        action.Request.ActorId,
+                        session.ActiveActorId,
+                        StringComparison.Ordinal)))
                 throw new InvalidOperationException(
                     "Displacement action sequence or actor is stale.");
             foreach (GameplayActionOutcome outcome in action.Outcomes)

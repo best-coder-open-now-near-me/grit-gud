@@ -354,6 +354,8 @@ namespace GritGud.PlayMode.Tests
                 bootstrap.GetComponent<GameplayController>();
             GameplayDestructibleController destructibles =
                 bootstrap.GetComponent<GameplayDestructibleController>();
+            GameplayAttackController attacks =
+                bootstrap.GetComponent<GameplayAttackController>();
             const string propId = "crate-yard-01";
             DestructiblePropSnapshot before =
                 destructibles.Session.GetProp(propId);
@@ -368,9 +370,21 @@ namespace GritGud.PlayMode.Tests
             Assert.That(before.DetachedFractureChunks, Is.Zero);
             Assert.That(originalRenderer, Is.Not.Null);
             Assert.That(originalCollider, Is.Not.Null);
-            Assert.That(
-                destructibles.TryApplyDamage(propId, 4f, out var record),
-                Is.True);
+            attacks.SetActor(gameplay.PartyControl.Snapshot.SelectedActorId);
+            var impact = new DirectFireImpactRecord(
+                propId,
+                "surface.wood",
+                before.Pose.Position,
+                normalX: 0f,
+                normalY: 1f,
+                normalZ: 0f,
+                worldStateRevision:
+                    gameplay.Session.Journal.LastEntry?.Sequence ?? 0L);
+            Assert.That(attacks.TryDischarge(
+                propId,
+                before.Pose.Position,
+                impact), Is.True, attacks.LastFailure.ToString());
+            DestructibleDamageRecord record = attacks.LastDischarge.Damage;
             yield return null;
 
             DestructiblePropSnapshot damaged =
