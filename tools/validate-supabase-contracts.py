@@ -169,6 +169,38 @@ def main() -> int:
             if normalize(permission) not in normalize(sql):
                 failures.append(f"missing RPC permission boundary: {permission}")
 
+    save_definition = definitions.get("save_level_draft")
+    if save_definition is not None:
+        save_body = normalize(save_definition.group("body"))
+        null_guard = "expected_revision is null"
+        distinct_guard = (
+            "current_draft.revision is distinct from expected_revision"
+        )
+        update_statement = "update public.level_drafts"
+        if null_guard not in save_body:
+            failures.append(
+                "public.save_level_draft must reject a null expected_revision"
+            )
+        if distinct_guard not in save_body:
+            failures.append(
+                "public.save_level_draft must compare revisions with "
+                "IS DISTINCT FROM"
+            )
+        guard_positions = (
+            save_body.find(null_guard),
+            save_body.find(distinct_guard),
+        )
+        update_position = save_body.find(update_statement)
+        if (
+            min(guard_positions) >= 0
+            and update_position >= 0
+            and max(guard_positions) > update_position
+        ):
+            failures.append(
+                "public.save_level_draft must validate expected_revision "
+                "before updating the draft"
+            )
+
     repository = REPOSITORY_SOURCE.read_text(encoding="utf-8-sig")
     for name in EXPECTED_CONTRACTS:
         if f'"{name}"' not in repository:
