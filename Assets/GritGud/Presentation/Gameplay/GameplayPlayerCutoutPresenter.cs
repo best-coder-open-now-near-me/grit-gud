@@ -4,7 +4,7 @@ using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Presentation.Levels.Runtime;
 using UnityEngine;
-using UnityEngine.Rendering.Universal;
+using UnityEngine.Rendering;
 
 namespace GritGud.Presentation.Gameplay
 {
@@ -16,8 +16,8 @@ namespace GritGud.Presentation.Gameplay
         public const float HorizontalViewportRadius = 0.12f;
         public const float VerticalViewportRadius = 0.3f;
         public const float LeftViewportExtension = 0.04f;
-        public const string SilhouetteCameraName =
-            "Gameplay Player Silhouette Camera";
+        public const string SilhouetteShaderName =
+            "Hidden/GritGud/PlayerSilhouetteMask";
 
         private const float DefaultPivotHeight = 1.3f;
         private const float FloorPatchRefreshSeconds = 0.2f;
@@ -65,7 +65,7 @@ namespace GritGud.Presentation.Gameplay
         };
 
         private Camera gameplayCamera;
-        private Camera silhouetteCamera;
+        private Material silhouetteMaterial;
         private RenderTexture silhouetteMask;
         private Transform target;
         private ActorStancePresenter stancePresenter;
@@ -81,6 +81,10 @@ namespace GritGud.Presentation.Gameplay
             new HashSet<Renderer>();
         private readonly List<Vector3> walkableFloorTargets =
             new List<Vector3>();
+        private readonly List<Renderer> playerSilhouetteRenderers =
+            new List<Renderer>();
+        private readonly List<Material> sourceMaterials =
+            new List<Material>();
         private MaterialPropertyBlock propertyBlock;
         private Vector3 lastFloorPatchOrigin =
             new Vector3(float.PositiveInfinity, 0f, 0f);
@@ -99,7 +103,9 @@ namespace GritGud.Presentation.Gameplay
         public float CurrentVerticalRadius { get; private set; }
 
         public bool HasSilhouetteMask =>
-            silhouetteCamera != null && silhouetteMask != null;
+            silhouetteMaterial != null && silhouetteMask != null;
+
+        internal RenderTexture SilhouetteMask => silhouetteMask;
 
         private void Awake()
         {
@@ -120,9 +126,10 @@ namespace GritGud.Presentation.Gameplay
                 ? followTarget
                 : throw new ArgumentNullException(nameof(followTarget));
             stancePresenter = actorStancePresenter;
+            RefreshPlayerSilhouetteRenderers();
             ConfigureWalkability(followTarget);
             RegisterCutoutRenderers(playerCutoutRenderers);
-            CreateSilhouetteCamera();
+            CreateSilhouetteResources();
             PresentationEnabled = true;
             enabled = true;
             RefreshNow();
@@ -142,6 +149,7 @@ namespace GritGud.Presentation.Gameplay
                 ? followTarget
                 : throw new ArgumentNullException(nameof(followTarget));
             stancePresenter = actorStancePresenter;
+            RefreshPlayerSilhouetteRenderers();
             ConfigureWalkability(followTarget);
             enabled = PresentationEnabled;
             RefreshNow();
@@ -151,6 +159,8 @@ namespace GritGud.Presentation.Gameplay
         {
             ClearOvalOccluders();
             renderersByEntity.Clear();
+            playerSilhouetteRenderers.Clear();
+            sourceMaterials.Clear();
             walkableFloorTargets.Clear();
             walkabilityValidator = null;
             target = null;
@@ -471,47 +481,26 @@ namespace GritGud.Presentation.Gameplay
             propertyBlock.Clear();
         }
 
-        private void CreateSilhouetteCamera()
+        private void CreateSilhouetteResources()
         {
-            int playerLayer = LayerMask.NameToLayer(
-                GameplayCameraController.LocalPlayerLayerName);
-            if (playerLayer < 0)
+            Shader shader = Shader.Find(SilhouetteShaderName);
+            if (shader == null)
             {
                 throw new InvalidOperationException(
-                    $"Player cutout requires the " +
-                    $"'{GameplayCameraController.LocalPlayerLayerName}' " +
-                    "project layer.");
+                    $"Player cutout requires shader '{SilhouetteShaderName}'.");
             }
 
-            var cameraObject = new GameObject(SilhouetteCameraName)
+            silhouetteMaterial = new Material(shader)
             {
+                name = "Gameplay Player Silhouette Material",
                 hideFlags = HideFlags.HideAndDontSave,
             };
-            cameraObject.transform.SetParent(
-                gameplayCamera.transform,
-                worldPositionStays: false);
-            silhouetteCamera = cameraObject.AddComponent<Camera>();
-            silhouetteCamera.CopyFrom(gameplayCamera);
-            silhouetteCamera.enabled = false;
-            silhouetteCamera.cullingMask = 1 << playerLayer;
-            silhouetteCamera.clearFlags = CameraClearFlags.SolidColor;
-            silhouetteCamera.backgroundColor = Color.clear;
-            silhouetteCamera.allowHDR = false;
-            silhouetteCamera.allowMSAA = false;
-            silhouetteCamera.depthTextureMode = DepthTextureMode.None;
-            silhouetteCamera.useOcclusionCulling = false;
-            silhouetteCamera.rect = new Rect(0f, 0f, 1f, 1f);
-
-            UniversalAdditionalCameraData cameraData =
-                silhouetteCamera.GetUniversalAdditionalCameraData();
-            cameraData.renderPostProcessing = false;
-            cameraData.antialiasing = AntialiasingMode.None;
             EnsureSilhouetteMask();
         }
 
         private void EnsureSilhouetteMask()
         {
-            if (gameplayCamera == null || silhouetteCamera == null)
+            if (gameplayCamera == null || silhouetteMaterial == null)
             {
                 return;
             }
@@ -541,7 +530,6 @@ namespace GritGud.Presentation.Gameplay
                 hideFlags = HideFlags.HideAndDontSave,
             };
             silhouetteMask.Create();
-            silhouetteCamera.targetTexture = silhouetteMask;
 
             RenderTexture previous = RenderTexture.active;
             RenderTexture.active = silhouetteMask;
@@ -554,23 +542,76 @@ namespace GritGud.Presentation.Gameplay
         {
             if (!PresentationEnabled
                 || gameplayCamera == null
-                || silhouetteCamera == null
+                || silhouetteMaterial == null
                 || silhouetteMask == null)
             {
                 return;
             }
 
-            Transform gameplayTransform = gameplayCamera.transform;
-            silhouetteCamera.transform.SetPositionAndRotation(
-                gameplayTransform.position,
-                gameplayTransform.rotation);
-            silhouetteCamera.worldToCameraMatrix =
-                gameplayCamera.worldToCameraMatrix;
-            silhouetteCamera.projectionMatrix = gameplayCamera.projectionMatrix;
-            silhouetteCamera.nearClipPlane = gameplayCamera.nearClipPlane;
-            silhouetteCamera.farClipPlane = gameplayCamera.farClipPlane;
-            silhouetteCamera.Render();
+            RefreshPlayerSilhouetteRenderers();
+            var commands = new CommandBuffer
+            {
+                name = "Render Gameplay Player Silhouette",
+            };
+            try
+            {
+                commands.SetRenderTarget(silhouetteMask);
+                commands.ClearRenderTarget(
+                    clearDepth: true,
+                    clearColor: true,
+                    backgroundColor: Color.clear);
+                commands.SetViewProjectionMatrices(
+                    gameplayCamera.worldToCameraMatrix,
+                    GL.GetGPUProjectionMatrix(
+                        gameplayCamera.projectionMatrix,
+                        renderIntoTexture: true));
+                for (int rendererIndex = 0;
+                    rendererIndex < playerSilhouetteRenderers.Count;
+                    rendererIndex++)
+                {
+                    Renderer renderer =
+                        playerSilhouetteRenderers[rendererIndex];
+                    if (renderer == null
+                        || !renderer.enabled
+                        || renderer.forceRenderingOff
+                        || !renderer.gameObject.activeInHierarchy)
+                    {
+                        continue;
+                    }
+
+                    sourceMaterials.Clear();
+                    renderer.GetSharedMaterials(sourceMaterials);
+                    int submeshCount = Mathf.Max(1, sourceMaterials.Count);
+                    for (int submesh = 0;
+                        submesh < submeshCount;
+                        submesh++)
+                    {
+                        commands.DrawRenderer(
+                            renderer,
+                            silhouetteMaterial,
+                            submesh,
+                            shaderPass: 0);
+                    }
+                }
+
+                Graphics.ExecuteCommandBuffer(commands);
+            }
+            finally
+            {
+                commands.Release();
+            }
             SetSilhouetteMaskGlobal();
+        }
+
+        private void RefreshPlayerSilhouetteRenderers()
+        {
+            playerSilhouetteRenderers.Clear();
+            if (target == null)
+                return;
+
+            playerSilhouetteRenderers.AddRange(
+                target.GetComponentsInChildren<Renderer>(
+                    includeInactive: true));
         }
 
         private static Vector2Int CalculateMaskSize(Camera camera)
@@ -593,22 +634,14 @@ namespace GritGud.Presentation.Gameplay
         private void ReleaseSilhouetteResources()
         {
             ReleaseSilhouetteMask();
-            if (silhouetteCamera != null)
-            {
-                GameObject cameraObject = silhouetteCamera.gameObject;
-                silhouetteCamera = null;
-                cameraObject.transform.SetParent(null);
-                GameplayObjectLifecycle.Destroy(cameraObject);
-            }
+            GameplayObjectLifecycle.Destroy(silhouetteMaterial);
+            silhouetteMaterial = null;
+            playerSilhouetteRenderers.Clear();
+            sourceMaterials.Clear();
         }
 
         private void ReleaseSilhouetteMask()
         {
-            if (silhouetteCamera != null)
-            {
-                silhouetteCamera.targetTexture = null;
-            }
-
             GameplayObjectLifecycle.Destroy(silhouetteMask);
             silhouetteMask = null;
         }

@@ -256,15 +256,9 @@ namespace GritGud.Presentation.Tests
                 Is.EqualTo(GameplayPlayerCutoutPresenter.LeftViewportExtension));
             Assert.That(playerCutout.PresentationEnabled, Is.True);
             Assert.That(playerCutout.HasSilhouetteMask, Is.True);
-            Camera silhouetteCamera = gameplayCamera
-                .GetComponentsInChildren<Camera>(includeInactive: true)
-                .Single(camera => camera.name
-                    == GameplayPlayerCutoutPresenter.SilhouetteCameraName);
-            Assert.That(silhouetteCamera.enabled, Is.False);
-            Assert.That(silhouetteCamera.targetTexture, Is.Not.Null);
             Assert.That(
                 Shader.GetGlobalTexture("_GritGudPlayerSilhouetteMask"),
-                Is.SameAs(silhouetteCamera.targetTexture));
+                Is.SameAs(playerCutout.SilhouetteMask));
             Assert.That(
                 Vector3.Distance(
                     gameplayCamera.transform.position,
@@ -276,19 +270,13 @@ namespace GritGud.Presentation.Tests
             Assert.That(playerViewport.x, Is.InRange(0f, 1f));
             Assert.That(playerViewport.x, Is.GreaterThan(0.5f));
             Assert.That(playerViewport.y, Is.InRange(0f, 1f));
-            int localPlayerLayer = LayerMask.NameToLayer(
-                GameplayCameraController.LocalPlayerLayerName);
-            int localPlayerMask = 1 << localPlayerLayer;
-            Assert.That(localPlayerLayer, Is.GreaterThanOrEqualTo(0));
-            Assert.That(
-                silhouetteCamera.cullingMask,
-                Is.EqualTo(localPlayerMask));
+            int[] originalPlayerLayers = player
+                .GetComponentsInChildren<Renderer>()
+                .Select(renderer => renderer.gameObject.layer)
+                .ToArray();
             Assert.That(player.GetComponentsInChildren<Renderer>()
-                .All(renderer => renderer.gameObject.layer == localPlayerLayer),
-                Is.True);
-            Assert.That(
-                gameplayCamera.cullingMask & localPlayerMask,
-                Is.EqualTo(localPlayerMask));
+                .All(renderer => !renderer.forceRenderingOff), Is.True);
+            int originalGameplayCullingMask = gameplayCamera.cullingMask;
 
             cameraController.ToggleView();
             cameraController.RefreshNow();
@@ -302,7 +290,14 @@ namespace GritGud.Presentation.Tests
                 gameplayCamera.transform.position,
                 Is.EqualTo(stancePresenter.FirstPersonEyePosition)
                     .Using(Vector3ComparerWithEqualsOperator.Instance));
-            Assert.That(gameplayCamera.cullingMask & localPlayerMask, Is.Zero);
+            Assert.That(player.GetComponentsInChildren<Renderer>()
+                .All(renderer => renderer.forceRenderingOff), Is.True);
+            Assert.That(gameplayCamera.cullingMask,
+                Is.EqualTo(originalGameplayCullingMask));
+            Assert.That(
+                player.GetComponentsInChildren<Renderer>()
+                    .Select(renderer => renderer.gameObject.layer),
+                Is.EqualTo(originalPlayerLayers));
             Assert.That(playerCutout.PresentationEnabled, Is.False);
             Assert.That(playerCutout.CurrentShaderData, Is.EqualTo(Vector4.zero));
             Assert.That(playerCutout.CurrentLeftExtension, Is.Zero);
@@ -317,13 +312,14 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 cameraController.View,
                 Is.EqualTo(GameplayCameraView.ThirdPerson));
-            Assert.That(
-                gameplayCamera.cullingMask & localPlayerMask,
-                Is.EqualTo(localPlayerMask));
+            Assert.That(player.GetComponentsInChildren<Renderer>()
+                .All(renderer => !renderer.forceRenderingOff), Is.True);
+            Assert.That(gameplayCamera.cullingMask,
+                Is.EqualTo(originalGameplayCullingMask));
             Assert.That(playerCutout.PresentationEnabled, Is.True);
             Assert.That(
                 Shader.GetGlobalTexture("_GritGudPlayerSilhouetteMask"),
-                Is.SameAs(silhouetteCamera.targetTexture));
+                Is.SameAs(playerCutout.SilhouetteMask));
             Assert.That(
                 Vector3.Distance(
                     gameplayCamera.transform.position,
