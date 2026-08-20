@@ -21,6 +21,24 @@ namespace GritGud.Presentation.Persistence
         {
             public string identityId;
             public string equippedItemId;
+            public List<MagazineDocument> weaponMagazines =
+                new List<MagazineDocument>();
+            public List<ReserveDocument> ammunitionReserves =
+                new List<ReserveDocument>();
+        }
+
+        [Serializable]
+        private sealed class MagazineDocument
+        {
+            public string weaponItemId;
+            public int loadedRounds;
+        }
+
+        [Serializable]
+        private sealed class ReserveDocument
+        {
+            public string ammoTypeId;
+            public int rounds;
         }
 
         public const string StorageKey = "grit-gud.party-save";
@@ -69,13 +87,44 @@ namespace GritGud.Presentation.Persistence
                     throw new InvalidOperationException(
                         "The local party save contains an empty character.");
 
+                var magazines = new List<GameplayPartyWeaponMagazineSave>();
+                var reserves = new List<GameplayPartyAmmunitionReserveSave>();
+                if (document.schemaVersion >= 4)
+                {
+                    if (character.weaponMagazines == null
+                        || character.ammunitionReserves == null)
+                        throw new InvalidOperationException(
+                            "The local party save has incomplete ammunition state.");
+                    foreach (MagazineDocument magazine in
+                        character.weaponMagazines)
+                    {
+                        if (magazine == null)
+                            throw new InvalidOperationException(
+                                "The local party save contains an empty magazine.");
+                        magazines.Add(new GameplayPartyWeaponMagazineSave(
+                            magazine.weaponItemId,
+                            magazine.loadedRounds));
+                    }
+                    foreach (ReserveDocument reserve in
+                        character.ammunitionReserves)
+                    {
+                        if (reserve == null)
+                            throw new InvalidOperationException(
+                                "The local party save contains an empty reserve.");
+                        reserves.Add(new GameplayPartyAmmunitionReserveSave(
+                            reserve.ammoTypeId,
+                            reserve.rounds));
+                    }
+                }
                 characters.Add(new GameplayPartyCharacterSave(
                     character.identityId,
-                    NormalizeOptionalId(character.equippedItemId)));
+                    NormalizeOptionalId(character.equippedItemId),
+                    magazines,
+                    reserves));
             }
 
             save = new GameplayPartySave(
-                GameplayPartySave.CurrentSchemaVersion,
+                document.schemaVersion,
                 characters);
             return true;
         }
@@ -102,6 +151,22 @@ namespace GritGud.Presentation.Persistence
                     identityId = character.IdentityId,
                     equippedItemId = character.EquippedItemId ?? string.Empty,
                 };
+                foreach (GameplayPartyWeaponMagazineSave magazine in
+                    character.WeaponMagazines)
+                    serializedCharacter.weaponMagazines.Add(
+                        new MagazineDocument
+                        {
+                            weaponItemId = magazine.WeaponItemId,
+                            loadedRounds = magazine.LoadedRounds,
+                        });
+                foreach (GameplayPartyAmmunitionReserveSave reserve in
+                    character.AmmunitionReserves)
+                    serializedCharacter.ammunitionReserves.Add(
+                        new ReserveDocument
+                        {
+                            ammoTypeId = reserve.AmmoTypeId,
+                            rounds = reserve.Rounds,
+                        });
                 document.characters.Add(serializedCharacter);
             }
 

@@ -20,6 +20,14 @@ namespace GritGud.Tests.EditMode.Gameplay
                 "character.mara",
                 out GameplayPartyCharacterSave mara), Is.True);
             Assert.That(mara.EquippedItemId, Is.EqualTo("weapon.rifle"));
+            Assert.That(mara.TryGetMagazine(
+                "weapon.rifle",
+                out GameplayPartyWeaponMagazineSave magazine), Is.True);
+            Assert.That(magazine.LoadedRounds, Is.EqualTo(4));
+            Assert.That(mara.TryGetReserve(
+                "ammo.rifle",
+                out GameplayPartyAmmunitionReserveSave reserve), Is.True);
+            Assert.That(reserve.Rounds, Is.EqualTo(18));
             Assert.That(
                 typeof(GameplayPartyCharacterSave).GetProperty("Wounds"),
                 Is.Null);
@@ -37,12 +45,16 @@ namespace GritGud.Tests.EditMode.Gameplay
                 GameplayPartySave.CurrentSchemaVersion,
                 new[]
                 {
-                    new GameplayPartyCharacterSave(
+                    CreateCharacterSave(
                         "character.mara",
-                        equippedItemId: null),
-                    new GameplayPartyCharacterSave(
+                        equippedItemId: null,
+                        loaded: 1,
+                        reserve: 2),
+                    CreateCharacterSave(
                         "character.vale",
-                        "weapon.rifle"),
+                        "weapon.rifle",
+                        loaded: 5,
+                        reserve: 7),
                 });
 
             var restored = new GameplaySession(
@@ -58,6 +70,14 @@ namespace GritGud.Tests.EditMode.Gameplay
             Assert.That(mara.TurnBudget.ActionPoints, Is.EqualTo(4));
             Assert.That(restored.GetActor("vale").EquippedItemId,
                 Is.EqualTo("weapon.rifle"));
+            Assert.That(mara.Ammunition.GetMagazine("weapon.rifle")
+                .LoadedRounds, Is.EqualTo(1));
+            Assert.That(mara.Ammunition.GetReserve("ammo.rifle"),
+                Is.EqualTo(2));
+            Assert.That(restored.GetActor("vale").Ammunition
+                .GetMagazine("weapon.rifle").LoadedRounds, Is.EqualTo(5));
+            Assert.That(restored.GetActor("vale").Ammunition
+                .GetReserve("ammo.rifle"), Is.EqualTo(7));
         }
 
         [Test]
@@ -83,7 +103,97 @@ namespace GritGud.Tests.EditMode.Gameplay
                 out GameplayPartyCharacterSave mara), Is.True);
             Assert.That(mara.EquippedItemId, Is.Null);
             Assert.That(persistence.Status,
-                Is.EqualTo("Saved party equipment."));
+                Is.EqualTo("Saved party equipment and ammunition."));
+        }
+
+        [Test]
+        public void AmmunitionChangesPersistImmediately()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            var store = new MemoryPartySaveStore();
+            using var persistence = new GameplayPartyPersistenceSession(store);
+            persistence.Bind(gameplay);
+
+            Assert.That(new GameplayReloadSession(gameplay).TryResolve(
+                "mara",
+                out _,
+                out GameplayReloadFailure failure), Is.True);
+
+            Assert.That(failure, Is.EqualTo(GameplayReloadFailure.None));
+            Assert.That(store.SaveCount, Is.EqualTo(1));
+            Assert.That(store.Saved.TryGetCharacter(
+                "character.mara",
+                out GameplayPartyCharacterSave mara), Is.True);
+            Assert.That(mara.TryGetMagazine(
+                "weapon.rifle",
+                out GameplayPartyWeaponMagazineSave magazine), Is.True);
+            Assert.That(magazine.LoadedRounds, Is.EqualTo(6));
+            Assert.That(mara.TryGetReserve(
+                "ammo.rifle",
+                out GameplayPartyAmmunitionReserveSave reserve), Is.True);
+            Assert.That(reserve.Rounds, Is.EqualTo(16));
+        }
+
+        [Test]
+        public void SchemaThreeMigratesToAuthoredAmmunitionState()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            var store = new MemoryPartySaveStore
+            {
+                Saved = new GameplayPartySave(
+                    3,
+                    new[]
+                    {
+                        new GameplayPartyCharacterSave(
+                            "character.mara",
+                            "weapon.rifle"),
+                        new GameplayPartyCharacterSave(
+                            "character.vale",
+                            "weapon.rifle"),
+                    }),
+            };
+            using var persistence = new GameplayPartyPersistenceSession(store);
+
+            GameplayPartySave migrated = persistence.Load(gameplay.Scenario);
+
+            Assert.That(migrated.SchemaVersion,
+                Is.EqualTo(GameplayPartySave.CurrentSchemaVersion));
+            Assert.That(migrated.TryGetCharacter(
+                "character.mara",
+                out GameplayPartyCharacterSave mara), Is.True);
+            Assert.That(mara.TryGetMagazine(
+                "weapon.rifle",
+                out GameplayPartyWeaponMagazineSave magazine), Is.True);
+            Assert.That(magazine.LoadedRounds, Is.EqualTo(4));
+            Assert.That(mara.TryGetReserve(
+                "ammo.rifle",
+                out GameplayPartyAmmunitionReserveSave reserve), Is.True);
+            Assert.That(reserve.Rounds, Is.EqualTo(18));
+        }
+
+        [Test]
+        public void CurrentSchemaMissingAmmunitionFailsClosed()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            var store = new MemoryPartySaveStore
+            {
+                Saved = new GameplayPartySave(
+                    GameplayPartySave.CurrentSchemaVersion,
+                    new[]
+                    {
+                        new GameplayPartyCharacterSave(
+                            "character.mara",
+                            "weapon.rifle"),
+                        new GameplayPartyCharacterSave(
+                            "character.vale",
+                            "weapon.rifle"),
+                    }),
+            };
+            using var persistence = new GameplayPartyPersistenceSession(store);
+
+            Assert.That(persistence.Load(gameplay.Scenario), Is.Null);
+            Assert.That(persistence.Status,
+                Does.StartWith("Ignored an invalid party save:"));
         }
 
         [Test]
@@ -182,7 +292,18 @@ namespace GritGud.Tests.EditMode.Gameplay
                     "Fire rifle",
                     new ActionCost(1, 0f, ActionMobility.Mobile),
                     1f,
-                    accuracyDecay: AccuracyDecayDefinition.None));
+                    accuracyDecay: AccuracyDecayDefinition.None),
+                ammunition: new WeaponAmmunitionDefinition(
+                    "ammo.rifle",
+                    magazineCapacity: 6,
+                    initialLoadedRounds: 4,
+                    roundsPerUse: 1,
+                    reloadTurnCost: new ActionCost(
+                        2,
+                        0f,
+                        ActionMobility.Set),
+                    consumesRemainingMovement: true,
+                    reloadPolicyVersion: 1));
             var mara = new ScenarioActorDefinition(
                 "mara",
                 10,
@@ -190,7 +311,11 @@ namespace GritGud.Tests.EditMode.Gameplay
                 new TurnBudget(4, 8f),
                 new[] { rifle },
                 "weapon.rifle",
-                CreateProfile("character.mara", "Mara"));
+                CreateProfile("character.mara", "Mara"),
+                ammunitionReserves: new[]
+                {
+                    new AmmunitionReserveDefinition("ammo.rifle", 18),
+                });
             var vale = new ScenarioActorDefinition(
                 "vale",
                 9,
@@ -198,7 +323,11 @@ namespace GritGud.Tests.EditMode.Gameplay
                 new TurnBudget(4, 8f),
                 new[] { rifle },
                 "weapon.rifle",
-                CreateProfile("character.vale", "Vale"));
+                CreateProfile("character.vale", "Vale"),
+                ammunitionReserves: new[]
+                {
+                    new AmmunitionReserveDefinition("ammo.rifle", 18),
+                });
             var party = new PlayerPartyDefinition(
                 new[] { "mara", "vale" },
                 "mara");
@@ -209,5 +338,25 @@ namespace GritGud.Tests.EditMode.Gameplay
                 Array.Empty<ScenarioObjectiveDefinition>(),
                 playerParty: party));
         }
+
+        private static GameplayPartyCharacterSave CreateCharacterSave(
+            string identityId,
+            string equippedItemId,
+            int loaded,
+            int reserve) => new GameplayPartyCharacterSave(
+            identityId,
+            equippedItemId,
+            new[]
+            {
+                new GameplayPartyWeaponMagazineSave(
+                    "weapon.rifle",
+                    loaded),
+            },
+            new[]
+            {
+                new GameplayPartyAmmunitionReserveSave(
+                    "ammo.rifle",
+                    reserve),
+            });
     }
 }

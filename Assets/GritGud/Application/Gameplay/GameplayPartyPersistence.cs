@@ -13,11 +13,59 @@ namespace GritGud.Application.Gameplay
         void Delete();
     }
 
+    public readonly struct GameplayPartyWeaponMagazineSave
+    {
+        public GameplayPartyWeaponMagazineSave(
+            string weaponItemId,
+            int loadedRounds)
+        {
+            if (string.IsNullOrWhiteSpace(weaponItemId))
+                throw new ArgumentException(
+                    "Saved magazines require a weapon item identifier.",
+                    nameof(weaponItemId));
+            if (loadedRounds < 0)
+                throw new ArgumentOutOfRangeException(nameof(loadedRounds));
+            WeaponItemId = weaponItemId;
+            LoadedRounds = loadedRounds;
+        }
+
+        public string WeaponItemId { get; }
+        public int LoadedRounds { get; }
+    }
+
+    public readonly struct GameplayPartyAmmunitionReserveSave
+    {
+        public GameplayPartyAmmunitionReserveSave(
+            string ammoTypeId,
+            int rounds)
+        {
+            if (string.IsNullOrWhiteSpace(ammoTypeId))
+                throw new ArgumentException(
+                    "Saved ammunition reserves require an ammunition type.",
+                    nameof(ammoTypeId));
+            if (rounds < 0)
+                throw new ArgumentOutOfRangeException(nameof(rounds));
+            AmmoTypeId = ammoTypeId;
+            Rounds = rounds;
+        }
+
+        public string AmmoTypeId { get; }
+        public int Rounds { get; }
+    }
+
     public sealed class GameplayPartyCharacterSave
     {
+        private readonly Dictionary<string, GameplayPartyWeaponMagazineSave>
+            magazinesByWeapon;
+        private readonly Dictionary<string, GameplayPartyAmmunitionReserveSave>
+            reservesByType;
+
         public GameplayPartyCharacterSave(
             string identityId,
-            string equippedItemId)
+            string equippedItemId,
+            IEnumerable<GameplayPartyWeaponMagazineSave> weaponMagazines = null,
+            IEnumerable<GameplayPartyAmmunitionReserveSave>
+                ammunitionReserves = null)
         {
             if (string.IsNullOrWhiteSpace(identityId))
             {
@@ -28,16 +76,71 @@ namespace GritGud.Application.Gameplay
 
             IdentityId = identityId;
             EquippedItemId = equippedItemId;
+            var magazines = new List<GameplayPartyWeaponMagazineSave>(
+                weaponMagazines
+                    ?? Array.Empty<GameplayPartyWeaponMagazineSave>());
+            magazines.Sort((left, right) => StringComparer.Ordinal.Compare(
+                left.WeaponItemId,
+                right.WeaponItemId));
+            magazinesByWeapon = new Dictionary<
+                string,
+                GameplayPartyWeaponMagazineSave>(StringComparer.Ordinal);
+            foreach (GameplayPartyWeaponMagazineSave magazine in magazines)
+                if (!magazinesByWeapon.TryAdd(
+                    magazine.WeaponItemId,
+                    magazine))
+                    throw new ArgumentException(
+                        $"Saved magazine '{magazine.WeaponItemId}' is duplicated.",
+                        nameof(weaponMagazines));
+            WeaponMagazines = magazines.AsReadOnly();
+
+            var reserves = new List<GameplayPartyAmmunitionReserveSave>(
+                ammunitionReserves
+                    ?? Array.Empty<GameplayPartyAmmunitionReserveSave>());
+            reserves.Sort((left, right) => StringComparer.Ordinal.Compare(
+                left.AmmoTypeId,
+                right.AmmoTypeId));
+            reservesByType = new Dictionary<
+                string,
+                GameplayPartyAmmunitionReserveSave>(StringComparer.Ordinal);
+            foreach (GameplayPartyAmmunitionReserveSave reserve in reserves)
+                if (!reservesByType.TryAdd(reserve.AmmoTypeId, reserve))
+                    throw new ArgumentException(
+                        $"Saved reserve '{reserve.AmmoTypeId}' is duplicated.",
+                        nameof(ammunitionReserves));
+            AmmunitionReserves = reserves.AsReadOnly();
         }
 
         public string IdentityId { get; }
 
         public string EquippedItemId { get; }
+
+        public IReadOnlyList<GameplayPartyWeaponMagazineSave> WeaponMagazines
+        {
+            get;
+        }
+
+        public IReadOnlyList<GameplayPartyAmmunitionReserveSave>
+            AmmunitionReserves { get; }
+
+        public bool TryGetMagazine(
+            string weaponItemId,
+            out GameplayPartyWeaponMagazineSave magazine) =>
+            magazinesByWeapon.TryGetValue(
+                weaponItemId ?? string.Empty,
+                out magazine);
+
+        public bool TryGetReserve(
+            string ammoTypeId,
+            out GameplayPartyAmmunitionReserveSave reserve) =>
+            reservesByType.TryGetValue(
+                ammoTypeId ?? string.Empty,
+                out reserve);
     }
 
     public sealed class GameplayPartySave
     {
-        public const int CurrentSchemaVersion = 3;
+        public const int CurrentSchemaVersion = 4;
 
         private readonly Dictionary<string, GameplayPartyCharacterSave>
             charactersByIdentity;
@@ -112,13 +215,90 @@ namespace GritGud.Application.Gameplay
                     ?? throw new InvalidOperationException(
                         $"Party actor '{actorId}' has no character identity.");
                 GameplayActorSnapshot actor = gameplay.GetActor(actorId);
+                var magazines = new List<GameplayPartyWeaponMagazineSave>(
+                    actor.Ammunition.Magazines.Count);
+                foreach (WeaponMagazineSnapshot magazine in
+                    actor.Ammunition.Magazines)
+                    magazines.Add(new GameplayPartyWeaponMagazineSave(
+                        magazine.WeaponItemId,
+                        magazine.LoadedRounds));
+                var reserves = new List<GameplayPartyAmmunitionReserveSave>(
+                    actor.Ammunition.Reserves.Count);
+                foreach (AmmunitionReserveSnapshot reserve in
+                    actor.Ammunition.Reserves)
+                    reserves.Add(new GameplayPartyAmmunitionReserveSave(
+                        reserve.AmmoTypeId,
+                        reserve.Rounds));
                 characters.Add(new GameplayPartyCharacterSave(
                     profile.IdentityId,
-                    actor.EquippedItemId));
+                    actor.EquippedItemId,
+                    magazines,
+                    reserves));
             }
             return new GameplayPartySave(
                 CurrentSchemaVersion,
                 characters);
+        }
+    }
+
+    public static class GameplayPartySaveMigrator
+    {
+        public static GameplayPartySave Migrate(
+            GameplayPartySave save,
+            ScenarioDefinition scenario)
+        {
+            if (save == null) throw new ArgumentNullException(nameof(save));
+            if (scenario == null)
+                throw new ArgumentNullException(nameof(scenario));
+            if (save.SchemaVersion == GameplayPartySave.CurrentSchemaVersion)
+                return save;
+            if (save.SchemaVersion < 1
+                || save.SchemaVersion > GameplayPartySave.CurrentSchemaVersion)
+                throw new InvalidOperationException(
+                    $"Party save schema {save.SchemaVersion} is unsupported.");
+
+            var migrated = new List<GameplayPartyCharacterSave>(
+                save.Characters.Count);
+            foreach (GameplayPartyCharacterSave character in save.Characters)
+            {
+                ScenarioActorDefinition actor = FindActor(
+                    scenario,
+                    character.IdentityId);
+                var magazines = new List<GameplayPartyWeaponMagazineSave>();
+                foreach (InventoryItemDefinition item in actor.Inventory)
+                    if (item.Ammunition != null)
+                        magazines.Add(new GameplayPartyWeaponMagazineSave(
+                            item.Id,
+                            item.Ammunition.InitialLoadedRounds));
+                var reserves = new List<GameplayPartyAmmunitionReserveSave>();
+                foreach (AmmunitionReserveDefinition reserve in
+                    actor.AmmunitionReserves)
+                    reserves.Add(new GameplayPartyAmmunitionReserveSave(
+                        reserve.AmmoTypeId,
+                        reserve.Rounds));
+                migrated.Add(new GameplayPartyCharacterSave(
+                    character.IdentityId,
+                    character.EquippedItemId,
+                    magazines,
+                    reserves));
+            }
+            return new GameplayPartySave(
+                GameplayPartySave.CurrentSchemaVersion,
+                migrated);
+        }
+
+        private static ScenarioActorDefinition FindActor(
+            ScenarioDefinition scenario,
+            string identityId)
+        {
+            foreach (ScenarioActorDefinition actor in scenario.Actors)
+                if (string.Equals(
+                    actor.CharacterProfile?.IdentityId,
+                    identityId,
+                    StringComparison.Ordinal))
+                    return actor;
+            throw new InvalidOperationException(
+                $"Saved character identity '{identityId}' is not authored by the scenario.");
         }
     }
 
@@ -173,9 +353,39 @@ namespace GritGud.Application.Gameplay
                             + $"unavailable to '{profile.IdentityId}'.");
                     }
                 }
+
+                int authoredMagazineCount = 0;
+                foreach (InventoryItemDefinition item in actor.Inventory)
+                {
+                    if (item.Ammunition == null) continue;
+                    authoredMagazineCount++;
+                    if (!character.TryGetMagazine(
+                            item.Id,
+                            out GameplayPartyWeaponMagazineSave magazine)
+                        || magazine.LoadedRounds
+                            > item.Ammunition.MagazineCapacity)
+                        throw new InvalidOperationException(
+                            $"Saved magazine '{item.Id}' is missing or invalid for "
+                            + $"'{profile.IdentityId}'.");
+                }
+                if (character.WeaponMagazines.Count != authoredMagazineCount)
+                    throw new InvalidOperationException(
+                        $"Saved magazines do not match '{profile.IdentityId}'.");
+
+                foreach (AmmunitionReserveDefinition reserve in
+                    actor.AmmunitionReserves)
+                    if (!character.TryGetReserve(
+                        reserve.AmmoTypeId,
+                        out _))
+                        throw new InvalidOperationException(
+                            $"Saved reserve '{reserve.AmmoTypeId}' is missing for "
+                            + $"'{profile.IdentityId}'.");
+                if (character.AmmunitionReserves.Count
+                    != actor.AmmunitionReserves.Count)
+                    throw new InvalidOperationException(
+                        $"Saved reserves do not match '{profile.IdentityId}'.");
             }
         }
-
     }
 
     public sealed class GameplayPartyPersistenceSession : IDisposable
@@ -215,6 +425,7 @@ namespace GritGud.Application.Gameplay
                     Report("No saved party was found; using authored character state.");
                     return null;
                 }
+                save = GameplayPartySaveMigrator.Migrate(save, scenario);
                 GameplayPartySaveValidator.Validate(save, scenario);
             }
             catch (Exception exception)
@@ -236,6 +447,7 @@ namespace GritGud.Application.Gameplay
             gameplay = gameplaySession
                 ?? throw new ArgumentNullException(nameof(gameplaySession));
             gameplay.EquipmentChanged += HandleEquipmentChanged;
+            gameplay.AmmunitionChanged += HandleAmmunitionChanged;
             dirty = false;
         }
 
@@ -256,7 +468,7 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
-            Report("Saved party equipment.");
+            Report("Saved party equipment and ammunition.");
             return true;
         }
 
@@ -276,6 +488,8 @@ namespace GritGud.Application.Gameplay
                 {
                     boundGameplay.EquipmentChanged -=
                         HandleEquipmentChanged;
+                    boundGameplay.AmmunitionChanged -=
+                        HandleAmmunitionChanged;
                 }
                 gameplay = null;
                 disposed = true;
@@ -283,6 +497,9 @@ namespace GritGud.Application.Gameplay
         }
 
         private void HandleEquipmentChanged(EquipmentChangeRecord _) =>
+            MarkDirtyAndFlush();
+
+        private void HandleAmmunitionChanged(WeaponAmmunitionDelta _) =>
             MarkDirtyAndFlush();
 
         private void MarkDirtyAndFlush()

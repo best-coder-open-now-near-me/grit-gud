@@ -70,6 +70,25 @@ namespace GritGud.Application.Gameplay
             foreach (AmmunitionReserveDefinition reserve in
                 definition.AmmunitionReserves)
                 ammunitionReserves.Add(reserve.AmmoTypeId, reserve.Rounds);
+            if (restoredCharacter != null)
+            {
+                foreach (GameplayPartyWeaponMagazineSave saved in
+                    restoredCharacter.WeaponMagazines)
+                {
+                    WeaponMagazineSnapshot authored =
+                        weaponMagazines[saved.WeaponItemId];
+                    weaponMagazines[saved.WeaponItemId] =
+                        new WeaponMagazineSnapshot(
+                            authored.WeaponItemId,
+                            authored.AmmoTypeId,
+                            authored.Capacity,
+                            saved.LoadedRounds,
+                            authored.RoundsPerUse);
+                }
+                foreach (GameplayPartyAmmunitionReserveSave saved in
+                    restoredCharacter.AmmunitionReserves)
+                    ammunitionReserves[saved.AmmoTypeId] = saved.Rounds;
+            }
             turnBudgetAllowance = definition.StartingTurnBudget;
             actionPointEconomy = new TurnActionPointEconomy(
                 definition.StartingTurnBudget.ActionPoints,
