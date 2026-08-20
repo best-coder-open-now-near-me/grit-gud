@@ -242,17 +242,18 @@ namespace GritGud.Application.Gameplay
 
     public static class GameplayNumericPolicy
     {
-        public const int CurrentVersion = 1;
+        public const int CurrentVersion = 2;
         public const int CanonicalDecimalPlaces = 5;
         public const float ComparisonTolerance = 0.0001f;
 
         public static float Normalize(float value)
         {
             RequireFinite(value, nameof(value));
-            return (float)Math.Round(
+            float rounded = (float)Math.Round(
                 value,
                 CanonicalDecimalPlaces,
                 MidpointRounding.AwayFromZero);
+            return rounded == 0f ? 0f : rounded;
         }
 
         public static string FormatCanonical(float value) =>

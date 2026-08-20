@@ -48,6 +48,12 @@ namespace GritGud.Domain.Tests.Gameplay
                 GameplayNumericPolicy.FormatCanonical(1.234567f),
                 Is.EqualTo("1.23457"));
             Assert.That(
+                GameplayNumericPolicy.FormatCanonical(-0f),
+                Is.EqualTo("0"));
+            Assert.That(
+                GameplayNumericPolicy.FormatCanonical(-0.000001f),
+                Is.EqualTo("0"));
+            Assert.That(
                 GameplayNumericPolicy.AreEquivalent(2f, 2.00005f),
                 Is.True);
             Assert.Throws<ArgumentOutOfRangeException>(
