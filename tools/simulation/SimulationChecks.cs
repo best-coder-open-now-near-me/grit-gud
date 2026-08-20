@@ -30,6 +30,7 @@ internal static class SimulationChecks
             VerifyConcreteActorAttackCandidateRoute();
             VerifyPermanentPolicyRunner();
             VerifyLogicalExecutionGuards();
+            VerifyBasicExecutableCandidateRoutes();
             VerifyAllCurrentContentCoverage();
             VerifyTacticalDestructibleSimulation();
             executedFixtureChecks.Add("sim-destructible-cover");
@@ -164,6 +165,63 @@ internal static class SimulationChecks
                     reversed,
                     new[] { droneAttackInput }).Count == 0,
             "Drone candidate generation ignored its canonical sensor envelope.");
+        var droneMoveInput = new GameplayReachableInput(
+            GameplayReachableInputKind.MovementControl,
+            "fixture.drone.move",
+            "player",
+            GameplayCapabilityProfiles.AerialDroneMove(),
+            droneDefinition.Id,
+            droneDefinition.Id);
+        GameplayCapabilityRegistry moveCapabilities =
+            GameplayCurrentCapabilityCatalog.Create(
+                reducers,
+                new[] { droneMoveInput });
+        var moveRoutes = new GameplayCandidateExecutionRouteRegistry(
+            moveCapabilities);
+        moveRoutes.Register(new GameplayDroneMoveCandidateExecutionRoute());
+        IReadOnlyList<GameplayCandidate> builtDroneMoves =
+            new GameplayHeadlessCandidateBuilder(
+                moveCapabilities,
+                sensorSpatial).Build(
+                    initial,
+                    new[] { droneMoveInput },
+                    "player");
+        Require(builtDroneMoves.Count > 1,
+            "Drone semantic movement did not expand into stable destinations.");
+        var moveContext = new GameplayDecisionContext(
+            initial,
+            GameplayObservationSnapshot.FullState("player", initial));
+        GameplayExecutableCandidateEvaluation moveEvaluation =
+            moveRoutes.Evaluate(moveContext, builtDroneMoves[0]);
+        Require(moveEvaluation.IsLegal
+            && moveEvaluation.Evidence.Count == 1,
+            "Drone movement candidate was not legal and evidence-backed.");
+        var moveRuntime = new GameplaySimulationRuntime(
+            new GameplayExecutionIdentity(
+                new GameplayContentIdentity(
+                    gameplay.Scenario.Id,
+                    scenarioSchemaVersion: 1,
+                    rulesSchemaVersion: 1,
+                    new string('3', 64)),
+                new SpatialContentIdentity(
+                    sensorLevel.levelId,
+                    sensorLevel.schemaVersion,
+                    evidenceAlgorithmVersion: 1,
+                    new string('d', 64)),
+                gameplay.RunIdentity),
+            initial,
+            reducers,
+            moveCapabilities);
+        moveRuntime.Execute(moveRoutes.Prepare(
+            moveContext,
+            moveEvaluation));
+        Require(moveRuntime.CurrentState.Drones[0].Position.DistanceTo(
+                    initial.Drones[0].Position) > 0f
+            && GameplayExactReplay.Verify(
+                initial,
+                moveRuntime.Trajectory,
+                reducers).IsExact,
+            "Drone movement route did not reduce and replay exactly.");
         var trajectory = new List<GameplaySemanticTransition>();
         TurnBudget initialBudget = initial.Session.GetActor("player").TurnBudget;
         var movement = new DroneMoveRecord(
@@ -2679,6 +2737,189 @@ internal static class SimulationChecks
         Require(maximumFailure?.Kind
                 == GameplayDecisionFailureKind.MaximumTransitionsExceeded,
             "Maximum transition guard did not stop execution.");
+    }
+
+    private static void VerifyBasicExecutableCandidateRoutes()
+    {
+        AttackDefinition rifle = CreateRifle();
+        var firstWeapon = new InventoryItemDefinition(
+            "weapon.first",
+            "First Weapon",
+            hotbarSlot: 1,
+            InventoryItemKind.Weapon,
+            new ActionCost(1, 0f, ActionMobility.Set),
+            new EquipmentEffectSet(0.9f),
+            attack: rifle);
+        var secondWeapon = new InventoryItemDefinition(
+            "weapon.second",
+            "Second Weapon",
+            hotbarSlot: 2,
+            InventoryItemKind.Weapon,
+            new ActionCost(1, 0f, ActionMobility.Set),
+            new EquipmentEffectSet(0.8f),
+            attack: rifle);
+        var player = new ScenarioActorDefinition(
+            "player",
+            initiative: 10,
+            new GameplayActorPose(new GameplayPosition(0f, 0f, 0f), 0f),
+            new TurnBudget(4, 8f),
+            new[] { firstWeapon, secondWeapon },
+            initiallyEquippedItemId: firstWeapon.Id,
+            combat: new ActorCombatDefinition(
+                "player",
+                new[] { "raider" },
+                maximumWounds: 2));
+        var enemy = new ScenarioActorDefinition(
+            "enemy",
+            initiative: 0,
+            new GameplayActorPose(new GameplayPosition(0f, 0f, 5f), 180f),
+            new TurnBudget(4, 8f),
+            rifle,
+            combat: new ActorCombatDefinition(
+                "raider",
+                new[] { "player" },
+                maximumWounds: 2));
+        var objective = new ScenarioObjectiveDefinition(
+            "objective",
+            new GameplayPosition(0f, 0f, 0f),
+            interactionRadius: 1f);
+        var scenario = new ScenarioDefinition(
+            "basic-route-check",
+            new ScenarioTimingDefinition(1f),
+            new[] { player, enemy },
+            new[] { objective });
+        var gameplay = new GameplaySession(scenario, scenarioSeed: 123u);
+        Require(gameplay.BeginEncounter(),
+            "Basic route fixture encounter did not begin.");
+        GameplayCombatStateSnapshot initial = GameplayCombatStateCapture.Capture(
+            gameplay);
+        var level = new LevelDocument
+        {
+            levelId = "basic-route-level",
+            schemaVersion = LevelDocument.CurrentSchemaVersion,
+        };
+        level.Normalize();
+        IReadOnlyList<GameplayReachableInput> inputs =
+            GameplayReachableInputEnumerator.Enumerate(scenario, level);
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
+        GameplayCapabilityRegistry capabilities =
+            GameplayCurrentCapabilityCatalog.Create(reducers, inputs);
+        var routes = new GameplayCandidateExecutionRouteRegistry(capabilities);
+        routes.Register(new GameplayStanceCandidateExecutionRoute());
+        routes.Register(new GameplayEquipmentCandidateExecutionRoute(scenario));
+        routes.Register(new GameplayInteractionCandidateExecutionRoute());
+        IReadOnlyList<GameplayCandidate> candidates =
+            new GameplayTacticalCandidateBuilder(capabilities).Build(
+                initial,
+                inputs);
+        GameplayCandidate stance = FindCandidate(
+            candidates,
+            "player",
+            GameplaySemanticCapability.ChangeStance,
+            "player");
+        GameplayCandidate unequip = FindCandidate(
+            candidates,
+            "player",
+            GameplaySemanticCapability.Equip,
+            firstWeapon.Id);
+        GameplayCandidate equip = FindCandidate(
+            candidates,
+            "player",
+            GameplaySemanticCapability.Equip,
+            secondWeapon.Id);
+        GameplayCandidate interact = FindCandidate(
+            candidates,
+            "player",
+            GameplaySemanticCapability.Interact,
+            objective.Id);
+        var runtime = new GameplaySimulationRuntime(
+            new GameplayExecutionIdentity(
+                new GameplayContentIdentity(
+                    scenario.Id,
+                    scenarioSchemaVersion: 1,
+                    rulesSchemaVersion: 1,
+                    new string('5', 64)),
+                new SpatialContentIdentity(
+                    level.levelId,
+                    level.schemaVersion,
+                    evidenceAlgorithmVersion: 1,
+                    new string('4', 64)),
+                gameplay.RunIdentity),
+            initial,
+            reducers,
+            capabilities);
+        ExecuteCandidate(runtime, routes, stance);
+        Require(runtime.CurrentState.Session.GetActor("player").Pose.Stance
+                == ActorStance.Crouched,
+            "Stance candidate did not install its reducer-owned pose.");
+        ExecuteCandidate(runtime, routes, unequip);
+        Require(runtime.CurrentState.Session.GetActor("player")
+                .EquippedItemId == null,
+            "Equipment candidate did not unequip the canonical item.");
+        ExecuteCandidate(runtime, routes, equip);
+        GameplayActorSnapshot equipped = runtime.CurrentState.Session.GetActor(
+            "player");
+        Require(string.Equals(
+                equipped.EquippedItemId,
+                secondWeapon.Id,
+                StringComparison.Ordinal)
+            && equipped.EquipmentEffects.MovementSpeedMultiplier == 0.8f,
+            "Equipment candidate did not install item effects.");
+        ExecuteCandidate(runtime, routes, interact);
+        bool completed = false;
+        foreach (GameplayObjectiveSnapshot value in runtime.CurrentState.Session
+            .Objectives)
+            if (string.Equals(
+                value.ObjectiveId,
+                objective.Id,
+                StringComparison.Ordinal)) completed = value.IsCompleted;
+        Require(completed
+            && runtime.Trajectory.Count == 4
+            && GameplayExactReplay.Verify(
+                initial,
+                runtime.Trajectory,
+                reducers).IsExact,
+            "Basic executable routes did not form one exact semantic trajectory.");
+    }
+
+    private static void ExecuteCandidate(
+        GameplaySimulationRuntime runtime,
+        GameplayCandidateExecutionRouteRegistry routes,
+        GameplayCandidate candidate)
+    {
+        var context = new GameplayDecisionContext(
+            runtime.CurrentState,
+            GameplayObservationSnapshot.FullState(
+                candidate.ActorId,
+                runtime.CurrentState));
+        GameplayExecutableCandidateEvaluation evaluation = routes.Evaluate(
+            context,
+            candidate);
+        Require(evaluation.IsLegal,
+            "Candidate route was unexpectedly illegal: "
+                + evaluation.FailureCode);
+        runtime.Execute(routes.Prepare(context, evaluation));
+    }
+
+    private static GameplayCandidate FindCandidate(
+        IEnumerable<GameplayCandidate> candidates,
+        string actorId,
+        GameplaySemanticCapability capability,
+        string subjectId)
+    {
+        foreach (GameplayCandidate candidate in candidates)
+            if (candidate.Profile.Capability == capability
+                && string.Equals(
+                    candidate.ActorId,
+                    actorId,
+                    StringComparison.Ordinal)
+                && string.Equals(
+                    candidate.SubjectId,
+                    subjectId,
+                    StringComparison.Ordinal)) return candidate;
+        throw new InvalidOperationException(
+            $"Candidate '{actorId}/{capability}/{subjectId}' was not built.");
     }
 
     private static void VerifyCanonicalActionOwnedRecordSequences()

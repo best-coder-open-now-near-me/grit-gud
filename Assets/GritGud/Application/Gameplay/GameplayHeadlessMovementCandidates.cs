@@ -230,6 +230,9 @@ namespace GritGud.Application.Gameplay
                     if (input.Profile.Equals(
                         GameplayCapabilityProfiles.GroundedMove()))
                         result.AddRange(BuildGroundedMoves(state, input));
+                    else if (input.Profile.Equals(
+                        GameplayCapabilityProfiles.AerialDroneMove()))
+                        result.AddRange(BuildDroneMoves(state, input));
                     continue;
                 }
                 result.AddRange(tacticalCandidates.Build(
@@ -307,10 +310,129 @@ namespace GritGud.Application.Gameplay
             }
         }
 
+        private IEnumerable<GameplayCandidate> BuildDroneMoves(
+            GameplayCombatStateSnapshot state,
+            GameplayReachableInput input)
+        {
+            state.RequireCoverage(GameplayCombatStateCoverage.Drones);
+            DroneSnapshot drone = FindDrone(
+                state.Drones,
+                input.SourceSubjectId ?? input.SubjectIdHint);
+            GameplayActorSnapshot controller = state.Session.GetActor(
+                drone.Definition.ControllerActorId);
+            if (!drone.IsOperational
+                || controller.IsIncapacitated
+                || controller.TurnBudget.ActionPoints
+                    < drone.Definition.MoveCost.ActionPoints
+                || controller.TurnBudget.MovementOpportunity
+                    < drone.Definition.MoveCost.MovementOpportunity)
+                yield break;
+            float maximumDistance = Math.Min(
+                maximumCandidateDistance,
+                drone.Definition.MaximumMoveDistance);
+            float[] distances = maximumDistance <= 0.2f
+                ? new[] { maximumDistance }
+                : new[] { maximumDistance * 0.5f, maximumDistance };
+            foreach (float distance in distances)
+            foreach (GameplayPosition direction in Directions)
+            {
+                double length = Math.Sqrt(
+                    (direction.X * direction.X)
+                    + (direction.Z * direction.Z));
+                var destination = new GameplayPosition(
+                    drone.Position.X
+                        + (float)((direction.X / length) * distance),
+                    drone.Position.Y,
+                    drone.Position.Z
+                        + (float)((direction.Z / length) * distance));
+                if (spatial.BlocksPath(
+                    state,
+                    drone.Position,
+                    destination,
+                    clearanceRadius: 0.2f)) continue;
+                float facing = (float)(Math.Atan2(
+                    destination.X - drone.Position.X,
+                    destination.Z - drone.Position.Z) * 180d / Math.PI);
+                if (facing < 0f) facing += 360f;
+                GameplayEvidenceRecord evidence = spatial.CaptureEvidence(
+                    "drone-route",
+                    state,
+                    drone.Position,
+                    destination,
+                    clearanceRadius: 0.2f);
+                var intent = new GameplayHeadlessDroneMoveIntent(
+                    input,
+                    state.CanonicalHash,
+                    drone.DroneId,
+                    drone.Position,
+                    destination,
+                    facing,
+                    evidence);
+                yield return candidates.Build(
+                    input,
+                    new GameplaySubjectReference(
+                        GameplaySemanticSubjectKind.Vehicle,
+                        drone.DroneId),
+                    intent,
+                    "drone-move." + drone.DroneId + "."
+                        + Format(destination));
+            }
+        }
+
+        private static DroneSnapshot FindDrone(
+            IEnumerable<DroneSnapshot> drones,
+            string droneId)
+        {
+            foreach (DroneSnapshot drone in drones)
+                if (string.Equals(
+                    drone.DroneId,
+                    droneId,
+                    StringComparison.Ordinal)) return drone;
+            throw new KeyNotFoundException(
+                $"Drone '{droneId}' is absent from canonical state.");
+        }
+
         private static string Format(GameplayPosition position) =>
             GameplayNumericPolicy.FormatCanonical(position.X) + ","
             + GameplayNumericPolicy.FormatCanonical(position.Y) + ","
             + GameplayNumericPolicy.FormatCanonical(position.Z);
+    }
+
+    public sealed class GameplayHeadlessDroneMoveIntent
+    {
+        public GameplayHeadlessDroneMoveIntent(
+            GameplayReachableInput input,
+            string stateHash,
+            string droneId,
+            GameplayPosition origin,
+            GameplayPosition destination,
+            float facingDegrees,
+            GameplayEvidenceRecord routeEvidence)
+        {
+            Input = input ?? throw new ArgumentNullException(nameof(input));
+            StateHash = GameplayContentIdentity.RequireDigest(
+                stateHash,
+                nameof(stateHash));
+            DroneId = GameplayContentIdentity.RequireText(
+                droneId,
+                nameof(droneId));
+            GameplayNumericPolicy.RequireFinite(
+                facingDegrees,
+                nameof(facingDegrees));
+            Origin = origin;
+            Destination = destination;
+            FacingDegrees = GameplayNumericPolicy.Normalize(facingDegrees);
+            RouteEvidence = routeEvidence ?? throw new ArgumentNullException(
+                nameof(routeEvidence));
+        }
+
+        public GameplayReachableInput Input { get; }
+        public string StateHash { get; }
+        public string DroneId { get; }
+        public GameplayPosition Origin { get; }
+        public GameplayPosition Destination { get; }
+        public float FacingDegrees { get; }
+        public GameplayEvidenceRecord RouteEvidence { get; }
     }
 
     public sealed class GameplayGroundedMoveCandidateExecutionRoute :
