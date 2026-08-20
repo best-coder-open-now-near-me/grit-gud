@@ -164,7 +164,7 @@ namespace GritGud.Presentation.Gameplay
                 actionStates.TryGetValue(
                     entry.Key,
                     out TurnReplayActorActionState action);
-                actor.Present(entry.Value, action);
+                actor.Present(entry.Value, action, position);
             }
         }
 

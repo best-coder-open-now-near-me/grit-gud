@@ -129,15 +129,6 @@ namespace GritGud.Presentation.Gameplay
                 Present(Session.GetProp(propId));
         }
 
-        internal void PresentReplayTransient(DestructibleDamageRecord record)
-        {
-            if (record == null)
-                throw new ArgumentNullException(nameof(record));
-            if (!presenters.TryGetValue(record.PropId, out var presenter))
-                return;
-            presenter.PresentDamage(record, spawnTransientDebris: true);
-        }
-
         internal void ClearReplayTransients()
         {
             foreach (DestructiblePropPresenter presenter in presenters.Values)

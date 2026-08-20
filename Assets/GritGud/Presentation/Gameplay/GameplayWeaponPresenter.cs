@@ -336,60 +336,6 @@ namespace GritGud.Presentation.Gameplay
             }
         }
 
-        internal bool PresentReplayTransient(
-            ActionResolvedJournalEntry resolved)
-        {
-            if (!replayPresentation || resolved == null
-                || !string.Equals(
-                    resolved.Action.Request.ActorId,
-                    actorId,
-                    StringComparison.Ordinal)
-                || currentDefinition == null)
-            {
-                return false;
-            }
-
-            Vector3 destination;
-            bool drawTracer;
-            if (TryGetAttackResolution(
-                    resolved.Action,
-                    out AttackResolutionRecord attack))
-            {
-                if (currentDefinition.AttackPresentation
-                    == WeaponAttackPresentationKind.ContactStrike)
-                    return false;
-                destination = ResolveAttackDestination(attack);
-                drawTracer = true;
-            }
-            else if (TryGetProjectileLaunch(
-                    resolved.Action,
-                    out ProjectileLaunchRecord launch))
-            {
-                destination = ToVector3(launch.AimPoint);
-                drawTracer = false;
-            }
-            else if (TryGetWeaponDischarge(
-                    resolved.Action,
-                    out WeaponDischargeRecord discharge))
-            {
-                destination = ToVector3(discharge.AimPoint);
-                drawTracer = true;
-            }
-            else
-                return false;
-
-            Vector3 origin = Muzzle != null
-                ? Muzzle.position
-                : registry.GetActor(actorId).Transform.position
-                    + Vector3.up * 1.2f;
-            effectsPresenter?.PresentShot(
-                currentDefinition,
-                origin,
-                destination,
-                drawTracer);
-            return true;
-        }
-
         internal void ClearReplayTransients()
         {
             effectsPresenter?.ClearTransientVisuals();

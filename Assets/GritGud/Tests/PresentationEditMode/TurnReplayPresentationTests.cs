@@ -111,52 +111,5 @@ namespace GritGud.Presentation.Tests
             }
         }
 
-        [Test]
-        public void TransientBindingsClearSpawnedEffectsOnSeek()
-        {
-            var actor = new GameObject("Replay Transient Actor");
-            var effectPrefab = new GameObject("Replay Effect Prefab");
-            GameplayTurnReplayTransientHooks hooks =
-                actor.AddComponent<GameplayTurnReplayTransientHooks>();
-            hooks.Configure(new GameplayTurnReplayTransientBinding(
-                TurnReplayActorActionKind.Equipment,
-                TurnReplayEventBoundary.Start,
-                clip: null,
-                particleOrEffectPrefab: effectPrefab,
-                lifetime: 2f));
-            var timedEvent = new TurnReplayTimedEvent(
-                0,
-                new TurnEndedJournalEntry(
-                    1,
-                    new TurnEndRecord(1, "actor", "other")),
-                0f,
-                0.2f);
-            try
-            {
-                hooks.Present(new GameplayTurnReplayTransientCue(
-                    "actor",
-                    TurnReplayActorActionKind.Equipment,
-                    new TurnReplayEventCrossing(
-                        timedEvent,
-                        TurnReplayEventBoundary.Start)));
-                Assert.That(hooks.ActiveTransientCount, Is.EqualTo(1));
-
-                hooks.Clear();
-                Assert.That(hooks.ActiveTransientCount, Is.Zero);
-
-                hooks.Present(new GameplayTurnReplayTransientCue(
-                    "actor",
-                    TurnReplayActorActionKind.Equipment,
-                    new TurnReplayEventCrossing(
-                        timedEvent,
-                        TurnReplayEventBoundary.End)));
-                Assert.That(hooks.ActiveTransientCount, Is.Zero);
-            }
-            finally
-            {
-                Object.DestroyImmediate(actor);
-                Object.DestroyImmediate(effectPrefab);
-            }
-        }
     }
 }

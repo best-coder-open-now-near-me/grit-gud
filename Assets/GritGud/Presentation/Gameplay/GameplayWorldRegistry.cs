@@ -31,9 +31,6 @@ namespace GritGud.Presentation.Gameplay
             MovementInput = root.GetComponent<ExplorationMovementInput>();
             Wounds = root.GetComponent<ActorWoundVariantPresenter>()
                 ?? root.AddComponent<ActorWoundVariantPresenter>();
-            ReplayTransients = root.GetComponent<
-                    GameplayTurnReplayTransientHooks>()
-                ?? root.AddComponent<GameplayTurnReplayTransientHooks>();
             ReplayActions = root.GetComponent<
                     GameplayTurnReplayActorStateHooks>()
                 ?? root.AddComponent<GameplayTurnReplayActorStateHooks>();
@@ -59,8 +56,6 @@ namespace GritGud.Presentation.Gameplay
         public ExplorationMovementInput MovementInput { get; }
 
         public ActorWoundVariantPresenter Wounds { get; }
-
-        public GameplayTurnReplayTransientHooks ReplayTransients { get; }
 
         public GameplayTurnReplayActorStateHooks ReplayActions { get; }
 

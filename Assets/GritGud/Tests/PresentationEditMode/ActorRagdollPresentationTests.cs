@@ -177,14 +177,11 @@ namespace GritGud.Presentation.Tests
                 ragdoll.TickActiveRagdoll(
                     ragdoll.Profile.MaximumActiveSeconds);
                 Vector3 frozenLivePosition = head.position;
-                TurnReplayEventTimeline timeline = CreateTimeline();
-                TurnReplayTimedEvent actionEvent = timeline.Events[0];
-
                 ragdoll.BeginReplayPresentation();
                 bool presented = ragdoll.PresentReplay(
-                    timeline,
-                    actionEvent.StartSeconds +
-                        (actionEvent.DurationSeconds * 0.5f) + 0.05f);
+                    transitionSequence: 1,
+                    normalizedProgress: 0.6f,
+                    presentationDurationSeconds: 0.8f);
 
                 Assert.That(presented, Is.True);
                 Assert.That(
@@ -207,44 +204,5 @@ namespace GritGud.Presentation.Tests
             }
         }
 
-        private static TurnReplayEventTimeline CreateTimeline()
-        {
-            var previous = new TurnBudget(4, 8f);
-            var resulting = new TurnBudget(3, 8f);
-            var action = new GameplayActionRecord(
-                1,
-                new GameplayActionRequest(
-                    "mara",
-                    EquipmentActionIds.Equip,
-                    "weapon.rifle"),
-                new ActionCost(1, 0f, ActionMobility.Set),
-                previous,
-                resulting,
-                new GameplayActionOutcome[]
-                {
-                    new EquipmentChangedActionOutcome(
-                        new EquipmentChangeRecord(
-                            "mara",
-                            "weapon.rifle",
-                            EquipmentChangeKind.Equip,
-                            previousEquippedItemId: null,
-                            resultingEquippedItemId: "weapon.rifle")),
-                });
-            return new TurnReplayEventTimeline(new TurnReplayWindow(
-                "mara",
-                new[]
-                {
-                    new TurnReplaySegment(
-                        1,
-                        "mara",
-                        new GameplayJournalEntry[]
-                        {
-                            new ActionResolvedJournalEntry(1, action),
-                            new TurnEndedJournalEntry(
-                                2,
-                                new TurnEndRecord(1, "mara", "raider")),
-                        }),
-                }));
-        }
     }
 }

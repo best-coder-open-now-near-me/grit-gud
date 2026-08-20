@@ -2628,6 +2628,15 @@ internal static class SimulationChecks
             "Full live combat projection trajectory did not replay exactly.");
         GameplaySemanticReplayTimeline replay =
             live.CreateReplayTimeline();
+        var playback = new GameplaySemanticReplayPlaybackTimeline(replay);
+        GameplaySemanticReplayPlaybackPosition playbackStart =
+            playback.Locate(0f);
+        GameplaySemanticReplayPlaybackPosition playbackEnd =
+            playback.Locate(playback.TotalDurationSeconds);
+        GameplayPresentationWorldStateSample initialSample =
+            GameplaySemanticReplaySampler.Sample(
+                playbackStart.Frame,
+                playbackStart.Progress);
         GameplayPresentationWorldStateSample droneSample =
             GameplaySemanticReplaySampler.Sample(
                 replay.Frames[1],
@@ -2640,6 +2649,19 @@ internal static class SimulationChecks
             GameplaySemanticReplaySampler.Sample(
                 replay.Frames[4],
                 linearProgress: 0.5f);
+        GameplayPresentationWorldStateSample beforeLaunch =
+            GameplaySemanticReplaySampler.Sample(
+                replay.Frames[3],
+                linearProgress: 0f);
+        GameplayPresentationWorldStateSample resolvedLaunch =
+            GameplaySemanticReplaySampler.Sample(
+                replay.Frames[3],
+                GameplaySemanticReplayPresentationTiming
+                    .ActionResolutionProgress);
+        IReadOnlyList<TurnReplayActorActionState> launchActions =
+            TurnReplayActorActionProjector.Project(
+                replay.Frames[3],
+                normalizedProgress: 0.5f);
         Require(replay.Frames.Count == 5
             && string.Equals(
                 replay.FinalState.CanonicalHash,
@@ -2657,7 +2679,26 @@ internal static class SimulationChecks
                     previousVehicle.Position.Z + 0.25f)) < 0.001f
             && projectileSample.Projectiles[0].DistanceTraveled > 0f
             && projectileSample.Projectiles[0].DistanceTraveled
-                < advanceDistance * 0.5f,
+                < advanceDistance * 0.5f
+            && playback.Frames.Count == replay.Frames.Count
+            && playback.TotalDurationSeconds > 0f
+            && playbackStart.Frame.Index == 0
+            && playbackStart.Progress == 0f
+            && playbackEnd.Frame.Index == replay.Frames.Count - 1
+            && playbackEnd.Progress == 1f
+            && string.Equals(
+                initialSample.Session.ActiveActorId,
+                initial.Session.ActiveActorId,
+                StringComparison.Ordinal)
+            && beforeLaunch.Projectiles.Count == 0
+            && resolvedLaunch.Projectiles.Count == 1
+            && launchActions.Count == 1
+            && launchActions[0].Kind
+                == TurnReplayActorActionKind.Attack
+            && string.Equals(
+                launchActions[0].ActorId,
+                controller.ActorId,
+                StringComparison.Ordinal),
             "Semantic replay did not consume reducer endpoints with shared presentation interpolation.");
 
         bool duplicateFireAdvanceRejected = false;

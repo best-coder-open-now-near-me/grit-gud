@@ -193,49 +193,48 @@ namespace GritGud.Presentation.Actors
         }
 
         internal bool PresentReplay(
-            TurnReplayEventTimeline timeline,
-            float timeSeconds)
+            long transitionSequence,
+            float normalizedProgress,
+            float presentationDurationSeconds)
         {
             if (!replaying)
             {
                 throw new InvalidOperationException(
                     "Begin ragdoll replay presentation before sampling traces.");
             }
-            if (timeline == null)
-                throw new ArgumentNullException(nameof(timeline));
-            if (!IsFinite(timeSeconds))
-                throw new ArgumentOutOfRangeException(nameof(timeSeconds));
+            if (transitionSequence <= 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(transitionSequence));
+            if (!IsFinite(normalizedProgress)
+                || !IsFinite(presentationDurationSeconds)
+                || presentationDurationSeconds <= 0f)
+                throw new ArgumentOutOfRangeException(
+                    nameof(normalizedProgress));
             if (!rigBuilt)
                 return false;
 
             ActorRagdollPoseTrace selected = null;
-            float selectedHandoffSeconds = float.MinValue;
             foreach (ActorRagdollPoseTrace trace in traces)
             {
-                if (!TraceMatchesProfile(trace))
+                if (!TraceMatchesProfile(trace)
+                    || trace.JournalSequence != transitionSequence)
                     continue;
-                foreach (TurnReplayTimedEvent timedEvent in timeline.Events)
-                {
-                    if (timedEvent.Entry.Sequence != trace.JournalSequence)
-                        continue;
-                    float handoffSeconds = timedEvent.StartSeconds +
-                        (timedEvent.DurationSeconds *
-                            trace.HandoffEventNormalizedTime);
-                    if (timeSeconds >= handoffSeconds &&
-                        handoffSeconds >= selectedHandoffSeconds)
-                    {
-                        selected = trace;
-                        selectedHandoffSeconds = handoffSeconds;
-                    }
-                    break;
-                }
+                selected = trace;
+                break;
             }
-            if (selected == null || selected.SampleCount == 0)
+            if (selected == null
+                || selected.SampleCount == 0
+                || normalizedProgress
+                    < selected.HandoffEventNormalizedTime)
                 return false;
 
             EnsureReplayBuffers(selected.BoneCount);
             selected.SampleAt(
-                Mathf.Max(0f, timeSeconds - selectedHandoffSeconds),
+                Mathf.Max(
+                    0f,
+                    (normalizedProgress
+                        - selected.HandoffEventNormalizedTime)
+                        * presentationDurationSeconds),
                 replayPositions,
                 replayRotations);
             for (int index = 0; index < runtimeBones.Count; index++)

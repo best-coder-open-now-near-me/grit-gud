@@ -54,17 +54,14 @@ namespace GritGud.PlayMode.Tests
                     HumanBodyBones.Hips);
                 Vector3 frozenPosition = hips.position;
                 Quaternion frozenRotation = hips.rotation;
-                TurnReplayEventTimeline timeline = CreateTimeline();
-                TurnReplayTimedEvent actionEvent = timeline.Events[0];
-
                 ragdoll.BeginReplayPresentation();
                 Assert.That(
                     actor.GetComponentsInChildren<Rigidbody>(true),
                     Has.All.Matches<Rigidbody>(body => body.isKinematic));
                 Assert.That(ragdoll.PresentReplay(
-                    timeline,
-                    actionEvent.StartSeconds +
-                        (actionEvent.DurationSeconds * 0.5f) + 0.1f),
+                    transitionSequence: 1,
+                    normalizedProgress: 0.75f,
+                    presentationDurationSeconds: 0.8f),
                     Is.True);
                 yield return new WaitForFixedUpdate();
                 Vector3 replayPosition = hips.position;
@@ -90,44 +87,5 @@ namespace GritGud.PlayMode.Tests
             }
         }
 
-        private static TurnReplayEventTimeline CreateTimeline()
-        {
-            var previous = new TurnBudget(4, 8f);
-            var resulting = new TurnBudget(3, 8f);
-            var action = new GameplayActionRecord(
-                1,
-                new GameplayActionRequest(
-                    "mara",
-                    EquipmentActionIds.Equip,
-                    "weapon.rifle"),
-                new ActionCost(1, 0f, ActionMobility.Set),
-                previous,
-                resulting,
-                new GameplayActionOutcome[]
-                {
-                    new EquipmentChangedActionOutcome(
-                        new EquipmentChangeRecord(
-                            "mara",
-                            "weapon.rifle",
-                            EquipmentChangeKind.Equip,
-                            previousEquippedItemId: null,
-                            resultingEquippedItemId: "weapon.rifle")),
-                });
-            return new TurnReplayEventTimeline(new TurnReplayWindow(
-                "mara",
-                new[]
-                {
-                    new TurnReplaySegment(
-                        1,
-                        "mara",
-                        new GameplayJournalEntry[]
-                        {
-                            new ActionResolvedJournalEntry(1, action),
-                            new TurnEndedJournalEntry(
-                                2,
-                                new TurnEndRecord(1, "mara", "raider")),
-                        }),
-                }));
-        }
     }
 }

@@ -82,8 +82,7 @@ namespace GritGud.Presentation.Gameplay
         internal void Present(
             GameplayActorSnapshot snapshot,
             TurnReplayActorActionState action,
-            TurnReplayEventTimeline timeline = null,
-            float timeSeconds = 0f)
+            GameplaySemanticReplayPlaybackPosition? playback = null)
         {
             if (!presenting)
             {
@@ -123,28 +122,20 @@ namespace GritGud.Presentation.Gameplay
                 pose.Stance,
                 animationAction,
                 animationProgress);
-            if (timeline != null)
-                ragdoll?.PresentReplay(timeline, timeSeconds);
-        }
-
-        internal void PresentTransient(
-            GameplayTurnReplayTransientCue cue)
-        {
-            if (!presenting)
-                return;
-            view.ReplayTransients.Present(cue);
-            if (cue.Crossing.Boundary == TurnReplayEventBoundary.Start
-                && cue.Crossing.TimedEvent.Entry
-                    is ActionResolvedJournalEntry resolved)
+            if (playback.HasValue)
             {
-                weapon?.PresentReplayTransient(resolved);
+                GameplaySemanticReplayPlaybackPosition position =
+                    playback.Value;
+                ragdoll?.PresentReplay(
+                    position.Frame.Transition.Identity.Sequence,
+                    position.Progress,
+                    position.PlaybackFrame.DurationSeconds);
             }
         }
 
         internal void ClearTransients()
         {
             weapon?.ClearReplayTransients();
-            view.ReplayTransients.Clear();
         }
 
         public void Dispose() => End();
