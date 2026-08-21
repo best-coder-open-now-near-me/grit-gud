@@ -16,6 +16,7 @@ namespace GritGud.Application.Gameplay
         ObjectiveVictory,
         MutualDefeat,
         ExecutionFailure,
+        Stalemate,
     }
 
     public sealed class GameplayBattleTerminalResult
@@ -542,6 +543,21 @@ namespace GritGud.Application.Gameplay
                 }
                 catch (GameplayDecisionFailureException failure)
                 {
+                    if (failure.Kind
+                        == GameplayDecisionFailureKind.NoProgressTurn)
+                    {
+                        GameplayBattleTerminalResult stalemate =
+                            CreateTerminal(
+                                runtime.CurrentState,
+                                GameplayBattleTerminalKind.Stalemate);
+                        return new GameplayBattleRunResult(
+                            executionIdentity,
+                            initialState,
+                            transitions,
+                            decisions,
+                            runtime.CurrentState,
+                            stalemate);
+                    }
                     GameplayBattleTerminalResult failed = CreateFailureTerminal(
                         runtime.CurrentState,
                         failure);
@@ -616,21 +632,66 @@ namespace GritGud.Application.Gameplay
                 terminal = null;
                 return false;
             }
-            terminal = new GameplayBattleTerminalResult(
+            terminal = CreateTerminal(
+                state,
                 kind.Value,
-                state.Session.LastTransitionSequence,
-                state.CanonicalHash,
                 capableParty,
                 capableHostiles);
             return true;
         }
 
+        private GameplayBattleTerminalResult CreateTerminal(
+            GameplayCombatStateSnapshot state,
+            GameplayBattleTerminalKind kind)
+        {
+            CollectCapableActors(
+                state,
+                out List<string> capableParty,
+                out List<string> capableHostiles);
+            return CreateTerminal(
+                state,
+                kind,
+                capableParty,
+                capableHostiles);
+        }
+
+        private static GameplayBattleTerminalResult CreateTerminal(
+            GameplayCombatStateSnapshot state,
+            GameplayBattleTerminalKind kind,
+            IEnumerable<string> capableParty,
+            IEnumerable<string> capableHostiles) =>
+            new GameplayBattleTerminalResult(
+                kind,
+                state.Session.LastTransitionSequence,
+                state.CanonicalHash,
+                capableParty,
+                capableHostiles);
+
         private GameplayBattleTerminalResult CreateFailureTerminal(
             GameplayCombatStateSnapshot state,
             GameplayDecisionFailureException failure)
         {
-            var capableParty = new List<string>();
-            var capableHostiles = new List<string>();
+            CollectCapableActors(
+                state,
+                out List<string> capableParty,
+                out List<string> capableHostiles);
+            return new GameplayBattleTerminalResult(
+                GameplayBattleTerminalKind.ExecutionFailure,
+                state.Session.LastTransitionSequence,
+                state.CanonicalHash,
+                capableParty,
+                capableHostiles,
+                failure.Kind,
+                DescribeFailure(failure));
+        }
+
+        private void CollectCapableActors(
+            GameplayCombatStateSnapshot state,
+            out List<string> capableParty,
+            out List<string> capableHostiles)
+        {
+            capableParty = new List<string>();
+            capableHostiles = new List<string>();
             foreach (ScenarioActorDefinition actor in assembly.Scenario.Actors)
             {
                 if (state.Session.GetActor(actor.Id).IsIncapacitated)
@@ -640,14 +701,6 @@ namespace GritGud.Application.Gameplay
                 else if (actor.Combat.EnemyBehavior != null)
                     capableHostiles.Add(actor.Id);
             }
-            return new GameplayBattleTerminalResult(
-                GameplayBattleTerminalKind.ExecutionFailure,
-                state.Session.LastTransitionSequence,
-                state.CanonicalHash,
-                capableParty,
-                capableHostiles,
-                failure.Kind,
-                DescribeFailure(failure));
         }
 
         private static string DescribeFailure(Exception failure)

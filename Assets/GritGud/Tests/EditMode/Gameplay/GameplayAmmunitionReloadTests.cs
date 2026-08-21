@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
+using GritGud.Domain.Levels;
 using GritGud.Domain.Turns;
 using NUnit.Framework;
 
@@ -224,6 +225,202 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void HeadlessFireReloadFireReplaysAndMatchesLiveProjection()
+        {
+            GameplaySession gameplay = CreateGameplay(
+                loaded: 1,
+                reserve: 2);
+            gameplay.BeginEncounter();
+            GameplayCombatStateSnapshot initial =
+                GameplayCombatStateCapture.Capture(gameplay);
+            InventoryItemDefinition weapon = gameplay.Scenario.GetActor(
+                "player").GetInventoryItem("weapon.rifle");
+            var attackInput = new GameplayReachableInput(
+                GameplayReachableInputKind.EquippedAttack,
+                "weapon.rifle.power->Actor",
+                "player",
+                GameplayCapabilityProfiles.Attack(weapon.Attack),
+                "target");
+            var reloadInput = new GameplayReachableInput(
+                GameplayReachableInputKind.ReloadControl,
+                "control.reload.weapon.rifle",
+                "player",
+                GameplayCapabilityProfiles.Reload(weapon.Ammunition),
+                weapon.Id);
+            var playerEndInput = new GameplayReachableInput(
+                GameplayReachableInputKind.EndTurnControl,
+                "control.end-turn.player",
+                "player",
+                GameplayCapabilityProfiles.EndTurn(emergency: false));
+            var targetEndInput = new GameplayReachableInput(
+                GameplayReachableInputKind.EndTurnControl,
+                "control.end-turn.target",
+                "target",
+                GameplayCapabilityProfiles.EndTurn(emergency: false));
+            GameplayReachableInput[] inputs =
+            {
+                attackInput,
+                reloadInput,
+                playerEndInput,
+                targetEndInput,
+            };
+            GameplayTransitionReducerRegistry reducers =
+                GameplaySimulationReducers.CreateCurrent();
+            GameplayCapabilityRegistry capabilities =
+                GameplayCurrentCapabilityCatalog.Create(reducers, inputs);
+            var level = new LevelDocument
+            {
+                levelId = "reload-level",
+                schemaVersion = 1,
+            };
+            level.Normalize();
+            var spatial = new GameplayHeadlessSpatialEvidence(
+                level,
+                CreateExecutionIdentity(gameplay).Spatial);
+            var routes = new GameplayCandidateExecutionRouteRegistry(
+                capabilities);
+            routes.Register(new GameplayActorAttackCandidateExecutionRoute(
+                gameplay.Scenario,
+                Array.Empty<TacticalContextRuleDefinition>(),
+                spatial));
+            routes.Register(new GameplayReloadCandidateExecutionRoute(
+                gameplay.Scenario));
+            routes.Register(new GameplayEndTurnCandidateExecutionRoute(
+                gameplay.Scenario));
+            var candidates = new GameplayReachableCandidateBuilder(
+                capabilities);
+            GameplayCandidate attack = candidates.Build(attackInput);
+            GameplayCandidate reload = candidates.Build(reloadInput);
+            GameplayCandidate playerEnd = candidates.Build(playerEndInput);
+            GameplayCandidate targetEnd = candidates.Build(targetEndInput);
+            var runtime = new GameplaySimulationRuntime(
+                CreateExecutionIdentity(gameplay),
+                initial,
+                reducers,
+                capabilities);
+
+            Execute(runtime, routes, attack);
+            AssertAmmunition(runtime.CurrentState, loaded: 0, reserve: 2);
+            Assert.That(Evaluate(runtime, routes, attack).IsLegal, Is.False);
+            Assert.That(Evaluate(runtime, routes, reload).IsLegal, Is.True);
+            Execute(runtime, routes, playerEnd);
+            Execute(runtime, routes, targetEnd);
+
+            Execute(runtime, routes, reload);
+            AssertAmmunition(runtime.CurrentState, loaded: 2, reserve: 0);
+            Assert.That(Evaluate(runtime, routes, attack).IsLegal, Is.True);
+            Assert.That(Evaluate(runtime, routes, reload).IsLegal, Is.False);
+            Execute(runtime, routes, playerEnd);
+            Execute(runtime, routes, targetEnd);
+
+            Execute(runtime, routes, attack);
+            AssertAmmunition(runtime.CurrentState, loaded: 1, reserve: 0);
+            Assert.That(runtime.Trajectory, Has.Count.EqualTo(7));
+            Assert.That(runtime.Trajectory[0].Transition.Profile.Capability,
+                Is.EqualTo(GameplaySemanticCapability.DirectAttack));
+            Assert.That(runtime.Trajectory[3].Transition.Profile.Capability,
+                Is.EqualTo(GameplaySemanticCapability.Reload));
+            Assert.That(runtime.Trajectory[6].Transition.Profile.Capability,
+                Is.EqualTo(GameplaySemanticCapability.DirectAttack));
+            Assert.That(GameplayExactReplay.Verify(
+                initial,
+                runtime.Trajectory,
+                reducers).IsExact, Is.True);
+
+            var liveGameplay = new GameplaySession(
+                gameplay.Scenario,
+                scenarioSeed: 11u);
+            liveGameplay.BeginEncounter();
+            GameplayCombatStateSnapshot liveInitial =
+                GameplayCombatStateCapture.Capture(liveGameplay);
+            Assert.That(liveInitial.CanonicalHash,
+                Is.EqualTo(initial.CanonicalHash));
+            using (var live = new GameplayLiveSessionRuntime(
+                liveGameplay,
+                CreateExecutionIdentity(liveGameplay),
+                liveInitial,
+                reducers,
+                capabilities))
+            {
+                foreach (GameplayTrajectoryStep step in runtime.Trajectory)
+                    live.Execute(step.Transition);
+                Assert.That(live.CurrentState.CanonicalHash,
+                    Is.EqualTo(runtime.CurrentState.CanonicalHash));
+                Assert.That(GameplayCombatStateCapture.Capture(liveGameplay)
+                    .CanonicalHash,
+                    Is.EqualTo(runtime.CurrentState.CanonicalHash));
+            }
+        }
+
+        [Test]
+        public void TurnModeTransitionsNeverReplenishAmmunition()
+        {
+            GameplaySession gameplay = CreateGameplay(
+                loaded: 1,
+                reserve: 2);
+            gameplay.EnterTurnMode();
+            Assert.That(new GameplayAttackSession(gameplay).TryDischarge(
+                "player",
+                GameplayTargetIds.WorldAimPoint,
+                new GameplayPosition(0f, 0f, 10f),
+                out _,
+                out AttackResolutionFailure failure), Is.True);
+            Assert.That(failure, Is.EqualTo(AttackResolutionFailure.None));
+            AssertAmmunition(gameplay, loaded: 0, reserve: 2);
+
+            Assert.That(gameplay.TryExitTurnMode(out _), Is.True);
+            gameplay.AdvanceContinuousTime(
+                gameplay.Scenario.Timing.MinimumVoluntaryTurnSeconds);
+            Assert.That(gameplay.EnterTurnMode(), Is.True);
+
+            AssertAmmunition(gameplay, loaded: 0, reserve: 2);
+        }
+
+        [Test]
+        public void CompatibleWeaponsShareReserveAndPreserveMagazinesOnSwitch()
+        {
+            GameplaySession gameplay = CreateDualWeaponGameplay();
+            var reloads = new GameplayReloadSession(gameplay);
+            var equipment = new GameplayEquipmentSession(gameplay);
+
+            Assert.That(reloads.TryResolve("player", out _, out _), Is.True);
+            AssertDualAmmunition(
+                gameplay,
+                rifleLoaded: 2,
+                launcherLoaded: 0,
+                reserve: 1);
+            Assert.That(equipment.TryResolveSwitch(
+                "player",
+                "weapon.launcher",
+                out _,
+                out _,
+                out _), Is.True);
+            AssertDualAmmunition(
+                gameplay,
+                rifleLoaded: 2,
+                launcherLoaded: 0,
+                reserve: 1);
+
+            Assert.That(reloads.TryResolve("player", out _, out _), Is.True);
+            AssertDualAmmunition(
+                gameplay,
+                rifleLoaded: 2,
+                launcherLoaded: 1,
+                reserve: 0);
+            Assert.That(equipment.TryResolveSwitch(
+                "player",
+                "weapon.rifle",
+                out _,
+                out _,
+                out _), Is.True);
+            AssertDualAmmunition(
+                gameplay,
+                rifleLoaded: 2,
+                launcherLoaded: 1,
+                reserve: 0);
+        }
+
+        [Test]
         public void StaleReloadCannotTransferTheSameReserveTwice()
         {
             GameplaySession gameplay = CreateGameplay(
@@ -435,6 +632,10 @@ namespace GritGud.Domain.Tests.Gameplay
                 new TurnBudget(actionPoints, 8f),
                 new[] { weapon },
                 equipped ? weapon.Id : null,
+                combat: new ActorCombatDefinition(
+                    "party",
+                    new[] { "hostile" },
+                    maximumWounds: 10),
                 ammunitionReserves: new[]
                 {
                     new AmmunitionReserveDefinition("ammo.rifle", reserve),
@@ -445,13 +646,72 @@ namespace GritGud.Domain.Tests.Gameplay
                 new GameplayActorPose(
                     new GameplayPosition(0f, 0f, 10f),
                     180f),
-                new TurnBudget(0, 8f));
+                new TurnBudget(0, 8f),
+                combat: new ActorCombatDefinition(
+                    "hostile",
+                    new[] { "party" },
+                    maximumWounds: 10));
             return new GameplaySession(new ScenarioDefinition(
                 "reload-test",
                 new ScenarioTimingDefinition(1f),
                 new[] { player, target },
                 Array.Empty<ScenarioObjectiveDefinition>()),
                 scenarioSeed: 11u);
+        }
+
+        private static GameplaySession CreateDualWeaponGameplay()
+        {
+            var attack = new AttackDefinition(
+                "attack.shared-ammo",
+                "Fire",
+                new ActionCost(1, 0f, ActionMobility.Set),
+                2f,
+                accuracyDecay: AccuracyDecayDefinition.None);
+            InventoryItemDefinition CreateWeapon(string id, int slot) =>
+                new InventoryItemDefinition(
+                    id,
+                    id,
+                    slot,
+                    InventoryItemKind.Weapon,
+                    new ActionCost(1, 0f, ActionMobility.Set),
+                    EquipmentEffectSet.None,
+                    attack,
+                    ammunition: new WeaponAmmunitionDefinition(
+                        "ammo.shared",
+                        magazineCapacity: 2,
+                        initialLoadedRounds: 0,
+                        roundsPerUse: 1,
+                        reloadTurnCost: new ActionCost(
+                            2,
+                            0f,
+                            ActionMobility.Set),
+                        consumesRemainingMovement: true,
+                        reloadPolicyVersion: 1));
+            InventoryItemDefinition rifle = CreateWeapon(
+                "weapon.rifle",
+                1);
+            InventoryItemDefinition launcher = CreateWeapon(
+                "weapon.launcher",
+                2);
+            var player = new ScenarioActorDefinition(
+                "player",
+                10,
+                new GameplayActorPose(
+                    new GameplayPosition(0f, 0f, 0f),
+                    0f),
+                new TurnBudget(4, 8f),
+                new[] { rifle, launcher },
+                rifle.Id,
+                ammunitionReserves: new[]
+                {
+                    new AmmunitionReserveDefinition("ammo.shared", 3),
+                });
+            return new GameplaySession(new ScenarioDefinition(
+                "shared-ammo-test",
+                new ScenarioTimingDefinition(1f),
+                new[] { player },
+                Array.Empty<ScenarioObjectiveDefinition>()),
+                scenarioSeed: 13u);
         }
 
         private static GameplayExecutionIdentity CreateExecutionIdentity(
@@ -479,6 +739,66 @@ namespace GritGud.Domain.Tests.Gameplay
                 Is.EqualTo(loaded));
             Assert.That(ammunition.GetReserve("ammo.rifle"),
                 Is.EqualTo(reserve));
+        }
+
+        private static void AssertAmmunition(
+            GameplayCombatStateSnapshot state,
+            int loaded,
+            int reserve)
+        {
+            ActorAmmunitionSnapshot ammunition = state.Session
+                .GetActor("player").Ammunition;
+            Assert.That(ammunition.GetMagazine("weapon.rifle").LoadedRounds,
+                Is.EqualTo(loaded));
+            Assert.That(ammunition.GetReserve("ammo.rifle"),
+                Is.EqualTo(reserve));
+        }
+
+        private static void AssertDualAmmunition(
+            GameplaySession gameplay,
+            int rifleLoaded,
+            int launcherLoaded,
+            int reserve)
+        {
+            ActorAmmunitionSnapshot ammunition = gameplay.GetActor("player")
+                .Ammunition;
+            Assert.That(ammunition.GetMagazine("weapon.rifle").LoadedRounds,
+                Is.EqualTo(rifleLoaded));
+            Assert.That(ammunition.GetMagazine("weapon.launcher").LoadedRounds,
+                Is.EqualTo(launcherLoaded));
+            Assert.That(ammunition.GetReserve("ammo.shared"),
+                Is.EqualTo(reserve));
+        }
+
+        private static GameplayExecutableCandidateEvaluation Evaluate(
+            GameplaySimulationRuntime runtime,
+            GameplayCandidateExecutionRouteRegistry routes,
+            GameplayCandidate candidate)
+        {
+            var context = new GameplayDecisionContext(
+                runtime.CurrentState,
+                GameplayObservationSnapshot.FullState(
+                    candidate.ActorId,
+                    runtime.CurrentState));
+            return routes.Evaluate(context, candidate);
+        }
+
+        private static void Execute(
+            GameplaySimulationRuntime runtime,
+            GameplayCandidateExecutionRouteRegistry routes,
+            GameplayCandidate candidate)
+        {
+            GameplayExecutableCandidateEvaluation evaluation = Evaluate(
+                runtime,
+                routes,
+                candidate);
+            Assert.That(evaluation.IsLegal, Is.True, evaluation.FailureCode);
+            var context = new GameplayDecisionContext(
+                runtime.CurrentState,
+                GameplayObservationSnapshot.FullState(
+                    candidate.ActorId,
+                    runtime.CurrentState));
+            runtime.Execute(routes.Prepare(context, evaluation));
         }
     }
 }
