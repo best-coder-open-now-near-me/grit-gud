@@ -468,6 +468,10 @@ namespace GritGud.Presentation.Tests
             Assert.That(actor.GetInventoryItem("item.frag-grenade").InitialQuantity,
                 Is.EqualTo(2));
             Assert.That(actor.InitiallyEquippedItemId, Is.EqualTo("weapon.rifle"));
+            Assert.That(actor.AmmunitionReserves, Has.Count.EqualTo(1));
+            Assert.That(actor.AmmunitionReserves[0].AmmoTypeId,
+                Is.EqualTo("ammo.rifle"));
+            Assert.That(actor.AmmunitionReserves[0].Rounds, Is.EqualTo(18));
         }
 
         [Test]

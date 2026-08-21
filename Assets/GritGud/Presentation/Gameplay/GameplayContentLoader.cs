@@ -433,6 +433,16 @@ namespace GritGud.Presentation.Gameplay
                 selected.Add(item);
             }
             actor.inventory = selected;
+            var retainedAmmoTypes = new HashSet<string>(
+                StringComparer.Ordinal);
+            foreach (ScenarioInventoryItemData item in selected)
+                if (item.ammunition?.enabled == true)
+                    retainedAmmoTypes.Add(item.ammunition.ammoTypeId);
+            actor.ammunitionReserves = (actor.ammunitionReserves
+                    ?? new List<ScenarioAmmunitionReserveData>())
+                .Where(reserve => reserve != null
+                    && retainedAmmoTypes.Contains(reserve.ammoTypeId))
+                .ToList();
             actor.initiallyEquippedItemId = loadout.initiallyEquippedItemId;
             actor.attackCapability = null;
         }
