@@ -583,7 +583,7 @@ namespace GritGud.Application.Gameplay
             }
         }
 
-        private enum JsonKind
+        internal enum JsonKind
         {
             Null,
             Boolean,
@@ -593,7 +593,7 @@ namespace GritGud.Application.Gameplay
             Object,
         }
 
-        private sealed class JsonNode
+        internal sealed class JsonNode
         {
             private JsonNode(
                 JsonKind kind,
@@ -705,7 +705,7 @@ namespace GritGud.Application.Gameplay
                     name + " must be a JSON " + expected + ".");
         }
 
-        private sealed class Parser
+        internal sealed class Parser
         {
             private readonly string text;
             private int index;

@@ -60,12 +60,47 @@ namespace GritGud.Application.Gameplay
             GameplayCombatStateSnapshot initialState,
             IEnumerable<GameplayTrajectoryStep> trajectory,
             GameplayTransitionReducerRegistry reducers)
+            : this(
+                initialState,
+                trajectory,
+                reducers,
+                authoritativeResultingStates: null,
+                authoritativeDomainEvents: null)
+        {
+        }
+
+        internal static GameplaySemanticReplayTimeline FromRecordedArtifact(
+            GameplayCombatStateSnapshot initialState,
+            IEnumerable<GameplayTrajectoryStep> trajectory,
+            IReadOnlyList<GameplayCombatStateSnapshot> resultingStates,
+            IReadOnlyList<IReadOnlyList<GameplayDomainEvent>> domainEvents) =>
+            new GameplaySemanticReplayTimeline(
+                initialState,
+                trajectory,
+                reducers: null,
+                authoritativeResultingStates: resultingStates,
+                authoritativeDomainEvents: domainEvents);
+
+        private GameplaySemanticReplayTimeline(
+            GameplayCombatStateSnapshot initialState,
+            IEnumerable<GameplayTrajectoryStep> trajectory,
+            GameplayTransitionReducerRegistry reducers,
+            IReadOnlyList<GameplayCombatStateSnapshot>
+                authoritativeResultingStates,
+            IReadOnlyList<IReadOnlyList<GameplayDomainEvent>>
+                authoritativeDomainEvents)
         {
             InitialState = initialState ?? throw new ArgumentNullException(
                 nameof(initialState));
             if (trajectory == null)
                 throw new ArgumentNullException(nameof(trajectory));
-            if (reducers == null)
+            bool usesRecordedFrames = authoritativeResultingStates != null
+                || authoritativeDomainEvents != null;
+            if ((authoritativeResultingStates == null)
+                != (authoritativeDomainEvents == null))
+                throw new ArgumentException(
+                    "Authoritative replay states and events must be supplied together.");
+            if (reducers == null && !usesRecordedFrames)
                 throw new ArgumentNullException(nameof(reducers));
             var built = new List<GameplaySemanticReplayFrame>();
             GameplayCombatStateSnapshot state = InitialState;
@@ -76,21 +111,53 @@ namespace GritGud.Application.Gameplay
                     throw new ArgumentException(
                         "Semantic replay trajectories cannot contain null frames.",
                         nameof(trajectory));
-                string payloadDigest =
-                    GameplayTransitionPayloadDigest.Calculate(step.Transition);
-                RequireEqual(
-                    index,
-                    "transition-payload",
-                    step.TransitionPayloadDigest,
-                    payloadDigest);
-                GameplayReductionResult reduction = reducers.Reduce(
-                    state,
-                    step.Transition);
-                RequireEqual(
-                    index,
-                    "state-hash",
-                    step.ResultingStateHash,
-                    reduction.Resulting.CanonicalHash);
+                if (!usesRecordedFrames)
+                {
+                    string payloadDigest = GameplayTransitionPayloadDigest
+                        .Calculate(step.Transition);
+                    RequireEqual(
+                        index,
+                        "transition-payload",
+                        step.TransitionPayloadDigest,
+                        payloadDigest);
+                }
+                GameplayReductionResult reduction;
+                if (usesRecordedFrames)
+                {
+                    // Portable artifacts round floating-point source values for
+                    // canonical storage. Their independently digested states
+                    // and events are the playback authority; exact reduction
+                    // from unrounded values is proved when the artifact is
+                    // generated and verified offline.
+                    if (index >= authoritativeResultingStates.Count)
+                        throw new ArgumentException(
+                            "Authoritative replay states do not cover the trajectory.",
+                            nameof(authoritativeResultingStates));
+                    if (index >= authoritativeDomainEvents.Count)
+                        throw new ArgumentException(
+                            "Authoritative replay events do not cover the trajectory.",
+                            nameof(authoritativeDomainEvents));
+                    GameplayCombatStateSnapshot authoritative =
+                        authoritativeResultingStates[index];
+                    RequireEqual(
+                        index,
+                        "artifact-state-hash",
+                        step.ResultingStateHash,
+                        authoritative.CanonicalHash);
+                    reduction = new GameplayReductionResult(
+                        state,
+                        authoritative,
+                        authoritativeDomainEvents[index]);
+                }
+                else
+                {
+                    reduction = reducers.Reduce(state, step.Transition);
+                    RequireEqual(
+                        index,
+                        "state-hash",
+                        step.ResultingStateHash,
+                        reduction.Resulting.CanonicalHash);
+                }
                 RequireEqual(
                     index,
                     "domain-events",
@@ -107,6 +174,16 @@ namespace GritGud.Application.Gameplay
                 state = reduction.Resulting;
                 index++;
             }
+            if (authoritativeResultingStates != null
+                && authoritativeResultingStates.Count != index)
+                throw new ArgumentException(
+                    "Authoritative replay states exceed the trajectory.",
+                    nameof(authoritativeResultingStates));
+            if (authoritativeDomainEvents != null
+                && authoritativeDomainEvents.Count != index)
+                throw new ArgumentException(
+                    "Authoritative replay events exceed the trajectory.",
+                    nameof(authoritativeDomainEvents));
             frames = built.AsReadOnly();
             FinalState = state;
         }

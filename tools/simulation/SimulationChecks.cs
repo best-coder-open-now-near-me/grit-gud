@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
@@ -3360,6 +3361,23 @@ internal static class SimulationChecks
             artifactJson);
         GameplaySemanticReplayTimeline verifiedArtifactReplay =
             GameplayBattleArtifactVerifier.VerifyRun(result, decoded);
+        Stopwatch playbackClock = Stopwatch.StartNew();
+        string embeddedArtifactJson = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "Assets",
+            "GritGud",
+            "Content",
+            "Resources",
+            "SimulationArtifacts",
+            "depot-first-sim.json"));
+        GameplayBattleArtifact playbackArtifact = GameplayBattleArtifactCodec
+            .Read(embeddedArtifactJson);
+        GameplaySemanticReplayTimeline loadedArtifactReplay =
+            GameplayBattleArtifactReplayLoader.Load(playbackArtifact);
+        playbackClock.Stop();
+        Console.WriteLine(
+            "Artifact playback decode + load: "
+            + playbackClock.Elapsed.TotalSeconds.ToString("0.000") + "s");
         Require(string.Equals(
                 decoded.ToPortableJson(),
                 artifactJson,
@@ -3376,6 +3394,17 @@ internal static class SimulationChecks
             && string.Equals(
                 verifiedArtifactReplay.FinalState.CanonicalHash,
                 result.FinalState.CanonicalHash,
+                StringComparison.Ordinal)
+            && string.Equals(
+                loadedArtifactReplay.FinalState.CanonicalHash,
+                result.FinalState.CanonicalHash,
+                StringComparison.Ordinal)
+            && loadedArtifactReplay.Frames.Count
+                == decoded.Content.Transitions.Count
+            && string.Equals(
+                playbackArtifact.Content.ExecutionIdentity.Gameplay
+                    .DefinitionDigest,
+                decoded.Content.ExecutionIdentity.Gameplay.DefinitionDigest,
                 StringComparison.Ordinal),
             "Battle artifact was not byte-stable and scoreboard-complete.");
         GameplayBattleArtifactFormatException unknownFailure = null;

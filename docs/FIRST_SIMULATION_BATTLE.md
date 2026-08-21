@@ -145,8 +145,11 @@ not identify gameplay state.
 ## Visual review and dead time
 
 The battle viewer loads the same verified artifact and projects it through the
-existing replay world/action presentation seams. It never runs another policy
-or re-resolves gameplay. Human playback may compress intervals containing no
+existing replay world/action presentation seams. Runtime loading rehydrates the
+artifact's recorded transitions, resulting states, and domain events; exact
+policy regeneration and reducer proof remain offline validation gates. The
+viewer never runs another policy or re-resolves gameplay. Human playback may
+compress intervals containing no
 meaningful movement, decision, reaction opportunity, threat change, or visible
 consequence. Compression cannot remove or reorder authoritative transitions and
 cannot hide awareness changes, reaction windows, projectile arrivals,

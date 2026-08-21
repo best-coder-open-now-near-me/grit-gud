@@ -169,13 +169,13 @@ namespace GritGud.Domain.Gameplay
             }
             RemainingFraction = remainingFraction;
             PulseProgress = pulseProgress;
+            CurrentRadius = Field.Definition.RadiusAt(RemainingFraction);
         }
 
         public FireFieldRecord Field { get; }
         public float RemainingFraction { get; }
         public float PulseProgress { get; }
-        public float CurrentRadius =>
-            Field.Definition.RadiusAt(RemainingFraction);
+        public float CurrentRadius { get; }
     }
 
     public enum FireFieldSubjectKind
