@@ -135,7 +135,7 @@ namespace GritGud.Presentation.Gameplay
                 foreach (InventoryItemDefinition item in
                     Session.GetInventory(actorId))
                 {
-                    AddAuthoredBinding(
+                    AddDefaultBinding(
                         item.HotbarSlot,
                         new GameplayHotbarBinding(
                             GameplayHotbarBindingKind.InventoryItem,
@@ -147,7 +147,7 @@ namespace GritGud.Presentation.Gameplay
                 {
                     if (ability.AuthoredSlot == 0)
                         continue;
-                    AddAuthoredBinding(
+                    AddDefaultBinding(
                         ability.AuthoredSlot,
                         new GameplayHotbarBinding(
                             GameplayHotbarBindingKind.ActorAbility,
@@ -429,7 +429,7 @@ namespace GritGud.Presentation.Gameplay
             return false;
         }
 
-        private void AddAuthoredBinding(
+        private void AddDefaultBinding(
             int slotNumber,
             GameplayHotbarBinding binding)
         {
@@ -442,9 +442,10 @@ namespace GritGud.Presentation.Gameplay
 
             if (bindings.ContainsKey(slotNumber))
             {
-                throw new InvalidOperationException(
-                    $"Actor '{actorId}' assigns multiple actions to hotbar "
-                    + $"slot {slotNumber}.");
+                // Default slots are preferences assembled from independent
+                // content sources. The earlier binding stays selected while
+                // this action remains available in the assignment chooser.
+                return;
             }
 
             bindings.Add(slotNumber, binding);

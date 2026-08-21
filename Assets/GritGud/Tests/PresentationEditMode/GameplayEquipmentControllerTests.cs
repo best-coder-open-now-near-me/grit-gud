@@ -284,6 +284,45 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void CollidingDefaultAbilityRemainsAvailableForAssignment()
+        {
+            var root = new GameObject("Default Hotbar Collision Test");
+            try
+            {
+                GameplaySession session = CreateSession();
+                var ability = new GameplayActorAbilityHotbarDefinition(
+                    "ability.control-drone",
+                    "Scout Drone",
+                    authoredSlot: 2);
+                GameplayHotbarController hotbar =
+                    root.AddComponent<GameplayHotbarController>();
+
+                Assert.DoesNotThrow(() => hotbar.Bind(
+                    session,
+                    "player",
+                    new[] { ability },
+                    (_, __) => false,
+                    (_, __) => false));
+
+                Assert.That(
+                    hotbar.Bindings[2],
+                    Is.EqualTo(new GameplayHotbarBinding(
+                        GameplayHotbarBindingKind.InventoryItem,
+                        "launcher")));
+                Assert.That(hotbar.ActorAbilities, Does.Contain(ability));
+                var abilityBinding = new GameplayHotbarBinding(
+                    GameplayHotbarBindingKind.ActorAbility,
+                    ability.Id);
+                Assert.That(hotbar.TryBindSlot(5, abilityBinding), Is.True);
+                Assert.That(hotbar.Bindings[5], Is.EqualTo(abilityBinding));
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
         public void HotbarControllerKeepsIndependentPartyMemberLayouts()
         {
             var root = new GameObject("Party Hotbar Layout Test");

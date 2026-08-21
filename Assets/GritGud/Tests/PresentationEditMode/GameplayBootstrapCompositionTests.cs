@@ -125,26 +125,27 @@ namespace GritGud.Presentation.Tests
             Assert.That(equipment, Is.Not.Null);
             Assert.That(hotbar, Is.Not.Null);
             Assert.That(
-                hotbar.Bindings[GameplayCoreActorAbilities.StanceHotbarSlot],
-                Is.EqualTo(new GameplayHotbarBinding(
-                    GameplayHotbarBindingKind.ActorAbility,
-                    GameplayCoreActorAbilities.StanceId)));
+                hotbar.ActorAbilities.Select(ability => ability.Id),
+                Does.Contain(GameplayCoreActorAbilities.StanceId));
             Assert.That(
-                hotbar.Bindings[GameplayDroneController.HotbarSlot],
-                Is.EqualTo(new GameplayHotbarBinding(
-                    GameplayHotbarBindingKind.ActorAbility,
-                    GameplayDroneController.AbilityId)));
+                hotbar.ActorAbilities.Select(ability => ability.Id),
+                Does.Contain(GameplayDroneController.AbilityId));
+            var stanceBinding = new GameplayHotbarBinding(
+                GameplayHotbarBindingKind.ActorAbility,
+                GameplayCoreActorAbilities.StanceId);
+            Assert.That(hotbar.TryBindSlot(1, stanceBinding), Is.True);
+            Assert.That(hotbar.Bindings[1], Is.EqualTo(stanceBinding));
             Assert.That(
                 gameplay.Session.GetActor("player").Pose.Stance,
                 Is.EqualTo(ActorStance.Standing));
             Assert.That(
-                hotbar.TryActivateSlot(GameplayCoreActorAbilities.StanceHotbarSlot),
+                hotbar.TryActivateSlot(1),
                 Is.True);
             Assert.That(
                 gameplay.Session.GetActor("player").Pose.Stance,
                 Is.EqualTo(ActorStance.Crouched));
             Assert.That(
-                hotbar.TryActivateSlot(GameplayCoreActorAbilities.StanceHotbarSlot),
+                hotbar.TryActivateSlot(1),
                 Is.True);
             Assert.That(
                 gameplay.Session.GetActor("player").Pose.Stance,
