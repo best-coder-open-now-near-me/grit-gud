@@ -316,6 +316,46 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void OvertakenPreparedThrowFailsWithoutMutatingCurrentGameplay()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            var session = CreateThrownSession(
+                gameplay,
+                new FixedWorldQuery(),
+                new FixedSampler(new GameplayPosition(4f, 0f, 1f)));
+            var intended = new GameplayPosition(4f, 0f, 0f);
+
+            Assert.That(session.TryPrepareThrowItem(
+                "player",
+                "item.grenade",
+                intended,
+                out ThrownExplosiveRecord prepared,
+                out _), Is.True);
+            Assert.That(session.TryThrowItem(
+                "player",
+                "item.grenade",
+                intended,
+                out _,
+                out _), Is.True);
+            int actionCount = gameplay.ResolvedActions.Count;
+            int remainingQuantity = gameplay.GetInventoryQuantity(
+                "player",
+                "item.grenade");
+
+            Assert.That(session.TryCommitPreparedThrow(
+                prepared,
+                out _,
+                out ThrownExplosiveFailure failure), Is.False);
+
+            Assert.That(failure,
+                Is.EqualTo(ThrownExplosiveFailure.WorldStateChanged));
+            Assert.That(gameplay.ResolvedActions, Has.Count.EqualTo(actionCount));
+            Assert.That(
+                gameplay.GetInventoryQuantity("player", "item.grenade"),
+                Is.EqualTo(remainingQuantity));
+        }
+
+        [Test]
         public void DepletedConsumableCannotSampleOrCommitAnotherThrow()
         {
             GameplaySession gameplay = CreateGameplay(initialQuantity: 1);

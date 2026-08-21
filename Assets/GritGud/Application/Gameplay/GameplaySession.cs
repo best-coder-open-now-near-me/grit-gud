@@ -597,6 +597,13 @@ namespace GritGud.Application.Gameplay
             LastResolvedAction?.Sequence ?? 0L,
             lastAuxiliaryActionSequence);
 
+        /// <summary>
+        /// Gets the revision that spatial presentation queries must stamp on
+        /// their evidence.  Once the semantic runtime owns the session, this
+        /// advances independently of the legacy gameplay journal.
+        /// </summary>
+        public long WorldStateRevision => JournalSequence;
+
         internal long NextActionSequence => LastActionSequence + 1L;
 
         internal IReadOnlyCollection<Type> ValidatedActionOutcomeTypes =>

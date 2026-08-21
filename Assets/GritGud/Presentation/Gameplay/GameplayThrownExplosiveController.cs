@@ -86,7 +86,7 @@ namespace GritGud.Presentation.Gameplay
             throws = new GameplayThrownExplosiveSession(
                 Session,
                 new UnityThrownExplosiveLandingQuery(
-                    () => Session.Journal.LastEntry?.Sequence ?? 0L),
+                    () => Session.WorldStateRevision),
                 blastWorldQuery ?? throw new ArgumentNullException(
                     nameof(blastWorldQuery)),
                 consequenceResolver ?? throw new ArgumentNullException(
@@ -224,7 +224,19 @@ namespace GritGud.Presentation.Gameplay
                     out failure))
             {
                 LastFailure = failure;
-                StatusMessage = $"Throw unavailable: {failure}.";
+                if (failure == ThrownExplosiveFailure.WorldStateChanged)
+                {
+                    StatusMessage = "World changed. Aim refreshed; throw again.";
+                    dialogue.Append(
+                        GameplayDialogueChannel.System,
+                        "THROW NOT APPLIED",
+                        "Spatial state changed before confirmation. "
+                            + "No item was spent; aim and confirm again.");
+                }
+                else
+                {
+                    StatusMessage = $"Throw unavailable: {failure}.";
+                }
                 return false;
             }
 
@@ -409,6 +421,8 @@ namespace GritGud.Presentation.Gameplay
                     return "THROW UNAVAILABLE - ACTOR PINNED";
                 case ThrownExplosiveFailure.OperationInProgress:
                     return "THROW UNAVAILABLE - ACTION IN PROGRESS";
+                case ThrownExplosiveFailure.WorldStateChanged:
+                    return "WORLD CHANGED - AIM AGAIN";
                 case ThrownExplosiveFailure.Depleted:
                     return "THROW UNAVAILABLE - ITEM DEPLETED";
                 case ThrownExplosiveFailure.InsufficientActionPoints:

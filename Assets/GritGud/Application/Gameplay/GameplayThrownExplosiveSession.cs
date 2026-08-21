@@ -13,6 +13,7 @@ namespace GritGud.Application.Gameplay
         ActorIncapacitated,
         ActorPinned,
         OperationInProgress,
+        WorldStateChanged,
         Depleted,
         OutOfRange,
         InsufficientActionPoints,
@@ -215,10 +216,14 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(prepared));
             }
 
-            if (prepared.Sequence != gameplay.NextActionSequence)
+            if (prepared.Sequence != gameplay.NextActionSequence
+                || (gameplay.IsCanonicalProjectionBound
+                    && prepared.WorldStateRevision
+                        != gameplay.WorldStateRevision))
             {
-                throw new InvalidOperationException(
-                    "The prepared explosive is not the next canonical action.");
+                return Fail(
+                    ThrownExplosiveFailure.WorldStateChanged,
+                    out failure);
             }
 
             bool startsEncounter = gameplay.ThrownExplosiveStartsEncounter(

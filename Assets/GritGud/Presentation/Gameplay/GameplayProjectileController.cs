@@ -121,7 +121,7 @@ namespace GritGud.Presentation.Gameplay
                 ?? ProjectilePresentationCatalog.LoadDefault();
             var query = new UnityProjectileSegmentQuery(
                 registry,
-                () => Session?.Journal.LastEntry?.Sequence ?? 0L,
+                () => Session?.WorldStateRevision ?? 0L,
                 blastWorldQuery ?? throw new ArgumentNullException(
                     nameof(blastWorldQuery)));
             projectiles = new GameplayProjectileSession(

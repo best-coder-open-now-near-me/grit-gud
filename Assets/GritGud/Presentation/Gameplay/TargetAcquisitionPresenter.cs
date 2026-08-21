@@ -544,7 +544,7 @@ namespace GritGud.Presentation.Gameplay
                     observer.Transform,
                     target.Transform,
                     Physics.DefaultRaycastLayers,
-                    () => session?.Journal.LastEntry?.Sequence ?? 0L,
+                    () => session?.WorldStateRevision ?? 0L,
                     sightObscurance);
                 exposureQueries.Add(target.ActorId, exposureQuery);
             }
@@ -669,7 +669,7 @@ namespace GritGud.Presentation.Gameplay
                 targetId,
                 normal,
                 surfaceId,
-                session.Journal.LastEntry?.Sequence ?? 0L,
+                session.WorldStateRevision,
                 preferredFractureChunkIndex);
             if (WeaponTargetingActive)
             {

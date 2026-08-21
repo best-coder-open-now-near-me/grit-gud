@@ -187,7 +187,7 @@ namespace GritGud.Presentation.Gameplay
         {
             var blastWorldQuery = new UnityBlastWorldQuery(
                 worldRegistry,
-                () => session.Journal.LastEntry?.Sequence ?? 0L,
+                () => session.WorldStateRevision,
                 propId => destructibles.Session.TryGetProp(propId, out _));
             var blastConsequences = new GameplayBlastConsequenceResolver(
                 session,

@@ -2211,9 +2211,13 @@ internal static class SimulationChecks
                     .CanonicalHash,
                 StringComparison.Ordinal)
             && gameplay.Operation == GameplaySessionOperation.None
+            && gameplay.WorldStateRevision
+                == live.CurrentState.Session.JournalSequence
+            && gameplay.WorldStateRevision
+                > (gameplay.Journal.LastEntry?.Sequence ?? 0L)
             && capabilityNotifications == 1
             && domainEventSawProjectedState,
-            "Reducer-owned movement was not installed as the live session projection before presentation events.");
+            "Reducer-owned movement did not expose its canonical spatial revision to presentation.");
 
         bool legacyMovementRejected = false;
         try
