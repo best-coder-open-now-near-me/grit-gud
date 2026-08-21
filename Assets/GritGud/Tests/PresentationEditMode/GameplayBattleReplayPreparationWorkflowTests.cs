@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using GritGud.Presentation.Gameplay;
 using NUnit.Framework;
+using Object = UnityEngine.Object;
 
 namespace GritGud.Presentation.Tests
 {
@@ -124,6 +125,35 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 stages.Completed,
                 Is.EqualTo((Stage[])Enum.GetValues(typeof(Stage))));
+        }
+
+        [Test]
+        public void MissingHistoricalWeaponVisualRefusesReplayWithIdentity()
+        {
+            WeaponPresentationCatalog catalog =
+                WeaponPresentationCatalog.CreateRuntime();
+            try
+            {
+                InvalidOperationException failure = Assert.Throws<
+                    InvalidOperationException>(() =>
+                    GameplayFirstSimulationPreparationService
+                        .RequireHistoricalWeaponPresentation(
+                            catalog,
+                            "historical-actor",
+                            "weapon.removed",
+                            transitionSequence: 42));
+
+                Assert.That(failure.Message, Does.Contain("transition 42"));
+                Assert.That(failure.Message,
+                    Does.Contain("historical-actor"));
+                Assert.That(failure.Message, Does.Contain("weapon.removed"));
+                Assert.That(failure.Message,
+                    Does.Contain("presentation catalog"));
+            }
+            finally
+            {
+                Object.DestroyImmediate(catalog);
+            }
         }
 
         private static Task<GameplayBattleReplayPreparationResult<

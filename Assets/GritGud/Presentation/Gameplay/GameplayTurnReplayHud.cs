@@ -10,6 +10,23 @@ namespace GritGud.Presentation.Gameplay
         VerifiedSimulation,
     }
 
+    internal readonly struct GameplayReplayPlayheadChange
+    {
+        public GameplayReplayPlayheadChange(
+            float previousTimeSeconds,
+            float timeSeconds,
+            bool presentsTimedEvents)
+        {
+            PreviousTimeSeconds = previousTimeSeconds;
+            TimeSeconds = timeSeconds;
+            PresentsTimedEvents = presentsTimedEvents;
+        }
+
+        public float PreviousTimeSeconds { get; }
+        public float TimeSeconds { get; }
+        public bool PresentsTimedEvents { get; }
+    }
+
     [DisallowMultipleComponent]
     public sealed class GameplayTurnReplayHud : MonoBehaviour
     {
@@ -51,7 +68,7 @@ namespace GritGud.Presentation.Gameplay
 
         internal event Action<bool> OpenChanged;
 
-        internal event Action<float> PlayheadChanged;
+        internal event Action<GameplayReplayPlayheadChange> PlayheadChanged;
 
         public bool IsAvailable => runtime != null
             && (externalReplay != null
@@ -60,8 +77,8 @@ namespace GritGud.Presentation.Gameplay
                     && runtime.HasLastCompletedTurnReplay));
 
         internal string ActionLabel => externalReplay == null
-            ? "REPLAY"
-            : "WATCH";
+            ? "REPLAY TURN"
+            : "WATCH BATTLE";
 
         public void Bind(
             GameplaySession session,
@@ -115,7 +132,8 @@ namespace GritGud.Presentation.Gameplay
                 RefreshPlayback();
                 isPlaying = playback != null;
                 playhead = 0f;
-                if (!TryNotifyPlayheadChanged())
+                if (!TryNotifyPlayheadChanged(
+                        new GameplayReplayPlayheadChange(0f, 0f, false)))
                     AbortPlayback();
             }
         }
@@ -142,7 +160,8 @@ namespace GritGud.Presentation.Gameplay
             isPlaying = true;
             playhead = 0f;
             if (!TryNotifyOpenChanged(true)
-                || !TryNotifyPlayheadChanged())
+                || !TryNotifyPlayheadChanged(
+                    new GameplayReplayPlayheadChange(0f, 0f, false)))
             {
                 AbortPlayback();
             }
@@ -184,10 +203,14 @@ namespace GritGud.Presentation.Gameplay
             }
             if (!isOpen || !isPlaying || playback == null)
                 return;
+            float previousPlayhead = playhead;
             playhead = Mathf.Min(
                 playback.TotalDurationSeconds,
                 playhead + (unscaledDeltaSeconds * speed));
-            if (!TryNotifyPlayheadChanged())
+            if (!TryNotifyPlayheadChanged(new GameplayReplayPlayheadChange(
+                    previousPlayhead,
+                    playhead,
+                    presentsTimedEvents: playhead > previousPlayhead)))
             {
                 AbortPlayback();
                 return;
@@ -216,8 +239,11 @@ namespace GritGud.Presentation.Gameplay
             GameplaySemanticReplayPlaybackPosition position = playback.Locate(
                 playhead);
             int selectedFrame = position.Frame.Index;
+            int selectedTurn = playback.LocateTurnGroupIndex(playhead);
             GUI.Box(bar, GUIContent.none);
-            string actorId = position.Frame.Transition.Payload.ActorId;
+            string actorId = externalReplay == null
+                ? position.Frame.Transition.Payload.ActorId
+                : playback.TurnGroups[selectedTurn].ActorId;
             string displayName = ResolveDisplayName(actorId);
             string capability = position.Frame.Transition.Payload.Profile
                 .Capability.ToString();
@@ -238,8 +264,13 @@ namespace GritGud.Presentation.Gameplay
             }
             GUI.Label(
                 new Rect(bar.x + 10f, bar.y + 5f, bar.width - 50f, 20f),
-                $"{mode}  {selectedFrame + 1}/{playback.Frames.Count}  "
-                    + detail,
+                externalReplay == null
+                    ? $"{mode}  EVENT {selectedFrame + 1}/"
+                        + $"{playback.Frames.Count}  {detail}"
+                    : $"{mode}  TURN {selectedTurn + 1}/"
+                        + $"{playback.TurnGroups.Count} · EVENT "
+                        + $"{selectedFrame + 1}/{playback.Frames.Count}  "
+                        + detail,
                 titleStyle);
             if (GUI.Button(
                 new Rect(bar.xMax - 30f, bar.y + 4f, 24f, 22f),
@@ -254,31 +285,58 @@ namespace GritGud.Presentation.Gameplay
                 bar.y + 28f,
                 bar.width - 20f,
                 24f);
-            for (int index = 0; index < playback.Frames.Count; index++)
+            if (externalReplay == null)
             {
-                GameplaySemanticReplayPlaybackFrame frame =
-                    playback.Frames[index];
-                Rect segment = new Rect(
-                    timeline.x + (timeline.width
-                        * frame.StartSeconds
-                        / playback.TotalDurationSeconds),
-                    timeline.y,
-                    timeline.width * frame.DurationSeconds
-                        / playback.TotalDurationSeconds,
-                    timeline.height);
-                string label = segment.width >= 34f
-                    ? (index + 1).ToString()
-                    : string.Empty;
-                if (GUI.Button(
-                    segment,
-                    label,
-                    index == selectedFrame
-                        ? activeSegmentStyle
-                        : segmentStyle))
+                for (int index = 0; index < playback.Frames.Count; index++)
                 {
-                    playhead = frame.StartSeconds;
-                    isPlaying = false;
+                    GameplaySemanticReplayPlaybackFrame frame =
+                        playback.Frames[index];
+                    Rect segment = CalculateTimelineSegment(
+                        timeline,
+                        frame.StartSeconds,
+                        frame.DurationSeconds);
+                    string label = segment.width >= 34f
+                        ? (index + 1).ToString()
+                        : string.Empty;
+                    if (GUI.Button(
+                        segment,
+                        label,
+                        index == selectedFrame
+                            ? activeSegmentStyle
+                            : segmentStyle))
+                    {
+                        playhead = frame.StartSeconds;
+                        isPlaying = false;
+                    }
                 }
+            }
+            else
+            {
+                for (int index = 0;
+                    index < playback.TurnGroups.Count;
+                    index++)
+                {
+                    GameplaySemanticReplayTurnGroup group =
+                        playback.TurnGroups[index];
+                    Rect segment = CalculateTimelineSegment(
+                        timeline,
+                        group.StartSeconds,
+                        group.DurationSeconds);
+                    string label = segment.width >= 34f
+                        ? "T" + (index + 1)
+                        : string.Empty;
+                    if (GUI.Button(
+                        segment,
+                        label,
+                        index == selectedTurn
+                            ? activeSegmentStyle
+                            : segmentStyle))
+                    {
+                        playhead = group.StartSeconds;
+                        isPlaying = false;
+                    }
+                }
+                DrawCombatEventMarkers(timeline);
             }
 
             float railX = timeline.x + (timeline.width
@@ -293,8 +351,11 @@ namespace GritGud.Presentation.Gameplay
                 new Rect(bar.x + 10f, controlsY, 30f, 20f),
                 "|<"))
             {
-                int previous = Mathf.Max(0, selectedFrame - 1);
-                playhead = playback.GetFrameStartSeconds(previous);
+                playhead = externalReplay == null
+                    ? playback.GetFrameStartSeconds(
+                        Mathf.Max(0, selectedFrame - 1))
+                    : playback.TurnGroups[
+                        Mathf.Max(0, selectedTurn - 1)].StartSeconds;
                 isPlaying = false;
             }
             if (GUI.Button(
@@ -309,12 +370,24 @@ namespace GritGud.Presentation.Gameplay
                 new Rect(bar.x + 100f, controlsY, 30f, 20f),
                 ">|"))
             {
-                int next = Mathf.Min(
-                    playback.Frames.Count - 1,
-                    selectedFrame + 1);
-                playhead = next == selectedFrame
-                    ? playback.TotalDurationSeconds
-                    : playback.GetFrameStartSeconds(next);
+                if (externalReplay == null)
+                {
+                    int next = Mathf.Min(
+                        playback.Frames.Count - 1,
+                        selectedFrame + 1);
+                    playhead = next == selectedFrame
+                        ? playback.TotalDurationSeconds
+                        : playback.GetFrameStartSeconds(next);
+                }
+                else
+                {
+                    int next = Mathf.Min(
+                        playback.TurnGroups.Count - 1,
+                        selectedTurn + 1);
+                    playhead = next == selectedTurn
+                        ? playback.TotalDurationSeconds
+                        : playback.TurnGroups[next].StartSeconds;
+                }
                 isPlaying = false;
             }
             if (GUI.Button(
@@ -336,8 +409,45 @@ namespace GritGud.Presentation.Gameplay
                 playback.TotalDurationSeconds);
             if (!Mathf.Approximately(previousPlayhead, playhead))
             {
-                if (!TryNotifyPlayheadChanged())
+                if (!TryNotifyPlayheadChanged(
+                        new GameplayReplayPlayheadChange(
+                            previousPlayhead,
+                            playhead,
+                            false)))
                     AbortPlayback();
+            }
+        }
+
+        private Rect CalculateTimelineSegment(
+            Rect timeline,
+            float startSeconds,
+            float durationSeconds) => new Rect(
+                timeline.x + (timeline.width
+                    * startSeconds / playback.TotalDurationSeconds),
+                timeline.y,
+                timeline.width * durationSeconds
+                    / playback.TotalDurationSeconds,
+                timeline.height);
+
+        private void DrawCombatEventMarkers(Rect timeline)
+        {
+            foreach (GameplaySemanticReplayPlaybackFrame frame in
+                playback.Frames)
+            {
+                foreach (ReplayCombatPresentationEvent presentationEvent in
+                    ReplayCombatPresentationEventProjector.Project(
+                        frame.Frame))
+                {
+                    float eventSeconds = frame.StartSeconds
+                        + (frame.DurationSeconds
+                            * presentationEvent.NormalizedTime);
+                    float x = timeline.x + timeline.width
+                        * eventSeconds / playback.TotalDurationSeconds;
+                    GUI.DrawTexture(
+                        new Rect(x - 1f, timeline.y + 2f, 2f,
+                            timeline.height - 4f),
+                        Texture2D.whiteTexture);
+                }
             }
         }
 
@@ -403,7 +513,8 @@ namespace GritGud.Presentation.Gameplay
             return succeeded;
         }
 
-        private bool TryNotifyPlayheadChanged()
+        private bool TryNotifyPlayheadChanged(
+            GameplayReplayPlayheadChange change)
         {
             bool succeeded = true;
             Delegate[] subscribers = PlayheadChanged?.GetInvocationList();
@@ -412,7 +523,7 @@ namespace GritGud.Presentation.Gameplay
             {
                 try
                 {
-                    ((Action<float>)subscriber)(playhead);
+                    ((Action<GameplayReplayPlayheadChange>)subscriber)(change);
                 }
                 catch (Exception exception)
                 {

@@ -129,6 +129,24 @@ namespace GritGud.Presentation.Gameplay
             return rig?.SynchronizeAimForShot(destination) ?? 0f;
         }
 
+        internal void PresentReplayShotState(
+            Vector3 destination,
+            ActorWeaponAnimationSet animationSet,
+            float elapsedSeconds)
+        {
+            if (animationSet == null)
+                throw new ArgumentNullException(nameof(animationSet));
+            rig?.SetAimPoint(destination);
+            rig?.SetReplayRecoil(
+                animationSet.RecoilKickDegrees,
+                animationSet.RecoilHoldSeconds,
+                animationSet.RecoilReturnSeconds,
+                elapsedSeconds);
+        }
+
+        internal void ClearReplayShotState() =>
+            rig?.ClearReplayShotState();
+
         internal void PresentRecoil(ActorWeaponAnimationSet animationSet)
         {
             if (animationSet == null)

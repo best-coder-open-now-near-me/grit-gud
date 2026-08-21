@@ -1,3 +1,4 @@
+using System;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Turns;
@@ -46,6 +47,132 @@ namespace GritGud.Presentation.Tests
                 presenter.Dispose();
                 Assert.That(actor.transform.position, Is.EqualTo(Vector3.zero));
                 Assert.That(view.Stance.Stance, Is.EqualTo(ActorStance.Standing));
+            }
+            finally
+            {
+                Object.DestroyImmediate(actor);
+            }
+        }
+
+        [Test]
+        public void ArmedReplayActorWithoutWeaponMountFailsWithIdentity()
+        {
+            var actor = new GameObject("Armed Replay Actor Missing Weapon");
+            try
+            {
+                actor.AddComponent<CharacterController>();
+                actor.AddComponent<ActorStancePresenter>();
+                var view = new GameplayActorView(
+                    "party.missing-weapon",
+                    string.Empty,
+                    targetable: false,
+                    actor);
+                var presenter = new GameplayTurnReplayActorPresenter(view);
+                presenter.Begin();
+
+                InvalidOperationException exception = Assert.Throws<
+                    InvalidOperationException>(() => presenter.Present(
+                        new GameplayActorSnapshot(
+                            "party.missing-weapon",
+                            new GameplayActorPose(
+                                new GameplayPosition(0f, 0f, 0f),
+                                0f,
+                                ActorStance.Standing),
+                            new TurnBudget(2, 3f),
+                            new ActorWoundSnapshot(
+                                "party.missing-weapon",
+                                0,
+                                0f),
+                            "weapon.missing",
+                            EquipmentEffectSet.None),
+                        action: null));
+
+                Assert.That(exception.Message, Does.Contain("transition initial"));
+                Assert.That(exception.Message, Does.Contain("party.missing-weapon"));
+                Assert.That(exception.Message, Does.Contain("weapon mount"));
+                Assert.That(exception.Message, Does.Contain("weapon.missing"));
+                presenter.Dispose();
+            }
+            finally
+            {
+                Object.DestroyImmediate(actor);
+            }
+        }
+
+        [Test]
+        public void BackwardScrubbingRebuildsTimedEventCursorWithoutDuplicates()
+        {
+            var cursor = new ReplayTimedPresentationEventCursor();
+            const string shot = "12:WeaponDischarge:party.scout:";
+
+            Assert.That(cursor.TryCross(shot, 0.65f, 0f, 1f), Is.True);
+            Assert.That(cursor.TryCross(shot, 0.65f, 0f, 1f), Is.False);
+
+            cursor.Clear();
+            cursor.RebuildMark(shot, 0.65f, 0.8f);
+            Assert.That(cursor.TryCross(shot, 0.65f, 0.8f, 1f), Is.False);
+
+            cursor.Clear();
+            cursor.RebuildMark(shot, 0.65f, 0.2f);
+            Assert.That(cursor.TryCross(shot, 0.65f, 0.2f, 1f), Is.True);
+            Assert.That(cursor.TryCross(shot, 0.65f, 0.2f, 1f), Is.False);
+        }
+
+        [Test]
+        public void FatalNonSelectedActorReactsAtEventThenUsesAuthoredIncapacitation()
+        {
+            GameObject prefab = Resources.Load<GameObject>(
+                "Actors/DefaultPlayerActor");
+            GameObject actor = Object.Instantiate(prefab);
+            try
+            {
+                var view = new GameplayActorView(
+                    "party.support",
+                    string.Empty,
+                    targetable: true,
+                    actor);
+                ActorAnimationCoordinator animation = actor.GetComponent<
+                    ActorAnimationCoordinator>();
+                animation.TargetAnimator.cullingMode =
+                    AnimatorCullingMode.AlwaysAnimate;
+                using var presenter = new GameplayTurnReplayActorPresenter(view);
+                presenter.Begin();
+
+                presenter.Present(
+                    CreateActorSnapshot(
+                        "party.support",
+                        woundCount: 2,
+                        maximumWounds: 3),
+                    new TurnReplayActorActionState(
+                        "party.support",
+                        TurnReplayActorActionKind.Reaction,
+                        journalSequence: 42,
+                        normalizedProgress: 0.649f,
+                        contactReaction: false,
+                        resultingWoundCount: 3,
+                        hitRegion: TargetRegionId.Torso));
+                Assert.That(
+                    animation.ReplayAction,
+                    Is.Null,
+                    "A ranged reaction cannot precede its discharge event.");
+
+                presenter.Present(
+                    CreateActorSnapshot(
+                        "party.support",
+                        woundCount: 3,
+                        maximumWounds: 3),
+                    new TurnReplayActorActionState(
+                        "party.support",
+                        TurnReplayActorActionKind.Reaction,
+                        journalSequence: 42,
+                        normalizedProgress: 0.65f,
+                        contactReaction: false,
+                        resultingWoundCount: 3,
+                        hitRegion: TargetRegionId.Torso));
+                Assert.That(
+                    animation.ReplayAction,
+                    Is.EqualTo(ActorAnimationAction.IncapacitateShoulder));
+                Assert.That(animation.ReplayActionProgress, Is.Zero);
             }
             finally
             {
@@ -153,6 +280,21 @@ namespace GritGud.Presentation.Tests
                 Object.DestroyImmediate(actor);
             }
         }
+
+        private static GameplayActorSnapshot CreateActorSnapshot(
+            string actorId,
+            int woundCount,
+            int maximumWounds) => new GameplayActorSnapshot(
+                actorId,
+                new GameplayActorPose(
+                    new GameplayPosition(0f, 0f, 0f),
+                    0f,
+                    ActorStance.Standing),
+                new TurnBudget(2, 3f),
+                new ActorWoundSnapshot(actorId, woundCount, 0f),
+                equippedItemId: null,
+                equipmentEffects: EquipmentEffectSet.None,
+                maximumWounds: maximumWounds);
 
     }
 }

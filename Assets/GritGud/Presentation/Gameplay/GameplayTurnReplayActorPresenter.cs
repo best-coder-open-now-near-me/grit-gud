@@ -71,16 +71,10 @@ namespace GritGud.Presentation.Gameplay
             TryOptional(
                 "ragdoll",
                 () => ragdoll?.BeginReplayPresentation());
-            TryOptional(
-                "animation",
-                () => animation?.BeginReplayPresentation());
-            TryOptional(
-                "weapon",
-                () => weapon?.BeginReplayPresentation());
-            TryOptional(
-                "weapon aim",
-                () => aim?.BeginReplayPresentation());
-            TryOptional(
+            BeginRequired("animation", () => animation?.BeginReplayPresentation());
+            BeginRequired("weapon", () => weapon?.BeginReplayPresentation());
+            BeginRequired("weapon aim", () => aim?.BeginReplayPresentation());
+            BeginRequired(
                 "weapon aim rig",
                 () => aimRig?.BeginReplayPresentation());
             TryOptional(
@@ -124,6 +118,13 @@ namespace GritGud.Presentation.Gameplay
             }
 
             GameplayActorPose pose = snapshot.Pose;
+            long transitionSequence = action?.TransitionSequence
+                ?? playback?.Frame.Transition.Identity.Sequence
+                ?? 0L;
+            string replayRecord = playback?.Frame.SemanticRecord
+                    ?.GetType().Name
+                ?? action?.Kind.ToString()
+                ?? "state sample";
             view.Transform.SetPositionAndRotation(
                 new Vector3(
                     pose.Position.X,
@@ -135,13 +136,32 @@ namespace GritGud.Presentation.Gameplay
             TryOptional(
                 "wounds",
                 () => view.Wounds.PresentReplay(snapshot.Wounds));
-            TryOptional(
-                "weapon",
-                () =>
-                {
-                    weapon?.PresentReplayEquipment(snapshot.EquippedItemId);
-                    weapon?.PresentReplayAction(action);
-                });
+            if (!string.IsNullOrWhiteSpace(snapshot.EquippedItemId)
+                && weapon == null)
+                throw RequiredFailure(
+                    "weapon mount",
+                    transitionSequence,
+                    replayRecord,
+                    $"armed actor equips '{snapshot.EquippedItemId}' but has no GameplayWeaponPresenter");
+            if (!string.IsNullOrWhiteSpace(snapshot.EquippedItemId)
+                && aimRig == null)
+                throw RequiredFailure(
+                    "weapon aim rig",
+                    transitionSequence,
+                    replayRecord,
+                    "armed actor has no post-animation WeaponAimRig");
+            if (weapon != null)
+                PresentRequired(
+                    "weapon",
+                    transitionSequence,
+                    replayRecord,
+                    () =>
+                    {
+                        weapon.PresentReplayEquipment(snapshot.EquippedItemId);
+                        weapon.PresentReplayAction(
+                            action,
+                            playback?.PlaybackFrame.DurationSeconds ?? 0f);
+                    });
             TryOptional(
                 "actor-state hooks",
                 () =>
@@ -149,11 +169,22 @@ namespace GritGud.Presentation.Gameplay
                     view.ReplayActions.Present(action);
                     view.ReplayActions.PresentPinState(snapshot.PinState);
                 });
-            TryOptional(
-                "animation",
-                () =>
-                {
-                    if (animation == null) return;
+            bool requiresAnimation = action != null
+                || replayVelocity.GetValueOrDefault().sqrMagnitude > 0.000001f
+                || snapshot.IsIncapacitated;
+            if (requiresAnimation && animation == null)
+                throw RequiredFailure(
+                    "combat animation",
+                    transitionSequence,
+                    replayRecord,
+                    "actor has no ActorAnimationCoordinator");
+            if (animation != null)
+                PresentRequired(
+                    "animation",
+                    transitionSequence,
+                    replayRecord,
+                    () =>
+                    {
                     ResolveAnimationProjection(
                         snapshot,
                         action,
@@ -167,26 +198,22 @@ namespace GritGud.Presentation.Gameplay
                         pose.Stance,
                         animationAction,
                         animationProgress);
-                });
-            TryOptional(
-                "weapon aim rig",
-                () =>
-                {
-                    if (aimRig == null) return;
+                    });
+            if (aimRig != null)
+                PresentRequired(
+                    "weapon aim rig",
+                    transitionSequence,
+                    replayRecord,
+                    () =>
+                    {
                     aimRig.SetReplaySupportWeightImmediate();
                     aimRig.SynchronizeAfterAnimation(0f);
-                });
-            if (playback.HasValue)
-            {
-                GameplaySemanticReplayPlaybackPosition position =
-                    playback.Value;
-                TryOptional(
-                    "ragdoll",
-                    () => ragdoll?.PresentReplay(
-                        position.Frame.Transition.Identity.Sequence,
-                        position.Progress,
-                        position.PlaybackFrame.DurationSeconds));
-            }
+                    });
+            // Semantic replay uses the seekable authored incapacitation clip
+            // above for every source, including portable artifacts. Runtime
+            // ragdoll traces are deliberately not mixed into this path: they
+            // are session-local data and cannot produce the same terminal pose
+            // in a fresh artifact viewer.
         }
 
         internal void ClearTransients()
@@ -194,6 +221,25 @@ namespace GritGud.Presentation.Gameplay
             TryOptional(
                 "weapon",
                 () => weapon?.ClearReplayTransients());
+        }
+
+        internal void PresentEvent(
+            ReplayCombatPresentationEvent presentationEvent)
+        {
+            if (!presenting)
+                throw new InvalidOperationException(
+                    "Begin actor replay presentation before projecting events.");
+            if (weapon == null)
+                throw RequiredFailure(
+                    "weapon discharge",
+                    presentationEvent.TransitionSequence,
+                    presentationEvent.Kind.ToString(),
+                    "actor has no GameplayWeaponPresenter");
+            PresentRequired(
+                "weapon discharge",
+                presentationEvent.TransitionSequence,
+                presentationEvent.Kind.ToString(),
+                () => weapon.PresentReplayEvent(presentationEvent));
         }
 
         public void Dispose() => End();
@@ -289,6 +335,59 @@ namespace GritGud.Presentation.Gameplay
             }
         }
 
+        private void BeginRequired(string feature, Action begin)
+        {
+            try
+            {
+                begin?.Invoke();
+            }
+            catch (Exception exception)
+            {
+                throw new InvalidOperationException(
+                    $"Replay actor '{view.ActorId}' could not begin required "
+                    + $"{feature} presentation: {exception.Message}",
+                    exception);
+            }
+        }
+
+        private void PresentRequired(
+            string feature,
+            long transitionSequence,
+            string replayRecord,
+            Action present)
+        {
+            try
+            {
+                present();
+            }
+            catch (Exception exception)
+            {
+                throw RequiredFailure(
+                    feature,
+                    transitionSequence,
+                    replayRecord,
+                    exception.Message,
+                    exception);
+            }
+        }
+
+        private InvalidOperationException RequiredFailure(
+            string feature,
+            long transitionSequence,
+            string replayRecord,
+            string detail,
+            Exception inner = null)
+        {
+            string transition = transitionSequence > 0
+                ? transitionSequence.ToString()
+                : "initial";
+            return new InvalidOperationException(
+                $"Replay transition {transition} actor '{view.ActorId}' "
+                + $"cannot project required {feature} for {replayRecord}: "
+                + detail,
+                inner);
+        }
+
         private void ResolveAnimationProjection(
             GameplayActorSnapshot snapshot,
             TurnReplayActorActionState state,
@@ -311,7 +410,8 @@ namespace GritGud.Presentation.Gameplay
             switch (state.Kind)
             {
                 case TurnReplayActorActionKind.Attack:
-                    action = weapon?.ResolveReplayAttackAnimation()
+                    action = weapon?.ResolveReplayAttackAnimation(
+                            state.IsContactAttack)
                         ?? ActorAnimationAction.WeaponFire;
                     return;
                 case TurnReplayActorActionKind.Equipment:
@@ -322,18 +422,14 @@ namespace GritGud.Presentation.Gameplay
                     action = ActorAnimationAction.Throw;
                     return;
                 case TurnReplayActorActionKind.Reaction:
-                    if (state.IsContactReaction)
+                    float eventTime = state.EventNormalizedTime;
+                    if (progress < eventTime)
                     {
-                        float impact = GameplayCloseQuartersPresentationTiming
-                            .ContactImpactNormalizedTime;
-                        if (progress < impact)
-                        {
-                            action = null;
-                            progress = 0f;
-                            return;
-                        }
-                        progress = Mathf.InverseLerp(impact, 1f, progress);
+                        action = null;
+                        progress = 0f;
+                        return;
                     }
+                    progress = Mathf.InverseLerp(eventTime, 1f, progress);
                     action = state.ResultingWoundCount >=
                         snapshot.MaximumWounds
                         ? ActorAnimationCoordinator

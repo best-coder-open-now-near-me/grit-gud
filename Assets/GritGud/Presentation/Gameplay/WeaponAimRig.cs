@@ -179,6 +179,38 @@ namespace GritGud.Presentation.Gameplay
             RecoilWeight = recoilElapsed >= 0f ? 1f : 0f;
         }
 
+        internal void SetReplayRecoil(
+            float kickDegrees,
+            float holdSeconds,
+            float returnSeconds,
+            float elapsedSeconds)
+        {
+            if (!replayPresentation)
+                throw new InvalidOperationException(
+                    "Begin weapon-aim replay presentation before seeking recoil.");
+            recoilKickDegrees = Mathf.Clamp(kickDegrees, 0f, 30f);
+            recoilHoldSeconds = Mathf.Max(0f, holdSeconds);
+            recoilReturnSeconds = Mathf.Max(0.01f, returnSeconds);
+            float duration = recoilHoldSeconds + recoilReturnSeconds;
+            recoilElapsed = recoilKickDegrees > 0f
+                    && elapsedSeconds >= 0f
+                    && elapsedSeconds < duration
+                ? elapsedSeconds
+                : -1f;
+            RecoilWeight = recoilElapsed >= 0f
+                ? EvaluateRecoilWeight(
+                    recoilElapsed,
+                    recoilHoldSeconds,
+                    recoilReturnSeconds)
+                : 0f;
+        }
+
+        internal void ClearReplayShotState()
+        {
+            ClearAimPoint();
+            ClearRecoil();
+        }
+
         internal void ClearAimPoint() => hasAimPoint = false;
 
         internal void ClearAimPointWhenSettled()

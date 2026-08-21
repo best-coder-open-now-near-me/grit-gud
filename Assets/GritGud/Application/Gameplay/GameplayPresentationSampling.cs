@@ -204,6 +204,32 @@ namespace GritGud.Application.Gameplay
                 ProjectileFlightStatus.InFlight);
         }
 
+        public static ProjectileFlightSnapshot Sample(
+            ProjectileAdvanceRecord advance,
+            float linearProgress,
+            float accelerationFraction = DefaultAccelerationFraction)
+        {
+            if (advance == null) throw new ArgumentNullException(nameof(advance));
+            float progress = Clamp01(linearProgress);
+            float impactProgress = GameplaySemanticReplayPresentationTiming
+                .GetProjectileImpactProgress(advance);
+            if (advance.Resulting.Impact == null || impactProgress >= 1f)
+            {
+                return Sample(
+                    advance.Previous,
+                    advance.Resulting,
+                    progress,
+                    accelerationFraction);
+            }
+            if (progress >= impactProgress)
+                return advance.Resulting;
+            return Sample(
+                advance.Previous,
+                advance.Resulting,
+                impactProgress <= 0f ? 1f : progress / impactProgress,
+                accelerationFraction);
+        }
+
         private static float Clamp01(float value) =>
             Math.Max(0f, Math.Min(1f, value));
     }

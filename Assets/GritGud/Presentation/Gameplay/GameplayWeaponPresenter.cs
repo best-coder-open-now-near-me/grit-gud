@@ -279,16 +279,19 @@ namespace GritGud.Presentation.Gameplay
             }
 
             currentDefinition = catalog.Get(CurrentItemId);
-            AttackDefinition equippedAttack = session
-                .GetInventoryItem(actorId, CurrentItemId)
-                .Attack;
-            bool contactAttack = equippedAttack?.Contact != null;
-            bool contactPresentation = currentDefinition.AttackPresentation
-                == WeaponAttackPresentationKind.ContactStrike;
-            if (contactAttack != contactPresentation)
+            if (!replayPresentation)
             {
-                throw new InvalidOperationException(
-                    $"Weapon presentation '{CurrentItemId}' must match its authored contact-attack delivery.");
+                AttackDefinition equippedAttack = session
+                    .GetInventoryItem(actorId, CurrentItemId)
+                    .Attack;
+                bool contactAttack = equippedAttack?.Contact != null;
+                bool contactPresentation = currentDefinition.AttackPresentation
+                    == WeaponAttackPresentationKind.ContactStrike;
+                if (contactAttack != contactPresentation)
+                {
+                    throw new InvalidOperationException(
+                        $"Weapon presentation '{CurrentItemId}' must match its authored contact-attack delivery.");
+                }
             }
             WeaponRigSocketSet weaponSockets = mountPresenter.Mount(
                 currentDefinition);
@@ -326,16 +329,67 @@ namespace GritGud.Presentation.Gameplay
         }
 
         internal void PresentReplayAction(
-            TurnReplayActorActionState action)
+            TurnReplayActorActionState action,
+            float frameDurationSeconds = 0f)
         {
             if (!replayPresentation)
                 return;
-            if (action != null
-                && action.Kind == TurnReplayActorActionKind.Attack
-                && currentDefinition?.AttackPresentation
-                    == WeaponAttackPresentationKind.ContactStrike)
+            if (action == null
+                || action.Kind != TurnReplayActorActionKind.Attack
+                || action.IsContactAttack)
             {
+                aimPresenter?.ClearReplayShotState();
                 return;
+            }
+            if (!action.Destination.HasValue)
+                throw new InvalidOperationException(
+                    $"Replay transition {action.TransitionSequence} attack "
+                    + $"for actor '{actorId}' has no recorded destination.");
+            ActorWeaponAnimationSet animationSet = animationCoordinator.Profile
+                .GetWeaponAnimationSet(currentDefinition.AnimationSetId);
+            float elapsed = action.NormalizedProgress
+                    < action.EventNormalizedTime
+                ? -1f
+                : Mathf.Max(0f, frameDurationSeconds)
+                    * (action.NormalizedProgress
+                        - action.EventNormalizedTime);
+            aimPresenter.PresentReplayShotState(
+                ToVector3(action.Destination.Value),
+                animationSet,
+                elapsed);
+        }
+
+        internal void PresentReplayEvent(
+            ReplayCombatPresentationEvent presentationEvent)
+        {
+            if (!replayPresentation)
+                throw new InvalidOperationException(
+                    "Begin weapon replay presentation before projecting combat events.");
+            if (presentationEvent == null)
+                throw new ArgumentNullException(nameof(presentationEvent));
+            if (!string.Equals(
+                    presentationEvent.ActorId,
+                    actorId,
+                    StringComparison.Ordinal))
+                throw new ArgumentException(
+                    "Replay combat events must match their weapon presenter.",
+                    nameof(presentationEvent));
+            switch (presentationEvent.Kind)
+            {
+                case ReplayCombatPresentationEventKind.WeaponDischarge:
+                    PresentReplayFire(
+                        ToVector3(presentationEvent.Destination),
+                        drawTracer: true);
+                    break;
+                case ReplayCombatPresentationEventKind.ProjectileLaunch:
+                    PresentReplayFire(
+                        ToVector3(presentationEvent.Destination),
+                        drawTracer: false);
+                    break;
+                default:
+                    throw new ArgumentException(
+                        "Weapon presenters cannot project projectile impacts.",
+                        nameof(presentationEvent));
             }
         }
 
@@ -345,9 +399,8 @@ namespace GritGud.Presentation.Gameplay
             contactStrikeElapsed = -1f;
         }
 
-        internal ActorAnimationAction ResolveReplayAttackAnimation() =>
-            currentDefinition?.AttackPresentation ==
-                WeaponAttackPresentationKind.ContactStrike
+        internal ActorAnimationAction ResolveReplayAttackAnimation(
+            bool contactAttack) => contactAttack
                 ? ActorAnimationAction.ContactStrike
                 : ActorAnimationAction.WeaponFire;
 
@@ -411,6 +464,34 @@ namespace GritGud.Presentation.Gameplay
                 destination,
                 drawTracer);
             aimPresenter.PresentRecoil(animationSet);
+        }
+
+        private void PresentReplayFire(
+            Vector3 destination,
+            bool drawTracer)
+        {
+            if (currentDefinition == null)
+                throw new InvalidOperationException(
+                    $"Replay actor '{actorId}' cannot discharge without a mounted weapon presentation.");
+
+            GameplayActorView actor = registry.GetActor(actorId);
+            Vector3 origin = Muzzle != null
+                ? Muzzle.position
+                : actor.Stance.FirstPersonEyePosition;
+            if (Muzzle != null
+                && weaponClearanceResolver.TryResolve(
+                    actor,
+                    Muzzle,
+                    out RaycastHit obstruction))
+            {
+                destination = obstruction.point;
+                drawTracer = false;
+            }
+            effectsPresenter.PresentShot(
+                currentDefinition,
+                origin,
+                destination,
+                drawTracer);
         }
 
         private void PresentContactStrike()

@@ -84,6 +84,18 @@ namespace GritGud.Presentation.Gameplay
 
         internal bool IsSimulationViewer => simulationViewer;
 
+        internal int ReplayPresentedDischargeCount =>
+            turnReplayWorldPresenter?.PresentedDischargeCount ?? 0;
+
+        internal int ReplayPresentedProjectileImpactCount =>
+            turnReplayWorldPresenter?.PresentedProjectileImpactCount ?? 0;
+
+        internal int ReplayPresentedReactionCount =>
+            turnReplayWorldPresenter?.PresentedReactionCount ?? 0;
+
+        internal int ReplayPresentedIncapacitationCount =>
+            turnReplayWorldPresenter?.PresentedIncapacitationCount ?? 0;
+
         private void Awake()
         {
             EnsureDependencies();

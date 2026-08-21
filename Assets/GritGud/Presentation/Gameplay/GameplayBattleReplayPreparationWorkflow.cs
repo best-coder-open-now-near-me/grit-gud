@@ -142,6 +142,9 @@ namespace GritGud.Presentation.Gameplay
                 GameplayBattleArtifactReplayLoader.Load(artifact);
             cancellationToken.ThrowIfCancellationRequested();
             RequireViewerEntityCompatibility(assembly, replay.InitialState);
+            RequireViewerWeaponPresentationCompatibility(
+                replay,
+                WeaponPresentationCatalog.LoadDefault());
             return GameplayBattleReplayPreparationResult<
                 GameplayBattleArtifact,
                 GameplaySemanticReplayTimeline>.Ready(artifact, replay);
@@ -269,6 +272,57 @@ namespace GritGud.Presentation.Gameplay
                 "drone",
                 initial.Drones.Select(value => value.DroneId),
                 assembly.Drones.Select(value => value.Id));
+        }
+
+        internal static void RequireViewerWeaponPresentationCompatibility(
+            GameplaySemanticReplayTimeline replay,
+            WeaponPresentationCatalog catalog)
+        {
+            if (replay == null) throw new ArgumentNullException(nameof(replay));
+            if (catalog == null) throw new ArgumentNullException(nameof(catalog));
+            ValidateWeaponPresentations(
+                replay.InitialState.Session.Actors,
+                catalog,
+                transitionSequence: 0L);
+            foreach (GameplaySemanticReplayFrame frame in replay.Frames)
+                ValidateWeaponPresentations(
+                    frame.Resulting.Session.Actors,
+                    catalog,
+                    frame.Transition.Identity.Sequence);
+        }
+
+        private static void ValidateWeaponPresentations(
+            IEnumerable<GameplayActorSnapshot> actors,
+            WeaponPresentationCatalog catalog,
+            long transitionSequence)
+        {
+            foreach (GameplayActorSnapshot actor in actors)
+            {
+                RequireHistoricalWeaponPresentation(
+                    catalog,
+                    actor.ActorId,
+                    actor.EquippedItemId,
+                    transitionSequence);
+            }
+        }
+
+        internal static void RequireHistoricalWeaponPresentation(
+            WeaponPresentationCatalog catalog,
+            string actorId,
+            string equippedItemId,
+            long transitionSequence)
+        {
+            if (catalog == null) throw new ArgumentNullException(nameof(catalog));
+            if (string.IsNullOrWhiteSpace(equippedItemId)
+                || catalog.TryGet(equippedItemId, out _))
+                return;
+            string location = transitionSequence <= 0
+                ? "initial replay state"
+                : "transition " + transitionSequence;
+            throw new InvalidOperationException(
+                $"Replay cannot open: {location} actor '{actorId}' equips "
+                + $"historical item '{equippedItemId}', but the current weapon "
+                + "presentation catalog has no matching visual definition.");
         }
 
         private static void RequireSameIds(

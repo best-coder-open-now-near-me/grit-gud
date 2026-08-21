@@ -6,6 +6,33 @@ using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
 {
+    internal sealed class ReplayTimedPresentationEventCursor
+    {
+        private readonly HashSet<string> emitted = new HashSet<string>(
+            StringComparer.Ordinal);
+
+        public bool TryCross(
+            string stableKey,
+            float eventTimeSeconds,
+            float previousTimeSeconds,
+            float currentTimeSeconds) =>
+            currentTimeSeconds > previousTimeSeconds
+            && eventTimeSeconds >= previousTimeSeconds
+            && eventTimeSeconds <= currentTimeSeconds
+            && emitted.Add(stableKey);
+
+        public void RebuildMark(
+            string stableKey,
+            float eventTimeSeconds,
+            float timeSeconds)
+        {
+            if (eventTimeSeconds <= timeSeconds)
+                emitted.Add(stableKey);
+        }
+
+        public void Clear() => emitted.Clear();
+    }
+
     /// <summary>
     /// Presentation adapter over an exact reducer-verified trajectory. It
     /// samples immutable before/result states and never reconstructs gameplay.
@@ -19,6 +46,7 @@ namespace GritGud.Presentation.Gameplay
             private readonly Action<GameplayPresentationWorldStateSample> present;
             private readonly Action clearTransients;
             private readonly Action end;
+            private readonly bool required;
             private bool active;
             private bool started;
 
@@ -27,7 +55,8 @@ namespace GritGud.Presentation.Gameplay
                 Action beginPresentation,
                 Action<GameplayPresentationWorldStateSample> presentSample,
                 Action clearPresentationTransients,
-                Action endPresentation)
+                Action endPresentation,
+                bool isRequired = false)
             {
                 name = projectionName;
                 begin = beginPresentation ?? throw new ArgumentNullException(
@@ -39,6 +68,7 @@ namespace GritGud.Presentation.Gameplay
                         nameof(clearPresentationTransients));
                 end = endPresentation ?? throw new ArgumentNullException(
                     nameof(endPresentation));
+                required = isRequired;
             }
 
             public void Begin()
@@ -51,6 +81,11 @@ namespace GritGud.Presentation.Gameplay
                 }
                 catch (Exception exception)
                 {
+                    if (required)
+                        throw new InvalidOperationException(
+                            $"Replay required {name} presentation could not start: "
+                            + exception.Message,
+                            exception);
                     Disable("start", exception);
                 }
             }
@@ -64,6 +99,13 @@ namespace GritGud.Presentation.Gameplay
                 }
                 catch (Exception exception)
                 {
+                    if (required)
+                        throw new InvalidOperationException(
+                            $"Replay transition {sample.Frame.Transition.Identity.Sequence} "
+                            + $"required {name} projection failed for "
+                            + $"{sample.Frame.SemanticRecord.GetType().Name}: "
+                            + exception.Message,
+                            exception);
                     Disable("sample", exception);
                 }
             }
@@ -77,6 +119,11 @@ namespace GritGud.Presentation.Gameplay
                 }
                 catch (Exception exception)
                 {
+                    if (required)
+                        throw new InvalidOperationException(
+                            $"Replay required {name} transients could not clear: "
+                            + exception.Message,
+                            exception);
                     Disable("clear transients", exception);
                 }
             }
@@ -132,7 +179,18 @@ namespace GritGud.Presentation.Gameplay
             new List<Behaviour>();
         private readonly List<bool> liveBehaviourEnabled =
             new List<bool>();
+        private readonly ReplayTimedPresentationEventCursor timedEventCursor =
+            new ReplayTimedPresentationEventCursor();
+        private readonly HashSet<string> presentedDischargeEvents =
+            new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<string> presentedProjectileImpactEvents =
+            new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<string> presentedReactionEvents =
+            new HashSet<string>(StringComparer.Ordinal);
+        private readonly HashSet<string> presentedIncapacitations =
+            new HashSet<string>(StringComparer.Ordinal);
         private GameplayWorldRegistry world;
+        private GameplayProjectileController projectiles;
         private GameplayInputController input;
         private GameplayTurnReplayHud hud;
         private GameplayHud gameplayHud;
@@ -143,6 +201,13 @@ namespace GritGud.Presentation.Gameplay
         private bool enemiesWerePaused;
         private float priorTimeScale;
         private bool presenting;
+
+        internal int PresentedDischargeCount => presentedDischargeEvents.Count;
+        internal int PresentedProjectileImpactCount =>
+            presentedProjectileImpactEvents.Count;
+        internal int PresentedReactionCount => presentedReactionEvents.Count;
+        internal int PresentedIncapacitationCount =>
+            presentedIncapacitations.Count;
 
         public void Bind(
             GameplayWorldRegistry registry,
@@ -160,6 +225,7 @@ namespace GritGud.Presentation.Gameplay
         {
             Dispose();
             world = registry ?? throw new ArgumentNullException(nameof(registry));
+            projectiles = projectileController;
             input = inputController ?? throw new ArgumentNullException(
                 nameof(inputController));
             hud = replayHud ?? throw new ArgumentNullException(nameof(replayHud));
@@ -198,6 +264,7 @@ namespace GritGud.Presentation.Gameplay
                 hud.PlayheadChanged -= HandlePlayheadChanged;
             }
             world = null;
+            projectiles = null;
             input = null;
             hud = null;
             gameplayHud = null;
@@ -206,6 +273,11 @@ namespace GritGud.Presentation.Gameplay
             optionalProjections.Clear();
             liveBehaviours.Clear();
             liveBehaviourEnabled.Clear();
+            timedEventCursor.Clear();
+            presentedDischargeEvents.Clear();
+            presentedProjectileImpactEvents.Clear();
+            presentedReactionEvents.Clear();
+            presentedIncapacitations.Clear();
         }
 
         private void HandleOpenChanged(bool open)
@@ -218,7 +290,14 @@ namespace GritGud.Presentation.Gameplay
             if (hud.Playback == null)
                 return;
 
+            RequireReplayDependencies(hud.Playback.Replay);
+
             actors.Clear();
+            timedEventCursor.Clear();
+            presentedDischargeEvents.Clear();
+            presentedProjectileImpactEvents.Clear();
+            presentedReactionEvents.Clear();
+            presentedIncapacitations.Clear();
             presenting = true;
             try
             {
@@ -249,6 +328,7 @@ namespace GritGud.Presentation.Gameplay
                     projection.Begin();
                 }
                 Present();
+                RebuildTimedEventCursor(hud.TimeSeconds);
             }
             catch
             {
@@ -257,12 +337,51 @@ namespace GritGud.Presentation.Gameplay
             }
         }
 
-        private void HandlePlayheadChanged(float _)
+        private void RequireReplayDependencies(
+            GameplaySemanticReplayTimeline replay)
+        {
+            foreach (GameplayActorSnapshot snapshot in replay.InitialState
+                .Session.Actors)
+            {
+                if (!world.TryGetActor(
+                        snapshot.ActorId,
+                        out GameplayActorView _))
+                    throw new InvalidOperationException(
+                        $"Replay cannot open: actor '{snapshot.ActorId}' has "
+                        + "no GameplayTurnReplayActorPresenter source view.");
+            }
+            bool containsProjectiles = replay.InitialState.Projectiles.Count > 0;
+            foreach (GameplaySemanticReplayFrame frame in replay.Frames)
+            {
+                containsProjectiles |= frame.SemanticRecord
+                    is ProjectileAdvanceRecord
+                    || frame.Resulting.Projectiles.Count > 0;
+            }
+            if (containsProjectiles && projectiles == null)
+                throw new InvalidOperationException(
+                    "Replay cannot open: the verified timeline contains "
+                    + "projectile records but no GameplayProjectileController "
+                    + "is bound for required projection.");
+        }
+
+        private void HandlePlayheadChanged(
+            GameplayReplayPlayheadChange change)
         {
             if (!presenting)
                 return;
-            ClearTransients();
+            if (!change.PresentsTimedEvents)
+                ClearTransients();
             Present();
+            if (change.PresentsTimedEvents)
+            {
+                PresentTimedEvents(
+                    change.PreviousTimeSeconds,
+                    change.TimeSeconds);
+            }
+            else
+            {
+                RebuildTimedEventCursor(change.TimeSeconds);
+            }
         }
 
         private void Present()
@@ -301,7 +420,9 @@ namespace GritGud.Presentation.Gameplay
                 if (!actors.TryGetValue(
                         entry.Key,
                         out GameplayTurnReplayActorPresenter actor))
-                    continue;
+                    throw new InvalidOperationException(
+                        $"Replay transition {position.Frame.Transition.Identity.Sequence} "
+                        + $"cannot project actor '{entry.Key}': no replay actor presenter exists.");
                 actionStates.TryGetValue(
                     entry.Key,
                     out TurnReplayActorActionState action);
@@ -316,6 +437,97 @@ namespace GritGud.Presentation.Gameplay
                     position,
                     replayVelocity,
                     replayGrounded);
+            }
+        }
+
+        private void PresentTimedEvents(float previousTime, float currentTime)
+        {
+            GameplaySemanticReplayPlaybackTimeline playback = hud.Playback;
+            if (playback == null || currentTime <= previousTime) return;
+            foreach (GameplaySemanticReplayPlaybackFrame playbackFrame in
+                playback.Frames)
+            {
+                if (playbackFrame.StartSeconds > currentTime
+                    || playbackFrame.EndSeconds < previousTime)
+                    continue;
+                foreach (ReplayCombatPresentationEvent presentationEvent in
+                    ReplayCombatPresentationEventProjector.Project(
+                        playbackFrame.Frame))
+                {
+                    float eventTime = playbackFrame.StartSeconds
+                        + (playbackFrame.DurationSeconds
+                            * presentationEvent.NormalizedTime);
+                    if (!timedEventCursor.TryCross(
+                            presentationEvent.StableKey,
+                            eventTime,
+                            previousTime,
+                            currentTime))
+                        continue;
+                    PresentTimedEvent(presentationEvent);
+                }
+            }
+        }
+
+        private void PresentTimedEvent(
+            ReplayCombatPresentationEvent presentationEvent)
+        {
+            if (presentationEvent.Kind ==
+                ReplayCombatPresentationEventKind.ProjectileImpact)
+            {
+                if (projectiles == null)
+                    throw new InvalidOperationException(
+                        $"Replay transition {presentationEvent.TransitionSequence} "
+                        + $"cannot project impact for projectile "
+                        + $"'{presentationEvent.ProjectileId}': no projectile presenter is bound.");
+                presentedProjectileImpactEvents.Add(
+                    presentationEvent.StableKey);
+                return;
+            }
+            if (presentationEvent.Kind ==
+                ReplayCombatPresentationEventKind.Reaction)
+            {
+                presentedReactionEvents.Add(presentationEvent.StableKey);
+                return;
+            }
+            if (presentationEvent.Kind ==
+                ReplayCombatPresentationEventKind.Incapacitation)
+            {
+                presentedIncapacitations.Add(presentationEvent.StableKey);
+                return;
+            }
+
+            if (!actors.TryGetValue(
+                    presentationEvent.ActorId,
+                    out GameplayTurnReplayActorPresenter actor))
+                throw new InvalidOperationException(
+                    $"Replay transition {presentationEvent.TransitionSequence} "
+                    + $"cannot project {presentationEvent.Kind} for actor "
+                    + $"'{presentationEvent.ActorId}': no replay actor presenter exists.");
+            actor.PresentEvent(presentationEvent);
+            presentedDischargeEvents.Add(presentationEvent.StableKey);
+        }
+
+        private void RebuildTimedEventCursor(float timeSeconds)
+        {
+            timedEventCursor.Clear();
+            GameplaySemanticReplayPlaybackTimeline playback = hud.Playback;
+            if (playback == null) return;
+            foreach (GameplaySemanticReplayPlaybackFrame playbackFrame in
+                playback.Frames)
+            {
+                if (playbackFrame.StartSeconds > timeSeconds) break;
+                foreach (ReplayCombatPresentationEvent presentationEvent in
+                    ReplayCombatPresentationEventProjector.Project(
+                        playbackFrame.Frame))
+                {
+                    float eventTime = playbackFrame.StartSeconds
+                        + (playbackFrame.DurationSeconds
+                            * presentationEvent.NormalizedTime);
+                    timedEventCursor.RebuildMark(
+                        presentationEvent.StableKey,
+                        eventTime,
+                        timeSeconds);
+                }
             }
         }
 
@@ -400,6 +612,7 @@ namespace GritGud.Presentation.Gameplay
                 ref failure);
             liveBehaviourEnabled.Clear();
             actors.Clear();
+            timedEventCursor.Clear();
             presenting = false;
             if (failure != null)
             {
@@ -436,8 +649,9 @@ namespace GritGud.Presentation.Gameplay
                     projectileController.BeginReplayPresentation,
                     sample => projectileController.PresentReplay(
                         sample.Projectiles),
-                    () => { },
-                    projectileController.EndReplayPresentation));
+                    projectileController.ClearReplayTransients,
+                    projectileController.EndReplayPresentation,
+                    isRequired: true));
             }
             if (destructibleController != null)
             {

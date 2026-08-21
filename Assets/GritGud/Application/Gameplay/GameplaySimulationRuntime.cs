@@ -228,16 +228,72 @@ namespace GritGud.Application.Gameplay
             }
 
             TurnEndRecord endedTurn = FindTurnEndRecord(reduction);
-            if (endedTurn == null)
+            if (endedTurn != null)
+            {
+                CloseOpenReplayWindow(
+                    endedTurn.EndingActorId,
+                    endedTurn.Sequence,
+                    trajectoryIndex,
+                    reduction.Resulting,
+                    GameplayReplayWindowClosureReason.TurnEnded);
                 return;
+            }
 
+            if (ExitedEncounter(reduction))
+            {
+                string actorId = reduction.Previous.Session.ActiveActorId;
+                if (string.IsNullOrWhiteSpace(actorId))
+                    actorId = reduction.Resulting.Session.ActiveActorId;
+                CloseOpenReplayWindow(
+                    actorId,
+                    reduction.Resulting.Session.LastTransitionSequence,
+                    trajectoryIndex,
+                    reduction.Resulting,
+                    GameplayReplayWindowClosureReason.EncounterEnded);
+            }
+        }
+
+        internal bool CloseTerminalReplayWindow(
+            string actorId,
+            long transitionSequence,
+            GameplayReplayWindowClosureReason closureReason =
+                GameplayReplayWindowClosureReason.TerminalCapability)
+        {
+            if (closureReason != GameplayReplayWindowClosureReason
+                    .TerminalCapability
+                && closureReason != GameplayReplayWindowClosureReason
+                    .ArtifactTerminal)
+                throw new ArgumentOutOfRangeException(nameof(closureReason));
+            if (trajectory.Count == 0
+                || openReplayWindowStartTrajectoryIndex >= trajectory.Count)
+                return false;
+            CloseOpenReplayWindow(
+                actorId,
+                transitionSequence,
+                trajectory.Count - 1,
+                CurrentState,
+                closureReason);
+            return true;
+        }
+
+        private void CloseOpenReplayWindow(
+            string actorId,
+            long closureSequence,
+            int trajectoryIndex,
+            GameplayCombatStateSnapshot resultingState,
+            GameplayReplayWindowClosureReason closureReason)
+        {
+            if (string.IsNullOrWhiteSpace(actorId))
+                throw new InvalidOperationException(
+                    $"Replay window closure '{closureReason}' has no actor identity.");
             completedTurnReplayWindows.Add(new GameplayReplayWindow(
-                endedTurn.EndingActorId,
-                endedTurn.Sequence,
+                actorId,
+                closureSequence,
                 openReplayWindowInitialState,
                 openReplayWindowStartTrajectoryIndex,
-                trajectoryIndex));
-            openReplayWindowInitialState = reduction.Resulting;
+                trajectoryIndex,
+                closureReason));
+            openReplayWindowInitialState = resultingState;
             openReplayWindowStartTrajectoryIndex = checked(
                 trajectoryIndex + 1);
         }
@@ -249,6 +305,13 @@ namespace GritGud.Application.Gameplay
             return !previous.EncounterActive
                 && resulting.EncounterActive
                 && resulting.Mode == GameplaySessionMode.TurnBased;
+        }
+
+        private static bool ExitedEncounter(GameplayReductionResult reduction)
+        {
+            GameplaySessionStateSnapshot previous = reduction.Previous.Session;
+            GameplaySessionStateSnapshot resulting = reduction.Resulting.Session;
+            return previous.EncounterActive && !resulting.EncounterActive;
         }
 
         private static TurnEndRecord FindTurnEndRecord(

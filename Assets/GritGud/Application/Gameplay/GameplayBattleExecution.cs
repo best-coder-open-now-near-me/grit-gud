@@ -283,7 +283,8 @@ namespace GritGud.Application.Gameplay
             IEnumerable<GameplayBattleDecisionRecord> decisions,
             GameplayCombatStateSnapshot finalState,
             GameplayBattleTerminalResult terminal,
-            GameplayDecisionDiagnostic failureDiagnostic = null)
+            GameplayDecisionDiagnostic failureDiagnostic = null,
+            IEnumerable<GameplayReplayWindow> replayWindows = null)
         {
             ExecutionIdentity = executionIdentity
                 ?? throw new ArgumentNullException(nameof(executionIdentity));
@@ -300,6 +301,9 @@ namespace GritGud.Application.Gameplay
                 decisions ?? throw new ArgumentNullException(
                     nameof(decisions))).AsReadOnly();
             FailureDiagnostic = failureDiagnostic;
+            ReplayWindows = new List<GameplayReplayWindow>(
+                replayWindows ?? Array.Empty<GameplayReplayWindow>())
+                .AsReadOnly();
             if (!string.Equals(
                     terminal.FinalStateHash,
                     finalState.CanonicalHash,
@@ -323,6 +327,7 @@ namespace GritGud.Application.Gameplay
         public GameplayCombatStateSnapshot FinalState { get; }
         public GameplayBattleTerminalResult Terminal { get; }
         public GameplayDecisionDiagnostic FailureDiagnostic { get; }
+        public IReadOnlyList<GameplayReplayWindow> ReplayWindows { get; }
 
         public IReadOnlyList<GameplayTrajectoryStep> CreateTrajectory()
         {
@@ -516,13 +521,19 @@ namespace GritGud.Application.Gameplay
                 if (TryResolveTerminal(
                         runtime.CurrentState,
                         out GameplayBattleTerminalResult terminal))
+                {
+                    runtime.CloseTerminalReplayWindow(
+                        runtime.CurrentState.Session.ActiveActorId,
+                        terminal.TransitionSequence);
                     return new GameplayBattleRunResult(
                         executionIdentity,
                         initialState,
                         transitions,
                         decisions,
                         runtime.CurrentState,
-                        terminal);
+                        terminal,
+                        replayWindows: runtime.CompletedTurnReplayWindows);
+                }
                 GameplaySessionStateSnapshot session = runtime.CurrentState
                     .Session;
                 if (!string.Equals(
@@ -567,17 +578,25 @@ namespace GritGud.Application.Gameplay
                             CreateTerminal(
                                 runtime.CurrentState,
                                 GameplayBattleTerminalKind.Stalemate);
+                        runtime.CloseTerminalReplayWindow(
+                            runtime.CurrentState.Session.ActiveActorId,
+                            stalemate.TransitionSequence);
                         return new GameplayBattleRunResult(
                             executionIdentity,
                             initialState,
                             transitions,
                             decisions,
                             runtime.CurrentState,
-                            stalemate);
+                            stalemate,
+                            replayWindows:
+                                runtime.CompletedTurnReplayWindows);
                     }
                     GameplayBattleTerminalResult failed = CreateFailureTerminal(
                         runtime.CurrentState,
                         failure);
+                    runtime.CloseTerminalReplayWindow(
+                        runtime.CurrentState.Session.ActiveActorId,
+                        failed.TransitionSequence);
                     return new GameplayBattleRunResult(
                         executionIdentity,
                         initialState,
@@ -585,7 +604,8 @@ namespace GritGud.Application.Gameplay
                         decisions,
                         runtime.CurrentState,
                         failed,
-                        failure.Diagnostic);
+                        failure.Diagnostic,
+                        runtime.CompletedTurnReplayWindows);
                 }
             }
         }

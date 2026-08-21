@@ -3344,6 +3344,18 @@ internal static class SimulationChecks
         Require(result.Decisions.Count > 0
             && result.Transitions.Count == result.Decisions.Count + 1,
             "Permanent battle did not retain setup plus policy decisions.");
+        Require(result.ReplayWindows.Count > 0,
+            "Permanent battle did not close any replay windows.");
+        GameplayReplayWindow terminalReplayWindow = result.ReplayWindows[
+            result.ReplayWindows.Count - 1];
+        Require(terminalReplayWindow.ClosureReason
+                == GameplayReplayWindowClosureReason.TerminalCapability
+            && terminalReplayWindow.EndTrajectoryIndex
+                == result.Transitions.Count - 1
+            && terminalReplayWindow.TurnSequence
+                == result.Terminal.TransitionSequence,
+            "The lethal terminal transition was not retained in the final "
+                + "terminal-capability replay window.");
         int portableFractureProps = 0;
         foreach (DestructiblePropSnapshot prop in initial.Destructibles)
         {

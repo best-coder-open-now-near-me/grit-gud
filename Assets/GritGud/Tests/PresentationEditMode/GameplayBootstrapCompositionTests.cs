@@ -324,6 +324,20 @@ namespace GritGud.Presentation.Tests
             Assert.That(replayHud.IsAvailable, Is.True);
             Assert.That(replayHud.IsOpen, Is.True);
             Assert.That(replayHud.Replay.Frames.Count, Is.EqualTo(74));
+            Assert.That(replayHud.ActionLabel, Is.EqualTo("WATCH BATTLE"));
+            Assert.That(replayHud.Playback.TurnGroups.Count, Is.GreaterThan(1));
+            Assert.That(
+                replayHud.Playback.TurnGroups[
+                    replayHud.Playback.TurnGroups.Count - 1]
+                    .EndsWithTurnRecord,
+                Is.False,
+                "The lethal terminal tail must remain attached as the final "
+                + "battle turn even without a TurnEnd record.");
+            Assert.That(
+                replayHud.Playback.TurnGroups[
+                    replayHud.Playback.TurnGroups.Count - 1]
+                    .ClosureReason,
+                Is.EqualTo(GameplayReplayWindowClosureReason.ArtifactTerminal));
             Assert.That(runtime.InputController.CameraOnly, Is.True);
             Assert.That(runtime.Hud.IsVisible, Is.False);
             Assert.That(runtime.PartyHud.IsPresentationSuppressed, Is.True);
@@ -368,6 +382,39 @@ namespace GritGud.Presentation.Tests
                 Vector3.Distance(replayedActor.position, replayStart),
                 Is.GreaterThan(0.01f));
             Assert.That(camera.Target, Is.SameAs(cameraTarget));
+
+            int expectedDischarges = replayHud.Playback.Frames.Sum(frame =>
+                ReplayCombatPresentationEventProjector.Project(frame.Frame)
+                    .Count(presentationEvent => presentationEvent.Kind ==
+                            ReplayCombatPresentationEventKind.WeaponDischarge
+                        || presentationEvent.Kind ==
+                            ReplayCombatPresentationEventKind.ProjectileLaunch));
+            int expectedImpacts = replayHud.Playback.Frames.Sum(frame =>
+                ReplayCombatPresentationEventProjector.Project(frame.Frame)
+                    .Count(presentationEvent => presentationEvent.Kind ==
+                        ReplayCombatPresentationEventKind.ProjectileImpact));
+            int expectedReactions = replayHud.Playback.Frames.Sum(frame =>
+                ReplayCombatPresentationEventProjector.Project(frame.Frame)
+                    .Count(presentationEvent => presentationEvent.Kind ==
+                        ReplayCombatPresentationEventKind.Reaction));
+            int expectedIncapacitations = replayHud.Playback.Frames.Sum(frame =>
+                ReplayCombatPresentationEventProjector.Project(frame.Frame)
+                    .Count(presentationEvent => presentationEvent.Kind ==
+                        ReplayCombatPresentationEventKind.Incapacitation));
+            replayHud.AdvancePlayback(replayHud.Playback.TotalDurationSeconds);
+
+            Assert.That(
+                gameplay.ReplayPresentedDischargeCount,
+                Is.EqualTo(expectedDischarges).And.GreaterThan(0));
+            Assert.That(
+                gameplay.ReplayPresentedProjectileImpactCount,
+                Is.EqualTo(expectedImpacts));
+            Assert.That(
+                gameplay.ReplayPresentedReactionCount,
+                Is.EqualTo(expectedReactions).And.GreaterThan(0));
+            Assert.That(
+                gameplay.ReplayPresentedIncapacitationCount,
+                Is.EqualTo(expectedIncapacitations).And.GreaterThan(0));
 
             runtime.Bootstrap.PlayMainLevel();
             Assert.That(

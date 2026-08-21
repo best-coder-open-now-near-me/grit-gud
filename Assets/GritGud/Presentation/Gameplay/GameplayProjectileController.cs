@@ -56,6 +56,20 @@ namespace GritGud.Presentation.Gameplay
 
         internal int PresenterCount => presenters.Count;
 
+        internal int ReplayPresenterCount => replayPresenters.Count;
+
+        internal int ReplayImpactCount
+        {
+            get
+            {
+                int count = 0;
+                foreach (ProjectileFlightPresenter presenter in
+                    replayPresenters.Values)
+                    if (presenter.ReplayImpactVisible) count++;
+                return count;
+            }
+        }
+
         internal bool HasUnresolvedProjectileFlight
         {
             get
@@ -254,6 +268,13 @@ namespace GritGud.Presentation.Gameplay
                 replayPresenters[projectileId].Dispose();
                 replayPresenters.Remove(projectileId);
             }
+        }
+
+        internal void ClearReplayTransients()
+        {
+            foreach (ProjectileFlightPresenter presenter in
+                replayPresenters.Values)
+                presenter.ClearReplayImpact();
         }
 
         internal void EndReplayPresentation()

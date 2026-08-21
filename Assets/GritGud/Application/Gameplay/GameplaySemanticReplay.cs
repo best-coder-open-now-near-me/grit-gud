@@ -329,6 +329,57 @@ namespace GritGud.Application.Gameplay
         public float Progress { get; }
     }
 
+    public sealed class GameplaySemanticReplayTurnGroup
+    {
+        internal GameplaySemanticReplayTurnGroup(
+            int index,
+            IEnumerable<GameplaySemanticReplayPlaybackFrame> groupedFrames)
+        {
+            var copied = new List<GameplaySemanticReplayPlaybackFrame>(
+                groupedFrames ?? throw new ArgumentNullException(
+                    nameof(groupedFrames)));
+            if (copied.Count == 0)
+                throw new ArgumentException(
+                    "Replay turn groups cannot be empty.",
+                    nameof(groupedFrames));
+            Index = index;
+            Frames = copied.AsReadOnly();
+            StartSeconds = copied[0].StartSeconds;
+            EndSeconds = copied[copied.Count - 1].EndSeconds;
+            ActorId = ResolveActorId(copied);
+            EndsWithTurnRecord = copied[copied.Count - 1].Frame
+                .SemanticRecord is TurnEndRecord;
+            ClosureReason = EndsWithTurnRecord
+                ? GameplayReplayWindowClosureReason.TurnEnded
+                : GameplayReplayWindowClosureReason.ArtifactTerminal;
+        }
+
+        public int Index { get; }
+        public string ActorId { get; }
+        public IReadOnlyList<GameplaySemanticReplayPlaybackFrame> Frames
+        {
+            get;
+        }
+        public float StartSeconds { get; }
+        public float EndSeconds { get; }
+        public float DurationSeconds => EndSeconds - StartSeconds;
+        public bool EndsWithTurnRecord { get; }
+        public GameplayReplayWindowClosureReason ClosureReason { get; }
+
+        private static string ResolveActorId(
+            IReadOnlyList<GameplaySemanticReplayPlaybackFrame> groupedFrames)
+        {
+            for (int index = groupedFrames.Count - 1; index >= 0; index--)
+            {
+                GameplaySemanticReplayPlaybackFrame frame =
+                    groupedFrames[index];
+                if (frame.Frame.SemanticRecord is TurnEndRecord ended)
+                    return ended.EndingActorId;
+            }
+            return groupedFrames[0].Frame.Transition.Identity.ActorId;
+        }
+    }
+
     /// <summary>
     /// Presentation-only clock over an exact semantic trajectory. Every
     /// canonical transition retains one ordered frame; only its display
@@ -339,6 +390,8 @@ namespace GritGud.Application.Gameplay
     {
         private readonly IReadOnlyList<GameplaySemanticReplayPlaybackFrame>
             frames;
+        private readonly IReadOnlyList<GameplaySemanticReplayTurnGroup>
+            turnGroups;
 
         public GameplaySemanticReplayPlaybackTimeline(
             GameplaySemanticReplayTimeline replay)
@@ -358,12 +411,15 @@ namespace GritGud.Application.Gameplay
                 cursor += duration;
             }
             frames = built.AsReadOnly();
+            turnGroups = BuildTurnGroups(built);
             TotalDurationSeconds = cursor;
         }
 
         public GameplaySemanticReplayTimeline Replay { get; }
         public IReadOnlyList<GameplaySemanticReplayPlaybackFrame> Frames =>
             frames;
+        public IReadOnlyList<GameplaySemanticReplayTurnGroup> TurnGroups =>
+            turnGroups;
         public float TotalDurationSeconds { get; }
 
         public GameplaySemanticReplayPlaybackPosition Locate(
@@ -398,11 +454,74 @@ namespace GritGud.Application.Gameplay
 
         public float GetFrameEndSeconds(int index) => frames[index]
             .EndSeconds;
+
+        public int LocateTurnGroupIndex(float timeSeconds)
+        {
+            if (turnGroups.Count == 0)
+                throw new InvalidOperationException(
+                    "An empty semantic trajectory has no replay turn group.");
+            float time = Math.Max(
+                0f,
+                Math.Min(TotalDurationSeconds, timeSeconds));
+            for (int index = turnGroups.Count - 1; index >= 0; index--)
+                if (time >= turnGroups[index].StartSeconds)
+                    return index;
+            return 0;
+        }
+
+        private static IReadOnlyList<GameplaySemanticReplayTurnGroup>
+            BuildTurnGroups(
+                IReadOnlyList<GameplaySemanticReplayPlaybackFrame> playbackFrames)
+        {
+            var result = new List<GameplaySemanticReplayTurnGroup>();
+            var current = new List<GameplaySemanticReplayPlaybackFrame>();
+            foreach (GameplaySemanticReplayPlaybackFrame frame in playbackFrames)
+            {
+                current.Add(frame);
+                if (!(frame.Frame.SemanticRecord is TurnEndRecord)) continue;
+                result.Add(new GameplaySemanticReplayTurnGroup(
+                    result.Count,
+                    current));
+                current = new List<GameplaySemanticReplayPlaybackFrame>();
+            }
+            if (current.Count > 0)
+                result.Add(new GameplaySemanticReplayTurnGroup(
+                    result.Count,
+                    current));
+            return result.AsReadOnly();
+        }
     }
 
     public static class GameplaySemanticReplayPresentationTiming
     {
+        public const float ContactResolutionProgress = 0.4f;
         public const float ActionResolutionProgress = 0.65f;
+
+        public static float GetProjectileImpactProgress(
+            ProjectileAdvanceRecord advance)
+        {
+            if (advance == null) throw new ArgumentNullException(nameof(advance));
+            ProjectileImpactRecord impact = advance.Resulting.Impact;
+            if (impact == null) return 1f;
+            float arrivalWithinAdvance = Math.Max(
+                0f,
+                impact.ArrivalTurnTime - advance.Previous.ElapsedTurnTime);
+            return Clamp(
+                arrivalWithinAdvance / advance.RequestedTurnTime,
+                0f,
+                1f);
+        }
+
+        public static float GetActionResolutionProgress(
+            GameplayActionRecord action)
+        {
+            if (action == null) throw new ArgumentNullException(nameof(action));
+            foreach (GameplayActionOutcome outcome in action.Outcomes)
+                if (outcome is AttackResolvedActionOutcome resolved
+                    && resolved.Attack.IsContactAttack)
+                    return ContactResolutionProgress;
+            return ActionResolutionProgress;
+        }
 
         public static float GetDurationSeconds(
             GameplaySemanticReplayFrame frame)
@@ -488,12 +607,23 @@ namespace GritGud.Application.Gameplay
                 linearProgress,
                 nameof(linearProgress));
             float progress = Clamp01(linearProgress);
+            bool projectileImpactResolved =
+                frame.SemanticRecord is ProjectileAdvanceRecord impactAdvance
+                && impactAdvance.Resulting.Impact != null
+                && progress >= GameplaySemanticReplayPresentationTiming
+                    .GetProjectileImpactProgress(impactAdvance);
+            bool droneAttackResolved =
+                frame.SemanticRecord is DroneAttackRecord
+                && progress >= GameplaySemanticReplayPresentationTiming
+                    .ActionResolutionProgress;
             GameplayCombatStateSnapshot baseState = progress >= 1f
+                    || projectileImpactResolved
+                    || droneAttackResolved
                 ? frame.Resulting
                 : frame.Previous;
-            if (frame.SemanticRecord is GameplayActionRecord
+            if (frame.SemanticRecord is GameplayActionRecord resolvingAction
                 && progress >= GameplaySemanticReplayPresentationTiming
-                    .ActionResolutionProgress)
+                    .GetActionResolutionProgress(resolvingAction))
             {
                 baseState = frame.Resulting;
             }
@@ -522,8 +652,7 @@ namespace GritGud.Application.Gameplay
                     ReplaceProjectile(
                         projectiles,
                         GameplayProjectilePresentationSampler.Sample(
-                            projectile.Previous,
-                            projectile.Resulting,
+                            projectile,
                             progress));
                     break;
                 case DroneMoveRecord drone:

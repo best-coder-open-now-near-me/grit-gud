@@ -4,6 +4,74 @@ using GritGud.Domain.Gameplay;
 
 namespace GritGud.Application.Gameplay
 {
+    public enum ReplayCombatPresentationEventKind
+    {
+        WeaponDischarge = 0,
+        ProjectileLaunch = 1,
+        ProjectileImpact = 2,
+        Reaction = 3,
+        Incapacitation = 4,
+    }
+
+    public sealed class ReplayCombatPresentationEvent
+    {
+        public ReplayCombatPresentationEvent(
+            long transitionSequence,
+            ReplayCombatPresentationEventKind kind,
+            string actorId,
+            string targetId,
+            GameplayPosition origin,
+            GameplayPosition destination,
+            float normalizedTime,
+            string projectileId = null)
+        {
+            if (transitionSequence <= 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(transitionSequence));
+            if (!Enum.IsDefined(
+                    typeof(ReplayCombatPresentationEventKind),
+                    kind))
+                throw new ArgumentOutOfRangeException(nameof(kind));
+            if (string.IsNullOrWhiteSpace(actorId)
+                && kind != ReplayCombatPresentationEventKind.ProjectileImpact)
+                throw new ArgumentException(
+                    "Replay combat events require an actor identifier.",
+                    nameof(actorId));
+            if (float.IsNaN(normalizedTime)
+                || float.IsInfinity(normalizedTime)
+                || normalizedTime < 0f
+                || normalizedTime > 1f)
+                throw new ArgumentOutOfRangeException(nameof(normalizedTime));
+            if ((kind == ReplayCombatPresentationEventKind.ProjectileLaunch
+                    || kind == ReplayCombatPresentationEventKind.ProjectileImpact)
+                && string.IsNullOrWhiteSpace(projectileId))
+                throw new ArgumentException(
+                    "Projectile replay events require a projectile identifier.",
+                    nameof(projectileId));
+
+            TransitionSequence = transitionSequence;
+            Kind = kind;
+            ActorId = actorId ?? string.Empty;
+            TargetId = targetId ?? string.Empty;
+            Origin = origin;
+            Destination = destination;
+            NormalizedTime = normalizedTime;
+            ProjectileId = projectileId ?? string.Empty;
+        }
+
+        public long TransitionSequence { get; }
+        public ReplayCombatPresentationEventKind Kind { get; }
+        public string ActorId { get; }
+        public string TargetId { get; }
+        public GameplayPosition Origin { get; }
+        public GameplayPosition Destination { get; }
+        public float NormalizedTime { get; }
+        public string ProjectileId { get; }
+
+        public string StableKey => TransitionSequence + ":"
+            + Kind + ":" + ActorId + ":" + ProjectileId;
+    }
+
     public enum TurnReplayActorActionKind
     {
         Attack = 0,
@@ -28,7 +96,12 @@ namespace GritGud.Application.Gameplay
             float normalizedProgress,
             bool contactReaction = false,
             int resultingWoundCount = -1,
-            TargetRegionId? hitRegion = null)
+            TargetRegionId? hitRegion = null,
+            float eventNormalizedTime = -1f,
+            GameplayPosition? origin = null,
+            GameplayPosition? destination = null,
+            string projectileId = null,
+            bool contactAttack = false)
         {
             ActorId = string.IsNullOrWhiteSpace(actorId)
                 ? throw new ArgumentException(
@@ -54,6 +127,26 @@ namespace GritGud.Application.Gameplay
             IsContactReaction = contactReaction;
             ResultingWoundCount = resultingWoundCount;
             HitRegion = hitRegion;
+            float resolvedEventTime = eventNormalizedTime < 0f
+                ? kind == TurnReplayActorActionKind.Reaction
+                    ? contactReaction
+                        ? GameplaySemanticReplayPresentationTiming
+                            .ContactResolutionProgress
+                        : GameplaySemanticReplayPresentationTiming
+                            .ActionResolutionProgress
+                    : 0f
+                : eventNormalizedTime;
+            if (float.IsNaN(resolvedEventTime)
+                || float.IsInfinity(resolvedEventTime)
+                || resolvedEventTime < 0f
+                || resolvedEventTime > 1f)
+                throw new ArgumentOutOfRangeException(
+                    nameof(eventNormalizedTime));
+            EventNormalizedTime = resolvedEventTime;
+            Origin = origin;
+            Destination = destination;
+            ProjectileId = projectileId ?? string.Empty;
+            IsContactAttack = contactAttack;
         }
 
         public string ActorId { get; }
@@ -63,6 +156,172 @@ namespace GritGud.Application.Gameplay
         public bool IsContactReaction { get; }
         public int ResultingWoundCount { get; }
         public TargetRegionId? HitRegion { get; }
+        public float EventNormalizedTime { get; }
+        public GameplayPosition? Origin { get; }
+        public GameplayPosition? Destination { get; }
+        public string ProjectileId { get; }
+        public bool IsContactAttack { get; }
+    }
+
+    public static class ReplayCombatPresentationEventProjector
+    {
+        public static IReadOnlyList<ReplayCombatPresentationEvent> Project(
+            GameplaySemanticReplayFrame frame)
+        {
+            if (frame == null) throw new ArgumentNullException(nameof(frame));
+            var events = new List<ReplayCombatPresentationEvent>(Project(
+                frame.Transition.Identity.Sequence,
+                frame.SemanticRecord));
+            if (frame.SemanticRecord is GameplayActionRecord action
+                && !ContainsWeaponEvent(events))
+            {
+                foreach (GameplayActionOutcome outcome in action.Outcomes)
+                {
+                    if (!(outcome is AttackResolvedActionOutcome resolved)
+                        || resolved.Attack.IsContactAttack)
+                        continue;
+                    GameplayActorSnapshot attacker = frame.Previous.Session
+                        .GetActor(resolved.Attack.AttackerId);
+                    GameplayActorSnapshot target = frame.Previous.Session
+                        .GetActor(resolved.Attack.TargetId);
+                    events.Add(new ReplayCombatPresentationEvent(
+                        frame.Transition.Identity.Sequence,
+                        ReplayCombatPresentationEventKind.WeaponDischarge,
+                        resolved.Attack.AttackerId,
+                        resolved.Attack.TargetId,
+                        AddHeight(attacker.Pose.Position, 1f),
+                        AddHeight(target.Pose.Position, 1f),
+                        GameplaySemanticReplayPresentationTiming
+                            .ActionResolutionProgress));
+                    break;
+                }
+            }
+            AppendReactionEvents(frame, events);
+            return events.Count == 0
+                ? Array.Empty<ReplayCombatPresentationEvent>()
+                : events.AsReadOnly();
+        }
+
+        public static IReadOnlyList<ReplayCombatPresentationEvent> Project(
+            long transitionSequence,
+            object semanticRecord)
+        {
+            if (transitionSequence <= 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(transitionSequence));
+            if (semanticRecord == null)
+                throw new ArgumentNullException(nameof(semanticRecord));
+            long sequence = transitionSequence;
+            var events = new List<ReplayCombatPresentationEvent>();
+            if (semanticRecord is GameplayActionRecord action)
+            {
+                foreach (GameplayActionOutcome outcome in action.Outcomes)
+                {
+                    if (outcome is WeaponDischargedActionOutcome discharged)
+                    {
+                        WeaponDischargeRecord value = discharged.Discharge;
+                        events.Add(new ReplayCombatPresentationEvent(
+                            sequence,
+                            ReplayCombatPresentationEventKind.WeaponDischarge,
+                            value.AttackerId,
+                            value.TargetId,
+                            value.Origin,
+                            value.AimPoint,
+                            GameplaySemanticReplayPresentationTiming
+                                .ActionResolutionProgress));
+                    }
+                    else if (outcome is ProjectileLaunchedActionOutcome launched)
+                    {
+                        ProjectileLaunchRecord value = launched.Launch;
+                        events.Add(new ReplayCombatPresentationEvent(
+                            sequence,
+                            ReplayCombatPresentationEventKind.ProjectileLaunch,
+                            value.AttackerId,
+                            value.IntendedTargetId,
+                            value.Origin,
+                            value.AimPoint,
+                            GameplaySemanticReplayPresentationTiming
+                                .ActionResolutionProgress,
+                            value.ProjectileId));
+                    }
+                }
+            }
+            else if (semanticRecord is ProjectileAdvanceRecord advance
+                && advance.Resulting.Impact != null)
+            {
+                ProjectileImpactRecord impact = advance.Resulting.Impact;
+                events.Add(new ReplayCombatPresentationEvent(
+                    sequence,
+                    ReplayCombatPresentationEventKind.ProjectileImpact,
+                    advance.Resulting.Launch.AttackerId,
+                    impact.HitEntityId,
+                    advance.SegmentStart,
+                    impact.Position,
+                    GameplaySemanticReplayPresentationTiming
+                        .GetProjectileImpactProgress(advance),
+                    advance.ProjectileId));
+            }
+
+            return events.Count == 0
+                ? Array.Empty<ReplayCombatPresentationEvent>()
+                : events.AsReadOnly();
+        }
+
+        private static bool ContainsWeaponEvent(
+            IReadOnlyList<ReplayCombatPresentationEvent> events)
+        {
+            foreach (ReplayCombatPresentationEvent presentationEvent in events)
+                if (presentationEvent.Kind ==
+                        ReplayCombatPresentationEventKind.WeaponDischarge
+                    || presentationEvent.Kind ==
+                        ReplayCombatPresentationEventKind.ProjectileLaunch)
+                    return true;
+            return false;
+        }
+
+        private static void AppendReactionEvents(
+            GameplaySemanticReplayFrame frame,
+            ICollection<ReplayCombatPresentationEvent> events)
+        {
+            foreach (TurnReplayActorActionState state in
+                TurnReplayActorActionProjector.Project(frame, 1f))
+            {
+                if (state.Kind != TurnReplayActorActionKind.Reaction
+                    || state.ResultingWoundCount < 0)
+                    continue;
+                GameplayActorSnapshot previous = frame.Previous.Session
+                    .GetActor(state.ActorId);
+                GameplayActorSnapshot resulting = frame.Resulting.Session
+                    .GetActor(state.ActorId);
+                GameplayPosition position = AddHeight(
+                    resulting.Pose.Position,
+                    1f);
+                events.Add(new ReplayCombatPresentationEvent(
+                    frame.Transition.Identity.Sequence,
+                    ReplayCombatPresentationEventKind.Reaction,
+                    state.ActorId,
+                    state.ActorId,
+                    position,
+                    position,
+                    state.EventNormalizedTime));
+                if (!previous.IsIncapacitated && resulting.IsIncapacitated)
+                    events.Add(new ReplayCombatPresentationEvent(
+                        frame.Transition.Identity.Sequence,
+                        ReplayCombatPresentationEventKind.Incapacitation,
+                        state.ActorId,
+                        state.ActorId,
+                        position,
+                        position,
+                        state.EventNormalizedTime));
+            }
+        }
+
+        private static GameplayPosition AddHeight(
+            GameplayPosition position,
+            float height) => new GameplayPosition(
+                position.X,
+                position.Y + height,
+                position.Z);
     }
 
     /// <summary>
@@ -77,18 +336,21 @@ namespace GritGud.Application.Gameplay
                 TurnReplayActorActionKind kind,
                 bool contactReaction = false,
                 int resultingWoundCount = -1,
-                TargetRegionId? hitRegion = null)
+                TargetRegionId? hitRegion = null,
+                float eventNormalizedTime = -1f)
             {
                 Kind = kind;
                 ContactReaction = contactReaction;
                 ResultingWoundCount = resultingWoundCount;
                 HitRegion = hitRegion;
+                EventNormalizedTime = eventNormalizedTime;
             }
 
             public TurnReplayActorActionKind Kind { get; }
             public bool ContactReaction { get; }
             public int ResultingWoundCount { get; }
             public TargetRegionId? HitRegion { get; }
+            public float EventNormalizedTime { get; }
         }
 
         public static IReadOnlyList<TurnReplayActorActionState> Project(
@@ -107,7 +369,12 @@ namespace GritGud.Application.Gameplay
             switch (frame.SemanticRecord)
             {
                 case GameplayActionRecord action:
-                    ProjectAction(action, sequence, progress, states);
+                    ProjectAction(
+                        frame,
+                        action,
+                        sequence,
+                        progress,
+                        states);
                     break;
                 case MovementRouteRecord movement:
                     ProjectTraversal(movement, sequence, progress, states);
@@ -133,6 +400,14 @@ namespace GritGud.Application.Gameplay
                         TurnReplayActorActionKind.Attack,
                         sequence,
                         progress);
+                    break;
+                case ProjectileAdvanceRecord projectile:
+                    ProjectProjectileImpactReactions(
+                        frame,
+                        projectile,
+                        sequence,
+                        progress,
+                        states);
                     break;
                 case GameplayEmergencyReactionTransitionPayload emergency
                     when emergency.Phase == "begin":
@@ -199,12 +474,18 @@ namespace GritGud.Application.Gameplay
         }
 
         private static void ProjectAction(
+            GameplaySemanticReplayFrame frame,
             GameplayActionRecord action,
             long sequence,
             float progress,
             ICollection<TurnReplayActorActionState> states)
         {
             TurnReplayActorActionKind? primary = null;
+            float primaryEventTime = 0f;
+            GameplayPosition? primaryOrigin = null;
+            GameplayPosition? primaryDestination = null;
+            string primaryProjectileId = null;
+            bool primaryContactAttack = false;
             var reactions = new Dictionary<
                 string,
                 ReactionProjection>(StringComparer.Ordinal);
@@ -237,12 +518,41 @@ namespace GritGud.Application.Gameplay
                 else if (outcome is AttackResolvedActionOutcome attack)
                 {
                     primary ??= TurnReplayActorActionKind.Attack;
+                    primaryContactAttack = attack.Attack.IsContactAttack;
+                    if (!primaryContactAttack)
+                    {
+                        GameplayActorSnapshot attacker = frame.Previous.Session
+                            .GetActor(attack.Attack.AttackerId);
+                        GameplayActorSnapshot target = frame.Previous.Session
+                            .GetActor(attack.Attack.TargetId);
+                        primaryEventTime =
+                            GameplaySemanticReplayPresentationTiming
+                                .ActionResolutionProgress;
+                        primaryOrigin = AddHeight(
+                            attacker.Pose.Position,
+                            1f);
+                        primaryDestination = AddHeight(
+                            target.Pose.Position,
+                            1f);
+                    }
                     AddAttackReaction(reactions, attack.Attack);
                 }
-                else if (outcome is WeaponDischargedActionOutcome
-                    || outcome is ProjectileLaunchedActionOutcome)
+                else if (outcome is WeaponDischargedActionOutcome discharged)
                 {
                     primary ??= TurnReplayActorActionKind.Attack;
+                    primaryEventTime = GameplaySemanticReplayPresentationTiming
+                        .ActionResolutionProgress;
+                    primaryOrigin = discharged.Discharge.Origin;
+                    primaryDestination = discharged.Discharge.AimPoint;
+                }
+                else if (outcome is ProjectileLaunchedActionOutcome launched)
+                {
+                    primary ??= TurnReplayActorActionKind.Attack;
+                    primaryEventTime = GameplaySemanticReplayPresentationTiming
+                        .ActionResolutionProgress;
+                    primaryOrigin = launched.Launch.Origin;
+                    primaryDestination = launched.Launch.AimPoint;
+                    primaryProjectileId = launched.Launch.ProjectileId;
                 }
                 else if (outcome is EquipmentChangedActionOutcome)
                 {
@@ -251,12 +561,31 @@ namespace GritGud.Application.Gameplay
             }
 
             if (primary.HasValue)
-                Add(
-                    states,
+            {
+                if (primary.Value == TurnReplayActorActionKind.Attack
+                    && !primaryContactAttack
+                    && !primaryDestination.HasValue)
+                {
+                    GameplayActorSnapshot attacker = frame.Previous.Session
+                        .GetActor(action.Request.ActorId);
+                    GameplayActorSnapshot target = frame.Previous.Session
+                        .GetActor(action.Request.TargetId);
+                    primaryEventTime = GameplaySemanticReplayPresentationTiming
+                        .ActionResolutionProgress;
+                    primaryOrigin = AddHeight(attacker.Pose.Position, 1f);
+                    primaryDestination = AddHeight(target.Pose.Position, 1f);
+                }
+                states.Add(new TurnReplayActorActionState(
                     action.Request.ActorId,
                     primary.Value,
                     sequence,
-                    progress);
+                    progress,
+                    eventNormalizedTime: primaryEventTime,
+                    origin: primaryOrigin,
+                    destination: primaryDestination,
+                    projectileId: primaryProjectileId,
+                    contactAttack: primaryContactAttack));
+            }
             foreach (KeyValuePair<string, ReactionProjection> reaction
                 in reactions)
             {
@@ -267,7 +596,8 @@ namespace GritGud.Application.Gameplay
                     progress,
                     reaction.Value.ContactReaction,
                     reaction.Value.ResultingWoundCount,
-                    reaction.Value.HitRegion));
+                    reaction.Value.HitRegion,
+                    reaction.Value.EventNormalizedTime));
             }
         }
 
@@ -280,7 +610,12 @@ namespace GritGud.Application.Gameplay
                 TurnReplayActorActionKind.Reaction,
                 attack.IsContactAttack,
                 attack.TargetWoundsAfter.WoundCount,
-                attack.HitRegion);
+                attack.HitRegion,
+                attack.IsContactAttack
+                    ? GameplaySemanticReplayPresentationTiming
+                        .ContactResolutionProgress
+                    : GameplaySemanticReplayPresentationTiming
+                        .ActionResolutionProgress);
         }
 
         private static void ProjectAttackReaction(
@@ -297,7 +632,101 @@ namespace GritGud.Application.Gameplay
                 progress,
                 attack.IsContactAttack,
                 attack.TargetWoundsAfter.WoundCount,
-                attack.HitRegion));
+                attack.HitRegion,
+                attack.IsContactAttack
+                    ? GameplaySemanticReplayPresentationTiming
+                        .ContactResolutionProgress
+                    : GameplaySemanticReplayPresentationTiming
+                        .ActionResolutionProgress));
+        }
+
+        private static void ProjectProjectileImpactReactions(
+            GameplaySemanticReplayFrame frame,
+            ProjectileAdvanceRecord advance,
+            long sequence,
+            float progress,
+            ICollection<TurnReplayActorActionState> states)
+        {
+            ProjectileImpactRecord impact = advance.Resulting.Impact;
+            if (impact == null) return;
+            float eventTime = GameplaySemanticReplayPresentationTiming
+                .GetProjectileImpactProgress(advance);
+            var reacted = new HashSet<string>(StringComparer.Ordinal);
+            foreach (BlastEffectRecord effect in impact.BlastEffects)
+            {
+                if (effect.SubjectKind != BlastSubjectKind.Actor
+                    || !reacted.Add(effect.EntityId))
+                    continue;
+                AddProjectileReaction(
+                    frame,
+                    effect.EntityId,
+                    effect.InjuryRegion,
+                    sequence,
+                    progress,
+                    eventTime,
+                    states);
+            }
+
+            if (reacted.Add(impact.HitEntityId))
+            {
+                AddProjectileReaction(
+                    frame,
+                    impact.HitEntityId,
+                    hitRegion: null,
+                    sequence,
+                    progress,
+                    eventTime,
+                    states);
+            }
+        }
+
+        private static void AddProjectileReaction(
+            GameplaySemanticReplayFrame frame,
+            string actorId,
+            TargetRegionId? hitRegion,
+            long sequence,
+            float progress,
+            float eventTime,
+            ICollection<TurnReplayActorActionState> states)
+        {
+            if (!TryFindActor(
+                frame.Resulting.Session.Actors,
+                actorId,
+                out GameplayActorSnapshot resulting)
+                || !TryFindActor(
+                frame.Previous.Session.Actors,
+                actorId,
+                out GameplayActorSnapshot previous)
+                || resulting.Wounds.WoundCount
+                    <= previous.Wounds.WoundCount)
+                return;
+            states.Add(new TurnReplayActorActionState(
+                actorId,
+                TurnReplayActorActionKind.Reaction,
+                sequence,
+                progress,
+                contactReaction: false,
+                resulting.Wounds.WoundCount,
+                hitRegion,
+                eventTime));
+        }
+
+        private static bool TryFindActor(
+            IReadOnlyList<GameplayActorSnapshot> actors,
+            string actorId,
+            out GameplayActorSnapshot result)
+        {
+            foreach (GameplayActorSnapshot actor in actors)
+                if (string.Equals(
+                        actor.ActorId,
+                        actorId,
+                        StringComparison.Ordinal))
+                {
+                    result = actor;
+                    return true;
+                }
+            result = default;
+            return false;
         }
 
         private static TurnReplayActorActionKind MapDisplacementKind(
@@ -316,6 +745,13 @@ namespace GritGud.Application.Gameplay
                     return TurnReplayActorActionKind.Displacement;
             }
         }
+
+        private static GameplayPosition AddHeight(
+            GameplayPosition position,
+            float height) => new GameplayPosition(
+                position.X,
+                position.Y + height,
+                position.Z);
 
         private static void Add(
             ICollection<TurnReplayActorActionState> states,

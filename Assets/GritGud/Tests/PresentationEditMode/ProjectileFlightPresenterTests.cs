@@ -1,3 +1,4 @@
+using System.Linq;
 using GritGud.Domain.Gameplay;
 using GritGud.Presentation.Gameplay;
 using NUnit.Framework;
@@ -357,6 +358,77 @@ namespace GritGud.Presentation.Tests
                 presenter?.Dispose();
                 Object.DestroyImmediate(projectilePrefab);
                 Object.DestroyImmediate(trailPrefab);
+            }
+        }
+
+        [Test]
+        public void ReplayImpactIsIdempotentAndClearsWhenScrubbingBackward()
+        {
+            GameObject projectilePrefab = GameObject.CreatePrimitive(
+                PrimitiveType.Capsule);
+            GameObject impactPrefab = GameObject.CreatePrimitive(
+                PrimitiveType.Sphere);
+            var definition = new ProjectilePresentationDefinition(
+                "projectile.test",
+                projectilePrefab,
+                Vector3.zero,
+                modelScale: 0.25f,
+                spinSpeed: 0f,
+                impactPrefab: impactPrefab);
+            ProjectileFlightSnapshot initial = CreateInitialFlight();
+            var impact = new ProjectileImpactRecord(
+                initial.ProjectileId,
+                "target",
+                initial.Launch.GetPosition(1f),
+                arrivalTurnTime: 0.25f,
+                worldStateRevision: 1);
+            var impacted = new ProjectileFlightSnapshot(
+                initial.Launch,
+                impact.Position,
+                distanceTraveled: 1f,
+                elapsedTurnTime: 0.25f,
+                status: ProjectileFlightStatus.Impacted,
+                impact);
+            ProjectileFlightPresenter presenter = null;
+            try
+            {
+                presenter = new ProjectileFlightPresenter(initial, definition);
+
+                presenter.PresentReplay(impacted);
+                Assert.That(presenter.ReplayImpactVisible, Is.True);
+                Transform replayImpact = Object.FindObjectsByType<Transform>(
+                        FindObjectsInactive.Include)
+                    .Single(transform => transform.name
+                        == "projectile.test Impact Effect");
+                int effectCount = 1;
+                Assert.That(
+                    Vector3.Distance(
+                        replayImpact.position,
+                        new Vector3(
+                            impact.Position.X,
+                            impact.Position.Y,
+                            impact.Position.Z)),
+                    Is.LessThan(0.0001f),
+                    "Replay impact VFX must use the authoritative collision position.");
+
+                presenter.PresentReplay(impacted);
+                Assert.That(
+                    Object.FindObjectsByType<Transform>(
+                            FindObjectsInactive.Include)
+                        .Count(transform => transform.name
+                            == "projectile.test Impact Effect"),
+                    Is.EqualTo(effectCount),
+                    "Sampling an impacted replay frame repeatedly must not "
+                    + "duplicate its one-shot effect.");
+
+                presenter.PresentReplay(initial);
+                Assert.That(presenter.ReplayImpactVisible, Is.False);
+            }
+            finally
+            {
+                presenter?.Dispose();
+                Object.DestroyImmediate(projectilePrefab);
+                Object.DestroyImmediate(impactPrefab);
             }
         }
 

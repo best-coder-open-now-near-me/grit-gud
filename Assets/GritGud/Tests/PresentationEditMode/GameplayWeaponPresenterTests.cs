@@ -669,6 +669,44 @@ namespace GritGud.Presentation.Tests
                 Assert.That(presenter.HeldWeapon.name,
                     Is.EqualTo("Replay Launcher - Held"));
 
+                var shot = new ReplayCombatPresentationEvent(
+                    transitionSequence: 12,
+                    ReplayCombatPresentationEventKind.WeaponDischarge,
+                    "player",
+                    "target",
+                    new GameplayPosition(0f, 1f, 0f),
+                    new GameplayPosition(0f, 1f, 8f),
+                    GameplaySemanticReplayPresentationTiming
+                        .ActionResolutionProgress);
+                var cursor = new ReplayTimedPresentationEventCursor();
+                if (cursor.TryCross(
+                    shot.StableKey,
+                    shot.NormalizedTime,
+                    0f,
+                    1f))
+                {
+                    presenter.PresentReplayEvent(shot);
+                }
+                Assert.That(
+                    host.GetComponentsInChildren<Light>().Length,
+                    Is.EqualTo(1),
+                    "A crossed replay discharge must emit one muzzle light.");
+                Assert.That(
+                    host.GetComponentsInChildren<LineRenderer>().Length,
+                    Is.EqualTo(1),
+                    "A crossed hitscan discharge must emit one tracer.");
+                Assert.That(
+                    cursor.TryCross(
+                        shot.StableKey,
+                        shot.NormalizedTime,
+                        0f,
+                        1f),
+                    Is.False,
+                    "The same forward threshold crossing cannot emit twice.");
+                Assert.That(presenter.TransientVisualCount, Is.EqualTo(2));
+                presenter.ClearReplayTransients();
+                Assert.That(presenter.TransientVisualCount, Is.Zero);
+
                 presenter.PresentReplayEquipment(null);
                 Assert.That(presenter.HeldWeapon, Is.Null);
 

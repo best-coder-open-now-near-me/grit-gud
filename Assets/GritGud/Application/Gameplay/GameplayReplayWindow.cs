@@ -2,6 +2,14 @@ using System;
 
 namespace GritGud.Application.Gameplay
 {
+    public enum GameplayReplayWindowClosureReason
+    {
+        TurnEnded = 0,
+        EncounterEnded = 1,
+        TerminalCapability = 2,
+        ArtifactTerminal = 3,
+    }
+
     /// <summary>
     /// A verified contiguous section of the semantic trajectory. Its initial
     /// state is the canonical root immediately before <see cref="StartTrajectoryIndex"/>,
@@ -14,7 +22,9 @@ namespace GritGud.Application.Gameplay
             long turnSequence,
             GameplayCombatStateSnapshot initialState,
             int startTrajectoryIndex,
-            int endTrajectoryIndex)
+            int endTrajectoryIndex,
+            GameplayReplayWindowClosureReason closureReason =
+                GameplayReplayWindowClosureReason.TurnEnded)
         {
             if (string.IsNullOrWhiteSpace(actorId))
                 throw new ArgumentException(
@@ -30,12 +40,17 @@ namespace GritGud.Application.Gameplay
             if (endTrajectoryIndex < startTrajectoryIndex)
                 throw new ArgumentOutOfRangeException(
                     nameof(endTrajectoryIndex));
+            if (!Enum.IsDefined(
+                    typeof(GameplayReplayWindowClosureReason),
+                    closureReason))
+                throw new ArgumentOutOfRangeException(nameof(closureReason));
 
             ActorId = actorId;
             TurnSequence = turnSequence;
             InitialState = initialState;
             StartTrajectoryIndex = startTrajectoryIndex;
             EndTrajectoryIndex = endTrajectoryIndex;
+            ClosureReason = closureReason;
         }
 
         public string ActorId { get; }
@@ -47,6 +62,8 @@ namespace GritGud.Application.Gameplay
         public int StartTrajectoryIndex { get; }
 
         public int EndTrajectoryIndex { get; }
+
+        public GameplayReplayWindowClosureReason ClosureReason { get; }
 
         public int TransitionCount => checked(
             EndTrajectoryIndex - StartTrajectoryIndex + 1);
