@@ -15,11 +15,13 @@ namespace GritGud.Presentation.Gameplay
     [Serializable]
     internal sealed class GameplayContentManifestDocument
     {
-        public const int CurrentSchemaVersion = 1;
+        public const int CurrentSchemaVersion = 2;
 
         public int schemaVersion = CurrentSchemaVersion;
         public string scenarioResource = string.Empty;
         public string levelResource = string.Empty;
+        public string fractureSpatialCatalogResource =
+            "Gameplay/fracture-spatial-catalog";
     }
 
     internal sealed class GameplayContentPackage
@@ -33,8 +35,7 @@ namespace GritGud.Presentation.Gameplay
             CharacterAppearanceCatalog characterAppearances,
             UnityCharacterLibrary characters,
             GameplayScenarioAssembly assembly,
-            IReadOnlyDictionary<string, GameplayFractureSpatialProfile>
-                fractureSpatialProfiles,
+            GameplayStaticSpatialContent spatialContent,
             bool isSandbox = false)
         {
             Manifest = manifest;
@@ -45,9 +46,9 @@ namespace GritGud.Presentation.Gameplay
             CharacterAppearances = characterAppearances;
             Characters = characters;
             Assembly = assembly;
-            FractureSpatialProfiles = fractureSpatialProfiles
+            SpatialContent = spatialContent
                 ?? throw new ArgumentNullException(
-                    nameof(fractureSpatialProfiles));
+                    nameof(spatialContent));
             ValidationContent = new LevelValidationContent(
                 archetypes.CreateKnownIdSet(),
                 scenario.actors
@@ -76,8 +77,11 @@ namespace GritGud.Presentation.Gameplay
 
         public GameplayScenarioAssembly Assembly { get; }
 
+        public GameplayStaticSpatialContent SpatialContent { get; }
+
         public IReadOnlyDictionary<string, GameplayFractureSpatialProfile>
-            FractureSpatialProfiles { get; }
+            FractureSpatialProfiles =>
+                SpatialContent.FractureProfilesByArchetype;
 
         public LevelValidationContent ValidationContent { get; }
 
@@ -339,11 +343,20 @@ namespace GritGud.Presentation.Gameplay
             ApplyCharacterAuthoring(scenario, characters);
             GameplayScenarioAssembly assembly =
                 new GameplayScenarioAssembler().Assemble(scenario, level);
-            IReadOnlyDictionary<string, GameplayFractureSpatialProfile>
-                fractureSpatialProfiles =
-                    GameplaySpatialContentAssembler.AssembleFractureProfiles(
-                        level,
-                        archetypes);
+            TextAsset fractureCatalogAsset = LoadRequiredText(
+                manifest.fractureSpatialCatalogResource,
+                "fracture spatial catalog");
+            GameplayFractureSpatialCatalogDocument fractureCatalog =
+                JsonUtility.FromJson<GameplayFractureSpatialCatalogDocument>(
+                    fractureCatalogAsset.text)
+                ?? throw new InvalidOperationException(
+                    "The fracture spatial catalog is invalid JSON.");
+            var spatialContent = new GameplayStaticSpatialContent(
+                level,
+                fractureCatalog);
+            GameplaySpatialContentAssembler.ValidateFractureProfiles(
+                spatialContent,
+                archetypes);
             foreach (ScenarioActorRuntimeDefinition actor in assembly.Actors)
             {
                 _ = actorPresentations.Get(actor.PresentationId);
@@ -358,7 +371,7 @@ namespace GritGud.Presentation.Gameplay
                 characterAppearances,
                 characters,
                 assembly,
-                fractureSpatialProfiles,
+                spatialContent,
                 isSandbox);
         }
 

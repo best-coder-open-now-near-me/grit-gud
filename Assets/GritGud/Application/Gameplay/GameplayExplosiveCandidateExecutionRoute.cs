@@ -416,6 +416,8 @@ namespace GritGud.Application.Gameplay
                 if (effect.SubjectKind == BlastSubjectKind.Actor)
                 {
                     affectedActors++;
+                    if (record.SmokeField != null)
+                        continue;
                     ScenarioActorDefinition affected = scenario.GetActor(
                         effect.EntityId);
                     if (thrower.Combat.IsHostileTo(

@@ -1,5 +1,6 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "scenarioResource": "Scenarios/depot-yard",
-  "levelResource": "Levels/Published/main-level"
+  "levelResource": "Levels/Published/main-level",
+  "fractureSpatialCatalogResource": "Gameplay/fracture-spatial-catalog"
 }

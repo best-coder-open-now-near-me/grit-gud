@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Levels;
@@ -11,43 +10,82 @@ namespace GritGud.Presentation.Gameplay
 {
     public static class GameplaySpatialContentAssembler
     {
-        public static IReadOnlyDictionary<string, GameplayFractureSpatialProfile>
-            AssembleFractureProfiles(
-                LevelDocument level,
+        public static void ValidateFractureProfiles(
+                GameplayStaticSpatialContent spatialContent,
                 LevelArchetypeCatalog archetypes)
         {
-            if (level == null) throw new ArgumentNullException(nameof(level));
+            if (spatialContent == null)
+                throw new ArgumentNullException(nameof(spatialContent));
             if (archetypes == null)
                 throw new ArgumentNullException(nameof(archetypes));
-            var profiles = new Dictionary<string, GameplayFractureSpatialProfile>(
-                StringComparer.Ordinal);
-            foreach (LevelEntity entity in level.entities)
+            IReadOnlyDictionary<string, GameplayFractureSpatialProfile>
+                authoritative = spatialContent.FractureProfilesByArchetype;
+            foreach (LevelArchetypeDefinition archetype in archetypes.Entries)
             {
-                if (entity?.destructible?.enabled != true
-                    || entity.coverVolumes == null
-                    || entity.coverVolumes.Count == 0)
-                    continue;
-                if (!archetypes.TryGet(
-                        entity.archetypeId,
-                        out LevelArchetypeDefinition archetype))
+                if (archetype?.FractureProfile == null) continue;
+                if (!authoritative.TryGetValue(
+                        archetype.ArchetypeId,
+                        out GameplayFractureSpatialProfile expected))
                 {
                     throw new InvalidOperationException(
-                        $"Tactical destructible '{entity.id}' uses unknown "
-                        + $"archetype '{entity.archetypeId}'.");
+                        $"Fracturable archetype '{archetype.ArchetypeId}' is "
+                        + "missing from portable spatial content.");
                 }
 
-                DestructibleFractureProfile fracture = archetype.FractureProfile;
-                if (fracture == null || profiles.ContainsKey(entity.archetypeId))
-                    continue;
-                profiles.Add(
-                    entity.archetypeId,
-                    fracture.CreateSpatialProfile());
+                GameplayFractureSpatialProfile actual =
+                    archetype.FractureProfile.CreateSpatialProfile();
+                ValidateEquivalent(archetype.ArchetypeId, expected, actual);
             }
 
-            return new ReadOnlyDictionary<
-                string,
-                GameplayFractureSpatialProfile>(profiles);
+            foreach (string archetypeId in authoritative.Keys)
+                if (!archetypes.TryGet(
+                        archetypeId,
+                        out LevelArchetypeDefinition archetype)
+                    || archetype.FractureProfile == null)
+                {
+                    throw new InvalidOperationException(
+                        $"Portable fracture spatial archetype '{archetypeId}' "
+                        + "has no Unity presentation profile.");
+                }
         }
+
+        private static void ValidateEquivalent(
+            string archetypeId,
+            GameplayFractureSpatialProfile expected,
+            GameplayFractureSpatialProfile actual)
+        {
+            if (!string.Equals(
+                    expected.ProfileId,
+                    actual.ProfileId,
+                    StringComparison.Ordinal)
+                || expected.ChunkCount != actual.ChunkCount)
+            {
+                throw new InvalidOperationException(
+                    $"Unity fracture profile for '{archetypeId}' does not "
+                    + "match portable spatial topology.");
+            }
+
+            for (int index = 0; index < expected.ChunkCount; index++)
+            {
+                GameplayLocalSpatialVolume left =
+                    expected.ChunkVolumes[index];
+                GameplayLocalSpatialVolume right = actual.ChunkVolumes[index];
+                if (!Equivalent(left.Center, right.Center)
+                    || !Equivalent(left.Size, right.Size))
+                {
+                    throw new InvalidOperationException(
+                        $"Unity fracture profile for '{archetypeId}' chunk "
+                        + $"{index} does not match portable spatial topology.");
+                }
+            }
+        }
+
+        private static bool Equivalent(
+            GameplayPosition left,
+            GameplayPosition right) =>
+            GameplayNumericPolicy.AreEquivalent(left.X, right.X)
+            && GameplayNumericPolicy.AreEquivalent(left.Y, right.Y)
+            && GameplayNumericPolicy.AreEquivalent(left.Z, right.Z);
     }
 
     [CreateAssetMenu(

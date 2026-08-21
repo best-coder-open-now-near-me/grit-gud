@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using GritGud.Application.Gameplay;
+using GritGud.Domain.Levels;
 using NUnit.Framework;
 
 namespace GritGud.Domain.Tests.Gameplay
@@ -119,6 +121,72 @@ namespace GritGud.Domain.Tests.Gameplay
                     "defender-roll"),
                 Is.EqualTo(20));
         }
+
+        [Test]
+        public void FractureCatalogParticipatesInStaticSpatialIdentity()
+        {
+            var level = new LevelDocument
+            {
+                levelId = "fracture-identity",
+                entities = new List<LevelEntity>
+                {
+                    new LevelEntity
+                    {
+                        id = "cover",
+                        archetypeId = "cover.fracturable",
+                        destructible = new DestructibleInstanceData
+                        {
+                            enabled = true,
+                            initialState = "intact",
+                            integrity = 10f,
+                        },
+                    },
+                },
+            };
+            var catalog = new GameplayFractureSpatialCatalogDocument
+            {
+                profiles = new List<GameplayFractureSpatialProfileData>
+                {
+                    new GameplayFractureSpatialProfileData
+                    {
+                        archetypeId = "cover.fracturable",
+                        profileId = "fracture.cover",
+                        chunks = new List<GameplayFractureSpatialChunkData>
+                        {
+                            Chunk(0f),
+                            Chunk(1f),
+                        },
+                    },
+                },
+            };
+            var first = new GameplayStaticSpatialContent(level, catalog);
+            GameplayFractureSpatialCatalogDocument changed =
+                catalog.DeepCopy();
+            changed.profiles[0].chunks[0].center.x = 0.25f;
+            var second = new GameplayStaticSpatialContent(level, changed);
+            LevelDocument changedLevel = level.DeepCopy();
+            changedLevel.displayName = "Changed level content";
+            var third = new GameplayStaticSpatialContent(
+                changedLevel,
+                catalog);
+
+            Assert.That(
+                first.ResolveFractureChunkCount(level.entities[0]),
+                Is.EqualTo(2));
+            Assert.That(
+                first.Identity.HasSameIdentity(second.Identity),
+                Is.False);
+            Assert.That(
+                first.Identity.HasSameIdentity(third.Identity),
+                Is.False);
+        }
+
+        private static GameplayFractureSpatialChunkData Chunk(float x) =>
+            new GameplayFractureSpatialChunkData
+            {
+                center = new Float3Data(x, 0.5f, 0f),
+                size = new Float3Data(1f, 1f, 1f),
+            };
 
         private static GameplayExecutionIdentity CreateIdentity(
             string gameplayDigest,

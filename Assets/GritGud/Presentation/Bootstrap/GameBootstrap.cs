@@ -302,7 +302,7 @@ namespace GritGud.Presentation.Bootstrap
                 preparation = GameplayFirstSimulationPreparationService
                     .PrepareAsync(
                         simulationContent.Assembly,
-                        simulationContent.Level,
+                        simulationContent.SpatialContent,
                         owner.Token);
             }
             catch (Exception exception)

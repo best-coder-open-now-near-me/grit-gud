@@ -105,7 +105,7 @@ namespace GritGud.Presentation.Gameplay
         internal void BindSemanticRuntime(
             GameplayLiveSessionRuntime runtime,
             GameplayScenarioAssembly assembly,
-            LevelDocument level,
+            GameplayStaticSpatialContent spatialContent,
             GameplayCapabilityRegistry capabilities,
             GameplaySessionPresenter sessionPresenter,
             GameplayActionController actionController,
@@ -124,13 +124,19 @@ namespace GritGud.Presentation.Gameplay
             if (runtime == null) throw new ArgumentNullException(nameof(runtime));
             if (assembly == null)
                 throw new ArgumentNullException(nameof(assembly));
-            if (level == null) throw new ArgumentNullException(nameof(level));
+            if (spatialContent == null)
+                throw new ArgumentNullException(nameof(spatialContent));
             if (capabilities == null)
                 throw new ArgumentNullException(nameof(capabilities));
 
-            var spatial = new GameplayHeadlessSpatialEvidence(
-                level,
-                runtime.ExecutionIdentity.Spatial);
+            if (!runtime.ExecutionIdentity.Spatial.HasSameIdentity(
+                    spatialContent.Identity))
+                throw new ArgumentException(
+                    "Enemy runtime and static spatial content differ.",
+                    nameof(spatialContent));
+            LevelDocument level = spatialContent.Level;
+            GameplayHeadlessSpatialEvidence spatial =
+                spatialContent.CreateEvidence();
             IReadOnlyList<GameplayReachableInput> reachable =
                 GameplayReachableInputEnumerator.Enumerate(assembly, level);
             GameplayCandidateExecutionRouteRegistry routes =

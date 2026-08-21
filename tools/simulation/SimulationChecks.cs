@@ -1005,6 +1005,15 @@ internal static class SimulationChecks
             out assembly,
             out level);
 
+    private static void LoadDepotContent(
+        out GameplayScenarioAssembly assembly,
+        out LevelDocument level,
+        out GameplayStaticSpatialContent spatialContent) =>
+        SimulationRepositoryContent.LoadDepot(
+            out assembly,
+            out level,
+            out spatialContent);
+
     private static void VerifyBankedActionPointEconomy()
     {
         var economy = new TurnActionPointEconomy(4, 4, 6);
@@ -3267,24 +3276,38 @@ internal static class SimulationChecks
     {
         LoadDepotContent(
             out GameplayScenarioAssembly assembly,
-            out LevelDocument level);
+            out LevelDocument level,
+            out GameplayStaticSpatialContent spatialContent);
         GameplayCombatStateSnapshot initial =
-            GameplayHeadlessBattleStateFactory.Create(assembly, level);
+            GameplayHeadlessBattleStateFactory.Create(assembly, spatialContent);
+        GameplayFractureSpatialCatalogDocument changedFractureCatalog =
+            spatialContent.FractureCatalog.DeepCopy();
+        changedFractureCatalog.profiles[0].chunks[0].center.x += 0.125f;
+        var changedFractureContent = new GameplayStaticSpatialContent(
+            level,
+            changedFractureCatalog);
+        Require(!spatialContent.Identity.HasSameIdentity(
+                changedFractureContent.Identity),
+            "Static spatial identity ignored fracture topology changes.");
+        LevelDocument changedLevel = level.DeepCopy();
+        changedLevel.displayName += " identity mutation";
+        var changedLevelContent = new GameplayStaticSpatialContent(
+            changedLevel,
+            spatialContent.FractureCatalog);
+        Require(!spatialContent.Identity.HasSameIdentity(
+                changedLevelContent.Identity),
+            "Static spatial identity ignored level content changes.");
         var identity = new GameplayExecutionIdentity(
             new GameplayContentIdentity(
                 assembly.Scenario.Id,
                 ScenarioContentDocument.CurrentSchemaVersion,
                 GameplayCombatStateSnapshot.CurrentSchemaVersion,
                 GameplayCanonicalValueDigest.Calculate(assembly.Scenario)),
-            new SpatialContentIdentity(
-                level.levelId,
-                level.schemaVersion,
-                evidenceAlgorithmVersion: 1,
-                GameplayCanonicalValueDigest.Calculate(level)),
+            spatialContent.Identity,
             initial.Session.RunIdentity);
         var runner = new GameplayBattleRunner(
             assembly,
-            level,
+            spatialContent,
             identity,
             logicalGuardPolicy: new GameplayExecutionLogicalGuardPolicy(
                 maximumTransitions: 2000,
@@ -3306,6 +3329,14 @@ internal static class SimulationChecks
         Require(result.Decisions.Count > 0
             && result.Transitions.Count == result.Decisions.Count + 1,
             "Permanent battle did not retain setup plus policy decisions.");
+        int portableFractureProps = 0;
+        foreach (DestructiblePropSnapshot prop in initial.Destructibles)
+        {
+            if (prop.FractureChunkCount == 12) portableFractureProps++;
+        }
+        Require(portableFractureProps == initial.Destructibles.Count
+            && portableFractureProps > 0,
+            "Permanent battle did not initialize portable fracture topology.");
         int fireDeployments = 0;
         int concussiveThrows = 0;
         int droneMoves = 0;
@@ -3335,10 +3366,19 @@ internal static class SimulationChecks
             + ", concussive=" + concussiveThrows
             + ", drone-moves=" + droneMoves
             + ", drone-attacks=" + droneAttacks);
+        bool detachedFracture = false;
+        foreach (DestructiblePropSnapshot prop in
+            result.FinalState.Destructibles)
+            if (prop.DetachedFractureChunks != 0UL)
+            {
+                detachedFracture = true;
+                break;
+            }
         Require(fireDeployments > 0
             && concussiveThrows > 0
             && droneMoves > 0
-            && droneAttacks > 0,
+            && droneAttacks > 0
+            && detachedFracture,
             "Permanent battle did not exercise every first-sim mechanic.");
         GameplayExactReplayResult replay = GameplayExactReplay.Verify(
             initial,
@@ -4743,8 +4783,15 @@ internal static class SimulationChecks
                     reducers).IsExact,
                 $"Explosive '{explosive.Id}' did not reduce and replay exactly.");
             if (explosive.DeploysSmoke)
+            {
+                Require(selected.ExpectedOutcome.GetValue(
+                            "blast.hostile-actors") == 0f
+                        && selected.ExpectedOutcome.GetValue(
+                            "blast.friendly-actors") == 0f,
+                    "Smoke field proximity was misreported as a damaging blast.");
                 Require(runtime.CurrentState.SmokeFields.Count == 1,
                     "Smoke grenade did not install one canonical smoke field.");
+            }
             if (explosive.DeploysFire)
                 Require(runtime.CurrentState.FireFields.Count == 1,
                     "Incendiary grenade did not install one canonical fire field.");

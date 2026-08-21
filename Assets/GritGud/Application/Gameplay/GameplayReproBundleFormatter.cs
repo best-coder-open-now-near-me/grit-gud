@@ -15,6 +15,12 @@ namespace GritGud.Application.Gameplay
     /// </summary>
     public static class GameplayReproBundleFormatter
     {
+        private enum CanonicalMemberMode
+        {
+            Properties,
+            SerializableFields,
+        }
+
         public static string Format(GameplayReproBundle bundle)
         {
             if (bundle == null) throw new ArgumentNullException(nameof(bundle));
@@ -25,7 +31,12 @@ namespace GritGud.Application.Gameplay
             AppendString(text, "grit-gud-semantic-repro");
             text.Append(',');
             AppendName(text, "bundle");
-            AppendValue(text, bundle, visiting, depth: 0);
+            AppendValue(
+                text,
+                bundle,
+                visiting,
+                depth: 0,
+                CanonicalMemberMode.Properties);
             text.Append('}');
             return text.ToString();
         }
@@ -37,7 +48,20 @@ namespace GritGud.Application.Gameplay
                 text,
                 value,
                 new HashSet<object>(ReferenceComparer.Instance),
-                depth: 0);
+                depth: 0,
+                CanonicalMemberMode.Properties);
+            return text.ToString();
+        }
+
+        internal static string FormatCanonicalSerializableFields(object value)
+        {
+            var text = new StringBuilder(4 * 1024);
+            AppendValue(
+                text,
+                value,
+                new HashSet<object>(ReferenceComparer.Instance),
+                depth: 0,
+                CanonicalMemberMode.SerializableFields);
             return text.ToString();
         }
 
@@ -45,7 +69,8 @@ namespace GritGud.Application.Gameplay
             StringBuilder text,
             object value,
             ISet<object> visiting,
-            int depth)
+            int depth,
+            CanonicalMemberMode memberMode)
         {
             if (depth > 128)
                 throw new InvalidOperationException(
@@ -110,15 +135,30 @@ namespace GritGud.Application.Gameplay
             {
                 if (value is IDictionary dictionary)
                 {
-                    AppendDictionary(text, dictionary, visiting, depth + 1);
+                    AppendDictionary(
+                        text,
+                        dictionary,
+                        visiting,
+                        depth + 1,
+                        memberMode);
                     return;
                 }
                 if (value is IEnumerable sequence)
                 {
-                    AppendSequence(text, sequence, visiting, depth + 1);
+                    AppendSequence(
+                        text,
+                        sequence,
+                        visiting,
+                        depth + 1,
+                        memberMode);
                     return;
                 }
-                AppendObject(text, value, visiting, depth + 1);
+                AppendObject(
+                    text,
+                    value,
+                    visiting,
+                    depth + 1,
+                    memberMode);
             }
             finally
             {
@@ -130,7 +170,8 @@ namespace GritGud.Application.Gameplay
             StringBuilder text,
             IDictionary dictionary,
             ISet<object> visiting,
-            int depth)
+            int depth,
+            CanonicalMemberMode memberMode)
         {
             var entries = new List<DictionaryEntry>();
             foreach (DictionaryEntry entry in dictionary)
@@ -147,7 +188,12 @@ namespace GritGud.Application.Gameplay
                     Convert.ToString(
                         entries[index].Key,
                         CultureInfo.InvariantCulture));
-                AppendValue(text, entries[index].Value, visiting, depth);
+                AppendValue(
+                    text,
+                    entries[index].Value,
+                    visiting,
+                    depth,
+                    memberMode);
             }
             text.Append('}');
         }
@@ -156,14 +202,15 @@ namespace GritGud.Application.Gameplay
             StringBuilder text,
             IEnumerable sequence,
             ISet<object> visiting,
-            int depth)
+            int depth,
+            CanonicalMemberMode memberMode)
         {
             text.Append('[');
             bool first = true;
             foreach (object item in sequence)
             {
                 if (!first) text.Append(',');
-                AppendValue(text, item, visiting, depth);
+                AppendValue(text, item, visiting, depth, memberMode);
                 first = false;
             }
             text.Append(']');
@@ -173,9 +220,15 @@ namespace GritGud.Application.Gameplay
             StringBuilder text,
             object value,
             ISet<object> visiting,
-            int depth)
+            int depth,
+            CanonicalMemberMode memberMode)
         {
             Type type = value.GetType();
+            if (memberMode == CanonicalMemberMode.SerializableFields)
+            {
+                AppendSerializableFields(text, value, visiting, depth, type);
+                return;
+            }
             PropertyInfo[] properties = type.GetProperties(
                 BindingFlags.Public | BindingFlags.Instance);
             Array.Sort(properties, (left, right) =>
@@ -201,7 +254,42 @@ namespace GritGud.Application.Gameplay
                 }
                 text.Append(',');
                 AppendName(text, property.Name);
-                AppendValue(text, propertyValue, visiting, depth);
+                AppendValue(
+                    text,
+                    propertyValue,
+                    visiting,
+                    depth,
+                    memberMode);
+            }
+            text.Append('}');
+        }
+
+        private static void AppendSerializableFields(
+            StringBuilder text,
+            object value,
+            ISet<object> visiting,
+            int depth,
+            Type type)
+        {
+            FieldInfo[] fields = type.GetFields(
+                BindingFlags.Public | BindingFlags.Instance);
+            Array.Sort(fields, (left, right) =>
+                StringComparer.Ordinal.Compare(left.Name, right.Name));
+            text.Append('{');
+            AppendName(text, "$type");
+            AppendString(text, type.FullName ?? type.Name);
+            foreach (FieldInfo field in fields)
+            {
+                if (field.IsDefined(typeof(NonSerializedAttribute), false))
+                    continue;
+                text.Append(',');
+                AppendName(text, field.Name);
+                AppendValue(
+                    text,
+                    field.GetValue(value),
+                    visiting,
+                    depth,
+                    CanonicalMemberMode.SerializableFields);
             }
             text.Append('}');
         }

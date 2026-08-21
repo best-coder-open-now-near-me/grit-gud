@@ -118,19 +118,20 @@ namespace GritGud.Presentation.Gameplay
             GameplayBattleArtifact,
             GameplaySemanticReplayTimeline>> PrepareAsync(
             GameplayScenarioAssembly assembly,
-            LevelDocument level,
+            GameplayStaticSpatialContent spatialContent,
             CancellationToken cancellationToken)
         {
             if (assembly == null) throw new ArgumentNullException(
                 nameof(assembly));
-            if (level == null) throw new ArgumentNullException(nameof(level));
+            if (spatialContent == null)
+                throw new ArgumentNullException(nameof(spatialContent));
             await Task.Yield();
             cancellationToken.ThrowIfCancellationRequested();
 
             GameplayBattleArtifact artifact = LoadArtifact();
             cancellationToken.ThrowIfCancellationRequested();
             GameplayExecutionIdentity loadedIdentity =
-                CreateLoadedIdentity(assembly, level);
+                CreateLoadedIdentity(assembly, spatialContent);
             GameplayExecutionIdentity artifactIdentity = artifact.Content
                 .ExecutionIdentity;
             RequireViewerIdentityCompatibility(
@@ -165,17 +166,12 @@ namespace GritGud.Presentation.Gameplay
 
         private static GameplayExecutionIdentity CreateLoadedIdentity(
             GameplayScenarioAssembly assembly,
-            LevelDocument level)
+            GameplayStaticSpatialContent spatialContent)
         {
-            var spatial = new SpatialContentIdentity(
-                level.levelId,
-                level.schemaVersion,
-                evidenceAlgorithmVersion: 1,
-                GameplayCanonicalValueDigest.Calculate(level));
             GameplayScenarioAssembly grounded =
                 GameplayHeadlessScenarioGrounding.Resolve(
                     assembly,
-                    new GameplayHeadlessSpatialEvidence(level, spatial));
+                    spatialContent.CreateEvidence());
             return new GameplayExecutionIdentity(
                 new GameplayContentIdentity(
                     grounded.Scenario.Id,
@@ -183,7 +179,7 @@ namespace GritGud.Presentation.Gameplay
                     GameplayCombatStateSnapshot.CurrentSchemaVersion,
                     GameplayCanonicalValueDigest.Calculate(
                         grounded.Scenario)),
-                spatial,
+                spatialContent.Identity,
                 new ScenarioRunIdentity(
                     grounded.Scenario.Id + ".run",
                     grounded.RandomSeed));

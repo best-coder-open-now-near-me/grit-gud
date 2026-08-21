@@ -87,6 +87,14 @@ namespace GritGud.Application.Gameplay
             return CalculateCanonicalJson(canonical);
         }
 
+        internal static string CalculateSerializableFields(object value)
+        {
+            if (value == null) throw new ArgumentNullException(nameof(value));
+            string canonical = GameplayReproBundleFormatter
+                .FormatCanonicalSerializableFields(value);
+            return CalculateCanonicalJson(canonical);
+        }
+
         internal static string CalculateCanonicalJson(string canonicalJson)
         {
             if (string.IsNullOrWhiteSpace(canonicalJson))

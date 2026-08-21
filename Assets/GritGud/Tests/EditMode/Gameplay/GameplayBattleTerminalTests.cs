@@ -21,23 +21,24 @@ namespace GritGud.Domain.Tests.Gameplay
                 schemaVersion = LevelDocument.CurrentSchemaVersion,
             };
             level.Normalize();
+            var spatialContent = new GameplayStaticSpatialContent(
+                level,
+                new GameplayFractureSpatialCatalogDocument());
             GameplayCombatStateSnapshot initial =
-                GameplayHeadlessBattleStateFactory.Create(assembly, level);
+                GameplayHeadlessBattleStateFactory.Create(
+                    assembly,
+                    spatialContent);
             var identity = new GameplayExecutionIdentity(
                 new GameplayContentIdentity(
                     assembly.Scenario.Id,
                     ScenarioContentDocument.CurrentSchemaVersion,
                     GameplayCombatStateSnapshot.CurrentSchemaVersion,
                     GameplayCanonicalValueDigest.Calculate(assembly.Scenario)),
-                new SpatialContentIdentity(
-                    level.levelId,
-                    level.schemaVersion,
-                    evidenceAlgorithmVersion: 1,
-                    GameplayCanonicalValueDigest.Calculate(level)),
+                spatialContent.Identity,
                 initial.Session.RunIdentity);
             var runner = new GameplayBattleRunner(
                 assembly,
-                level,
+                spatialContent,
                 identity,
                 new EndTurnPolicy(),
                 deadlinePolicy: new GameplayExecutionDeadlinePolicy(

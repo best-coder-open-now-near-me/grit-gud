@@ -12,6 +12,14 @@ internal static class SimulationRepositoryContent
         out GameplayScenarioAssembly assembly,
         out LevelDocument level)
     {
+        LoadDepot(out assembly, out level, out _);
+    }
+
+    public static void LoadDepot(
+        out GameplayScenarioAssembly assembly,
+        out LevelDocument level,
+        out GameplayStaticSpatialContent spatialContent)
+    {
         string contentRoot = Path.Combine(
             FindRepositoryRoot(),
             "Assets",
@@ -32,16 +40,21 @@ internal static class SimulationRepositoryContent
                 json));
         scenario.Normalize();
         level.Normalize();
+        GameplayFractureSpatialCatalogDocument fractureCatalog = ReadJson<
+            GameplayFractureSpatialCatalogDocument>(
+                Path.Combine(
+                    contentRoot,
+                    "Gameplay",
+                    "fracture-spatial-catalog.json"),
+                json);
+        spatialContent = new GameplayStaticSpatialContent(
+            level,
+            fractureCatalog);
         GameplayScenarioAssembly authored = new GameplayScenarioAssembler()
             .Assemble(scenario, level);
-        var spatialIdentity = new SpatialContentIdentity(
-            level.levelId,
-            level.schemaVersion,
-            evidenceAlgorithmVersion: 1,
-            GameplayCanonicalValueDigest.Calculate(level));
         assembly = GameplayHeadlessScenarioGrounding.Resolve(
             authored,
-            new GameplayHeadlessSpatialEvidence(level, spatialIdentity));
+            spatialContent.CreateEvidence());
     }
 
     public static string FindRepositoryRoot()

@@ -18,19 +18,21 @@ namespace GritGud.Presentation.Gameplay
 
         public void Bind(
             LevelWorld world,
-            LevelDocument level,
+            GameplayStaticSpatialContent spatialContent,
             GameplayJournal journal)
         {
             if (world == null)
             {
                 throw new ArgumentNullException(nameof(world));
             }
+            if (spatialContent == null)
+                throw new ArgumentNullException(nameof(spatialContent));
 
             Unbind();
             Session = DestructiblePropSession.FromLevel(
-                level,
+                spatialContent.Level,
                 journal ?? throw new ArgumentNullException(nameof(journal)),
-                entity => ResolveFractureChunkCount(world, entity));
+                spatialContent.ResolveFractureChunkCount);
             Session.Damaged += HandleDamage;
             foreach (string propId in Session.PropIds)
             {
@@ -183,17 +185,5 @@ namespace GritGud.Presentation.Gameplay
                 presenter?.TickDisplacement(deltaTime);
         }
 
-        private static int ResolveFractureChunkCount(
-            LevelWorld world,
-            LevelEntity entity)
-        {
-            if (!world.TryGetEntity(entity.id, out LevelEntityView view))
-            {
-                throw new InvalidOperationException(
-                    $"Loaded level is missing destructible prop '{entity.id}'.");
-            }
-
-            return view.Archetype.FractureProfile?.ChunkCount ?? 0;
-        }
     }
 }

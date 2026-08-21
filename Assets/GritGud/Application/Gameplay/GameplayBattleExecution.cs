@@ -337,18 +337,23 @@ namespace GritGud.Application.Gameplay
     {
         public static GameplayCombatStateSnapshot Create(
             GameplayScenarioAssembly assembly,
-            LevelDocument level)
+            GameplayStaticSpatialContent spatialContent)
         {
             if (assembly == null)
                 throw new ArgumentNullException(nameof(assembly));
-            if (level == null) throw new ArgumentNullException(nameof(level));
+            if (spatialContent == null)
+                throw new ArgumentNullException(nameof(spatialContent));
+            LevelDocument level = spatialContent.Level;
             var gameplay = new GameplaySession(
                 assembly.Scenario,
                 scenarioSeed: assembly.RandomSeed);
             GameplayCombatStateSnapshot sessionState =
                 GameplayCombatStateCapture.Capture(gameplay);
             DestructiblePropSession destructibles =
-                DestructiblePropSession.FromLevel(level, gameplay.Journal);
+                DestructiblePropSession.FromLevel(
+                    level,
+                    gameplay.Journal,
+                    spatialContent.ResolveFractureChunkCount);
             var propStates = new List<DestructiblePropSnapshot>();
             foreach (string propId in destructibles.PropIds)
                 propStates.Add(destructibles.GetProp(propId));
@@ -402,7 +407,7 @@ namespace GritGud.Application.Gameplay
 
         public GameplayBattleRunner(
             GameplayScenarioAssembly scenarioAssembly,
-            LevelDocument level,
+            GameplayStaticSpatialContent spatialContent,
             GameplayExecutionIdentity identity,
             IGameplayCandidatePolicy candidatePolicy = null,
             GameplayExecutionDeadlinePolicy deadlinePolicy = null,
@@ -411,7 +416,9 @@ namespace GritGud.Application.Gameplay
         {
             assembly = scenarioAssembly ?? throw new ArgumentNullException(
                 nameof(scenarioAssembly));
-            if (level == null) throw new ArgumentNullException(nameof(level));
+            if (spatialContent == null)
+                throw new ArgumentNullException(nameof(spatialContent));
+            LevelDocument level = spatialContent.Level;
             executionIdentity = identity ?? throw new ArgumentNullException(
                 nameof(identity));
             if (!string.Equals(
@@ -441,9 +448,13 @@ namespace GritGud.Application.Gameplay
                     reachable,
                     capabilities)
                 .RequireComplete(assembly.Scenario.Id);
-            var spatial = new GameplayHeadlessSpatialEvidence(
-                level,
-                identity.Spatial);
+            if (!identity.Spatial.HasSameIdentity(spatialContent.Identity))
+                throw new ArgumentException(
+                    "Battle execution identity does not match static spatial "
+                    + "content.",
+                    nameof(identity));
+            GameplayHeadlessSpatialEvidence spatial =
+                spatialContent.CreateEvidence();
             GameplayCandidateExecutionRouteRegistry routes =
                 GameplayCurrentCandidateExecutionRoutes.Create(
                     assembly,

@@ -41,16 +41,17 @@ internal static class SimulationCli
         string label = Optional(options, "label", "depot-first-sim");
         SimulationRepositoryContent.LoadDepot(
             out GameplayScenarioAssembly assembly,
-            out LevelDocument level);
+            out LevelDocument level,
+            out GameplayStaticSpatialContent spatialContent);
         GameplayCombatStateSnapshot initial =
-            GameplayHeadlessBattleStateFactory.Create(assembly, level);
+            GameplayHeadlessBattleStateFactory.Create(assembly, spatialContent);
         GameplayExecutionIdentity identity = CreateIdentity(
             assembly,
-            level,
+            spatialContent,
             initial.Session.RunIdentity);
         var runner = new GameplayBattleRunner(
             assembly,
-            level,
+            spatialContent,
             identity,
             deadlinePolicy: ArtifactDeadlinePolicy(),
             logicalGuardPolicy: new GameplayExecutionLogicalGuardPolicy(
@@ -99,12 +100,13 @@ internal static class SimulationCli
             canonical);
         SimulationRepositoryContent.LoadDepot(
             out GameplayScenarioAssembly assembly,
-            out LevelDocument level);
+            out LevelDocument level,
+            out GameplayStaticSpatialContent spatialContent);
         GameplayCombatStateSnapshot initial =
-            GameplayHeadlessBattleStateFactory.Create(assembly, level);
+            GameplayHeadlessBattleStateFactory.Create(assembly, spatialContent);
         GameplayExecutionIdentity identity = CreateIdentity(
             assembly,
-            level,
+            spatialContent,
             initial.Session.RunIdentity);
         if (!identity.HasSameIdentity(expected.Content.ExecutionIdentity))
             throw new InvalidOperationException(
@@ -117,7 +119,7 @@ internal static class SimulationCli
                 "Current initial state does not match the artifact.");
         var runner = new GameplayBattleRunner(
             assembly,
-            level,
+            spatialContent,
             identity,
             deadlinePolicy: ArtifactDeadlinePolicy(),
             logicalGuardPolicy: new GameplayExecutionLogicalGuardPolicy(
@@ -148,18 +150,14 @@ internal static class SimulationCli
 
     private static GameplayExecutionIdentity CreateIdentity(
         GameplayScenarioAssembly assembly,
-        LevelDocument level,
+        GameplayStaticSpatialContent spatialContent,
         ScenarioRunIdentity run) => new GameplayExecutionIdentity(
             new GameplayContentIdentity(
                 assembly.Scenario.Id,
                 ScenarioContentDocument.CurrentSchemaVersion,
                 GameplayCombatStateSnapshot.CurrentSchemaVersion,
                 GameplayCanonicalValueDigest.Calculate(assembly.Scenario)),
-            new SpatialContentIdentity(
-                level.levelId,
-                level.schemaVersion,
-                evidenceAlgorithmVersion: 1,
-                GameplayCanonicalValueDigest.Calculate(level)),
+            spatialContent.Identity,
             run);
 
     private static void PrintSummary(

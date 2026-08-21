@@ -303,7 +303,10 @@ namespace GritGud.Presentation.Gameplay
                 levelWorld.Root.transform,
                 visualTheme);
             var journal = new GameplayJournal();
-            destructibleController.Bind(levelWorld, content.Level, journal);
+            destructibleController.Bind(
+                levelWorld,
+                content.SpatialContent,
+                journal);
             worldRegistry = new GameplayWorldRegistry(levelWorld);
             var resolvedActorPoses = new Dictionary<string, GameplayActorPose>(
                 StringComparer.Ordinal);
@@ -642,11 +645,7 @@ namespace GritGud.Presentation.Gameplay
                     GameplayCombatStateSnapshot.CurrentSchemaVersion,
                     GameplayCanonicalValueDigest.Calculate(
                         scenarioAssembly.Scenario)),
-                new SpatialContentIdentity(
-                    content.Level.levelId,
-                    content.Level.schemaVersion,
-                    evidenceAlgorithmVersion: 1,
-                    GameplayCanonicalValueDigest.Calculate(content.Level)),
+                content.SpatialContent.Identity,
                 session.RunIdentity);
             liveRuntime = new GameplayLiveSessionRuntime(
                 projection,
@@ -657,7 +656,7 @@ namespace GritGud.Presentation.Gameplay
             enemyController.BindSemanticRuntime(
                 liveRuntime,
                 scenarioAssembly,
-                content.Level,
+                content.SpatialContent,
                 capabilities,
                 sessionPresenter,
                 actionController,
