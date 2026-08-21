@@ -1,7 +1,10 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using GritGud.Application.Gameplay;
 using GritGud.Application.Levels;
 using GritGud.Presentation.LevelEditing;
 using GritGud.Presentation.Gameplay;
@@ -35,6 +38,7 @@ namespace GritGud.Presentation.Bootstrap
         private SupabaseRuntime supabase;
         private LevelDraftLibraryCoordinator draftLibrary;
         private CloudDraftNavigationCommands cloudNavigation;
+        private CancellationTokenSource simulationPreparationCancellation;
 
         public LevelDraftRecord ActiveCloudDraft { get; private set; }
 
@@ -57,6 +61,9 @@ namespace GritGud.Presentation.Bootstrap
         }
 
         public ApplicationMode CurrentMode { get; private set; } = ApplicationMode.Menu;
+
+        public bool IsPreparingSimulation =>
+            simulationPreparationCancellation != null;
 
         public IReadOnlyList<CommittedLevelEntry> CommittedLevels
         {
@@ -102,6 +109,7 @@ namespace GritGud.Presentation.Bootstrap
         {
             CancelCloudNavigation();
             ActiveCloudDraft = null;
+            startMenu?.SetLaunchStatus(string.Empty);
             EnsureCommittedLevels();
             EnsureStartMenu();
             CommittedLevelEntry entry = committedLevels.Find(resourceKey)
@@ -178,14 +186,8 @@ namespace GritGud.Presentation.Bootstrap
 
             CancelCloudNavigation();
             ActiveCloudDraft = null;
-            CommittedLevelEntry entry = RequireDefaultCommittedLevel(
-                requirePlayable: true);
-            LevelDocument level = committedLevels.OpenForPlay(
-                entry.ResourceKey);
             gameplayStartRoutine = StartCoroutine(
-                BeginGameplayOnNextFrame(
-                    level,
-                    simulationViewer: true));
+                PrepareFirstSimulationOnMenu());
         }
 
         public Task PlayCloudDraftAsync(
@@ -238,8 +240,7 @@ namespace GritGud.Presentation.Bootstrap
 
         private IEnumerator BeginGameplayOnNextFrame(
             LevelDocument level,
-            bool sandbox = false,
-            bool simulationViewer = false)
+            bool sandbox = false)
         {
             EnsureStartMenu();
             editorTestActive = false;
@@ -258,15 +259,11 @@ namespace GritGud.Presentation.Bootstrap
 
             try
             {
-                if (simulationViewer)
-                    gameplay.BeginSimulation(level);
-                else if (sandbox)
+                if (sandbox)
                     gameplay.BeginSandbox(level);
                 else
                     gameplay.BeginCommitted(level);
-                CurrentMode = simulationViewer
-                    ? ApplicationMode.SimulationViewer
-                    : ApplicationMode.Gameplay;
+                CurrentMode = ApplicationMode.Gameplay;
             }
             catch
             {
@@ -279,6 +276,127 @@ namespace GritGud.Presentation.Bootstrap
             {
                 gameplayStartRoutine = null;
             }
+        }
+
+        private IEnumerator PrepareFirstSimulationOnMenu()
+        {
+            EnsureStartMenu();
+            var owner = new CancellationTokenSource();
+            simulationPreparationCancellation = owner;
+            startMenu.SetLaunchStatus(
+                "LOADING DEPOT FIRST SIM…\n"
+                + "The viewer will open when its replay is ready.");
+
+            // Leave the menu frame that requested playback before loading and
+            // validating the permanent artifact.
+            yield return null;
+
+            Task<GameplayBattleReplayPreparationResult<
+                GameplayBattleArtifact,
+                GameplaySemanticReplayTimeline>> preparation = null;
+            GameplayContentPackage simulationContent = null;
+            Exception startupFailure = null;
+            try
+            {
+                simulationContent = GameplayContentLoader.LoadDefault();
+                preparation = GameplayFirstSimulationPreparationService
+                    .PrepareAsync(
+                        simulationContent.Assembly,
+                        simulationContent.Level,
+                        owner.Token);
+            }
+            catch (Exception exception)
+            {
+                startupFailure = exception;
+            }
+
+            if (startupFailure != null)
+            {
+                FinishSimulationPreparationFailure(owner, startupFailure);
+                yield break;
+            }
+
+            while (!preparation.IsCompleted)
+            {
+                yield return null;
+            }
+
+            if (!ReferenceEquals(simulationPreparationCancellation, owner))
+            {
+                owner.Dispose();
+                yield break;
+            }
+            if (preparation.IsCanceled)
+            {
+                ReleaseSimulationPreparation(owner);
+                yield break;
+            }
+            if (preparation.IsFaulted)
+            {
+                FinishSimulationPreparationFailure(
+                    owner,
+                    preparation.Exception.GetBaseException());
+                yield break;
+            }
+
+            GameplayBattleReplayPreparationResult<
+                GameplayBattleArtifact,
+                GameplaySemanticReplayTimeline> prepared = preparation.Result;
+            if (!prepared.IsReady)
+            {
+                FinishSimulationPreparationFailure(
+                    owner,
+                    new InvalidOperationException(
+                        "The embedded simulation does not match Depot content."));
+                yield break;
+            }
+
+            editorTestActive = false;
+            levelEditor?.EndSession();
+            characterEditor?.EndSession();
+            if (gameplay == null)
+                gameplay = gameObject.AddComponent<GameplayController>();
+            startMenu.SetLaunchStatus("OPENING VERIFIED SIMULATION…");
+            startMenu.enabled = false;
+            try
+            {
+                gameplay.BeginSimulation(simulationContent, prepared);
+                CurrentMode = ApplicationMode.SimulationViewer;
+                ReleaseSimulationPreparation(owner);
+            }
+            catch (Exception exception)
+            {
+                gameplay.EndSession();
+                startMenu.enabled = true;
+                CurrentMode = ApplicationMode.Menu;
+                FinishSimulationPreparationFailure(owner, exception);
+            }
+        }
+
+        private void FinishSimulationPreparationFailure(
+            CancellationTokenSource owner,
+            Exception exception)
+        {
+            if (!ReferenceEquals(simulationPreparationCancellation, owner))
+            {
+                owner.Dispose();
+                return;
+            }
+            startMenu.SetLaunchStatus(
+                "SIMULATION UNAVAILABLE — " + exception.Message);
+            Debug.LogException(exception, this);
+            ReleaseSimulationPreparation(owner);
+        }
+
+        private void ReleaseSimulationPreparation(
+            CancellationTokenSource owner)
+        {
+            if (ReferenceEquals(simulationPreparationCancellation, owner))
+            {
+                simulationPreparationCancellation = null;
+                gameplayStartRoutine = null;
+            }
+            owner.Dispose();
         }
 
         private IEnumerator BeginEditorTestOnNextFrame(LevelDocument snapshot)
@@ -327,6 +445,7 @@ namespace GritGud.Presentation.Bootstrap
             gameplay?.EndSession();
             characterEditor?.EndSession();
             startMenu.enabled = true;
+            startMenu.SetLaunchStatus(string.Empty);
             CurrentMode = ApplicationMode.Menu;
             ActiveCloudDraft = null;
         }
@@ -444,6 +563,14 @@ namespace GritGud.Presentation.Bootstrap
 
         private void CancelPendingGameplayStart()
         {
+            if (simulationPreparationCancellation != null)
+            {
+                simulationPreparationCancellation.Cancel();
+                simulationPreparationCancellation = null;
+                gameplayStartRoutine = null;
+                startMenu?.SetLaunchStatus(string.Empty);
+                return;
+            }
             if (gameplayStartRoutine == null)
             {
                 return;

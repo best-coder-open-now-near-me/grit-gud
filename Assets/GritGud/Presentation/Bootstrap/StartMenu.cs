@@ -58,6 +58,7 @@ namespace GritGud.Presentation.Bootstrap
             Array.Empty<CommittedLevelEntry>();
         private LevelSelectionKind selectedKind;
         private string selectedKey = string.Empty;
+        private string launchStatus = string.Empty;
         private string cloudDraftStatus = string.Empty;
         private DraftDialogAction draftDialogAction;
         private string draftDialogName = string.Empty;
@@ -68,6 +69,11 @@ namespace GritGud.Presentation.Bootstrap
         internal string SelectedResourceKey => selectedKind == LevelSelectionKind.Committed
             ? selectedKey
             : string.Empty;
+
+        internal string LaunchStatus => launchStatus;
+
+        internal void SetLaunchStatus(string value) =>
+            launchStatus = value ?? string.Empty;
 
         private void OnEnable()
         {
@@ -133,13 +139,18 @@ namespace GritGud.Presentation.Bootstrap
                 new Rect(94f, 278f, 350f, 32f),
                 "LEVEL LIBRARY",
                 subtitleStyle);
+            bool preparingSimulation =
+                GameBootstrap.Instance?.IsPreparingSimulation == true;
+            bool previousEnabled = GUI.enabled;
+            GUI.enabled = previousEnabled && !preparingSimulation;
             DrawLevelList(new Rect(92f, 312f, 350f, 142f));
+            GUI.enabled = previousEnabled;
 
             CommittedLevelEntry selected = FindSelectedLevel();
             LevelDraftSummary selectedDraft = FindSelectedDraft();
             LevelDraftLibraryCoordinator draftLibrary = GameBootstrap.Instance?.DraftLibrary;
             bool cloudSelected = selectedKind == LevelSelectionKind.CloudDraft;
-            string status = cloudSelected
+            string levelStatus = cloudSelected
                 ? selectedDraft == null
                     ? (string.IsNullOrWhiteSpace(cloudDraftStatus) ? "Select a cloud draft." : cloudDraftStatus)
                     : string.IsNullOrWhiteSpace(cloudDraftStatus)
@@ -148,11 +159,15 @@ namespace GritGud.Presentation.Bootstrap
                 : selected == null
                 ? "No committed levels were found. You can still create a new level."
                 : selected.LevelId + "\n" + selected.StatusMessage;
+            string status = string.IsNullOrWhiteSpace(launchStatus)
+                ? levelStatus
+                : launchStatus;
             GUI.Label(new Rect(94f, 462f, 420f, 38f), status, statusStyle);
 
-            bool previousEnabled = GUI.enabled;
-            GUI.enabled = (cloudSelected && selectedDraft != null && draftLibrary?.IsBusy != true)
-                || (!cloudSelected && selected?.CanPlay == true);
+            GUI.enabled = !preparingSimulation
+                && ((cloudSelected && selectedDraft != null
+                        && draftLibrary?.IsBusy != true)
+                    || (!cloudSelected && selected?.CanPlay == true));
             if (DrawMenuButton(new Rect(92f, 508f, 350f, 40f), "PLAY SELECTED"))
             {
                 if (cloudSelected)
@@ -163,8 +178,10 @@ namespace GritGud.Presentation.Bootstrap
                     GameBootstrap.Instance.PlayCommittedLevel(selected.ResourceKey);
             }
 
-            GUI.enabled = (cloudSelected && selectedDraft != null && draftLibrary?.IsBusy != true)
-                || (!cloudSelected && selected?.CanEdit == true);
+            GUI.enabled = !preparingSimulation
+                && ((cloudSelected && selectedDraft != null
+                        && draftLibrary?.IsBusy != true)
+                    || (!cloudSelected && selected?.CanEdit == true));
             if (DrawMenuButton(new Rect(92f, 554f, 350f, 40f), "EDIT SELECTED"))
             {
                 if (cloudSelected)
@@ -175,8 +192,11 @@ namespace GritGud.Presentation.Bootstrap
                     GameBootstrap.Instance.OpenCommittedLevelEditor(selected.ResourceKey);
             }
 
-            GUI.enabled = previousEnabled;
-            if (DrawMenuButton(new Rect(92f, 600f, 350f, 40f), "WATCH SIMS"))
+            GUI.enabled = previousEnabled && !preparingSimulation;
+            string watchLabel = preparingSimulation
+                ? "LOADING SIM…"
+                : "WATCH SIMS";
+            if (DrawMenuButton(new Rect(92f, 600f, 350f, 40f), watchLabel))
             {
                 GameBootstrap.Instance.WatchFirstSimulation();
             }
@@ -191,6 +211,7 @@ namespace GritGud.Presentation.Bootstrap
                 GameBootstrap.Instance.OpenCharacterEditor();
             }
 
+            GUI.enabled = previousEnabled;
             if (DrawMenuButton(new Rect(92f, 738f, 350f, 40f), "QUIT"))
             {
                 Quit();

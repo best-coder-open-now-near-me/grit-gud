@@ -167,12 +167,13 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplayFireFieldController fireFieldPresenter;
         private readonly GameplayDroneController drones;
         private readonly GameplayPartyHud partyHud;
-        private readonly GameplayScenarioAssembly scenario;
-        private readonly LevelDocument level;
         private readonly GameplayCameraRig cameraRig;
         private readonly GameplayReplayCameraCutPresenter cameraCuts;
         private readonly GameplayBattleReplayController battleReplay;
         private readonly bool simulationViewer;
+        private readonly GameplayBattleReplayPreparationResult<
+            GameplayBattleArtifact,
+            GameplaySemanticReplayTimeline> preparedSimulation;
         private readonly IReadOnlyList<Behaviour> liveBehaviours;
         private readonly GameplayEnemyController enemies;
         private readonly Func<GameplayLiveSessionRuntime> resolveRuntime;
@@ -192,12 +193,13 @@ namespace GritGud.Presentation.Gameplay
             GameplayFireFieldController fireFieldPresenter,
             GameplayDroneController drones,
             GameplayPartyHud partyHud,
-            GameplayScenarioAssembly scenarioAssembly,
-            LevelDocument levelDocument,
             GameplayCameraRig gameplayCameraRig,
             GameplayReplayCameraCutPresenter replayCameraCuts,
             GameplayBattleReplayController battleReplayController,
             bool asSimulationViewer,
+            GameplayBattleReplayPreparationResult<
+                GameplayBattleArtifact,
+                GameplaySemanticReplayTimeline> preparedReplay,
             GameplayEnemyController enemyController,
             IEnumerable<Behaviour> behavioursToSuspend,
             Func<GameplayLiveSessionRuntime> resolveRuntime)
@@ -224,10 +226,6 @@ namespace GritGud.Presentation.Gameplay
                 ?? throw new ArgumentNullException(nameof(fireFieldPresenter));
             this.drones = drones ?? throw new ArgumentNullException(nameof(drones));
             this.partyHud = partyHud ?? throw new ArgumentNullException(nameof(partyHud));
-            scenario = scenarioAssembly ?? throw new ArgumentNullException(
-                nameof(scenarioAssembly));
-            level = levelDocument ?? throw new ArgumentNullException(
-                nameof(levelDocument));
             cameraRig = gameplayCameraRig ?? throw new ArgumentNullException(
                 nameof(gameplayCameraRig));
             cameraCuts = replayCameraCuts ?? throw new ArgumentNullException(
@@ -236,6 +234,15 @@ namespace GritGud.Presentation.Gameplay
                 ?? throw new ArgumentNullException(
                     nameof(battleReplayController));
             simulationViewer = asSimulationViewer;
+            preparedSimulation = preparedReplay;
+            if (simulationViewer
+                && (preparedSimulation == null
+                    || !preparedSimulation.IsReady))
+            {
+                throw new ArgumentException(
+                    "Simulation replay installation requires prepared content.",
+                    nameof(preparedReplay));
+            }
             enemies = enemyController ?? throw new ArgumentNullException(
                 nameof(enemyController));
             liveBehaviours = new List<Behaviour>(behavioursToSuspend
@@ -280,9 +287,7 @@ namespace GritGud.Presentation.Gameplay
             {
                 partyHud.Bind(session, partyControl, input);
                 battleReplay.Bind(
-                    scenario,
-                    level,
-                    runtime,
+                    preparedSimulation,
                     replayHud,
                     input,
                     gameplayHud,

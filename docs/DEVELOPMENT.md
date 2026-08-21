@@ -42,8 +42,10 @@ At runtime, `GameBootstrap` installs the code-driven start menu. Its committed
 level library lists validated JSON documents from `Resources/Levels/Published`.
 **Play Selected** and **Edit Selected** route the selected detached document
 through the shared runtime and authoring loaders; **Watch Sims** opens the
-verified authored-simulation viewer; **New Level** opens a fresh portable
-document. **Quit** stops Play Mode in the Editor and exits standalone players.
+verified authored-simulation viewer after decoding its stored replay on the
+menu; it does not regenerate tactical policy decisions at runtime. **New
+Level** opens a fresh portable document. **Quit** stops Play Mode in the Editor
+and exits standalone players.
 
 Bootstrap is the only enabled build scene and is registered as the Editor's
 Play Mode start scene. A guarded Editor initializer also opens it once when a

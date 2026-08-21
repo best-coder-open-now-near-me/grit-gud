@@ -255,6 +255,42 @@ namespace GritGud.Presentation.Tests
         }
 
         [UnityTest]
+        public IEnumerator WatchSimsKeepsTheMenuUntilPlaybackIsReady()
+        {
+            GameObject ownedApplication = null;
+            GameBootstrap bootstrap = GameBootstrap.Instance;
+            if (bootstrap == null)
+            {
+                ownedApplication = new GameObject(
+                    "Simulation Menu Preparation Test");
+                bootstrap = ownedApplication.AddComponent<GameBootstrap>();
+            }
+
+            bootstrap.ReturnToMenu();
+            bootstrap.WatchFirstSimulation();
+
+            Assert.That(bootstrap.CurrentMode, Is.EqualTo(ApplicationMode.Menu));
+            Assert.That(bootstrap.IsPreparingSimulation, Is.True);
+            Assert.That(
+                bootstrap.GetComponent<GameplayController>()?.IsRunning
+                    ?? false,
+                Is.False);
+            Assert.That(
+                bootstrap.GetComponent<StartMenu>().LaunchStatus,
+                Does.StartWith("LOADING DEPOT FIRST SIM"));
+
+            bootstrap.ReturnToMenu();
+            Assert.That(bootstrap.IsPreparingSimulation, Is.False);
+            Assert.That(
+                bootstrap.GetComponent<StartMenu>().LaunchStatus,
+                Is.Empty);
+            yield return null;
+
+            if (ownedApplication != null)
+                Object.DestroyImmediate(ownedApplication);
+        }
+
+        [UnityTest]
         public IEnumerator WatchSimsLaunchesAnExclusiveSimulationViewer()
         {
             using var runtime = new GameplayRuntimeTestHarness();
@@ -275,7 +311,9 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 replayHud.Source,
                 Is.EqualTo(GameplayReplaySource.VerifiedSimulation));
-            Assert.That(replayHud.IsAvailable, Is.False);
+            Assert.That(replayHud.IsAvailable, Is.True);
+            Assert.That(replayHud.IsOpen, Is.True);
+            Assert.That(replayHud.Replay.Frames.Count, Is.EqualTo(79));
             Assert.That(runtime.InputController.CameraOnly, Is.True);
             Assert.That(runtime.Hud.IsVisible, Is.False);
             Assert.That(runtime.PartyHud.IsPresentationSuppressed, Is.True);

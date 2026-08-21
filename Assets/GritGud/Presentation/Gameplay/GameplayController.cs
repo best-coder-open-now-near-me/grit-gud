@@ -67,6 +67,9 @@ namespace GritGud.Presentation.Gameplay
         private GameplayControlRouter controlRouter;
         private GameplayLiveSessionRuntime liveRuntime;
         private bool simulationViewer;
+        private GameplayBattleReplayPreparationResult<
+            GameplayBattleArtifact,
+            GameplaySemanticReplayTimeline> preparedSimulation;
 
         public bool IsRunning => levelWorld != null && player != null;
 
@@ -213,21 +216,39 @@ namespace GritGud.Presentation.Gameplay
                 asSimulationViewer: false);
         }
 
-        public void BeginSimulation(LevelDocument level)
+        internal void BeginSimulation(
+            GameplayContentPackage simulationContent,
+            GameplayBattleReplayPreparationResult<
+                GameplayBattleArtifact,
+                GameplaySemanticReplayTimeline> preparedReplay)
         {
             Begin(
-                GameplayContentLoader.LoadCommitted(level),
-                asSimulationViewer: true);
+                simulationContent ?? throw new ArgumentNullException(
+                    nameof(simulationContent)),
+                asSimulationViewer: true,
+                preparedReplay: preparedReplay);
         }
 
         private void Begin(
             GameplayContentPackage initialContent,
-            bool asSimulationViewer)
+            bool asSimulationViewer,
+            GameplayBattleReplayPreparationResult<
+                GameplayBattleArtifact,
+                GameplaySemanticReplayTimeline> preparedReplay = null)
         {
             EndSession();
             try
             {
                 simulationViewer = asSimulationViewer;
+                preparedSimulation = preparedReplay;
+                if (simulationViewer
+                    && (preparedSimulation == null
+                        || !preparedSimulation.IsReady))
+                {
+                    throw new ArgumentException(
+                        "Simulation viewing requires a prepared replay.",
+                        nameof(preparedReplay));
+                }
                 EnsureDependencies();
                 RequireBootstrap();
                 enabled = true;
@@ -564,12 +585,11 @@ namespace GritGud.Presentation.Gameplay
                     fireFieldController,
                     droneController,
                     partyHud,
-                    scenarioAssembly,
-                    content.Level,
                     cameraRig,
                     replayCameraCutPresenter,
                     battleReplayController,
                     simulationViewer,
+                    preparedSimulation,
                     enemyController,
                     new Behaviour[]
                     {
@@ -723,6 +743,7 @@ namespace GritGud.Presentation.Gameplay
             content = null;
             dialogueLog = null;
             simulationViewer = false;
+            preparedSimulation = null;
             enabled = false;
         }
 

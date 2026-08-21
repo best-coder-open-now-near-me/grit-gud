@@ -75,6 +75,18 @@ namespace GritGud.Presentation.Tests
             else
                 Bootstrap.PlayMainLevel();
             yield return null;
+            if (watchSimulation)
+            {
+                float deadline = Time.realtimeSinceStartup + 10f;
+                while (Bootstrap.IsPreparingSimulation
+                    && Time.realtimeSinceStartup < deadline)
+                {
+                    yield return null;
+                }
+                if (Bootstrap.IsPreparingSimulation)
+                    throw new TimeoutException(
+                        "Simulation playback did not load within ten seconds.");
+            }
 
             Gameplay = Bootstrap.GetComponent<GameplayController>();
             InputController = Bootstrap.GetComponent<GameplayInputController>();

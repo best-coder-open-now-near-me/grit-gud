@@ -1,6 +1,10 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using GritGud.Application.Gameplay;
+using GritGud.Domain.Gameplay;
+using GritGud.Domain.Levels;
+using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
 {
@@ -98,5 +102,87 @@ namespace GritGud.Presentation.Gameplay
                 TArtifact,
                 TReplay>.Ready(artifact, replay);
         }
+    }
+
+    /// <summary>
+    /// Loads the embedded authored simulation before presentation constructs a
+    /// playable world. Runtime playback rehydrates the stored trajectory;
+    /// regenerating the tactical policy run remains an offline
+    /// verification concern.
+    /// </summary>
+    internal static class GameplayFirstSimulationPreparationService
+    {
+        public static async Task<GameplayBattleReplayPreparationResult<
+            GameplayBattleArtifact,
+            GameplaySemanticReplayTimeline>> PrepareAsync(
+            GameplayScenarioAssembly assembly,
+            LevelDocument level,
+            CancellationToken cancellationToken)
+        {
+            if (assembly == null) throw new ArgumentNullException(
+                nameof(assembly));
+            if (level == null) throw new ArgumentNullException(nameof(level));
+            await Task.Yield();
+            cancellationToken.ThrowIfCancellationRequested();
+
+            GameplayBattleArtifact artifact = LoadArtifact();
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!MatchesLoadedContent(assembly, level, artifact))
+            {
+                return GameplayBattleReplayPreparationResult<
+                    GameplayBattleArtifact,
+                    GameplaySemanticReplayTimeline>.ContentMismatch(artifact);
+            }
+
+            GameplaySemanticReplayTimeline replay =
+                GameplayBattleArtifactReplayLoader.Load(artifact);
+            cancellationToken.ThrowIfCancellationRequested();
+            return GameplayBattleReplayPreparationResult<
+                GameplayBattleArtifact,
+                GameplaySemanticReplayTimeline>.Ready(artifact, replay);
+        }
+
+        private static GameplayBattleArtifact LoadArtifact()
+        {
+            TextAsset asset = Resources.Load<TextAsset>(
+                GameplayBattleReplayController.ArtifactResource);
+            if (asset == null)
+                throw new InvalidOperationException(
+                    "First-sim artifact resource was not found.");
+            try
+            {
+                return GameplayBattleArtifactCodec.Read(asset.text);
+            }
+            finally
+            {
+                Resources.UnloadAsset(asset);
+            }
+        }
+
+        private static bool MatchesLoadedContent(
+            GameplayScenarioAssembly assembly,
+            LevelDocument level,
+            GameplayBattleArtifact expected)
+        {
+            GameplayExecutionIdentity identity = expected.Content
+                .ExecutionIdentity;
+            var actual = new GameplayExecutionIdentity(
+                new GameplayContentIdentity(
+                    assembly.Scenario.Id,
+                    ScenarioContentDocument.CurrentSchemaVersion,
+                    GameplayCombatStateSnapshot.CurrentSchemaVersion,
+                    GameplayCanonicalValueDigest.Calculate(
+                        assembly.Scenario)),
+                new SpatialContentIdentity(
+                    level.levelId,
+                    level.schemaVersion,
+                    evidenceAlgorithmVersion: 1,
+                    GameplayCanonicalValueDigest.Calculate(level)),
+                new ScenarioRunIdentity(
+                    assembly.Scenario.Id + ".run",
+                    assembly.RandomSeed));
+            return actual.HasSameIdentity(identity);
+        }
+
     }
 }
