@@ -362,7 +362,7 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
-        public void ReplayImpactIsIdempotentAndClearsWhenScrubbingBackward()
+        public void ReplayImpactRequiresTimedEventAndLateSeekDoesNotRecreate()
         {
             GameObject projectilePrefab = GameObject.CreatePrimitive(
                 PrimitiveType.Capsule);
@@ -395,6 +395,12 @@ namespace GritGud.Presentation.Tests
                 presenter = new ProjectileFlightPresenter(initial, definition);
 
                 presenter.PresentReplay(impacted);
+                Assert.That(
+                    presenter.ReplayImpactVisible,
+                    Is.False,
+                    "Persistent impacted state must not recreate a one-shot effect.");
+
+                presenter.PresentReplayImpact(impact.Position);
                 Assert.That(presenter.ReplayImpactVisible, Is.True);
                 Transform replayImpact = Object.FindObjectsByType<Transform>(
                         FindObjectsInactive.Include)
@@ -421,7 +427,18 @@ namespace GritGud.Presentation.Tests
                     "Sampling an impacted replay frame repeatedly must not "
                     + "duplicate its one-shot effect.");
 
-                presenter.PresentReplay(initial);
+                presenter.TickReplayImpact(
+                    definition.ImpactEffectSeconds + 0.01f);
+                Assert.That(presenter.ReplayImpactVisible, Is.False);
+                presenter.PresentReplay(impacted);
+                Assert.That(
+                    presenter.ReplayImpactVisible,
+                    Is.False,
+                    "Seeking well after impact must reconstruct aftermath only.");
+
+                presenter.PresentReplayImpact(impact.Position);
+                Assert.That(presenter.ReplayImpactVisible, Is.True);
+                presenter.ClearReplayImpact();
                 Assert.That(presenter.ReplayImpactVisible, Is.False);
             }
             finally

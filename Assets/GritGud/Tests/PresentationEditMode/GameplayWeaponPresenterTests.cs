@@ -674,10 +674,13 @@ namespace GritGud.Presentation.Tests
                     ReplayCombatPresentationEventKind.WeaponDischarge,
                     "player",
                     "target",
-                    new GameplayPosition(0f, 1f, 0f),
-                    new GameplayPosition(0f, 1f, 8f),
+                    new GameplayPosition(12f, 3f, -5f),
+                    new GameplayPosition(12f, 3f, 8f),
                     GameplaySemanticReplayPresentationTiming
-                        .ActionResolutionProgress);
+                        .ActionResolutionProgress,
+                    presentationId: "launcher");
+                presenter.PresentReplayEquipment("rifle");
+                Assert.That(presenter.CurrentItemId, Is.EqualTo("rifle"));
                 var cursor = new ReplayTimedPresentationEventCursor();
                 if (cursor.TryCross(
                     shot.StableKey,
@@ -688,6 +691,11 @@ namespace GritGud.Presentation.Tests
                     presenter.PresentReplayEvent(shot);
                 }
                 Assert.That(
+                    presenter.CurrentItemId,
+                    Is.EqualTo("launcher"),
+                    "A crossed event must use its recorded presentation item "
+                    + "instead of the final sampled equipment.");
+                Assert.That(
                     host.GetComponentsInChildren<Light>().Length,
                     Is.EqualTo(1),
                     "A crossed replay discharge must emit one muzzle light.");
@@ -695,6 +703,11 @@ namespace GritGud.Presentation.Tests
                     host.GetComponentsInChildren<LineRenderer>().Length,
                     Is.EqualTo(1),
                     "A crossed hitscan discharge must emit one tracer.");
+                Assert.That(
+                    host.GetComponentInChildren<LineRenderer>().GetPosition(0),
+                    Is.EqualTo(new Vector3(12f, 3f, -5f)),
+                    "A historical shot outside muzzle tolerance must use its "
+                    + "recorded origin without querying current-world physics.");
                 Assert.That(
                     cursor.TryCross(
                         shot.StableKey,
@@ -1435,6 +1448,74 @@ namespace GritGud.Presentation.Tests
                 Object.DestroyImmediate(host);
                 Object.DestroyImmediate(grip);
                 Object.DestroyImmediate(weaponPrefab);
+            }
+        }
+
+        [Test]
+        public void WeaponAimReplayRestoresExactLiveTransientState()
+        {
+            var actor = new GameObject("Replay Restore Actor");
+            var weapon = new GameObject("Replay Restore Weapon");
+            Transform muzzle = new GameObject("Replay Restore Muzzle").transform;
+            Transform support = new GameObject("Replay Restore Support").transform;
+            Transform hint = new GameObject("Replay Restore Hint").transform;
+            try
+            {
+                actor.AddComponent<Animator>();
+                WeaponAimRig rig = actor.AddComponent<WeaponAimRig>();
+                muzzle.SetParent(weapon.transform, false);
+                support.SetParent(weapon.transform, false);
+                hint.SetParent(weapon.transform, false);
+                rig.Bind(
+                    actor.transform,
+                    weapon.transform,
+                    muzzle,
+                    support,
+                    hint,
+                    handPositionWeight: 1f,
+                    handRotationWeight: 1f,
+                    elbowHintWeight: 0.5f,
+                    handBlendSeconds: 0.2f,
+                    maxAimCorrectionDegrees: 18f,
+                    maxBodyAimCorrectionDegrees: 12f,
+                    bodyCorrectionDegreesPerSecond: 120f,
+                    weaponCorrectionDegreesPerSecond: 180f);
+                rig.TickSupportBlend(0.05f);
+                var liveAimPoint = new Vector3(4f, 1.5f, 7f);
+                rig.SetAimPoint(liveAimPoint);
+                rig.TriggerRecoil(6f, 0.1f, 0.3f);
+                float liveBlend = rig.SupportBlendWeight;
+                float liveRecoilElapsed = rig.RecoilElapsed;
+                float liveRecoilWeight = rig.RecoilWeight;
+                Quaternion liveBodyCorrection = rig.LocalBodyAimCorrection;
+                Quaternion liveWeaponCorrection = rig.LocalAimCorrection;
+                bool liveEnabled = rig.enabled;
+
+                rig.BeginReplayPresentation();
+                Assert.That(rig.HasAimPoint, Is.False);
+                Assert.That(rig.IsRecoiling, Is.False);
+                rig.SetReplaySupportWeightImmediate();
+                rig.SetReplayRecoil(12f, 0.2f, 0.5f, 0.3f);
+
+                rig.EndReplayPresentation();
+
+                Assert.That(rig.HasAimPoint, Is.True);
+                Assert.That(rig.CurrentAimPoint, Is.EqualTo(liveAimPoint));
+                Assert.That(rig.SupportBlendWeight, Is.EqualTo(liveBlend));
+                Assert.That(rig.RecoilElapsed, Is.EqualTo(liveRecoilElapsed));
+                Assert.That(rig.RecoilWeight, Is.EqualTo(liveRecoilWeight));
+                Assert.That(
+                    rig.LocalBodyAimCorrection,
+                    Is.EqualTo(liveBodyCorrection));
+                Assert.That(
+                    rig.LocalAimCorrection,
+                    Is.EqualTo(liveWeaponCorrection));
+                Assert.That(rig.enabled, Is.EqualTo(liveEnabled));
+            }
+            finally
+            {
+                Object.DestroyImmediate(actor);
+                Object.DestroyImmediate(weapon);
             }
         }
 

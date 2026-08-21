@@ -12,6 +12,8 @@ namespace GritGud.Presentation.Gameplay
     [DefaultExecutionOrder(100)]
     public sealed class GameplayWeaponPresenter : MonoBehaviour
     {
+        private const float ReplayMuzzleAnchorTolerance = 0.35f;
+
         private GameplaySession session;
         private GameplayWorldRegistry registry;
         private GameplayAttackController attackController;
@@ -377,12 +379,16 @@ namespace GritGud.Presentation.Gameplay
             switch (presentationEvent.Kind)
             {
                 case ReplayCombatPresentationEventKind.WeaponDischarge:
+                    PresentReplayEventEquipment(presentationEvent);
                     PresentReplayFire(
+                        ToVector3(presentationEvent.Origin),
                         ToVector3(presentationEvent.Destination),
                         drawTracer: true);
                     break;
                 case ReplayCombatPresentationEventKind.ProjectileLaunch:
+                    PresentReplayEventEquipment(presentationEvent);
                     PresentReplayFire(
+                        ToVector3(presentationEvent.Origin),
                         ToVector3(presentationEvent.Destination),
                         drawTracer: false);
                     break;
@@ -467,6 +473,7 @@ namespace GritGud.Presentation.Gameplay
         }
 
         private void PresentReplayFire(
+            Vector3 recordedOrigin,
             Vector3 destination,
             bool drawTracer)
         {
@@ -475,23 +482,41 @@ namespace GritGud.Presentation.Gameplay
                     $"Replay actor '{actorId}' cannot discharge without a mounted weapon presentation.");
 
             GameplayActorView actor = registry.GetActor(actorId);
-            Vector3 origin = Muzzle != null
+            Vector3 currentMuzzle = Muzzle != null
                 ? Muzzle.position
                 : actor.Stance.FirstPersonEyePosition;
-            if (Muzzle != null
-                && weaponClearanceResolver.TryResolve(
-                    actor,
-                    Muzzle,
-                    out RaycastHit obstruction))
+            float originMismatch = Vector3.Distance(
+                currentMuzzle,
+                recordedOrigin);
+            Vector3 effectOrigin = originMismatch
+                    <= ReplayMuzzleAnchorTolerance
+                ? currentMuzzle
+                : recordedOrigin;
+            if (originMismatch > ReplayMuzzleAnchorTolerance)
             {
-                destination = obstruction.point;
-                drawTracer = false;
+                Debug.LogWarning(
+                    $"Replay transition discharge for actor '{actorId}' "
+                    + $"has a {originMismatch:0.###}m muzzle mismatch; using "
+                    + "the recorded origin without a live-world query.",
+                    this);
             }
             effectsPresenter.PresentShot(
                 currentDefinition,
-                origin,
+                effectOrigin,
                 destination,
                 drawTracer);
+        }
+
+        private void PresentReplayEventEquipment(
+            ReplayCombatPresentationEvent presentationEvent)
+        {
+            if (string.IsNullOrWhiteSpace(presentationEvent.PresentationId)
+                || string.Equals(
+                    presentationEvent.PresentationId,
+                    CurrentItemId,
+                    StringComparison.Ordinal))
+                return;
+            PresentEquippedWeapon(presentationEvent.PresentationId);
         }
 
         private void PresentContactStrike()

@@ -39,6 +39,28 @@ namespace GritGud.Presentation.Gameplay
     /// </summary>
     internal sealed class GameplayTurnReplayWorldPresenter : IDisposable
     {
+        private const float PreEventNormalizedOffset = 0.0001f;
+
+        private sealed class CrossedTimedEvent
+        {
+            public CrossedTimedEvent(
+                GameplaySemanticReplayPlaybackFrame playbackFrame,
+                ReplayCombatPresentationEvent presentationEvent,
+                float timeSeconds,
+                int order)
+            {
+                PlaybackFrame = playbackFrame;
+                PresentationEvent = presentationEvent;
+                TimeSeconds = timeSeconds;
+                Order = order;
+            }
+
+            public GameplaySemanticReplayPlaybackFrame PlaybackFrame { get; }
+            public ReplayCombatPresentationEvent PresentationEvent { get; }
+            public float TimeSeconds { get; }
+            public int Order { get; }
+        }
+
         private sealed class OptionalWorldProjection
         {
             private readonly string name;
@@ -191,6 +213,7 @@ namespace GritGud.Presentation.Gameplay
             new HashSet<string>(StringComparer.Ordinal);
         private GameplayWorldRegistry world;
         private GameplayProjectileController projectiles;
+        private GameplayDroneController drones;
         private GameplayInputController input;
         private GameplayTurnReplayHud hud;
         private GameplayHud gameplayHud;
@@ -216,6 +239,7 @@ namespace GritGud.Presentation.Gameplay
             GameplayProjectileController projectileController,
             GameplayDestructibleController destructibleController,
             GameplayVehicleController vehicleController,
+            GameplayDroneController droneController,
             GameplaySmokeFieldController smokeController,
             GameplayFireFieldController fireController,
             GameplayHud liveGameplayHud,
@@ -226,6 +250,7 @@ namespace GritGud.Presentation.Gameplay
             Dispose();
             world = registry ?? throw new ArgumentNullException(nameof(registry));
             projectiles = projectileController;
+            drones = droneController;
             input = inputController ?? throw new ArgumentNullException(
                 nameof(inputController));
             hud = replayHud ?? throw new ArgumentNullException(nameof(replayHud));
@@ -249,6 +274,7 @@ namespace GritGud.Presentation.Gameplay
                 projectileController,
                 destructibleController,
                 vehicleController,
+                droneController,
                 smokeController,
                 fireController);
             hud.OpenChanged += HandleOpenChanged;
@@ -265,6 +291,7 @@ namespace GritGud.Presentation.Gameplay
             }
             world = null;
             projectiles = null;
+            drones = null;
             input = null;
             hud = null;
             gameplayHud = null;
@@ -362,6 +389,14 @@ namespace GritGud.Presentation.Gameplay
                     "Replay cannot open: the verified timeline contains "
                     + "projectile records but no GameplayProjectileController "
                     + "is bound for required projection.");
+            bool containsDrones = replay.InitialState.Drones.Count > 0;
+            foreach (GameplaySemanticReplayFrame frame in replay.Frames)
+                containsDrones |= frame.Resulting.Drones.Count > 0;
+            if (containsDrones && drones?.Session == null)
+                throw new InvalidOperationException(
+                    "Replay cannot open: the verified timeline contains "
+                    + "drones but no bound GameplayDroneController exists for "
+                    + "required projection.");
         }
 
         private void HandlePlayheadChanged(
@@ -370,18 +405,16 @@ namespace GritGud.Presentation.Gameplay
             if (!presenting)
                 return;
             if (!change.PresentsTimedEvents)
+            {
                 ClearTransients();
-            Present();
-            if (change.PresentsTimedEvents)
-            {
-                PresentTimedEvents(
-                    change.PreviousTimeSeconds,
-                    change.TimeSeconds);
-            }
-            else
-            {
+                Present();
                 RebuildTimedEventCursor(change.TimeSeconds);
+                return;
             }
+            PresentTimedEvents(
+                change.PreviousTimeSeconds,
+                change.TimeSeconds);
+            Present();
         }
 
         private void Present()
@@ -391,6 +424,12 @@ namespace GritGud.Presentation.Gameplay
                 return;
             GameplaySemanticReplayPlaybackPosition position = playback.Locate(
                 hud.TimeSeconds);
+            Present(position);
+        }
+
+        private void Present(
+            GameplaySemanticReplayPlaybackPosition position)
+        {
             GameplayPresentationWorldStateSample sample =
                 GameplaySemanticReplaySampler.Sample(
                     position.Frame,
@@ -444,6 +483,8 @@ namespace GritGud.Presentation.Gameplay
         {
             GameplaySemanticReplayPlaybackTimeline playback = hud.Playback;
             if (playback == null || currentTime <= previousTime) return;
+            var crossed = new List<CrossedTimedEvent>();
+            int order = 0;
             foreach (GameplaySemanticReplayPlaybackFrame playbackFrame in
                 playback.Frames)
             {
@@ -463,8 +504,29 @@ namespace GritGud.Presentation.Gameplay
                             previousTime,
                             currentTime))
                         continue;
-                    PresentTimedEvent(presentationEvent);
+                    crossed.Add(new CrossedTimedEvent(
+                        playbackFrame,
+                        presentationEvent,
+                        eventTime,
+                        order++));
                 }
+            }
+            crossed.Sort((left, right) =>
+            {
+                int timeOrder = left.TimeSeconds.CompareTo(right.TimeSeconds);
+                return timeOrder != 0
+                    ? timeOrder
+                    : left.Order.CompareTo(right.Order);
+            });
+            foreach (CrossedTimedEvent crossedEvent in crossed)
+            {
+                float preEventTime = Mathf.Max(
+                    crossedEvent.PlaybackFrame.StartSeconds,
+                    crossedEvent.TimeSeconds
+                        - crossedEvent.PlaybackFrame.DurationSeconds
+                        * PreEventNormalizedOffset);
+                Present(playback.Locate(preEventTime));
+                PresentTimedEvent(crossedEvent.PresentationEvent);
             }
         }
 
@@ -479,6 +541,7 @@ namespace GritGud.Presentation.Gameplay
                         $"Replay transition {presentationEvent.TransitionSequence} "
                         + $"cannot project impact for projectile "
                         + $"'{presentationEvent.ProjectileId}': no projectile presenter is bound.");
+                projectiles.PresentReplayImpact(presentationEvent);
                 presentedProjectileImpactEvents.Add(
                     presentationEvent.StableKey);
                 return;
@@ -493,6 +556,19 @@ namespace GritGud.Presentation.Gameplay
                 ReplayCombatPresentationEventKind.Incapacitation)
             {
                 presentedIncapacitations.Add(presentationEvent.StableKey);
+                return;
+            }
+
+            if (presentationEvent.ShooterKind ==
+                ReplayCombatPresentationSubjectKind.Drone)
+            {
+                if (drones == null)
+                    throw new InvalidOperationException(
+                        $"Replay transition {presentationEvent.TransitionSequence} "
+                        + $"cannot project {presentationEvent.Kind} for drone "
+                        + $"'{presentationEvent.ShooterId}': no drone presenter is bound.");
+                drones.PresentReplayEvent(presentationEvent);
+                presentedDischargeEvents.Add(presentationEvent.StableKey);
                 return;
             }
 
@@ -638,6 +714,7 @@ namespace GritGud.Presentation.Gameplay
             GameplayProjectileController projectileController,
             GameplayDestructibleController destructibleController,
             GameplayVehicleController vehicleController,
+            GameplayDroneController droneController,
             GameplaySmokeFieldController smokeController,
             GameplayFireFieldController fireController)
         {
@@ -671,6 +748,16 @@ namespace GritGud.Presentation.Gameplay
                     sample => vehicleController.PresentReplay(sample.Vehicles),
                     () => { },
                     vehicleController.EndReplayPresentation));
+            }
+            if (droneController?.Session != null)
+            {
+                optionalProjections.Add(new OptionalWorldProjection(
+                    "drone",
+                    droneController.BeginReplayPresentation,
+                    sample => droneController.PresentReplay(sample.Drones),
+                    droneController.ClearReplayTransients,
+                    droneController.EndReplayPresentation,
+                    isRequired: true));
             }
             if (smokeController != null)
             {

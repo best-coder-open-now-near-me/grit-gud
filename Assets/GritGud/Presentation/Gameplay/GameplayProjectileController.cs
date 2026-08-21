@@ -277,6 +277,23 @@ namespace GritGud.Presentation.Gameplay
                 presenter.ClearReplayImpact();
         }
 
+        internal void PresentReplayImpact(
+            ReplayCombatPresentationEvent presentationEvent)
+        {
+            if (presentationEvent == null) throw new ArgumentNullException(
+                nameof(presentationEvent));
+            if (presentationEvent.Kind !=
+                    ReplayCombatPresentationEventKind.ProjectileImpact
+                || !replayPresenters.TryGetValue(
+                    presentationEvent.ProjectileId,
+                    out ProjectileFlightPresenter presenter))
+                throw new InvalidOperationException(
+                    $"Replay transition {presentationEvent.TransitionSequence} "
+                    + $"has no presented projectile '{presentationEvent.ProjectileId}' "
+                    + "for its impact event.");
+            presenter.PresentReplayImpact(presentationEvent.Destination);
+        }
+
         internal void EndReplayPresentation()
         {
             foreach (ProjectileFlightPresenter presenter in replayPresenters.Values)
@@ -466,6 +483,9 @@ namespace GritGud.Presentation.Gameplay
             {
                 presenter.Tick(deltaTime);
             }
+            foreach (ProjectileFlightPresenter presenter in
+                replayPresenters.Values)
+                presenter.TickReplayImpact(deltaTime);
         }
 
         private void HandleTurnEnded(TurnEndRecord turn)

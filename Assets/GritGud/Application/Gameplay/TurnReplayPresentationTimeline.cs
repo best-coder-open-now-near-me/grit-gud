@@ -13,6 +13,14 @@ namespace GritGud.Application.Gameplay
         Incapacitation = 4,
     }
 
+    public enum ReplayCombatPresentationSubjectKind
+    {
+        Actor = 0,
+        Drone = 1,
+        Destructible = 2,
+        World = 3,
+    }
+
     public sealed class ReplayCombatPresentationEvent
     {
         public ReplayCombatPresentationEvent(
@@ -23,7 +31,12 @@ namespace GritGud.Application.Gameplay
             GameplayPosition origin,
             GameplayPosition destination,
             float normalizedTime,
-            string projectileId = null)
+            string projectileId = null,
+            ReplayCombatPresentationSubjectKind shooterKind =
+                ReplayCombatPresentationSubjectKind.Actor,
+            ReplayCombatPresentationSubjectKind targetKind =
+                ReplayCombatPresentationSubjectKind.Actor,
+            string presentationId = null)
         {
             if (transitionSequence <= 0)
                 throw new ArgumentOutOfRangeException(
@@ -32,6 +45,14 @@ namespace GritGud.Application.Gameplay
                     typeof(ReplayCombatPresentationEventKind),
                     kind))
                 throw new ArgumentOutOfRangeException(nameof(kind));
+            if (!Enum.IsDefined(
+                    typeof(ReplayCombatPresentationSubjectKind),
+                    shooterKind))
+                throw new ArgumentOutOfRangeException(nameof(shooterKind));
+            if (!Enum.IsDefined(
+                    typeof(ReplayCombatPresentationSubjectKind),
+                    targetKind))
+                throw new ArgumentOutOfRangeException(nameof(targetKind));
             if (string.IsNullOrWhiteSpace(actorId)
                 && kind != ReplayCombatPresentationEventKind.ProjectileImpact)
                 throw new ArgumentException(
@@ -57,6 +78,9 @@ namespace GritGud.Application.Gameplay
             Destination = destination;
             NormalizedTime = normalizedTime;
             ProjectileId = projectileId ?? string.Empty;
+            ShooterKind = shooterKind;
+            TargetKind = targetKind;
+            PresentationId = presentationId ?? string.Empty;
         }
 
         public long TransitionSequence { get; }
@@ -67,6 +91,10 @@ namespace GritGud.Application.Gameplay
         public GameplayPosition Destination { get; }
         public float NormalizedTime { get; }
         public string ProjectileId { get; }
+        public ReplayCombatPresentationSubjectKind ShooterKind { get; }
+        public string ShooterId => ActorId;
+        public ReplayCombatPresentationSubjectKind TargetKind { get; }
+        public string PresentationId { get; }
 
         public string StableKey => TransitionSequence + ":"
             + Kind + ":" + ActorId + ":" + ProjectileId;
@@ -172,6 +200,7 @@ namespace GritGud.Application.Gameplay
             var events = new List<ReplayCombatPresentationEvent>(Project(
                 frame.Transition.Identity.Sequence,
                 frame.SemanticRecord));
+            AppendSpecialSubjectDischarges(frame, events);
             if (frame.SemanticRecord is GameplayActionRecord action
                 && !ContainsWeaponEvent(events))
             {
@@ -197,9 +226,163 @@ namespace GritGud.Application.Gameplay
                 }
             }
             AppendReactionEvents(frame, events);
+            for (int index = 0; index < events.Count; index++)
+                events[index] = CompleteEventIdentity(frame, events[index]);
             return events.Count == 0
                 ? Array.Empty<ReplayCombatPresentationEvent>()
                 : events.AsReadOnly();
+        }
+
+        private static void AppendSpecialSubjectDischarges(
+            GameplaySemanticReplayFrame frame,
+            ICollection<ReplayCombatPresentationEvent> events)
+        {
+            long sequence = frame.Transition.Identity.Sequence;
+            switch (frame.SemanticRecord)
+            {
+                case ActorDroneAttackRecord attack:
+                {
+                    GameplayActorSnapshot attacker = frame.Previous.Session
+                        .GetActor(attack.AttackerId);
+                    DroneSnapshot target = FindDrone(
+                        frame.Previous.Drones,
+                        attack.DroneId);
+                    events.Add(new ReplayCombatPresentationEvent(
+                        sequence,
+                        ReplayCombatPresentationEventKind.WeaponDischarge,
+                        attack.AttackerId,
+                        attack.DroneId,
+                        AddHeight(attacker.Pose.Position, 1f),
+                        target.Position,
+                        GameplaySemanticReplayPresentationTiming
+                            .ActionResolutionProgress,
+                        shooterKind:
+                            ReplayCombatPresentationSubjectKind.Actor,
+                        targetKind:
+                            ReplayCombatPresentationSubjectKind.Drone));
+                    break;
+                }
+                case DroneAttackRecord attack:
+                {
+                    DroneSnapshot shooter = FindDrone(
+                        frame.Previous.Drones,
+                        attack.DroneId);
+                    ReplayCombatPresentationSubjectKind targetKind =
+                        ResolveSubjectKind(frame, attack.TargetId);
+                    events.Add(new ReplayCombatPresentationEvent(
+                        sequence,
+                        ReplayCombatPresentationEventKind.WeaponDischarge,
+                        attack.DroneId,
+                        attack.TargetId,
+                        shooter.Position,
+                        ResolveSubjectPosition(
+                            frame,
+                            attack.TargetId,
+                            targetKind),
+                        GameplaySemanticReplayPresentationTiming
+                            .ActionResolutionProgress,
+                        shooterKind:
+                            ReplayCombatPresentationSubjectKind.Drone,
+                        targetKind: targetKind,
+                        presentationId:
+                            shooter.Definition.Attack.ActionId));
+                    break;
+                }
+            }
+        }
+
+        private static ReplayCombatPresentationEvent CompleteEventIdentity(
+            GameplaySemanticReplayFrame frame,
+            ReplayCombatPresentationEvent presentationEvent)
+        {
+            ReplayCombatPresentationSubjectKind shooterKind =
+                ResolveSubjectKind(frame, presentationEvent.ShooterId);
+            ReplayCombatPresentationSubjectKind targetKind =
+                ResolveSubjectKind(frame, presentationEvent.TargetId);
+            string presentationId = presentationEvent.PresentationId;
+            if ((presentationEvent.Kind ==
+                    ReplayCombatPresentationEventKind.WeaponDischarge
+                    || presentationEvent.Kind ==
+                    ReplayCombatPresentationEventKind.ProjectileLaunch)
+                && shooterKind == ReplayCombatPresentationSubjectKind.Actor)
+            {
+                presentationId = frame.Previous.Session.GetActor(
+                    presentationEvent.ShooterId).EquippedItemId;
+            }
+            return new ReplayCombatPresentationEvent(
+                presentationEvent.TransitionSequence,
+                presentationEvent.Kind,
+                presentationEvent.ShooterId,
+                presentationEvent.TargetId,
+                presentationEvent.Origin,
+                presentationEvent.Destination,
+                presentationEvent.NormalizedTime,
+                presentationEvent.ProjectileId,
+                shooterKind,
+                targetKind,
+                presentationId);
+        }
+
+        private static ReplayCombatPresentationSubjectKind ResolveSubjectKind(
+            GameplaySemanticReplayFrame frame,
+            string subjectId)
+        {
+            if (string.IsNullOrWhiteSpace(subjectId)
+                || string.Equals(
+                    subjectId,
+                    GameplayTargetIds.WorldAimPoint,
+                    StringComparison.Ordinal))
+                return ReplayCombatPresentationSubjectKind.World;
+            foreach (GameplayActorSnapshot actor in frame.Previous.Session.Actors)
+                if (string.Equals(actor.ActorId, subjectId, StringComparison.Ordinal))
+                    return ReplayCombatPresentationSubjectKind.Actor;
+            foreach (DroneSnapshot drone in frame.Previous.Drones)
+                if (string.Equals(drone.DroneId, subjectId, StringComparison.Ordinal))
+                    return ReplayCombatPresentationSubjectKind.Drone;
+            foreach (DestructiblePropSnapshot prop in frame.Previous.Destructibles)
+                if (string.Equals(prop.PropId, subjectId, StringComparison.Ordinal))
+                    return ReplayCombatPresentationSubjectKind.Destructible;
+            return ReplayCombatPresentationSubjectKind.World;
+        }
+
+        private static GameplayPosition ResolveSubjectPosition(
+            GameplaySemanticReplayFrame frame,
+            string subjectId,
+            ReplayCombatPresentationSubjectKind subjectKind)
+        {
+            switch (subjectKind)
+            {
+                case ReplayCombatPresentationSubjectKind.Actor:
+                    return AddHeight(
+                        frame.Previous.Session.GetActor(subjectId).Pose.Position,
+                        1f);
+                case ReplayCombatPresentationSubjectKind.Drone:
+                    return FindDrone(frame.Previous.Drones, subjectId).Position;
+                case ReplayCombatPresentationSubjectKind.Destructible:
+                    foreach (DestructiblePropSnapshot prop in
+                        frame.Previous.Destructibles)
+                        if (string.Equals(
+                                prop.PropId,
+                                subjectId,
+                                StringComparison.Ordinal))
+                            return prop.Pose.Position;
+                    break;
+            }
+            return new GameplayPosition(0f, 0f, 0f);
+        }
+
+        private static DroneSnapshot FindDrone(
+            IEnumerable<DroneSnapshot> drones,
+            string droneId)
+        {
+            foreach (DroneSnapshot drone in drones)
+                if (string.Equals(
+                        drone.DroneId,
+                        droneId,
+                        StringComparison.Ordinal))
+                    return drone;
+            throw new KeyNotFoundException(
+                $"Replay drone '{droneId}' is absent from the previous state.");
         }
 
         public static IReadOnlyList<ReplayCombatPresentationEvent> Project(
@@ -394,13 +577,24 @@ namespace GritGud.Application.Gameplay
                             states);
                     break;
                 case ActorDroneAttackRecord attack:
-                    Add(
-                        states,
+                {
+                    GameplayActorSnapshot attacker = frame.Previous.Session
+                        .GetActor(attack.AttackerId);
+                    DroneSnapshot target = FindDrone(
+                        frame.Previous.Drones,
+                        attack.DroneId);
+                    states.Add(new TurnReplayActorActionState(
                         attack.AttackerId,
                         TurnReplayActorActionKind.Attack,
                         sequence,
-                        progress);
+                        progress,
+                        eventNormalizedTime:
+                            GameplaySemanticReplayPresentationTiming
+                                .ActionResolutionProgress,
+                        origin: AddHeight(attacker.Pose.Position, 1f),
+                        destination: target.Position));
                     break;
+                }
                 case ProjectileAdvanceRecord projectile:
                     ProjectProjectileImpactReactions(
                         frame,
@@ -457,6 +651,20 @@ namespace GritGud.Application.Gameplay
                     segmentProgress);
                 return;
             }
+        }
+
+        private static DroneSnapshot FindDrone(
+            IEnumerable<DroneSnapshot> drones,
+            string droneId)
+        {
+            foreach (DroneSnapshot drone in drones)
+                if (string.Equals(
+                        drone.DroneId,
+                        droneId,
+                        StringComparison.Ordinal))
+                    return drone;
+            throw new KeyNotFoundException(
+                $"Replay drone '{droneId}' is absent from the previous state.");
         }
 
         private static TurnReplayActorActionKind MapTraversalKind(

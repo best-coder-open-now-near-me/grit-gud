@@ -41,6 +41,7 @@ namespace GritGud.Presentation.Gameplay
         private bool disposed;
         private bool presentationSuppressed;
         private GameObject replayImpactEffect;
+        private float replayImpactRemainingSeconds;
 
         public ProjectileFlightPresenter(
             ProjectileFlightSnapshot initialSnapshot,
@@ -144,23 +145,31 @@ namespace GritGud.Presentation.Gameplay
             scheduledSnapshot = value;
             previewEndpoint = null;
             ApplySnapshot(value, createImpactEffect: false);
-            if (value.Status == ProjectileFlightStatus.Impacted)
-            {
-                replayImpactEffect ??= effects.CreateImpact(
-                    ToVector3(value.Position),
-                    Mathf.Max(0.6f, value.Launch.Definition.BlastRadius),
+        }
+
+        internal void PresentReplayImpact(GameplayPosition position)
+        {
+            ThrowIfDisposed();
+            if (replayImpactEffect == null)
+                replayImpactEffect = effects.CreateImpact(
+                    ToVector3(position),
+                    Mathf.Max(0.6f, snapshot.Launch.Definition.BlastRadius),
                     effectParent);
-            }
-            else
-            {
-                ClearReplayImpact();
-            }
+            replayImpactRemainingSeconds = presentation.ImpactEffectSeconds;
+        }
+
+        internal void TickReplayImpact(float deltaTime)
+        {
+            if (replayImpactEffect == null) return;
+            replayImpactRemainingSeconds -= Mathf.Max(0f, deltaTime);
+            if (replayImpactRemainingSeconds <= 0f) ClearReplayImpact();
         }
 
         internal void ClearReplayImpact()
         {
             GameplayObjectLifecycle.Destroy(replayImpactEffect);
             replayImpactEffect = null;
+            replayImpactRemainingSeconds = 0f;
         }
 
         internal void SetPresentationSuppressed(bool suppressed)

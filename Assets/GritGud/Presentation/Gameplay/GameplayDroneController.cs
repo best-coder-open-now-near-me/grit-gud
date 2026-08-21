@@ -28,9 +28,24 @@ namespace GritGud.Presentation.Gameplay
         private Func<Vector2, bool> pointerBlocked;
         private string commandDroneId;
         private CommandMode mode;
+        private bool replayPresentation;
+        private int replayPresentedDischargeCount;
 
         public bool IsTargeting => mode != CommandMode.None;
         public GameplayDroneSession Session => drones;
+        internal int ReplayPresentedDischargeCount =>
+            replayPresentedDischargeCount;
+        internal int ReplayTransientVisualCount
+        {
+            get
+            {
+                int count = 0;
+                foreach (GameObject root in roots.Values)
+                    count += root.GetComponent<GameplayDroneVisualPresenter>()?
+                        .ReplayTransientVisualCount ?? 0;
+                return count;
+            }
+        }
 
         internal void Bind(
             LevelWorld world,
@@ -113,6 +128,87 @@ namespace GritGud.Presentation.Gameplay
                     "Bind drones before refreshing their presentation.");
             foreach (DroneSnapshot snapshot in drones.CaptureDrones())
                 ApplySnapshot(snapshot);
+        }
+
+        internal void BeginReplayPresentation()
+        {
+            if (drones == null)
+                throw new InvalidOperationException(
+                    "Bind drones before beginning replay presentation.");
+            if (replayPresentation)
+                throw new InvalidOperationException(
+                    "Drone replay presentation is already active.");
+            CancelTargeting();
+            ClearReplayTransients();
+            replayPresentedDischargeCount = 0;
+            replayPresentation = true;
+        }
+
+        internal void PresentReplay(IReadOnlyList<DroneSnapshot> snapshots)
+        {
+            if (!replayPresentation)
+                throw new InvalidOperationException(
+                    "Begin drone replay presentation before projecting state.");
+            if (snapshots == null) throw new ArgumentNullException(
+                nameof(snapshots));
+            var retained = new HashSet<string>(StringComparer.Ordinal);
+            foreach (DroneSnapshot snapshot in snapshots)
+            {
+                retained.Add(snapshot.DroneId);
+                ApplySnapshot(snapshot);
+            }
+            foreach (KeyValuePair<string, GameObject> entry in roots)
+                if (!retained.Contains(entry.Key)) entry.Value.SetActive(false);
+        }
+
+        internal void PresentReplayEvent(
+            ReplayCombatPresentationEvent presentationEvent)
+        {
+            if (!replayPresentation)
+                throw new InvalidOperationException(
+                    "Begin drone replay presentation before projecting events.");
+            if (presentationEvent == null) throw new ArgumentNullException(
+                nameof(presentationEvent));
+            if (presentationEvent.ShooterKind !=
+                    ReplayCombatPresentationSubjectKind.Drone
+                || !roots.TryGetValue(
+                    presentationEvent.ShooterId,
+                    out GameObject root))
+                throw new InvalidOperationException(
+                    $"Replay transition {presentationEvent.TransitionSequence} "
+                    + $"has no drone shooter '{presentationEvent.ShooterId}'.");
+            GameplayDroneVisualPresenter visual = root.GetComponent<
+                GameplayDroneVisualPresenter>()
+                ?? throw new InvalidOperationException(
+                    $"Replay drone '{presentationEvent.ShooterId}' has no visual presenter.");
+            visual.PresentReplayDischarge(
+                presentationEvent.PresentationId,
+                presentationEvent.Origin,
+                presentationEvent.Destination);
+            replayPresentedDischargeCount++;
+        }
+
+        internal void ClearReplayTransients()
+        {
+            foreach (GameObject root in roots.Values)
+                root.GetComponent<GameplayDroneVisualPresenter>()?
+                    .ClearReplayTransients();
+        }
+
+        internal void EndReplayPresentation()
+        {
+            if (!replayPresentation) return;
+            ClearReplayTransients();
+            replayPresentation = false;
+            RefreshAuthoritativePresentation();
+        }
+
+        internal Transform GetPresentationTransform(string droneId)
+        {
+            if (!roots.TryGetValue(droneId, out GameObject root))
+                throw new KeyNotFoundException(
+                    $"Drone '{droneId}' has no presentation root.");
+            return root.transform;
         }
 
         public bool TryAttackDroneAtPointer(
@@ -270,6 +366,7 @@ namespace GritGud.Presentation.Gameplay
 
         public void Unbind()
         {
+            EndReplayPresentation();
             CancelTargeting();
             roots.Clear();
             drones = null;
@@ -278,6 +375,8 @@ namespace GritGud.Presentation.Gameplay
             smoke = null;
             dialogue = null;
             pointerBlocked = null;
+            replayPresentation = false;
+            replayPresentedDischargeCount = 0;
             enabled = false;
         }
 

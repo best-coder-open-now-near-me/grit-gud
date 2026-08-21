@@ -586,6 +586,7 @@ namespace GritGud.Presentation.Gameplay
                     projectileController,
                     worldRegistry,
                     vehicleController,
+                    droneController,
                     smokeFieldController,
                     fireFieldController,
                     partyHud,

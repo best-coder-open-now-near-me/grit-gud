@@ -15,6 +15,38 @@ namespace GritGud.Presentation.Gameplay
     [RequireComponent(typeof(Animator))]
     internal sealed class WeaponAimRig : MonoBehaviour
     {
+        private readonly struct ReplayTransientSnapshot
+        {
+            public ReplayTransientSnapshot(WeaponAimRig rig)
+            {
+                AimPoint = rig.aimPoint;
+                HasAimPoint = rig.hasAimPoint;
+                LocalBodyAimCorrection = rig.localBodyAimCorrection;
+                LocalAimCorrection = rig.localAimCorrection;
+                BlendWeight = rig.blendWeight;
+                RecoilKickDegrees = rig.recoilKickDegrees;
+                RecoilHoldSeconds = rig.recoilHoldSeconds;
+                RecoilReturnSeconds = rig.recoilReturnSeconds;
+                RecoilElapsed = rig.recoilElapsed;
+                AimErrorDegrees = rig.AimErrorDegrees;
+                RecoilWeight = rig.RecoilWeight;
+                Enabled = rig.enabled;
+            }
+
+            public Vector3 AimPoint { get; }
+            public bool HasAimPoint { get; }
+            public Quaternion LocalBodyAimCorrection { get; }
+            public Quaternion LocalAimCorrection { get; }
+            public float BlendWeight { get; }
+            public float RecoilKickDegrees { get; }
+            public float RecoilHoldSeconds { get; }
+            public float RecoilReturnSeconds { get; }
+            public float RecoilElapsed { get; }
+            public float AimErrorDegrees { get; }
+            public float RecoilWeight { get; }
+            public bool Enabled { get; }
+        }
+
         private const float DirectionTolerance = 0.000001f;
         private const float ReachTolerance = 0.0001f;
         private const string WeaponAnchorName = "Weapon Anchor";
@@ -51,12 +83,17 @@ namespace GritGud.Presentation.Gameplay
         private float recoilReturnSeconds = 0.01f;
         private float recoilElapsed = -1f;
         private bool replayPresentation;
+        private ReplayTransientSnapshot? replayTransientSnapshot;
 
         internal float SupportBlendWeight => blendWeight;
         internal bool FollowsAnimatedPrimaryGrip => true;
         internal bool HasAimPoint => hasAimPoint;
         internal bool IsRecoiling => recoilElapsed >= 0f;
         internal bool IsReplayPresentation => replayPresentation;
+        internal Vector3 CurrentAimPoint => aimPoint;
+        internal Quaternion LocalBodyAimCorrection => localBodyAimCorrection;
+        internal Quaternion LocalAimCorrection => localAimCorrection;
+        internal float RecoilElapsed => recoilElapsed;
         internal float AimErrorDegrees { get; private set; }
         internal float RecoilWeight { get; private set; }
 
@@ -247,6 +284,7 @@ namespace GritGud.Presentation.Gameplay
             }
 
             replayPresentation = true;
+            replayTransientSnapshot = new ReplayTransientSnapshot(this);
             ClearAimPoint();
             ClearRecoil();
             enabled = true;
@@ -265,9 +303,24 @@ namespace GritGud.Presentation.Gameplay
 
         internal void EndReplayPresentation()
         {
+            if (!replayPresentation) return;
+            ReplayTransientSnapshot snapshot = replayTransientSnapshot
+                ?? throw new InvalidOperationException(
+                    "Weapon-aim replay presentation has no restoration snapshot.");
             replayPresentation = false;
-            ClearAimPoint();
-            ClearRecoil();
+            replayTransientSnapshot = null;
+            aimPoint = snapshot.AimPoint;
+            hasAimPoint = snapshot.HasAimPoint;
+            localBodyAimCorrection = snapshot.LocalBodyAimCorrection;
+            localAimCorrection = snapshot.LocalAimCorrection;
+            blendWeight = snapshot.BlendWeight;
+            recoilKickDegrees = snapshot.RecoilKickDegrees;
+            recoilHoldSeconds = snapshot.RecoilHoldSeconds;
+            recoilReturnSeconds = snapshot.RecoilReturnSeconds;
+            recoilElapsed = snapshot.RecoilElapsed;
+            AimErrorDegrees = snapshot.AimErrorDegrees;
+            RecoilWeight = snapshot.RecoilWeight;
+            enabled = snapshot.Enabled;
         }
 
         internal void TickSupportBlend(float deltaTime)

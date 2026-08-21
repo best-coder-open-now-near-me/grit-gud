@@ -613,7 +613,8 @@ namespace GritGud.Application.Gameplay
                 && progress >= GameplaySemanticReplayPresentationTiming
                     .GetProjectileImpactProgress(impactAdvance);
             bool droneAttackResolved =
-                frame.SemanticRecord is DroneAttackRecord
+                (frame.SemanticRecord is DroneAttackRecord
+                    || frame.SemanticRecord is ActorDroneAttackRecord)
                 && progress >= GameplaySemanticReplayPresentationTiming
                     .ActionResolutionProgress;
             GameplayCombatStateSnapshot baseState = progress >= 1f
