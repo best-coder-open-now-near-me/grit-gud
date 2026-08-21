@@ -10,8 +10,11 @@ namespace GritGud.Application.Gameplay
         public GameplayPartyMemberHudModel(
             string actorId,
             string displayName,
+            bool partyMember,
+            bool hostile,
             bool selected,
             bool commanding,
+            bool active,
             bool incapacitated,
             bool canSelect,
             TurnBudget turnBudget,
@@ -21,8 +24,11 @@ namespace GritGud.Application.Gameplay
             ActorId = actorId ?? throw new ArgumentNullException(nameof(actorId));
             DisplayName = displayName ?? throw new ArgumentNullException(
                 nameof(displayName));
+            PartyMember = partyMember;
+            Hostile = hostile;
             Selected = selected;
             Commanding = commanding;
+            Active = active;
             Incapacitated = incapacitated;
             CanSelect = canSelect;
             TurnBudget = turnBudget;
@@ -34,9 +40,15 @@ namespace GritGud.Application.Gameplay
 
         public string DisplayName { get; }
 
+        public bool PartyMember { get; }
+
+        public bool Hostile { get; }
+
         public bool Selected { get; }
 
         public bool Commanding { get; }
+
+        public bool Active { get; }
 
         public bool Incapacitated { get; }
 
@@ -53,13 +65,17 @@ namespace GritGud.Application.Gameplay
     {
         public GameplayPartyHudModel(
             bool initiativeControlsSelection,
+            bool combatRoster,
             IReadOnlyList<GameplayPartyMemberHudModel> members)
         {
             InitiativeControlsSelection = initiativeControlsSelection;
+            CombatRoster = combatRoster;
             Members = members ?? throw new ArgumentNullException(nameof(members));
         }
 
         public bool InitiativeControlsSelection { get; }
+
+        public bool CombatRoster { get; }
 
         public IReadOnlyList<GameplayPartyMemberHudModel> Members { get; }
     }
@@ -77,14 +93,27 @@ namespace GritGud.Application.Gameplay
 
             bool initiativeControlsSelection =
                 gameplay.Mode == GameplaySessionMode.TurnBased;
+            bool combatRoster = gameplay.EncounterActive;
+            IReadOnlyList<string> actorIds = combatRoster
+                ? gameplay.InitiativeOrder
+                : control.ActorIds;
+            var partyActorIds = new HashSet<string>(
+                control.ActorIds,
+                StringComparer.Ordinal);
             var members = new List<GameplayPartyMemberHudModel>(
-                control.ActorIds.Count);
-            foreach (string actorId in control.ActorIds)
+                actorIds.Count);
+            foreach (string actorId in actorIds)
             {
                 GameplayActorSnapshot actor = gameplay.GetActor(actorId);
                 CharacterProfileDefinition profile = gameplay.Scenario
                     .GetActor(actorId)
                     .CharacterProfile;
+                bool partyMember = partyActorIds.Contains(actorId);
+                bool hostile = IsHostileToParty(
+                    gameplay,
+                    control.ActorIds,
+                    actorId,
+                    partyMember);
                 bool selected = string.Equals(
                     actorId,
                     control.SelectedActorId,
@@ -93,13 +122,21 @@ namespace GritGud.Application.Gameplay
                     actorId,
                     control.CommandActorId,
                     StringComparison.Ordinal);
+                bool active = string.Equals(
+                    actorId,
+                    gameplay.ActiveActorId,
+                    StringComparison.Ordinal);
                 members.Add(new GameplayPartyMemberHudModel(
                     actorId,
                     profile?.DisplayName ?? actorId,
+                    partyMember,
+                    hostile,
                     selected,
                     commanding,
+                    active,
                     actor.IsIncapacitated,
                     canSelect: !initiativeControlsSelection
+                        && partyMember
                         && !actor.IsIncapacitated
                         && !selected,
                     actor.TurnBudget,
@@ -109,7 +146,31 @@ namespace GritGud.Application.Gameplay
 
             return new GameplayPartyHudModel(
                 initiativeControlsSelection,
+                combatRoster,
                 members.AsReadOnly());
+        }
+
+        private static bool IsHostileToParty(
+            GameplaySession gameplay,
+            IReadOnlyList<string> partyActorIds,
+            string actorId,
+            bool partyMember)
+        {
+            if (partyMember)
+            {
+                return false;
+            }
+
+            foreach (string partyActorId in partyActorIds)
+            {
+                if (gameplay.IsHostile(partyActorId, actorId)
+                    || gameplay.IsHostile(actorId, partyActorId))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

@@ -1,0 +1,162 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e0875b079a30f3649a055165aca5a2e8, type: 3}
+  m_Name: DefaultActorRagdollProfile
+  m_EditorClassIdentifier: GritGud.Presentation::GritGud.Presentation.Actors.ActorRagdollProfile
+  traceSchemaId: default-humanoid-v1
+  traceSchemaVersion: 1
+  bones:
+  - bone: 0
+    connectedBone: 55
+    endBone: 7
+    colliderShape: 0
+    massFraction: 0.14
+    radiusScale: 0.55
+    lengthScale: 0.9
+    lowTwistDegrees: -18
+    highTwistDegrees: 18
+    swingOneDegrees: 18
+    swingTwoDegrees: 18
+  - bone: 7
+    connectedBone: 0
+    endBone: 8
+    colliderShape: 0
+    massFraction: 0.12
+    radiusScale: 0.42
+    lengthScale: 0.95
+    lowTwistDegrees: -18
+    highTwistDegrees: 18
+    swingOneDegrees: 18
+    swingTwoDegrees: 18
+  - bone: 8
+    connectedBone: 7
+    endBone: 9
+    colliderShape: 0
+    massFraction: 0.16
+    radiusScale: 0.36
+    lengthScale: 0.95
+    lowTwistDegrees: -22
+    highTwistDegrees: 22
+    swingOneDegrees: 24
+    swingTwoDegrees: 20
+  - bone: 10
+    connectedBone: 8
+    endBone: 9
+    colliderShape: 1
+    massFraction: 0.08
+    radiusScale: 0.82
+    lengthScale: 1
+    lowTwistDegrees: -35
+    highTwistDegrees: 35
+    swingOneDegrees: 35
+    swingTwoDegrees: 35
+  - bone: 13
+    connectedBone: 8
+    endBone: 15
+    colliderShape: 0
+    massFraction: 0.055
+    radiusScale: 0.27
+    lengthScale: 0.9
+    lowTwistDegrees: -55
+    highTwistDegrees: 55
+    swingOneDegrees: 65
+    swingTwoDegrees: 45
+  - bone: 15
+    connectedBone: 13
+    endBone: 17
+    colliderShape: 0
+    massFraction: 0.035
+    radiusScale: 0.24
+    lengthScale: 0.9
+    lowTwistDegrees: -8
+    highTwistDegrees: 75
+    swingOneDegrees: 12
+    swingTwoDegrees: 12
+  - bone: 14
+    connectedBone: 8
+    endBone: 16
+    colliderShape: 0
+    massFraction: 0.055
+    radiusScale: 0.27
+    lengthScale: 0.9
+    lowTwistDegrees: -55
+    highTwistDegrees: 55
+    swingOneDegrees: 65
+    swingTwoDegrees: 45
+  - bone: 16
+    connectedBone: 14
+    endBone: 18
+    colliderShape: 0
+    massFraction: 0.035
+    radiusScale: 0.24
+    lengthScale: 0.9
+    lowTwistDegrees: -8
+    highTwistDegrees: 75
+    swingOneDegrees: 12
+    swingTwoDegrees: 12
+  - bone: 1
+    connectedBone: 0
+    endBone: 3
+    colliderShape: 0
+    massFraction: 0.09
+    radiusScale: 0.25
+    lengthScale: 0.92
+    lowTwistDegrees: -35
+    highTwistDegrees: 45
+    swingOneDegrees: 40
+    swingTwoDegrees: 28
+  - bone: 3
+    connectedBone: 1
+    endBone: 5
+    colliderShape: 0
+    massFraction: 0.06
+    radiusScale: 0.22
+    lengthScale: 0.92
+    lowTwistDegrees: -8
+    highTwistDegrees: 80
+    swingOneDegrees: 12
+    swingTwoDegrees: 12
+  - bone: 2
+    connectedBone: 0
+    endBone: 4
+    colliderShape: 0
+    massFraction: 0.09
+    radiusScale: 0.25
+    lengthScale: 0.92
+    lowTwistDegrees: -35
+    highTwistDegrees: 45
+    swingOneDegrees: 40
+    swingTwoDegrees: 28
+  - bone: 4
+    connectedBone: 2
+    endBone: 6
+    colliderShape: 0
+    massFraction: 0.06
+    radiusScale: 0.22
+    lengthScale: 0.92
+    lowTwistDegrees: -8
+    highTwistDegrees: 80
+    swingOneDegrees: 12
+    swingTwoDegrees: 12
+  totalMass: 72
+  handoffNormalizedTime: 0.72
+  sampleIntervalSeconds: 0.05
+  minimumActiveSeconds: 0.45
+  settleHoldSeconds: 0.35
+  maximumActiveSeconds: 2.25
+  settleLinearSpeed: 0.12
+  settleAngularSpeed: 0.3
+  maximumImpulseSpeed: 2.4
+  upwardImpulseFraction: 0.22
+  maximumStoredTraces: 4
+  linearDamping: 0.08
+  angularDamping: 0.12

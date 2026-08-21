@@ -64,13 +64,28 @@ namespace GritGud.Application.Gameplay
                 return true;
             }
 
-            if (!gameplay.TryEndEmergencyTurn(actorId, out bool passCompleted, out failure)) return false;
+            bool completesResponsePass =
+                gameplay.TurnPhase == GameplayTurnPhase.EmergencyReaction
+                && gameplay.Operation == GameplaySessionOperation.None
+                && string.Equals(
+                    gameplay.ActiveActorId,
+                    actorId,
+                    StringComparison.Ordinal)
+                && gameplay.EmergencyResponderIndex
+                    == gameplay.EmergencyResponders.Count - 1;
+            if (completesResponsePass && !resolution.IsResolved)
+                resolution.ResolveAfterResponsePass();
+            if (!gameplay.TryEndEmergencyTurn(
+                    actorId,
+                    out bool passCompleted,
+                    out failure))
+                return false;
             if (passCompleted)
             {
-                if (!resolution.IsResolved)
-                {
-                    resolution.ResolveAfterResponsePass();
-                }
+                if (!completesResponsePass)
+                    throw new InvalidOperationException(
+                        "Emergency response completion was not predicted "
+                        + "from canonical turn state.");
                 gameplay.CompleteEmergencyReaction(window.InitiatorActorId);
                 SetStatus(EmergencyReactionWindowStatus.Completed);
                 resolution = null;

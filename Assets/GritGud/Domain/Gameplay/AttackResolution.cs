@@ -283,7 +283,8 @@ namespace GritGud.Domain.Gameplay
             int regionRoll,
             TargetRegionId? hitRegion,
             ActorWoundRecord wound,
-            float? maximumReach = null)
+            float? maximumReach = null,
+            IGameplayActionContext context = null)
         {
             if (sequence <= 0)
             {
@@ -322,6 +323,20 @@ namespace GritGud.Domain.Gameplay
                     "Attack exposure and wound state must describe the same target.",
                     nameof(targetWoundsBefore));
             }
+            if (context != null
+                && (!string.Equals(
+                        context.AttackerId,
+                        exposure.ObserverId,
+                        StringComparison.Ordinal)
+                    || !string.Equals(
+                        context.SubjectId,
+                        exposure.TargetId,
+                        StringComparison.Ordinal)))
+            {
+                throw new ArgumentException(
+                    "Attack context identities must match recorded exposure.",
+                    nameof(context));
+            }
 
             if (hitRoll < 1 || hitRoll > 100)
             {
@@ -331,7 +346,8 @@ namespace GritGud.Domain.Gameplay
             int hitChance = AttackHitChanceRules.CalculateFinalHitChancePercent(
                 exposure,
                 accuracyDecay,
-                distance);
+                distance,
+                context?.AccuracyDeltaPercent ?? 0);
             bool hit = hitRoll <= hitChance;
             if (hit)
             {
@@ -382,6 +398,7 @@ namespace GritGud.Domain.Gameplay
             RegionRoll = regionRoll;
             HitRegion = hitRegion;
             Wound = wound;
+            Context = context;
         }
 
         public long Sequence { get; }
@@ -425,7 +442,8 @@ namespace GritGud.Domain.Gameplay
             AttackHitChanceRules.CalculateFinalHitChancePercent(
                 Exposure,
                 AccuracyDecay,
-                Distance);
+                Distance,
+                Context?.AccuracyDeltaPercent ?? 0);
 
         public int HitRoll { get; }
 
@@ -436,6 +454,8 @@ namespace GritGud.Domain.Gameplay
         public TargetRegionId? HitRegion { get; }
 
         public ActorWoundRecord Wound { get; }
+
+        public IGameplayActionContext Context { get; }
 
         private static bool WoundsMatch(
             ActorWoundSnapshot left,
@@ -487,7 +507,8 @@ namespace GritGud.Domain.Gameplay
             float distance,
             ActorWoundSnapshot targetWoundsBefore,
             float woundMovementPenalty,
-            ContactAttackDefinition contact = null)
+            ContactAttackDefinition contact = null,
+            IGameplayActionContext context = null)
         {
             if (exposure == null)
             {
@@ -513,7 +534,8 @@ namespace GritGud.Domain.Gameplay
             int hitChance = AttackHitChanceRules.CalculateFinalHitChancePercent(
                 exposure,
                 accuracyDecay,
-                distance);
+                distance,
+                context?.AccuracyDeltaPercent ?? 0);
             if (hitRoll > hitChance)
             {
                 return new AttackResolutionRecord(
@@ -527,7 +549,8 @@ namespace GritGud.Domain.Gameplay
                     regionRoll: 0,
                     hitRegion: null,
                     wound: null,
-                    maximumReach: contact?.MaximumReach);
+                    maximumReach: contact?.MaximumReach,
+                    context: context);
             }
 
             int regionRoll = rolls.Roll(exposure.VisibleSampleCount);
@@ -554,7 +577,8 @@ namespace GritGud.Domain.Gameplay
                 regionRoll,
                 hitRegion,
                 wound,
-                contact?.MaximumReach);
+                contact?.MaximumReach,
+                context);
         }
 
         private sealed class SeededAttackRolls

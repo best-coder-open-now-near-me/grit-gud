@@ -46,6 +46,7 @@ namespace GritGud.Presentation.Tests
             var projectile = new GameObject("Smoke Grenade Prefab");
             var persistent = new GameObject("Smoke Volume Prefab");
             persistent.AddComponent<ParticleSystem>();
+            persistent.AddComponent<BoxCollider>();
             var catalog = ConsumablePresentationCatalog.CreateRuntime(
                 new ThrownExplosivePresentationDefinition(
                     "item.smoke-grenade",
@@ -94,9 +95,25 @@ namespace GritGud.Presentation.Tests
                     "Smoke should wait for the grenade's authored release "
                     + "and flight time.");
                 Assert.That(
+                    host.transform.GetChild(0).GetComponent<BoxCollider>()
+                        .enabled,
+                    Is.False,
+                    "Smoke visuals must never participate in projectile physics.");
+                Assert.That(
                     catalog.GetThrownExplosive("item.smoke-grenade")
                         .ImpactDelaySeconds,
                     Is.EqualTo(0.85f).Within(0.001f));
+
+                controller.BeginReplayPresentation();
+                Assert.That(controller.ActiveVisualCount, Is.Zero);
+                controller.PresentReplay(smoke.CaptureActiveFields());
+                Assert.That(controller.ActiveVisualCount, Is.EqualTo(1));
+                controller.PresentReplay(
+                    System.Array.Empty<SmokeFieldSnapshot>());
+                Assert.That(controller.ActiveVisualCount, Is.Zero);
+                controller.EndReplayPresentation();
+                Assert.That(controller.ActiveVisualCount, Is.EqualTo(1));
+                Assert.That(smoke.ActiveCount, Is.EqualTo(1));
             }
             finally
             {

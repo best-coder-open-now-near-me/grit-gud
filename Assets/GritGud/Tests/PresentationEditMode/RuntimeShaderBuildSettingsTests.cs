@@ -16,6 +16,8 @@ namespace GritGud.Presentation.Tests
             "GritGud/RuntimeOutline",
             "GritGud/EmissiveSurface",
             "GritGud/TacticalWireframe",
+            "GritGud/Portable Gradient Skybox",
+            "Hidden/GritGud/PlayerSilhouetteMask",
         };
 
         [Test]
@@ -64,6 +66,29 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 outline.FindPropertyIndex("_OutlineEnabled"),
                 Is.GreaterThanOrEqualTo(0));
+            Assert.That(
+                outline.FindPropertyIndex("_OutlineScreenSpace"),
+                Is.GreaterThanOrEqualTo(0));
+            Assert.That(
+                outline.FindPropertyIndex("_OutlineScreenWidth"),
+                Is.GreaterThanOrEqualTo(0));
+        }
+
+        [Test]
+        public void FractureInteriorsUseThePortableProjectShader()
+        {
+            string[] materialPaths =
+            {
+                "Assets/GritGud/Content/Generated/Fractures/CrateWood/CrateWoodInterior.mat",
+                "Assets/GritGud/Content/Generated/Fractures/BarrelMetal/BarrelMetalInterior.mat",
+            };
+            foreach (string path in materialPaths)
+            {
+                Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+                Assert.That(material, Is.Not.Null, path);
+                Assert.That(material.shader, Is.Not.Null, path);
+                Assert.That(material.shader.name, Is.EqualTo("GritGud/CelSurface"), path);
+            }
         }
     }
 }

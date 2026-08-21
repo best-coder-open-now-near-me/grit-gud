@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using GritGud.Domain.Levels;
+using GritGud.Domain.Turns;
 
 namespace GritGud.Domain.Gameplay
 {
@@ -14,6 +15,9 @@ namespace GritGud.Domain.Gameplay
     public sealed class ScenarioTimingData
     {
         public float minimumVoluntaryTurnSeconds;
+        public int startingActionPoints = 4;
+        public int actionPointIncome = 4;
+        public int maximumHeldActionPoints = 6;
     }
 
     [Serializable]
@@ -91,6 +95,22 @@ namespace GritGud.Domain.Gameplay
     }
 
     [Serializable]
+    public sealed class ScenarioSurfaceDamageModifierData
+    {
+        public string surfaceId = string.Empty;
+        public float multiplier = 1f;
+    }
+
+    [Serializable]
+    public sealed class ScenarioDirectFireDamageData
+    {
+        public string damageTypeId = string.Empty;
+        public float baseIntegrityDamage;
+        public List<ScenarioSurfaceDamageModifierData> surfaceModifiers =
+            new List<ScenarioSurfaceDamageModifierData>();
+    }
+
+    [Serializable]
     public sealed class ScenarioAttackCapabilityData
     {
         public bool enabled;
@@ -101,6 +121,43 @@ namespace GritGud.Domain.Gameplay
         public ScenarioAccuracyDecayData accuracyDecay;
         public ScenarioProjectileCapabilityData projectile;
         public ScenarioContactAttackData contact;
+        public ScenarioDirectFireDamageData directFireDamage;
+        public float soundSignature = 1f;
+        public float directVehicleIntegrityDamage;
+    }
+
+    [Serializable]
+    public sealed class ScenarioTacticalPredicateData
+    {
+        public string feature = string.Empty;
+        public string comparison = "equal";
+        public string value = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class ScenarioTacticalConsequencesData
+    {
+        public int accuracyDeltaPercent;
+        public int woundDelta;
+        public bool hasReactionsAllowed;
+        public bool reactionsAllowed;
+        public float soundMultiplier = 1f;
+        public int actionPointCostDelta;
+    }
+
+    [Serializable]
+    public sealed class ScenarioTacticalRuleData
+    {
+        public string id = string.Empty;
+        public string displayName = string.Empty;
+        public int order;
+        public string capability = string.Empty;
+        public List<string> subjectKinds = new List<string>();
+        public List<ScenarioTacticalPredicateData> predicates =
+            new List<ScenarioTacticalPredicateData>();
+        public ScenarioTacticalConsequencesData consequences =
+            new ScenarioTacticalConsequencesData();
+        public List<string> outcomeFeatureIds = new List<string>();
     }
 
     [Serializable]
@@ -122,7 +179,30 @@ namespace GritGud.Domain.Gameplay
         public ScenarioEquipmentEffectData equippedEffects =
             new ScenarioEquipmentEffectData();
         public ScenarioAttackCapabilityData attackCapability;
+        public ScenarioWeaponAmmunitionData ammunition;
         public ScenarioConsumablePowerData consumablePower;
+    }
+
+    [Serializable]
+    public sealed class ScenarioWeaponAmmunitionData
+    {
+        // JsonUtility materializes omitted/null nested objects. This explicit
+        // discriminator keeps ammunition-free items portable across serializers.
+        public bool enabled;
+        public string ammoTypeId = string.Empty;
+        public int magazineCapacity;
+        public int initialLoadedRounds;
+        public int roundsPerUse = 1;
+        public ScenarioActionCostData reloadCost = new ScenarioActionCostData();
+        public bool consumesRemainingMovement = true;
+        public int reloadPolicyVersion = 1;
+    }
+
+    [Serializable]
+    public sealed class ScenarioAmmunitionReserveData
+    {
+        public string ammoTypeId = string.Empty;
+        public int rounds;
     }
 
     [Serializable]
@@ -144,7 +224,9 @@ namespace GritGud.Domain.Gameplay
         public float blastRadius;
         public float blastWoundMovementPenalty;
         public float blastIntegrityDamage;
+        public int blastActionPointReduction;
         public ScenarioSmokeFieldData smokeField;
+        public ScenarioFireFieldData fireField;
     }
 
     [Serializable]
@@ -155,6 +237,20 @@ namespace GritGud.Domain.Gameplay
         public float explorationDurationSeconds;
         public int durationTurnEnds;
         public float minimumObscuredPath;
+    }
+
+    [Serializable]
+    public sealed class ScenarioFireFieldData
+    {
+        public float initialRadius;
+        public float maximumRadius;
+        public float height;
+        public float explorationDurationSeconds;
+        public int durationTurnEnds;
+        public float explorationPulseSeconds;
+        public float actorWoundMovementPenalty;
+        public float destructibleIntegrityDamage;
+        public float minimumHazardPath;
     }
 
     [Serializable]
@@ -172,6 +268,30 @@ namespace GritGud.Domain.Gameplay
         public float preferredEngagementRange;
         public float movementSearchRadius;
         public int maximumAttacksPerTurn;
+        public int minimumAttackHitChancePercent = 25;
+        public ScenarioEncounterAwarenessData awareness;
+        public ScenarioPatrolRouteData patrol;
+        public List<string> reinforcementActorIds = new List<string>();
+    }
+
+    [Serializable]
+    public sealed class ScenarioEncounterAwarenessData
+    {
+        public float hearingRange;
+        public int sightSuspicionGain;
+        public int soundSuspicionGain;
+        public int suspicionDecayPerTick;
+        public int alertThreshold;
+    }
+
+    [Serializable]
+    public sealed class ScenarioPatrolRouteData
+    {
+        // JsonUtility materializes omitted/null nested objects. This explicit
+        // discriminator keeps stationary enemies portable across serializers.
+        public bool enabled;
+        public bool loops = true;
+        public List<Float3Data> waypoints = new List<Float3Data>();
     }
 
     [Serializable]
@@ -189,6 +309,7 @@ namespace GritGud.Domain.Gameplay
         public string id = string.Empty;
         public string displayName = string.Empty;
         public string presentationId = string.Empty;
+        public string characterId = string.Empty;
         public bool targetable = true;
         public Float3Data position;
         public float facingDegrees;
@@ -204,6 +325,8 @@ namespace GritGud.Domain.Gameplay
         public string initiallyEquippedItemId = string.Empty;
         public List<ScenarioInventoryItemData> inventory =
             new List<ScenarioInventoryItemData>();
+        public List<ScenarioAmmunitionReserveData> ammunitionReserves =
+            new List<ScenarioAmmunitionReserveData>();
         public ScenarioCharacterProfileData characterProfile;
     }
 
@@ -215,15 +338,6 @@ namespace GritGud.Domain.Gameplay
     }
 
     [Serializable]
-    public sealed class ScenarioAdvancementOptionData
-    {
-        public string id = string.Empty;
-        public string skillId = string.Empty;
-        public int pointCost;
-        public int maximumBonus;
-    }
-
-    [Serializable]
     public sealed class ScenarioCharacterProfileData
     {
         public string identityId = string.Empty;
@@ -232,8 +346,6 @@ namespace GritGud.Domain.Gameplay
         public List<ScenarioCharacterRatingData> attributes = new List<ScenarioCharacterRatingData>();
         public List<ScenarioCharacterRatingData> skills = new List<ScenarioCharacterRatingData>();
         public List<string> talentIds = new List<string>();
-        public int startingProgressionPoints;
-        public List<ScenarioAdvancementOptionData> advancementOptions = new List<ScenarioAdvancementOptionData>();
     }
 
     [Serializable]
@@ -241,7 +353,7 @@ namespace GritGud.Domain.Gameplay
     {
         public int actionPoints;
         public float movementOpportunity;
-        public string mobility = "set";
+        public string mobility = ActionMobilityCodec.SetValue;
     }
 
     [Serializable]
@@ -258,11 +370,32 @@ namespace GritGud.Domain.Gameplay
     }
 
     [Serializable]
+    public sealed class ScenarioPropTopplingData
+    {
+        public bool enabled;
+        public float pitchOffsetDegrees;
+        public float rollOffsetDegrees = 90f;
+        public float elevationOffset;
+    }
+
+    [Serializable]
+    public sealed class ScenarioPropPinningData
+    {
+        public bool enabled;
+        public float maximumActorMass;
+        public float minimumContactDepth;
+    }
+
+    [Serializable]
     public sealed class ScenarioPropContentData
     {
         public string entityId = string.Empty;
         public float mass;
         public string sizeClass = "medium";
+        public ScenarioPropTopplingData toppling =
+            new ScenarioPropTopplingData();
+        public ScenarioPropPinningData pinning =
+            new ScenarioPropPinningData();
         public ScenarioAttackResponseData attackResponse;
     }
 
@@ -283,6 +416,19 @@ namespace GritGud.Domain.Gameplay
     }
 
     [Serializable]
+    public sealed class ScenarioDroneContentData
+    {
+        public string entityId = string.Empty;
+        public string controllerActorId = string.Empty;
+        public float maximumIntegrity;
+        public float maximumMoveDistance;
+        public ScenarioActionCostData moveCost = new ScenarioActionCostData();
+        public float sensorRange;
+        public float sensorViewAngleDegrees;
+        public ScenarioAttackCapabilityData attackCapability;
+    }
+
+    [Serializable]
     public sealed class ScenarioPlayerPartyData
     {
         public List<string> actorIds = new List<string>();
@@ -300,7 +446,7 @@ namespace GritGud.Domain.Gameplay
     [Serializable]
     public sealed class ScenarioContentDocument
     {
-        public const int CurrentSchemaVersion = 12;
+        public const int CurrentSchemaVersion = 19;
 
         public int schemaVersion = CurrentSchemaVersion;
         public string scenarioId = string.Empty;
@@ -320,6 +466,10 @@ namespace GritGud.Domain.Gameplay
             new List<ScenarioPropContentData>();
         public List<ScenarioVehicleContentData> vehicles =
             new List<ScenarioVehicleContentData>();
+        public List<ScenarioDroneContentData> drones =
+            new List<ScenarioDroneContentData>();
+        public List<ScenarioTacticalRuleData> tacticalRules =
+            new List<ScenarioTacticalRuleData>();
 
         public void Normalize()
         {
@@ -337,6 +487,9 @@ namespace GritGud.Domain.Gameplay
             objectives = objectives ?? new List<ScenarioObjectiveContentData>();
             props = props ?? new List<ScenarioPropContentData>();
             vehicles = vehicles ?? new List<ScenarioVehicleContentData>();
+            drones = drones ?? new List<ScenarioDroneContentData>();
+            tacticalRules = tacticalRules
+                ?? new List<ScenarioTacticalRuleData>();
         }
     }
 }

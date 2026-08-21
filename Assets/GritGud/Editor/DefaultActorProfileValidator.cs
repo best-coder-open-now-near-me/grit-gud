@@ -63,6 +63,7 @@ namespace GritGud.Editor
                 ActorAnimationParameters.EmptyHandsStateName,
                 string.Empty,
                 EmptyPoseValue,
+                poseLayerWeight: 0f,
                 recoilPlaybackSpeed: 1f,
                 recoilLayerWeight: 0f,
                 recoilKickDegrees: 0f,
@@ -73,6 +74,7 @@ namespace GritGud.Editor
                 ActorAnimationParameters.RifleAimStateName,
                 ActorAnimationParameters.RifleRecoilStateName,
                 RiflePoseValue,
+                poseLayerWeight: WeaponPoseLayerWeight,
                 recoilPlaybackSpeed: RifleRecoilPlaybackSpeed,
                 recoilLayerWeight: 0.8f,
                 recoilKickDegrees: 9f,
@@ -83,6 +85,7 @@ namespace GritGud.Editor
                 ActorAnimationParameters.LauncherAimStateName,
                 ActorAnimationParameters.LauncherRecoilStateName,
                 LauncherPoseValue,
+                poseLayerWeight: WeaponPoseLayerWeight,
                 recoilPlaybackSpeed: LauncherRecoilPlaybackSpeed,
                 recoilLayerWeight: 1f,
                 recoilKickDegrees: 14f,
@@ -90,16 +93,17 @@ namespace GritGud.Editor
                 recoilReturnSeconds: 0.6f);
             ValidateWeaponSet(
                 profile.GetWeaponAnimationSet(ActorAnimationPoseIds.Melee),
-                ActorAnimationParameters.EmptyHandsStateName,
+                ActorAnimationParameters.KnifeIdleStateName,
                 string.Empty,
                 MeleePoseValue,
+                poseLayerWeight: WeaponPoseLayerWeight,
                 recoilPlaybackSpeed: 1f,
                 recoilLayerWeight: 0f,
                 recoilKickDegrees: 0f,
                 recoilHoldSeconds: 0f,
                 recoilReturnSeconds: 0.18f);
 
-            if (profile.ActionBindings.Count != 2 ||
+            if (profile.ActionBindings.Count != 8 ||
                 !profile.TryGetActionBinding(
                     ActorAnimationAction.Interact,
                     out ActorAnimationActionBinding interaction) ||
@@ -118,12 +122,64 @@ namespace GritGud.Editor
                 !throwing.UsesState ||
                 Mathf.Abs(
                     throwing.TransitionSeconds -
-                    ActionTransitionSeconds) > 0.001f)
+                    ActionTransitionSeconds) > 0.001f ||
+                !profile.TryGetActionBinding(
+                    ActorAnimationAction.Jump,
+                    out ActorAnimationActionBinding jump) ||
+                jump.UsesTrigger ||
+                jump.LayerName !=
+                    ActorAnimationParameters.TraversalLayerName ||
+                jump.StateName != ActorAnimationParameters.JumpStateName ||
+                !jump.UsesState ||
+                Mathf.Abs(
+                    jump.TransitionSeconds -
+                    ActionTransitionSeconds) > 0.001f ||
+                !IsStateBinding(
+                    profile,
+                    ActorAnimationAction.ContactStrike,
+                    ActorAnimationParameters.ActionLayerName,
+                    ActorAnimationParameters.KnifeStrikeStateName) ||
+                !IsStateBinding(
+                    profile,
+                    ActorAnimationAction.HitReaction,
+                    ActorAnimationParameters.ReactionLayerName,
+                    ActorAnimationParameters.HitReactionStateName) ||
+                !IsStateBinding(
+                    profile,
+                    ActorAnimationAction.Incapacitate,
+                    ActorAnimationParameters.ReactionLayerName,
+                    ActorAnimationParameters.FallOverStateName) ||
+                !IsStateBinding(
+                    profile,
+                    ActorAnimationAction.IncapacitateShoulder,
+                    ActorAnimationParameters.ReactionLayerName,
+                    ActorAnimationParameters.ShoulderFallStateName) ||
+                !IsStateBinding(
+                    profile,
+                    ActorAnimationAction.Push,
+                    ActorAnimationParameters.DisplacementLayerName,
+                    ActorAnimationParameters.PushStateName))
             {
                 throw new InvalidOperationException(
                     "The default animation profile requires its authored "
-                    + "interaction and throw action bindings.");
+                    + "interaction, throw, jump, strike, and reaction bindings.");
             }
+        }
+
+        private static bool IsStateBinding(
+            ActorAnimationProfile profile,
+            ActorAnimationAction action,
+            string layerName,
+            string stateName)
+        {
+            return profile.TryGetActionBinding(action, out var binding) &&
+                !binding.UsesTrigger &&
+                binding.UsesState &&
+                binding.LayerName == layerName &&
+                binding.StateName == stateName &&
+                Mathf.Abs(
+                    binding.TransitionSeconds -
+                    ActionTransitionSeconds) <= 0.001f;
         }
 
         private static void ValidateWeaponSet(
@@ -131,6 +187,7 @@ namespace GritGud.Editor
             string poseStateName,
             string recoilStateName,
             int animatorPoseValue,
+            float poseLayerWeight,
             float recoilPlaybackSpeed,
             float recoilLayerWeight,
             float recoilKickDegrees,
@@ -144,7 +201,7 @@ namespace GritGud.Editor
                     set.RecoilPlaybackSpeed - recoilPlaybackSpeed) > 0.001f ||
                 Mathf.Abs(
                     set.PoseLayerWeight -
-                    WeaponPoseLayerWeight) > 0.001f ||
+                    poseLayerWeight) > 0.001f ||
                 Mathf.Abs(
                     set.PoseTransitionSeconds -
                     WeaponPoseTransitionSeconds) > 0.001f ||

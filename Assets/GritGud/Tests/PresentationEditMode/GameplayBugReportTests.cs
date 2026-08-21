@@ -32,7 +32,7 @@ namespace GritGud.Presentation.Tests
             var guidance = new GameplayGuidanceEntry(
                 "turn.voluntary.entry",
                 "Voluntary tactical interval",
-                "Entering starts with full AP.",
+                "Entering preserves held AP and movement.",
                 "The environment advances when the interval ends.",
                 "Press T when you want to plan.");
             var route = new GameplayBugReportRouteState(
@@ -63,12 +63,13 @@ namespace GritGud.Presentation.Tests
 
             Assert.That(report, Does.Contain("Generated UTC: 2026-08-09T14:05:06.007Z"));
             Assert.That(report, Does.Contain("Guidance ID: turn.voluntary.entry"));
-            Assert.That(report, Does.Contain("Expected: Entering starts with full AP."));
+            Assert.That(report, Does.Contain(
+                "Expected: Entering preserves held AP and movement."));
             Assert.That(report, Does.Contain("Scenario: bug-report-test"));
             Assert.That(report, Does.Contain("Mode: Exploration"));
             Assert.That(report, Does.Contain("Initiative: player -> target"));
             Assert.That(report, Does.Contain(
-                "player | position=(1.25, 0, -2.5) | facing=90 | stance=Standing | AP=4 | move=8"));
+                "player | position=(1.25, 0, -2.5) | facing=90 | stance=Standing | AP=4 | move=5.5"));
             Assert.That(report, Does.Contain("Last voluntary cycle: 1"));
             Assert.That(report, Does.Contain("Last ended turn: <none>"));
             Assert.That(report, Does.Contain("AP=4 | move=5.5"));
@@ -126,11 +127,10 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
-        public void FormatterCapturesPartyControlAndIdentityBoundProgression()
+        public void FormatterCapturesPartyControlWithoutProgressionState()
         {
             GameplaySession session = CreatePartySession();
             using var control = new GameplayPartyControlSession(session);
-            var progression = new GameplayPartyProgressionSession(session);
 
             Assert.That(control.TrySelectActor("vale", out _), Is.True);
             string report = GameplayBugReportFormatter.Format(
@@ -143,17 +143,14 @@ namespace GritGud.Presentation.Tests
                     "Select a party member."),
                 default(GameplayBugReportRouteState),
                 CreateRuntime(),
-                control.Snapshot,
-                progression);
+                control.Snapshot);
 
             Assert.That(report, Does.Contain("Player party: mara, vale"));
             Assert.That(report, Does.Contain("Selected party actor: vale"));
             Assert.That(report, Does.Contain("Command party actor: vale"));
             Assert.That(report, Does.Contain("Party defeated: no"));
-            Assert.That(report, Does.Contain(
-                "mara | identity=character.mara | unspent=0 | bonuses=<none>"));
-            Assert.That(report, Does.Contain(
-                "vale | identity=character.vale | unspent=0 | bonuses=<none>"));
+            Assert.That(report, Does.Not.Contain("progression"));
+            Assert.That(report, Does.Not.Contain("unspent"));
         }
 
         [Test]
@@ -345,9 +342,7 @@ namespace GritGud.Presentation.Tests
                         new CharacterRating(CoreAttributeIds.Charisma, 3),
                     },
                     Array.Empty<CharacterRating>(),
-                    Array.Empty<string>(),
-                    0,
-                    Array.Empty<CharacterAdvancementOption>());
+                    Array.Empty<string>());
             var mara = new ScenarioActorDefinition(
                 "mara",
                 10,

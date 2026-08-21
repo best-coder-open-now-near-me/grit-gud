@@ -53,6 +53,7 @@ MonoBehaviour:
     color: {r: 0, g: 0.008, b: 0.022, a: 1}
   tacticalTransition:
     durationSeconds: 0.46
+    combatEntryDelaySeconds: 2
     edgeBandHeight: 3
     scanLineWidth: 240
     washOpacity: 0.065

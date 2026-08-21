@@ -1,6 +1,7 @@
 using System;
 using GritGud.Domain.Gameplay;
 using GritGud.Presentation.Actors.Animation;
+using GritGud.Presentation.Gameplay;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -13,7 +14,7 @@ namespace GritGud.Presentation.Tests
         {
             Assert.That(
                 ActorAnimationChannelPlan.Channels.Count,
-                Is.EqualTo(6));
+                Is.EqualTo(8));
             Assert.That(
                 ActorAnimationChannelPlan.Locomotion.BodyRegion,
                 Is.EqualTo(BodyRegion.WholeBody));
@@ -39,6 +40,18 @@ namespace GritGud.Presentation.Tests
                 ActorAnimationChannelPlan.Actions.BodyRegion,
                 Is.EqualTo(BodyRegion.TorsoAndArms));
             Assert.That(
+                ActorAnimationChannelPlan.Displacements.BodyRegion,
+                Is.EqualTo(BodyRegion.WholeBody));
+            Assert.That(
+                ActorAnimationChannelPlan.Displacements.BlendMode,
+                Is.EqualTo(AnimationChannelBlendMode.Override));
+            Assert.That(
+                ActorAnimationChannelPlan.Reactions.BodyRegion,
+                Is.EqualTo(BodyRegion.WholeBody));
+            Assert.That(
+                ActorAnimationChannelPlan.Reactions.BlendMode,
+                Is.EqualTo(AnimationChannelBlendMode.Override));
+            Assert.That(
                 ActorAnimationChannelPlan.WeaponAim.ExecutionStage,
                 Is.EqualTo(AnimationExecutionStage.PostAnimation));
             Assert.That(
@@ -56,6 +69,12 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 ActorAnimationChannelPlan.Channels[4].Priority,
                 Is.LessThan(ActorAnimationChannelPlan.Channels[5].Priority));
+            Assert.That(
+                ActorAnimationChannelPlan.Channels[5].Priority,
+                Is.LessThan(ActorAnimationChannelPlan.Channels[6].Priority));
+            Assert.That(
+                ActorAnimationChannelPlan.Channels[6].Priority,
+                Is.LessThan(ActorAnimationChannelPlan.Channels[7].Priority));
         }
 
         [Test]
@@ -102,6 +121,228 @@ namespace GritGud.Presentation.Tests
                         ActorAnimationParameters.NoActionStateName),
                     Is.True);
                 Assert.That(animator.GetLayerWeight(layer), Is.Zero);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(actor);
+            }
+        }
+
+        [Test]
+        public void PushActionUsesItsDedicatedFullBodyChannelAndReleases()
+        {
+            GameObject prefab = Resources.Load<GameObject>(
+                "Actors/DefaultPlayerActor");
+            GameObject actor = UnityEngine.Object.Instantiate(prefab);
+            try
+            {
+                ActorAnimationCoordinator presenter =
+                    actor.GetComponent<ActorAnimationCoordinator>();
+                Animator animator = presenter.TargetAnimator;
+                animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                animator.Update(0f);
+
+                int layer = animator.GetLayerIndex(
+                    ActorAnimationParameters.DisplacementLayerName);
+                Assert.That(layer, Is.GreaterThanOrEqualTo(0));
+                Assert.That(animator.GetLayerWeight(layer), Is.Zero);
+                Assert.That(
+                    presenter.TryRequestAction(ActorAnimationAction.Push),
+                    Is.True);
+                animator.Update(0.1f);
+
+                Assert.That(animator.GetLayerWeight(layer), Is.EqualTo(1f));
+                Assert.That(
+                    animator.GetCurrentAnimatorStateInfo(layer).IsName(
+                        ActorAnimationParameters.PushStateName),
+                    Is.True);
+
+                for (int frame = 0; frame < 100; frame++)
+                    animator.Update(0.05f);
+
+                Assert.That(
+                    animator.GetCurrentAnimatorStateInfo(layer).IsName(
+                        ActorAnimationParameters.NoDisplacementStateName),
+                    Is.True);
+                Assert.That(animator.GetLayerWeight(layer), Is.Zero);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(actor);
+            }
+        }
+
+        [Test]
+        public void DeferredIncapacitationUsesCommittedWoundRegionAtContact()
+        {
+            GameObject prefab = Resources.Load<GameObject>(
+                "Actors/DefaultPlayerActor");
+            GameObject actor = UnityEngine.Object.Instantiate(prefab);
+            try
+            {
+                ActorAnimationCoordinator animation =
+                    actor.GetComponent<ActorAnimationCoordinator>();
+                Animator animator = animation.TargetAnimator;
+                animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                animator.Update(0f);
+
+                animation.DeferIncapacitationPresentation();
+                animation.PresentIncapacitation(
+                    Quaternion.Euler(0f, 0f, 90f),
+                    Vector3.down);
+                Assert.That(animation.LastRequestedAction, Is.Null);
+
+                Assert.That(
+                    animation.PresentWoundReaction(
+                        TargetRegionId.RightArm,
+                        incapacitated: true),
+                    Is.True);
+                animator.Update(0.1f);
+
+                Assert.That(
+                    animation.LastRequestedAction,
+                    Is.EqualTo(
+                        ActorAnimationAction.IncapacitateShoulder));
+                int layer = animator.GetLayerIndex(
+                    ActorAnimationParameters.ReactionLayerName);
+                Assert.That(animator.GetLayerWeight(layer), Is.EqualTo(1f));
+                Assert.That(
+                    animator.GetCurrentAnimatorStateInfo(layer).IsName(
+                        ActorAnimationParameters.ShoulderFallStateName),
+                    Is.True);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(actor);
+            }
+        }
+
+        [Test]
+        public void PinnedActorKeepsDownedPoseAfterNonIncapacitatingWound()
+        {
+            GameObject prefab = Resources.Load<GameObject>(
+                "Actors/DefaultPlayerActor");
+            GameObject actor = UnityEngine.Object.Instantiate(prefab);
+            try
+            {
+                ActorAnimationCoordinator animation =
+                    actor.GetComponent<ActorAnimationCoordinator>();
+                Assert.That(
+                    animation.TryRequestAction(
+                        ActorAnimationAction.Incapacitate),
+                    Is.True);
+
+                Assert.That(
+                    animation.PresentWoundReaction(
+                        TargetRegionId.Torso,
+                        incapacitated: false,
+                        pinned: true),
+                    Is.False);
+                Assert.That(
+                    animation.LastRequestedAction,
+                    Is.EqualTo(ActorAnimationAction.Incapacitate));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(actor);
+            }
+        }
+
+        [Test]
+        public void KnifeActionCanBeInterruptedBackToTheOwnedIdleState()
+        {
+            GameObject prefab = Resources.Load<GameObject>(
+                "Actors/DefaultPlayerActor");
+            GameObject actor = UnityEngine.Object.Instantiate(prefab);
+            try
+            {
+                ActorAnimationCoordinator animation =
+                    actor.GetComponent<ActorAnimationCoordinator>();
+                Animator animator = animation.TargetAnimator;
+                animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                animator.Update(0f);
+
+                Assert.That(
+                    animation.TryRequestAction(
+                        ActorAnimationAction.ContactStrike),
+                    Is.True);
+                animator.Update(0.1f);
+                Assert.That(
+                    animation.InterruptAction(
+                        ActorAnimationAction.ContactStrike),
+                    Is.True);
+                animator.Update(0.2f);
+
+                int layer = animator.GetLayerIndex(
+                    ActorAnimationParameters.ActionLayerName);
+                Assert.That(
+                    animator.GetCurrentAnimatorStateInfo(layer).IsName(
+                        ActorAnimationParameters.NoActionStateName),
+                    Is.True);
+                Assert.That(animator.GetLayerWeight(layer), Is.Zero);
+                Assert.That(animation.ActionSequence, Is.EqualTo(1));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(actor);
+            }
+        }
+
+        [Test]
+        public void ClearingPinnedProfileReleasesHeldFallPoseAndRestoresStanceTargeting()
+        {
+            GameObject prefab = Resources.Load<GameObject>(
+                "Actors/DefaultPlayerActor");
+            GameObject actor = UnityEngine.Object.Instantiate(prefab);
+            try
+            {
+                ActorAnimationCoordinator animation =
+                    actor.GetComponent<ActorAnimationCoordinator>();
+                Animator animator = animation.TargetAnimator;
+                animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                var hooks = actor.AddComponent<
+                    GameplayTurnReplayActorStateHooks>();
+                var targets = actor.AddComponent<
+                    ActorTargetProfilePresenter>();
+                targets.Bind(
+                    actor.GetComponent<ActorStancePresenter>(),
+                    hooks);
+                animator.Update(0f);
+
+                hooks.PresentPinState(new ActorPinState(
+                    "actor",
+                    "prop",
+                    displacementSequence: 1,
+                    new DisplacementContactEvidence(
+                        "actor",
+                        new GameplayPosition(0f, 0f, 0f),
+                        new GameplayPosition(0f, 1f, 0f),
+                        overlapDepth: 0.2f)));
+                animator.Update(0.2f);
+
+                Assert.That(
+                    targets.ProfileKind,
+                    Is.EqualTo(ActorTargetProfileKind.PinnedDown));
+                Assert.That(
+                    animation.LastRequestedAction,
+                    Is.EqualTo(ActorAnimationAction.Incapacitate));
+
+                hooks.PresentPinState(null);
+                animator.Update(0.2f);
+
+                int layer = animator.GetLayerIndex(
+                    ActorAnimationParameters.ReactionLayerName);
+                Assert.That(
+                    animator.GetCurrentAnimatorStateInfo(layer).IsName(
+                        ActorAnimationParameters.NoReactionStateName),
+                    Is.True);
+                Assert.That(animator.GetLayerWeight(layer), Is.Zero);
+                Assert.That(
+                    targets.ProfileKind,
+                    Is.EqualTo(ActorTargetProfileKind.Standing));
+                Assert.That(
+                    animation.LastRequestedAction,
+                    Is.EqualTo(ActorAnimationAction.Interact));
             }
             finally
             {

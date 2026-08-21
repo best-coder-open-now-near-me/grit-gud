@@ -113,9 +113,9 @@ namespace GritGud.Presentation.Tests
                 1280f,
                 commandBar);
             Rect commandHints = GameplayHud.CalculateCommandHintsRectangle(
-                1280f,
                 commandBar);
             Rect bodyStatus = GameplayHud.CalculateBodyStatusRectangle(
+                1280f,
                 commandBar);
             Rect hotbar = GameplayHud.CalculateHotbarRectangle(
                 commandBar,
@@ -135,6 +135,8 @@ namespace GritGud.Presentation.Tests
             Rect warningHint =
                 GameplayHud.CalculateWarningHintRectangle(
                     commandBar);
+            Rect encounterNotice =
+                GameplayHud.CalculateEncounterNoticeRectangle(1280f);
             Rect dialoguePanel = GameplayDialogueDrawer.CalculatePanelRectangle(
                 1280f,
                 commandBar,
@@ -146,25 +148,31 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 1280f - dialogueButton.xMax,
                 Is.EqualTo(GameplayHud.CommandBarMargin));
-            Assert.That(commandBar.x - bodyStatus.xMax,
+            Assert.That(commandBar.x - commandHints.xMax,
                 Is.EqualTo(GameplayHud.CommandBarMargin));
-            Assert.That(bodyStatus.x, Is.EqualTo(GameplayHud.CommandBarMargin));
-            Assert.That(commandHints.x, Is.EqualTo(dialogueButton.x));
-            Assert.That(commandHints.y, Is.EqualTo(dialogueButton.yMax + 5f));
+            Assert.That(commandHints.x,
+                Is.EqualTo(GameplayHud.CommandBarMargin));
+            Assert.That(bodyStatus.x, Is.EqualTo(dialogueButton.x));
+            Assert.That(bodyStatus.width, Is.EqualTo(dialogueButton.width));
+            Assert.That(
+                bodyStatus.y - dialogueButton.yMax,
+                Is.EqualTo(GameplayHud.SideRailSectionGap));
             Assert.That(
                 commandBar.yMax - commandHints.yMax,
                 Is.EqualTo(GameplayHud.CommandBarMargin));
             Assert.That(
-                dialogueButton.y,
-                Is.EqualTo(
-                    commandBar.y
-                    + 13f
-                    - (GameplayHud.CommandBarMargin * 2f)));
+                commandBar.yMax - bodyStatus.yMax,
+                Is.EqualTo(GameplayHud.CommandBarMargin));
             Assert.That(
                 commandBar.yMax - hotbar.yMax,
                 Is.EqualTo(GameplayHud.CommandBarMargin));
             Assert.That(commandBar.height, Is.EqualTo(118f));
             Assert.That(hotbar.height, Is.EqualTo(86f));
+            Assert.That(
+                GameplayHud.TurnResourceTop
+                    - (GameplayHud.TurnModeButtonTop
+                        + GameplayHud.TurnModeButtonHeight),
+                Is.EqualTo(20f));
             Assert.That(equipmentFlyout.x,
                 Is.EqualTo(GameplayHud.CommandBarMargin));
             Assert.That(equipmentFlyout.y,
@@ -191,9 +199,45 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 warningHint.height,
                 Is.EqualTo(GameplayHud.WarningHintHeight));
+            Assert.That(encounterNotice.y,
+                Is.EqualTo(GameplayHud.EncounterNoticeTop));
+            Assert.That(encounterNotice.height,
+                Is.EqualTo(GameplayHud.EncounterNoticeHeight));
+            Assert.That(encounterNotice.width,
+                Is.EqualTo(GameplayHud.EncounterNoticeMaximumWidth));
+            Assert.That(encounterNotice.center.x, Is.EqualTo(640f));
             Assert.That(1280f - dialoguePanel.xMax,
                 Is.EqualTo(GameplayHud.CommandBarMargin));
-            Assert.That(commandHints.height / 8f, Is.GreaterThan(9f));
+            Assert.That(
+                commandHints.height,
+                Is.EqualTo(
+                    GameplayHud.CalculateCommandHintContentHeight(
+                        GameplayHud.CommandHintRowCapacity)));
+            Rect previousHintRow = default(Rect);
+            for (int index = 0;
+                index < GameplayHud.CommandHintRowCapacity;
+                index++)
+            {
+                Rect hintRow = GameplayHud.CalculateCommandHintRowRectangle(
+                    commandHints,
+                    index,
+                    GameplayHud.CommandHintRowCapacity);
+                Assert.That(
+                    hintRow.height,
+                    Is.EqualTo(GameplayHud.CommandHintRowHeight));
+                Assert.That(hintRow.yMin,
+                    Is.GreaterThanOrEqualTo(commandHints.yMin));
+                Assert.That(hintRow.yMax,
+                    Is.LessThanOrEqualTo(commandHints.yMax));
+                if (index > 0)
+                {
+                    Assert.That(
+                        hintRow.yMin - previousHintRow.yMax,
+                        Is.EqualTo(GameplayHud.CommandHintRowGap));
+                }
+
+                previousHintRow = hintRow;
+            }
             foreach (TargetRegionId region in new[]
             {
                 TargetRegionId.Head,
@@ -217,6 +261,22 @@ namespace GritGud.Presentation.Tests
                 Assert.That(regionRectangle.yMax,
                     Is.LessThanOrEqualTo(bodyStatus.yMax));
             }
+            Rect head = GameplayHud.CalculateBodyRegionRectangle(
+                bodyStatus,
+                TargetRegionId.Head);
+            Rect torso = GameplayHud.CalculateBodyRegionRectangle(
+                bodyStatus,
+                TargetRegionId.Torso);
+            Rect arm = GameplayHud.CalculateBodyRegionRectangle(
+                bodyStatus,
+                TargetRegionId.LeftArm);
+            Rect leg = GameplayHud.CalculateBodyRegionRectangle(
+                bodyStatus,
+                TargetRegionId.LeftLeg);
+            Assert.That(head.width, Is.EqualTo(head.height).Within(0.001f));
+            Assert.That(torso.width, Is.GreaterThan(arm.width));
+            Assert.That(torso.height, Is.GreaterThan(head.height));
+            Assert.That(leg.height, Is.GreaterThan(head.height));
         }
     }
 }

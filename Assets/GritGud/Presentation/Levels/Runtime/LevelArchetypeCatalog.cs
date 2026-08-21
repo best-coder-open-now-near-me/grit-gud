@@ -12,6 +12,7 @@ namespace GritGud.Presentation.Levels.Runtime
         PlacementSurface = 1 << 0,
         Cover = 1 << 1,
         Destructible = 1 << 2,
+        Vehicle = 1 << 3,
     }
 
     public readonly struct LevelArchetypePlacementRules
@@ -48,6 +49,8 @@ namespace GritGud.Presentation.Levels.Runtime
         private readonly bool destructible;
         private readonly string destructibleState;
         private readonly float integrity;
+        private readonly LevelPlacementSurfaceData placementSurface;
+        private readonly string surfaceId;
 
         public LevelArchetypeGameplayDefaults(
             bool providesCover,
@@ -55,7 +58,9 @@ namespace GritGud.Presentation.Levels.Runtime
             Float3Data coverSize,
             bool destructible,
             string destructibleState,
-            float integrity)
+            float integrity,
+            LevelPlacementSurfaceData placementSurface,
+            string surfaceId = "surface.concrete")
         {
             this.providesCover = providesCover;
             this.coverCenter = coverCenter;
@@ -63,6 +68,10 @@ namespace GritGud.Presentation.Levels.Runtime
             this.destructible = destructible;
             this.destructibleState = destructibleState;
             this.integrity = integrity;
+            this.placementSurface = placementSurface;
+            this.surfaceId = string.IsNullOrWhiteSpace(surfaceId)
+                ? "surface.concrete"
+                : surfaceId;
         }
 
         public void ApplyTo(LevelEntity entity)
@@ -74,8 +83,10 @@ namespace GritGud.Presentation.Levels.Runtime
                     enabled = true,
                     initialState = destructibleState,
                     integrity = integrity,
+                    surfaceId = surfaceId,
                 };
             }
+            entity.placementSurface = placementSurface?.DeepCopy();
         }
     }
 
@@ -93,12 +104,19 @@ namespace GritGud.Presentation.Levels.Runtime
         [SerializeField] private float positionSnap = 0.25f;
         [SerializeField] private float angleSnap = 15f;
         [SerializeField] private bool placementSurface;
+        [SerializeField] private string placementSurfaceKind =
+            LevelPlacementSurfaceData.FlatKind;
+        [SerializeField] private float placementSurfaceNegativeZHeight;
+        [SerializeField] private float placementSurfacePositiveZHeight;
         [SerializeField] private bool providesCover;
         [SerializeField] private Vector3 defaultCoverCenter;
         [SerializeField] private Vector3 defaultCoverSize = Vector3.one;
         [SerializeField] private bool destructible;
+        [SerializeField] private bool vehicle;
         [SerializeField] private string initialDestructibleState = "intact";
         [SerializeField] private float initialIntegrity = 10f;
+        [SerializeField] private GritGud.Presentation.Gameplay.DestructibleFractureProfile
+            fractureProfile;
 
         public string ArchetypeId => archetypeId;
 
@@ -112,6 +130,9 @@ namespace GritGud.Presentation.Levels.Runtime
                 : surfacePresentationId;
 
         public GameObject Prefab => prefab;
+
+        public GritGud.Presentation.Gameplay.DestructibleFractureProfile
+            FractureProfile => fractureProfile;
 
         public Bounds LocalBounds => new Bounds(localBoundsCenter, localBoundsSize);
 
@@ -130,7 +151,8 @@ namespace GritGud.Presentation.Levels.Runtime
         public LevelArchetypeCapabilities Capabilities =>
             (placementSurface ? LevelArchetypeCapabilities.PlacementSurface : LevelArchetypeCapabilities.None)
             | (providesCover ? LevelArchetypeCapabilities.Cover : LevelArchetypeCapabilities.None)
-            | (destructible ? LevelArchetypeCapabilities.Destructible : LevelArchetypeCapabilities.None);
+            | (destructible ? LevelArchetypeCapabilities.Destructible : LevelArchetypeCapabilities.None)
+            | (vehicle ? LevelArchetypeCapabilities.Vehicle : LevelArchetypeCapabilities.None);
 
         public LevelArchetypeGameplayDefaults GameplayDefaults => new LevelArchetypeGameplayDefaults(
             providesCover,
@@ -138,7 +160,9 @@ namespace GritGud.Presentation.Levels.Runtime
             ToData(defaultCoverSize),
             destructible,
             initialDestructibleState,
-            initialIntegrity);
+            initialIntegrity,
+            CreatePlacementSurface(),
+            SurfacePresentationId);
 
         public LevelEntity CreateEntity(Vector3 position, float yawDegrees)
         {
@@ -158,6 +182,34 @@ namespace GritGud.Presentation.Levels.Runtime
         private static Float3Data ToData(Vector3 value)
         {
             return new Float3Data(value.x, value.y, value.z);
+        }
+
+        private LevelPlacementSurfaceData CreatePlacementSurface()
+        {
+            if (!placementSurface) return null;
+            string kind = string.IsNullOrWhiteSpace(placementSurfaceKind)
+                ? LevelPlacementSurfaceData.FlatKind
+                : placementSurfaceKind.Trim().ToLowerInvariant();
+            float flatHeight = localBoundsCenter.y
+                + (localBoundsSize.y * 0.5f);
+            return new LevelPlacementSurfaceData
+            {
+                kind = kind,
+                localCenter = new Float3Data(
+                    localBoundsCenter.x,
+                    0f,
+                    localBoundsCenter.z),
+                size = new Float3Data(
+                    localBoundsSize.x,
+                    0f,
+                    localBoundsSize.z),
+                negativeZHeight = kind == LevelPlacementSurfaceData.FlatKind
+                    ? flatHeight
+                    : placementSurfaceNegativeZHeight,
+                positiveZHeight = kind == LevelPlacementSurfaceData.FlatKind
+                    ? flatHeight
+                    : placementSurfacePositiveZHeight,
+            };
         }
     }
 

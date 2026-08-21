@@ -3,6 +3,7 @@
     "rootNamespace": "GritGud.Editor",
     "references": [
         "GritGud.Domain",
+        "GritGud.Application",
         "GritGud.Presentation"
     ],
     "includePlatforms": [

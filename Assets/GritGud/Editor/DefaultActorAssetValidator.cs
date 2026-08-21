@@ -24,15 +24,24 @@ namespace GritGud.Editor
                     controller) &&
                 DefaultActorControllerValidator.HasRequiredActionLayer(
                     controller) &&
+                DefaultActorControllerValidator.HasRequiredTraversalLayer(
+                    controller) &&
+                DefaultActorControllerValidator.HasRequiredDisplacementLayer(
+                    controller) &&
+                DefaultActorControllerValidator.HasRequiredReactionLayer(
+                    controller) &&
                 AssetDatabase.LoadAssetAtPath<AvatarMask>(
                     LowerBodyMaskPath) != null &&
                 AssetDatabase.LoadAssetAtPath<ActorAnimationProfile>(
                     ProfilePath) != null &&
                 AssetDatabase.LoadAssetAtPath<ActorMotionProfile>(
                     MotionProfilePath) != null &&
+                AssetDatabase.LoadAssetAtPath<ActorRagdollProfile>(
+                    RagdollProfilePath) != null &&
                 prefab != null &&
                 prefab.GetComponent<AnimatorDriver>() != null &&
                 prefab.GetComponent<ActorAnimationCoordinator>() != null &&
+                prefab.GetComponent<ActorRagdollPresenter>() != null &&
                 AssetDatabase.LoadAssetAtPath<GameObject>(
                     DefaultWeaponRigAssetGenerator.RifleRigPath) != null &&
                 AssetDatabase.LoadAssetAtPath<GameObject>(
@@ -52,10 +61,14 @@ namespace GritGud.Editor
             ActorMotionProfile motionProfile =
                 AssetDatabase.LoadAssetAtPath<ActorMotionProfile>(
                     MotionProfilePath);
+            ActorRagdollProfile ragdollProfile =
+                AssetDatabase.LoadAssetAtPath<ActorRagdollProfile>(
+                    RagdollProfilePath);
             GameObject prefab =
                 AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
             if (controller == null || profile == null ||
-                motionProfile == null || prefab == null)
+                motionProfile == null || ragdollProfile == null ||
+                prefab == null)
             {
                 throw new InvalidOperationException(
                     "The default player controller, profile, and prefab "
@@ -65,6 +78,7 @@ namespace GritGud.Editor
             DefaultActorControllerValidator.Validate(controller);
             DefaultActorProfileValidator.Validate(profile, controller);
             DefaultActorMotionProfileValidator.Validate(motionProfile);
+            DefaultActorRagdollProfileValidator.Validate(ragdollProfile);
             GameObject prefabContents =
                 PrefabUtility.LoadPrefabContents(PrefabPath);
             try
@@ -73,6 +87,7 @@ namespace GritGud.Editor
                     prefabContents,
                     profile,
                     motionProfile,
+                    ragdollProfile,
                     controller);
             }
             finally

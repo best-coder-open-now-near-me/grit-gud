@@ -37,6 +37,34 @@ namespace GritGud.Application.Gameplay
 
     public static class GameplayCombatDiagnosticFormatter
     {
+        public static GameplayDiagnosticProjection FormatInitiative(
+            GameplaySession session)
+        {
+            if (session == null)
+            {
+                throw new ArgumentNullException(nameof(session));
+            }
+
+            var lines = new List<string>(session.InitiativeResults.Count);
+            for (int index = 0; index < session.InitiativeResults.Count; index++)
+            {
+                GameplayInitiativeResult result = session.InitiativeResults[index];
+                ScenarioActorDefinition actor = session.Scenario.GetActor(
+                    result.ActorId);
+                string name = actor.CharacterProfile?.DisplayName ?? actor.Id;
+                lines.Add(
+                    name
+                    + " — DEX " + result.Dexterity
+                    + " with " + result.ParticipantCount + " combatants"
+                    + " → advance " + result.ReactionAdvance
+                    + " → position " + (index + 1));
+            }
+
+            lines.Add("All later rounds repeat this order; Dexterity affects reaction only.");
+
+            return new GameplayDiagnosticProjection("Initiative order", lines);
+        }
+
         public static bool TryFormatAction(
             GameplayActionRecord action,
             out GameplayDiagnosticProjection projection)
@@ -85,6 +113,16 @@ namespace GritGud.Application.Gameplay
 
                     case InventoryQuantityChangedActionOutcome inventory:
                         AppendInventoryQuantity(lines, inventory.Change);
+                        break;
+
+                    case AmmunitionSpentActionOutcome ammunition:
+                        AppendAmmunition(lines, ammunition.Change);
+                        break;
+
+                    case WeaponReloadedActionOutcome reload:
+                        title = reload.Change.ActorId + " RELOADS "
+                            + reload.Change.WeaponItemId;
+                        AppendAmmunition(lines, reload.Change);
                         break;
 
                     case ObjectiveCompletedActionOutcome _:
@@ -174,50 +212,18 @@ namespace GritGud.Application.Gameplay
                         + Format(prediction.CollisionTurnTime) + " turn",
                     "REACTION AP - ceil("
                         + Format(prediction.CollisionTurnTime)
-                        + " x " + launch.TurnActionPointAllowance
+                        + " x " + launch.TurnActionPointTimeScale
                         + ") = " + window.ActionPointAllowance,
                     "SHARED RESOLUTION INTERVAL - "
                         + window.ActionPointAllowance + " / "
-                        + launch.TurnActionPointAllowance + " = "
+                        + launch.TurnActionPointTimeScale + " = "
                         + Format((float)window.ActionPointAllowance
-                            / launch.TurnActionPointAllowance)
+                            / launch.TurnActionPointTimeScale)
                         + " turn",
                     "PREDICTION WORLD REVISION - "
                         + prediction.WorldStateRevision
                         + " - COLLISION REQUERIED AFTER RESPONSES",
                 });
-        }
-
-        public static GameplayDiagnosticProjection FormatEnemyDecision(
-            EnemyTacticalDecisionRecord decision)
-        {
-            if (decision == null)
-            {
-                throw new ArgumentNullException(nameof(decision));
-            }
-
-            var lines = new List<string>
-            {
-                "DECISION - " + decision.Kind,
-                "RATIONALE - " + decision.Rationale,
-            };
-            if (decision.Exposure != null)
-            {
-                lines.Add("LOS - " + decision.Exposure.VisibleSampleCount
-                    + " / " + decision.Exposure.TotalSampleCount
-                    + " samples visible");
-            }
-
-            if (decision.MovementRoute != null)
-            {
-                lines.Add("ROUTE - "
-                    + Format(decision.MovementRoute.TotalCost)
-                    + " m to " + decision.MovementRoute.Destination);
-            }
-
-            return new GameplayDiagnosticProjection(
-                decision.ActorId + " TACTICAL DECISION",
-                lines);
         }
 
         public static bool TryFormatJournalEntry(
@@ -243,6 +249,19 @@ namespace GritGud.Application.Gameplay
                     projection = FormatVehicleMomentum(vehicle.Momentum);
                     return true;
 
+                case DroneMovedJournalEntry droneMove:
+                    projection = FormatDroneMove(droneMove.Movement);
+                    return true;
+
+                case DroneAttackResolvedJournalEntry droneAttack:
+                    projection = FormatDroneAttack(droneAttack.Attack);
+                    return true;
+
+                case ActorDroneAttackResolvedJournalEntry actorDroneAttack:
+                    projection = FormatActorDroneAttack(
+                        actorDroneAttack.Attack);
+                    return true;
+
                 case ProjectileAdvancedJournalEntry projectile:
                     projection = FormatProjectileAdvance(projectile.Advance);
                     return true;
@@ -251,12 +270,10 @@ namespace GritGud.Application.Gameplay
                     projection = FormatReactionWindow(reaction.Window);
                     return true;
 
-                case EnemyDecisionCommittedJournalEntry enemy:
-                    projection = FormatEnemyDecision(enemy.Decision);
-                    return true;
-
                 case TurnModeChangedJournalEntry _:
                 case EncounterChangedJournalEntry _:
+                case EnemyAwarenessChangedJournalEntry _:
+                case PatrolAdvancedJournalEntry _:
                 case MovementBudgetSpentJournalEntry _:
                 case StanceChangedJournalEntry _:
                 case MovementRouteCommittedJournalEntry _:
@@ -281,6 +298,8 @@ namespace GritGud.Application.Gameplay
                 || outcomeType == typeof(ProjectileLaunchedActionOutcome)
                 || outcomeType == typeof(ThrownExplosiveActionOutcome)
                 || outcomeType == typeof(InventoryQuantityChangedActionOutcome)
+                || outcomeType == typeof(AmmunitionSpentActionOutcome)
+                || outcomeType == typeof(WeaponReloadedActionOutcome)
                 || outcomeType == typeof(DisplacementActionOutcome))
             {
                 return GameplayDiagnosticPolicy.Formatted;
@@ -305,13 +324,17 @@ namespace GritGud.Application.Gameplay
                 case GameplayJournalEntryKind.ActionResolved:
                 case GameplayJournalEntryKind.DestructibleDamaged:
                 case GameplayJournalEntryKind.VehicleMomentumResolved:
+                case GameplayJournalEntryKind.DroneMoved:
+                case GameplayJournalEntryKind.DroneAttackResolved:
+                case GameplayJournalEntryKind.ActorDroneAttackResolved:
                 case GameplayJournalEntryKind.ProjectileAdvanced:
                 case GameplayJournalEntryKind.EmergencyReactionChanged:
-                case GameplayJournalEntryKind.EnemyDecisionCommitted:
                     return GameplayDiagnosticPolicy.Formatted;
 
                 case GameplayJournalEntryKind.TurnModeChanged:
                 case GameplayJournalEntryKind.EncounterChanged:
+                case GameplayJournalEntryKind.EnemyAwarenessChanged:
+                case GameplayJournalEntryKind.PatrolAdvanced:
                 case GameplayJournalEntryKind.MovementBudgetSpent:
                 case GameplayJournalEntryKind.StanceChanged:
                 case GameplayJournalEntryKind.MovementRouteCommitted:
@@ -357,6 +380,61 @@ namespace GritGud.Application.Gameplay
                         + " -> "
                         + FormatPosition(momentum.Resulting.Position),
                     "PATH - " + momentum.Path.Count + " recorded points",
+                });
+
+        private static GameplayDiagnosticProjection FormatDroneMove(
+            DroneMoveRecord movement) => new GameplayDiagnosticProjection(
+                movement.DroneId + " MOVES",
+                new[]
+                {
+                    "CONTROLLER - " + movement.ControllerActorId,
+                    "POSITION - " + FormatPosition(movement.Origin)
+                        + " -> " + FormatPosition(movement.Destination),
+                    "FACING - " + Format(movement.ResultingFacingDegrees)
+                        + " degrees",
+                    "AP - " + movement.PreviousBudget.ActionPoints
+                        + " -> " + movement.ResultingBudget.ActionPoints,
+                });
+
+        private static GameplayDiagnosticProjection FormatDroneAttack(
+            DroneAttackRecord attack)
+        {
+            var lines = new List<string>
+            {
+                "CONTROLLER - " + attack.ControllerActorId,
+                "TARGET - " + attack.TargetKind + " " + attack.TargetId,
+                "AP - " + attack.PreviousBudget.ActionPoints
+                    + " -> " + attack.ResultingBudget.ActionPoints,
+                "CONSEQUENCE - " + attack.Consequence.GetType().Name,
+            };
+            if (attack.Consequence is AttackResolutionRecord resolution)
+                lines.Add(resolution.Hit
+                    ? "RESULT - HIT " + resolution.HitRegion
+                    : "RESULT - MISS");
+            return new GameplayDiagnosticProjection(
+                attack.DroneId + " ATTACKS",
+                lines);
+        }
+
+        private static GameplayDiagnosticProjection FormatActorDroneAttack(
+            ActorDroneAttackRecord attack) => new GameplayDiagnosticProjection(
+                attack.AttackerId + " ATTACKS " + attack.DroneId,
+                new[]
+                {
+                    "ATTACK - " + attack.AttackId,
+                    "LOS - " + attack.Exposure.VisibleSampleCount
+                        + " / " + attack.Exposure.TotalSampleCount
+                        + " samples visible",
+                    "HIT CHANCE - " + attack.HitChancePercent
+                        + "% - ROLL " + attack.HitRoll,
+                    attack.Hit
+                        ? "INTEGRITY - "
+                            + Format(attack.Damage.Previous.RemainingIntegrity)
+                            + " -> "
+                            + Format(attack.Damage.Resulting.RemainingIntegrity)
+                        : "RESULT - MISS",
+                    "AP - " + attack.PreviousBudget.ActionPoints
+                        + " -> " + attack.ResultingBudget.ActionPoints,
                 });
 
         private static GameplayDiagnosticProjection FormatReactionWindow(
@@ -417,6 +495,24 @@ namespace GritGud.Application.Gameplay
                     + Format(smoke.MinimumObscuredPath)
                     + " m traversed smoke");
             }
+            else if (thrown.Definition.FireField != null)
+            {
+                FireFieldDefinition fire = thrown.Definition.FireField;
+                lines.Add("FIRE AREA - "
+                    + Format(fire.InitialRadius) + " m initial / "
+                    + Format(fire.MaximumRadius) + " m maximum - HEIGHT "
+                    + Format(fire.Height) + " m");
+                lines.Add("FIRE LIFETIME - "
+                    + Format(fire.ExplorationDurationSeconds)
+                    + " s exploration / " + fire.DurationTurnEnds
+                    + " ended turns");
+                lines.Add("FIRE PULSE - "
+                    + Format(fire.ExplorationPulseSeconds) + " s - ACTOR "
+                    + Format(fire.ActorWoundMovementPenalty)
+                    + " wound movement penalty - PROP "
+                    + Format(fire.DestructibleIntegrityDamage)
+                    + " integrity damage");
+            }
             else
             {
                 lines.Add("BLAST RADIUS - "
@@ -427,7 +523,15 @@ namespace GritGud.Application.Gameplay
                 thrown.BlastEffects,
                 thrown.Definition.BlastWoundMovementPenalty,
                 thrown.Definition.BlastIntegrityDamage,
-                thrown.Definition.SmokeField != null ? "SMOKE" : "BLAST");
+                thrown.Definition.SmokeField != null
+                    ? "SMOKE"
+                    : thrown.Definition.FireField != null ? "FIRE" : "BLAST");
+            foreach (ConcussiveActionPointEffectRecord effect
+                in thrown.ConcussiveEffects)
+                lines.Add("CONCUSSION - " + effect.ActorId
+                    + " - AP " + effect.PreviousActionPoints
+                    + " - " + effect.RemovedActionPoints
+                    + " = " + effect.ResultingActionPoints);
         }
 
         private static void AppendInventoryQuantity(
@@ -438,6 +542,21 @@ namespace GritGud.Application.Gameplay
                 + " - " + change.PreviousQuantity
                 + " - " + change.ConsumedQuantity
                 + " = " + change.ResultingQuantity);
+        }
+
+        private static void AppendAmmunition(
+            ICollection<string> lines,
+            WeaponAmmunitionDelta change)
+        {
+            lines.Add("AMMUNITION - " + change.WeaponItemId
+                + " - LOADED " + change.PreviousLoadedRounds
+                + (change.Kind == WeaponAmmunitionChangeKind.Reload
+                    ? " + "
+                    : " - ")
+                + change.ChangedRounds
+                + " = " + change.ResultingLoadedRounds
+                + " - RESERVE " + change.PreviousReserveRounds
+                + " -> " + change.ResultingReserveRounds);
         }
 
         private static void AppendDisplacement(

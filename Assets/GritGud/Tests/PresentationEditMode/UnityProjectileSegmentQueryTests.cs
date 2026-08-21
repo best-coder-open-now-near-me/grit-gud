@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
+using GritGud.Domain.Levels;
 using GritGud.Presentation.Gameplay;
 using GritGud.Presentation.Levels.Runtime;
 using NUnit.Framework;
@@ -11,10 +12,13 @@ namespace GritGud.Presentation.Tests
     public sealed class UnityProjectileSegmentQueryTests
     {
         private readonly List<GameObject> createdObjects = new List<GameObject>();
+        private TerrainWorldProjector terrainProjector;
 
         [TearDown]
         public void TearDown()
         {
+            terrainProjector?.Dispose();
+            terrainProjector = null;
             foreach (GameObject createdObject in createdObjects)
             {
                 if (createdObject != null)
@@ -24,6 +28,31 @@ namespace GritGud.Presentation.Tests
             }
 
             createdObjects.Clear();
+        }
+
+        [Test]
+        public void ProjectedTerrainRidgeStopsProjectileAsWorldGeometry()
+        {
+            CreateTerrainRidge();
+            GameplayWorldRegistry registry = CreateRegistry();
+            var origin = new Vector3(2f, 1.2f, 0.25f);
+            var target = new Vector3(2f, 1.2f, 3.75f);
+            CreateActor(registry, "attacker", origin);
+            CreateActor(registry, "target", target);
+            Physics.SyncTransforms();
+            var adapter = new UnityProjectileSegmentQuery(
+                registry,
+                currentWorldStateRevision: () => 45L,
+                blastQuery: new EmptyBlastWorldQuery(45L));
+
+            ProjectileSegmentQueryResult result = adapter.Query(
+                CreateQuery(origin, target, target));
+
+            Assert.That(result.HasCollision, Is.True);
+            Assert.That(
+                result.HitEntityId,
+                Is.EqualTo(UnityProjectileSegmentQuery.UnregisteredWorldGeometryId));
+            Assert.That(result.CollisionFraction, Is.LessThan(1f));
         }
 
         [Test]
@@ -45,6 +74,44 @@ namespace GritGud.Presentation.Tests
             Assert.That(result.WorldStateRevision, Is.EqualTo(42));
             Assert.That(result.CollisionFraction, Is.GreaterThan(0f));
             Assert.That(result.CollisionFraction, Is.LessThan(1f));
+        }
+
+        [Test]
+        public void PinnedProjectileCollisionUsesHorizontalTargetProfile()
+        {
+            GameplayWorldRegistry registry = CreateRegistry();
+            CreateActor(registry, "attacker", new Vector3(0f, 0f, -4f));
+            CreateActor(registry, "target", Vector3.zero);
+            GameplayActorView target = registry.GetActor("target");
+            target.ReplayActions.PresentPinState(new ActorPinState(
+                "target",
+                "prop",
+                displacementSequence: 1,
+                new DisplacementContactEvidence(
+                    "target",
+                    new GameplayPosition(0f, 0f, 0f),
+                    new GameplayPosition(0f, 1f, 0f),
+                    overlapDepth: 0.2f)));
+            Physics.SyncTransforms();
+            var adapter = new UnityProjectileSegmentQuery(
+                registry,
+                currentWorldStateRevision: () => 46L,
+                blastQuery: new EmptyBlastWorldQuery(46L));
+
+            ProjectileSegmentQueryResult bodyHit = adapter.Query(CreateQuery(
+                new Vector3(0f, 0.3f, -4f),
+                new Vector3(0f, 0.3f, 0f),
+                new Vector3(0f, 0.3f, 1f)));
+            ProjectileSegmentQueryResult uprightOnly = adapter.Query(
+                CreateQuery(
+                    new Vector3(0f, 1.2f, -4f),
+                    new Vector3(0f, 1.2f, 0f),
+                    new Vector3(0f, 1.2f, 1f)));
+
+            Assert.That(bodyHit.HasCollision, Is.True);
+            Assert.That(bodyHit.HitEntityId, Is.EqualTo("target"));
+            Assert.That(uprightOnly.HasCollision, Is.False,
+                "The old upright movement volume must not catch projectiles.");
         }
 
         [Test]
@@ -131,6 +198,19 @@ namespace GritGud.Presentation.Tests
         private static ProjectileSegmentQuery CreateQuery(
             bool withBlast = false)
         {
+            return CreateQuery(
+                Vector3.zero,
+                new Vector3(0f, 0f, 10f),
+                new Vector3(0f, 0f, 8f),
+                withBlast);
+        }
+
+        private static ProjectileSegmentQuery CreateQuery(
+            Vector3 origin,
+            Vector3 aimPoint,
+            Vector3 segmentEnd,
+            bool withBlast = false)
+        {
             var definition = new ProjectileFlightDefinition(
                 "projectile.query-test",
                 speedPerTurn: 4f,
@@ -144,10 +224,10 @@ namespace GritGud.Presentation.Tests
                 attackerId: "attacker",
                 intendedTargetId: "target",
                 actionId: "attack.projectile",
-                origin: new GameplayPosition(0f, 0f, 0f),
-                aimPoint: new GameplayPosition(0f, 0f, 10f),
+                origin: ToPosition(origin),
+                aimPoint: ToPosition(aimPoint),
                 definition: definition,
-                turnActionPointAllowance: 4,
+                turnActionPointTimeScale: 4,
                 remainingActionPointsAfterLaunch: 2);
             var flight = new ProjectileFlightSnapshot(
                 launch,
@@ -157,8 +237,44 @@ namespace GritGud.Presentation.Tests
                 status: ProjectileFlightStatus.InFlight);
             return new ProjectileSegmentQuery(
                 flight,
-                new GameplayPosition(0f, 0f, 8f));
+                ToPosition(segmentEnd));
         }
+
+        private void CreateTerrainRidge()
+        {
+            var root = new GameObject("Projectile Terrain Ridge");
+            createdObjects.Add(root);
+            terrainProjector = new TerrainWorldProjector(root.transform);
+            var heights = new List<int>(new int[25]);
+            for (int x = 0; x < 5; x++)
+            {
+                heights[2 * 5 + x] = 12;
+            }
+
+            var document = new LevelDocument
+            {
+                schemaVersion = LevelDocument.CurrentSchemaVersion,
+                levelId = "projectile-terrain",
+                displayName = "Projectile Terrain",
+                terrainSurfaces = new List<TerrainSurfaceData>
+                {
+                    new TerrainSurfaceData
+                    {
+                        id = "ridge",
+                        origin = new Float3Data(0f, 0f, 0f),
+                        sampleCountX = 5,
+                        sampleCountZ = 5,
+                        sampleSpacing = 1f,
+                        elevationIncrement = 0.25f,
+                        heightSamples = heights,
+                    },
+                },
+            };
+            terrainProjector.Replace(document);
+        }
+
+        private static GameplayPosition ToPosition(Vector3 value) =>
+            new GameplayPosition(value.x, value.y, value.z);
 
         private sealed class EmptyBlastWorldQuery : IBlastWorldQuery
         {

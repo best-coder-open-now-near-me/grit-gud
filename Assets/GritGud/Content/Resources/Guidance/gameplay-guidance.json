@@ -3,14 +3,14 @@
     {
       "id": "turn.voluntary.entry",
       "title": "Voluntary tactical intervals",
-      "expectedBehavior": "Pressing T outside an initiated encounter starts a voluntary tactical interval with the actor's full AP and movement allowance.",
+      "expectedBehavior": "Pressing T outside an initiated encounter starts a voluntary tactical interval without changing the actor's held AP or movement allowance.",
       "rationale": "Turn mode is available for precise positioning and environment interaction even when nobody is hostile.",
       "playerTip": "Enter turn mode whenever precision helps; completing the interval lets the environment answer before the next one."
     },
     {
       "id": "turn.voluntary.active",
       "title": "Completing a voluntary interval",
-      "expectedBehavior": "Pressing Space while no action is resolving ends this interval, records its final actor state, and locks player commands during the matching world turn. Completing that phase replenishes AP and movement. Pressing T completes the interval and returns to exploration; a new voluntary interval remains locked until one minimum world turn has elapsed.",
+      "expectedBehavior": "Pressing Space while no action is resolving ends this interval, records its final actor state, and locks player commands during the matching world turn. Completing that phase adds the scenario AP income up to its held cap and restores movement. Pressing T returns to exploration without replenishing resources; a new voluntary interval remains locked until one minimum world turn has elapsed.",
       "rationale": "Repeated voluntary intervals are allowed because the world receives one corresponding opportunity to act for every interval the player completes.",
       "playerTip": "Press Space for another tactical interval, or press T to complete the interval and return to exploration."
     },

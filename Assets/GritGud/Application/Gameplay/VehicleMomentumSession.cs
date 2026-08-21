@@ -23,6 +23,10 @@ namespace GritGud.Application.Gameplay
         private readonly List<VehicleMomentumRecord> records =
             new List<VehicleMomentumRecord>();
         private readonly IReadOnlyList<VehicleMomentumRecord> readOnlyRecords;
+        private bool canonicalProjectionBound;
+        private Func<VehicleMomentumRecord, GameplayReductionResult>
+            canonicalExecutor;
+        private Func<long> canonicalSequence;
 
         public VehicleMomentumSession(
             VehicleMomentumProfile profile,
@@ -48,6 +52,70 @@ namespace GritGud.Application.Gameplay
 
         public IReadOnlyList<VehicleMomentumRecord> Records => readOnlyRecords;
 
+        internal void BindCanonicalExecutor(
+            Func<VehicleMomentumRecord, GameplayReductionResult> executor,
+            Func<long> nextSequence)
+        {
+            if (executor == null) throw new ArgumentNullException(nameof(executor));
+            if (nextSequence == null)
+                throw new ArgumentNullException(nameof(nextSequence));
+            if (canonicalExecutor != null || canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Vehicle semantic executor is already bound or projection binding has started.");
+            canonicalExecutor = executor;
+            canonicalSequence = nextSequence;
+        }
+
+        internal void BindCanonicalProjection(VehicleMomentumState snapshot)
+        {
+            if (canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Vehicle already has a canonical runtime projection.");
+            if (!StatesMatch(State, snapshot))
+                throw new InvalidOperationException(
+                    "Vehicle session does not match the initial canonical state.");
+            canonicalProjectionBound = true;
+        }
+
+        internal void ValidateCanonicalProjection(
+            VehicleMomentumState snapshot)
+        {
+            if (!string.Equals(
+                    State.VehicleId,
+                    snapshot.VehicleId,
+                    StringComparison.Ordinal)
+                || snapshot.Speed > Profile.MaximumSpeed)
+                throw new InvalidOperationException(
+                    "Canonical vehicle projection changed identity or exceeded its authored speed.");
+        }
+
+        internal void ValidateCanonicalProjection(
+            VehicleMomentumState snapshot,
+            object semanticRecord)
+        {
+            ValidateCanonicalProjection(snapshot);
+            if (StatesMatch(State, snapshot)) return;
+            if (!(semanticRecord is VehicleMomentumRecord movement)
+                || !StatesMatch(movement.Previous, State)
+                || !StatesMatch(movement.Resulting, snapshot))
+                throw new InvalidOperationException(
+                    "A changed canonical vehicle requires its exact movement record.");
+        }
+
+        internal void InstallCanonicalProjection(
+            VehicleMomentumState snapshot,
+            object semanticRecord)
+        {
+            if (!canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Vehicle is not bound to a canonical runtime.");
+            ValidateCanonicalProjection(snapshot, semanticRecord);
+            if (StatesMatch(State, snapshot)) return;
+            var movement = (VehicleMomentumRecord)semanticRecord;
+            State = snapshot;
+            records.Add(movement);
+        }
+
         public VehicleMovementEnvelope CreateEnvelope()
         {
             float minimumEndSpeed = Math.Max(
@@ -72,12 +140,27 @@ namespace GritGud.Application.Gameplay
         public bool TryResolvePath(
             IEnumerable<GameplayPosition> requestedPath,
             out VehicleMomentumRecord record,
+            out VehiclePathFailure failure) => TryResolvePath(
+                requestedPath,
+                canonicalProjectionBound
+                    ? canonicalSequence()
+                    : records.Count + 1L,
+                out record,
+                out failure);
+
+        public bool TryResolvePath(
+            IEnumerable<GameplayPosition> requestedPath,
+            long transitionSequence,
+            out VehicleMomentumRecord record,
             out VehiclePathFailure failure)
         {
             if (requestedPath == null)
             {
                 throw new ArgumentNullException(nameof(requestedPath));
             }
+            if (transitionSequence <= 0L)
+                throw new ArgumentOutOfRangeException(
+                    nameof(transitionSequence));
 
             var path = new List<GameplayPosition>(requestedPath);
             if (path.Count < 2)
@@ -161,7 +244,7 @@ namespace GritGud.Application.Gameplay
                 headings[headings.Count - 1],
                 finalSpeed);
             record = new VehicleMomentumRecord(
-                records.Count + 1L,
+                transitionSequence,
                 State,
                 resulting,
                 path);
@@ -176,11 +259,18 @@ namespace GritGud.Application.Gameplay
             {
                 throw new ArgumentNullException(nameof(record));
             }
+            if (canonicalProjectionBound)
+            {
+                canonicalExecutor(record);
+                return;
+            }
+            RequireLegacyMutationAllowed(nameof(Commit));
 
-            if (record.Sequence != records.Count + 1L)
+            if (records.Count > 0
+                && record.Sequence <= records[records.Count - 1].Sequence)
             {
                 throw new InvalidOperationException(
-                    "The vehicle record is not the next authoritative sequence.");
+                    "Vehicle movement must advance its canonical transition sequence.");
             }
 
             if (!StatesMatch(State, record.Previous))
@@ -271,5 +361,12 @@ namespace GritGud.Application.Gameplay
             && left.Position.DistanceTo(right.Position) <= DistanceTolerance
             && Math.Abs(left.ForwardDegrees - right.ForwardDegrees) <= DistanceTolerance
             && Math.Abs(left.Speed - right.Speed) <= DistanceTolerance;
+
+        private void RequireLegacyMutationAllowed(string operation)
+        {
+            if (canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    $"Legacy vehicle mutation '{operation}' is disabled while the semantic runtime owns state.");
+        }
     }
 }

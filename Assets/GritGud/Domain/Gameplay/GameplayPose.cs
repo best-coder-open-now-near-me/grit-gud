@@ -98,4 +98,25 @@ namespace GritGud.Domain.Gameplay
             return normalized == 0f ? 0f : normalized;
         }
     }
+
+    public sealed class ExplorationPoseRecord
+    {
+        public ExplorationPoseRecord(
+            string actorId,
+            GameplayActorPose previousPose,
+            GameplayActorPose resultingPose)
+        {
+            ActorId = string.IsNullOrWhiteSpace(actorId)
+                ? throw new ArgumentException(
+                    "Exploration pose records require an actor identifier.",
+                    nameof(actorId))
+                : actorId;
+            PreviousPose = previousPose;
+            ResultingPose = resultingPose;
+        }
+
+        public string ActorId { get; }
+        public GameplayActorPose PreviousPose { get; }
+        public GameplayActorPose ResultingPose { get; }
+    }
 }

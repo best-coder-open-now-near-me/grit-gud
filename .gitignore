@@ -2,6 +2,7 @@
 [Ll]ibrary/
 [Tt]emp/
 [Oo]bj/
+[Bb]in/
 [Bb]uild/
 [Bb]uilds/
 [Ll]ogs/
@@ -26,6 +27,9 @@
 *.mdb
 *.opendb
 *.VC.db
+
+# Hand-authored build projections over the same Unity-free production source.
+!tools/simulation/*.csproj
 
 # Unity and platform output
 *.apk
@@ -62,3 +66,8 @@ mono_crash.*
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Local Supabase project configuration. The publishable key is safe for a
+# shipped client, but each developer/test environment uses its own project.
+/Assets/GritGud/Content/Resources/SupabaseConfiguration.asset
+/Assets/GritGud/Content/Resources/SupabaseConfiguration.asset.meta

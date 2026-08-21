@@ -86,6 +86,12 @@ namespace GritGud.Domain.Tests
                 GameplayPartyHudModelBuilder.Build(gameplay, control);
 
             Assert.That(combat.InitiativeControlsSelection, Is.True);
+            Assert.That(combat.CombatRoster, Is.True);
+            Assert.That(combat.Members, Has.Count.EqualTo(3));
+            Assert.That(combat.Members[1].ActorId, Is.EqualTo("raider"));
+            Assert.That(combat.Members[1].PartyMember, Is.False);
+            Assert.That(combat.Members[1].Hostile, Is.True);
+            Assert.That(combat.Members[1].Active, Is.False);
             Assert.That(combat.Members[0].CanSelect, Is.False);
             Assert.That(combat.Members[1].CanSelect, Is.False);
             Assert.That(combat.Members[0].Commanding, Is.True);
@@ -113,6 +119,30 @@ namespace GritGud.Domain.Tests
             Assert.That(gameplay.ActiveActorId, Is.EqualTo("vale"));
             Assert.That(control.SelectedActorId, Is.EqualTo("vale"));
             Assert.That(control.CommandActorId, Is.EqualTo("vale"));
+        }
+
+        [Test]
+        public void ThrowingControlObserverCannotInterruptLaterObserversOrTurnAdvance()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            using var control = new GameplayPartyControlSession(gameplay);
+            Assert.That(gameplay.BeginEncounter(), Is.True);
+            GameplayPartyControlSnapshot? observed = null;
+            control.ControlChanged += _ => throw new InvalidOperationException(
+                "control projection failed");
+            control.ControlChanged += snapshot => observed = snapshot;
+
+            InvalidOperationException exception =
+                Assert.Throws<InvalidOperationException>(() =>
+                    gameplay.TryEndTurn("mara", out _));
+
+            Assert.That(
+                exception.Message,
+                Is.EqualTo("control projection failed"));
+            Assert.That(gameplay.Mode, Is.EqualTo(GameplaySessionMode.TurnBased));
+            Assert.That(gameplay.ActiveActorId, Is.EqualTo("raider"));
+            Assert.That(observed.HasValue, Is.True);
+            Assert.That(observed.Value.CommandActorId, Is.Null);
         }
 
         [Test]
@@ -197,7 +227,7 @@ namespace GritGud.Domain.Tests
                 new[] { mara, raider, vale },
                 Array.Empty<ScenarioObjectiveDefinition>(),
                 playerParty: party);
-            return new GameplaySession(scenario);
+            return new GameplaySession(scenario, scenarioSeed: 1u);
         }
 
         private static ScenarioActorDefinition CreateActor(
@@ -219,9 +249,7 @@ namespace GritGud.Domain.Tests
                     new CharacterRating(CoreAttributeIds.Charisma, 3),
                 },
                 Array.Empty<CharacterRating>(),
-                Array.Empty<string>(),
-                0,
-                Array.Empty<CharacterAdvancementOption>());
+                Array.Empty<string>());
             var combat = new ActorCombatDefinition(
                 allegianceId,
                 new[] { hostileAllegianceId },
@@ -259,8 +287,7 @@ namespace GritGud.Domain.Tests
                         totalSampleCount: 1),
                 });
             var attacks = new GameplayAttackSession(
-                gameplay,
-                authoredScenarioSeed: 1u);
+                gameplay);
             Assert.That(attacks.TryResolve(
                 attackerId,
                 exposure,

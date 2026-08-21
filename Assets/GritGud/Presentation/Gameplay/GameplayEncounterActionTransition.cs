@@ -1,12 +1,13 @@
 using System;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
+using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
 {
     internal static class GameplayEncounterActionTransition
     {
-        public static void BeginAfterCommittedAction(
+        public static bool BeginAfterCommittedAction(
             GameplaySession session,
             GameplayActionRecord action,
             Func<GameplayActionRecord, bool> beginEncounter,
@@ -19,14 +20,24 @@ namespace GritGud.Presentation.Gameplay
             if (session.EncounterActive
                 || !session.ActionStartsEncounter(action))
             {
-                return;
+                return false;
             }
 
-            if (beginEncounter == null || !beginEncounter(action))
+            try
             {
-                throw new InvalidOperationException(
-                    $"A committed encounter-opening {actionKind} could not start its encounter.");
+                if (beginEncounter != null && beginEncounter(action))
+                    return true;
+
+                Debug.LogWarning(
+                    $"Committed {actionKind} requires an encounter, but its presentation start request was not accepted.");
             }
+            catch (Exception exception)
+            {
+                Debug.LogWarning(
+                    $"Committed {actionKind} could not present its encounter start: {exception.Message}");
+            }
+
+            return false;
         }
     }
 }

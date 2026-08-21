@@ -5,6 +5,7 @@ namespace GritGud.Presentation.Levels.Runtime
 {
     public sealed class LevelEntityView : MonoBehaviour
     {
+        private Vector3 rotationPivotLocal;
         private LevelArchetypeDefinition archetype;
 
         public string EntityId { get; private set; }
@@ -31,6 +32,9 @@ namespace GritGud.Presentation.Levels.Runtime
 
             EntityId = entity.id;
             ArchetypeId = entity.archetypeId;
+            rotationPivotLocal = entity.rotationPivot == null
+                ? Vector3.zero
+                : ToVector(entity.rotationPivot.localPosition);
             ApplyTransform(entity.transform);
         }
 
@@ -40,7 +44,10 @@ namespace GritGud.Presentation.Levels.Runtime
                 value.position.x,
                 value.position.y,
                 value.position.z);
-            transform.localRotation = Quaternion.Euler(0f, value.yawDegrees, 0f);
+            transform.localRotation = Quaternion.Euler(
+                value.pitchDegrees,
+                value.yawDegrees,
+                value.rollDegrees);
         }
 
         public LevelTransformData ReadTransform()
@@ -48,30 +55,97 @@ namespace GritGud.Presentation.Levels.Runtime
             Vector3 position = transform.localPosition;
             return new LevelTransformData(
                 new Float3Data(position.x, position.y, position.z),
-                NormalizeYaw(transform.localEulerAngles.y));
+                NormalizeAngle(transform.localEulerAngles.x),
+                NormalizeAngle(transform.localEulerAngles.y),
+                NormalizeAngle(transform.localEulerAngles.z));
         }
 
         public Bounds GetWorldBounds()
         {
-            return TransformBounds(archetype.Presentation.LocalBounds, transform);
+            Bounds localBounds = CalculateVisualLocalBounds(
+                archetype.Presentation.Prefab,
+                archetype.Presentation.LocalBounds);
+            return TransformBounds(localBounds, transform);
+        }
+
+        public Vector3 GetRotationPivotWorld()
+        {
+            return transform.TransformPoint(rotationPivotLocal);
+        }
+
+        public static Vector3 CalculateBoundsPivot(Bounds bounds, float normalizedX, float normalizedZ)
+        {
+            return new Vector3(
+                Mathf.Lerp(bounds.min.x, bounds.max.x, (normalizedX + 1f) * 0.5f),
+                bounds.min.y,
+                Mathf.Lerp(bounds.min.z, bounds.max.z, (normalizedZ + 1f) * 0.5f));
+        }
+
+        public static Bounds CalculateVisualLocalBounds(GameObject prefab, Bounds fallback)
+        {
+            if (prefab == null)
+                return fallback;
+
+            Transform root = prefab.transform;
+            Matrix4x4 worldToRoot = root.worldToLocalMatrix;
+            Bounds? combined = null;
+            foreach (MeshFilter filter in prefab.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (filter.sharedMesh == null)
+                    continue;
+
+                Bounds candidate = TransformBounds(
+                    filter.sharedMesh.bounds,
+                    worldToRoot * filter.transform.localToWorldMatrix);
+                combined = Encapsulate(combined, candidate);
+            }
+
+            foreach (SkinnedMeshRenderer renderer in
+                prefab.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                Bounds candidate = TransformBounds(
+                    renderer.localBounds,
+                    worldToRoot * renderer.transform.localToWorldMatrix);
+                combined = Encapsulate(combined, candidate);
+            }
+
+            return combined ?? fallback;
         }
 
         public static Bounds TransformBounds(Bounds localBounds, Transform source)
         {
+            return TransformBounds(localBounds, source.localToWorldMatrix);
+        }
+
+        private static Bounds TransformBounds(Bounds localBounds, Matrix4x4 matrix)
+        {
             Vector3 extents = localBounds.extents;
-            Vector3 axisX = source.TransformVector(extents.x, 0f, 0f);
-            Vector3 axisY = source.TransformVector(0f, extents.y, 0f);
-            Vector3 axisZ = source.TransformVector(0f, 0f, extents.z);
+            Vector3 axisX = matrix.MultiplyVector(new Vector3(extents.x, 0f, 0f));
+            Vector3 axisY = matrix.MultiplyVector(new Vector3(0f, extents.y, 0f));
+            Vector3 axisZ = matrix.MultiplyVector(new Vector3(0f, 0f, extents.z));
             var worldExtents = new Vector3(
                 Mathf.Abs(axisX.x) + Mathf.Abs(axisY.x) + Mathf.Abs(axisZ.x),
                 Mathf.Abs(axisX.y) + Mathf.Abs(axisY.y) + Mathf.Abs(axisZ.y),
                 Mathf.Abs(axisX.z) + Mathf.Abs(axisY.z) + Mathf.Abs(axisZ.z));
-            return new Bounds(source.TransformPoint(localBounds.center), worldExtents * 2f);
+            return new Bounds(matrix.MultiplyPoint3x4(localBounds.center), worldExtents * 2f);
         }
 
-        private static float NormalizeYaw(float yaw)
+        private static Bounds Encapsulate(Bounds? current, Bounds addition)
+        {
+            if (!current.HasValue)
+                return addition;
+
+            Bounds combined = current.Value;
+            combined.Encapsulate(addition);
+            return combined;
+        }
+
+        private static float NormalizeAngle(float yaw)
         {
             return Mathf.Repeat(yaw + 180f, 360f) - 180f;
         }
+
+        private static Vector3 ToVector(Float3Data value) =>
+            new Vector3(value.x, value.y, value.z);
     }
 }

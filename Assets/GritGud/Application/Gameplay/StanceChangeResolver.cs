@@ -10,6 +10,7 @@ namespace GritGud.Application.Gameplay
         ActorNotActive,
         OperationInProgress,
         SpatiallyBlocked,
+        ActorPinned,
     }
 
     public readonly struct StanceTransitionValidation
@@ -96,6 +97,12 @@ namespace GritGud.Application.Gameplay
             }
 
             GameplayActorSnapshot actor = session.GetActor(actorId);
+            if (actor.IsPinned)
+            {
+                failure = StanceChangeFailure.ActorPinned;
+                failureCode = "actor.pinned";
+                return false;
+            }
             if (actor.Pose.Stance == requestedStance)
             {
                 failure = StanceChangeFailure.AlreadyInStance;

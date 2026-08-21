@@ -5,6 +5,36 @@ using GritGud.Domain.Turns;
 
 namespace GritGud.Application.Gameplay
 {
+    public sealed class GameplayInitiativeResult
+    {
+        public GameplayInitiativeResult(
+            string actorId,
+            int dexterity,
+            int reactionAdvance,
+            int participantCount)
+        {
+            ActorId = string.IsNullOrWhiteSpace(actorId)
+                ? throw new ArgumentException(
+                    "Initiative requires an actor ID.",
+                    nameof(actorId))
+                : actorId;
+            if (participantCount <= 0
+                || reactionAdvance < 1
+                || reactionAdvance > participantCount)
+            {
+                throw new ArgumentOutOfRangeException(nameof(reactionAdvance));
+            }
+            Dexterity = dexterity;
+            ReactionAdvance = reactionAdvance;
+            ParticipantCount = participantCount;
+        }
+
+        public string ActorId { get; }
+        public int Dexterity { get; }
+        public int ReactionAdvance { get; }
+        public int ParticipantCount { get; }
+    }
+
     public enum GameplaySessionMode
     {
         Exploration,
@@ -26,6 +56,12 @@ namespace GritGud.Application.Gameplay
     }
 
     public enum GameplayTurnPhase
+    {
+        Normal,
+        EmergencyReaction,
+    }
+
+    public enum GameplayTurnKind
     {
         Normal,
         EmergencyReaction,
@@ -91,7 +127,14 @@ namespace GritGud.Application.Gameplay
             string equippedItemId,
             EquipmentEffectSet equipmentEffects,
             int maximumWounds = int.MaxValue,
-            ActorInventorySnapshot inventory = null)
+            ActorInventorySnapshot inventory = null,
+            TurnActionPointEconomy? actionPointEconomy = null,
+            float turnMovementAllowance = -1f,
+            ActorPinState pinState = null,
+            int emergencyActionPointAllowance = 0,
+            TurnBudget? suspendedTurnBudget = null,
+            int attacksCommittedThisTurn = 0,
+            ActorAmmunitionSnapshot ammunition = null)
         {
             if (!string.Equals(actorId, wounds.ActorId, StringComparison.Ordinal))
             {
@@ -101,6 +144,12 @@ namespace GritGud.Application.Gameplay
             }
             if (maximumWounds <= 0)
                 throw new ArgumentOutOfRangeException(nameof(maximumWounds));
+            if (emergencyActionPointAllowance < 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(emergencyActionPointAllowance));
+            if (attacksCommittedThisTurn < 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(attacksCommittedThisTurn));
             ActorInventorySnapshot resolvedInventory = inventory
                 ?? new ActorInventorySnapshot(
                     actorId,
@@ -114,6 +163,30 @@ namespace GritGud.Application.Gameplay
                     "Actor snapshots and inventory state must share an identifier.",
                     nameof(inventory));
             }
+            ActorAmmunitionSnapshot resolvedAmmunition = ammunition
+                ?? new ActorAmmunitionSnapshot(
+                    actorId,
+                    Array.Empty<WeaponMagazineSnapshot>(),
+                    Array.Empty<AmmunitionReserveSnapshot>());
+            if (!string.Equals(
+                    actorId,
+                    resolvedAmmunition.ActorId,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Actor snapshots and ammunition state must share an identifier.",
+                    nameof(ammunition));
+            }
+            if (pinState != null
+                && !string.Equals(
+                    actorId,
+                    pinState.ActorId,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "Actor snapshots and pin state must share an identifier.",
+                    nameof(pinState));
+            }
 
             ActorId = actorId;
             Pose = pose;
@@ -123,6 +196,27 @@ namespace GritGud.Application.Gameplay
             EquipmentEffects = equipmentEffects;
             MaximumWounds = maximumWounds;
             Inventory = resolvedInventory;
+            ActionPointEconomy = actionPointEconomy
+                ?? new TurnActionPointEconomy(
+                    turnBudget.ActionPoints,
+                    turnBudget.ActionPoints,
+                    Math.Max(1, turnBudget.ActionPoints));
+            TurnMovementAllowance = turnMovementAllowance < 0f
+                ? turnBudget.MovementOpportunity + wounds.MovementPenalty
+                : turnMovementAllowance;
+            PinState = pinState;
+            EmergencyActionPointAllowance = emergencyActionPointAllowance;
+            SuspendedTurnBudget = suspendedTurnBudget;
+            AttacksCommittedThisTurn = attacksCommittedThisTurn;
+            Ammunition = resolvedAmmunition;
+            if (float.IsNaN(TurnMovementAllowance)
+                || float.IsInfinity(TurnMovementAllowance)
+                || ActionPointEconomy.MaximumHeldActionPoints
+                    < turnBudget.ActionPoints
+                || TurnMovementAllowance + 0.0001f
+                    < turnBudget.MovementOpportunity + wounds.MovementPenalty)
+                throw new ArgumentException(
+                    "Actor allowances cannot be below the represented state.");
         }
 
         public string ActorId { get; }
@@ -141,8 +235,79 @@ namespace GritGud.Application.Gameplay
 
         public ActorInventorySnapshot Inventory { get; }
 
+        public TurnActionPointEconomy ActionPointEconomy { get; }
+
+        public float TurnMovementAllowance { get; }
+
+        public ActorPinState PinState { get; }
+
+        public int EmergencyActionPointAllowance { get; }
+
+        public TurnBudget? SuspendedTurnBudget { get; }
+
+        public int AttacksCommittedThisTurn { get; }
+
+        public ActorAmmunitionSnapshot Ammunition { get; }
+
+        public bool IsPinned => PinState != null;
+
         public bool IsIncapacitated => Wounds.WoundCount >= MaximumWounds;
 
+    }
+
+    public readonly struct GameplayActorStateSnapshot
+    {
+        internal GameplayActorStateSnapshot(
+            string actorId,
+            GameplayActorPose pose,
+            TurnBudget turnBudget,
+            ActorWoundSnapshot wounds,
+            string equippedItemId,
+            EquipmentEffectSet equipmentEffects,
+            int maximumWounds,
+            TurnActionPointEconomy actionPointEconomy,
+            float turnMovementAllowance,
+            ActorPinState pinState,
+            int attacksCommittedThisTurn)
+        {
+            ActorId = actorId;
+            Pose = pose;
+            TurnBudget = turnBudget;
+            Wounds = wounds;
+            EquippedItemId = equippedItemId;
+            EquipmentEffects = equipmentEffects;
+            MaximumWounds = maximumWounds;
+            ActionPointEconomy = actionPointEconomy;
+            TurnMovementAllowance = turnMovementAllowance;
+            PinState = pinState;
+            AttacksCommittedThisTurn = attacksCommittedThisTurn;
+        }
+
+        public string ActorId { get; }
+
+        public GameplayActorPose Pose { get; }
+
+        public TurnBudget TurnBudget { get; }
+
+        public ActorWoundSnapshot Wounds { get; }
+
+        public string EquippedItemId { get; }
+
+        public EquipmentEffectSet EquipmentEffects { get; }
+
+        public int MaximumWounds { get; }
+
+        public TurnActionPointEconomy ActionPointEconomy { get; }
+
+        public float TurnMovementAllowance { get; }
+
+        public ActorPinState PinState { get; }
+
+        public int AttacksCommittedThisTurn { get; }
+
+        public bool IsPinned => PinState != null;
+
+        public bool IsIncapacitated => Wounds.WoundCount >= MaximumWounds;
     }
 
     public readonly struct GameplayObjectiveSnapshot
@@ -177,7 +342,8 @@ namespace GritGud.Application.Gameplay
     {
         public VoluntaryTurnCycleRecord(
             long sequence,
-            IEnumerable<GameplayActorSnapshot> actors)
+            IEnumerable<GameplayActorSnapshot> actors,
+            IEnumerable<PersonalTurnStartRecord> personalTurnStarts = null)
         {
             if (sequence <= 0)
             {
@@ -199,47 +365,16 @@ namespace GritGud.Application.Gameplay
 
             Sequence = sequence;
             Actors = actorSnapshots.AsReadOnly();
+            PersonalTurnStarts = new List<PersonalTurnStartRecord>(
+                personalTurnStarts
+                    ?? Array.Empty<PersonalTurnStartRecord>()).AsReadOnly();
         }
 
         public long Sequence { get; }
 
         public IReadOnlyList<GameplayActorSnapshot> Actors { get; }
-    }
 
-    public sealed class TurnEndRecord
-    {
-        public TurnEndRecord(
-            long sequence,
-            string endingActorId,
-            string nextActorId)
-        {
-            if (sequence <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(sequence));
-            }
-
-            EndingActorId = RequireActorId(endingActorId, nameof(endingActorId));
-            NextActorId = RequireActorId(nextActorId, nameof(nextActorId));
-            Sequence = sequence;
-        }
-
-        public long Sequence { get; }
-
-        public string EndingActorId { get; }
-
-        public string NextActorId { get; }
-
-        private static string RequireActorId(string value, string parameterName)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                throw new ArgumentException(
-                    "Turn records require actor identifiers.",
-                    parameterName);
-            }
-
-            return value;
-        }
+        public IReadOnlyList<PersonalTurnStartRecord> PersonalTurnStarts { get; }
     }
 
     public readonly struct GameplayActiveActorChange
@@ -272,83 +407,183 @@ namespace GritGud.Application.Gameplay
         public GameplaySessionMode CurrentMode { get; }
     }
 
-    public sealed class GameplaySession
+    public sealed partial class GameplaySession : IGameplayTurnLifecycleHost
     {
-        private readonly Dictionary<string, ActorState> actors =
-            new Dictionary<string, ActorState>(StringComparer.Ordinal);
-        private readonly Dictionary<string, ObjectiveState> objectives =
-            new Dictionary<string, ObjectiveState>(StringComparer.Ordinal);
+        private readonly Dictionary<string, GameplayActorState> actors =
+            new Dictionary<string, GameplayActorState>(StringComparer.Ordinal);
+        private readonly Dictionary<string, GameplayObjectiveState> objectives =
+            new Dictionary<string, GameplayObjectiveState>(StringComparer.Ordinal);
         private readonly List<GameplayActionRecord> resolvedActions =
             new List<GameplayActionRecord>();
-        private readonly IReadOnlyList<string> initiativeOrder;
+        private long lastAuxiliaryActionSequence;
+        private readonly List<string> initiativeOrder;
+        private readonly IReadOnlyList<string> allInitiativeOrder;
+        private readonly IReadOnlyList<string> allActorIds;
+        private readonly IReadOnlyList<GameplayInitiativeResult>
+            initiativeResults;
         private readonly IReadOnlyList<GameplayActionRecord> readOnlyResolvedActions;
-        private string activeActorId;
+        private readonly GameplayTurnLifecycle turnLifecycle;
+        private readonly GameplayActionCommitValidator actionCommitValidator;
+        private readonly GameplayActionOutcomeApplier actionOutcomeApplier;
         private MovementRouteRecord pendingMovementRoute;
-        private VoluntaryTurnCycleRecord pendingVoluntaryTurnCycle;
-        private float voluntaryTurnReentrySecondsRemaining;
-        private IReadOnlyList<string> emergencyResponders;
-        private int emergencyResponderIndex = -1;
-        private string emergencyResumeActorId;
+        private GameplayEncounterStateSnapshot encounterState;
 
         public GameplaySession(
             ScenarioDefinition scenario,
-            GameplayJournal journal = null)
+            GameplayJournal journal = null,
+            uint scenarioSeed = 0u,
+            GameplayPartySave restoredParty = null)
+            : this(
+                scenario,
+                new ScenarioRunIdentity(
+                    (scenario ?? throw new ArgumentNullException(nameof(scenario))).Id
+                        + ".run",
+                    scenarioSeed),
+                journal,
+                restoredParty)
+        {
+        }
+
+        public GameplaySession(
+            ScenarioDefinition scenario,
+            ScenarioRunIdentity runIdentity,
+            GameplayJournal journal = null,
+            GameplayPartySave restoredParty = null)
         {
             Scenario = scenario ?? throw new ArgumentNullException(nameof(scenario));
+            RunIdentity = runIdentity ?? throw new ArgumentNullException(
+                nameof(runIdentity));
             Journal = journal ?? new GameplayJournal();
-            var initiative = new List<ScenarioActorDefinition>(scenario.Actors);
+            if (restoredParty != null)
+                GameplayPartySaveValidator.Validate(restoredParty, scenario);
+            int participantCount = scenario.Actors.Count;
+            var initiative = new List<GameplayInitiativeResult>(participantCount);
+            foreach (ScenarioActorDefinition actor in scenario.Actors)
+            {
+                GameplayPartyCharacterSave restoredCharacter = null;
+                if (restoredParty != null
+                    && actor.CharacterProfile != null)
+                {
+                    restoredParty.TryGetCharacter(
+                        actor.CharacterProfile.IdentityId,
+                        out restoredCharacter);
+                }
+                actors.Add(
+                    actor.Id,
+                    new GameplayActorState(
+                        actor,
+                        scenario.Timing,
+                        restoredCharacter));
+                initiative.Add(ResolveInitiative(actor, participantCount));
+            }
             initiative.Sort(CompareInitiative);
             var order = new List<string>(initiative.Count);
-            foreach (ScenarioActorDefinition actor in initiative)
-            {
-                actors.Add(actor.Id, new ActorState(actor));
-                order.Add(actor.Id);
-            }
+            foreach (GameplayInitiativeResult result in initiative)
+                order.Add(result.ActorId);
 
             foreach (ScenarioObjectiveDefinition objective in scenario.Objectives)
             {
-                objectives.Add(objective.Id, new ObjectiveState(objective));
+                objectives.Add(
+                    objective.Id,
+                    new GameplayObjectiveState(objective));
             }
 
-            initiativeOrder = order.AsReadOnly();
+            initiativeOrder = new List<string>(order);
+            allInitiativeOrder = new List<string>(order).AsReadOnly();
+            allActorIds = new List<string>(order).AsReadOnly();
+            initiativeResults = initiative.AsReadOnly();
             readOnlyResolvedActions = resolvedActions.AsReadOnly();
+            turnLifecycle = new GameplayTurnLifecycle(this);
+            actionCommitValidator = new GameplayActionCommitValidator(this);
+            actionOutcomeApplier = new GameplayActionOutcomeApplier(this);
+            canonicalJournalSequence = Journal.LastEntry?.Sequence ?? 0L;
+            var awareness = new List<EnemyAwarenessSnapshot>();
+            foreach (ScenarioActorDefinition actor in scenario.Actors)
+            {
+                if (actor.Combat.EnemyBehavior != null)
+                {
+                    awareness.Add(new EnemyAwarenessSnapshot(
+                        actor.Id,
+                        EncounterAwarenessState.Unaware,
+                        suspicion: 0));
+                }
+            }
+            encounterState = new GameplayEncounterStateSnapshot(awareness);
         }
 
         public ScenarioDefinition Scenario { get; }
 
+        public ScenarioRunIdentity RunIdentity { get; }
+
         public GameplayJournal Journal { get; }
 
-        public GameplaySessionMode Mode { get; private set; } =
-            GameplaySessionMode.Exploration;
+        public GameplaySessionMode Mode => turnLifecycle.Mode;
 
         public GameplaySessionOperation Operation { get; private set; } =
             GameplaySessionOperation.None;
 
-        public TurnModeContext TurnContext { get; private set; } =
-            TurnModeContext.None;
+        public long Revision { get; private set; }
 
-        public bool EncounterActive { get; private set; }
+        public long LastTransitionSequence { get; private set; }
 
-        public bool EncounterCompletionRequested { get; private set; }
+        public void RecordSemanticTransition(
+            GameplayTransitionIdentity identity)
+        {
+            RequireLegacyMutationAllowed(nameof(RecordSemanticTransition));
+            if (!actors.ContainsKey(identity.ActorId))
+                throw new InvalidOperationException(
+                    "Semantic transition actors must belong to the session.");
+            RecordSemanticTransition(identity.Sequence);
+        }
+
+        private void RecordSemanticTransition(long sequence)
+        {
+            if (sequence != LastTransitionSequence + 1L)
+                throw new InvalidOperationException(
+                    "Semantic transitions must commit in sequence.");
+            LastTransitionSequence = sequence;
+        }
+
+        public TurnModeContext TurnContext => turnLifecycle.TurnContext;
+
+        public bool EncounterActive => turnLifecycle.EncounterActive;
+
+        public bool EncounterCompletionRequested =>
+            turnLifecycle.EncounterCompletionRequested;
 
         public IReadOnlyList<string> InitiativeOrder => initiativeOrder;
 
-        public string ActiveActorId => activeActorId;
+        public IReadOnlyList<string> AllInitiativeOrder => allInitiativeOrder;
 
-        public GameplayTurnPhase TurnPhase { get; private set; } =
-            GameplayTurnPhase.Normal;
+        public IReadOnlyList<string> AllActorIds => allActorIds;
+
+        public GameplayEncounterStateSnapshot EncounterState => encounterState;
+
+        public IReadOnlyList<string> EmergencyResponders =>
+            turnLifecycle.EmergencyResponders;
+
+        public int EmergencyResponderIndex =>
+            turnLifecycle.EmergencyResponderIndex;
+
+        public string EmergencyResumeActorId =>
+            turnLifecycle.EmergencyResumeActorId;
+
+        public IReadOnlyList<GameplayInitiativeResult> InitiativeResults =>
+            initiativeResults;
+
+        public string ActiveActorId => turnLifecycle.ActiveActorId;
+
+        public GameplayTurnPhase TurnPhase => turnLifecycle.TurnPhase;
 
         public float VoluntaryTurnReentrySecondsRemaining =>
-            voluntaryTurnReentrySecondsRemaining;
+            turnLifecycle.VoluntaryTurnReentrySecondsRemaining;
 
-        public bool CanEnterTurnMode =>
-            Mode == GameplaySessionMode.Exploration
-            && (EncounterActive || voluntaryTurnReentrySecondsRemaining <= 0f);
+        public bool CanEnterTurnMode => turnLifecycle.CanEnterTurnMode;
 
         public MovementRouteRecord PendingMovementRoute => pendingMovementRoute;
 
         public VoluntaryTurnCycleRecord PendingVoluntaryTurnCycle =>
-            pendingVoluntaryTurnCycle;
+            turnLifecycle.PendingVoluntaryTurnCycle;
 
         public IReadOnlyList<GameplayActionRecord> ResolvedActions =>
             readOnlyResolvedActions;
@@ -357,6 +592,25 @@ namespace GritGud.Application.Gameplay
             resolvedActions.Count == 0
                 ? null
                 : resolvedActions[resolvedActions.Count - 1];
+
+        public long LastActionSequence => Math.Max(
+            LastResolvedAction?.Sequence ?? 0L,
+            lastAuxiliaryActionSequence);
+
+        /// <summary>
+        /// Gets the revision that spatial presentation queries must stamp on
+        /// their evidence.  Once the semantic runtime owns the session, this
+        /// advances independently of the legacy gameplay journal.
+        /// </summary>
+        public long WorldStateRevision => JournalSequence;
+
+        internal long NextActionSequence => LastActionSequence + 1L;
+
+        internal IReadOnlyCollection<Type> ValidatedActionOutcomeTypes =>
+            actionCommitValidator.SupportedOutcomeTypes;
+
+        internal IReadOnlyCollection<Type> AppliedActionOutcomeTypes =>
+            actionOutcomeApplier.SupportedOutcomeTypes;
 
         public bool IsActorIncapacitated(string actorId) =>
             RequireActor(actorId).IsIncapacitated;
@@ -432,385 +686,61 @@ namespace GritGud.Application.Gameplay
 
         public VoluntaryTurnCycleRecord LastCompletedVoluntaryTurnCycle
         {
-            get;
-            private set;
+            get => turnLifecycle.LastCompletedVoluntaryTurnCycle;
         }
 
-        public TurnEndRecord LastEndedTurn { get; private set; }
+        public TurnEndRecord LastEndedTurn => turnLifecycle.LastEndedTurn;
 
-        public event Action<VoluntaryTurnCycleRecord> VoluntaryTurnCycleCompleted;
+        public event Action<VoluntaryTurnCycleRecord> VoluntaryTurnCycleCompleted
+        {
+            add => turnLifecycle.VoluntaryTurnCycleCompleted += value;
+            remove => turnLifecycle.VoluntaryTurnCycleCompleted -= value;
+        }
 
-        public event Action<TurnEndRecord> TurnEnded;
+        public event Action<TurnEndRecord> TurnEnded
+        {
+            add => turnLifecycle.TurnEnded += value;
+            remove => turnLifecycle.TurnEnded -= value;
+        }
 
         public event Action<EquipmentChangeRecord> EquipmentChanged;
 
-        public event Action<GameplayActiveActorChange> ActiveActorChanged;
+        public event Action<WeaponAmmunitionDelta> AmmunitionChanged;
 
-        public event Action<GameplayModeChange> ModeChanged;
+        public event Action<GameplayActiveActorChange> ActiveActorChanged
+        {
+            add => turnLifecycle.ActiveActorChanged += value;
+            remove => turnLifecycle.ActiveActorChanged -= value;
+        }
+
+        public event Action<GameplayModeChange> ModeChanged
+        {
+            add => turnLifecycle.ModeChanged += value;
+            remove => turnLifecycle.ModeChanged -= value;
+        }
 
         public event Action<string> ActorCapabilityChanged;
 
-        public bool EnterTurnMode()
-        {
-            return TryEnterTurnMode(out _);
-        }
-
-        public bool TryEnterTurnMode(out TurnModeEntryFailure failure)
-        {
-            if (Mode == GameplaySessionMode.TurnBased)
-            {
-                failure = TurnModeEntryFailure.AlreadyInTurnMode;
-                return false;
-            }
-
-            if (!EncounterActive && voluntaryTurnReentrySecondsRemaining > 0f)
-            {
-                failure = TurnModeEntryFailure.VoluntaryReentryLocked;
-                return false;
-            }
-
-            if (!EncounterActive || activeActorId == null)
-            {
-                SetActiveActor(
-                    FindNextCapableActor(startingAfterIndex: -1)
-                        ?? initiativeOrder[0]);
-            }
-
-            GameplaySessionMode previousMode = Mode;
-            SetMode(GameplaySessionMode.TurnBased);
-            Operation = GameplaySessionOperation.None;
-            TurnContext = EncounterActive
-                ? TurnModeContext.InitiatedEncounter
-                : TurnModeContext.Voluntary;
-            Journal.RecordTurnModeChanged(
-                previousMode,
-                Mode,
-                TurnContext,
-                activeActorId);
-            failure = TurnModeEntryFailure.None;
-            return true;
-        }
-
-        public void AdvanceContinuousTime(float elapsedSeconds)
-        {
-            if (float.IsNaN(elapsedSeconds)
-                || float.IsInfinity(elapsedSeconds)
-                || elapsedSeconds < 0f)
-            {
-                throw new ArgumentOutOfRangeException(nameof(elapsedSeconds));
-            }
-
-            if (Mode != GameplaySessionMode.Exploration
-                || EncounterActive
-                || voluntaryTurnReentrySecondsRemaining <= 0f
-                || elapsedSeconds == 0f)
-            {
-                return;
-            }
-
-            voluntaryTurnReentrySecondsRemaining = Math.Max(
-                0f,
-                voluntaryTurnReentrySecondsRemaining - elapsedSeconds);
-        }
-
-        public bool BeginEncounter()
-        {
-            if (EncounterActive)
-            {
-                return false;
-            }
-
-            EncounterActive = true;
-            EncounterCompletionRequested = false;
-            Journal.RecordEncounterChanged(isActive: true);
-            if (Mode == GameplaySessionMode.Exploration)
-            {
-                return EnterTurnMode();
-            }
-
-            TurnContext = TurnModeContext.InitiatedEncounter;
-            return true;
-        }
-
-        public bool BeginEncounterFromAction(GameplayActionRecord action)
-        {
-            if (action == null)
-                throw new ArgumentNullException(nameof(action));
-            if (EncounterActive
-                || !ReferenceEquals(action, LastResolvedAction)
-                || !ActionStartsEncounter(action))
-            {
-                return false;
-            }
-
-            return BeginEncounter();
-        }
-
-        public bool CompleteEncounter()
-        {
-            if (!EncounterActive)
-            {
-                return false;
-            }
-
-            EncounterActive = false;
-            EncounterCompletionRequested = false;
-            if (Mode == GameplaySessionMode.TurnBased)
-            {
-                TurnContext = TurnModeContext.Voluntary;
-            }
-
-            Journal.RecordEncounterChanged(isActive: false);
-
-            return true;
-        }
-
-        public bool RequestEncounterCompletionAtTurnEnd()
-        {
-            if (!EncounterActive || EncounterCompletionRequested)
-            {
-                return false;
-            }
-
-            EncounterCompletionRequested = true;
-            return true;
-        }
-
-        public bool TryExitTurnMode(out TurnModeExitFailure failure)
-        {
-            if (Mode != GameplaySessionMode.TurnBased)
-            {
-                failure = TurnModeExitFailure.NotInTurnMode;
-                return false;
-            }
-
-            if (Operation != GameplaySessionOperation.None)
-            {
-                failure = TurnModeExitFailure.OperationInProgress;
-                return false;
-            }
-
-            if (EncounterActive)
-            {
-                failure = TurnModeExitFailure.EncounterActive;
-                return false;
-            }
-
-            CompleteVoluntaryTurnCycleAndExit();
-            failure = TurnModeExitFailure.None;
-            return true;
-        }
-
-        public bool TryEndTurn(string actorId, out TurnEndFailure failure)
-        {
-            if (TurnPhase == GameplayTurnPhase.EmergencyReaction)
-            {
-                return TryEndEmergencyTurn(actorId, out _, out failure);
-            }
-            if (Mode != GameplaySessionMode.TurnBased)
-            {
-                failure = TurnEndFailure.NotInTurnMode;
-                return false;
-            }
-
-            if (Operation != GameplaySessionOperation.None)
-            {
-                failure = TurnEndFailure.OperationInProgress;
-                return false;
-            }
-
-            if (!string.Equals(activeActorId, actorId, StringComparison.Ordinal))
-            {
-                failure = TurnEndFailure.ActorNotActive;
-                return false;
-            }
-
-            string endingActorId = activeActorId;
-            if (!EncounterActive)
-            {
-                BeginVoluntaryWorldTurn();
-                RecordTurnEnd(endingActorId, activeActorId);
-                failure = TurnEndFailure.None;
-                return true;
-            }
-
-            int activeIndex = 0;
-            while (activeIndex < initiativeOrder.Count
-                && !string.Equals(
-                    initiativeOrder[activeIndex],
-                    activeActorId,
-                    StringComparison.Ordinal))
-            {
-                activeIndex++;
-            }
-
-            if (activeIndex >= initiativeOrder.Count)
-            {
-                throw new InvalidOperationException(
-                    "The active actor is missing from initiative order.");
-            }
-
-            if (EncounterCompletionRequested)
-            {
-                RecordTurnEnd(endingActorId, endingActorId);
-                CompleteEncounter();
-                CompleteVoluntaryTurnCycleAndExit();
-                failure = TurnEndFailure.None;
-                return true;
-            }
-
-            string nextActorId = FindNextCapableActor(activeIndex)
-                ?? endingActorId;
-            actors[nextActorId].RefreshTurnBudget();
-            SetActiveActor(nextActorId);
-            RecordTurnEnd(endingActorId, activeActorId);
-            failure = TurnEndFailure.None;
-            return true;
-        }
-
-        public void BeginEmergencyReaction(
-            string attackerId,
-            IReadOnlyList<string> responderIds,
-            int actionPointAllowance)
-        {
-            if (Mode != GameplaySessionMode.TurnBased || !EncounterActive
-                || Operation != GameplaySessionOperation.None)
-            {
-                throw new InvalidOperationException("Emergency reactions require an idle encounter turn.");
-            }
-            if (TurnPhase != GameplayTurnPhase.Normal)
-            {
-                throw new InvalidOperationException("An emergency reaction is already active.");
-            }
-            if (responderIds == null || responderIds.Count == 0)
-            {
-                throw new ArgumentException(
-                    "Emergency reactions require responders.",
-                    nameof(responderIds));
-            }
-            if (actionPointAllowance <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(actionPointAllowance));
-            }
-            RequireActor(attackerId);
-            var responders = new List<string>(responderIds.Count);
-            var unique = new HashSet<string>(StringComparer.Ordinal);
-            foreach (string responderId in responderIds)
-            {
-                RequireActor(responderId);
-                if (string.Equals(attackerId, responderId, StringComparison.Ordinal)
-                    || !unique.Add(responderId))
-                {
-                    throw new ArgumentException(
-                        "Emergency responders must be unique and cannot include the attacker.",
-                        nameof(responderIds));
-                }
-                responders.Add(responderId);
-            }
-            emergencyResponders = responders.AsReadOnly();
-            emergencyResponderIndex = 0;
-            emergencyResumeActorId = attackerId;
-            TurnPhase = GameplayTurnPhase.EmergencyReaction;
-            string firstResponderId = emergencyResponders[0];
-            actors[firstResponderId].BeginEmergencyTurn(actionPointAllowance);
-            SetActiveActor(firstResponderId);
-        }
-
-        public bool TryEndEmergencyTurn(
-            string actorId,
-            out bool responsePassCompleted,
-            out TurnEndFailure failure)
-        {
-            responsePassCompleted = false;
-            if (TurnPhase != GameplayTurnPhase.EmergencyReaction)
-            {
-                return TryEndTurn(actorId, out failure);
-            }
-            if (Operation != GameplaySessionOperation.None)
-            {
-                failure = TurnEndFailure.OperationInProgress;
-                return false;
-            }
-            if (!string.Equals(activeActorId, actorId, StringComparison.Ordinal))
-            {
-                failure = TurnEndFailure.ActorNotActive;
-                return false;
-            }
-            string endingActorId = activeActorId;
-            emergencyResponderIndex++;
-            responsePassCompleted =
-                emergencyResponderIndex >= emergencyResponders.Count;
-            if (!responsePassCompleted)
-            {
-                string nextResponderId =
-                    emergencyResponders[emergencyResponderIndex];
-                actors[nextResponderId].BeginEmergencyTurn(
-                    actors[endingActorId].EmergencyActionPointAllowance);
-                SetActiveActor(nextResponderId);
-            }
-            RecordTurnEnd(
-                endingActorId,
-                responsePassCompleted ? emergencyResumeActorId : activeActorId);
-            failure = TurnEndFailure.None;
-            return true;
-        }
-
-        public void CompleteEmergencyReaction(string resumeActorId)
-        {
-            if (TurnPhase != GameplayTurnPhase.EmergencyReaction)
-            {
-                throw new InvalidOperationException("No emergency reaction is active.");
-            }
-            if (!string.Equals(
-                    resumeActorId,
-                    emergencyResumeActorId,
-                    StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "Emergency reactions must resume their triggering attacker.");
-            }
-            ActorState actor = RequireActor(resumeActorId);
-            emergencyResponders = null;
-            emergencyResponderIndex = -1;
-            emergencyResumeActorId = null;
-            TurnPhase = GameplayTurnPhase.Normal;
-            actor.RefreshTurnBudget();
-            SetActiveActor(resumeActorId);
-        }
-
-        public bool CompleteVoluntaryWorldTurn()
-        {
-            if (Mode != GameplaySessionMode.TurnBased
-                || EncounterActive
-                || Operation != GameplaySessionOperation.ResolvingWorldTurn
-                || pendingVoluntaryTurnCycle == null)
-            {
-                return false;
-            }
-
-            VoluntaryTurnCycleRecord completedCycle =
-                pendingVoluntaryTurnCycle;
-            pendingVoluntaryTurnCycle = null;
-            LastCompletedVoluntaryTurnCycle = completedCycle;
-            RefreshTurnBudgets();
-            SetActiveActor(
-                FindNextCapableActor(startingAfterIndex: -1)
-                    ?? initiativeOrder[0]);
-            Operation = GameplaySessionOperation.None;
-            TurnContext = TurnModeContext.Voluntary;
-            Journal.RecordVoluntaryTurnCycleCompleted(completedCycle);
-            VoluntaryTurnCycleCompleted?.Invoke(completedCycle);
-            return true;
-        }
+        /// <summary>
+        /// Raised after an authoritative action has committed. Exploration
+        /// systems use this to capture transient world evidence such as sound;
+        /// they never infer it from presentation effects.
+        /// </summary>
+        public event Action<GameplayActionRecord> ActionResolved;
 
         public GameplayActorSnapshot GetActor(string actorId)
         {
             return RequireActor(actorId).CreateSnapshot();
         }
 
-        public int GetTurnActionPointAllowance(string actorId)
+        public GameplayActorStateSnapshot GetActorState(string actorId)
         {
-            return RequireActor(actorId).TurnActionPointAllowance;
+            return RequireActor(actorId).CreateStateSnapshot();
+        }
+
+        public TurnActionPointEconomy GetActionPointEconomy(string actorId)
+        {
+            return RequireActor(actorId).ActionPointEconomy;
         }
 
         public bool TryGetActor(
@@ -818,13 +748,28 @@ namespace GritGud.Application.Gameplay
             out GameplayActorSnapshot actor)
         {
             if (!string.IsNullOrWhiteSpace(actorId)
-                && actors.TryGetValue(actorId, out ActorState state))
+                && actors.TryGetValue(actorId, out GameplayActorState state))
             {
                 actor = state.CreateSnapshot();
                 return true;
             }
 
             actor = default(GameplayActorSnapshot);
+            return false;
+        }
+
+        public bool TryGetActorState(
+            string actorId,
+            out GameplayActorStateSnapshot actor)
+        {
+            if (!string.IsNullOrWhiteSpace(actorId)
+                && actors.TryGetValue(actorId, out GameplayActorState state))
+            {
+                actor = state.CreateStateSnapshot();
+                return true;
+            }
+
+            actor = default(GameplayActorStateSnapshot);
             return false;
         }
 
@@ -847,6 +792,19 @@ namespace GritGud.Application.Gameplay
             return action != null;
         }
 
+        public bool CanActorUseAction(
+            string actorId,
+            string actionId)
+        {
+            GameplayActorState actor = RequireActor(actorId);
+            return actor.PinState == null
+                || IsPushOffAction(actorId, actionId);
+        }
+
+        private bool IsPushOffAction(string actorId, string actionId) =>
+            TryGetDisplacementAction(actorId, actionId, out var action)
+            && action.Intent == DisplacementActionKind.PushOff;
+
         public InventoryItemDefinition GetInventoryItem(
             string actorId,
             string itemId) => RequireActorDefinition(actorId).GetInventoryItem(
@@ -866,7 +824,7 @@ namespace GritGud.Application.Gameplay
 
         public InventoryItemDefinition GetEquippedItem(string actorId)
         {
-            ActorState actor = RequireActor(actorId);
+            GameplayActorState actor = RequireActor(actorId);
             return actor.EquippedItemId == null
                 ? null
                 : RequireActorDefinition(actorId).GetInventoryItem(
@@ -897,7 +855,9 @@ namespace GritGud.Application.Gameplay
             out GameplayObjectiveSnapshot objective)
         {
             if (!string.IsNullOrWhiteSpace(objectiveId)
-                && objectives.TryGetValue(objectiveId, out ObjectiveState state))
+                && objectives.TryGetValue(
+                    objectiveId,
+                    out GameplayObjectiveState state))
             {
                 objective = state.CreateSnapshot();
                 return true;
@@ -917,12 +877,39 @@ namespace GritGud.Application.Gameplay
                     "Exploration poses cannot be changed while turn mode is active.");
             }
 
-            RequireActor(actorId).Pose = pose;
+            GameplayActorState actor = RequireActor(actorId);
+            if (actor.PinState != null)
+            {
+                throw new InvalidOperationException(
+                    $"Pinned actor '{actorId}' cannot move in exploration.");
+            }
+            if (PosesMatch(actor.Pose, pose))
+                return;
+            if (IsCanonicalProjectionBound)
+            {
+                ExecuteCanonical(new GameplayWorldAdvanceTransitionPayload(
+                    actorId,
+                    "continuous-time",
+                    explorationPose: new ExplorationPoseRecord(
+                        actorId,
+                        actor.Pose,
+                        pose)));
+                return;
+            }
+            RequireLegacyMutationAllowed(nameof(UpdateExplorationPose));
+            actor.Pose = pose;
+            MarkStateChanged();
         }
 
         public void SpendMovement(string actorId, float amount)
         {
-            ActorState actor = RequireActiveActor(actorId);
+            RequireLegacyMutationAllowed(nameof(SpendMovement));
+            GameplayActorState actor = RequireActiveActor(actorId);
+            if (actor.PinState != null)
+            {
+                throw new InvalidOperationException(
+                    $"Pinned actor '{actorId}' cannot spend movement.");
+            }
             TurnBudget previousBudget = actor.TurnBudget;
             actor.TurnBudget = actor.TurnBudget.SpendMovement(amount);
             Journal.RecordMovementBudgetSpent(
@@ -930,6 +917,7 @@ namespace GritGud.Application.Gameplay
                 amount,
                 previousBudget,
                 actor.TurnBudget);
+            MarkStateChanged();
         }
 
         public void CommitStanceChange(StanceChangeRecord record)
@@ -938,10 +926,21 @@ namespace GritGud.Application.Gameplay
             {
                 throw new ArgumentNullException(nameof(record));
             }
+            if (IsCanonicalProjectionBound)
+            {
+                ExecuteCanonical(new GameplayStanceTransitionPayload(record));
+                return;
+            }
+            RequireLegacyMutationAllowed(nameof(CommitStanceChange));
 
-            ActorState actor = Mode == GameplaySessionMode.TurnBased
+            GameplayActorState actor = Mode == GameplaySessionMode.TurnBased
                 ? RequireActiveActor(record.ActorId)
                 : RequireActor(record.ActorId);
+            if (actor.PinState != null)
+            {
+                throw new InvalidOperationException(
+                    $"Pinned actor '{record.ActorId}' cannot change stance.");
+            }
             if (!PosesMatch(actor.Pose, record.PreviousPose))
             {
                 throw new InvalidOperationException(
@@ -950,6 +949,7 @@ namespace GritGud.Application.Gameplay
 
             actor.Pose = record.ResultingPose;
             Journal.RecordStanceChanged(record);
+            MarkStateChanged();
         }
 
         public void CommitMovementRoute(MovementRouteRecord route)
@@ -958,24 +958,54 @@ namespace GritGud.Application.Gameplay
             {
                 throw new ArgumentNullException(nameof(route));
             }
+            if (IsCanonicalProjectionBound)
+            {
+                ExecuteCanonical(new GameplayMoveTransitionPayload(
+                    route.HasTraversal
+                        ? GameplayCapabilityProfiles.TraversalMove()
+                        : GameplayCapabilityProfiles.GroundedMove(),
+                    route));
+                return;
+            }
+            RequireLegacyMutationAllowed(nameof(CommitMovementRoute));
 
-            ActorState actor = RequireActiveActor(route.ActorId);
+            GameplayActorState actor = RequireActiveActor(route.ActorId);
+            if (actor.PinState != null)
+            {
+                throw new InvalidOperationException(
+                    $"Pinned actor '{route.ActorId}' cannot commit movement.");
+            }
             if (!PosesMatch(actor.Pose, route.OriginPose))
             {
                 throw new InvalidOperationException(
                     "The movement route no longer begins at the actor's authoritative pose.");
             }
 
-            TurnBudget updatedBudget =
-                actor.TurnBudget.SpendMovement(route.TotalCost);
+            if (route.HasFrozenBudget
+                && (actor.TurnBudget.ActionPoints
+                        != route.PreviousBudget.ActionPoints
+                    || actor.TurnBudget.MovementOpportunity
+                        != route.PreviousBudget.MovementOpportunity))
+            {
+                throw new InvalidOperationException(
+                    "The movement route was planned against a stale turn budget.");
+            }
+
+            TurnBudget updatedBudget = actor.TurnBudget.SpendAction(
+                new ActionCost(
+                    route.TotalActionPointCost,
+                    route.TotalCost,
+                    ActionMobility.Mobile));
             actor.TurnBudget = updatedBudget;
             pendingMovementRoute = route;
             Operation = GameplaySessionOperation.ResolvingMovement;
             Journal.RecordMovementRouteCommitted(route);
+            MarkStateChanged();
         }
 
         public void CommitForcedDisplacement(DisplacementRecord record)
         {
+            RequireLegacyMutationAllowed(nameof(CommitForcedDisplacement));
             if (record == null)
             {
                 throw new ArgumentNullException(nameof(record));
@@ -989,7 +1019,7 @@ namespace GritGud.Application.Gameplay
                     nameof(record));
             }
 
-            ActorState actor = RequireActor(record.Request.SubjectId);
+            GameplayActorState actor = RequireActor(record.Request.SubjectId);
             if (actor.Pose.Position.DistanceTo(record.PreviousPosition) > 0f)
             {
                 throw new InvalidOperationException(
@@ -1000,10 +1030,49 @@ namespace GritGud.Application.Gameplay
                 record.ResultingPosition,
                 actor.Pose.FacingDegrees,
                 actor.Pose.Stance);
+            MarkStateChanged();
+        }
+
+        internal void ValidatePinTransition(ActorPinTransition transition)
+        {
+            if (transition == null)
+                return;
+
+            GameplayActorState actor = RequireActor(transition.ActorId);
+            if (!PosesMatch(actor.Pose, transition.PreviousPose)
+                || !PinStatesMatch(actor.PinState, transition.PreviousState))
+            {
+                throw new InvalidOperationException(
+                    "The pin transition no longer starts from authoritative actor state.");
+            }
+        }
+
+        internal void CommitPinTransition(
+            ActorPinTransition transition,
+            GameplayNotificationBatch notifications,
+            bool validatePrevious = true)
+        {
+            RequireLegacyMutationAllowed(nameof(CommitPinTransition));
+            if (transition == null)
+                return;
+
+            if (notifications == null)
+                throw new ArgumentNullException(nameof(notifications));
+
+            if (validatePrevious)
+                ValidatePinTransition(transition);
+            GameplayActorState actor = RequireActor(transition.ActorId);
+            actor.Pose = transition.ResultingPose;
+            actor.PinState = transition.ResultingState;
+            notifications.Add(ActorCapabilityChanged, transition.ActorId);
+            MarkStateChanged();
         }
 
         public void CompleteMovementResolution()
         {
+            if (IsCanonicalProjectionBound)
+                return;
+            RequireLegacyMutationAllowed(nameof(CompleteMovementResolution));
             if (Operation != GameplaySessionOperation.ResolvingMovement
                 || pendingMovementRoute == null)
             {
@@ -1012,7 +1081,7 @@ namespace GritGud.Application.Gameplay
             }
 
             MovementRouteRecord completedRoute = pendingMovementRoute;
-            ActorState actor = RequireActor(completedRoute.ActorId);
+            GameplayActorState actor = RequireActor(completedRoute.ActorId);
             actor.Pose = new GameplayActorPose(
                 completedRoute.Destination,
                 completedRoute.FinalFacingDegrees,
@@ -1020,100 +1089,105 @@ namespace GritGud.Application.Gameplay
             pendingMovementRoute = null;
             Operation = GameplaySessionOperation.None;
             Journal.RecordMovementRouteCompleted(completedRoute);
+            MarkStateChanged();
         }
 
         public void CommitAction(GameplayActionRecord record)
         {
+            var notifications = new GameplayNotificationBatch();
+            CommitAction(record, notifications);
+            notifications.Publish();
+        }
+
+        internal void CommitAction(
+            GameplayActionRecord record,
+            GameplayNotificationBatch notifications)
+        {
+            if (notifications == null)
+            {
+                throw new ArgumentNullException(nameof(notifications));
+            }
+            if (IsCanonicalProjectionBound)
+            {
+                ExecuteCanonical(record);
+                return;
+            }
+            RequireLegacyMutationAllowed(nameof(CommitAction));
+
             ValidateActionCommit(record);
 
-            ActorState actor = Mode == GameplaySessionMode.TurnBased
-                ? RequireActiveActor(record.Request.ActorId)
-                : RequireActor(record.Request.ActorId);
+            GameplayActorState actor = RequireActionActor(record.Request.ActorId);
+            if (actor.PinState != null
+                && !IsPushOffAction(
+                    record.Request.ActorId,
+                    record.Request.ActionId))
+            {
+                throw new InvalidOperationException(
+                    $"Pinned actor '{record.Request.ActorId}' can only Push Off its pinning prop.");
+            }
             actor.TurnBudget = record.ResultingBudget;
             foreach (GameplayActionOutcome outcome in record.Outcomes)
+                if (outcome is AttackResolvedActionOutcome
+                    || outcome is WeaponDischargedActionOutcome
+                    || outcome is ProjectileLaunchedActionOutcome)
+                {
+                    actor.CommitWeaponAttack();
+                    break;
+                }
+            foreach (GameplayActionOutcome outcome in record.Outcomes)
             {
-                ApplyActionFacing(actor, outcome);
-                ApplyActionOutcome(outcome);
+                actionOutcomeApplier.Apply(
+                    actor,
+                    outcome,
+                    notifications,
+                    ActorCapabilityChanged,
+                    EquipmentChanged);
             }
 
             resolvedActions.Add(record);
             Journal.RecordActionResolved(record);
-        }
-
-        private void ApplyActionFacing(
-            ActorState actor,
-            GameplayActionOutcome outcome)
-        {
-            switch (outcome)
-            {
-                case AttackResolvedActionOutcome attackResolved:
-                    actor.FaceToward(
-                        RequireActor(attackResolved.TargetId).Pose.Position);
-                    break;
-
-                case WeaponDischargedActionOutcome weaponDischarged:
-                    actor.FaceToward(weaponDischarged.Discharge.AimPoint);
-                    break;
-
-                case ProjectileLaunchedActionOutcome projectileLaunched:
-                    actor.FaceToward(projectileLaunched.Launch.AimPoint);
-                    break;
-
-                case ThrownExplosiveActionOutcome thrownExplosive:
-                    actor.FaceToward(
-                        thrownExplosive.Record.IntendedLanding);
-                    break;
-
-                case DisplacementActionOutcome displacement:
-                    actor.FaceToward(
-                        displacement.Displacement.PreviousPosition);
-                    break;
-            }
+            notifications.Add(ActionResolved, record);
+            MarkStateChanged();
         }
 
         internal void ValidateActionCommit(GameplayActionRecord record)
+            => actionCommitValidator.Validate(record);
+
+        internal void ApplyAmmunitionChange(
+            WeaponAmmunitionDelta change,
+            GameplayNotificationBatch notifications)
         {
-            if (record == null)
-            {
-                throw new ArgumentNullException(nameof(record));
-            }
+            RequireActor(change.ActorId).ApplyAmmunition(change);
+            notifications.Add(AmmunitionChanged, change);
+        }
 
-            ActorState actor = Mode == GameplaySessionMode.TurnBased
-                ? RequireActiveActor(record.Request.ActorId)
-                : RequireActor(record.Request.ActorId);
-            long expectedSequence = resolvedActions.Count == 0
-                ? 1
-                : resolvedActions[resolvedActions.Count - 1].Sequence + 1;
-            if (record.Sequence != expectedSequence)
-            {
-                throw new InvalidOperationException(
-                    "The action record is not the next authoritative sequence.");
-            }
-
-            if (!TurnBudgetsMatch(actor.TurnBudget, record.PreviousBudget))
-            {
-                throw new InvalidOperationException(
-                    "The action no longer begins at the actor's authoritative budget.");
-            }
-
-            TurnBudget expectedBudget = actor.TurnBudget.SpendAction(record.Cost);
-            if (!TurnBudgetsMatch(expectedBudget, record.ResultingBudget))
-            {
-                throw new InvalidOperationException(
-                    "The action record's resulting budget does not match its cost.");
-            }
-
-            ValidateActionOutcomes(record);
+        private static GameplayInitiativeResult ResolveInitiative(
+            ScenarioActorDefinition actor,
+            int participantCount)
+        {
+            int boundedDexterity = Math.Max(1, Math.Min(5, actor.Initiative));
+            int reactionAdvance = 1 + ((boundedDexterity - 1)
+                * (participantCount - 1) / 4);
+            return new GameplayInitiativeResult(
+                actor.Id,
+                actor.Initiative,
+                reactionAdvance,
+                participantCount);
         }
 
         private static int CompareInitiative(
-            ScenarioActorDefinition left,
-            ScenarioActorDefinition right)
+            GameplayInitiativeResult left,
+            GameplayInitiativeResult right)
         {
-            int initiativeComparison = right.Initiative.CompareTo(left.Initiative);
+            int initiativeComparison = right.ReactionAdvance.CompareTo(
+                left.ReactionAdvance);
+            if (initiativeComparison == 0)
+            {
+                initiativeComparison = right.Dexterity.CompareTo(left.Dexterity);
+            }
             return initiativeComparison != 0
                 ? initiativeComparison
-                : StringComparer.Ordinal.Compare(left.Id, right.Id);
+                : StringComparer.Ordinal.Compare(left.ActorId, right.ActorId);
         }
 
         private static bool PosesMatch(
@@ -1127,142 +1201,11 @@ namespace GritGud.Application.Gameplay
                 && left.Stance == right.Stance;
         }
 
-        private static bool TurnBudgetsMatch(
-            TurnBudget left,
-            TurnBudget right)
-        {
-            return left.ActionPoints == right.ActionPoints
-                && left.MovementOpportunity == right.MovementOpportunity;
-        }
-
-        private void ValidateActionOutcomes(GameplayActionRecord record)
-        {
-            var outcomeKeys = new HashSet<string>(StringComparer.Ordinal);
-            foreach (GameplayActionOutcome outcome in record.Outcomes)
-            {
-                string outcomeKey = outcome.GetType().FullName
-                    + ":"
-                    + (outcome.TargetId ?? string.Empty);
-                if (!outcomeKeys.Add(outcomeKey))
-                {
-                    throw new InvalidOperationException(
-                        "An action record cannot repeat the same authoritative outcome.");
-                }
-
-                switch (outcome)
-                {
-                    case ObjectiveCompletedActionOutcome objectiveCompleted:
-                        ObjectiveState objective = RequireObjective(
-                            objectiveCompleted.ObjectiveId);
-                        if (objective.IsCompleted)
-                        {
-                            throw new InvalidOperationException(
-                                "The objective is already complete.");
-                        }
-
-                        break;
-
-                    case AttackResolvedActionOutcome attackResolved:
-                        ValidateAttackOutcome(record, attackResolved.Attack);
-                        break;
-
-                    case WeaponDischargedActionOutcome weaponDischarged:
-                        ValidateWeaponDischargeOutcome(
-                            record,
-                            weaponDischarged.Discharge);
-                        break;
-
-                    case ProjectileLaunchedActionOutcome projectileLaunched:
-                        ValidateProjectileLaunchOutcome(
-                            record,
-                            projectileLaunched.Launch);
-                        break;
-
-                    case EquipmentChangedActionOutcome equipmentChanged:
-                        ValidateEquipmentChangeOutcome(
-                            record,
-                            equipmentChanged.Change);
-                        break;
-
-                    case ThrownExplosiveActionOutcome thrownExplosive:
-                        ValidateThrownExplosiveOutcome(record, thrownExplosive.Record);
-                        break;
-
-                    case InventoryQuantityChangedActionOutcome inventory:
-                        ValidateInventoryQuantityChangeOutcome(
-                            record,
-                            inventory.Change);
-                        break;
-
-                    case DisplacementActionOutcome displacement:
-                        ValidateDisplacementActionOutcome(
-                            record,
-                            displacement.Displacement);
-                        break;
-
-                    default:
-                        throw new InvalidOperationException(
-                            $"Unsupported action outcome '{outcome.GetType().Name}'.");
-                }
-            }
-        }
-
-        private void ApplyActionOutcome(GameplayActionOutcome outcome)
-        {
-            switch (outcome)
-            {
-                case ObjectiveCompletedActionOutcome objectiveCompleted:
-                    RequireObjective(objectiveCompleted.ObjectiveId).IsCompleted = true;
-                    break;
-
-                case AttackResolvedActionOutcome attackResolved:
-                    RequireActor(attackResolved.TargetId).ApplyAttack(
-                        attackResolved.Attack);
-                    ActorCapabilityChanged?.Invoke(attackResolved.TargetId);
-                    break;
-
-                case WeaponDischargedActionOutcome _:
-                    // A world-point discharge spends the weapon cost and changes
-                    // facing, but has no target state to mutate.
-                    break;
-
-                case ProjectileLaunchedActionOutcome _:
-                    // The projectile session owns flight state. Launch only spends
-                    // the action's authored weapon cost in the gameplay session.
-                    break;
-
-                case EquipmentChangedActionOutcome equipmentChanged:
-                    EquipmentChangeRecord change = equipmentChanged.Change;
-                    ActorState actor = RequireActor(change.ActorId);
-                    InventoryItemDefinition item = change.ResultingEquippedItemId
-                        == null
-                            ? null
-                            : RequireActorDefinition(change.ActorId)
-                                .GetInventoryItem(change.ResultingEquippedItemId);
-                    actor.ApplyEquipment(item);
-                    EquipmentChanged?.Invoke(change);
-                    break;
-
-                case ThrownExplosiveActionOutcome thrownExplosive:
-                    // The focused thrown-explosive session validates and commits
-                    // shared blast consequences after the action is accepted.
-                    break;
-
-                case InventoryQuantityChangedActionOutcome inventory:
-                    RequireActor(inventory.Change.ActorId)
-                        .ApplyInventoryQuantity(inventory.Change);
-                    break;
-
-                case DisplacementActionOutcome _:
-                    // The displacement session commits the resolved world move
-                    // after the ordinary action budget has been accepted.
-                    break;
-
-                default:
-                    throw new InvalidOperationException(
-                        $"Unsupported action outcome '{outcome.GetType().Name}'.");
-            }
-        }
+        private static bool PinStatesMatch(
+            ActorPinState left,
+            ActorPinState right) =>
+            ReferenceEquals(left, right)
+            || (left != null && left.HasSameState(right));
 
         private VoluntaryTurnCycleRecord CreateVoluntaryTurnCycleRecord()
         {
@@ -1279,421 +1222,68 @@ namespace GritGud.Application.Gameplay
             return new VoluntaryTurnCycleRecord(sequence, actorSnapshots);
         }
 
-        private void ValidateAttackOutcome(
-            GameplayActionRecord action,
-            AttackResolutionRecord attack)
-        {
-            if (attack == null)
-            {
-                throw new InvalidOperationException(
-                    "Attack outcomes require a resolution record.");
-            }
-
-            if (!string.Equals(
-                    action.Request.ActorId,
-                    attack.AttackerId,
-                    StringComparison.Ordinal)
-                || !string.Equals(
-                    action.Request.TargetId,
-                    attack.TargetId,
-                    StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "The attack record does not match its action request.");
-            }
-
-            AttackDefinition equippedAttack = GetEquippedAttack(
-                attack.AttackerId);
-            if (equippedAttack == null
-                || !string.Equals(
-                    equippedAttack.ActionId,
-                    action.Request.ActionId,
-                    StringComparison.Ordinal)
-                || !ActionCostsMatch(
-                    action.Cost,
-                    GetAttackActionCost(
-                        equippedAttack,
-                        action))
-                || !AccuracyDecayDefinitionsMatch(
-                    equippedAttack.AccuracyDecay,
-                    attack.AccuracyDecay))
-            {
-                throw new InvalidOperationException(
-                    "The actor does not own the recorded attack action.");
-            }
-
-            ActorState target = RequireActor(attack.TargetId);
-            ActorState attacker = RequireActor(attack.AttackerId);
-            if (attacker.Pose.Position.DistanceTo(target.Pose.Position)
-                != attack.Distance)
-            {
-                throw new InvalidOperationException(
-                    "The attack distance no longer matches the authoritative actor positions.");
-            }
-
-            if (!WoundsMatch(target.Wounds, attack.TargetWoundsBefore))
-            {
-                throw new InvalidOperationException(
-                    "The attack no longer begins at the target's authoritative wound state.");
-            }
-        }
-
-        private void ValidateWeaponDischargeOutcome(
-            GameplayActionRecord action,
-            WeaponDischargeRecord discharge)
-        {
-            if (discharge == null
-                || !string.Equals(
-                    action.Request.ActorId,
-                    discharge.AttackerId,
-                    StringComparison.Ordinal)
-                || !string.Equals(
-                    action.Request.ActionId,
-                    discharge.ActionId,
-                    StringComparison.Ordinal)
-                || !string.Equals(
-                    action.Request.TargetId,
-                    discharge.TargetId,
-                    StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "The weapon discharge does not match its action request.");
-            }
-
-            AttackDefinition equippedAttack = GetEquippedAttack(
-                discharge.AttackerId);
-            ActorState attacker = RequireActor(discharge.AttackerId);
-            if (equippedAttack == null
-                || equippedAttack.Projectile != null
-                || !ActionCostsMatch(
-                    action.Cost,
-                    GetAttackActionCost(
-                        equippedAttack,
-                        action))
-                || !string.Equals(
-                    equippedAttack.ActionId,
-                    discharge.ActionId,
-                    StringComparison.Ordinal)
-                || !string.Equals(
-                    action.Request.TargetId,
-                    discharge.TargetId,
-                    StringComparison.Ordinal)
-                || attacker.Pose.Position.DistanceTo(discharge.Origin) > 0f)
-            {
-                throw new InvalidOperationException(
-                    "The actor does not own the recorded immediate weapon discharge.");
-            }
-        }
-
-        private void ValidateThrownExplosiveOutcome(
-            GameplayActionRecord action,
-            ThrownExplosiveRecord thrown)
-        {
-            if (thrown == null
-                || !string.Equals(action.Request.ActorId, thrown.ThrowerId, StringComparison.Ordinal)
-                || !string.Equals(action.Request.ActionId, thrown.Definition.Id, StringComparison.Ordinal)
-                || !string.Equals(action.Request.TargetId, thrown.Definition.Id, StringComparison.Ordinal)
-                || !ActionCostsMatch(
-                    action.Cost,
-                    GetThrownExplosiveActionCost(
-                        thrown.Definition,
-                        action)))
-                throw new InvalidOperationException("The thrown explosive does not match its action request.");
-            ActorState actor = RequireActor(thrown.ThrowerId);
-            InventoryItemDefinition item = RequireActorDefinition(thrown.ThrowerId)
-                .GetInventoryItem(thrown.Definition.Id);
-            if (!ThrownExplosiveDefinitionsMatch(
-                    item.ConsumablePower as ThrownExplosiveDefinition,
-                    thrown.Definition))
-                throw new InvalidOperationException(
-                    "The actor does not own the recorded thrown explosive.");
-            if (actor.Pose.Position.DistanceTo(thrown.Origin) > 0f)
-                throw new InvalidOperationException("The throw no longer starts at the actor's position.");
-            if (thrown.Definition.GetLaunchOrigin(actor.Pose)
-                    .DistanceTo(thrown.LaunchOrigin) > 0f)
-                throw new InvalidOperationException(
-                    "The throw no longer starts at its authored launch origin.");
-
-            InventoryQuantityChangeRecord quantity =
-                FindInventoryQuantityChange(action, thrown.Definition.Id);
-            if (quantity == null
-                || !string.Equals(
-                    quantity.ActorId,
-                    thrown.ThrowerId,
-                    StringComparison.Ordinal)
-                || quantity.ConsumedQuantity != 1)
-            {
-                throw new InvalidOperationException(
-                    "A thrown explosive must consume exactly one matching inventory item in the same action.");
-            }
-        }
-
-        private void ValidateInventoryQuantityChangeOutcome(
-            GameplayActionRecord action,
-            InventoryQuantityChangeRecord change)
-        {
-            if (change == null
-                || !string.Equals(
-                    action.Request.ActorId,
-                    change.ActorId,
-                    StringComparison.Ordinal)
-                || !string.Equals(
-                    action.Request.TargetId,
-                    change.ItemId,
-                    StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "The inventory quantity change does not match its action request.");
-            }
-
-            InventoryItemDefinition item = RequireActorDefinition(
-                change.ActorId).GetInventoryItem(change.ItemId);
-            ActorState actor = RequireActor(change.ActorId);
-            int pairedThrowCount = 0;
-            foreach (GameplayActionOutcome outcome in action.Outcomes)
-            {
-                if (outcome is ThrownExplosiveActionOutcome thrown
-                    && string.Equals(
-                        thrown.Record.Definition.Id,
-                        change.ItemId,
-                        StringComparison.Ordinal))
-                {
-                    pairedThrowCount++;
-                }
-            }
-
-            if (item == null
-                || item.Kind != InventoryItemKind.Consumable
-                || pairedThrowCount != 1
-                || change.ConsumedQuantity != 1
-                || actor.GetInventoryQuantity(change.ItemId)
-                    != change.PreviousQuantity)
-            {
-                throw new InvalidOperationException(
-                    "The inventory quantity change is not valid for the actor's authoritative state.");
-            }
-        }
-
-        private static InventoryQuantityChangeRecord
-            FindInventoryQuantityChange(
-                GameplayActionRecord action,
-                string itemId)
-        {
-            InventoryQuantityChangeRecord matched = null;
-            foreach (GameplayActionOutcome outcome in action.Outcomes)
-            {
-                if (outcome is InventoryQuantityChangedActionOutcome inventory
-                    && string.Equals(
-                        inventory.Change.ItemId,
-                        itemId,
-                        StringComparison.Ordinal))
-                {
-                    if (matched != null)
-                    {
-                        throw new InvalidOperationException(
-                            "A thrown explosive action must contain exactly one matching inventory quantity change.");
-                    }
-
-                    matched = inventory.Change;
-                }
-            }
-
-            return matched;
-        }
-
-        private void ValidateDisplacementActionOutcome(
-            GameplayActionRecord action,
-            DisplacementRecord displacement)
-        {
-            if (displacement == null)
-            {
-                DisplacementActionCommitValidator.Validate(
-                    action,
-                    displacement,
-                    definition: null,
-                    equippedItem: null,
-                    chargesTurnCost: ShouldChargeTurnCost(action));
-                return;
-            }
-
-            DisplacementActionDefinition definition = RequireActorDefinition(
-                displacement.Request.ActorId).GetDisplacementAction(
-                    displacement.Request.ActionId);
-            RequireActor(displacement.Request.ActorId);
-            DisplacementActionCommitValidator.Validate(
-                action,
-                displacement,
-                definition,
-                GetEquippedItem(displacement.Request.ActorId),
-                ShouldChargeTurnCost(action));
-        }
-
-        private static bool ThrownExplosiveDefinitionsMatch(
-            ThrownExplosiveDefinition left,
-            ThrownExplosiveDefinition right) =>
-            left != null && right != null
-                && string.Equals(left.Id, right.Id, StringComparison.Ordinal)
-                && ActionCostsMatch(left.TurnCost, right.TurnCost)
-                && left.MaximumRange == right.MaximumRange
-                && left.StandingLaunchHeight == right.StandingLaunchHeight
-                && left.CrouchedLaunchHeight == right.CrouchedLaunchHeight
-                && left.BaseUncertaintyRadius == right.BaseUncertaintyRadius
-                && left.UncertaintyPerMeter == right.UncertaintyPerMeter
-                && left.BlastRadius == right.BlastRadius
-                && left.BlastWoundMovementPenalty
-                    == right.BlastWoundMovementPenalty
-                && left.BlastIntegrityDamage
-                    == right.BlastIntegrityDamage
-                && SmokeFieldDefinitionsMatch(
-                    left.SmokeField,
-                    right.SmokeField);
-
-        private static bool SmokeFieldDefinitionsMatch(
-            SmokeFieldDefinition left,
-            SmokeFieldDefinition right) =>
-            left == null
-                ? right == null
-                : left.Matches(right);
-
-        private void ValidateProjectileLaunchOutcome(
-            GameplayActionRecord action,
-            ProjectileLaunchRecord launch)
-        {
-            if (launch == null
-                || !string.Equals(
-                    action.Request.ActorId,
-                    launch.AttackerId,
-                    StringComparison.Ordinal)
-                || !string.Equals(
-                    action.Request.TargetId,
-                    launch.IntendedTargetId,
-                    StringComparison.Ordinal)
-                || !string.Equals(
-                    action.Request.ActionId,
-                    launch.ActionId,
-                    StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "The projectile launch does not match its action request.");
-            }
-
-            AttackDefinition weapon = GetEquippedAttack(launch.AttackerId);
-            if (weapon?.Projectile == null
-                || !string.Equals(
-                    weapon.ActionId,
-                    launch.ActionId,
-                    StringComparison.Ordinal)
-                || !ActionCostsMatch(action.Cost, weapon.TurnCost)
-                || !ProjectileDefinitionsMatch(
-                    launch.Definition,
-                    weapon.Projectile))
-            {
-                throw new InvalidOperationException(
-                    "The actor does not own the recorded projectile weapon.");
-            }
-
-            ActorState attacker = RequireActor(launch.AttackerId);
-            GameplayPosition expectedOrigin = weapon.Projectile.GetLaunchOrigin(
-                attacker.Pose);
-            if (expectedOrigin.DistanceTo(launch.Origin) > 0f)
-            {
-                throw new InvalidOperationException(
-                    "The projectile launch no longer starts at the attacker's authored launch point.");
-            }
-
-            // Projectile attacks are aimed at a world point.  The reference id may
-            // identify an actor, destructible, or unregistered patch of terrain;
-            // collision at arrival remains authoritative.
-        }
-
         internal void ApplyBlastInjury(
             string actorId,
             TargetRegionId? region,
             float woundMovementPenalty)
         {
-            RequireActor(actorId).ApplyBlast(region, woundMovementPenalty);
-            ActorCapabilityChanged?.Invoke(actorId);
+            RequireLegacyMutationAllowed(nameof(ApplyBlastInjury));
+            var notifications = new GameplayNotificationBatch();
+            ApplyBlastInjury(
+                actorId,
+                region,
+                woundMovementPenalty,
+                notifications);
+            notifications.Publish();
         }
 
-        private void ValidateEquipmentChangeOutcome(
-            GameplayActionRecord action,
-            EquipmentChangeRecord change)
+        internal void ApplyBlastInjury(
+            string actorId,
+            TargetRegionId? region,
+            float woundMovementPenalty,
+            GameplayNotificationBatch notifications)
         {
-            foreach (GameplayActionOutcome outcome in action.Outcomes)
+            RequireLegacyMutationAllowed(nameof(ApplyBlastInjury));
+            if (notifications == null)
             {
-                if (outcome is DisplacementActionOutcome)
-                {
-                    // The focused displacement validator owns its automatic
-                    // equipment transition as part of the composite action.
-                    return;
-                }
+                throw new ArgumentNullException(nameof(notifications));
             }
 
-            if (change == null
-                || !string.Equals(
-                    action.Request.ActorId,
-                    change.ActorId,
-                    StringComparison.Ordinal)
-                || !string.Equals(
-                    action.Request.TargetId,
-                    change.ItemId,
-                    StringComparison.Ordinal))
-            {
-                throw new InvalidOperationException(
-                    "The equipment change does not match its action request.");
-            }
-
-            ActorState actor = RequireActor(change.ActorId);
-            ScenarioActorDefinition definition = RequireActorDefinition(
-                change.ActorId);
-            InventoryItemDefinition item = definition.GetInventoryItem(
-                change.ItemId);
-            if (item == null)
-            {
-                throw new InvalidOperationException(
-                    "The actor does not own the recorded equipment change.");
-            }
-
-            ActionCost expectedCost = Mode == GameplaySessionMode.TurnBased
-                ? item.EquipmentCost
-                : new ActionCost(
-                    0,
-                    0f,
-                    item.EquipmentCost.Mobility);
-            if (!item.IsEquippable
-                || !string.Equals(
-                    actor.EquippedItemId,
-                    change.PreviousEquippedItemId,
-                    StringComparison.Ordinal)
-                || !ActionCostsMatch(action.Cost, expectedCost))
-            {
-                throw new InvalidOperationException(
-                    "The actor does not own the recorded equipment change.");
-            }
-
-            string expectedActionId = change.Kind == EquipmentChangeKind.Equip
-                ? EquipmentActionIds.Equip
-                : EquipmentActionIds.Unequip;
-            string expectedResult = change.Kind == EquipmentChangeKind.Equip
-                ? item.Id
-                : null;
-            if (!string.Equals(
-                    action.Request.ActionId,
-                    expectedActionId,
-                    StringComparison.Ordinal)
-                || !string.Equals(
-                    change.ResultingEquippedItemId,
-                    expectedResult,
-                    StringComparison.Ordinal)
-                || (change.Kind == EquipmentChangeKind.Equip
-                    && change.PreviousEquippedItemId != null))
-            {
-                throw new InvalidOperationException(
-                    "The recorded equipment transition is invalid.");
-            }
+            RequireActor(actorId).ApplyBlast(region, woundMovementPenalty);
+            notifications.Add(ActorCapabilityChanged, actorId);
+            MarkStateChanged();
         }
 
-        private ScenarioActorDefinition RequireActorDefinition(string actorId)
+        internal void ApplyEnvironmentalInjury(
+            string actorId,
+            TargetRegionId region,
+            float woundMovementPenalty,
+            GameplayNotificationBatch notifications)
+        {
+            RequireLegacyMutationAllowed(nameof(ApplyEnvironmentalInjury));
+            if (notifications == null)
+                throw new ArgumentNullException(nameof(notifications));
+            GameplayActorState actor = RequireActor(actorId);
+            if (actor.IsIncapacitated) return;
+            actor.ApplyBlast(region, woundMovementPenalty);
+            notifications.Add(ActorCapabilityChanged, actorId);
+            MarkStateChanged();
+        }
+
+        internal void ApplyConcussion(
+            ConcussiveActionPointEffectRecord effect,
+            GameplayNotificationBatch notifications)
+        {
+            RequireLegacyMutationAllowed(nameof(ApplyConcussion));
+            if (effect == null) throw new ArgumentNullException(nameof(effect));
+            if (notifications == null)
+                throw new ArgumentNullException(nameof(notifications));
+            RequireActor(effect.ActorId).ApplyConcussion(effect);
+            notifications.Add(ActorCapabilityChanged, effect.ActorId);
+            MarkStateChanged();
+        }
+
+        internal ScenarioActorDefinition RequireActorDefinition(string actorId)
         {
             foreach (ScenarioActorDefinition actor in Scenario.Actors)
             {
@@ -1707,158 +1297,66 @@ namespace GritGud.Application.Gameplay
                 $"Actor definition '{actorId}' is not part of the scenario.");
         }
 
-        private static bool WoundsMatch(
-            ActorWoundSnapshot left,
-            ActorWoundSnapshot right)
+        GameplayJournal IGameplayTurnLifecycleHost.Journal => Journal;
+
+        GameplaySessionOperation IGameplayTurnLifecycleHost.Operation
         {
-            return left.HasSameState(right);
+            get => Operation;
+            set => Operation = value;
         }
 
-        private static bool ActionCostsMatch(ActionCost left, ActionCost right)
+        IReadOnlyList<string> IGameplayTurnLifecycleHost.InitiativeOrder =>
+            initiativeOrder;
+
+        float IGameplayTurnLifecycleHost.MinimumVoluntaryTurnSeconds =>
+            Scenario.Timing.MinimumVoluntaryTurnSeconds;
+
+        void IGameplayTurnLifecycleHost.RequireActorForTurnLifecycle(
+            string actorId) => RequireActor(actorId);
+
+        bool IGameplayTurnLifecycleHost.IsActorIncapacitatedForTurnLifecycle(
+            string actorId) => RequireActor(actorId).IsIncapacitated;
+
+        PersonalTurnStartRecord
+            IGameplayTurnLifecycleHost.StartPersonalTurnForTurnLifecycle(
+                string actorId) => RequireActor(actorId).StartPersonalTurn();
+
+        IReadOnlyList<PersonalTurnStartRecord>
+            IGameplayTurnLifecycleHost.StartCapablePersonalTurnsForTurnLifecycle()
         {
-            return left.ActionPoints == right.ActionPoints
-                && left.MovementOpportunity == right.MovementOpportunity
-                && left.Mobility == right.Mobility;
-        }
-
-        private ActionCost GetAttackActionCost(
-            AttackDefinition attack,
-            GameplayActionRecord action) =>
-            ShouldChargeTurnCost(action)
-                ? attack.TurnCost
-                : new ActionCost(
-                    0,
-                    0f,
-                    attack.TurnCost.Mobility);
-
-        private ActionCost GetThrownExplosiveActionCost(
-            ThrownExplosiveDefinition definition,
-            GameplayActionRecord action) =>
-            ShouldChargeTurnCost(action)
-                ? definition.TurnCost
-                : new ActionCost(
-                    0,
-                    0f,
-                    definition.TurnCost.Mobility);
-
-        private bool ShouldChargeTurnCost(GameplayActionRecord action) =>
-            Mode == GameplaySessionMode.TurnBased
-            || (!EncounterActive && ActionStartsEncounter(action));
-
-        private static bool AccuracyDecayDefinitionsMatch(
-            AccuracyDecayDefinition left,
-            AccuracyDecayDefinition right) =>
-            left != null
-                && right != null
-                && left.HalfLifeDistance == right.HalfLifeDistance
-                && left.MinimumAccuracyPercent
-                    == right.MinimumAccuracyPercent;
-
-        private static bool ProjectileDefinitionsMatch(
-            ProjectileFlightDefinition left,
-            ProjectileFlightDefinition right)
-        {
-            return left != null
-                && right != null
-                && string.Equals(left.Id, right.Id, StringComparison.Ordinal)
-                && left.SpeedPerTurn == right.SpeedPerTurn
-                && left.Radius == right.Radius
-                && left.MaximumRange == right.MaximumRange
-                && left.StandingLaunchHeight == right.StandingLaunchHeight
-                && left.CrouchedLaunchHeight == right.CrouchedLaunchHeight
-                && left.OpensEmergencyReactionWindow
-                    == right.OpensEmergencyReactionWindow
-                && left.BlastRadius == right.BlastRadius
-                && left.BlastWoundMovementPenalty
-                    == right.BlastWoundMovementPenalty
-                && left.BlastIntegrityDamage
-                    == right.BlastIntegrityDamage;
-        }
-
-        private void BeginVoluntaryWorldTurn()
-        {
-            pendingVoluntaryTurnCycle = CreateVoluntaryTurnCycleRecord();
-            Operation = GameplaySessionOperation.ResolvingWorldTurn;
-        }
-
-        private void CompleteVoluntaryTurnCycleAndExit()
-        {
-            VoluntaryTurnCycleRecord completedCycle =
-                CreateVoluntaryTurnCycleRecord();
-            LastCompletedVoluntaryTurnCycle = completedCycle;
-            RefreshTurnBudgets();
-            GameplaySessionMode previousMode = Mode;
-            SetMode(GameplaySessionMode.Exploration);
-            TurnContext = TurnModeContext.None;
-            voluntaryTurnReentrySecondsRemaining =
-                Scenario.Timing.MinimumVoluntaryTurnSeconds;
-            Journal.RecordVoluntaryTurnCycleCompleted(completedCycle);
-            Journal.RecordTurnModeChanged(
-                previousMode,
-                Mode,
-                TurnContext,
-                activeActorId);
-            VoluntaryTurnCycleCompleted?.Invoke(completedCycle);
-        }
-
-        private void RecordTurnEnd(string endingActorId, string nextActorId)
-        {
-            var record = new TurnEndRecord(
-                LastEndedTurn == null ? 1 : LastEndedTurn.Sequence + 1,
-                endingActorId,
-                nextActorId);
-            LastEndedTurn = record;
-            Journal.RecordTurnEnded(record);
-            TurnEnded?.Invoke(record);
-        }
-
-        private void SetActiveActor(string actorId)
-        {
-            if (string.Equals(activeActorId, actorId, StringComparison.Ordinal))
-                return;
-
-            string previousActorId = activeActorId;
-            activeActorId = actorId;
-            ActiveActorChanged?.Invoke(new GameplayActiveActorChange(
-                previousActorId,
-                activeActorId));
-        }
-
-        private void SetMode(GameplaySessionMode mode)
-        {
-            if (Mode == mode)
-                return;
-
-            GameplaySessionMode previousMode = Mode;
-            Mode = mode;
-            ModeChanged?.Invoke(new GameplayModeChange(previousMode, Mode));
-        }
-
-        private void RefreshTurnBudgets()
-        {
+            var starts = new List<PersonalTurnStartRecord>();
             foreach (string actorId in initiativeOrder)
-            {
-                actors[actorId].RefreshTurnBudget();
-            }
+                if (!actors[actorId].IsIncapacitated)
+                    starts.Add(actors[actorId].StartPersonalTurn());
+            return starts.AsReadOnly();
         }
 
-        private string FindNextCapableActor(int startingAfterIndex)
+        void IGameplayTurnLifecycleHost.BeginEmergencyTurnForTurnLifecycle(
+            string actorId,
+            int actionPointAllowance) =>
+            RequireActor(actorId).BeginEmergencyTurn(actionPointAllowance);
+
+        void IGameplayTurnLifecycleHost.EndEmergencyTurnForTurnLifecycle(
+            string actorId) => RequireActor(actorId).EndEmergencyTurn();
+
+        int IGameplayTurnLifecycleHost
+            .GetEmergencyActionPointAllowanceForTurnLifecycle(
+                string actorId) =>
+            RequireActor(actorId).EmergencyActionPointAllowance;
+
+        VoluntaryTurnCycleRecord IGameplayTurnLifecycleHost
+            .CreateVoluntaryTurnCycleRecordForTurnLifecycle() =>
+            CreateVoluntaryTurnCycleRecord();
+
+        void IGameplayTurnLifecycleHost.MarkStateChangedForTurnLifecycle() =>
+            MarkStateChanged();
+
+        private void MarkStateChanged()
         {
-            for (int offset = 1; offset <= initiativeOrder.Count; offset++)
-            {
-                int index = (startingAfterIndex + offset)
-                    % initiativeOrder.Count;
-                string candidateId = initiativeOrder[index];
-                if (!actors[candidateId].IsIncapacitated)
-                {
-                    return candidateId;
-                }
-            }
-
-            return null;
+            Revision++;
         }
 
-        private ActorState RequireActiveActor(string actorId)
+        private GameplayActorState RequireActiveActor(string actorId)
         {
             if (Mode != GameplaySessionMode.TurnBased)
             {
@@ -1866,7 +1364,7 @@ namespace GritGud.Application.Gameplay
                     "Turn resources can only be used while turn mode is active.");
             }
 
-            if (!string.Equals(activeActorId, actorId, StringComparison.Ordinal))
+            if (!string.Equals(ActiveActorId, actorId, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
                     "Only the active actor can use turn resources.");
@@ -1878,7 +1376,7 @@ namespace GritGud.Application.Gameplay
                     "Turn commands cannot begin while another operation is resolving.");
             }
 
-            ActorState actor = RequireActor(actorId);
+            GameplayActorState actor = RequireActor(actorId);
             if (actor.IsIncapacitated)
             {
                 throw new InvalidOperationException(
@@ -1888,7 +1386,12 @@ namespace GritGud.Application.Gameplay
             return actor;
         }
 
-        private ActorState RequireActor(string actorId)
+        internal GameplayActorState RequireActionActor(string actorId) =>
+            Mode == GameplaySessionMode.TurnBased
+                ? RequireActiveActor(actorId)
+                : RequireActor(actorId);
+
+        internal GameplayActorState RequireActor(string actorId)
         {
             if (string.IsNullOrWhiteSpace(actorId))
             {
@@ -1897,7 +1400,7 @@ namespace GritGud.Application.Gameplay
                     nameof(actorId));
             }
 
-            if (!actors.TryGetValue(actorId, out ActorState actor))
+            if (!actors.TryGetValue(actorId, out GameplayActorState actor))
             {
                 throw new KeyNotFoundException(
                     $"Actor '{actorId}' does not belong to scenario '{Scenario.Id}'.");
@@ -1906,7 +1409,7 @@ namespace GritGud.Application.Gameplay
             return actor;
         }
 
-        private ObjectiveState RequireObjective(string objectiveId)
+        internal GameplayObjectiveState RequireObjective(string objectiveId)
         {
             if (string.IsNullOrWhiteSpace(objectiveId))
             {
@@ -1915,7 +1418,9 @@ namespace GritGud.Application.Gameplay
                     nameof(objectiveId));
             }
 
-            if (!objectives.TryGetValue(objectiveId, out ObjectiveState objective))
+            if (!objectives.TryGetValue(
+                    objectiveId,
+                    out GameplayObjectiveState objective))
             {
                 throw new KeyNotFoundException(
                     $"Objective '{objectiveId}' does not belong to scenario '{Scenario.Id}'.");
@@ -1924,199 +1429,5 @@ namespace GritGud.Application.Gameplay
             return objective;
         }
 
-        private sealed class ActorState
-        {
-            private readonly TurnBudget turnBudgetAllowance;
-            private readonly Dictionary<string, int> inventoryQuantities =
-                new Dictionary<string, int>(StringComparer.Ordinal);
-
-            public ActorState(ScenarioActorDefinition definition)
-            {
-                ActorId = definition.Id;
-                Pose = definition.StartingPose;
-                TurnBudget = definition.StartingTurnBudget;
-                Wounds = new ActorWoundSnapshot(definition.Id, 0, 0f);
-                MaximumWounds = definition.Combat.MaximumWounds;
-                EquippedItemId = definition.InitiallyEquippedItemId;
-                EquipmentEffects = definition.GetInventoryItem(
-                        EquippedItemId)?.EquippedEffects
-                    ?? EquipmentEffectSet.None;
-                foreach (InventoryItemDefinition item in definition.Inventory)
-                {
-                    if (item.Kind == InventoryItemKind.Consumable)
-                    {
-                        inventoryQuantities.Add(item.Id, item.InitialQuantity);
-                    }
-                }
-                turnBudgetAllowance = definition.StartingTurnBudget;
-            }
-
-            public string ActorId { get; }
-
-            public GameplayActorPose Pose { get; set; }
-
-            public TurnBudget TurnBudget { get; set; }
-
-            public int EmergencyActionPointAllowance { get; private set; }
-
-            public int TurnActionPointAllowance =>
-                turnBudgetAllowance.ActionPoints;
-
-            public ActorWoundSnapshot Wounds { get; private set; }
-
-            public int MaximumWounds { get; }
-
-            public bool IsIncapacitated =>
-                Wounds.WoundCount >= MaximumWounds;
-
-            public string EquippedItemId { get; private set; }
-
-            public EquipmentEffectSet EquipmentEffects { get; private set; }
-
-            public void ApplyEquipment(InventoryItemDefinition item)
-            {
-                EquippedItemId = item?.Id;
-                EquipmentEffects = item?.EquippedEffects
-                    ?? EquipmentEffectSet.None;
-            }
-
-            public int GetInventoryQuantity(string itemId)
-            {
-                if (inventoryQuantities.TryGetValue(itemId, out int quantity))
-                {
-                    return quantity;
-                }
-
-                throw new KeyNotFoundException(
-                    $"Consumable quantity '{itemId}' is not part of actor '{ActorId}'.");
-            }
-
-            public void ApplyInventoryQuantity(
-                InventoryQuantityChangeRecord change)
-            {
-                inventoryQuantities[change.ItemId] = change.ResultingQuantity;
-            }
-
-            public void RefreshTurnBudget()
-            {
-                TurnBudget = new TurnBudget(
-                    turnBudgetAllowance.ActionPoints,
-                    WoundedMovementAllowance);
-            }
-
-            public void BeginEmergencyTurn(int actionPoints)
-            {
-                EmergencyActionPointAllowance = actionPoints;
-                TurnBudget = new TurnBudget(
-                    actionPoints,
-                    WoundedMovementAllowance);
-            }
-
-            public void ApplyAttack(AttackResolutionRecord attack)
-            {
-                if (!attack.Hit)
-                {
-                    return;
-                }
-
-                Wounds = attack.TargetWoundsAfter;
-                TurnBudget = new TurnBudget(
-                    TurnBudget.ActionPoints,
-                    Math.Min(
-                        TurnBudget.MovementOpportunity,
-                        WoundedMovementAllowance));
-            }
-
-            public void ApplyBlast(
-                TargetRegionId? region,
-                float movementPenalty)
-            {
-                if (movementPenalty <= 0f) return;
-                Wounds = region.HasValue
-                    ? Wounds.AddWound(region.Value, movementPenalty)
-                    : Wounds.AddUnlocalizedWound(movementPenalty);
-                TurnBudget = new TurnBudget(
-                    TurnBudget.ActionPoints,
-                    Math.Min(TurnBudget.MovementOpportunity, WoundedMovementAllowance));
-            }
-
-            public void FaceToward(GameplayPosition target)
-            {
-                double deltaX = (double)target.X - Pose.Position.X;
-                double deltaZ = (double)target.Z - Pose.Position.Z;
-                if (Math.Abs(deltaX) <= 0.0001
-                    && Math.Abs(deltaZ) <= 0.0001)
-                {
-                    return;
-                }
-
-                float facingDegrees = (float)(
-                    Math.Atan2(deltaX, deltaZ) * (180d / Math.PI));
-                Pose = new GameplayActorPose(
-                    Pose.Position,
-                    facingDegrees,
-                    Pose.Stance);
-            }
-
-            public GameplayActorSnapshot CreateSnapshot()
-            {
-                var quantities = new List<InventoryQuantitySnapshot>(
-                    inventoryQuantities.Count);
-                foreach (KeyValuePair<string, int> entry in inventoryQuantities)
-                {
-                    quantities.Add(new InventoryQuantitySnapshot(
-                        entry.Key,
-                        entry.Value));
-                }
-                quantities.Sort((left, right) => StringComparer.Ordinal.Compare(
-                    left.ItemId,
-                    right.ItemId));
-                return new GameplayActorSnapshot(
-                    ActorId,
-                    Pose,
-                    TurnBudget,
-                    Wounds,
-                    EquippedItemId,
-                    EquipmentEffects,
-                    MaximumWounds,
-                    new ActorInventorySnapshot(ActorId, quantities));
-            }
-
-            private float WoundedMovementAllowance => Math.Max(
-                0f,
-                turnBudgetAllowance.MovementOpportunity
-                    - Wounds.MovementPenalty);
-        }
-
-        private sealed class ObjectiveState
-        {
-            public ObjectiveState(ScenarioObjectiveDefinition definition)
-            {
-                ObjectiveId = definition.Id;
-                Position = definition.Position;
-                InteractionRadius = definition.InteractionRadius;
-                Interaction = definition.Interaction;
-            }
-
-            public string ObjectiveId { get; }
-
-            public GameplayPosition Position { get; }
-
-            public float InteractionRadius { get; }
-
-            public GameplayInteractionDefinition Interaction { get; }
-
-            public bool IsCompleted { get; set; }
-
-            public GameplayObjectiveSnapshot CreateSnapshot()
-            {
-                return new GameplayObjectiveSnapshot(
-                    ObjectiveId,
-                    Position,
-                    InteractionRadius,
-                    Interaction,
-                    IsCompleted);
-            }
-        }
     }
 }

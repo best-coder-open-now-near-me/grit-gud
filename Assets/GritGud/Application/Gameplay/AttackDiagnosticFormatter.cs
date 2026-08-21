@@ -45,6 +45,8 @@ namespace GritGud.Application.Gameplay
                     + $" - {FormatPercent(rollShare)} hit-location share");
             }
 
+            AppendTacticalContext(lines, attack.Context);
+
             if (attack.IsContactAttack)
             {
                 lines.Add(
@@ -54,6 +56,7 @@ namespace GritGud.Application.Gameplay
                 lines.Add(
                     $"HIT CHANCE - {attack.GeometricHitChancePercent}% geometric"
                     + " x 100% contact accuracy"
+                    + FormatContextAccuracy(attack.Context)
                     + $" = {attack.FinalHitChancePercent}%");
             }
             else
@@ -66,6 +69,7 @@ namespace GritGud.Application.Gameplay
                 lines.Add(
                     $"HIT CHANCE - {attack.GeometricHitChancePercent}% geometric"
                     + $" x {Format(attack.AccuracyPercent)}% accuracy"
+                    + FormatContextAccuracy(attack.Context)
                     + $" = {attack.FinalHitChancePercent}%");
             }
             lines.Add(
@@ -98,6 +102,62 @@ namespace GritGud.Application.Gameplay
             return lines.ToArray();
         }
 
+        private static void AppendTacticalContext(
+            ICollection<string> lines,
+            IGameplayActionContext actionContext)
+        {
+            if (actionContext == null)
+            {
+                lines.Add("TACTICAL CONTEXT - NONE");
+                return;
+            }
+            if (!(actionContext is ResolvedTacticalContext context))
+                throw new InvalidOperationException(
+                    "Attack diagnostics require resolved tactical context.");
+
+            TacticalContextSnapshot snapshot = context.Snapshot;
+            lines.Add(
+                $"TACTICAL CONTEXT - REVISION {snapshot.StateRevision}"
+                + $" - {snapshot.CapabilitySignature}"
+                + $" - {snapshot.Subject.Kind}:{snapshot.Subject.Id}"
+                + $" - DIGEST {context.CanonicalDigest}");
+            lines.Add(
+                $"TACTICAL EVIDENCE - AWARENESS {snapshot.TargetAwareness}"
+                + $" - VISIBILITY {snapshot.Visibility}"
+                + $" - RANGE {snapshot.RangeBand}"
+                + $" - EXPOSURE {snapshot.ExposureBand}"
+                + $" - ISOLATION {snapshot.IsolationBand}"
+                + $" - STANCE {snapshot.AttackerStance}->{snapshot.TargetStance}"
+                + $" - SUPPRESSED {snapshot.AttackerSuppressed}->{snapshot.TargetSuppressed}"
+                + $" - DISPLACED {snapshot.TargetDisplaced}"
+                + $" - ALLIES {snapshot.NearbyAttackerAllies}:{snapshot.NearbyTargetAllies}"
+                + $" - AP {snapshot.AttackerActionPoints}:{snapshot.TargetActionPoints}"
+                + $" - SOUND {Format(snapshot.SoundSignature)}");
+            if (context.Modifiers.Count == 0)
+            {
+                lines.Add("TACTICAL MODIFIERS - NONE");
+            }
+            foreach (AppliedTacticalModifier modifier in context.Modifiers)
+            {
+                lines.Add(
+                    $"TACTICAL RULE - {modifier.RuleId}"
+                    + $" - ORDER {modifier.RuleOrder}"
+                    + $" - ACCURACY {modifier.Consequences.AccuracyDeltaPercent:+#;-#;0}%"
+                    + $" - OUTCOMES {string.Join(",", modifier.OutcomeFeatureIds)}");
+            }
+            lines.Add(
+                "TACTICAL OUTCOMES - "
+                + (context.OutcomeFeatureIds.Count == 0
+                    ? "NONE"
+                    : string.Join(",", context.OutcomeFeatureIds)));
+        }
+
+        private static string FormatContextAccuracy(
+            IGameplayActionContext context) => context == null
+                || context.AccuracyDeltaPercent == 0
+                    ? string.Empty
+                    : $" {context.AccuracyDeltaPercent:+#;-#}% context";
+
         public static string[] FormatDischarge(GameplayActionRecord action)
         {
             if (action == null)
@@ -106,7 +166,7 @@ namespace GritGud.Application.Gameplay
             }
 
             WeaponDischargeRecord discharge = FindDischarge(action);
-            return new[]
+            var lines = new List<string>
             {
                 $"DISCHARGE #{discharge.Sequence} - ACTION #{action.Sequence}",
                 $"ACTOR - {discharge.AttackerId} -> {discharge.TargetId}",
@@ -123,8 +183,21 @@ namespace GritGud.Application.Gameplay
                     + $" {Format(discharge.AimPoint.Y)},"
                     + $" {Format(discharge.AimPoint.Z)}",
                 $"DISTANCE - {Format(discharge.Distance)} m",
-                "OUTCOME - WORLD DISCHARGE - NO TARGET HIT ROLL",
             };
+            if (discharge.Impact != null)
+            {
+                lines.Add($"IMPACT - {discharge.Impact.SurfaceId}"
+                    + $" - REV {discharge.Impact.WorldStateRevision}");
+            }
+            if (discharge.Damage != null)
+            {
+                lines.Add($"PROP DAMAGE - {Format(discharge.Damage.AppliedDamage)}"
+                    + $" - {Format(discharge.Damage.Previous.RemainingIntegrity)}"
+                    + $" -> {Format(discharge.Damage.Resulting.RemainingIntegrity)}"
+                    + $" - {discharge.Damage.Resulting.State.ToString().ToUpperInvariant()}");
+            }
+            lines.Add("OUTCOME - WORLD DISCHARGE - NO TARGET HIT ROLL");
+            return lines.ToArray();
         }
 
         private static AttackResolutionRecord FindAttack(

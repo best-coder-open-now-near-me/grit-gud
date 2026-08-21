@@ -10,6 +10,7 @@ namespace GritGud.Presentation.Gameplay
         private const string GroundHaloShaderName = "GritGud/EmissiveSurface";
         private const string TargetOutlineShaderName = "GritGud/RuntimeOutline";
         private const int HaloSegments = 48;
+        internal const float TargetOutlineScreenWidthPixels = 4f;
         private static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionColor =
             Shader.PropertyToID("_EmissionColor");
@@ -19,20 +20,34 @@ namespace GritGud.Presentation.Gameplay
             Shader.PropertyToID("_OutlineColor");
         private static readonly int OutlineWidth =
             Shader.PropertyToID("_OutlineWidth");
+        private static readonly int OutlineScreenSpace =
+            Shader.PropertyToID("_OutlineScreenSpace");
+        private static readonly int OutlineScreenWidth =
+            Shader.PropertyToID("_OutlineScreenWidth");
         private static readonly int OutlineEnabled =
             Shader.PropertyToID("_OutlineEnabled");
 
         private readonly List<RendererMaterialSnapshot> outlineRenderers =
             new List<RendererMaterialSnapshot>();
-        private GameplayActorView target;
+        private string targetId;
+        private Transform targetRoot;
         private LineRenderer groundHalo;
         private Material groundHaloMaterial;
         private Material targetOutlineMaterial;
+        private Color feedbackColor = ValidColor;
 
-        public static readonly Color AcquisitionOutlineColor =
-            GameplayVisualPalette.SignalOrangeGlow;
+        public static readonly Color ValidColor =
+            GameplayVisualPalette.TargetingValid;
 
-        public string TargetActorId => target?.ActorId;
+        public static readonly Color FriendlyColor =
+            GameplayVisualPalette.TargetingFriendly;
+
+        public static readonly Color InvalidColor =
+            GameplayVisualPalette.TargetingInvalid;
+
+        public static readonly Color AcquisitionOutlineColor = ValidColor;
+
+        public string TargetId => targetId;
 
         public bool GroundHaloVisible => groundHalo != null && groundHalo.enabled;
 
@@ -47,15 +62,46 @@ namespace GritGud.Presentation.Gameplay
                 throw new ArgumentNullException(nameof(actor));
             }
 
-            if (ReferenceEquals(target, actor))
+            SetTarget(actor.ActorId, actor.Transform);
+        }
+
+        public void SetTarget(string id, Transform root)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                throw new ArgumentException(
+                    "Target feedback requires a target identifier.",
+                    nameof(id));
+            }
+            if (root == null)
+            {
+                throw new ArgumentNullException(nameof(root));
+            }
+
+            if (string.Equals(targetId, id, StringComparison.Ordinal)
+                && ReferenceEquals(targetRoot, root))
             {
                 return;
             }
 
             ClearTarget();
-            target = actor;
+            targetId = id;
+            targetRoot = root;
             EnsureTargetOutline();
             EnsureGroundHalo();
+        }
+
+        public void SetColor(Color color)
+        {
+            feedbackColor = color;
+            if (groundHaloMaterial != null)
+            {
+                groundHaloMaterial.SetColor(EmissionColor, feedbackColor);
+            }
+            if (targetOutlineMaterial != null)
+            {
+                targetOutlineMaterial.SetColor(OutlineColor, feedbackColor);
+            }
         }
 
         public void SetVisible(bool outlineVisible, bool turnHaloVisible)
@@ -78,7 +124,8 @@ namespace GritGud.Presentation.Gameplay
             SetVisible(outlineVisible: false, turnHaloVisible: false);
             DestroyGroundHalo();
             DestroyTargetOutline();
-            target = null;
+            targetId = null;
+            targetRoot = null;
         }
 
         public void Dispose()
@@ -105,11 +152,11 @@ namespace GritGud.Presentation.Gameplay
                 GameplayVisualPalette.EmissionBase);
             groundHaloMaterial.SetColor(
                 EmissionColor,
-                GameplayVisualPalette.SignalBlueGlow);
+                feedbackColor);
             groundHaloMaterial.SetFloat(EmissionIntensity, 2.8f);
 
             var haloObject = new GameObject("Target Turn Ground Halo");
-            haloObject.transform.SetParent(target.Transform, false);
+            haloObject.transform.SetParent(targetRoot, false);
             groundHalo = haloObject.AddComponent<LineRenderer>();
             groundHalo.useWorldSpace = false;
             groundHalo.loop = true;
@@ -151,12 +198,16 @@ namespace GritGud.Presentation.Gameplay
             };
             targetOutlineMaterial.SetColor(
                 OutlineColor,
-                AcquisitionOutlineColor);
+                feedbackColor);
             targetOutlineMaterial.SetFloat(OutlineWidth, 0.024f);
+            targetOutlineMaterial.SetFloat(OutlineScreenSpace, 1f);
+            targetOutlineMaterial.SetFloat(
+                OutlineScreenWidth,
+                TargetOutlineScreenWidthPixels);
             targetOutlineMaterial.SetFloat(OutlineEnabled, 0f);
 
             foreach (Renderer renderer in
-                target.Transform.GetComponentsInChildren<Renderer>(true))
+                targetRoot.GetComponentsInChildren<Renderer>(true))
             {
                 if (!(renderer is MeshRenderer)
                     && !(renderer is SkinnedMeshRenderer))

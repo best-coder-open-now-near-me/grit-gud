@@ -5,6 +5,15 @@ and build automation. Editable third-party source packages live in a separate
 private repository and are installed only on licensed workstations and trusted
 build runners.
 
+> [!CAUTION]
+> This is a hard source-control boundary, not merely a local setup preference.
+> The canonical public Unity workspace is `E:\Projects\grit-gud-clean`.
+> Do not use the archived checkout as a source of new work, and do not copy
+> licensed files from it into public Git. Add or update those assets in
+> `best-coder-open-now-near-me/private-assets` first, preserve their `.meta`
+> files, then advance `.github/private-assets-ref` in a reviewable public
+> commit.
+
 Compiled Unity players may contain referenced licensed content. Raw FBX files,
 textures, source archives, demo projects, and other editable package contents
 must not be copied to the `gh-pages` branch or another public artifact.
@@ -27,6 +36,8 @@ grit-gud/
     Input Sprites for TextMesh Pro/
     Kevin Iglesias.meta
     Kevin Iglesias/
+    Mixamo.meta
+    Mixamo/
     Modern GDR - Free icons pack.meta
     Modern GDR - Free icons pack/
     UCLAGameLab.meta
@@ -54,7 +65,10 @@ Configure this value in **Settings > Secrets and variables > Actions**:
 
 The tracked `.github/private-assets-ref` file selects the asset branch, tag, or
 commit. It is pinned to the reviewed private-asset commit used by this source
-branch so the build is reproducible.
+branch so the build is reproducible. The adjacent
+`.github/private-assets-manifest.json` pins the same commit, the sentinel blob,
+the complete `grit-gud/Assets` tree, and every permitted top-level destination.
+Advance the ref and manifest together whenever the private overlay changes.
 
 The token must not have access to unrelated repositories or write permission.
 Because the preview workflow runs on trusted branch pushes rather than fork pull
@@ -64,11 +78,14 @@ During a build, the workflow:
 
 1. checks out public source normally;
 2. checks out the configured private repository into a temporary hidden folder;
-3. validates its sentinel and `Assets` layout;
-4. overlays its `Assets` contents into the Unity project;
-5. removes the temporary checkout, including its Git metadata and credentials;
-6. keys Unity's import cache with the installed asset revision; and
-7. publishes only the generated `Builds/Web` output.
+3. verifies the exact private revision, sentinel, asset-tree hash, permitted
+   destinations, regular-file modes, and clean tracked worktree;
+4. rejects any existing destination that would shadow a private file or folder;
+5. overlays its `Assets` contents with `rsync --ignore-existing`;
+6. byte-verifies every installed file and rejects missing or extra entries;
+7. removes the temporary checkout, including its Git metadata and credentials;
+8. keys Unity's import cache with the installed asset revision; and
+9. publishes only the generated `Builds/Web` output.
 
 ## Local development
 

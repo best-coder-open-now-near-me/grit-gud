@@ -74,6 +74,7 @@ namespace GritGud.Presentation.Gameplay
         private ConsumablePresentationCatalog presentationCatalog;
         private float insideOverlayAlpha;
         private Color insideOverlayColor;
+        private bool replayPresenting;
 
         internal int ActiveVisualCount => visuals.Count;
 
@@ -111,7 +112,33 @@ namespace GritGud.Presentation.Gameplay
             smokeFields = null;
             presentationCatalog = null;
             insideOverlayAlpha = 0f;
+            replayPresenting = false;
             enabled = false;
+        }
+
+        internal void BeginReplayPresentation()
+        {
+            if (smokeFields == null)
+                throw new InvalidOperationException(
+                    "Bind smoke fields before replay presentation.");
+            replayPresenting = true;
+            ReplaceVisuals(Array.Empty<SmokeFieldSnapshot>());
+        }
+
+        internal void PresentReplay(IReadOnlyList<SmokeFieldSnapshot> snapshots)
+        {
+            if (!replayPresenting)
+                throw new InvalidOperationException(
+                    "Begin smoke replay presentation before sampling it.");
+            SynchronizeVisuals(snapshots ?? throw new ArgumentNullException(
+                nameof(snapshots)));
+        }
+
+        internal void EndReplayPresentation()
+        {
+            if (!replayPresenting) return;
+            replayPresenting = false;
+            ReplaceVisuals(smokeFields.CaptureActiveFields());
         }
 
         private void Update()
@@ -119,7 +146,12 @@ namespace GritGud.Presentation.Gameplay
             if (smokeFields == null)
                 return;
 
-            smokeFields.AdvanceContinuousTime(Time.unscaledDeltaTime);
+            if (replayPresenting)
+            {
+                UpdateCameraInterior(Camera.main);
+                return;
+            }
+
             UpdateFades(Time.unscaledDeltaTime);
             UpdateCameraInterior(Camera.main);
         }
@@ -190,6 +222,7 @@ namespace GritGud.Presentation.Gameplay
                 Quaternion.identity,
                 transform);
             root.name = field.Id + " Smoke Volume";
+            DisablePhysicsColliders(root);
             float scale = field.Definition.Radius
                 * presentation.PersistentEffectScalePerRadius;
             root.transform.localScale = Vector3.Scale(
@@ -226,6 +259,39 @@ namespace GritGud.Presentation.Gameplay
             if (activateImmediately)
                 PlayParticles(systems);
             visuals.Add(field.Id, visual);
+        }
+
+        private void ReplaceVisuals(IReadOnlyList<SmokeFieldSnapshot> snapshots)
+        {
+            foreach (SmokeVisual visual in visuals.Values)
+                GameplayObjectLifecycle.Destroy(visual.Root);
+            visuals.Clear();
+            completedFades.Clear();
+            foreach (SmokeFieldSnapshot snapshot in snapshots)
+                CreateVisual(snapshot.Field);
+            insideOverlayAlpha = 0f;
+        }
+
+        private void SynchronizeVisuals(
+            IReadOnlyList<SmokeFieldSnapshot> snapshots)
+        {
+            var retained = new HashSet<string>(StringComparer.Ordinal);
+            foreach (SmokeFieldSnapshot snapshot in snapshots)
+            {
+                retained.Add(snapshot.Field.Id);
+                if (!visuals.ContainsKey(snapshot.Field.Id))
+                    CreateVisual(snapshot.Field);
+            }
+            completedFades.Clear();
+            foreach (string fieldId in visuals.Keys)
+                if (!retained.Contains(fieldId)) completedFades.Add(fieldId);
+            foreach (string fieldId in completedFades)
+            {
+                GameplayObjectLifecycle.Destroy(visuals[fieldId].Root);
+                visuals.Remove(fieldId);
+            }
+            completedFades.Clear();
+            insideOverlayAlpha = 0f;
         }
 
         internal static void ConfigureParticleSystems(
@@ -393,6 +459,17 @@ namespace GritGud.Presentation.Gameplay
                     hash *= 16777619;
                 }
                 return hash == 0 ? 1u : hash;
+            }
+        }
+
+        internal static void DisablePhysicsColliders(GameObject visualRoot)
+        {
+            if (visualRoot == null)
+                throw new ArgumentNullException(nameof(visualRoot));
+            foreach (Collider collider in
+                visualRoot.GetComponentsInChildren<Collider>(true))
+            {
+                collider.enabled = false;
             }
         }
 

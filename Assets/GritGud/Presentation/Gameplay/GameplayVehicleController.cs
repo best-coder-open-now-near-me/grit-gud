@@ -34,6 +34,7 @@ namespace GritGud.Presentation.Gameplay
         private readonly Dictionary<string, VehicleRuntime> vehicles =
             new Dictionary<string, VehicleRuntime>(StringComparer.Ordinal);
         private GameplaySession gameplaySession;
+        private bool replayPresenting;
 
         public int VehicleCount => vehicles.Count;
 
@@ -129,7 +130,11 @@ namespace GritGud.Presentation.Gameplay
                 path.Add(ToGameplayPosition(point));
             }
 
-            if (!runtime.Session.TryResolvePath(path, out record, out failure))
+            if (!runtime.Session.TryResolvePath(
+                    path,
+                    gameplaySession.LastTransitionSequence + 1L,
+                    out record,
+                    out failure))
             {
                 return false;
             }
@@ -154,7 +159,36 @@ namespace GritGud.Presentation.Gameplay
 
             vehicles.Clear();
             gameplaySession = null;
+            replayPresenting = false;
             enabled = false;
+        }
+
+        internal void BeginReplayPresentation()
+        {
+            replayPresenting = true;
+            foreach (VehicleRuntime runtime in vehicles.Values)
+                runtime.Envelope.SetPresentationEnabled(false);
+        }
+
+        internal void PresentReplay(IReadOnlyList<VehicleMomentumState> states)
+        {
+            if (!replayPresenting)
+                throw new InvalidOperationException(
+                    "Begin vehicle replay presentation before sampling it.");
+            if (states == null) throw new ArgumentNullException(nameof(states));
+            foreach (VehicleMomentumState state in states)
+                PresentState(GetVehicleRuntime(state.VehicleId), state);
+        }
+
+        internal void EndReplayPresentation()
+        {
+            if (!replayPresenting) return;
+            replayPresenting = false;
+            foreach (VehicleRuntime runtime in vehicles.Values)
+            {
+                PresentState(runtime, runtime.Session.State);
+                RefreshEnvelopeVisibility(runtime);
+            }
         }
 
         internal static bool ShouldShowMomentumEnvelope(
@@ -172,6 +206,7 @@ namespace GritGud.Presentation.Gameplay
 
         private void LateUpdate()
         {
+            if (replayPresenting) return;
             foreach (VehicleRuntime runtime in vehicles.Values)
             {
                 RefreshEnvelopeVisibility(runtime);
@@ -256,15 +291,29 @@ namespace GritGud.Presentation.Gameplay
             VehicleRuntime runtime,
             VehicleMomentumRecord record)
         {
-            VehicleMomentumState state = record.Resulting;
-            runtime.Root.transform.SetPositionAndRotation(
+            PresentState(runtime, record.Resulting);
+        }
+
+        private static void PresentState(
+            VehicleRuntime runtime,
+            VehicleMomentumState state)
+        {
+            ApplyReplayTransform(runtime.Root, state);
+            Physics.SyncTransforms();
+            runtime.Envelope.RefreshNow();
+        }
+
+        internal static void ApplyReplayTransform(
+            GameObject root,
+            VehicleMomentumState state)
+        {
+            if (root == null) throw new ArgumentNullException(nameof(root));
+            root.transform.SetPositionAndRotation(
                 new Vector3(
                     state.Position.X,
                     state.Position.Y,
                     state.Position.Z),
                 Quaternion.Euler(0f, state.ForwardDegrees, 0f));
-            Physics.SyncTransforms();
-            runtime.Envelope.RefreshNow();
         }
 
         private static GameplayPosition ToGameplayPosition(Vector3 position) =>

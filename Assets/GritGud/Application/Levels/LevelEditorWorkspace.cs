@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using GritGud.Application;
 using GritGud.Domain.Levels;
 
 namespace GritGud.Application.Levels
@@ -22,16 +23,26 @@ namespace GritGud.Application.Levels
     public sealed class LevelEditorWorkspace : IDisposable
     {
         private readonly LevelSession session;
-        private readonly ISet<string> knownArchetypeIds;
+        private readonly LevelValidationContent validationContent;
         private IReadOnlyList<LevelValidationIssue> validationIssues;
         private bool disposed;
 
-        public LevelEditorWorkspace(LevelDocument document, ISet<string> knownArchetypeIds = null)
+        public LevelEditorWorkspace(
+            LevelDocument document,
+            ISet<string> knownArchetypeIds = null,
+            bool initiallySaved = true)
+            : this(document, new LevelValidationContent(knownArchetypeIds), initiallySaved)
         {
-            session = new LevelSession(document);
-            this.knownArchetypeIds = knownArchetypeIds == null
-                ? null
-                : new HashSet<string>(knownArchetypeIds, StringComparer.Ordinal);
+        }
+
+        public LevelEditorWorkspace(
+            LevelDocument document,
+            LevelValidationContent validationContent,
+            bool initiallySaved = true)
+        {
+            session = new LevelSession(document, initiallySaved);
+            this.validationContent = validationContent
+                ?? throw new ArgumentNullException(nameof(validationContent));
             validationIssues = Validate(LevelValidationProfile.Authoring);
             session.Changed += HandleSessionChanged;
         }
@@ -72,10 +83,10 @@ namespace GritGud.Application.Levels
             return session.Redo();
         }
 
-        public void ReplaceDocument(LevelDocument document)
+        public void ReplaceDocument(LevelDocument document, bool isSaved = true)
         {
             ThrowIfDisposed();
-            session.ReplaceDocument(document);
+            session.ReplaceDocument(document, isSaved);
         }
 
         public void MarkSaved()
@@ -105,7 +116,7 @@ namespace GritGud.Application.Levels
         public IReadOnlyList<LevelValidationIssue> Validate(LevelValidationProfile profile)
         {
             ThrowIfDisposed();
-            return LevelValidator.Validate(session.CreateSnapshot(), knownArchetypeIds, profile);
+            return LevelValidator.Validate(session.CreateSnapshot(), validationContent, profile);
         }
 
         public void Dispose()
@@ -122,9 +133,15 @@ namespace GritGud.Application.Levels
         private void HandleSessionChanged(object sender, LevelSessionChangedEventArgs args)
         {
             validationIssues = Validate(LevelValidationProfile.Authoring);
-            Changed?.Invoke(
+            var notifications = new PostCommitNotificationBatch();
+            notifications.Add(
+                Changed,
                 this,
-                new LevelEditorWorkspaceChangedEventArgs(args, validationIssues));
+                new LevelEditorWorkspaceChangedEventArgs(
+                    args,
+                    validationIssues));
+            notifications.Publish(
+                "One or more level-workspace observers failed after the authoritative edit committed.");
         }
 
         private void ThrowIfDisposed()

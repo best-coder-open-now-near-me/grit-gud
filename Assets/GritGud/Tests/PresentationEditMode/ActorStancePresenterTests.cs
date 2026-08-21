@@ -116,13 +116,18 @@ namespace GritGud.Presentation.Tests
                 controller.height = 2f;
                 controller.center = new Vector3(0f, 1f, 0f);
                 var presenter = actor.AddComponent<ActorStancePresenter>();
+                var pinState = actor.AddComponent<
+                    GameplayTurnReplayActorStateHooks>();
+                var targetProfile = actor.AddComponent<
+                    ActorTargetProfilePresenter>();
+                targetProfile.Bind(presenter, pinState);
                 ActorTargetRegionSample[] standing =
-                    presenter.GetTargetRegionSamples().ToArray();
+                    targetProfile.GetTargetRegionSamples().ToArray();
                 Vector3 standingEye = presenter.FirstPersonEyePosition;
 
                 presenter.ApplyResolved(ActorStance.Crouched);
                 ActorTargetRegionSample[] crouched =
-                    presenter.GetTargetRegionSamples().ToArray();
+                    targetProfile.GetTargetRegionSamples().ToArray();
                 Vector3 crouchedEye = presenter.FirstPersonEyePosition;
 
                 Assert.That(standing.Select(sample => sample.Id).Distinct().Count(),

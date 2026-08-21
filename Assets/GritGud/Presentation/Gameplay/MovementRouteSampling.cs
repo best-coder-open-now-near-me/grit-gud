@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using UnityEngine;
 
@@ -51,6 +52,49 @@ namespace GritGud.Presentation.Gameplay
             position = ToVector3(points[points.Count - 1]);
             direction = lastDirection;
             return true;
+        }
+
+        public static bool TrySample(
+            IReadOnlyList<MovementRouteSegmentRecord> segments,
+            float elapsedSeconds,
+            out Vector3 position,
+            out Vector3 direction,
+            out int segmentIndex,
+            out float segmentProgress)
+        {
+            bool sampled = GameplayMovementPresentationSampler.TrySample(
+                segments,
+                elapsedSeconds,
+                fallbackFacingDegrees: 0f,
+                out GameplayMovementPresentationSample result);
+            position = sampled ? ToVector3(result.Position) : default;
+            direction = sampled
+                ? ToVector3(result.Direction)
+                : Vector3.forward;
+            segmentIndex = sampled ? result.SegmentIndex : -1;
+            segmentProgress = sampled ? result.SegmentProgress : 0f;
+            return sampled;
+        }
+
+        public static bool TrySample(
+            MovementRouteRecord route,
+            float elapsedSeconds,
+            out Vector3 position,
+            out Vector3 direction,
+            out int segmentIndex,
+            out float segmentProgress)
+        {
+            bool sampled = GameplayMovementPresentationSampler.TrySample(
+                route,
+                elapsedSeconds,
+                out GameplayMovementPresentationSample result);
+            position = sampled ? ToVector3(result.Position) : default;
+            direction = sampled
+                ? ToVector3(result.Direction)
+                : Vector3.forward;
+            segmentIndex = sampled ? result.SegmentIndex : -1;
+            segmentProgress = sampled ? result.SegmentProgress : 0f;
+            return sampled;
         }
 
         public static Vector3 ToVector3(GameplayPosition position)

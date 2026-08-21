@@ -10,6 +10,7 @@ namespace GritGud.Application.Gameplay
         ActorUnavailable,
         ActorNotActive,
         ActorIncapacitated,
+        ActorPinned,
         OperationInProgress,
         ItemUnavailable,
         PowerUnavailable,
@@ -106,12 +107,19 @@ namespace GritGud.Application.Gameplay
             string actorId,
             string itemId)
         {
-            if (!gameplay.TryGetActor(actorId, out GameplayActorSnapshot actor))
+            if (!GameplayActorActionAuthority.TryAuthorize(
+                    gameplay,
+                    actorId,
+                    GameplayActionTiming.Immediate,
+                    startsEncounter: false,
+                    blocksPinnedActor: true,
+                    out GameplayActorSnapshot actor,
+                    out GameplayActorActionFailure authorizationFailure))
             {
                 return Power(
                     null,
                     default,
-                    InventoryPowerAvailabilityFailure.ActorUnavailable);
+                    ToInventoryFailure(authorizationFailure));
             }
 
             InventoryItemDefinition item = gameplay.GetInventoryItem(
@@ -145,35 +153,7 @@ namespace GritGud.Application.Gameplay
                     InventoryPowerAvailabilityFailure.Depleted);
             }
 
-            if (gameplay.Operation != GameplaySessionOperation.None)
-            {
-                return Power(
-                    item,
-                    authoredCost,
-                    InventoryPowerAvailabilityFailure.OperationInProgress);
-            }
-
-            if (gameplay.IsActorIncapacitated(actorId))
-            {
-                return Power(
-                    item,
-                    authoredCost,
-                    InventoryPowerAvailabilityFailure.ActorIncapacitated);
-            }
-
             bool turnBased = gameplay.Mode == GameplaySessionMode.TurnBased;
-            if (turnBased
-                && !string.Equals(
-                    gameplay.ActiveActorId,
-                    actorId,
-                    StringComparison.Ordinal))
-            {
-                return Power(
-                    item,
-                    authoredCost,
-                    InventoryPowerAvailabilityFailure.ActorNotActive);
-            }
-
             if (item.Attack != null
                 && !string.Equals(
                     actor.EquippedItemId,
@@ -186,21 +166,14 @@ namespace GritGud.Application.Gameplay
                     InventoryPowerAvailabilityFailure.RequiresEquippedItem);
             }
 
+            // Exploration may begin a combat action at any time.  Whether the
+            // selected target starts an encounter is decided only when that
+            // action is resolved; the voluntary-turn cooldown must never
+            // disable a weapon or its hotkey beforehand.
             bool immediateExplorationAttack = !turnBased
-                && item.Attack != null
-                && item.Attack.Projectile == null;
+                && item.Attack != null;
             bool conditionalExplorationCost = !turnBased
                 && item.ConsumablePower != null;
-            if (!turnBased
-                && !immediateExplorationAttack
-                && !conditionalExplorationCost
-                && !gameplay.CanEnterTurnMode)
-            {
-                return Power(
-                    item,
-                    authoredCost,
-                    InventoryPowerAvailabilityFailure.TurnModeUnavailable);
-            }
 
             ActionCost resolvedCost = immediateExplorationAttack
                 ? new ActionCost(0, 0f, authoredCost.Mobility)
@@ -240,6 +213,8 @@ namespace GritGud.Application.Gameplay
                     return "REQUIRES ACTIVE TURN";
                 case InventoryPowerAvailabilityFailure.ActorIncapacitated:
                     return "ACTOR INCAPACITATED";
+                case InventoryPowerAvailabilityFailure.ActorPinned:
+                    return "PUSH OFF THE PINNING PROP FIRST";
                 case InventoryPowerAvailabilityFailure.OperationInProgress:
                     return "WAIT FOR CURRENT ACTION";
                 case InventoryPowerAvailabilityFailure.ItemUnavailable:
@@ -269,6 +244,8 @@ namespace GritGud.Application.Gameplay
                     return string.Empty;
                 case EquipmentChangeFailure.ActorNotActive:
                     return "REQUIRES ACTIVE TURN";
+                case EquipmentChangeFailure.ActorIncapacitated:
+                    return "ACTOR INCAPACITATED";
                 case EquipmentChangeFailure.OperationInProgress:
                     return "WAIT FOR CURRENT ACTION";
                 case EquipmentChangeFailure.ItemNotFound:
@@ -283,6 +260,30 @@ namespace GritGud.Application.Gameplay
                     return "CURRENT ITEM MUST BE UNEQUIPPED";
                 case EquipmentChangeFailure.AlreadyInRequestedState:
                     return "ITEM ALREADY IN REQUESTED STATE";
+                case EquipmentChangeFailure.ActorPinned:
+                    return "PUSH OFF THE PINNING PROP FIRST";
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(failure));
+            }
+        }
+
+        private static InventoryPowerAvailabilityFailure ToInventoryFailure(
+            GameplayActorActionFailure failure)
+        {
+            switch (failure)
+            {
+                case GameplayActorActionFailure.ActorUnavailable:
+                    return InventoryPowerAvailabilityFailure.ActorUnavailable;
+                case GameplayActorActionFailure.ActorNotActive:
+                    return InventoryPowerAvailabilityFailure.ActorNotActive;
+                case GameplayActorActionFailure.ActorIncapacitated:
+                    return InventoryPowerAvailabilityFailure.ActorIncapacitated;
+                case GameplayActorActionFailure.ActorPinned:
+                    return InventoryPowerAvailabilityFailure.ActorPinned;
+                case GameplayActorActionFailure.OperationInProgress:
+                    return InventoryPowerAvailabilityFailure.OperationInProgress;
+                case GameplayActorActionFailure.TurnModeRequired:
+                    return InventoryPowerAvailabilityFailure.TurnModeUnavailable;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(failure));
             }

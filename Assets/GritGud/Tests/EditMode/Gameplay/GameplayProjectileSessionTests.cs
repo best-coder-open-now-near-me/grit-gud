@@ -63,7 +63,7 @@ namespace GritGud.Domain.Tests.Gameplay
                 Is.EqualTo(2));
             Assert.That(projectiles.Launches, Has.Count.EqualTo(1));
             ProjectileLaunchRecord launch = projectiles.Launches[0];
-            Assert.That(launch.TurnActionPointAllowance, Is.EqualTo(4));
+            Assert.That(launch.TurnActionPointTimeScale, Is.EqualTo(4));
             Assert.That(
                 launch.RemainingActionPointsAfterLaunch,
                 Is.EqualTo(2));
@@ -72,6 +72,70 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(projectiles.HasActiveProjectiles, Is.True);
             Assert.That(action.Outcomes[0],
                 Is.TypeOf<ProjectileLaunchedActionOutcome>());
+        }
+
+        [Test]
+        public void PreparedLaunchIsNonMutatingAndMatchesAuthoritativeFlight()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            gameplay.EnterTurnMode();
+            var projectiles = CreateProjectileSession(
+                gameplay,
+                new QueuedSegmentQuery());
+
+            Assert.That(projectiles.TryPrepareLaunch(
+                "player",
+                "target",
+                new GameplayPosition(0f, 0f, 10f),
+                out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                out ProjectileLaunchFailure failure), Is.True);
+
+            Assert.That(failure, Is.EqualTo(ProjectileLaunchFailure.None));
+            Assert.That(gameplay.ResolvedActions, Is.Empty);
+            Assert.That(projectiles.Launches, Is.Empty);
+            Assert.That(projectiles.ProjectileIds, Is.Empty);
+            Assert.That(prepared.Predicted.Projectiles, Has.Count.EqualTo(1));
+            ProjectileFlightSnapshot predicted = prepared.Predicted.Projectiles[0];
+            Assert.That(predicted.ProjectileId, Is.EqualTo("projectile.1"));
+            Assert.That(predicted.Status, Is.EqualTo(
+                ProjectileFlightStatus.InFlight));
+            Assert.That(predicted.Position, Is.EqualTo(predicted.Launch.Origin));
+            Assert.That(
+                prepared.Predicted.Session.GetActor("player")
+                    .TurnBudget.ActionPoints,
+                Is.EqualTo(2));
+
+            GameplayTransitionCommitResult result =
+                projectiles.CommitPreparedLaunch(prepared);
+
+            Assert.That(result.MatchesPrediction, Is.True);
+            Assert.That(projectiles.Launches, Has.Count.EqualTo(1));
+            Assert.That(projectiles.GetProjectile("projectile.1").Status,
+                Is.EqualTo(ProjectileFlightStatus.InFlight));
+        }
+
+        [Test]
+        public void PreparedLaunchRejectsInterveningTurnBeforeMutation()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            gameplay.EnterTurnMode();
+            var projectiles = CreateProjectileSession(
+                gameplay,
+                new QueuedSegmentQuery());
+            Assert.That(projectiles.TryPrepareLaunch(
+                "player",
+                "target",
+                new GameplayPosition(0f, 0f, 10f),
+                out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                out _), Is.True);
+            Assert.That(gameplay.TryEndTurn("player", out _), Is.True);
+
+            Assert.Throws<InvalidOperationException>(
+                () => projectiles.CommitPreparedLaunch(prepared));
+
+            Assert.That(projectiles.Launches, Is.Empty);
+            Assert.That(projectiles.ProjectileIds, Is.Empty);
+            Assert.That(gameplay.ResolvedActions, Is.Empty);
         }
 
         [Test]
@@ -248,7 +312,10 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(second.Resulting.Position.Z, Is.EqualTo(6f));
             Assert.That(second.Resulting.ElapsedTurnTime, Is.EqualTo(1.5f));
             Assert.That(second.Resulting.Impact.HitEntityId, Is.EqualTo("target"));
-            Assert.That(second.Resulting.Impact.WorldStateRevision, Is.EqualTo(101));
+            Assert.That(second.Resulting.Impact.WorldStateRevision,
+                Is.EqualTo(second.WorldStateRevision));
+            Assert.That(second.WorldStateRevision,
+                Is.GreaterThan(first.WorldStateRevision));
             Assert.That(query.Queries, Has.Count.EqualTo(2));
             Assert.That(query.Queries[0].StartingTurnTime, Is.EqualTo(0f));
             Assert.That(query.Queries[0].ArrivalTurnTime, Is.EqualTo(1f));
@@ -294,7 +361,8 @@ namespace GritGud.Domain.Tests.Gameplay
                 Is.EqualTo(ProjectileFlightStatus.Impacted));
             Assert.That(replayed.Position.Z, Is.EqualTo(3f));
             Assert.That(replayed.Impact.HitEntityId, Is.EqualTo("cover.wall"));
-            Assert.That(replayed.Impact.WorldStateRevision, Is.EqualTo(22));
+            Assert.That(replayed.Impact.WorldStateRevision,
+                Is.EqualTo(advance.WorldStateRevision));
             Assert.That(replayGameplay.GetActor("player").TurnBudget.ActionPoints,
                 Is.EqualTo(2));
         }
@@ -353,10 +421,19 @@ namespace GritGud.Domain.Tests.Gameplay
                 "player", "world.aim-point", new GameplayPosition(0f, 1f, 10f),
                 out _, out _);
 
-            ProjectileAdvanceRecord advance = projectiles.Advance(
-                "projectile.1", 1f);
+            GameplayPreparedTransition<ProjectileAdvanceRecord> prepared =
+                projectiles.PrepareAdvance("projectile.1", 1f);
 
-            Assert.That(advance.Resulting.Impact.BlastEffects, Has.Count.EqualTo(1));
+            Assert.That(prepared.Record.Resulting.Impact.BlastEffects,
+                Has.Count.EqualTo(1));
+            Assert.That(projectiles.HasActiveProjectiles, Is.True);
+            Assert.That(gameplay.GetActor("target").Wounds.WoundCount, Is.Zero);
+            Assert.That(
+                prepared.Predicted.Session.GetActor("target")
+                    .Wounds.LeftLegWounds,
+                Is.EqualTo(1));
+            Assert.That(projectiles.CommitPreparedAdvance(prepared)
+                .MatchesPrediction, Is.True);
             Assert.That(projectiles.HasActiveProjectiles, Is.False);
             Assert.That(gameplay.GetActor("target").Wounds.WoundCount, Is.EqualTo(1));
             Assert.That(gameplay.GetActor("target").Wounds.MovementPenalty,
@@ -367,6 +444,204 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(
                 gameplay.GetActor("target").Wounds.TorsoWounds,
                 Is.Zero);
+        }
+
+        [Test]
+        public void PreparedAdvanceRejectsInterveningTurnBeforeMutation()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            gameplay.EnterTurnMode();
+            var query = new QueuedSegmentQuery(
+                ProjectileSegmentQueryResult.Clear(worldStateRevision: 12));
+            var projectiles = CreateProjectileSession(gameplay, query);
+            projectiles.TryLaunch(
+                "player",
+                "target",
+                new GameplayPosition(0f, 0f, 10f),
+                out _,
+                out _);
+            GameplayPreparedTransition<ProjectileAdvanceRecord> prepared =
+                projectiles.PrepareAdvance("projectile.1", 1f);
+            Assert.That(gameplay.TryEndTurn("player", out _), Is.True);
+
+            Assert.Throws<InvalidOperationException>(
+                () => projectiles.CommitPreparedAdvance(prepared));
+
+            Assert.That(projectiles.Advances, Is.Empty);
+            Assert.That(
+                projectiles.GetProjectile("projectile.1").DistanceTraveled,
+                Is.Zero);
+        }
+
+        [TestCase(-1L, TestName = "PreparedAdvanceRejectsStaleWorldRevisionAtomically")]
+        [TestCase(1L, TestName = "PreparedAdvanceRejectsFutureWorldRevisionAtomically")]
+        public void PreparedAdvanceRejectsMismatchedWorldRevisionAtomically(
+            long revisionOffset)
+        {
+            GameplaySession gameplay = CreateGameplay();
+            gameplay.EnterTurnMode();
+            var query = new RevisionSequenceSegmentQuery(
+                gameplay,
+                revisionOffset);
+            GameplayProjectileSession projectiles = CreateProjectileSession(
+                gameplay,
+                query);
+            projectiles.TryLaunch(
+                "player",
+                "target",
+                new GameplayPosition(0f, 0f, 10f),
+                out _,
+                out _);
+            GameplayCombatStateSnapshot before = GameplayCombatStateCapture
+                .Capture(gameplay, projectiles: projectiles);
+
+            Assert.Throws<InvalidOperationException>(() =>
+                projectiles.PrepareAdvance("projectile.1", 1f));
+
+            AssertProjectileStateUnchanged(before, gameplay, projectiles);
+            Assert.That(query.QueryCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void RevisionCanBecomeStaleBetweenPredictionAndPreparation()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            gameplay.EnterTurnMode();
+            var query = new RevisionSequenceSegmentQuery(
+                gameplay,
+                0L,
+                -1L);
+            GameplayProjectileSession projectiles = CreateProjectileSession(
+                gameplay,
+                query);
+            projectiles.TryLaunch(
+                "player",
+                "target",
+                new GameplayPosition(0f, 0f, 10f),
+                out _,
+                out _);
+            GameplayCombatStateSnapshot before = GameplayCombatStateCapture
+                .Capture(gameplay, projectiles: projectiles);
+
+            ProjectileAdvancePrediction prediction = projectiles.PredictAdvance(
+                "projectile.1",
+                1f);
+            Assert.That(
+                prediction.WorldStateRevision,
+                Is.EqualTo(before.Session.JournalSequence));
+            Assert.Throws<InvalidOperationException>(() =>
+                projectiles.PrepareAdvance("projectile.1", 1f));
+
+            AssertProjectileStateUnchanged(before, gameplay, projectiles);
+            Assert.That(query.QueryCount, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void ReducerRejectsRevisionThatBecameStaleBeforeReduction()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            gameplay.EnterTurnMode();
+            var query = new RevisionSequenceSegmentQuery(gameplay, 0L);
+            GameplayProjectileSession projectiles = CreateProjectileSession(
+                gameplay,
+                query);
+            projectiles.TryLaunch(
+                "player",
+                "target",
+                new GameplayPosition(0f, 0f, 10f),
+                out _,
+                out _);
+            GameplayCombatStateSnapshot preparedState =
+                GameplayCombatStateCapture.Capture(
+                    gameplay,
+                    projectiles: projectiles);
+            ProjectileAdvanceRecord advance = GameplayProjectilePreparation
+                .PrepareAdvance(
+                    preparedState,
+                    "projectile.1",
+                    1f,
+                    query);
+            var mutation = new GameplayCanonicalStateMutation(preparedState)
+            {
+                JournalSequence = checked(
+                    preparedState.Session.JournalSequence + 1L),
+                Revision = checked(preparedState.Session.Revision + 1L),
+            };
+            GameplayCombatStateSnapshot staleState = mutation.Build();
+            var payload = new GameplayProjectileAdvanceTransitionPayload(
+                "player",
+                advance,
+                destructiblesShareGameplayJournal: false);
+            var transition = new GameplaySemanticTransition(
+                new GameplayTransitionIdentity(
+                    advance.Sequence,
+                    payload.Profile.Capability.ToString(),
+                    payload.ActorId,
+                    payload.SubjectId),
+                staleState.CanonicalHash,
+                payload);
+            string stateHash = staleState.CanonicalHash;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                new GameplayWorldTransitionReducer().Reduce(
+                    staleState,
+                    transition));
+
+            Assert.That(staleState.CanonicalHash, Is.EqualTo(stateHash));
+            Assert.That(
+                staleState.Projectiles[0].DistanceTraveled,
+                Is.Zero);
+            Assert.That(
+                staleState.Projectiles[0].ElapsedTurnTime,
+                Is.Zero);
+            Assert.That(staleState.Projectiles[0].Impact, Is.Null);
+        }
+
+        [Test]
+        public void PreparedImpactPredictsDestructibleDamage()
+        {
+            GameplaySession gameplay = CreateGameplayWithBlast();
+            gameplay.EnterTurnMode();
+            var destructibles = new DestructiblePropSession(new[]
+            {
+                new DestructiblePropDefinition(
+                    "crate",
+                    10f,
+                    DestructiblePropState.Intact),
+            }, gameplay.Journal);
+            var query = new QueuedSegmentQuery(
+                ProjectileSegmentQueryResult.Collision(
+                    15L,
+                    "crate",
+                    0.5f,
+                    new[]
+                    {
+                        new BlastEffectRecord(
+                            "crate",
+                            BlastSubjectKind.DestructibleProp,
+                            1f,
+                            occlusionExposure: 1f,
+                            distanceFalloff: 0.5f),
+                    }));
+            GameplayProjectileSession projectiles = CreateProjectileSession(
+                gameplay,
+                query,
+                destructibles);
+            projectiles.TryLaunch(
+                "player", "world.aim-point", new GameplayPosition(0f, 1f, 10f),
+                out _, out _);
+
+            GameplayPreparedTransition<ProjectileAdvanceRecord> prepared =
+                projectiles.PrepareAdvance("projectile.1", 1f);
+
+            Assert.That(destructibles.GetProp("crate").RemainingIntegrity,
+                Is.EqualTo(10f));
+            Assert.That(prepared.Predicted.Destructibles[0].RemainingIntegrity,
+                Is.EqualTo(8f));
+            Assert.That(projectiles.CommitPreparedAdvance(prepared)
+                .MatchesPrediction, Is.True);
+            Assert.That(destructibles.GetProp("crate").RemainingIntegrity,
+                Is.EqualTo(8f));
         }
 
         private static GameplaySession CreateGameplay(
@@ -407,7 +682,8 @@ namespace GritGud.Domain.Tests.Gameplay
         private static GameplaySession CreateGameplayWithBlast()
         {
             var projectile = new ProjectileFlightDefinition(
-                "projectile.rocket", 4f, 0.1f, 12f, 1f, 1f, true, 5f, 2f);
+                "projectile.rocket", 4f, 0.1f, 12f, 1f, 1f, true, 5f, 2f,
+                blastIntegrityDamage: 4f);
             var player = new ScenarioActorDefinition(
                 "player", 10,
                 new GameplayActorPose(new GameplayPosition(0f, 0f, 0f), 0f),
@@ -468,6 +744,7 @@ namespace GritGud.Domain.Tests.Gameplay
         private sealed class QueuedSegmentQuery : IProjectileSegmentQuery
         {
             private readonly Queue<ProjectileSegmentQueryResult> results;
+            private Func<long> worldStateRevision;
 
             public QueuedSegmentQuery(
                 params ProjectileSegmentQueryResult[] queuedResults)
@@ -478,17 +755,68 @@ namespace GritGud.Domain.Tests.Gameplay
             public List<ProjectileSegmentQuery> Queries { get; } =
                 new List<ProjectileSegmentQuery>();
 
+            public void BindWorldStateRevision(Func<long> revision)
+            {
+                if (worldStateRevision != null)
+                    throw new InvalidOperationException(
+                        "Projectile query revision is already bound.");
+                worldStateRevision = revision ?? throw new ArgumentNullException(
+                    nameof(revision));
+            }
+
             public ProjectileSegmentQueryResult Query(
                 ProjectileSegmentQuery query)
             {
                 Queries.Add(query);
+                long revision = worldStateRevision?.Invoke()
+                    ?? throw new InvalidOperationException(
+                        "Projectile query revision is not bound.");
                 if (results.Count == 0)
                 {
                     return ProjectileSegmentQueryResult.Clear(
-                        worldStateRevision: Queries.Count);
+                        revision);
                 }
+                ProjectileSegmentQueryResult queued = results.Dequeue();
+                return queued.HasCollision
+                    ? ProjectileSegmentQueryResult.Collision(
+                        revision,
+                        queued.HitEntityId,
+                        queued.CollisionFraction,
+                        queued.BlastEffects)
+                    : ProjectileSegmentQueryResult.Clear(revision);
+            }
+        }
 
-                return results.Dequeue();
+        private sealed class RevisionSequenceSegmentQuery :
+            IProjectileSegmentQuery
+        {
+            private readonly GameplaySession gameplay;
+            private readonly Queue<long> revisionOffsets;
+
+            public RevisionSequenceSegmentQuery(
+                GameplaySession currentGameplay,
+                params long[] offsets)
+            {
+                gameplay = currentGameplay ?? throw new ArgumentNullException(
+                    nameof(currentGameplay));
+                revisionOffsets = new Queue<long>(offsets
+                    ?? throw new ArgumentNullException(nameof(offsets)));
+            }
+
+            public int QueryCount { get; private set; }
+
+            public ProjectileSegmentQueryResult Query(
+                ProjectileSegmentQuery query)
+            {
+                if (revisionOffsets.Count == 0)
+                    throw new InvalidOperationException(
+                        "The test did not author enough revision results.");
+                QueryCount++;
+                long revision = checked(
+                    GameplayCombatStateCapture.Capture(gameplay)
+                        .Session.JournalSequence
+                    + revisionOffsets.Dequeue());
+                return ProjectileSegmentQueryResult.Clear(revision);
             }
         }
 
@@ -498,6 +826,17 @@ namespace GritGud.Domain.Tests.Gameplay
         {
             var destructibles = new DestructiblePropSession(
                 Array.Empty<DestructiblePropDefinition>());
+            return CreateProjectileSession(gameplay, query, destructibles);
+        }
+
+        private static GameplayProjectileSession CreateProjectileSession(
+            GameplaySession gameplay,
+            IProjectileSegmentQuery query,
+            DestructiblePropSession destructibles)
+        {
+            if (query is QueuedSegmentQuery queued)
+                queued.BindWorldStateRevision(
+                    () => gameplay.Journal.LastEntry?.Sequence ?? 0L);
             return new GameplayProjectileSession(
                 gameplay,
                 query,
@@ -513,6 +852,35 @@ namespace GritGud.Domain.Tests.Gameplay
                 throw new AssertionException(
                     "Recorded projectile replay must not repeat collision queries.");
             }
+        }
+
+        private static void AssertProjectileStateUnchanged(
+            GameplayCombatStateSnapshot before,
+            GameplaySession gameplay,
+            GameplayProjectileSession projectiles)
+        {
+            GameplayCombatStateSnapshot after = GameplayCombatStateCapture
+                .Capture(gameplay, projectiles: projectiles);
+            Assert.That(after.CanonicalHash, Is.EqualTo(before.CanonicalHash));
+            Assert.That(
+                after.Session.JournalSequence,
+                Is.EqualTo(before.Session.JournalSequence));
+            Assert.That(
+                after.Session.GetActor("player").TurnBudget.ActionPoints,
+                Is.EqualTo(
+                    before.Session.GetActor("player")
+                        .TurnBudget.ActionPoints));
+            Assert.That(
+                after.Projectiles[0].DistanceTraveled,
+                Is.EqualTo(before.Projectiles[0].DistanceTraveled));
+            Assert.That(
+                after.Projectiles[0].ElapsedTurnTime,
+                Is.EqualTo(before.Projectiles[0].ElapsedTurnTime));
+            Assert.That(
+                after.Projectiles[0].Status,
+                Is.EqualTo(before.Projectiles[0].Status));
+            Assert.That(after.Projectiles[0].Impact, Is.Null);
+            Assert.That(projectiles.Advances, Is.Empty);
         }
     }
 }

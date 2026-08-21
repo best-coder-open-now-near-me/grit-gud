@@ -25,6 +25,7 @@ namespace GritGud.Presentation.Tests
                 Assert.That(gameplay.FindAction("Aim", true), Is.Not.Null);
                 Assert.That(gameplay.FindAction("CameraZoom", true), Is.Not.Null);
                 Assert.That(gameplay.FindAction("Attack", true), Is.Not.Null);
+                Assert.That(gameplay.FindAction("Reload", true), Is.Not.Null);
                 Assert.That(gameplay.FindAction("ToggleTurnMode", true), Is.Not.Null);
                 Assert.That(gameplay.FindAction("ToggleStance", true), Is.Not.Null);
                 Assert.That(gameplay.FindAction("ToggleCameraView", true), Is.Not.Null);
@@ -57,6 +58,14 @@ namespace GritGud.Presentation.Tests
                     gameplay.FindAction("CyclePartyMember", true).bindings
                         .Select(binding => binding.path),
                     Is.EquivalentTo(new[] { "<Keyboard>/tab" }));
+                Assert.That(
+                    gameplay.FindAction("Reload", true).bindings
+                        .Select(binding => binding.path),
+                    Is.EquivalentTo(new[] { "<Keyboard>/r" }));
+                Assert.That(
+                    gameplay.FindAction("CancelRoute", true).bindings
+                        .Select(binding => binding.path),
+                    Is.EquivalentTo(new[] { "<Keyboard>/x" }));
             }
             finally
             {

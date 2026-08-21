@@ -6,20 +6,34 @@ namespace GritGud.Domain.Gameplay
 {
     public sealed class ScenarioTimingDefinition
     {
-        public ScenarioTimingDefinition(float minimumVoluntaryTurnSeconds)
+        public ScenarioTimingDefinition(
+            float minimumVoluntaryTurnSeconds,
+            int startingActionPoints = 4,
+            int actionPointIncome = 4,
+            int maximumHeldActionPoints = 6)
         {
-            if (float.IsNaN(minimumVoluntaryTurnSeconds)
-                || float.IsInfinity(minimumVoluntaryTurnSeconds)
-                || minimumVoluntaryTurnSeconds <= 0f)
+            if (!IsValidMinimumVoluntaryTurnSeconds(
+                    minimumVoluntaryTurnSeconds))
             {
                 throw new ArgumentOutOfRangeException(
                     nameof(minimumVoluntaryTurnSeconds));
             }
 
             MinimumVoluntaryTurnSeconds = minimumVoluntaryTurnSeconds;
+            ActionPointEconomy = new TurnActionPointEconomy(
+                startingActionPoints,
+                actionPointIncome,
+                maximumHeldActionPoints);
         }
 
         public float MinimumVoluntaryTurnSeconds { get; }
+
+        public TurnActionPointEconomy ActionPointEconomy { get; }
+
+        public static bool IsValidMinimumVoluntaryTurnSeconds(float value) =>
+            !float.IsNaN(value)
+            && !float.IsInfinity(value)
+            && value > 0f;
     }
 
     public sealed class ScenarioActorDefinition
@@ -56,7 +70,8 @@ namespace GritGud.Domain.Gameplay
             string initiallyEquippedItemId,
             CharacterProfileDefinition characterProfile = null,
             DisplacementAbilityDefinition displacementAbility = null,
-            ActorCombatDefinition combat = null)
+            ActorCombatDefinition combat = null,
+            IEnumerable<AmmunitionReserveDefinition> ammunitionReserves = null)
             : this(
                 id,
                 initiative,
@@ -67,7 +82,8 @@ namespace GritGud.Domain.Gameplay
                 initiallyEquippedItemId,
                 characterProfile,
                 displacementAbility,
-                combat)
+                combat,
+                ammunitionReserves)
         {
         }
 
@@ -81,7 +97,8 @@ namespace GritGud.Domain.Gameplay
             string initiallyEquippedItemId,
             CharacterProfileDefinition characterProfile = null,
             DisplacementAbilityDefinition displacementAbility = null,
-            ActorCombatDefinition combat = null)
+            ActorCombatDefinition combat = null,
+            IEnumerable<AmmunitionReserveDefinition> ammunitionReserves = null)
         {
             Id = RequireId(id, nameof(id));
             Initiative = initiative;
@@ -118,6 +135,9 @@ namespace GritGud.Domain.Gameplay
             DerivedStatistics = characterProfile?.DerivedStatistics;
             DisplacementAbility = displacementAbility;
             Combat = combat ?? ActorCombatDefinition.CreateLegacyNeutral();
+            AmmunitionReserves = CopyAmmunitionReserves(
+                Inventory,
+                ammunitionReserves);
             ValidateHotbarAssignments(Inventory, DisplacementAbility);
         }
 
@@ -144,6 +164,9 @@ namespace GritGud.Domain.Gameplay
         public DisplacementAbilityDefinition DisplacementAbility { get; }
 
         public ActorCombatDefinition Combat { get; }
+
+        public IReadOnlyList<AmmunitionReserveDefinition>
+            AmmunitionReserves { get; }
 
         public IReadOnlyList<DisplacementActionDefinition>
             DisplacementActions => DisplacementAbility?.Actions
@@ -201,7 +224,8 @@ namespace GritGud.Domain.Gameplay
                     InitiallyEquippedItemId,
                     CharacterProfile,
                     DisplacementAbility,
-                    Combat);
+                    Combat,
+                    AmmunitionReserves);
 
         private static string RequireId(string value, string parameterName)
         {
@@ -245,6 +269,44 @@ namespace GritGud.Domain.Gameplay
                 copy.Add(item);
             }
 
+            return copy.AsReadOnly();
+        }
+
+        private static IReadOnlyList<AmmunitionReserveDefinition>
+            CopyAmmunitionReserves(
+                IReadOnlyList<InventoryItemDefinition> inventory,
+                IEnumerable<AmmunitionReserveDefinition> reserves)
+        {
+            var requiredTypes = new HashSet<string>(StringComparer.Ordinal);
+            foreach (InventoryItemDefinition item in inventory)
+                if (item.Ammunition != null)
+                    requiredTypes.Add(item.Ammunition.AmmoTypeId);
+
+            var copy = new List<AmmunitionReserveDefinition>();
+            var authoredTypes = new HashSet<string>(StringComparer.Ordinal);
+            foreach (AmmunitionReserveDefinition reserve in reserves
+                ?? Array.Empty<AmmunitionReserveDefinition>())
+            {
+                if (!authoredTypes.Add(reserve.AmmoTypeId))
+                    throw new ArgumentException(
+                        $"Ammunition reserve '{reserve.AmmoTypeId}' is duplicated.",
+                        nameof(reserves));
+                if (!requiredTypes.Contains(reserve.AmmoTypeId))
+                    throw new ArgumentException(
+                        $"Ammunition reserve '{reserve.AmmoTypeId}' has no matching weapon.",
+                        nameof(reserves));
+                copy.Add(reserve);
+            }
+
+            foreach (string ammoTypeId in requiredTypes)
+                if (!authoredTypes.Contains(ammoTypeId))
+                    throw new ArgumentException(
+                        $"Ammunition type '{ammoTypeId}' requires an actor reserve.",
+                        nameof(reserves));
+
+            copy.Sort((left, right) => StringComparer.Ordinal.Compare(
+                left.AmmoTypeId,
+                right.AmmoTypeId));
             return copy.AsReadOnly();
         }
 
@@ -294,7 +356,10 @@ namespace GritGud.Domain.Gameplay
             float woundMovementPenalty,
             ProjectileFlightDefinition projectile = null,
             AccuracyDecayDefinition accuracyDecay = null,
-            ContactAttackDefinition contact = null)
+            ContactAttackDefinition contact = null,
+            DirectFireDamageDefinition directFireDamage = null,
+            float soundSignature = 1f,
+            float directVehicleIntegrityDamage = 0f)
         {
             if (string.IsNullOrWhiteSpace(actionId))
             {
@@ -317,6 +382,18 @@ namespace GritGud.Domain.Gameplay
                 throw new ArgumentOutOfRangeException(
                     nameof(woundMovementPenalty));
             }
+            if (float.IsNaN(soundSignature)
+                || float.IsInfinity(soundSignature)
+                || soundSignature < 0f
+                || soundSignature > 1f)
+            {
+                throw new ArgumentOutOfRangeException(nameof(soundSignature));
+            }
+            if (float.IsNaN(directVehicleIntegrityDamage)
+                || float.IsInfinity(directVehicleIntegrityDamage)
+                || directVehicleIntegrityDamage < 0f)
+                throw new ArgumentOutOfRangeException(
+                    nameof(directVehicleIntegrityDamage));
 
             if (projectile != null && contact != null)
             {
@@ -324,6 +401,19 @@ namespace GritGud.Domain.Gameplay
                     "An attack cannot be both a projectile and a contact attack.",
                     nameof(contact));
             }
+
+            if (directFireDamage != null
+                && (projectile != null || contact != null))
+            {
+                throw new ArgumentException(
+                    "Only ranged immediate attacks can author direct-fire prop damage.",
+                    nameof(directFireDamage));
+            }
+            if (directVehicleIntegrityDamage > 0f
+                && (projectile != null || contact != null))
+                throw new ArgumentException(
+                    "Only ranged immediate attacks can author direct vehicle integrity damage.",
+                    nameof(directVehicleIntegrityDamage));
 
             if (contact != null && accuracyDecay != null)
             {
@@ -345,6 +435,9 @@ namespace GritGud.Domain.Gameplay
             WoundMovementPenalty = woundMovementPenalty;
             Projectile = projectile;
             Contact = contact;
+            DirectFireDamage = directFireDamage;
+            SoundSignature = soundSignature;
+            DirectVehicleIntegrityDamage = directVehicleIntegrityDamage;
             AccuracyDecay = contact == null
                 ? accuracyDecay
                 : AccuracyDecayDefinition.None;
@@ -363,6 +456,12 @@ namespace GritGud.Domain.Gameplay
         public AccuracyDecayDefinition AccuracyDecay { get; }
 
         public ContactAttackDefinition Contact { get; }
+
+        public DirectFireDamageDefinition DirectFireDamage { get; }
+
+        public float SoundSignature { get; }
+
+        public float DirectVehicleIntegrityDamage { get; }
 
         public bool CanTargetWorldPoint => Projectile == null && Contact == null;
     }

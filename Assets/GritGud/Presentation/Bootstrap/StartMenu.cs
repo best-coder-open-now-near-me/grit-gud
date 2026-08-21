@@ -1,3 +1,9 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using GritGud.Application.Levels;
+using GritGud.Presentation.Levels;
 using UnityEngine;
 
 namespace GritGud.Presentation.Bootstrap
@@ -8,6 +14,20 @@ namespace GritGud.Presentation.Bootstrap
     /// </summary>
     public sealed class StartMenu : MonoBehaviour
     {
+        private enum LevelSelectionKind
+        {
+            Committed,
+            CloudDraft,
+        }
+
+        private enum DraftDialogAction
+        {
+            None,
+            Rename,
+            Duplicate,
+            Delete,
+        }
+
         private const float ReferenceWidth = 1600f;
         private const float ReferenceHeight = 900f;
 
@@ -27,10 +47,38 @@ namespace GritGud.Presentation.Bootstrap
         private GUIStyle titleStyle;
         private GUIStyle subtitleStyle;
         private GUIStyle buttonStyle;
+        private GUIStyle levelButtonStyle;
+        private GUIStyle statusStyle;
+        private GUIStyle releaseStyle;
         private Texture2D whiteTexture;
         private Texture2D buttonNormalTexture;
         private Texture2D buttonHoverTexture;
         private Texture2D buttonActiveTexture;
+        private IReadOnlyList<CommittedLevelEntry> committedLevels =
+            Array.Empty<CommittedLevelEntry>();
+        private LevelSelectionKind selectedKind;
+        private string selectedKey = string.Empty;
+        private string launchStatus = string.Empty;
+        private string cloudDraftStatus = string.Empty;
+        private DraftDialogAction draftDialogAction;
+        private string draftDialogName = string.Empty;
+        private string draftDialogStatus = string.Empty;
+        private bool draftDialogRunning;
+        private Vector2 levelScroll;
+
+        internal string SelectedResourceKey => selectedKind == LevelSelectionKind.Committed
+            ? selectedKey
+            : string.Empty;
+
+        internal string LaunchStatus => launchStatus;
+
+        internal void SetLaunchStatus(string value) =>
+            launchStatus = value ?? string.Empty;
+
+        private void OnEnable()
+        {
+            RefreshCommittedLevels();
+        }
 
         private void OnGUI()
         {
@@ -48,6 +96,7 @@ namespace GritGud.Presentation.Bootstrap
 
             DrawBackdrop();
             DrawMenu();
+            DrawDraftDialog();
 
             GUI.matrix = previousMatrix;
         }
@@ -68,30 +117,320 @@ namespace GritGud.Presentation.Bootstrap
             DrawGlowLine(new Rect(60f, 72f, 128f, 2f), SignalColor);
             DrawGlowLine(new Rect(188f, 72f, 368f, 1f), MutedSignalColor);
             DrawGlowLine(new Rect(60f, 787f, 496f, 1f), MutedSignalColor);
+            GUI.Label(
+                new Rect(78f, 806f, 460f, 24f),
+                GameReleaseInfo.Format(UnityEngine.Application.version),
+                releaseStyle);
         }
 
         private void DrawMenu()
         {
+            if (committedLevels.Count == 0)
+            {
+                RefreshCommittedLevels();
+            }
+
             GUI.Label(new Rect(90f, 112f, 440f, 105f), "GRIT GUD", titleStyle);
             GUI.Label(new Rect(94f, 211f, 420f, 42f), "TACTICAL ROLE-PLAYING", subtitleStyle);
             DrawGlowLine(new Rect(94f, 261f, 88f, 2f), SignalColor);
             DrawGlowLine(new Rect(186f, 261f, 248f, 1f), MutedSignalColor);
 
-            if (DrawMenuButton(new Rect(92f, 320f, 350f, 62f), "PLAY MAIN LEVEL"))
+            GUI.Label(
+                new Rect(94f, 278f, 350f, 32f),
+                "LEVEL LIBRARY",
+                subtitleStyle);
+            bool preparingSimulation =
+                GameBootstrap.Instance?.IsPreparingSimulation == true;
+            bool previousEnabled = GUI.enabled;
+            GUI.enabled = previousEnabled && !preparingSimulation;
+            DrawLevelList(new Rect(92f, 312f, 350f, 142f));
+            GUI.enabled = previousEnabled;
+
+            CommittedLevelEntry selected = FindSelectedLevel();
+            LevelDraftSummary selectedDraft = FindSelectedDraft();
+            LevelDraftLibraryCoordinator draftLibrary = GameBootstrap.Instance?.DraftLibrary;
+            bool cloudSelected = selectedKind == LevelSelectionKind.CloudDraft;
+            string levelStatus = cloudSelected
+                ? selectedDraft == null
+                    ? (string.IsNullOrWhiteSpace(cloudDraftStatus) ? "Select a cloud draft." : cloudDraftStatus)
+                    : string.IsNullOrWhiteSpace(cloudDraftStatus)
+                        ? $"{selectedDraft.Name} — revision {selectedDraft.Revision}\nPrivate draft; not published."
+                        : cloudDraftStatus
+                : selected == null
+                ? "No committed levels were found. You can still create a new level."
+                : selected.LevelId + "\n" + selected.StatusMessage;
+            string status = string.IsNullOrWhiteSpace(launchStatus)
+                ? levelStatus
+                : launchStatus;
+            GUI.Label(new Rect(94f, 462f, 420f, 38f), status, statusStyle);
+
+            GUI.enabled = !preparingSimulation
+                && ((cloudSelected && selectedDraft != null
+                        && draftLibrary?.IsBusy != true)
+                    || (!cloudSelected && selected?.CanPlay == true));
+            if (DrawMenuButton(new Rect(92f, 508f, 350f, 40f), "PLAY SELECTED"))
             {
-                GameBootstrap.Instance.PlayMainLevel();
+                if (cloudSelected)
+                    _ = GameBootstrap.Instance.PlayCloudDraftAsync(
+                        selectedDraft.Id,
+                        message => cloudDraftStatus = message);
+                else
+                    GameBootstrap.Instance.PlayCommittedLevel(selected.ResourceKey);
             }
 
-            if (DrawMenuButton(new Rect(92f, 401f, 350f, 62f), "LEVEL EDITOR"))
+            GUI.enabled = !preparingSimulation
+                && ((cloudSelected && selectedDraft != null
+                        && draftLibrary?.IsBusy != true)
+                    || (!cloudSelected && selected?.CanEdit == true));
+            if (DrawMenuButton(new Rect(92f, 554f, 350f, 40f), "EDIT SELECTED"))
             {
-                GameBootstrap.Instance.OpenLevelEditor();
+                if (cloudSelected)
+                    _ = GameBootstrap.Instance.OpenCloudDraftEditorAsync(
+                        selectedDraft.Id,
+                        message => cloudDraftStatus = message);
+                else
+                    GameBootstrap.Instance.OpenCommittedLevelEditor(selected.ResourceKey);
             }
 
-            if (DrawMenuButton(new Rect(92f, 482f, 350f, 62f), "QUIT"))
+            GUI.enabled = previousEnabled && !preparingSimulation;
+            string watchLabel = preparingSimulation
+                ? "LOADING SIM…"
+                : "WATCH SIMS";
+            if (DrawMenuButton(new Rect(92f, 600f, 350f, 40f), watchLabel))
+            {
+                GameBootstrap.Instance.WatchFirstSimulation();
+            }
+
+            if (DrawMenuButton(new Rect(92f, 646f, 350f, 40f), "NEW LEVEL"))
+            {
+                GameBootstrap.Instance.OpenNewLevelEditor();
+            }
+
+            if (DrawMenuButton(new Rect(92f, 692f, 350f, 40f), "CHARACTER EDITOR"))
+            {
+                GameBootstrap.Instance.OpenCharacterEditor();
+            }
+
+            GUI.enabled = previousEnabled;
+            if (DrawMenuButton(new Rect(92f, 738f, 350f, 40f), "QUIT"))
             {
                 Quit();
             }
+        }
 
+        private void DrawLevelList(Rect rectangle)
+        {
+            GUILayout.BeginArea(rectangle, GUI.skin.box);
+            levelScroll = GUILayout.BeginScrollView(levelScroll);
+            LevelDraftLibraryCoordinator draftLibrary = GameBootstrap.Instance?.DraftLibrary;
+            if (draftLibrary != null)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("MY CLOUD DRAFTS", statusStyle);
+                GUI.enabled = !draftLibrary.IsBusy;
+                if (GUILayout.Button("REFRESH", levelButtonStyle, GUILayout.Width(76f), GUILayout.Height(26f)))
+                    _ = draftLibrary.RefreshAsync();
+                GUI.enabled = true;
+                GUILayout.EndHorizontal();
+                foreach (LevelDraftSummary draft in draftLibrary.Drafts)
+                {
+                    bool selected = selectedKind == LevelSelectionKind.CloudDraft
+                        && string.Equals(selectedKey, draft.Id.Value, StringComparison.Ordinal);
+                    Color previousBackground = GUI.backgroundColor;
+                    if (selected) GUI.backgroundColor = SignalColor;
+                    if (GUILayout.Button(
+                        (selected ? "> " : string.Empty) + "☁ " + draft.Name,
+                        levelButtonStyle,
+                        GUILayout.Height(38f)))
+                    {
+                        selectedKind = LevelSelectionKind.CloudDraft;
+                        selectedKey = draft.Id.Value;
+                        cloudDraftStatus = string.Empty;
+                        draftLibrary.Select(draft.Id);
+                    }
+                    GUI.backgroundColor = previousBackground;
+                    if (selected)
+                    {
+                        GUILayout.BeginHorizontal();
+                        if (GUILayout.Button("RENAME", levelButtonStyle, GUILayout.Height(28f)))
+                            BeginDraftDialog(DraftDialogAction.Rename, draft);
+                        if (GUILayout.Button("COPY", levelButtonStyle, GUILayout.Height(28f)))
+                            BeginDraftDialog(DraftDialogAction.Duplicate, draft);
+                        if (GUILayout.Button("DELETE", levelButtonStyle, GUILayout.Height(28f)))
+                            BeginDraftDialog(DraftDialogAction.Delete, draft);
+                        GUILayout.EndHorizontal();
+                    }
+                }
+                if (draftLibrary.Drafts.Count == 0)
+                    GUILayout.Label(draftLibrary.Status, statusStyle);
+            }
+            else if (GameBootstrap.Instance?.Supabase != null)
+                GUILayout.Label(GameBootstrap.Instance.Supabase.Status, statusStyle);
+
+            GUILayout.Label("COMMITTED LEVELS", statusStyle);
+            foreach (CommittedLevelEntry entry in committedLevels)
+            {
+                bool selected = selectedKind == LevelSelectionKind.Committed && string.Equals(
+                    selectedKey,
+                    entry.ResourceKey,
+                    StringComparison.Ordinal);
+                Color previousBackground = GUI.backgroundColor;
+                if (selected)
+                {
+                    GUI.backgroundColor = SignalColor;
+                }
+
+                string readiness = entry.CanPlay ? string.Empty : "! ";
+                if (GUILayout.Button(
+                    (selected ? "> " : string.Empty) + readiness + entry.DisplayName,
+                    levelButtonStyle,
+                    GUILayout.Height(38f)))
+                {
+                    selectedKind = LevelSelectionKind.Committed;
+                    selectedKey = entry.ResourceKey;
+                    cloudDraftStatus = string.Empty;
+                }
+
+                GUI.backgroundColor = previousBackground;
+            }
+
+            GUILayout.EndScrollView();
+            GUILayout.EndArea();
+        }
+
+        internal void RefreshCommittedLevels()
+        {
+            GameBootstrap bootstrap = GameBootstrap.Instance;
+            committedLevels = bootstrap?.CommittedLevels
+                ?? Array.Empty<CommittedLevelEntry>();
+            if (FindSelectedLevel() != null)
+            {
+                return;
+            }
+
+            CommittedLevelEntry preferred = committedLevels.FirstOrDefault(entry =>
+                entry.ResourceKey == UnityCommittedLevelLibrary.DefaultResourceKey
+                && entry.CanPlay)
+                ?? committedLevels.FirstOrDefault(entry => entry.CanPlay)
+                ?? committedLevels.FirstOrDefault(entry => entry.CanEdit)
+                ?? committedLevels.FirstOrDefault();
+
+            selectedKind = LevelSelectionKind.Committed;
+            selectedKey = preferred?.ResourceKey ?? string.Empty;
+        }
+
+        private CommittedLevelEntry FindSelectedLevel()
+        {
+            if (selectedKind != LevelSelectionKind.Committed) return null;
+            foreach (CommittedLevelEntry entry in committedLevels)
+            {
+                if (string.Equals(
+                    selectedKey,
+                    entry.ResourceKey,
+                    StringComparison.Ordinal))
+                {
+                    return entry;
+                }
+            }
+
+            return null;
+        }
+
+        private LevelDraftSummary FindSelectedDraft()
+        {
+            if (selectedKind != LevelSelectionKind.CloudDraft) return null;
+            LevelDraftLibraryCoordinator library = GameBootstrap.Instance?.DraftLibrary;
+            return library?.Drafts.FirstOrDefault(draft =>
+                string.Equals(draft.Id.Value, selectedKey, StringComparison.Ordinal));
+        }
+
+        private void BeginDraftDialog(DraftDialogAction action, LevelDraftSummary draft)
+        {
+            draftDialogAction = action;
+            draftDialogName = action == DraftDialogAction.Duplicate
+                ? draft.Name + " Copy"
+                : draft.Name;
+            draftDialogStatus = string.Empty;
+            draftDialogRunning = false;
+        }
+
+        private void DrawDraftDialog()
+        {
+            if (draftDialogAction == DraftDialogAction.None) return;
+            const float width = 460f;
+            const float height = 190f;
+            Rect panel = new Rect(
+                (ReferenceWidth - width) * 0.5f,
+                (ReferenceHeight - height) * 0.5f,
+                width,
+                height);
+            GUILayout.BeginArea(panel, GUI.skin.box);
+            GUILayout.Label(draftDialogAction == DraftDialogAction.Delete
+                ? "DELETE CLOUD DRAFT"
+                : draftDialogAction == DraftDialogAction.Rename
+                    ? "RENAME CLOUD DRAFT"
+                    : "DUPLICATE CLOUD DRAFT", subtitleStyle);
+            if (draftDialogAction == DraftDialogAction.Delete)
+                GUILayout.Label("The draft will be archived and removed from this list.", statusStyle);
+            else
+            {
+                GUILayout.Label("Draft names must be unique for your account.", statusStyle);
+                draftDialogName = GUILayout.TextField(draftDialogName, GUILayout.Height(32f));
+            }
+            if (!string.IsNullOrWhiteSpace(draftDialogStatus))
+                GUILayout.Label(draftDialogStatus, statusStyle);
+            GUILayout.FlexibleSpace();
+            GUILayout.BeginHorizontal();
+            GUI.enabled = !draftDialogRunning;
+            if (GUILayout.Button(draftDialogAction == DraftDialogAction.Delete ? "DELETE" : "CONFIRM", buttonStyle, GUILayout.Height(38f)))
+                _ = ConfirmDraftDialogAsync();
+            if (GUILayout.Button("CANCEL", buttonStyle, GUILayout.Height(38f)))
+                draftDialogAction = DraftDialogAction.None;
+            GUI.enabled = true;
+            GUILayout.EndHorizontal();
+            GUILayout.EndArea();
+        }
+
+        private async Task ConfirmDraftDialogAsync()
+        {
+            LevelDraftSummary selected = FindSelectedDraft();
+            LevelDraftLibraryCoordinator library = GameBootstrap.Instance?.DraftLibrary;
+            if (selected == null || library == null || draftDialogRunning) return;
+            draftDialogRunning = true;
+            draftDialogStatus = "Working…";
+            try
+            {
+                if (draftDialogAction == DraftDialogAction.Rename)
+                {
+                    await library.RenameAsync(selected.Id, draftDialogName);
+                    selectedKey = selected.Id.Value;
+                    cloudDraftStatus = library.Status;
+                }
+                else if (draftDialogAction == DraftDialogAction.Duplicate)
+                {
+                    LevelDraftRecord duplicate = await library.DuplicateAsync(selected.Id, draftDialogName);
+                    selectedKind = LevelSelectionKind.CloudDraft;
+                    selectedKey = duplicate.Summary.Id.Value;
+                    cloudDraftStatus = library.Status;
+                }
+                else
+                {
+                    await library.DeleteAsync(selected.Id);
+                    selectedKind = LevelSelectionKind.CloudDraft;
+                    selectedKey = string.Empty;
+                    RefreshCommittedLevels();
+                    cloudDraftStatus = library.Status;
+                }
+                draftDialogAction = DraftDialogAction.None;
+            }
+            catch (Exception exception)
+            {
+                draftDialogStatus = exception.Message;
+            }
+            finally
+            {
+                draftDialogRunning = false;
+            }
         }
 
         private bool DrawMenuButton(Rect rectangle, string label)
@@ -174,6 +513,30 @@ namespace GritGud.Presentation.Bootstrap
                 {
                     background = buttonActiveTexture,
                     textColor = PrimaryTextColor,
+                },
+            };
+            levelButtonStyle = new GUIStyle(buttonStyle)
+            {
+                fontSize = 16,
+                padding = new RectOffset(14, 10, 0, 0),
+            };
+            statusStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.UpperLeft,
+                fontSize = 13,
+                wordWrap = true,
+                normal = { textColor = GameplayVisualPalette.TextSecondary },
+            };
+            releaseStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleRight,
+                fontSize = 12,
+                fontStyle = FontStyle.Bold,
+                normal =
+                {
+                    textColor = GameplayVisualPalette.WithAlpha(
+                        GameplayVisualPalette.TextSecondary,
+                        0.82f),
                 },
             };
         }

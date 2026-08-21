@@ -6,4 +6,8 @@
     <type fullname="UnityEngine.CapsuleCollider" preserve="all" />
     <type fullname="UnityEngine.SphereCollider" preserve="all" />
   </assembly>
+  <!-- Authored replay artifacts carry allowlisted Gameplay type names. Keep
+       their constructors and canonical properties available to IL2CPP. -->
+  <assembly fullname="GritGud.Application" preserve="all" />
+  <assembly fullname="GritGud.Domain" preserve="all" />
 </linker>

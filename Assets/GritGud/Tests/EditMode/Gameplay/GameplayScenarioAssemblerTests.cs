@@ -1,13 +1,46 @@
 using System;
+using System.Reflection;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Levels;
+using GritGud.Domain.Turns;
 using NUnit.Framework;
 
 namespace GritGud.Domain.Tests
 {
     public sealed class GameplayScenarioAssemblerTests
     {
+        [Test]
+        public void AssemblerKeepsPolicyDetailsInFocusedCollaborators()
+        {
+            MethodInfo[] methods = typeof(GameplayScenarioAssembler).GetMethods(
+                BindingFlags.Instance
+                | BindingFlags.Static
+                | BindingFlags.Public
+                | BindingFlags.NonPublic
+                | BindingFlags.DeclaredOnly);
+
+            foreach (MethodInfo method in methods)
+            {
+                if (method.Name == nameof(GameplayScenarioAssembler.Assemble))
+                    continue;
+
+                Assert.That(
+                    ReferencesScenarioPolicy(method.ReturnType),
+                    Is.False,
+                    $"Coordinator method '{method.Name}' owns scenario policy "
+                    + "through its return type.");
+                foreach (ParameterInfo parameter in method.GetParameters())
+                {
+                    Assert.That(
+                        ReferencesScenarioPolicy(parameter.ParameterType),
+                        Is.False,
+                        $"Coordinator method '{method.Name}' owns scenario policy "
+                        + $"through parameter '{parameter.Name}'.");
+                }
+            }
+        }
+
         [Test]
         public void AssemblerBuildsScenarioFromContentAndLevelBinding()
         {
@@ -100,7 +133,18 @@ namespace GritGud.Domain.Tests
             Assert.That(push.AllowedResults,
                 Is.EqualTo(
                     DisplacementResultPolicies.Topple
+                    | DisplacementResultPolicies.Pin
                     | DisplacementResultPolicies.CollisionDamage));
+            DisplacementActionDefinition pushOff = result
+                .GetActorDefinition("actor.player")
+                .GetDisplacementAction("close-quarters.push-off");
+            Assert.That(pushOff, Is.Not.Null);
+            Assert.That(pushOff.Intent,
+                Is.EqualTo(DisplacementActionKind.PushOff));
+            Assert.That(pushOff.AcceptedSubjects,
+                Is.EqualTo(DisplacementSubjectKinds.Prop));
+            Assert.That(pushOff.AllowedResults,
+                Is.EqualTo(DisplacementResultPolicies.Release));
             Assert.That(
                 result.TryGetDisplacementSubject(
                     "actor.player",
@@ -117,6 +161,14 @@ namespace GritGud.Domain.Tests
             Assert.That(propSubject.Kind,
                 Is.EqualTo(DisplacementSubjectKind.Prop));
             Assert.That(propSubject.Mass, Is.EqualTo(35f));
+            Assert.That(propSubject.Toppling, Is.Not.Null);
+            Assert.That(propSubject.Toppling.RollOffsetDegrees, Is.EqualTo(90f));
+            Assert.That(propSubject.Toppling.ElevationOffset, Is.EqualTo(0.45f));
+            Assert.That(propSubject.Pinning, Is.Not.Null);
+            Assert.That(propSubject.Pinning.MaximumActorMass,
+                Is.EqualTo(90f));
+            Assert.That(propSubject.Pinning.MinimumContactDepth,
+                Is.EqualTo(0.05f));
             Assert.That(
                 result.TryGetVehicle(
                     "vehicle.one",
@@ -125,6 +177,37 @@ namespace GritGud.Domain.Tests
             Assert.That(vehicle.EntityId, Is.EqualTo("vehicle.one"));
             Assert.That(vehicle.MomentumProfile.MaximumSpeed, Is.EqualTo(10f));
             Assert.That(vehicle.StartingSpeed, Is.EqualTo(4f));
+        }
+
+        private static bool ReferencesScenarioPolicy(Type type)
+        {
+            if (type == typeof(ScenarioActorContentData)
+                || type == typeof(ScenarioInventoryItemData)
+                || type == typeof(ScenarioDisplacementAbilityData)
+                || type == typeof(ScenarioDisplacementActionData)
+                || type == typeof(ScenarioObjectiveContentData)
+                || type == typeof(ScenarioPropContentData)
+                || type == typeof(ScenarioVehicleContentData)
+                || type == typeof(ScenarioAttackResponseData))
+            {
+                return true;
+            }
+
+            if (type.HasElementType)
+            {
+                return ReferencesScenarioPolicy(type.GetElementType());
+            }
+
+            if (!type.IsGenericType)
+                return false;
+
+            foreach (Type argument in type.GetGenericArguments())
+            {
+                if (ReferencesScenarioPolicy(argument))
+                    return true;
+            }
+
+            return false;
         }
 
         [Test]
@@ -233,6 +316,7 @@ namespace GritGud.Domain.Tests
                     preferredEngagementRange = 12f,
                     movementSearchRadius = 6f,
                     maximumAttacksPerTurn = 1,
+                    awareness = CreateEncounterAwareness(),
                 },
             };
             content.actors[1].attackCapability = content.actors[0]
@@ -348,6 +432,38 @@ namespace GritGud.Domain.Tests
 
             Assert.That(exception.Message,
                 Does.Contain("perception range"));
+        }
+
+        [Test]
+        public void EnemyBehaviorWithoutAwarenessPolicyIsRejected()
+        {
+            ScenarioContentDocument content = CreateContent();
+            content.actors[1].combat = new ScenarioActorCombatData
+            {
+                allegianceId = "raider",
+                hostileAllegianceIds = { "player" },
+                maximumWounds = 2,
+                enemyBehavior = new ScenarioEnemyBehaviorData
+                {
+                    behaviorId = "behavior.rifleman",
+                    perceptionRange = 30f,
+                    viewAngleDegrees = 120f,
+                    preferredEngagementRange = 12f,
+                    movementSearchRadius = 6f,
+                    maximumAttacksPerTurn = 1,
+                },
+            };
+            content.actors[1].attackCapability = content.actors[0]
+                .attackCapability;
+
+            InvalidOperationException exception =
+                Assert.Throws<InvalidOperationException>(() =>
+                    new GameplayScenarioAssembler().Assemble(
+                        content,
+                        CreateLevel()));
+
+            Assert.That(exception.Message,
+                Does.Contain("requires an awareness policy"));
         }
 
         [Test]
@@ -522,6 +638,86 @@ namespace GritGud.Domain.Tests
         }
 
         [Test]
+        public void AssemblerCarriesAuthoredSoundAndTacticalRules()
+        {
+            ScenarioContentDocument content = CreateContent();
+            content.actors[0].attackCapability.soundSignature = 0.75f;
+            content.tacticalRules.Add(new ScenarioTacticalRuleData
+            {
+                id = "rule.ambush",
+                displayName = "Ambush",
+                capability = "direct-attack",
+                subjectKinds = { "actor" },
+                predicates =
+                {
+                    new ScenarioTacticalPredicateData
+                    {
+                        feature = "target-awareness",
+                        comparison = "equal",
+                        value = "unaware",
+                    },
+                },
+                consequences = new ScenarioTacticalConsequencesData
+                {
+                    accuracyDeltaPercent = 15,
+                    soundMultiplier = 1f,
+                },
+                outcomeFeatureIds = { "outcome.ambush" },
+            });
+
+            GameplayScenarioAssembly assembly = new GameplayScenarioAssembler()
+                .Assemble(content, CreateLevel());
+
+            Assert.That(
+                assembly.GetActorDefinition("actor.player").Attack.SoundSignature,
+                Is.EqualTo(0.75f));
+            Assert.That(assembly.TacticalRules, Has.Count.EqualTo(1));
+            Assert.That(
+                assembly.TacticalRules[0].ApplicableCapabilitySignatures,
+                Has.Count.EqualTo(1));
+            Assert.That(
+                assembly.TacticalRules[0].Consequences.AccuracyDeltaPercent,
+                Is.EqualTo(15));
+        }
+
+        [Test]
+        public void TacticalRuleRejectsUnreachableTargetKind()
+        {
+            ScenarioContentDocument content = CreateContent();
+            content.tacticalRules.Add(new ScenarioTacticalRuleData
+            {
+                id = "rule.invalid-prop-ambush",
+                displayName = "Invalid",
+                capability = "direct-attack",
+                subjectKinds = { "destructible-prop" },
+                predicates =
+                {
+                    new ScenarioTacticalPredicateData
+                    {
+                        feature = "target-awareness",
+                        comparison = "equal",
+                        value = "unaware",
+                    },
+                },
+                consequences = new ScenarioTacticalConsequencesData
+                {
+                    accuracyDeltaPercent = 15,
+                    soundMultiplier = 1f,
+                },
+                outcomeFeatureIds = { "outcome.invalid" },
+            });
+
+            InvalidOperationException exception =
+                Assert.Throws<InvalidOperationException>(() =>
+                    new GameplayScenarioAssembler().Assemble(
+                        content,
+                        CreateLevel()));
+
+            Assert.That(exception.Message, Does.Contain(
+                "matches no reachable capability and subject route"));
+        }
+
+        [Test]
         public void ContactAttackRejectsRangedDecayAndInvalidReach()
         {
             ScenarioContentDocument content = CreateContent();
@@ -589,6 +785,7 @@ namespace GritGud.Domain.Tests
             ScenarioAttackCapabilityData attack =
                 content.actors[0].attackCapability;
             attack.accuracyDecay = new ScenarioAccuracyDecayData();
+            attack.directFireDamage = new ScenarioDirectFireDamageData();
             attack.projectile = new ScenarioProjectileCapabilityData
             {
                 enabled = true,
@@ -608,6 +805,7 @@ namespace GritGud.Domain.Tests
 
             Assert.That(definition.Projectile, Is.Not.Null);
             Assert.That(definition.AccuracyDecay, Is.Null);
+            Assert.That(definition.DirectFireDamage, Is.Null);
         }
 
         [Test]
@@ -660,6 +858,36 @@ namespace GritGud.Domain.Tests
             Assert.That(grenade.SmokeField.DurationTurnEnds, Is.EqualTo(4));
             Assert.That(grenade.SmokeField.MinimumObscuredPath,
                 Is.EqualTo(0.75f));
+        }
+
+        [Test]
+        public void AssemblerBuildsConcussiveCurrentApPayload()
+        {
+            ScenarioContentDocument content = CreateContent();
+            ScenarioActorContentData player = content.actors[0];
+            player.attackCapability = null;
+            ScenarioInventoryItemData item = CreateGrenadeItem(quantity: 2);
+            item.id = "item.concussive-grenade";
+            item.consumablePower.thrownExplosive
+                .blastWoundMovementPenalty = 0f;
+            item.consumablePower.thrownExplosive.blastIntegrityDamage = 0f;
+            item.consumablePower.thrownExplosive
+                .blastActionPointReduction = 2;
+            player.inventory.Add(item);
+
+            var grenade = (ThrownExplosiveDefinition)
+                new GameplayScenarioAssembler()
+                    .Assemble(content, CreateLevel())
+                    .GetActorDefinition("actor.player")
+                    .GetInventoryItem(item.id)
+                    .ConsumablePower;
+
+            Assert.That(grenade.IsConcussive, Is.True);
+            Assert.That(grenade.BlastActionPointReduction, Is.EqualTo(2));
+            Assert.That(
+                GameplayCapabilityProfiles.ThrowExplosive(grenade)
+                    .GetTrait("consequence"),
+                Is.EqualTo("concussive-actor-ap"));
         }
 
         [Test]
@@ -776,6 +1004,39 @@ namespace GritGud.Domain.Tests
                 Does.Contain("Minimum voluntary turn duration"));
         }
 
+        [TestCase(ActionMobilityCodec.MobileValue, ActionMobility.Mobile)]
+        [TestCase(ActionMobilityCodec.MomentumValue, ActionMobility.Momentum)]
+        [TestCase(ActionMobilityCodec.SetValue, ActionMobility.Set)]
+        public void EverySerializedMobilityAssembles(
+            string serialized,
+            ActionMobility expected)
+        {
+            ScenarioContentDocument content = CreateContent();
+            content.objectives[0].turnCost.mobility = serialized;
+
+            GameplayScenarioAssembly assembly =
+                new GameplayScenarioAssembler().Assemble(
+                    content,
+                    CreateLevel());
+
+            Assert.That(
+                assembly.Scenario.Objectives[0].Interaction.TurnCost.Mobility,
+                Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void VehicleStartingSpeedCannotExceedItsProfileMaximum()
+        {
+            ScenarioContentDocument content = CreateContent();
+            content.vehicles[0].startingSpeed =
+                content.vehicles[0].maximumSpeed + 1f;
+
+            Assert.Throws<ArgumentOutOfRangeException>(() =>
+                new GameplayScenarioAssembler().Assemble(
+                    content,
+                    CreateLevel()));
+        }
+
         [Test]
         public void AssemblerBuildsAuthoredEnemyCombatPolicy()
         {
@@ -793,6 +1054,8 @@ namespace GritGud.Domain.Tests
                     preferredEngagementRange = 12f,
                     movementSearchRadius = 6f,
                     maximumAttacksPerTurn = 1,
+                    minimumAttackHitChancePercent = 40,
+                    awareness = CreateEncounterAwareness(),
                 },
             };
             content.actors[1].attackCapability = content.actors[0]
@@ -811,7 +1074,22 @@ namespace GritGud.Domain.Tests
                 Is.EqualTo(30f));
             Assert.That(enemy.Combat.EnemyBehavior.ViewAngleDegrees,
                 Is.EqualTo(120f));
+            Assert.That(
+                enemy.Combat.EnemyBehavior.MinimumAttackHitChancePercent,
+                Is.EqualTo(40));
+            Assert.That(enemy.Combat.EnemyBehavior.AwarenessPolicy.HearingRange,
+                Is.EqualTo(18f));
         }
+
+        private static ScenarioEncounterAwarenessData
+            CreateEncounterAwareness() => new ScenarioEncounterAwarenessData
+            {
+                hearingRange = 18f,
+                sightSuspicionGain = 100,
+                soundSuspicionGain = 50,
+                suspicionDecayPerTick = 10,
+                alertThreshold = 100,
+            };
 
         private static ScenarioInventoryItemData CreateGrenadeItem(
             int quantity) =>
@@ -937,6 +1215,18 @@ namespace GritGud.Domain.Tests
                     {
                         entityId = "prop.one",
                         mass = 35f,
+                        toppling = new ScenarioPropTopplingData
+                        {
+                            enabled = true,
+                            rollOffsetDegrees = 90f,
+                            elevationOffset = 0.45f,
+                        },
+                        pinning = new ScenarioPropPinningData
+                        {
+                            enabled = true,
+                            maximumActorMass = 90f,
+                            minimumContactDepth = 0.05f,
+                        },
                     },
                 },
                 vehicles =
@@ -1048,7 +1338,36 @@ namespace GritGud.Domain.Tests
                                     new System.Collections.Generic.List<string>
                                     {
                                         "topple",
+                                        "pin",
                                         "collision-damage",
+                                    },
+                            },
+                            new ScenarioDisplacementActionData
+                            {
+                                id = "close-quarters.push-off",
+                                displayName = "Push Off",
+                                intent = "push-off",
+                                cost = new ScenarioActionCostData
+                                {
+                                    actionPoints = 2,
+                                    movementOpportunity = 0f,
+                                    mobility = "set",
+                                },
+                                acceptedSubjectKinds =
+                                    new System.Collections.Generic.List<string>
+                                    {
+                                        "prop",
+                                    },
+                                reach = 2f,
+                                maximumDistance = 1.25f,
+                                maximumSubjectMass = 40f,
+                                handRequirement = "both-hands-free",
+                                autoStowPolicy = "allowed",
+                                contestPolicy = "none",
+                                allowedResults =
+                                    new System.Collections.Generic.List<string>
+                                    {
+                                        "release",
                                     },
                             },
                         },

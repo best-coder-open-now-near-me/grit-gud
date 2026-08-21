@@ -105,6 +105,7 @@ namespace GritGud.Presentation
     public sealed class TacticalTransitionPresentationDefinition
     {
         [SerializeField, Min(0.05f)] private float durationSeconds = 0.46f;
+        [SerializeField, Min(0.1f)] private float combatEntryDelaySeconds = 2f;
         [SerializeField, Min(1f)] private float edgeBandHeight = 3f;
         [SerializeField, Min(1f)] private float scanLineWidth = 220f;
         [SerializeField, Range(0f, 1f)] private float washOpacity = 0.075f;
@@ -112,6 +113,8 @@ namespace GritGud.Presentation
         [SerializeField] private Color explorationColor = new Color(0.55f, 0.9f, 1.35f, 1f);
 
         public float DurationSeconds => Mathf.Max(0.05f, durationSeconds);
+        public float CombatEntryDelaySeconds =>
+            Mathf.Max(0.1f, combatEntryDelaySeconds);
         public float EdgeBandHeight => Mathf.Max(1f, edgeBandHeight);
         public float ScanLineWidth => Mathf.Max(1f, scanLineWidth);
         public float WashOpacity => Mathf.Clamp01(washOpacity);

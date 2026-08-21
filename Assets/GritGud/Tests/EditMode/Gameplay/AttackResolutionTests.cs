@@ -52,7 +52,7 @@ namespace GritGud.Domain.Tests.Gameplay
         {
             GameplaySession source = CreateSession();
             source.EnterTurnMode();
-            var sourceAttacks = new GameplayAttackSession(source, 3u);
+            var sourceAttacks = new GameplayAttackSession(source);
 
             Assert.That(sourceAttacks.TryResolve(
                 "player",
@@ -63,7 +63,7 @@ namespace GritGud.Domain.Tests.Gameplay
 
             GameplaySession replay = CreateSession();
             replay.EnterTurnMode();
-            var replayAttacks = new GameplayAttackSession(replay, 3u);
+            var replayAttacks = new GameplayAttackSession(replay);
             replayAttacks.Commit(recordedAction);
 
             GameplayActorSnapshot sourceTarget = source.GetActor("target");
@@ -75,14 +75,164 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(
                 replayTarget.Wounds.HasSameState(sourceTarget.Wounds),
                 Is.True);
+            Assert.That(replayTarget.TurnBudget.ActionPoints,
+                Is.EqualTo(sourceTarget.TurnBudget.ActionPoints));
             Assert.That(replayTarget.TurnBudget.MovementOpportunity,
-                Is.EqualTo(6f));
+                Is.EqualTo(sourceTarget.TurnBudget.MovementOpportunity));
             Assert.That(replay.GetActor("player").TurnBudget.ActionPoints,
                 Is.EqualTo(3));
             Assert.That(replayAttacks.Records.Single().Exposure,
                 Is.SameAs(recordedAction.Outcomes
                     .OfType<AttackResolvedActionOutcome>()
                     .Single().Attack.Exposure));
+        }
+
+        [Test]
+        public void PreparedAttackIsNonMutatingAndMatchesAuthoritativeCommit()
+        {
+            GameplaySession session = CreateSession();
+            session.EnterTurnMode();
+            var attacks = new GameplayAttackSession(session);
+
+            Assert.That(attacks.TryPrepareResolve(
+                "player",
+                CreateExposure(torsoVisible: 5, legsVisible: 5),
+                out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                out AttackResolutionFailure failure), Is.True);
+
+            Assert.That(failure, Is.EqualTo(AttackResolutionFailure.None));
+            Assert.That(session.ResolvedActions, Is.Empty);
+            Assert.That(session.GetActor("player").TurnBudget.ActionPoints,
+                Is.EqualTo(4));
+            Assert.That(prepared.Previous.CanonicalHash,
+                Is.Not.EqualTo(prepared.Predicted.CanonicalHash));
+
+            GameplayTransitionCommitResult committed =
+                attacks.CommitPrepared(prepared);
+
+            Assert.That(committed.MatchesPrediction, Is.True);
+            Assert.That(session.GetActor("player").TurnBudget.ActionPoints,
+                Is.EqualTo(3));
+            Assert.That(attacks.Records, Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public void PreparedAttackFreezesQualifyingAmbushContextAndAccuracy()
+        {
+            GameplaySession session = CreateSession();
+            session.EnterTurnMode();
+            AttackDefinition definition = session.GetEquippedAttack("player");
+            var attacks = new GameplayAttackSession(
+                session,
+                tacticalContextQuery: new FixedTacticalContextQuery(
+                    TacticalAwarenessBand.Unaware,
+                    TacticalVisibilityRelation.AttackerOnly),
+                tacticalContextEvaluator: CreateAmbushEvaluator(definition));
+
+            Assert.That(attacks.TryPrepareResolve(
+                "player",
+                CreateExposure(torsoVisible: 5, legsVisible: 5),
+                out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                out AttackResolutionFailure failure), Is.True);
+
+            AttackResolutionRecord attack = prepared.Record.Outcomes
+                .OfType<AttackResolvedActionOutcome>()
+                .Single().Attack;
+            Assert.That(failure, Is.EqualTo(AttackResolutionFailure.None));
+            Assert.That(prepared.Record.Context, Is.SameAs(attack.Context));
+            Assert.That(attack.Context.AccuracyDeltaPercent, Is.EqualTo(15));
+            Assert.That(attack.FinalHitChancePercent, Is.EqualTo(48));
+            Assert.That(attack.Context.CanonicalDigest, Has.Length.EqualTo(64));
+            string diagnostics = string.Join(
+                Environment.NewLine,
+                AttackDiagnosticFormatter.Format(prepared.Record));
+            Assert.That(diagnostics, Does.Contain(
+                "TACTICAL RULE - rule.ambush.direct-attack.actor"));
+            Assert.That(diagnostics, Does.Contain(
+                "TACTICAL OUTCOMES - outcome.ambush"));
+            Assert.That(diagnostics, Does.Contain("+15% context"));
+            GameplayTacticalOutcome tacticalOutcome =
+                GameplayTacticalOutcomeProjector.Project(prepared.Record);
+            Assert.That(tacticalOutcome.FeatureIds, Is.EqualTo(
+                new[] { "outcome.ambush" }));
+            Assert.That(tacticalOutcome.FinalHitChancePercent, Is.EqualTo(48));
+            Assert.That(tacticalOutcome.ContextualAccuracyDeltaPercent,
+                Is.EqualTo(15));
+            Assert.That(tacticalOutcome.ActionPointsRemaining, Is.EqualTo(3));
+        }
+
+        [Test]
+        public void PreparedAttackRejectsStaleTacticalEvidence()
+        {
+            GameplaySession session = CreateSession();
+            session.EnterTurnMode();
+            AttackDefinition definition = session.GetEquippedAttack("player");
+            var attacks = new GameplayAttackSession(
+                session,
+                tacticalContextQuery: new FixedTacticalContextQuery(
+                    TacticalAwarenessBand.Unaware,
+                    TacticalVisibilityRelation.AttackerOnly,
+                    revisionOffset: -1),
+                tacticalContextEvaluator: CreateAmbushEvaluator(definition));
+
+            bool prepared = attacks.TryPrepareResolve(
+                "player",
+                CreateExposure(torsoVisible: 5, legsVisible: 5),
+                out GameplayPreparedTransition<GameplayActionRecord> action,
+                out AttackResolutionFailure failure);
+
+            Assert.That(prepared, Is.False);
+            Assert.That(action, Is.Null);
+            Assert.That(failure, Is.EqualTo(
+                AttackResolutionFailure.WorldStateChanged));
+            Assert.That(session.ResolvedActions, Is.Empty);
+        }
+
+        [Test]
+        public void PreparedAttackRejectsChangedTurnBeforeCommit()
+        {
+            GameplaySession session = CreateSession();
+            session.EnterTurnMode();
+            var attacks = new GameplayAttackSession(session);
+            Assert.That(attacks.TryPrepareResolve(
+                "player",
+                CreateExposure(torsoVisible: 5, legsVisible: 5),
+                out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                out _), Is.True);
+            Assert.That(session.TryEndTurn("player", out _), Is.True);
+
+            Assert.Throws<InvalidOperationException>(
+                () => attacks.CommitPrepared(prepared));
+
+            Assert.That(session.ResolvedActions, Is.Empty);
+            Assert.That(attacks.Records, Is.Empty);
+        }
+
+        [Test]
+        public void ObserverFailureCannotInterruptAuthoritativeAttackCommit()
+        {
+            GameplaySession session = CreateSession();
+            session.EnterTurnMode();
+            var attacks = new GameplayAttackSession(session);
+            int successfulObservers = 0;
+            session.ActorCapabilityChanged += _ =>
+                throw new InvalidOperationException("observer failed");
+            session.ActorCapabilityChanged += _ => successfulObservers++;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                attacks.TryResolve(
+                    "player",
+                    CreateExposure(torsoVisible: 5, legsVisible: 5),
+                    out _,
+                    out _));
+
+            Assert.That(successfulObservers, Is.EqualTo(1));
+            Assert.That(attacks.Records, Has.Count.EqualTo(1));
+            Assert.That(session.ResolvedActions, Has.Count.EqualTo(1));
+            Assert.That(session.GetActor("player").TurnBudget.ActionPoints,
+                Is.EqualTo(3));
+            Assert.That(session.Journal.LastEntry,
+                Is.TypeOf<ActionResolvedJournalEntry>());
         }
 
         [Test]
@@ -107,7 +257,7 @@ namespace GritGud.Domain.Tests.Gameplay
         {
             GameplaySession session = CreateSession();
             session.EnterTurnMode();
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
 
             Assert.That(attacks.TryResolve(
                 "player",
@@ -138,7 +288,7 @@ namespace GritGud.Domain.Tests.Gameplay
             GameplaySession session = CreateSession(
                 new GameplayPosition(5f, 0f, 0f));
             session.EnterTurnMode();
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
 
             Assert.That(attacks.TryResolve(
                 "player",
@@ -156,7 +306,7 @@ namespace GritGud.Domain.Tests.Gameplay
         {
             GameplaySession session = CreateSession();
             session.EnterTurnMode();
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
 
             Assert.That(attacks.TryDischarge(
                 "player",
@@ -186,10 +336,33 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void PreparedWorldDischargePredictsBudgetAndFacing()
+        {
+            GameplaySession session = CreateSession();
+            session.EnterTurnMode();
+            var attacks = new GameplayAttackSession(session);
+
+            Assert.That(attacks.TryPrepareDischarge(
+                "player",
+                GameplayTargetIds.WorldAimPoint,
+                new GameplayPosition(5f, 0f, 0f),
+                out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                out AttackResolutionFailure failure), Is.True);
+
+            Assert.That(failure, Is.EqualTo(AttackResolutionFailure.None));
+            GameplayActorSnapshot predicted =
+                prepared.Predicted.Session.GetActor("player");
+            Assert.That(predicted.TurnBudget.ActionPoints, Is.EqualTo(3));
+            Assert.That(predicted.Pose.FacingDegrees,
+                Is.EqualTo(90f).Within(0.001f));
+            Assert.That(attacks.CommitPrepared(prepared).MatchesPrediction, Is.True);
+        }
+
+        [Test]
         public void ExplorationDischargeRecordsStableTargetAtZeroCost()
         {
             GameplaySession session = CreateSession();
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
 
             Assert.That(attacks.TryDischarge(
                 "player",
@@ -216,7 +389,7 @@ namespace GritGud.Domain.Tests.Gameplay
         public void ExplorationAttackResolvesAgainstInertActorAtZeroCost()
         {
             GameplaySession session = CreateSession();
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
 
             Assert.That(attacks.TryResolve(
                 "player",
@@ -237,7 +410,7 @@ namespace GritGud.Domain.Tests.Gameplay
         {
             GameplaySession source = CreateSession();
             source.EnterTurnMode();
-            var sourceAttacks = new GameplayAttackSession(source, 3u);
+            var sourceAttacks = new GameplayAttackSession(source);
             sourceAttacks.TryDischarge(
                 "player",
                 new GameplayPosition(5f, 0f, 0f),
@@ -246,7 +419,7 @@ namespace GritGud.Domain.Tests.Gameplay
 
             GameplaySession replay = CreateSession();
             replay.EnterTurnMode();
-            var replayAttacks = new GameplayAttackSession(replay, 3u);
+            var replayAttacks = new GameplayAttackSession(replay);
             replayAttacks.Commit(action);
 
             Assert.That(replayAttacks.Discharges, Has.Count.EqualTo(1));
@@ -257,11 +430,11 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
-        public void CombatDiagnosticsIncludeFormulaSeedRollsAndOutcome()
+        public void CombatDiagnosticsReflectResolvedRollsAndOutcome()
         {
             GameplaySession session = CreateSession();
             session.EnterTurnMode();
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
             attacks.TryResolve(
                 "player",
                 CreateExposure(torsoVisible: 5, legsVisible: 5),
@@ -284,9 +457,10 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(diagnostic, Does.Contain(
                 "HIT CHANCE - 33% geometric x 100% accuracy = 33%"));
             Assert.That(diagnostic, Does.Contain("HIT ROLL - d100"));
-            Assert.That(diagnostic, Does.Contain("REGION ROLL - d10"));
-            Assert.That(diagnostic, Does.Contain("WOUND - count 0 + 1 = 1"));
-            Assert.That(diagnostic, Does.Contain("OUTCOME - HIT"));
+            Assert.That(diagnostic,
+                Does.Contain("REGION ROLL - NOT ROLLED ON MISS"));
+            Assert.That(diagnostic,
+                Does.Contain("OUTCOME - MISS - NO WOUND"));
         }
 
         [Test]
@@ -325,12 +499,35 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void HitChanceAppliesFrozenContextAfterDistanceBeforeClamping()
+        {
+            TargetExposureSnapshot exposure = CreateExposure(
+                torsoVisible: 5,
+                legsVisible: 5);
+            var decay = new AccuracyDecayDefinition(20f, 5f);
+
+            int boosted = AttackHitChanceRules.CalculateFinalHitChancePercent(
+                exposure,
+                decay,
+                distance: 20f,
+                contextualAccuracyDeltaPercent: 15);
+            int penalized = AttackHitChanceRules.CalculateFinalHitChancePercent(
+                exposure,
+                decay,
+                distance: 20f,
+                contextualAccuracyDeltaPercent: -30);
+
+            Assert.That(boosted, Is.EqualTo(32));
+            Assert.That(penalized, Is.EqualTo(1));
+        }
+
+        [Test]
         public void ContactAttackRejectsOutOfReachTargetWithoutMutation()
         {
             GameplaySession session = CreateContactSession(
                 new GameplayPosition(0f, 0f, 2.5f));
             session.EnterTurnMode();
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
 
             AttackResolutionFailure readiness = attacks.EvaluateResolve(
                 "player",
@@ -359,7 +556,7 @@ namespace GritGud.Domain.Tests.Gameplay
             GameplaySession session = CreateContactSession(
                 new GameplayPosition(0f, 0f, 1.5f));
             session.EnterTurnMode();
-            var attacks = new GameplayAttackSession(session, 3u);
+            var attacks = new GameplayAttackSession(session);
 
             Assert.That(attacks.TryDischarge(
                 "player",
@@ -441,7 +638,8 @@ namespace GritGud.Domain.Tests.Gameplay
                 "attack-test",
                 new ScenarioTimingDefinition(1.25f),
                 new[] { player, target },
-                Array.Empty<ScenarioObjectiveDefinition>()));
+                Array.Empty<ScenarioObjectiveDefinition>()),
+                scenarioSeed: 3u);
         }
 
         private static GameplaySession CreateContactSession(
@@ -470,7 +668,8 @@ namespace GritGud.Domain.Tests.Gameplay
                 "contact-attack-test",
                 new ScenarioTimingDefinition(1.25f),
                 new[] { player, target },
-                Array.Empty<ScenarioObjectiveDefinition>()));
+                Array.Empty<ScenarioObjectiveDefinition>()),
+                scenarioSeed: 3u);
         }
 
         private static TargetExposureSnapshot CreateExposure(
@@ -489,6 +688,78 @@ namespace GritGud.Domain.Tests.Gameplay
                     new TargetRegionExposure(TargetRegionId.LeftLeg, legsVisible, 5),
                     new TargetRegionExposure(TargetRegionId.RightLeg, 0, 5),
                 });
+        }
+
+        private static GameplayTacticalContextEvaluator CreateAmbushEvaluator(
+            AttackDefinition attack)
+        {
+            string signature = GameplayCapabilityProfiles.Attack(
+                attack,
+                GameplaySemanticSubjectKind.Actor).Signature;
+            return new GameplayTacticalContextEvaluator(new[]
+            {
+                new TacticalContextRuleDefinition(
+                    "rule.ambush.direct-attack.actor",
+                    "Ambush",
+                    order: 0,
+                    new[] { signature },
+                    new[] { GameplaySemanticSubjectKind.Actor },
+                    new[]
+                    {
+                        new TacticalContextPredicate(
+                            TacticalContextFeature.TargetAwareness,
+                            TacticalPredicateOperator.Equal,
+                            (int)TacticalAwarenessBand.Unaware),
+                        new TacticalContextPredicate(
+                            TacticalContextFeature.VisibilityRelation,
+                            TacticalPredicateOperator.Equal,
+                            (int)TacticalVisibilityRelation.AttackerOnly),
+                    },
+                    new TacticalModifierConsequences(
+                        accuracyDeltaPercent: 15),
+                    new[] { "outcome.ambush" }),
+            });
+        }
+
+        private sealed class FixedTacticalContextQuery :
+            IGameplayTacticalContextQuery
+        {
+            private readonly TacticalAwarenessBand awareness;
+            private readonly TacticalVisibilityRelation visibility;
+            private readonly long revisionOffset;
+
+            public FixedTacticalContextQuery(
+                TacticalAwarenessBand targetAwareness,
+                TacticalVisibilityRelation visibilityRelation,
+                long revisionOffset = 0L)
+            {
+                awareness = targetAwareness;
+                visibility = visibilityRelation;
+                this.revisionOffset = revisionOffset;
+            }
+
+            public TacticalContextSnapshot Capture(
+                GameplayCombatStateSnapshot state,
+                GameplayTacticalContextRequest request) => new(
+                    request.AttackerId,
+                    request.Subject,
+                    request.Profile.Signature,
+                    state.Session.Revision + revisionOffset,
+                    awareness,
+                    visibility,
+                    ActorStance.Crouched,
+                    ActorStance.Standing,
+                    TacticalRangeBand.Effective,
+                    TacticalExposureBand.Exposed,
+                    TacticalIsolationBand.Isolated,
+                    nearbyAttackerAllies: 0,
+                    nearbyTargetAllies: 0,
+                    attackerSuppressed: false,
+                    targetSuppressed: false,
+                    targetDisplaced: false,
+                    request.SoundSignature,
+                    attackerActionPoints: 4,
+                    targetActionPoints: 0);
         }
     }
 }

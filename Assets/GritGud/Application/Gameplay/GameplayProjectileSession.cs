@@ -11,6 +11,7 @@ namespace GritGud.Application.Gameplay
         TurnModeRequired,
         ActorNotActive,
         ActorIncapacitated,
+        ActorPinned,
         OperationInProgress,
         WeaponUnavailable,
         ProjectileUnavailable,
@@ -18,6 +19,7 @@ namespace GritGud.Application.Gameplay
         InvalidAimPoint,
         InsufficientActionPoints,
         InsufficientMovementOpportunity,
+        InsufficientLoadedAmmunition,
     }
 
     public enum ProjectileLaunchModeRequirement
@@ -116,6 +118,11 @@ namespace GritGud.Application.Gameplay
             new Dictionary<string, ProjectileFlightSnapshot>(StringComparer.Ordinal);
         private readonly IReadOnlyList<ProjectileLaunchRecord> readOnlyLaunches;
         private readonly IReadOnlyList<ProjectileAdvanceRecord> readOnlyAdvances;
+        private bool canonicalProjectionBound;
+        private Func<
+            GameplayTransitionPayload,
+            IEnumerable<GameplayEvidenceRecord>,
+            GameplayReductionResult> canonicalExecutor;
 
         public GameplayProjectileSession(
             GameplaySession gameplaySession,
@@ -136,6 +143,149 @@ namespace GritGud.Application.Gameplay
         public IReadOnlyList<ProjectileLaunchRecord> Launches => readOnlyLaunches;
 
         public IReadOnlyList<ProjectileAdvanceRecord> Advances => readOnlyAdvances;
+
+        internal void BindCanonicalExecutor(
+            Func<
+                GameplayTransitionPayload,
+                IEnumerable<GameplayEvidenceRecord>,
+                GameplayReductionResult> executor)
+        {
+            if (executor == null) throw new ArgumentNullException(nameof(executor));
+            if (canonicalExecutor != null || canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Projectile semantic executor is already bound or projection binding has started.");
+            canonicalExecutor = executor;
+        }
+
+        internal void BindCanonicalProjection(
+            IReadOnlyList<ProjectileFlightSnapshot> snapshots)
+        {
+            if (canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Projectiles already have a canonical runtime projection.");
+            ValidateCanonicalProjection(snapshots);
+            if (snapshots.Count != flights.Count)
+                throw new InvalidOperationException(
+                    "Projectile session does not match the initial canonical state.");
+            foreach (ProjectileFlightSnapshot snapshot in snapshots)
+                if (!SnapshotsMatch(flights[snapshot.ProjectileId], snapshot))
+                    throw new InvalidOperationException(
+                        "Projectile session does not match the initial canonical state.");
+            canonicalProjectionBound = true;
+        }
+
+        internal void ValidateCanonicalProjection(
+            IReadOnlyList<ProjectileFlightSnapshot> snapshots)
+        {
+            if (snapshots == null)
+                throw new ArgumentNullException(nameof(snapshots));
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (ProjectileFlightSnapshot snapshot in snapshots)
+            {
+                if (!ids.Add(snapshot.ProjectileId))
+                    throw new InvalidOperationException(
+                        $"Canonical projectile '{snapshot.ProjectileId}' is duplicated.");
+                if (flights.TryGetValue(
+                        snapshot.ProjectileId,
+                        out ProjectileFlightSnapshot current)
+                    && !string.Equals(
+                        GameplayCanonicalValueDigest.Calculate(current.Launch),
+                        GameplayCanonicalValueDigest.Calculate(snapshot.Launch),
+                        StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Canonical projectile '{snapshot.ProjectileId}' changed its launch identity.");
+                }
+            }
+            foreach (string projectileId in flights.Keys)
+                if (!ids.Contains(projectileId))
+                    throw new InvalidOperationException(
+                        $"Canonical projection removed projectile '{projectileId}'.");
+        }
+
+        internal void ValidateCanonicalProjection(
+            IReadOnlyList<ProjectileFlightSnapshot> snapshots,
+            object semanticRecord)
+        {
+            ValidateCanonicalProjection(snapshots);
+            foreach (ProjectileFlightSnapshot snapshot in snapshots)
+            {
+                if (!flights.TryGetValue(
+                        snapshot.ProjectileId,
+                        out ProjectileFlightSnapshot previous))
+                {
+                    if (!TryGetLaunch(semanticRecord, out ProjectileLaunchRecord launch)
+                        || !string.Equals(
+                            GameplayCanonicalValueDigest.Calculate(launch),
+                            GameplayCanonicalValueDigest.Calculate(snapshot.Launch),
+                            StringComparison.Ordinal))
+                        throw new InvalidOperationException(
+                            "A new canonical projectile requires its exact launch action.");
+                    continue;
+                }
+                if (SnapshotsMatch(previous, snapshot)) continue;
+                if (!(semanticRecord is ProjectileAdvanceRecord advance)
+                    || !string.Equals(
+                        advance.ProjectileId,
+                        snapshot.ProjectileId,
+                        StringComparison.Ordinal)
+                    || !SnapshotsMatch(advance.Previous, previous)
+                    || !SnapshotsMatch(advance.Resulting, snapshot))
+                    throw new InvalidOperationException(
+                        "A changed canonical projectile requires its exact advance record.");
+            }
+        }
+
+        internal void InstallCanonicalProjection(
+            IReadOnlyList<ProjectileFlightSnapshot> snapshots,
+            object semanticRecord)
+        {
+            if (!canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Projectiles are not bound to a canonical runtime.");
+            ValidateCanonicalProjection(snapshots, semanticRecord);
+            foreach (ProjectileFlightSnapshot snapshot in snapshots)
+            {
+                if (!flights.TryGetValue(
+                        snapshot.ProjectileId,
+                        out ProjectileFlightSnapshot previous))
+                {
+                    flights.Add(snapshot.ProjectileId, snapshot);
+                    launches.Add(snapshot.Launch);
+                    continue;
+                }
+                if (SnapshotsMatch(previous, snapshot)) continue;
+                var advance = (ProjectileAdvanceRecord)semanticRecord;
+                flights[snapshot.ProjectileId] = snapshot;
+                advances.Add(advance);
+            }
+        }
+
+        private static bool TryGetLaunch(
+            object semanticRecord,
+            out ProjectileLaunchRecord launch)
+        {
+            if (semanticRecord is GameplayActionRecord action
+                && GameplayWeaponActionOutcomes.TryGetPrimary(
+                    action,
+                    out ProjectileLaunchedActionOutcome launched))
+            {
+                launch = launched.Launch;
+                return true;
+            }
+            launch = null;
+            return false;
+        }
+
+        public IReadOnlyList<string> ProjectileIds
+        {
+            get
+            {
+                var ids = new List<string>(flights.Keys);
+                ids.Sort(StringComparer.Ordinal);
+                return ids.AsReadOnly();
+            }
+        }
 
         public bool HasActiveProjectiles
         {
@@ -183,77 +333,79 @@ namespace GritGud.Application.Gameplay
                     actorId,
                     intendedTargetId,
                     aimPoint,
-                    out AttackDefinition weapon,
-                    out GameplayActorSnapshot actor,
+                    out GameplayPreparedTransition<GameplayActionRecord> prepared,
                     out failure))
-            {
                 return false;
-            }
+            action = prepared.Record;
+            CommitPreparedLaunch(prepared);
+            return true;
+        }
 
-            long launchSequence = launches.Count + 1L;
-            string projectileId = CreateProjectileId(launchSequence);
-            GameplayPosition launchOrigin = weapon.Projectile.GetLaunchOrigin(
-                actor.Pose);
-            TurnBudget resultingBudget = actor.TurnBudget.SpendAction(
-                weapon.TurnCost);
-            var launch = new ProjectileLaunchRecord(
-                launchSequence,
-                projectileId,
-                actorId,
-                intendedTargetId,
-                weapon.ActionId,
-                launchOrigin,
-                aimPoint,
-                weapon.Projectile,
-                gameplay.GetTurnActionPointAllowance(actorId),
-                resultingBudget.ActionPoints);
-            long actionSequence = gameplay.LastResolvedAction == null
-                ? 1L
-                : gameplay.LastResolvedAction.Sequence + 1L;
-            action = new GameplayActionRecord(
-                actionSequence,
-                new GameplayActionRequest(
+        public bool TryPrepareLaunch(
+            string actorId,
+            string intendedTargetId,
+            GameplayPosition aimPoint,
+            out GameplayPreparedTransition<GameplayActionRecord> prepared,
+            out ProjectileLaunchFailure failure)
+        {
+            prepared = null;
+            GameplayCombatStateSnapshot previous = CaptureCombatState();
+            if (!GameplayProjectilePreparation.TryPrepareLaunch(
+                    previous,
+                    gameplay.Scenario,
                     actorId,
-                    weapon.ActionId,
-                    intendedTargetId),
-                weapon.TurnCost,
-                actor.TurnBudget,
-                resultingBudget,
-                new[] { new ProjectileLaunchedActionOutcome(launch) });
-            CommitLaunch(action);
+                    intendedTargetId,
+                    aimPoint,
+                    out GameplayActionRecord action,
+                    out failure))
+                return false;
+            prepared = new GameplayPreparedTransition<GameplayActionRecord>(
+                action,
+                previous,
+                GameplayWeaponActionStateProjector.Project(previous, action));
             failure = ProjectileLaunchFailure.None;
             return true;
         }
 
+        public GameplayTransitionCommitResult CommitPreparedLaunch(
+            GameplayPreparedTransition<GameplayActionRecord> prepared) =>
+            GameplayTransitionCoordinator.Commit(
+                prepared,
+                CaptureCombatState,
+                CommitLaunch);
+
         public void CommitLaunch(GameplayActionRecord action)
         {
+            if (!canonicalProjectionBound)
+                RequireLegacyMutationAllowed(nameof(CommitLaunch));
             if (action == null)
             {
                 throw new ArgumentNullException(nameof(action));
             }
 
-            if (action.Outcomes.Count != 1
-                || !(action.Outcomes[0] is ProjectileLaunchedActionOutcome outcome))
-            {
-                throw new ArgumentException(
-                    "Projectile launches require exactly one launch outcome.",
-                    nameof(action));
-            }
+            ProjectileLaunchedActionOutcome outcome =
+                GameplayWeaponActionOutcomes
+                    .RequirePrimary<ProjectileLaunchedActionOutcome>(action);
 
             ProjectileLaunchRecord launch = outcome.Launch;
-            long expectedSequence = launches.Count + 1L;
-            if (launch.Sequence != expectedSequence
+            if (launch.Sequence != action.Sequence
                 || !string.Equals(
                     launch.ProjectileId,
-                    CreateProjectileId(expectedSequence),
+                    CreateProjectileId(action.Sequence),
                     StringComparison.Ordinal)
                 || flights.ContainsKey(launch.ProjectileId))
             {
                 throw new InvalidOperationException(
-                    "The projectile launch is not the next authoritative launch.");
+                    "The projectile launch does not share its canonical action identity.");
             }
 
-            gameplay.CommitAction(action);
+            var notifications = new GameplayNotificationBatch();
+            gameplay.CommitAction(action, notifications);
+            if (canonicalProjectionBound)
+            {
+                notifications.Publish();
+                return;
+            }
             launches.Add(launch);
             flights.Add(
                 launch.ProjectileId,
@@ -263,119 +415,53 @@ namespace GritGud.Application.Gameplay
                     distanceTraveled: 0f,
                     elapsedTurnTime: 0f,
                     ProjectileFlightStatus.InFlight));
+            notifications.Publish();
         }
 
         public ProjectileAdvanceRecord Advance(
             string projectileId,
             float turnTime)
         {
-            ProjectileAdvancePrediction prediction = PredictAdvance(
-                projectileId,
-                turnTime);
-            ProjectileFlightSnapshot previous = prediction.Previous;
-            ProjectileFlightDefinition definition = previous.Launch.Definition;
-            float segmentDistance = prediction.SegmentDistance;
-            float segmentEndDistance = previous.DistanceTraveled
-                + segmentDistance;
-            ProjectileSegmentQueryResult queryResult = prediction.QueryResult;
-
-            ProjectileFlightSnapshot resulting;
-            float? collisionFraction = null;
-            if (queryResult.HasCollision)
-            {
-                collisionFraction = queryResult.CollisionFraction;
-                float impactDistance = previous.DistanceTraveled
-                    + (segmentDistance * queryResult.CollisionFraction);
-                GameplayPosition impactPosition = previous.Launch.GetPosition(
-                    impactDistance);
-                float arrivalTurnTime = impactDistance / definition.SpeedPerTurn;
-                var impact = new ProjectileImpactRecord(
-                    projectileId,
-                    queryResult.HitEntityId,
-                    impactPosition,
-                    arrivalTurnTime,
-                    queryResult.WorldStateRevision,
-                    queryResult.BlastEffects);
-                resulting = new ProjectileFlightSnapshot(
-                    previous.Launch,
-                    impactPosition,
-                    impactDistance,
-                    arrivalTurnTime,
-                    ProjectileFlightStatus.Impacted,
-                    impact);
-            }
-            else
-            {
-                float elapsedTurnTime = segmentEndDistance
-                    / definition.SpeedPerTurn;
-                ProjectileFlightStatus status = Math.Abs(
-                    segmentEndDistance - definition.MaximumRange)
-                    <= ValueTolerance
-                        ? ProjectileFlightStatus.Expired
-                        : ProjectileFlightStatus.InFlight;
-                resulting = new ProjectileFlightSnapshot(
-                    previous.Launch,
-                    prediction.SegmentEnd,
-                    segmentEndDistance,
-                    elapsedTurnTime,
-                    status);
-            }
-
-            var record = new ProjectileAdvanceRecord(
-                advances.Count + 1L,
-                previous,
-                resulting,
-                turnTime,
-                prediction.SegmentEnd,
-                queryResult.WorldStateRevision,
-                collisionFraction);
-            CommitAdvance(record);
-            return record;
+            GameplayPreparedTransition<ProjectileAdvanceRecord> prepared =
+                PrepareAdvance(projectileId, turnTime);
+            CommitPreparedAdvance(prepared);
+            return prepared.Record;
         }
 
-        public ProjectileAdvancePrediction PredictAdvance(
+        public GameplayPreparedTransition<ProjectileAdvanceRecord> PrepareAdvance(
             string projectileId,
             float turnTime)
         {
-            if (float.IsNaN(turnTime)
-                || float.IsInfinity(turnTime)
-                || turnTime <= 0f)
-            {
-                throw new ArgumentOutOfRangeException(nameof(turnTime));
-            }
-
-            ProjectileFlightSnapshot previous = GetProjectile(projectileId);
-            if (previous.Status != ProjectileFlightStatus.InFlight)
-            {
-                throw new InvalidOperationException(
-                    $"Projectile '{projectileId}' is no longer in flight.");
-            }
-
-            ProjectileFlightDefinition definition = previous.Launch.Definition;
-            double requestedDistance = (double)definition.SpeedPerTurn * turnTime;
-            float remainingDistance = definition.MaximumRange
-                - previous.DistanceTraveled;
-            float segmentDistance = (float)Math.Min(
-                remainingDistance,
-                requestedDistance);
-            float segmentEndDistance = previous.DistanceTraveled + segmentDistance;
-            GameplayPosition segmentEnd = previous.Launch.GetPosition(
-                segmentEndDistance);
-            var query = new ProjectileSegmentQuery(previous, segmentEnd);
-            ProjectileSegmentQueryResult queryResult = segmentQuery.Query(query);
-            if (!queryResult.IsDefined)
-            {
-                throw new InvalidOperationException(
-                    "Projectile segment queries must return an explicit result.");
-            }
-
-            return new ProjectileAdvancePrediction(
-                previous,
-                turnTime,
-                segmentDistance,
-                segmentEnd,
-                queryResult);
+            GameplayCombatStateSnapshot previousState = CaptureCombatState();
+            ProjectileAdvanceRecord record = GameplayProjectilePreparation
+                .PrepareAdvance(
+                    previousState,
+                    projectileId,
+                    turnTime,
+                    segmentQuery);
+            return new GameplayPreparedTransition<ProjectileAdvanceRecord>(
+                record,
+                previousState,
+                GameplayProjectileAdvanceStateProjector.Project(
+                    previousState,
+                    record,
+                    consequences.Destructibles.Journal == gameplay.Journal));
         }
+
+        public GameplayTransitionCommitResult CommitPreparedAdvance(
+            GameplayPreparedTransition<ProjectileAdvanceRecord> prepared) =>
+            GameplayTransitionCoordinator.Commit(
+                prepared,
+                CaptureCombatState,
+                CommitAdvance);
+
+        public ProjectileAdvancePrediction PredictAdvance(
+            string projectileId,
+            float turnTime) => GameplayProjectilePreparation.PredictAdvance(
+                CaptureCombatState(),
+                projectileId,
+                turnTime,
+                segmentQuery);
 
         public void CommitAdvance(ProjectileAdvanceRecord record)
         {
@@ -383,11 +469,24 @@ namespace GritGud.Application.Gameplay
             {
                 throw new ArgumentNullException(nameof(record));
             }
+            if (canonicalProjectionBound)
+            {
+                canonicalExecutor(new GameplayProjectileAdvanceTransitionPayload(
+                        !string.IsNullOrWhiteSpace(gameplay.ActiveActorId)
+                            ? gameplay.ActiveActorId
+                            : record.Previous.Launch.AttackerId,
+                        record,
+                        consequences.Destructibles.Journal
+                            == gameplay.Journal),
+                    null);
+                return;
+            }
+            RequireLegacyMutationAllowed(nameof(CommitAdvance));
 
-            if (record.Sequence != advances.Count + 1L)
+            if (record.Sequence != gameplay.LastTransitionSequence + 1L)
             {
                 throw new InvalidOperationException(
-                    "The projectile advance is not the next authoritative advance.");
+                    "The projectile advance is not the next canonical transition.");
             }
 
             ProjectileFlightSnapshot current = GetProjectile(record.ProjectileId);
@@ -438,103 +537,17 @@ namespace GritGud.Application.Gameplay
             return flight;
         }
 
-        private bool TryPrepareLaunch(
-            string actorId,
-            string intendedTargetId,
-            GameplayPosition aimPoint,
-            out AttackDefinition weapon,
-            out GameplayActorSnapshot actor,
-            out ProjectileLaunchFailure failure)
+        private GameplayCombatStateSnapshot CaptureCombatState() =>
+            GameplayCombatStateCapture.Capture(
+                gameplay,
+                consequences.Destructibles,
+                projectiles: this);
+
+        private void RequireLegacyMutationAllowed(string operation)
         {
-            weapon = null;
-            actor = default;
-            if (string.IsNullOrWhiteSpace(intendedTargetId)
-                || string.Equals(
-                    actorId,
-                    intendedTargetId,
-                    StringComparison.Ordinal))
-            {
-                failure = ProjectileLaunchFailure.TargetNotFound;
-                return false;
-            }
-
-            bool startsEncounter = gameplay.AttackStartsEncounter(
-                intendedTargetId);
-            bool explorationOpeningAction =
-                gameplay.Mode == GameplaySessionMode.Exploration
-                && startsEncounter;
-            if (gameplay.Mode != GameplaySessionMode.TurnBased
-                && !explorationOpeningAction)
-            {
-                failure = ProjectileLaunchFailure.TurnModeRequired;
-                return false;
-            }
-
-            if (explorationOpeningAction && !gameplay.CanEnterTurnMode)
-            {
-                failure = ProjectileLaunchFailure.TurnModeRequired;
-                return false;
-            }
-
-            if (gameplay.Operation != GameplaySessionOperation.None)
-            {
-                failure = ProjectileLaunchFailure.OperationInProgress;
-                return false;
-            }
-
-            if ((gameplay.Mode == GameplaySessionMode.TurnBased
-                    && !string.Equals(
-                        gameplay.ActiveActorId,
-                        actorId,
-                        StringComparison.Ordinal))
-                || !gameplay.TryGetActor(actorId, out actor))
-            {
-                failure = ProjectileLaunchFailure.ActorNotActive;
-                return false;
-            }
-
-            if (gameplay.IsActorIncapacitated(actorId))
-            {
-                failure = ProjectileLaunchFailure.ActorIncapacitated;
-                return false;
-            }
-
-            weapon = gameplay.GetEquippedAttack(actorId);
-            if (weapon == null)
-            {
-                failure = ProjectileLaunchFailure.WeaponUnavailable;
-                return false;
-            }
-
-            if (weapon.Projectile == null)
-            {
-                failure = ProjectileLaunchFailure.ProjectileUnavailable;
-                return false;
-            }
-
-            GameplayPosition launchOrigin = weapon.Projectile
-                .GetLaunchOrigin(actor.Pose);
-            if (launchOrigin.DistanceTo(aimPoint) <= ValueTolerance)
-            {
-                failure = ProjectileLaunchFailure.InvalidAimPoint;
-                return false;
-            }
-
-            ActionCost cost = weapon.TurnCost;
-            if (actor.TurnBudget.ActionPoints < cost.ActionPoints)
-            {
-                failure = ProjectileLaunchFailure.InsufficientActionPoints;
-                return false;
-            }
-
-            if (actor.TurnBudget.MovementOpportunity < cost.MovementOpportunity)
-            {
-                failure = ProjectileLaunchFailure.InsufficientMovementOpportunity;
-                return false;
-            }
-
-            failure = ProjectileLaunchFailure.None;
-            return true;
+            if (canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    $"Legacy projectile mutation '{operation}' is disabled while the semantic runtime owns state.");
         }
 
         private static string CreateProjectileId(long sequence) =>

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Turns;
@@ -23,6 +24,37 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(session.InitiativeOrder,
                 Is.EqualTo(new[] { "alpha", "bravo", "charlie" }));
             Assert.That(session.ActiveActorId, Is.EqualTo("alpha"));
+            Assert.That(session.InitiativeResults, Has.Count.EqualTo(3));
+            Assert.That(session.InitiativeResults[0].ActorId, Is.EqualTo("alpha"));
+            Assert.That(session.InitiativeResults[0].Dexterity, Is.EqualTo(10));
+            Assert.That(session.InitiativeResults[0].ParticipantCount, Is.EqualTo(3));
+            Assert.That(session.InitiativeResults[0].ReactionAdvance, Is.EqualTo(3));
+
+            GameplaySession repeated = CreateSession(
+                CreateActor("bravo", initiative: 10),
+                CreateActor("charlie", initiative: 5),
+                CreateActor("alpha", initiative: 10));
+            Assert.That(repeated.InitiativeOrder, Is.EqualTo(session.InitiativeOrder));
+            Assert.That(repeated.InitiativeResults[0].ReactionAdvance,
+                Is.EqualTo(session.InitiativeResults[0].ReactionAdvance));
+        }
+
+        [Test]
+        public void InitiativeDiagnosticExplainsReactionAdvanceAndEqualTurns()
+        {
+            GameplaySession session = CreateSession(
+                CreateActor("bravo", initiative: 10),
+                CreateActor("alpha", initiative: 10));
+
+            GameplayDiagnosticProjection diagnostic =
+                GameplayCombatDiagnosticFormatter.FormatInitiative(session);
+
+            Assert.That(diagnostic.Title, Is.EqualTo("Initiative order"));
+            Assert.That(diagnostic.Lines, Has.Count.EqualTo(3));
+            StringAssert.Contains("DEX 10 with 2 combatants", diagnostic.Lines[0]);
+            StringAssert.Contains("advance 2", diagnostic.Lines[0]);
+            StringAssert.Contains("position 1", diagnostic.Lines[0]);
+            StringAssert.Contains("repeat this order", diagnostic.Lines[2]);
         }
 
         [Test]
@@ -60,8 +92,8 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(
                 session.LastCompletedVoluntaryTurnCycle,
                 Is.SameAs(completedCycle));
-            Assert.That(actor.TurnBudget.ActionPoints, Is.EqualTo(4));
-            Assert.That(actor.TurnBudget.MovementOpportunity, Is.EqualTo(8f));
+            Assert.That(actor.TurnBudget.ActionPoints, Is.EqualTo(3));
+            Assert.That(actor.TurnBudget.MovementOpportunity, Is.EqualTo(4f));
 
             session.AdvanceContinuousTime(
                 session.Scenario.Timing.MinimumVoluntaryTurnSeconds - 0.01f);
@@ -119,7 +151,7 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(session.TryExitTurnMode(out failure), Is.True);
             Assert.That(
                 session.GetActor("player").TurnBudget.ActionPoints,
-                Is.EqualTo(4));
+                Is.EqualTo(3));
         }
 
         [Test]
@@ -181,12 +213,83 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(observed.HasValue, Is.True);
             Assert.That(observed.Value.PreviousActorId, Is.EqualTo("player"));
             Assert.That(observed.Value.CurrentActorId, Is.EqualTo("target"));
-            Assert.That(observedBudget.ActionPoints, Is.EqualTo(4));
+            Assert.That(observedBudget.ActionPoints, Is.EqualTo(6));
             Assert.That(observedBudget.MovementOpportunity, Is.EqualTo(8f));
         }
 
         [Test]
-        public void RequestedEncounterCompletionClosesOnEndTurnAndRefreshesMovement()
+        public void TurnModeObserversSeeTheCommittedContextAndJournal()
+        {
+            GameplaySession session = CreateSession(
+                CreateActor("player", 10));
+            TurnModeContext observedContext = TurnModeContext.None;
+            GameplaySessionOperation observedOperation =
+                GameplaySessionOperation.ResolvingWorldTurn;
+            TurnModeChangedJournalEntry observedJournal = null;
+            session.ModeChanged += _ =>
+            {
+                observedContext = session.TurnContext;
+                observedOperation = session.Operation;
+                observedJournal = session.Journal.Entries
+                    .OfType<TurnModeChangedJournalEntry>()
+                    .LastOrDefault();
+            };
+
+            Assert.That(session.EnterTurnMode(), Is.True);
+
+            Assert.That(observedContext, Is.EqualTo(TurnModeContext.Voluntary));
+            Assert.That(
+                observedOperation,
+                Is.EqualTo(GameplaySessionOperation.None));
+            Assert.That(observedJournal, Is.Not.Null);
+            Assert.That(
+                observedJournal.ResultingMode,
+                Is.EqualTo(GameplaySessionMode.TurnBased));
+            Assert.That(observedJournal.Context, Is.EqualTo(observedContext));
+            Assert.That(observedJournal.ActiveActorId, Is.EqualTo("player"));
+        }
+
+        [Test]
+        public void ThrowingTurnObserverCannotInterruptCommitOrLaterObservers()
+        {
+            GameplaySession session = CreateSession(
+                CreateActor("player", 10),
+                CreateActor("target", 0));
+            Assert.That(session.BeginEncounter(), Is.True);
+            TurnEndRecord observedCommittedTurn = null;
+            TurnEndRecord observedJournalTurn = null;
+            bool laterActorObserverRan = false;
+            bool turnObserverRan = false;
+            session.ActiveActorChanged += _ =>
+            {
+                observedCommittedTurn = session.LastEndedTurn;
+                observedJournalTurn = session.Journal.Entries
+                    .OfType<TurnEndedJournalEntry>()
+                    .LastOrDefault()
+                    ?.Turn;
+                throw new InvalidOperationException("projection failed");
+            };
+            session.ActiveActorChanged += _ => laterActorObserverRan = true;
+            session.TurnEnded += _ => turnObserverRan = true;
+            long revisionBeforeTurnEnd = session.Revision;
+
+            InvalidOperationException exception =
+                Assert.Throws<InvalidOperationException>(() =>
+                    session.TryEndTurn("player", out _));
+
+            Assert.That(exception.Message, Is.EqualTo("projection failed"));
+            Assert.That(session.ActiveActorId, Is.EqualTo("target"));
+            Assert.That(session.Revision, Is.GreaterThan(revisionBeforeTurnEnd));
+            Assert.That(observedCommittedTurn, Is.SameAs(session.LastEndedTurn));
+            Assert.That(observedJournalTurn, Is.SameAs(session.LastEndedTurn));
+            Assert.That(session.LastEndedTurn.EndingActorId, Is.EqualTo("player"));
+            Assert.That(session.LastEndedTurn.NextActorId, Is.EqualTo("target"));
+            Assert.That(laterActorObserverRan, Is.True);
+            Assert.That(turnObserverRan, Is.True);
+        }
+
+        [Test]
+        public void RequestedEncounterCompletionClosesWithoutMintingResources()
         {
             GameplaySession session = CreateSession(CreateActor("player", 10));
             Assert.That(session.BeginEncounter(), Is.True);
@@ -213,7 +316,7 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(session.TurnContext, Is.EqualTo(TurnModeContext.None));
             Assert.That(
                 session.GetActor("player").TurnBudget.MovementOpportunity,
-                Is.EqualTo(8f));
+                Is.EqualTo(5f));
             Assert.That(session.LastCompletedVoluntaryTurnCycle, Is.Not.Null);
             Assert.That(
                 session.LastCompletedVoluntaryTurnCycle.Actors[0]
@@ -275,7 +378,7 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(completedCycle.Actors[0].TurnBudget.MovementOpportunity,
                 Is.EqualTo(4f));
             Assert.That(session.GetActor("player").TurnBudget.ActionPoints,
-                Is.EqualTo(4));
+                Is.EqualTo(6));
             Assert.That(session.GetActor("player").TurnBudget.MovementOpportunity,
                 Is.EqualTo(8f));
             Assert.That(endedTurn, Is.SameAs(session.LastEndedTurn));
@@ -360,6 +463,34 @@ namespace GritGud.Domain.Tests.Gameplay
                     new GameplayActorPose(
                         new GameplayPosition(3f, 0f, 4f),
                         90f)));
+        }
+
+        [Test]
+        public void ActorReadsReuseImmutableInventoryAcrossPoseChanges()
+        {
+            GameplaySession session = CreateSession(CreateActor("player", 10));
+
+            GameplayActorSnapshot first = session.GetActor("player");
+            GameplayActorSnapshot repeated = session.GetActor("player");
+            long initialRevision = session.Revision;
+
+            Assert.That(repeated.Inventory, Is.SameAs(first.Inventory));
+            Assert.That(session.GetActorState("player").Pose,
+                Is.EqualTo(first.Pose));
+
+            session.UpdateExplorationPose(
+                "player",
+                new GameplayActorPose(
+                    new GameplayPosition(3f, 0f, 4f),
+                    90f));
+
+            GameplayActorSnapshot moved = session.GetActor("player");
+            Assert.That(session.Revision, Is.GreaterThan(initialRevision));
+            Assert.That(moved.Pose.Position.X, Is.EqualTo(3f));
+            Assert.That(moved.Inventory, Is.SameAs(first.Inventory));
+            Assert.That(
+                session.GetActorState("player").Pose.Position,
+                Is.EqualTo(moved.Pose.Position));
         }
 
         [Test]
@@ -448,6 +579,27 @@ namespace GritGud.Domain.Tests.Gameplay
                 Is.EqualTo(ActorStance.Standing));
         }
 
+        [Test]
+        public void EveryConcreteActionOutcomeHasValidationAndApplicationOwnership()
+        {
+            GameplaySession session = CreateSession(CreateActor("player", 10));
+            Type[] concreteOutcomeTypes = typeof(GameplayActionOutcome)
+                .Assembly
+                .GetTypes()
+                .Where(type => !type.IsAbstract
+                    && typeof(GameplayActionOutcome).IsAssignableFrom(type))
+                .ToArray();
+
+            Assert.That(
+                session.ValidatedActionOutcomeTypes,
+                Is.EquivalentTo(concreteOutcomeTypes),
+                "Every authoritative outcome needs a focused validator.");
+            Assert.That(
+                session.AppliedActionOutcomeTypes,
+                Is.EquivalentTo(concreteOutcomeTypes),
+                "Every authoritative outcome needs an explicit applier.");
+        }
+
         private static GameplaySession CreateSession(
             params ScenarioActorDefinition[] actors)
         {
@@ -464,7 +616,7 @@ namespace GritGud.Domain.Tests.Gameplay
                 new ScenarioTimingDefinition(1.25f),
                 actors,
                 new[] { objective });
-            return new GameplaySession(scenario);
+            return new GameplaySession(scenario, scenarioSeed: 42u);
         }
 
         private static ScenarioActorDefinition CreateActor(

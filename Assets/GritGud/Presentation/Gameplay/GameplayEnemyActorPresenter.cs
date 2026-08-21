@@ -1,6 +1,7 @@
 using System;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
+using GritGud.Presentation.Actors;
 using GritGud.Presentation.Actors.Animation;
 using UnityEngine;
 
@@ -60,6 +61,11 @@ namespace GritGud.Presentation.Gameplay
 
         public MovementRoutePlaybackPresenter Playback { get; }
 
+        public Vector3? ProjectileLaunchOrigin =>
+            weaponPresenter.Muzzle != null
+                ? weaponPresenter.Muzzle.position
+                : (Vector3?)null;
+
         public bool PresentIncapacitation()
         {
             if (IncapacitationPresented)
@@ -70,6 +76,17 @@ namespace GritGud.Presentation.Gameplay
             animationCoordinator?.PresentIncapacitation(
                 PresentationDefinition.IncapacitationLocalRotation,
                 PresentationDefinition.IncapacitationLocalOffset);
+            if (animationCoordinator?.LastRequestedAction ==
+                    ActorAnimationAction.Incapacitate ||
+                animationCoordinator?.LastRequestedAction ==
+                    ActorAnimationAction.IncapacitateShoulder)
+            {
+                View.Root.GetComponent<ActorRagdollPresenter>()
+                    ?.ArmIncapacitation(
+                        journalSequence: 0L,
+                        hitRegion: null,
+                        impulseDirection: View.Transform.forward);
+            }
             return true;
         }
 

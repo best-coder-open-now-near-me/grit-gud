@@ -13,7 +13,8 @@ namespace GritGud.Editor
         internal static void Build(
             GameObject sourceVisual,
             ActorAnimationProfile profile,
-            ActorMotionProfile motionProfile)
+            ActorMotionProfile motionProfile,
+            ActorRagdollProfile ragdollProfile)
         {
             var root = new GameObject("Default Player Actor");
             try
@@ -33,6 +34,8 @@ namespace GritGud.Editor
                 var animatorDriver = root.AddComponent<AnimatorDriver>();
                 var animationCoordinator =
                     root.AddComponent<ActorAnimationCoordinator>();
+                var ragdollPresenter =
+                    root.AddComponent<ActorRagdollPresenter>();
                 var locomotionPresenter =
                     root.AddComponent<ActorLocomotionAnimationPresenter>();
                 GameObject visual = PrefabUtility.InstantiatePrefab(
@@ -57,6 +60,7 @@ namespace GritGud.Editor
                     visual.GetComponentInChildren<Animator>(true);
                 animatorDriver.Bind(animator, profile.AnimatorController);
                 animationCoordinator.Bind(animator, profile);
+                ragdollPresenter.BindProfile(ragdollProfile);
                 motor.BindCommandSource(input);
                 locomotionPresenter.Bind(motor, animationCoordinator);
                 PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);

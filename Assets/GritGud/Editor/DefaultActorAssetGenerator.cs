@@ -19,6 +19,8 @@ namespace GritGud.Editor
             DefaultActorAssetRecipe.ProfilePath;
         public const string MotionProfilePath =
             DefaultActorAssetRecipe.MotionProfilePath;
+        public const string RagdollProfilePath =
+            DefaultActorAssetRecipe.RagdollProfilePath;
         public const string PrefabPath =
             DefaultActorAssetRecipe.PrefabPath;
 
@@ -41,6 +43,7 @@ namespace GritGud.Editor
 
             DefaultActorAssetValidator.ValidateHumanoidVisual(sourceVisual);
             ConfigureShooterAnimationImports();
+            ConfigureCloseQuartersAnimationImports();
             Dictionary<DefaultActorClipDefinition, AnimationClip> clips =
                 LoadClips();
             Dictionary<DefaultActorClipDefinition, AnimationClip>
@@ -61,6 +64,10 @@ namespace GritGud.Editor
                 RifleFirePath,
                 "Rifle Fire",
                 mustLoop: false);
+            AnimationClip jumpClip = LoadRequiredClip(
+                JumpPath,
+                "Jump",
+                mustLoop: false);
             AnimationClip launcherAim = LoadRequiredClip(
                 LauncherAimPath,
                 "Launcher Aim",
@@ -72,6 +79,25 @@ namespace GritGud.Editor
             AnimationClip throwClip = LoadRequiredClip(
                 ThrowPath,
                 "Throw",
+                mustLoop: false);
+            AnimationClip knifeIdle = LoadRequiredLoopingClip(
+                KnifeIdlePath,
+                "Knife Idle");
+            AnimationClip knifeStrike = LoadRequiredClip(
+                KnifeStrikePath,
+                "Knife Strike",
+                mustLoop: false);
+            AnimationClip shoulderFall = LoadRequiredClip(
+                ShoulderFallPath,
+                "Shoulder Hit And Fall",
+                mustLoop: false);
+            AnimationClip fallOver = LoadRequiredClip(
+                FallOverPath,
+                "Fall Over",
+                mustLoop: false);
+            AnimationClip push = LoadRequiredClip(
+                PushPath,
+                "Push",
                 mustLoop: false);
             AvatarMask upperBodyMask =
                 AssetDatabase.LoadAssetAtPath<AvatarMask>(UpperBodyMaskPath);
@@ -97,15 +123,24 @@ namespace GritGud.Editor
                 launcherAim,
                 launcherFire,
                 throwClip,
+                jumpClip,
+                knifeIdle,
+                knifeStrike,
+                push,
+                shoulderFall,
+                fallOver,
                 upperBodyMask);
             ActorAnimationProfile profile =
                 DefaultActorProfileBuilder.Build(controller);
             ActorMotionProfile motionProfile =
                 DefaultActorMotionProfileBuilder.Build();
+            ActorRagdollProfile ragdollProfile =
+                DefaultActorRagdollProfileBuilder.Build();
             DefaultActorPrefabBuilder.Build(
                 sourceVisual,
                 profile,
-                motionProfile);
+                motionProfile,
+                ragdollProfile);
 
             AssetDatabase.SaveAssets();
             NormalizeTextAsset(ControllerPath);
@@ -168,9 +203,15 @@ namespace GritGud.Editor
                 LoadAnimationClip(TurnLeftPath) != null &&
                 LoadAnimationClip(TurnRightPath) != null &&
                 LoadAnimationClip(RifleFirePath) != null &&
+                LoadAnimationClip(JumpPath) != null &&
                 LoadAnimationClip(LauncherAimPath) != null &&
                 LoadAnimationClip(LauncherFirePath) != null &&
-                LoadAnimationClip(ThrowPath) != null;
+                LoadAnimationClip(ThrowPath) != null &&
+                LoadAnimationClip(KnifeIdlePath) != null &&
+                LoadAnimationClip(KnifeStrikePath) != null &&
+                LoadAnimationClip(ShoulderFallPath) != null &&
+                LoadAnimationClip(FallOverPath) != null &&
+                LoadAnimationClip(PushPath) != null;
         }
 
         private static Dictionary<DefaultActorClipDefinition, AnimationClip>
@@ -232,9 +273,37 @@ namespace GritGud.Editor
                 loop: false,
                 additive: true);
             ConfigureHumanoidClip(
+                JumpPath,
+                loop: false,
+                additive: false);
+            ConfigureHumanoidClip(
                 LauncherFirePath,
                 loop: false,
                 additive: true);
+        }
+
+        private static void ConfigureCloseQuartersAnimationImports()
+        {
+            ConfigureHumanoidClip(
+                KnifeIdlePath,
+                loop: true,
+                additive: false);
+            ConfigureHumanoidClip(
+                KnifeStrikePath,
+                loop: false,
+                additive: false);
+            ConfigureHumanoidClip(
+                ShoulderFallPath,
+                loop: false,
+                additive: false);
+            ConfigureHumanoidClip(
+                FallOverPath,
+                loop: false,
+                additive: false);
+            ConfigureHumanoidClip(
+                PushPath,
+                loop: false,
+                additive: false);
         }
 
         private static void ConfigureHumanoidClip(
@@ -245,7 +314,7 @@ namespace GritGud.Editor
             if (!(AssetImporter.GetAtPath(path) is ModelImporter importer))
             {
                 throw new InvalidOperationException(
-                    $"Required shooter animation was not found at '{path}'.");
+                    $"Required actor animation was not found at '{path}'.");
             }
 
             bool importerChanged = false;

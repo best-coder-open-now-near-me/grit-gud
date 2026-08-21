@@ -11,6 +11,7 @@ namespace GritGud.Application.Gameplay
         TurnModeRequired,
         ActorNotActive,
         ActorIncapacitated,
+        ActorPinned,
         OperationInProgress,
         AttackUnavailable,
         TargetNotFound,
@@ -18,14 +19,18 @@ namespace GritGud.Application.Gameplay
         ExposureMismatch,
         TargetRequired,
         TargetOutOfReach,
+        WorldStateChanged,
         InsufficientActionPoints,
         InsufficientMovementOpportunity,
+        InsufficientLoadedAmmunition,
     }
 
     public sealed class GameplayAttackSession
     {
         private readonly GameplaySession gameplay;
-        private readonly uint scenarioSeed;
+        private readonly DestructiblePropSession destructibles;
+        private readonly ScenarioRunIdentity runIdentity;
+        private readonly GameplayActorAttackTransitionPreparer attackPreparer;
         private readonly List<AttackResolutionRecord> records =
             new List<AttackResolutionRecord>();
         private readonly IReadOnlyList<AttackResolutionRecord> readOnlyRecords;
@@ -36,11 +41,25 @@ namespace GritGud.Application.Gameplay
 
         public GameplayAttackSession(
             GameplaySession gameplaySession,
-            uint authoredScenarioSeed)
+            DestructiblePropSession destructibleSession = null,
+            IGameplayTacticalContextQuery tacticalContextQuery = null,
+            GameplayTacticalContextEvaluator tacticalContextEvaluator = null)
         {
             gameplay = gameplaySession ??
                 throw new ArgumentNullException(nameof(gameplaySession));
-            scenarioSeed = authoredScenarioSeed;
+            runIdentity = gameplay.RunIdentity;
+            destructibles = destructibleSession;
+            attackPreparer = new GameplayActorAttackTransitionPreparer(
+                gameplay.Scenario,
+                tacticalContextQuery,
+                tacticalContextEvaluator);
+            if (destructibles != null
+                && !ReferenceEquals(gameplay.Journal, destructibles.Journal))
+            {
+                throw new ArgumentException(
+                    "Direct-fire attacks and destructibles must share one gameplay journal.",
+                    nameof(destructibleSession));
+            }
             readOnlyRecords = records.AsReadOnly();
             readOnlyDischarges = discharges.AsReadOnly();
         }
@@ -54,12 +73,11 @@ namespace GritGud.Application.Gameplay
             string actorId,
             TargetExposureSnapshot exposure)
         {
-            return TryPrepare(
+            GameplayCombatStateSnapshot state = CaptureCombatState();
+            return attackPreparer.TryEvaluate(
+                state,
                 actorId,
                 exposure,
-                out _,
-                out _,
-                out _,
                 out _,
                 out AttackResolutionFailure failure)
                     ? AttackResolutionFailure.None
@@ -69,15 +87,21 @@ namespace GritGud.Application.Gameplay
         public AttackResolutionFailure EvaluateDischarge(
             string actorId,
             string targetId,
-            GameplayPosition aimPoint)
+            GameplayPosition aimPoint) =>
+            EvaluateDischarge(actorId, targetId, aimPoint, impact: null);
+
+        public AttackResolutionFailure EvaluateDischarge(
+            string actorId,
+            string targetId,
+            GameplayPosition aimPoint,
+            DirectFireImpactRecord impact)
         {
             return TryPrepareDischarge(
                 actorId,
                 targetId,
                 aimPoint,
-                out _,
-                out _,
-                out _,
+                impact,
+                out GameplayPreparedTransition<GameplayActionRecord> _,
                 out AttackResolutionFailure failure)
                     ? AttackResolutionFailure.None
                     : failure;
@@ -90,46 +114,35 @@ namespace GritGud.Application.Gameplay
             out AttackResolutionFailure failure)
         {
             action = null;
-            if (!TryPrepare(
+            if (!TryPrepareResolve(
                     actorId,
                     exposure,
-                    out AttackDefinition attack,
-                    out GameplayActorSnapshot actor,
-                    out GameplayActorSnapshot target,
-                    out ActionCost cost,
+                    out GameplayPreparedTransition<GameplayActionRecord> prepared,
+                    out failure))
+                return false;
+            action = prepared.Record;
+            CommitPrepared(prepared);
+            return true;
+        }
+
+        public bool TryPrepareResolve(
+            string actorId,
+            TargetExposureSnapshot exposure,
+            out GameplayPreparedTransition<GameplayActionRecord> prepared,
+            out AttackResolutionFailure failure)
+        {
+            prepared = null;
+            GameplayCombatStateSnapshot previous = CaptureCombatState();
+            if (!attackPreparer.TryEvaluate(
+                    previous,
+                    actorId,
+                    exposure,
+                    out GameplayActorAttackEvaluation evaluation,
                     out failure))
             {
                 return false;
             }
-
-            long attackSequence = records.Count + 1L;
-            uint resolutionSeed = AttackResolutionRules.DeriveResolutionSeed(
-                scenarioSeed,
-                attackSequence);
-            AttackResolutionRecord resolution = AttackResolutionRules.Resolve(
-                attackSequence,
-                resolutionSeed,
-                exposure,
-                attack.AccuracyDecay,
-                actor.Pose.Position.DistanceTo(target.Pose.Position),
-                target.Wounds,
-                attack.WoundMovementPenalty,
-                attack.Contact);
-            TurnBudget resultingBudget = actor.TurnBudget.SpendAction(cost);
-            long actionSequence = gameplay.LastResolvedAction == null
-                ? 1L
-                : gameplay.LastResolvedAction.Sequence + 1L;
-            action = new GameplayActionRecord(
-                actionSequence,
-                new GameplayActionRequest(
-                    actorId,
-                    attack.ActionId,
-                    target.ActorId),
-                cost,
-                actor.TurnBudget,
-                resultingBudget,
-                new[] { new AttackResolvedActionOutcome(resolution) });
-            Commit(action);
+            prepared = attackPreparer.Resolve(previous, evaluation);
             failure = AttackResolutionFailure.None;
             return true;
         }
@@ -151,6 +164,21 @@ namespace GritGud.Application.Gameplay
             string targetId,
             GameplayPosition aimPoint,
             out GameplayActionRecord action,
+            out AttackResolutionFailure failure) =>
+            TryDischarge(
+                actorId,
+                targetId,
+                aimPoint,
+                impact: null,
+                out action,
+                out failure);
+
+        public bool TryDischarge(
+            string actorId,
+            string targetId,
+            GameplayPosition aimPoint,
+            DirectFireImpactRecord impact,
+            out GameplayActionRecord action,
             out AttackResolutionFailure failure)
         {
             action = null;
@@ -158,39 +186,52 @@ namespace GritGud.Application.Gameplay
                     actorId,
                     targetId,
                     aimPoint,
-                    out AttackDefinition attack,
-                    out GameplayActorSnapshot actor,
-                    out ActionCost cost,
+                    impact,
+                    out GameplayPreparedTransition<GameplayActionRecord> prepared,
                     out failure))
-            {
                 return false;
-            }
-
-            var discharge = new WeaponDischargeRecord(
-                discharges.Count + 1L,
-                actorId,
-                attack.ActionId,
-                targetId,
-                actor.Pose.Position,
-                aimPoint);
-            TurnBudget resultingBudget = actor.TurnBudget.SpendAction(cost);
-            long actionSequence = gameplay.LastResolvedAction == null
-                ? 1L
-                : gameplay.LastResolvedAction.Sequence + 1L;
-            action = new GameplayActionRecord(
-                actionSequence,
-                new GameplayActionRequest(
-                    actorId,
-                    attack.ActionId,
-                    targetId),
-                cost,
-                actor.TurnBudget,
-                resultingBudget,
-                new[] { new WeaponDischargedActionOutcome(discharge) });
-            Commit(action);
-            failure = AttackResolutionFailure.None;
+            action = prepared.Record;
+            CommitPrepared(prepared);
             return true;
         }
+
+        public bool TryPrepareDischarge(
+            string actorId,
+            string targetId,
+            GameplayPosition aimPoint,
+            out GameplayPreparedTransition<GameplayActionRecord> prepared,
+            out AttackResolutionFailure failure) =>
+            TryPrepareDischarge(
+                actorId,
+                targetId,
+                aimPoint,
+                impact: null,
+                out prepared,
+                out failure);
+
+        public bool TryPrepareDischarge(
+            string actorId,
+            string targetId,
+            GameplayPosition aimPoint,
+            DirectFireImpactRecord impact,
+            out GameplayPreparedTransition<GameplayActionRecord> prepared,
+            out AttackResolutionFailure failure)
+            => GameplayDirectAttackPreparation.TryPrepareDischarge(
+                CaptureCombatState(),
+                gameplay.Scenario,
+                actorId,
+                targetId,
+                aimPoint,
+                impact,
+                out prepared,
+                out failure);
+
+        public GameplayTransitionCommitResult CommitPrepared(
+            GameplayPreparedTransition<GameplayActionRecord> prepared) =>
+            GameplayTransitionCoordinator.Commit(
+                prepared,
+                CaptureCombatState,
+                Commit);
 
         public void Commit(GameplayActionRecord action)
         {
@@ -199,21 +240,15 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(action));
             }
 
-            if (action.Outcomes.Count != 1)
-            {
-                throw new ArgumentException(
-                    "Recorded weapon actions require exactly one outcome.",
-                    nameof(action));
-            }
-
-
-            if (action.Outcomes[0] is WeaponDischargedActionOutcome discharge)
+            GameplayActionOutcome primary =
+                GameplayWeaponActionOutcomes.RequirePrimary(action);
+            if (primary is WeaponDischargedActionOutcome discharge)
             {
                 CommitDischarge(action, discharge.Discharge);
                 return;
             }
 
-            if (!(action.Outcomes[0] is AttackResolvedActionOutcome outcome))
+            if (!(primary is AttackResolvedActionOutcome outcome))
             {
                 throw new ArgumentException(
                     "Recorded weapon actions require an attack or discharge outcome.",
@@ -221,222 +256,119 @@ namespace GritGud.Application.Gameplay
             }
 
             AttackResolutionRecord attack = outcome.Attack;
-            long expectedSequence = records.Count + 1L;
-            if (attack.Sequence != expectedSequence)
+            ValidateTacticalContext(action, attack);
+            if (attack.Sequence != action.Sequence)
             {
                 throw new InvalidOperationException(
-                    "The attack is not the next authoritative attack sequence.");
+                    "The attack does not share its authoritative action sequence.");
             }
 
-            uint expectedSeed = AttackResolutionRules.DeriveResolutionSeed(
-                scenarioSeed,
-                expectedSequence);
+            uint expectedSeed = GameplayAddressedRandom.SampleUInt32(
+                runIdentity,
+                new GameplayTransitionIdentity(
+                    action.Sequence,
+                    GameplaySemanticCapability.DirectAttack.ToString(),
+                    action.Request.ActorId,
+                    action.Request.TargetId),
+                "resolution");
             if (attack.ResolutionSeed != expectedSeed)
             {
                 throw new InvalidOperationException(
                     "The attack seed does not match its scenario stream.");
             }
 
-            gameplay.CommitAction(action);
+            var notifications = new GameplayNotificationBatch();
+            gameplay.CommitAction(action, notifications);
             records.Add(attack);
+            notifications.Publish();
+        }
+
+        private void ValidateTacticalContext(
+            GameplayActionRecord action,
+            AttackResolutionRecord attack)
+        {
+            if (!ReferenceEquals(action.Context, attack.Context))
+                throw new InvalidOperationException(
+                    "Committed attack context does not match its action record.");
+            if (action.Context == null) return;
+            if (!(action.Context is ResolvedTacticalContext context))
+                throw new InvalidOperationException(
+                    "Committed direct attacks require resolved tactical context.");
+            if (context.StateRevision != gameplay.Revision)
+                throw new InvalidOperationException(
+                    "Committed tactical evidence does not match current world revision.");
+
+            AttackDefinition definition = gameplay.GetEquippedAttack(
+                action.Request.ActorId);
+            string expectedSignature = GameplayCapabilityProfiles.Attack(
+                definition,
+                GameplaySemanticSubjectKind.Actor).Signature;
+            if (!string.Equals(
+                    context.CapabilitySignature,
+                    expectedSignature,
+                    StringComparison.Ordinal)
+                || !string.Equals(
+                    context.SubjectKind,
+                    GameplaySemanticSubjectKind.Actor.ToString(),
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Committed tactical context does not match the direct-attack capability.");
+            }
+
+            var reconstructed = new ResolvedTacticalContext(
+                context.Snapshot,
+                context.Modifiers);
+            if (reconstructed.AccuracyDeltaPercent
+                    != context.AccuracyDeltaPercent
+                || !string.Equals(
+                    reconstructed.CanonicalDigest,
+                    context.CanonicalDigest,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Committed tactical context consequences are not canonical.");
+            }
         }
 
         private void CommitDischarge(
             GameplayActionRecord action,
             WeaponDischargeRecord discharge)
         {
-            long expectedSequence = discharges.Count + 1L;
-            if (discharge.Sequence != expectedSequence)
+            if (discharge.Sequence != action.Sequence)
             {
                 throw new InvalidOperationException(
-                    "The discharge is not the next authoritative discharge sequence.");
+                    "The discharge does not share its canonical action sequence.");
             }
 
-            gameplay.CommitAction(action);
+            var notifications = new GameplayNotificationBatch();
+            if (discharge.Damage != null)
+            {
+                if (destructibles == null)
+                {
+                    throw new InvalidOperationException(
+                        "Direct-fire prop damage requires a destructible session.");
+                }
+
+                destructibles.ValidateDamage(discharge.Damage);
+            }
+            gameplay.CommitAction(action, notifications);
+            if (gameplay.IsCanonicalProjectionBound)
+            {
+                discharges.Add(discharge);
+                notifications.Publish();
+                return;
+            }
+            if (discharge.Damage != null)
+            {
+                destructibles.CommitDamage(discharge.Damage, notifications);
+            }
             discharges.Add(discharge);
+            notifications.Publish();
         }
 
-        private bool TryPrepare(
-            string actorId,
-            TargetExposureSnapshot exposure,
-            out AttackDefinition attack,
-            out GameplayActorSnapshot actor,
-            out GameplayActorSnapshot target,
-            out ActionCost cost,
-            out AttackResolutionFailure failure)
-        {
-            attack = null;
-            actor = default;
-            target = default;
-            cost = default;
-            bool startsEncounter = exposure != null
-                && !string.IsNullOrWhiteSpace(exposure.TargetId)
-                && gameplay.AttackStartsEncounter(exposure.TargetId);
-            if (!TryPrepareActor(
-                    actorId,
-                    startsEncounter,
-                    out attack,
-                    out actor,
-                    out cost,
-                    out failure))
-            {
-                return false;
-            }
-
-            if (exposure == null
-                || !string.Equals(
-                    exposure.ObserverId,
-                    actorId,
-                    StringComparison.Ordinal))
-            {
-                failure = AttackResolutionFailure.ExposureMismatch;
-                return false;
-            }
-
-            if (string.Equals(actorId, exposure.TargetId, StringComparison.Ordinal)
-                || !gameplay.TryGetActor(exposure.TargetId, out target))
-            {
-                failure = AttackResolutionFailure.TargetNotFound;
-                return false;
-            }
-
-            if (gameplay.IsActorIncapacitated(exposure.TargetId))
-            {
-                failure = AttackResolutionFailure.TargetIncapacitated;
-                return false;
-            }
-
-            float distance = actor.Pose.Position.DistanceTo(
-                target.Pose.Position);
-            if (attack.Contact != null
-                && distance > attack.Contact.MaximumReach + 0.0001f)
-            {
-                failure = AttackResolutionFailure.TargetOutOfReach;
-                return false;
-            }
-
-            failure = AttackResolutionFailure.None;
-            return true;
-        }
-
-        private bool TryPrepareActor(
-            string actorId,
-            bool startsEncounter,
-            out AttackDefinition attack,
-            out GameplayActorSnapshot actor,
-            out ActionCost cost,
-            out AttackResolutionFailure failure)
-        {
-            attack = null;
-            actor = default;
-            cost = default;
-
-            if (gameplay.Operation != GameplaySessionOperation.None)
-            {
-                failure = AttackResolutionFailure.OperationInProgress;
-                return false;
-            }
-
-            if ((gameplay.Mode == GameplaySessionMode.TurnBased
-                    && !string.Equals(
-                        gameplay.ActiveActorId,
-                        actorId,
-                        StringComparison.Ordinal))
-                || !gameplay.TryGetActor(actorId, out actor))
-            {
-                failure = AttackResolutionFailure.ActorNotActive;
-                return false;
-            }
-
-            if (gameplay.IsActorIncapacitated(actorId))
-            {
-                failure = AttackResolutionFailure.ActorIncapacitated;
-                return false;
-            }
-
-            if (startsEncounter
-                && !gameplay.EncounterActive
-                && gameplay.Mode == GameplaySessionMode.Exploration
-                && !gameplay.CanEnterTurnMode)
-            {
-                failure = AttackResolutionFailure.TurnModeRequired;
-                return false;
-            }
-
-            attack = gameplay.GetEquippedAttack(actorId);
-            if (attack == null || attack.Projectile != null)
-            {
-                failure = AttackResolutionFailure.AttackUnavailable;
-                return false;
-            }
-
-            cost = gameplay.Mode == GameplaySessionMode.TurnBased
-                || startsEncounter
-                ? attack.TurnCost
-                : new ActionCost(
-                    0,
-                    0f,
-                    attack.TurnCost.Mobility);
-            if (actor.TurnBudget.ActionPoints < cost.ActionPoints)
-            {
-                failure = AttackResolutionFailure.InsufficientActionPoints;
-                return false;
-            }
-
-            if (actor.TurnBudget.MovementOpportunity < cost.MovementOpportunity)
-            {
-                failure = AttackResolutionFailure.InsufficientMovementOpportunity;
-                return false;
-            }
-
-            failure = AttackResolutionFailure.None;
-            return true;
-        }
-
-        private bool TryPrepareDischarge(
-            string actorId,
-            string targetId,
-            GameplayPosition aimPoint,
-            out AttackDefinition attack,
-            out GameplayActorSnapshot actor,
-            out ActionCost cost,
-            out AttackResolutionFailure failure)
-        {
-            attack = null;
-            actor = default;
-            cost = default;
-            if (string.IsNullOrWhiteSpace(targetId))
-            {
-                failure = AttackResolutionFailure.TargetNotFound;
-                return false;
-            }
-
-            if (!TryPrepareActor(
-                    actorId,
-                    gameplay.AttackStartsEncounter(targetId),
-                    out attack,
-                    out actor,
-                    out cost,
-                    out failure))
-            {
-                return false;
-            }
-
-            if (!attack.CanTargetWorldPoint)
-            {
-                failure = AttackResolutionFailure.TargetRequired;
-                return false;
-            }
-
-            if (actor.Pose.Position.DistanceTo(aimPoint) <= 0f)
-            {
-                failure = AttackResolutionFailure.TargetNotFound;
-                return false;
-            }
-
-            failure = AttackResolutionFailure.None;
-            return true;
-        }
+        private GameplayCombatStateSnapshot CaptureCombatState() =>
+            GameplayCombatStateCapture.Capture(gameplay, destructibles);
 
     }
 }

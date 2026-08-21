@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 12,
+  "schemaVersion": 19,
   "scenarioId": "depot-yard",
   "displayName": "Depot Yard",
   "levelId": "main-depot-yard-v1",
@@ -10,14 +10,37 @@
   "primaryTargetActorId": "depot-rifleman",
   "primaryObjectiveId": "raised-deck",
   "randomSeed": 12648430,
-  "timing": { "minimumVoluntaryTurnSeconds": 1.25 },
+  "timing": {
+    "minimumVoluntaryTurnSeconds": 1.25,
+    "startingActionPoints": 4,
+    "actionPointIncome": 4,
+    "maximumHeldActionPoints": 6
+  },
+  "tacticalRules": [
+    {
+      "id": "rule.ambush.direct-attack.actor",
+      "displayName": "Ambush",
+      "order": 0,
+      "capability": "direct-attack",
+      "subjectKinds": ["actor"],
+      "predicates": [
+        { "feature": "target-awareness", "comparison": "equal", "value": "unaware" },
+        { "feature": "visibility-relation", "comparison": "equal", "value": "attacker-only" }
+      ],
+      "consequences": {
+        "accuracyDeltaPercent": 15,
+        "soundMultiplier": 1.0
+      },
+      "outcomeFeatureIds": ["outcome.ambush"]
+    }
+  ],
   "actors": [
     {
       "id": "player",
       "displayName": "Player Actor",
       "presentationId": "actor.player.default",
       "targetable": false,
-      "position": { "x": 1.25, "y": 2.0, "z": -8.75 },
+      "position": { "x": -7.5, "y": 2.0, "z": 3.0 },
       "facingDegrees": 0.0,
       "stance": "standing",
       "turnBudget": { "actionPoints": 4 },
@@ -53,7 +76,7 @@
             "handRequirement": "none",
             "autoStowPolicy": "never",
             "contestPolicy": "close-quarters-control",
-            "allowedResults": []
+            "allowedResults": ["topple", "pin"]
           },
           {
             "id": "close-quarters.throw",
@@ -77,7 +100,26 @@
             "handRequirement": "both-hands-free",
             "autoStowPolicy": "allowed",
             "contestPolicy": "close-quarters-control",
-            "allowedResults": []
+            "allowedResults": ["topple", "pin"]
+          },
+          {
+            "id": "close-quarters.push-off",
+            "displayName": "Push Off",
+            "intent": "push-off",
+            "cost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "acceptedSubjectKinds": ["prop"],
+            "reach": 2.0,
+            "maximumDistance": 1.25,
+            "maximumSubjectMass": 40.0,
+            "maximumSubjectSize": "medium",
+            "handRequirement": "both-hands-free",
+            "autoStowPolicy": "allowed",
+            "contestPolicy": "none",
+            "allowedResults": ["release"]
           }
         ]
       },
@@ -97,16 +139,7 @@
           { "id": "skill.fieldcraft", "rating": 3 },
           { "id": "skill.close-quarters", "rating": 5 }
         ],
-        "talentIds": ["talent.steady-hands", "talent.combat-awareness", "talent.leverage"],
-        "startingProgressionPoints": 1,
-        "advancementOptions": [
-          {
-            "id": "advance.demolitions-drill",
-            "skillId": "skill.demolitions",
-            "pointCost": 1,
-            "maximumBonus": 1
-          }
-        ]
+        "talentIds": ["talent.steady-hands", "talent.combat-awareness", "talent.leverage"]
       },
       "initiallyEquippedItemId": "weapon.rifle",
       "inventory": [
@@ -132,10 +165,35 @@
               "mobility": "set"
             },
             "woundMovementPenalty": 2.0,
+            "soundSignature": 1.0,
+            "directVehicleIntegrityDamage": 1.0,
             "accuracyDecay": {
               "halfLifeDistance": 60.0,
               "minimumAccuracyPercent": 5.0
+            },
+            "directFireDamage": {
+              "damageTypeId": "damage.ballistic.rifle",
+              "baseIntegrityDamage": 2.0,
+              "surfaceModifiers": [
+                { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+              ]
             }
+          },
+          "ammunition": {
+            "enabled": true,
+            "ammoTypeId": "ammo.rifle",
+            "magazineCapacity": 6,
+            "initialLoadedRounds": 6,
+            "roundsPerUse": 1,
+            "reloadCost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "consumesRemainingMovement": true,
+            "reloadPolicyVersion": 1
           }
         },
         {
@@ -160,6 +218,7 @@
               "mobility": "set"
             },
             "woundMovementPenalty": 2.0,
+            "soundSignature": 1.0,
             "projectile": {
               "enabled": true,
               "id": "projectile.rocket.synty",
@@ -173,6 +232,20 @@
               "blastWoundMovementPenalty": 2.0,
               "blastIntegrityDamage": 4.0
             }
+          },
+          "ammunition": {
+            "enabled": true,
+            "ammoTypeId": "ammo.rocket",
+            "magazineCapacity": 1,
+            "initialLoadedRounds": 1,
+            "roundsPerUse": 1,
+            "reloadCost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "consumesRemainingMovement": true,
+            "reloadPolicyVersion": 1
           }
         },
         {
@@ -247,6 +320,49 @@
           }
         },
         {
+          "id": "item.incendiary-grenade",
+          "displayName": "Incendiary Grenade",
+          "hotbarSlot": 8,
+          "kind": "consumable",
+          "occupiedHands": 0,
+          "quantity": 2,
+          "equipmentCost": {
+            "actionPoints": 0,
+            "movementOpportunity": 0.0,
+            "mobility": "mobile"
+          },
+          "equippedEffects": { "movementSpeedMultiplier": 1.0 },
+          "consumablePower": {
+            "type": "thrown-explosive",
+            "thrownExplosive": {
+              "turnCost": {
+                "actionPoints": 2,
+                "movementOpportunity": 0.0,
+                "mobility": "mobile"
+              },
+              "maximumRange": 12.0,
+              "standingLaunchHeight": 1.2,
+              "crouchedLaunchHeight": 0.82,
+              "baseUncertaintyRadius": 0.65,
+              "uncertaintyPerMeter": 0.1,
+              "blastRadius": 0.0,
+              "blastWoundMovementPenalty": 0.0,
+              "blastIntegrityDamage": 0.0,
+              "fireField": {
+                "initialRadius": 1.5,
+                "maximumRadius": 3.5,
+                "height": 1.8,
+                "explorationDurationSeconds": 18.0,
+                "durationTurnEnds": 6,
+                "explorationPulseSeconds": 3.0,
+                "actorWoundMovementPenalty": 1.0,
+                "destructibleIntegrityDamage": 1.0,
+                "minimumHazardPath": 0.75
+              }
+            }
+          }
+        },
+        {
           "id": "weapon.combat-knife",
           "displayName": "Combat Knife",
           "hotbarSlot": 5,
@@ -268,9 +384,14 @@
               "mobility": "mobile"
             },
             "woundMovementPenalty": 2.0,
+            "soundSignature": 0.2,
             "contact": { "enabled": true, "maximumReach": 2.0 }
           }
         }
+      ],
+      "ammunitionReserves": [
+        { "ammoTypeId": "ammo.rifle", "rounds": 18 },
+        { "ammoTypeId": "ammo.rocket", "rounds": 2 }
       ]
     },
     {
@@ -278,7 +399,7 @@
       "displayName": "Oren Vale",
       "presentationId": "actor.player.default",
       "targetable": false,
-      "position": { "x": -1.0, "y": 2.0, "z": -8.75 },
+      "position": { "x": -10.5, "y": 2.0, "z": 3.5 },
       "facingDegrees": 0.0,
       "stance": "standing",
       "turnBudget": { "actionPoints": 4 },
@@ -311,7 +432,7 @@
             "handRequirement": "none",
             "autoStowPolicy": "never",
             "contestPolicy": "close-quarters-control",
-            "allowedResults": []
+            "allowedResults": ["topple", "pin"]
           },
           {
             "id": "close-quarters.throw",
@@ -335,7 +456,26 @@
             "handRequirement": "both-hands-free",
             "autoStowPolicy": "allowed",
             "contestPolicy": "close-quarters-control",
-            "allowedResults": []
+            "allowedResults": ["topple", "pin"]
+          },
+          {
+            "id": "close-quarters.push-off",
+            "displayName": "Push Off",
+            "intent": "push-off",
+            "cost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "acceptedSubjectKinds": ["prop"],
+            "reach": 2.0,
+            "maximumDistance": 1.25,
+            "maximumSubjectMass": 40.0,
+            "maximumSubjectSize": "medium",
+            "handRequirement": "both-hands-free",
+            "autoStowPolicy": "allowed",
+            "contestPolicy": "none",
+            "allowedResults": ["release"]
           }
         ]
       },
@@ -355,16 +495,7 @@
           { "id": "skill.fieldcraft", "rating": 5 },
           { "id": "skill.close-quarters", "rating": 3 }
         ],
-        "talentIds": ["talent.combat-awareness"],
-        "startingProgressionPoints": 1,
-        "advancementOptions": [
-          {
-            "id": "advance.fieldcraft-drill",
-            "skillId": "skill.fieldcraft",
-            "pointCost": 1,
-            "maximumBonus": 1
-          }
-        ]
+        "talentIds": ["talent.combat-awareness"]
       },
       "initiallyEquippedItemId": "weapon.rifle",
       "inventory": [
@@ -390,10 +521,35 @@
               "mobility": "set"
             },
             "woundMovementPenalty": 2.0,
+            "soundSignature": 1.0,
+            "directVehicleIntegrityDamage": 1.0,
             "accuracyDecay": {
               "halfLifeDistance": 60.0,
               "minimumAccuracyPercent": 5.0
+            },
+            "directFireDamage": {
+              "damageTypeId": "damage.ballistic.rifle",
+              "baseIntegrityDamage": 2.0,
+              "surfaceModifiers": [
+                { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+              ]
             }
+          },
+          "ammunition": {
+            "enabled": true,
+            "ammoTypeId": "ammo.rifle",
+            "magazineCapacity": 6,
+            "initialLoadedRounds": 6,
+            "roundsPerUse": 1,
+            "reloadCost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "consumesRemainingMovement": true,
+            "reloadPolicyVersion": 1
           }
         },
         {
@@ -436,6 +592,39 @@
           }
         },
         {
+          "id": "item.concussive-grenade",
+          "displayName": "Concussive Grenade",
+          "hotbarSlot": 3,
+          "kind": "consumable",
+          "occupiedHands": 0,
+          "quantity": 2,
+          "equipmentCost": {
+            "actionPoints": 0,
+            "movementOpportunity": 0.0,
+            "mobility": "mobile"
+          },
+          "equippedEffects": { "movementSpeedMultiplier": 1.0 },
+          "consumablePower": {
+            "type": "thrown-explosive",
+            "thrownExplosive": {
+              "turnCost": {
+                "actionPoints": 2,
+                "movementOpportunity": 0.0,
+                "mobility": "mobile"
+              },
+              "maximumRange": 12.0,
+              "standingLaunchHeight": 1.2,
+              "crouchedLaunchHeight": 0.82,
+              "baseUncertaintyRadius": 0.65,
+              "uncertaintyPerMeter": 0.1,
+              "blastRadius": 4.0,
+              "blastWoundMovementPenalty": 0.0,
+              "blastIntegrityDamage": 0.0,
+              "blastActionPointReduction": 2
+            }
+          }
+        },
+        {
           "id": "weapon.combat-knife",
           "displayName": "Combat Knife",
           "hotbarSlot": 5,
@@ -457,9 +646,13 @@
               "mobility": "mobile"
             },
             "woundMovementPenalty": 2.0,
+            "soundSignature": 0.2,
             "contact": { "enabled": true, "maximumReach": 2.0 }
           }
         }
+      ],
+      "ammunitionReserves": [
+        { "ammoTypeId": "ammo.rifle", "rounds": 18 }
       ]
     },
     {
@@ -485,8 +678,53 @@
           "viewAngleDegrees": 120.0,
           "preferredEngagementRange": 14.0,
           "movementSearchRadius": 6.0,
-          "maximumAttacksPerTurn": 1
+          "maximumAttacksPerTurn": 1,
+          "minimumAttackHitChancePercent": 35,
+          "awareness": {
+            "hearingRange": 18.0,
+            "sightSuspicionGain": 100,
+            "soundSuspicionGain": 50,
+            "suspicionDecayPerTick": 10,
+            "alertThreshold": 100
+          },
+          "patrol": {
+            "enabled": true,
+            "loops": true,
+            "waypoints": [
+              { "x": 5.0, "y": 2.0, "z": 0.0 },
+              { "x": 5.0, "y": 2.0, "z": 6.0 },
+              { "x": 1.5, "y": 2.0, "z": 6.0 },
+              { "x": 1.5, "y": 2.0, "z": 0.0 }
+            ]
+          },
+          "reinforcementActorIds": ["depot-yard-support"]
         }
+      },
+      "displacementAbility": {
+        "id": "ability.escape-pin",
+        "displayName": "Escape Pin",
+        "hotbarSlot": 4,
+        "actions": [
+          {
+            "id": "close-quarters.push-off",
+            "displayName": "Push Off",
+            "intent": "push-off",
+            "cost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "acceptedSubjectKinds": ["prop"],
+            "reach": 2.0,
+            "maximumDistance": 1.25,
+            "maximumSubjectMass": 40.0,
+            "maximumSubjectSize": "medium",
+            "handRequirement": "both-hands-free",
+            "autoStowPolicy": "allowed",
+            "contestPolicy": "none",
+            "allowedResults": ["release"]
+          }
+        ]
       },
       "characterProfile": {
         "identityId": "character.depot-rifleman",
@@ -502,9 +740,7 @@
           { "id": "skill.firearms", "rating": 3 },
           { "id": "skill.close-quarters", "rating": 4 }
         ],
-        "talentIds": [],
-        "startingProgressionPoints": 0,
-        "advancementOptions": []
+        "talentIds": []
       },
       "initiallyEquippedItemId": "weapon.rifle",
       "inventory": [
@@ -530,13 +766,386 @@
               "mobility": "set"
             },
             "woundMovementPenalty": 2.0,
+            "soundSignature": 1.0,
+            "directVehicleIntegrityDamage": 1.0,
             "accuracyDecay": {
               "halfLifeDistance": 45.0,
               "minimumAccuracyPercent": 5.0
+            },
+            "directFireDamage": {
+              "damageTypeId": "damage.ballistic.rifle",
+              "baseIntegrityDamage": 2.0,
+              "surfaceModifiers": [
+                { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+              ]
             }
+          },
+          "ammunition": {
+            "enabled": true,
+            "ammoTypeId": "ammo.rifle",
+            "magazineCapacity": 6,
+            "initialLoadedRounds": 6,
+            "roundsPerUse": 1,
+            "reloadCost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "consumesRemainingMovement": true,
+            "reloadPolicyVersion": 1
           }
         }
+      ],
+      "ammunitionReserves": [
+        { "ammoTypeId": "ammo.rifle", "rounds": 18 }
       ]
+    },
+    {
+      "id": "depot-yard-support",
+      "displayName": "Yard Support",
+      "presentationId": "actor.enemy.rifleman",
+      "targetable": true,
+      "position": { "x": 10.0, "y": 2.0, "z": 6.0 },
+      "facingDegrees": 225.0,
+      "stance": "standing",
+      "turnBudget": { "actionPoints": 4 },
+      "mass": 78.0,
+      "sizeClass": "medium",
+      "control": { "talentId": "", "talentModifier": 0 },
+      "attackResponse": { "startsEncounter": true },
+      "combat": {
+        "allegianceId": "raider",
+        "hostileAllegianceIds": ["player"],
+        "maximumWounds": 2,
+        "enemyBehavior": {
+          "behaviorId": "behavior.yard-support",
+          "perceptionRange": 24.0,
+          "viewAngleDegrees": 100.0,
+          "preferredEngagementRange": 12.0,
+          "movementSearchRadius": 5.0,
+          "maximumAttacksPerTurn": 1,
+          "minimumAttackHitChancePercent": 40,
+          "awareness": {
+            "hearingRange": 16.0,
+            "sightSuspicionGain": 100,
+            "soundSuspicionGain": 45,
+            "suspicionDecayPerTick": 10,
+            "alertThreshold": 100
+          },
+          "patrol": null,
+          "reinforcementActorIds": []
+        }
+      },
+      "initiallyEquippedItemId": "weapon.rifle",
+      "inventory": [
+        {
+          "id": "weapon.rifle",
+          "displayName": "Rifle",
+          "hotbarSlot": 1,
+          "kind": "weapon",
+          "occupiedHands": 2,
+          "equipmentCost": {
+            "actionPoints": 1,
+            "movementOpportunity": 0.0,
+            "mobility": "set"
+          },
+          "equippedEffects": { "movementSpeedMultiplier": 0.9 },
+          "attackCapability": {
+            "enabled": true,
+            "actionId": "attack.rifle",
+            "displayName": "Fire rifle",
+            "turnCost": {
+              "actionPoints": 1,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "woundMovementPenalty": 2.0,
+            "soundSignature": 1.0,
+            "directVehicleIntegrityDamage": 1.0,
+            "accuracyDecay": {
+              "halfLifeDistance": 45.0,
+              "minimumAccuracyPercent": 5.0
+            },
+            "directFireDamage": {
+              "damageTypeId": "damage.ballistic.rifle",
+              "baseIntegrityDamage": 2.0,
+              "surfaceModifiers": [
+                { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+              ]
+            }
+          },
+          "ammunition": {
+            "enabled": true,
+            "ammoTypeId": "ammo.rifle",
+            "magazineCapacity": 6,
+            "initialLoadedRounds": 6,
+            "roundsPerUse": 1,
+            "reloadCost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "consumesRemainingMovement": true,
+            "reloadPolicyVersion": 1
+          }
+        }
+      ],
+      "ammunitionReserves": [
+        { "ammoTypeId": "ammo.rifle", "rounds": 18 }
+      ],
+      "characterProfile": {
+        "identityId": "character.depot-yard-support",
+        "displayName": "Yard Support",
+        "archetype": "Raider Rifleman",
+        "attributes": [
+          { "id": "attribute.strength", "rating": 3 },
+          { "id": "attribute.dexterity", "rating": 3 },
+          { "id": "attribute.grit", "rating": 3 },
+          { "id": "attribute.charisma", "rating": 1 }
+        ],
+        "skills": [
+          { "id": "skill.firearms", "rating": 3 },
+          { "id": "skill.close-quarters", "rating": 3 }
+        ],
+        "talentIds": []
+      }
+    },
+    {
+      "id": "depot-warehouse-patrol",
+      "displayName": "Warehouse Patrol",
+      "presentationId": "actor.enemy.rifleman",
+      "targetable": true,
+      "position": { "x": 2.0, "y": 2.0, "z": -10.0 },
+      "facingDegrees": 90.0,
+      "stance": "standing",
+      "turnBudget": { "actionPoints": 4 },
+      "mass": 76.0,
+      "sizeClass": "medium",
+      "control": { "talentId": "", "talentModifier": 0 },
+      "attackResponse": { "startsEncounter": true },
+      "combat": {
+        "allegianceId": "raider",
+        "hostileAllegianceIds": ["player"],
+        "maximumWounds": 2,
+        "enemyBehavior": {
+          "behaviorId": "behavior.warehouse-patrol",
+          "perceptionRange": 22.0,
+          "viewAngleDegrees": 90.0,
+          "preferredEngagementRange": 10.0,
+          "movementSearchRadius": 5.0,
+          "maximumAttacksPerTurn": 1,
+          "minimumAttackHitChancePercent": 35,
+          "awareness": {
+            "hearingRange": 20.0,
+            "sightSuspicionGain": 100,
+            "soundSuspicionGain": 55,
+            "suspicionDecayPerTick": 8,
+            "alertThreshold": 100
+          },
+          "patrol": {
+            "enabled": true,
+            "loops": true,
+            "waypoints": [
+              { "x": 2.0, "y": 2.0, "z": -10.0 },
+              { "x": 8.0, "y": 2.0, "z": -10.0 },
+              { "x": 8.0, "y": 2.0, "z": -5.0 },
+              { "x": 2.0, "y": 2.0, "z": -5.0 }
+            ]
+          },
+          "reinforcementActorIds": ["depot-loading-guard"]
+        }
+      },
+      "initiallyEquippedItemId": "weapon.rifle",
+      "inventory": [
+        {
+          "id": "weapon.rifle",
+          "displayName": "Rifle",
+          "hotbarSlot": 1,
+          "kind": "weapon",
+          "occupiedHands": 2,
+          "equipmentCost": {
+            "actionPoints": 1,
+            "movementOpportunity": 0.0,
+            "mobility": "set"
+          },
+          "equippedEffects": { "movementSpeedMultiplier": 0.9 },
+          "attackCapability": {
+            "enabled": true,
+            "actionId": "attack.rifle",
+            "displayName": "Fire rifle",
+            "turnCost": {
+              "actionPoints": 1,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "woundMovementPenalty": 2.0,
+            "soundSignature": 1.0,
+            "directVehicleIntegrityDamage": 1.0,
+            "accuracyDecay": {
+              "halfLifeDistance": 42.0,
+              "minimumAccuracyPercent": 5.0
+            },
+            "directFireDamage": {
+              "damageTypeId": "damage.ballistic.rifle",
+              "baseIntegrityDamage": 2.0,
+              "surfaceModifiers": [
+                { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+              ]
+            }
+          },
+          "ammunition": {
+            "enabled": true,
+            "ammoTypeId": "ammo.rifle",
+            "magazineCapacity": 6,
+            "initialLoadedRounds": 6,
+            "roundsPerUse": 1,
+            "reloadCost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "consumesRemainingMovement": true,
+            "reloadPolicyVersion": 1
+          }
+        }
+      ],
+      "ammunitionReserves": [
+        { "ammoTypeId": "ammo.rifle", "rounds": 18 }
+      ],
+      "characterProfile": {
+        "identityId": "character.depot-warehouse-patrol",
+        "displayName": "Warehouse Patrol",
+        "archetype": "Raider Scout",
+        "attributes": [
+          { "id": "attribute.strength", "rating": 2 },
+          { "id": "attribute.dexterity", "rating": 4 },
+          { "id": "attribute.grit", "rating": 3 },
+          { "id": "attribute.charisma", "rating": 1 }
+        ],
+        "skills": [
+          { "id": "skill.firearms", "rating": 3 },
+          { "id": "skill.close-quarters", "rating": 3 }
+        ],
+        "talentIds": []
+      }
+    },
+    {
+      "id": "depot-loading-guard",
+      "displayName": "Loading Guard",
+      "presentationId": "actor.enemy.rifleman",
+      "targetable": true,
+      "position": { "x": 13.0, "y": 2.0, "z": -5.0 },
+      "facingDegrees": 180.0,
+      "stance": "standing",
+      "turnBudget": { "actionPoints": 4 },
+      "mass": 82.0,
+      "sizeClass": "medium",
+      "control": { "talentId": "", "talentModifier": 0 },
+      "attackResponse": { "startsEncounter": true },
+      "combat": {
+        "allegianceId": "raider",
+        "hostileAllegianceIds": ["player"],
+        "maximumWounds": 3,
+        "enemyBehavior": {
+          "behaviorId": "behavior.loading-guard",
+          "perceptionRange": 20.0,
+          "viewAngleDegrees": 80.0,
+          "preferredEngagementRange": 11.0,
+          "movementSearchRadius": 4.0,
+          "maximumAttacksPerTurn": 1,
+          "minimumAttackHitChancePercent": 45,
+          "awareness": {
+            "hearingRange": 22.0,
+            "sightSuspicionGain": 100,
+            "soundSuspicionGain": 60,
+            "suspicionDecayPerTick": 6,
+            "alertThreshold": 100
+          },
+          "patrol": null,
+          "reinforcementActorIds": []
+        }
+      },
+      "initiallyEquippedItemId": "weapon.rifle",
+      "inventory": [
+        {
+          "id": "weapon.rifle",
+          "displayName": "Rifle",
+          "hotbarSlot": 1,
+          "kind": "weapon",
+          "occupiedHands": 2,
+          "equipmentCost": {
+            "actionPoints": 1,
+            "movementOpportunity": 0.0,
+            "mobility": "set"
+          },
+          "equippedEffects": { "movementSpeedMultiplier": 0.9 },
+          "attackCapability": {
+            "enabled": true,
+            "actionId": "attack.rifle",
+            "displayName": "Fire rifle",
+            "turnCost": {
+              "actionPoints": 1,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "woundMovementPenalty": 2.0,
+            "soundSignature": 1.0,
+            "directVehicleIntegrityDamage": 1.0,
+            "accuracyDecay": {
+              "halfLifeDistance": 48.0,
+              "minimumAccuracyPercent": 5.0
+            },
+            "directFireDamage": {
+              "damageTypeId": "damage.ballistic.rifle",
+              "baseIntegrityDamage": 2.0,
+              "surfaceModifiers": [
+                { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+              ]
+            }
+          },
+          "ammunition": {
+            "enabled": true,
+            "ammoTypeId": "ammo.rifle",
+            "magazineCapacity": 6,
+            "initialLoadedRounds": 6,
+            "roundsPerUse": 1,
+            "reloadCost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "consumesRemainingMovement": true,
+            "reloadPolicyVersion": 1
+          }
+        }
+      ],
+      "ammunitionReserves": [
+        { "ammoTypeId": "ammo.rifle", "rounds": 18 }
+      ],
+      "characterProfile": {
+        "identityId": "character.depot-loading-guard",
+        "displayName": "Loading Guard",
+        "archetype": "Raider Guard",
+        "attributes": [
+          { "id": "attribute.strength", "rating": 4 },
+          { "id": "attribute.dexterity", "rating": 2 },
+          { "id": "attribute.grit", "rating": 4 },
+          { "id": "attribute.charisma", "rating": 1 }
+        ],
+        "skills": [
+          { "id": "skill.firearms", "rating": 3 },
+          { "id": "skill.close-quarters", "rating": 4 }
+        ],
+        "talentIds": []
+      }
     }
   ],
   "objectives": [
@@ -559,7 +1168,79 @@
     {
       "entityId": "crate-exposure-demo",
       "mass": 35.0,
-      "sizeClass": "medium"
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 0.0,
+        "rollOffsetDegrees": 90.0,
+        "elevationOffset": 0.5
+      }
+    },
+    {
+      "entityId": "barrel-yard-01",
+      "mass": 28.0,
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 90.0,
+        "rollOffsetDegrees": 0.0,
+        "elevationOffset": 0.55
+      }
+    },
+    {
+      "entityId": "barrel-yard-02",
+      "mass": 28.0,
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 90.0,
+        "rollOffsetDegrees": 0.0,
+        "elevationOffset": 0.55
+      }
+    },
+    {
+      "entityId": "crate-yard-01",
+      "mass": 35.0,
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 0.0,
+        "rollOffsetDegrees": 90.0,
+        "elevationOffset": 0.5
+      }
+    },
+    {
+      "entityId": "crate-warehouse-01",
+      "mass": 35.0,
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 0.0,
+        "rollOffsetDegrees": 90.0,
+        "elevationOffset": 0.5
+      }
+    },
+    {
+      "entityId": "crate-warehouse-02",
+      "mass": 35.0,
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 0.0,
+        "rollOffsetDegrees": 90.0,
+        "elevationOffset": 0.5
+      }
+    },
+    {
+      "entityId": "crate-warehouse-03",
+      "mass": 35.0,
+      "sizeClass": "medium",
+      "toppling": {
+        "enabled": true,
+        "pitchOffsetDegrees": 0.0,
+        "rollOffsetDegrees": 90.0,
+        "elevationOffset": 0.5
+      }
     }
   ],
   "vehicles": [
@@ -574,6 +1255,37 @@
       "speedTurningRadiusFactor": 0.16,
       "startingSpeed": 4.0,
       "startingOccupantActorId": ""
+    }
+  ],
+  "drones": [
+    {
+      "entityId": "scout-drone-01",
+      "controllerActorId": "player",
+      "maximumIntegrity": 4.0,
+      "maximumMoveDistance": 5.0,
+      "moveCost": {
+        "actionPoints": 1,
+        "movementOpportunity": 0.0,
+        "mobility": "mobile"
+      },
+      "sensorRange": 16.0,
+      "sensorViewAngleDegrees": 120.0,
+      "attackCapability": {
+        "enabled": true,
+        "actionId": "attack.drone-light-rifle",
+        "displayName": "Drone Light Rifle",
+        "turnCost": {
+          "actionPoints": 1,
+          "movementOpportunity": 0.0,
+          "mobility": "set"
+        },
+        "woundMovementPenalty": 1.0,
+        "accuracyDecay": {
+          "halfLifeDistance": 14.0,
+          "minimumAccuracyPercent": 20.0
+        },
+        "soundSignature": 0.65
+      }
     }
   ]
 }

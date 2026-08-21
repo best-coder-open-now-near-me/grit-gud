@@ -29,6 +29,14 @@ namespace GritGud.Presentation.Gameplay
                     $"Actor '{actorId}' requires {nameof(ActorStancePresenter)}.");
             Motor = root.GetComponent<ThirdPersonMotor>();
             MovementInput = root.GetComponent<ExplorationMovementInput>();
+            Wounds = root.GetComponent<ActorWoundVariantPresenter>()
+                ?? root.AddComponent<ActorWoundVariantPresenter>();
+            ReplayActions = root.GetComponent<
+                    GameplayTurnReplayActorStateHooks>()
+                ?? root.AddComponent<GameplayTurnReplayActorStateHooks>();
+            TargetProfile = root.GetComponent<ActorTargetProfilePresenter>()
+                ?? root.AddComponent<ActorTargetProfilePresenter>();
+            TargetProfile.Bind(Stance, ReplayActions);
         }
 
         public string ActorId { get; }
@@ -46,6 +54,12 @@ namespace GritGud.Presentation.Gameplay
         public ThirdPersonMotor Motor { get; }
 
         public ExplorationMovementInput MovementInput { get; }
+
+        public ActorWoundVariantPresenter Wounds { get; }
+
+        public GameplayTurnReplayActorStateHooks ReplayActions { get; }
+
+        public ActorTargetProfilePresenter TargetProfile { get; }
     }
 
     internal sealed class GameplayWorldRegistry : IDisposable

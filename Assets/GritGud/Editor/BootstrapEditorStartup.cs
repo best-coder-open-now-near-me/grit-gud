@@ -18,7 +18,7 @@ namespace GritGud.Editor
 
         private static void ConfigureStartupScene()
         {
-            if (Application.isBatchMode)
+            if (UnityEngine.Application.isBatchMode)
             {
                 return;
             }

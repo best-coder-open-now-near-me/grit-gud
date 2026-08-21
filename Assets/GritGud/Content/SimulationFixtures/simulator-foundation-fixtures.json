@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "depot-yard",
+  "levelId": "main-depot-yard-v1",
+  "fixtures": [
+    {
+      "id": "sim-awareness-multi-observer",
+      "behaviorCheckId": "sim-awareness-multi-observer",
+      "actorIds": ["player", "depot-rifleman", "depot-warehouse-patrol", "depot-loading-guard"],
+      "entityIds": [],
+      "assertions": ["observer-awareness-is-independent", "observer-order-is-deterministic", "sound-and-sight-are-distinct"]
+    },
+    {
+      "id": "sim-reinforcement-scope",
+      "behaviorCheckId": "sim-reinforcement-scope",
+      "actorIds": ["player", "depot-rifleman", "depot-yard-support", "depot-warehouse-patrol", "depot-loading-guard"],
+      "entityIds": [],
+      "assertions": ["detected-actor-enters-scope", "declared-reinforcements-enter-scope", "unrelated-enemies-remain-outside-scope"]
+    },
+    {
+      "id": "sim-destructible-cover",
+      "behaviorCheckId": "sim-destructible-cover",
+      "actorIds": ["player", "depot-rifleman"],
+      "entityIds": ["crate-exposure-demo"],
+      "assertions": ["destructible-is-an-attack-candidate", "damage-reduces-authoritative-state", "resulting-los-and-routing-evidence-refresh"]
+    },
+    {
+      "id": "sim-target-kind-matrix",
+      "behaviorCheckId": "sim-target-kind-matrix",
+      "actorIds": ["player", "depot-rifleman"],
+      "entityIds": ["crate-exposure-demo", "yard-runner"],
+      "assertions": ["actor-target-route", "destructible-target-route", "vehicle-target-route", "world-position-target-route"]
+    },
+    {
+      "id": "sim-ap-banking",
+      "behaviorCheckId": "sim-ap-banking",
+      "actorIds": ["player", "oren-vale", "depot-rifleman"],
+      "entityIds": [],
+      "assertions": ["personal-turn-income-only", "six-ap-cap", "cap-waste-is-recorded", "encounter-transitions-do-not-grant-ap"]
+    },
+    {
+      "id": "sim-smoke-and-exposure",
+      "behaviorCheckId": "sim-smoke-and-exposure",
+      "actorIds": ["player", "oren-vale", "depot-rifleman"],
+      "entityIds": [],
+      "assertions": ["smoke-is-not-solid-cover", "smoke-obscures-los-evidence", "smoke-decays-on-canonical-world-advancement"]
+    },
+    {
+      "id": "sim-persistent-fire",
+      "behaviorCheckId": "sim-persistent-fire",
+      "actorIds": ["player", "depot-rifleman"],
+      "entityIds": ["crate-exposure-demo"],
+      "assertions": ["fire-expands-from-canonical-time", "fire-damages-actors-and-destructibles", "fire-changes-route-hazard-evidence-without-becoming-solid", "live-and-headless-reduction-match"]
+    },
+    {
+      "id": "sim-concussive-ap",
+      "behaviorCheckId": "sim-concussive-ap",
+      "actorIds": ["player", "oren-vale", "depot-rifleman"],
+      "entityIds": [],
+      "assertions": ["blast-exposure-freezes-per-actor-ap-reduction", "current-ap-clamps-at-zero", "maximum-ap-and-income-are-unchanged", "thrower-cost-precedes-self-concussion", "live-and-headless-reduction-match"]
+    },
+    {
+      "id": "sim-drone-control",
+      "behaviorCheckId": "sim-drone-control",
+      "actorIds": ["player", "depot-rifleman"],
+      "entityIds": ["scout-drone-01"],
+      "assertions": ["controller-turn-gates-commands", "movement-and-attack-spend-controller-ap", "sensor-origin-and-facing-drive-exposure", "integrity-and-operational-state-are-authoritative", "live-headless-and-replay-reduction-match"]
+    },
+    {
+      "id": "sim-pinned-recovery",
+      "behaviorCheckId": "sim-pinned-recovery",
+      "actorIds": ["player", "depot-rifleman"],
+      "entityIds": ["crate-exposure-demo"],
+      "assertions": ["pinned-target-profile-parity", "push-off-releases-pin", "released-actor-can-resume-turn"]
+    },
+    {
+      "id": "sim-integrated-encounter",
+      "behaviorCheckId": "sim-integrated-encounter",
+      "actorIds": ["player", "oren-vale", "depot-rifleman", "depot-yard-support", "depot-warehouse-patrol", "depot-loading-guard"],
+      "entityIds": ["crate-exposure-demo", "yard-runner", "scout-drone-01"],
+      "assertions": ["multi-enemy-lifecycle-terminates", "trajectory-reduces-exactly", "detached-headless-replay-matches", "all-reachable-inputs-have-complete-routes"]
+    }
+  ]
+}

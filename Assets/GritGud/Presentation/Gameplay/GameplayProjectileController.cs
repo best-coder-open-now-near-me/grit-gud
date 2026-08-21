@@ -14,6 +14,9 @@ namespace GritGud.Presentation.Gameplay
 
         private readonly Dictionary<string, ProjectileFlightPresenter> presenters =
             new Dictionary<string, ProjectileFlightPresenter>(StringComparer.Ordinal);
+        private readonly Dictionary<string, ProjectileFlightPresenter>
+            replayPresenters = new Dictionary<string, ProjectileFlightPresenter>(
+                StringComparer.Ordinal);
 
         private GameplayProjectileSession projectiles;
         private GameplayImpactCycleSession impactCycle;
@@ -118,7 +121,7 @@ namespace GritGud.Presentation.Gameplay
                 ?? ProjectilePresentationCatalog.LoadDefault();
             var query = new UnityProjectileSegmentQuery(
                 registry,
-                () => Session?.Journal.LastEntry?.Sequence ?? 0L,
+                () => Session?.WorldStateRevision ?? 0L,
                 blastWorldQuery ?? throw new ArgumentNullException(
                     nameof(blastWorldQuery)));
             projectiles = new GameplayProjectileSession(
@@ -181,6 +184,7 @@ namespace GritGud.Presentation.Gameplay
             }
 
             presenters.Clear();
+            EndReplayPresentation();
             Session = null;
             projectiles = null;
             if (impactCycle != null)
@@ -214,6 +218,53 @@ namespace GritGud.Presentation.Gameplay
                 nameof(originProvider));
         }
 
+        internal void BeginReplayPresentation()
+        {
+            EndReplayPresentation();
+            foreach (ProjectileFlightPresenter presenter in presenters.Values)
+                presenter.SetPresentationSuppressed(true);
+        }
+
+        internal void PresentReplay(
+            IReadOnlyList<ProjectileFlightSnapshot> snapshots)
+        {
+            if (snapshots == null)
+                throw new ArgumentNullException(nameof(snapshots));
+            var retained = new HashSet<string>(StringComparer.Ordinal);
+            foreach (ProjectileFlightSnapshot snapshot in snapshots)
+            {
+                retained.Add(snapshot.ProjectileId);
+                if (!replayPresenters.TryGetValue(
+                    snapshot.ProjectileId,
+                    out ProjectileFlightPresenter presenter))
+                {
+                    presenter = new ProjectileFlightPresenter(
+                        snapshot,
+                        presentationCatalog.Get(snapshot.Launch.Definition.Id),
+                        transform);
+                    replayPresenters.Add(snapshot.ProjectileId, presenter);
+                }
+                presenter.PresentReplay(snapshot);
+            }
+            var removed = new List<string>();
+            foreach (string projectileId in replayPresenters.Keys)
+                if (!retained.Contains(projectileId)) removed.Add(projectileId);
+            foreach (string projectileId in removed)
+            {
+                replayPresenters[projectileId].Dispose();
+                replayPresenters.Remove(projectileId);
+            }
+        }
+
+        internal void EndReplayPresentation()
+        {
+            foreach (ProjectileFlightPresenter presenter in replayPresenters.Values)
+                presenter.Dispose();
+            replayPresenters.Clear();
+            foreach (ProjectileFlightPresenter presenter in presenters.Values)
+                presenter.SetPresentationSuppressed(false);
+        }
+
         public bool TryLaunch()
         {
             if (projectiles == null || actorId == null || !HasProjectileWeapon)
@@ -223,7 +274,10 @@ namespace GritGud.Presentation.Gameplay
 
             string targetId = acquisition?.CurrentTargetActorId
                 ?? WorldAimReferenceId;
-            if (!TryGetAimPoint(targetId, out GameplayPosition aimPoint))
+            if (!TryGetAimPoint(
+                    actorId,
+                    targetId,
+                    out GameplayPosition aimPoint))
             {
                 return Fail(ProjectileLaunchFailure.TargetNotFound);
             }
@@ -233,8 +287,54 @@ namespace GritGud.Presentation.Gameplay
                 return Fail(ProjectileLaunchFailure.TurnModeRequired);
             }
 
+            return TryLaunchResolved(
+                actorId,
+                targetId,
+                aimPoint,
+                getVisualLaunchOrigin?.Invoke());
+        }
+
+        internal bool TryLaunchActorAtTarget(
+            string attackerId,
+            string targetId,
+            Vector3? visualLaunchOrigin = null)
+        {
+            if (projectiles == null
+                || string.IsNullOrWhiteSpace(attackerId)
+                || Session.GetEquippedAttack(attackerId)?.Projectile == null)
+            {
+                return Fail(ProjectileLaunchFailure.ProjectileUnavailable);
+            }
+
+            if (!TryGetAimPoint(
+                    attackerId,
+                    targetId,
+                    out GameplayPosition aimPoint))
+            {
+                return Fail(ProjectileLaunchFailure.TargetNotFound);
+            }
+
+            if (projectiles.GetLaunchModeRequirement(targetId)
+                != ProjectileLaunchModeRequirement.None)
+            {
+                return Fail(ProjectileLaunchFailure.TurnModeRequired);
+            }
+
+            return TryLaunchResolved(
+                attackerId,
+                targetId,
+                aimPoint,
+                visualLaunchOrigin);
+        }
+
+        private bool TryLaunchResolved(
+            string attackerId,
+            string targetId,
+            GameplayPosition aimPoint,
+            Vector3? visualLaunchOrigin)
+        {
             if (!projectiles.TryLaunch(
-                    actorId,
+                    attackerId,
                     targetId,
                     aimPoint,
                     out GameplayActionRecord action,
@@ -249,8 +349,37 @@ namespace GritGud.Presentation.Gameplay
                 beginEncounter,
                 "projectile launch");
 
-            ProjectileLaunchRecord launch =
-                ((ProjectileLaunchedActionOutcome)action.Outcomes[0]).Launch;
+            PresentResolvedAction(action, visualLaunchOrigin);
+            bool reactionOpened = impactCycle.ObserveLaunch(LastLaunch);
+            ProjectileFlightSnapshot stagedFlight = projectiles.GetProjectile(
+                LastLaunch.ProjectileId);
+            if (stagedFlight.Status == ProjectileFlightStatus.InFlight)
+            {
+                StatusMessage = reactionOpened
+                    ? $"{LastLaunch.ProjectileId} staged. "
+                        + $"{impactCycle.CurrentWindow.ActionPointAllowance} AP reaction armed."
+                    : $"{LastLaunch.ProjectileId} staged through remaining turn time.";
+            }
+            return true;
+        }
+
+        internal void PresentResolvedAction(
+            GameplayActionRecord action,
+            Vector3? visualLaunchOrigin = null)
+        {
+            if (action == null) throw new ArgumentNullException(nameof(action));
+            ProjectileLaunchRecord launch = null;
+            foreach (GameplayActionOutcome outcome in action.Outcomes)
+                if (outcome is ProjectileLaunchedActionOutcome launched)
+                {
+                    launch = launched.Launch;
+                    break;
+                }
+            if (launch == null)
+                throw new ArgumentException(
+                    "Projectile presentation requires a launch outcome.",
+                    nameof(action));
+
             LastFailure = ProjectileLaunchFailure.None;
             LastResolvedAction = action;
             LastLaunch = launch;
@@ -260,29 +389,28 @@ namespace GritGud.Presentation.Gameplay
                 launch.ProjectileId);
             ProjectilePresentationDefinition presentation =
                 presentationCatalog.Get(launch.Definition.Id);
-            var presenter = new ProjectileFlightPresenter(
-                flight,
-                presentation,
-                transform,
-                getVisualLaunchOrigin?.Invoke());
-            presenters.Add(launch.ProjectileId, presenter);
-            bool reactionOpened = impactCycle.ObserveLaunch(launch);
-            ProjectileFlightSnapshot stagedFlight = projectiles.GetProjectile(
-                launch.ProjectileId);
-            if (stagedFlight.Status == ProjectileFlightStatus.InFlight)
+            if (!presenters.ContainsKey(launch.ProjectileId))
             {
-                StatusMessage = reactionOpened
-                    ? $"{launch.ProjectileId} staged. "
-                        + $"{impactCycle.CurrentWindow.ActionPointAllowance} AP reaction armed."
-                    : $"{launch.ProjectileId} staged through remaining turn time.";
+                var presenter = new ProjectileFlightPresenter(
+                    flight,
+                    presentation,
+                    transform,
+                    visualLaunchOrigin);
+                presenters.Add(launch.ProjectileId, presenter);
             }
+            StatusMessage = $"{launch.ProjectileId} staged for canonical advance.";
             if (GameplayCombatDiagnosticFormatter.TryFormatAction(
                     action,
                     out GameplayDiagnosticProjection diagnostic))
             {
                 dialogue.AppendCombatDiagnostic(diagnostic);
             }
-            return true;
+        }
+
+        internal void PresentResolvedAdvance(ProjectileAdvanceRecord advance)
+        {
+            if (advance == null) throw new ArgumentNullException(nameof(advance));
+            HandleImpactCycleAdvance(advance);
         }
 
         private bool TryEnterRequiredLaunchMode(string targetId)
@@ -296,8 +424,10 @@ namespace GritGud.Presentation.Gameplay
                         && beginTurnMode != null
                         && beginTurnMode();
                 case ProjectileLaunchModeRequirement.Encounter:
-                    return Session.Mode != GameplaySessionMode.Exploration
-                        || Session.CanEnterTurnMode;
+                    // The committed launch itself opens the encounter.  A
+                    // voluntary-turn cooldown is not an input lock and must
+                    // not prevent an opening shot.
+                    return true;
                 default:
                     throw new ArgumentOutOfRangeException();
             }
@@ -445,6 +575,7 @@ namespace GritGud.Presentation.Gameplay
         }
 
         private bool TryGetAimPoint(
+            string attackerId,
             string targetId,
             out GameplayPosition aimPoint)
         {
@@ -452,7 +583,8 @@ namespace GritGud.Presentation.Gameplay
             {
                 if (acquisition != null
                     && acquisition.TryGetPresentationAimPoint(
-                        Session.GetEquippedAttack(actorId).Projectile.MaximumRange,
+                        Session.GetEquippedAttack(attackerId)
+                            .Projectile.MaximumRange,
                         out Vector3 worldAimPoint))
                 {
                     aimPoint = ToGameplayPosition(worldAimPoint);
@@ -464,7 +596,7 @@ namespace GritGud.Presentation.Gameplay
             }
 
             IReadOnlyList<ActorTargetRegionSample> regions =
-                target.Stance.GetTargetRegionSamples();
+                target.TargetProfile.GetTargetRegionSamples();
             foreach (ActorTargetRegionSample region in regions)
             {
                 if (region.Id == TargetRegionId.Torso)
@@ -525,6 +657,8 @@ namespace GritGud.Presentation.Gameplay
                     return "Only the active actor can launch.";
                 case ProjectileLaunchFailure.ActorIncapacitated:
                     return "An incapacitated actor cannot launch.";
+                case ProjectileLaunchFailure.ActorPinned:
+                    return "Push off the pinning prop before launching.";
                 case ProjectileLaunchFailure.OperationInProgress:
                     return "Wait for the current movement to resolve.";
                 case ProjectileLaunchFailure.WeaponUnavailable:
@@ -538,6 +672,8 @@ namespace GritGud.Presentation.Gameplay
                     return "Not enough AP remains for this launch.";
                 case ProjectileLaunchFailure.InsufficientMovementOpportunity:
                     return "Not enough movement remains for this launch.";
+                case ProjectileLaunchFailure.InsufficientLoadedAmmunition:
+                    return "The equipped launcher is empty. Reload before launching.";
                 case ProjectileLaunchFailure.None:
                     return string.Empty;
                 default:

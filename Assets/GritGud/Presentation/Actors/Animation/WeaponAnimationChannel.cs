@@ -1,3 +1,5 @@
+using UnityEngine;
+
 namespace GritGud.Presentation.Actors.Animation
 {
     internal sealed class WeaponAnimationChannel
@@ -23,6 +25,31 @@ namespace GritGud.Presentation.Actors.Animation
             driver.SetLayerWeight(
                 ActorAnimationChannelPlan.WeaponPose.AnimatorLayerName,
                 animationSet.PoseLayerWeight);
+        }
+
+        public void PresentReplayPose(
+            ActorAnimationProfile profile,
+            AnimatorDriver driver,
+            string animationSetId)
+        {
+            ActorWeaponAnimationSet animationSet =
+                profile.GetWeaponAnimationSet(animationSetId);
+            CurrentAnimationSetId = animationSet.Id;
+            driver.SetInteger(
+                ActorAnimationParameters.WeaponPose,
+                animationSet.AnimatorPoseValue);
+            driver.PlayState(
+                ActorAnimationChannelPlan.WeaponPose.AnimatorLayerName,
+                Animator.StringToHash(animationSet.PoseStateName),
+                0f);
+            driver.SetLayerWeight(
+                ActorAnimationChannelPlan.WeaponPose.AnimatorLayerName,
+                animationSet.PoseLayerWeight);
+        }
+
+        public void RestoreCurrentAnimationSet(string animationSetId)
+        {
+            CurrentAnimationSetId = animationSetId;
         }
 
         public bool CanPresentPose(

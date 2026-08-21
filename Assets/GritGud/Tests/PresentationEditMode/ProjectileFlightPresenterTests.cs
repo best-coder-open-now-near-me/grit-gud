@@ -376,7 +376,7 @@ namespace GritGud.Presentation.Tests
                 origin: new GameplayPosition(0f, 0f, 0f),
                 aimPoint: new GameplayPosition(0f, 0f, 10f),
                 definition: flight,
-                turnActionPointAllowance: 4,
+                turnActionPointTimeScale: 4,
                 remainingActionPointsAfterLaunch: 2);
             return new ProjectileFlightSnapshot(
                 launch,

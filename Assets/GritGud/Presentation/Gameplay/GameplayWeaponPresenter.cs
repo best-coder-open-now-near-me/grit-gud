@@ -24,6 +24,9 @@ namespace GritGud.Presentation.Gameplay
         private WeaponActionEffectsPresenter effectsPresenter;
         private WeaponAimPresenter aimPresenter;
         private bool localPlayerPresentation;
+        private bool replayPresentation;
+        private string replayOriginalItemId;
+        private float contactStrikeElapsed = -1f;
 
         internal string CurrentItemId { get; private set; }
 
@@ -35,7 +38,7 @@ namespace GritGud.Presentation.Gameplay
             effectsPresenter?.TransientVisualCount ?? 0;
 
         internal bool ContactStrikeActive =>
-            effectsPresenter?.ContactStrikeActive ?? false;
+            contactStrikeElapsed >= 0f;
 
         internal float LastShotAimErrorDegrees { get; private set; }
 
@@ -152,14 +155,18 @@ namespace GritGud.Presentation.Gameplay
             aimPresenter = null;
             actorId = null;
             localPlayerPresentation = false;
+            replayPresentation = false;
+            replayOriginalItemId = null;
             CurrentItemId = null;
             LastShotAimErrorDegrees = 0f;
+            contactStrikeElapsed = -1f;
             enabled = false;
         }
 
         private void Update()
         {
             effectsPresenter?.Tick(Time.unscaledDeltaTime);
+            TickContactStrike(Time.unscaledDeltaTime);
         }
 
         internal void TickTransientVisuals(float deltaTime)
@@ -169,7 +176,8 @@ namespace GritGud.Presentation.Gameplay
 
         private void HandleEquipmentChanged(EquipmentChangeRecord change)
         {
-            if (change != null
+            if (!replayPresentation
+                && change != null
                 && string.Equals(change.ActorId, actorId, StringComparison.Ordinal))
             {
                 SyncEquippedWeapon();
@@ -178,7 +186,10 @@ namespace GritGud.Presentation.Gameplay
 
         private void HandleAttackResolved(GameplayActionRecord action)
         {
-            if (!TryGetAttackResolution(action, out AttackResolutionRecord resolution)
+            if (replayPresentation
+                || !TryGetAttackResolution(
+                    action,
+                    out AttackResolutionRecord resolution)
                 || !string.Equals(
                     resolution.AttackerId,
                     actorId,
@@ -187,21 +198,25 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            Vector3 destination = ResolveAttackDestination(resolution);
             if (currentDefinition?.AttackPresentation
                 == WeaponAttackPresentationKind.ContactStrike)
             {
-                PresentContactStrike(destination);
+                PresentContactStrike();
             }
             else
             {
-                PresentFire(destination, drawTracer: true);
+                PresentFire(
+                    ResolveAttackDestination(resolution),
+                    drawTracer: true);
             }
         }
 
         private void HandleProjectileLaunched(GameplayActionRecord action)
         {
-            if (!TryGetProjectileLaunch(action, out ProjectileLaunchRecord launch)
+            if (replayPresentation
+                || !TryGetProjectileLaunch(
+                    action,
+                    out ProjectileLaunchRecord launch)
                 || !string.Equals(
                     launch.AttackerId,
                     actorId,
@@ -215,7 +230,8 @@ namespace GritGud.Presentation.Gameplay
 
         private void HandleWeaponDischarged(GameplayActionRecord action)
         {
-            if (!TryGetWeaponDischarge(
+            if (replayPresentation
+                || !TryGetWeaponDischarge(
                     action,
                     out WeaponDischargeRecord discharge)
                 || !string.Equals(
@@ -231,7 +247,17 @@ namespace GritGud.Presentation.Gameplay
 
         private void SyncEquippedWeapon()
         {
-            string equippedItemId = session.GetActor(actorId).EquippedItemId;
+            PresentEquippedWeapon(session.GetActor(actorId).EquippedItemId);
+        }
+
+        private void PresentEquippedWeapon(string equippedItemId)
+        {
+            if (!replayPresentation && contactStrikeElapsed >= 0f)
+            {
+                animationCoordinator?.InterruptAction(
+                    ActorAnimationAction.ContactStrike);
+                contactStrikeElapsed = -1f;
+            }
             if (string.Equals(
                     equippedItemId,
                     CurrentItemId,
@@ -272,6 +298,65 @@ namespace GritGud.Presentation.Gameplay
                 mountPresenter.CaptureBaseLocalPose();
             }
             PresentWeaponPoseIfAvailable(currentDefinition.AnimationSetId);
+        }
+
+        internal void BeginReplayPresentation()
+        {
+            if (replayPresentation)
+            {
+                throw new InvalidOperationException(
+                    "Weapon replay presentation is already active.");
+            }
+            replayOriginalItemId = CurrentItemId;
+            replayPresentation = true;
+            ClearReplayTransients();
+        }
+
+        internal void PresentReplayEquipment(string equippedItemId)
+        {
+            if (!replayPresentation)
+            {
+                throw new InvalidOperationException(
+                    "Begin weapon replay presentation before projecting equipment.");
+            }
+            PresentEquippedWeapon(equippedItemId);
+        }
+
+        internal void PresentReplayAction(
+            TurnReplayActorActionState action)
+        {
+            if (!replayPresentation)
+                return;
+            if (action != null
+                && action.Kind == TurnReplayActorActionKind.Attack
+                && currentDefinition?.AttackPresentation
+                    == WeaponAttackPresentationKind.ContactStrike)
+            {
+                return;
+            }
+        }
+
+        internal void ClearReplayTransients()
+        {
+            effectsPresenter?.ClearTransientVisuals();
+            contactStrikeElapsed = -1f;
+        }
+
+        internal ActorAnimationAction ResolveReplayAttackAnimation() =>
+            currentDefinition?.AttackPresentation ==
+                WeaponAttackPresentationKind.ContactStrike
+                ? ActorAnimationAction.ContactStrike
+                : ActorAnimationAction.WeaponFire;
+
+        internal void EndReplayPresentation()
+        {
+            if (!replayPresentation)
+                return;
+            ClearReplayTransients();
+            string originalItemId = replayOriginalItemId;
+            replayOriginalItemId = null;
+            replayPresentation = false;
+            PresentEquippedWeapon(originalItemId);
         }
 
         private void PresentWeaponPoseIfAvailable(string animationSetId)
@@ -315,7 +400,7 @@ namespace GritGud.Presentation.Gameplay
             aimPresenter.PresentRecoil(animationSet);
         }
 
-        private void PresentContactStrike(Vector3 destination)
+        private void PresentContactStrike()
         {
             if (currentDefinition == null)
             {
@@ -323,14 +408,18 @@ namespace GritGud.Presentation.Gameplay
             }
 
             aimPresenter.SynchronizeAuthoritativeFacing();
-            effectsPresenter.PresentContactStrike(
-                currentDefinition,
-                destination);
+            contactStrikeElapsed = 0f;
+            animationCoordinator.TryRequestAction(
+                ActorAnimationAction.ContactStrike);
         }
 
         internal void TickContactStrike(float deltaTime)
         {
-            effectsPresenter?.TickContactStrike(deltaTime);
+            if (contactStrikeElapsed < 0f || currentDefinition == null)
+                return;
+            contactStrikeElapsed += Mathf.Max(0f, deltaTime);
+            if (contactStrikeElapsed >= currentDefinition.ContactStrikeSeconds)
+                contactStrikeElapsed = -1f;
         }
 
         private Vector3 ResolveAttackDestination(AttackResolutionRecord resolution)
@@ -347,7 +436,7 @@ namespace GritGud.Presentation.Gameplay
             TargetRegionId preferredRegion = resolution.HitRegion
                 ?? TargetRegionId.Torso;
             IReadOnlyList<ActorTargetRegionSample> samples =
-                target.Stance.GetTargetRegionSamples();
+                target.TargetProfile.GetTargetRegionSamples();
             foreach (ActorTargetRegionSample sample in samples)
             {
                 if (sample.Id == preferredRegion)
@@ -371,7 +460,7 @@ namespace GritGud.Presentation.Gameplay
         {
             aimPresenter?.ClearWeapon();
 
-            effectsPresenter?.ClearWeaponAction();
+            contactStrikeElapsed = -1f;
 
             if (animationCoordinator != null
                 && animationCoordinator.CanPresentWeaponPose(
@@ -389,9 +478,9 @@ namespace GritGud.Presentation.Gameplay
             GameplayActionRecord action,
             out AttackResolutionRecord resolution)
         {
-            if (action != null
-                && action.Outcomes.Count == 1
-                && action.Outcomes[0] is AttackResolvedActionOutcome outcome)
+            if (GameplayWeaponActionOutcomes.TryGetPrimary(
+                    action,
+                    out AttackResolvedActionOutcome outcome))
             {
                 resolution = outcome.Attack;
                 return true;
@@ -405,9 +494,9 @@ namespace GritGud.Presentation.Gameplay
             GameplayActionRecord action,
             out ProjectileLaunchRecord launch)
         {
-            if (action != null
-                && action.Outcomes.Count == 1
-                && action.Outcomes[0] is ProjectileLaunchedActionOutcome outcome)
+            if (GameplayWeaponActionOutcomes.TryGetPrimary(
+                    action,
+                    out ProjectileLaunchedActionOutcome outcome))
             {
                 launch = outcome.Launch;
                 return true;
@@ -421,9 +510,9 @@ namespace GritGud.Presentation.Gameplay
             GameplayActionRecord action,
             out WeaponDischargeRecord discharge)
         {
-            if (action != null
-                && action.Outcomes.Count == 1
-                && action.Outcomes[0] is WeaponDischargedActionOutcome outcome)
+            if (GameplayWeaponActionOutcomes.TryGetPrimary(
+                    action,
+                    out WeaponDischargedActionOutcome outcome))
             {
                 discharge = outcome.Discharge;
                 return true;

@@ -20,22 +20,25 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 theme.TacticalTransition.DurationSeconds,
                 Is.GreaterThan(0f));
+            Assert.That(
+                theme.TacticalTransition.CombatEntryDelaySeconds,
+                Is.EqualTo(2f));
         }
 
         [Test]
-        public void DepotLightingProfileOwnsFixturesAndAmbientEffects()
+        public void DressingCatalogOwnsPortableAmbientEffectReferences()
         {
-            LevelLightingProfile profile = LevelLightingCatalog
-                .LoadDefault()
-                .Get("main-depot-yard-v1");
+            LevelDressingCatalog catalog = LevelDressingCatalog.LoadDefault();
 
-            Assert.That(profile.PracticalLights.Count, Is.EqualTo(5));
-            Assert.That(profile.AmbientEffects.Count, Is.EqualTo(3));
+            Assert.That(catalog.AmbientEffects.Count, Is.EqualTo(2));
             Assert.That(
-                profile.PracticalLights.Count(light => light.Color.r > light.Color.b),
-                Is.EqualTo(2));
+                catalog.AmbientEffects.All(effect => effect.Prefab != null),
+                Is.True);
             Assert.That(
-                profile.AmbientEffects.All(effect => effect.Prefab != null),
+                catalog.TryGetAmbientEffect("dust-air", out _),
+                Is.True);
+            Assert.That(
+                catalog.TryGetAmbientEffect("ground-haze", out _),
                 Is.True);
         }
 
@@ -56,6 +59,76 @@ namespace GritGud.Presentation.Tests
             Assert.That(metal.ImpactEffectPrefab, Is.Not.Null);
             Assert.That(actor.ImpactEffectPrefab, Is.Not.Null);
             Assert.That(actor.DecalDiameter, Is.Zero);
+        }
+
+        [Test]
+        public void RifleUsesACompactWideSurfaceImpactEffect()
+        {
+            WeaponPresentationCatalog weapons =
+                WeaponPresentationCatalog.LoadDefault();
+
+            Assert.That(
+                weapons.Get("weapon.rifle").ImpactEffectScaleMultiplier,
+                Is.EqualTo(0.2f));
+            Assert.That(
+                weapons.Get("weapon.rifle").ImpactEffectWidthMultiplier,
+                Is.EqualTo(4f));
+            Assert.That(
+                weapons.Get("weapon.rocket-launcher")
+                    .ImpactEffectScaleMultiplier,
+                Is.EqualTo(1f));
+            Assert.That(
+                weapons.Get("weapon.rocket-launcher")
+                    .ImpactEffectWidthMultiplier,
+                Is.EqualTo(1f));
+        }
+
+        [Test]
+        public void InstantiatedRifleImpactAppliesWidthAfterClearingParticles()
+        {
+            SurfacePresentationDefinition surface =
+                SurfacePresentationCatalog.LoadDefault().Get("surface.concrete");
+            WeaponPresentationDefinition rifle =
+                WeaponPresentationCatalog.LoadDefault().Get("weapon.rifle");
+            var root = new GameObject("Impact Scale Test Root");
+            GameObject effect = null;
+            try
+            {
+                effect = GameplaySurfaceImpactPresenter.CreateImpactVisual(
+                    surface,
+                    Vector3.zero,
+                    Quaternion.identity,
+                    root.transform,
+                    rifle.ImpactEffectScaleMultiplier,
+                    rifle.ImpactEffectWidthMultiplier);
+
+                Vector3 uniformScale =
+                    surface.ImpactEffectPrefab.transform.localScale
+                    * surface.ImpactScale
+                    * 0.2f;
+                Vector3 expectedScale = Vector3.Scale(
+                    uniformScale,
+                    new Vector3(4f, 4f, 1f));
+                Assert.That(
+                    Vector3.Distance(effect.transform.localScale, expectedScale),
+                    Is.LessThan(0.000001f));
+                ParticleSystem[] systems = effect.GetComponentsInChildren<
+                    ParticleSystem>(true);
+                Assert.That(systems, Is.Not.Empty);
+                foreach (ParticleSystem particles in systems)
+                {
+                    Assert.That(particles.main.playOnAwake, Is.False);
+                    Assert.That(
+                        particles.main.scalingMode,
+                        Is.EqualTo(ParticleSystemScalingMode.Hierarchy));
+                }
+            }
+            finally
+            {
+                if (effect != null)
+                    Object.DestroyImmediate(effect);
+                Object.DestroyImmediate(root);
+            }
         }
 
         [Test]
@@ -93,6 +166,45 @@ namespace GritGud.Presentation.Tests
                     surfaces.TryGet(archetype.SurfacePresentationId, out _),
                     Is.True,
                     archetype.ArchetypeId);
+            }
+        }
+
+        [Test]
+        public void DefaultBreakableCoverOwnsStableBakedFractureProfiles()
+        {
+            LevelArchetypeCatalog archetypes = LevelArchetypeCatalog.LoadDefault();
+            foreach (string archetypeId in new[]
+            {
+                "prop.crate.standard",
+                "prop.barrel.metal",
+            })
+            {
+                Assert.That(archetypes.TryGet(archetypeId, out var archetype),
+                    Is.True);
+                DestructibleFractureProfile fracture = archetype.FractureProfile;
+                Assert.That(fracture, Is.Not.Null, archetypeId);
+                Assert.That(fracture.ChunkCount, Is.EqualTo(12), archetypeId);
+                Assert.That(fracture.FracturedPrefab, Is.Not.Null, archetypeId);
+                DestructibleFractureChunk[] chunks = fracture.FracturedPrefab
+                    .GetComponentsInChildren<DestructibleFractureChunk>(true);
+                Assert.That(chunks.Length, Is.EqualTo(fracture.ChunkCount));
+                Assert.That(
+                    chunks.Select(chunk => chunk.ChunkIndex).Distinct().Count(),
+                    Is.EqualTo(fracture.ChunkCount));
+                Assert.That(
+                    chunks.All(chunk =>
+                        chunk.GetComponent<MeshCollider>()?.convex == true),
+                    Is.True);
+                var spatial = fracture.CreateSpatialProfile();
+                Assert.That(spatial.ProfileId, Is.EqualTo(fracture.ProfileId));
+                Assert.That(spatial.ChunkCount, Is.EqualTo(fracture.ChunkCount));
+                Assert.That(
+                    spatial.ChunkVolumes.All(volume =>
+                        volume.Size.X > 0f
+                        && volume.Size.Y > 0f
+                        && volume.Size.Z > 0f),
+                    Is.True,
+                    archetypeId);
             }
         }
 

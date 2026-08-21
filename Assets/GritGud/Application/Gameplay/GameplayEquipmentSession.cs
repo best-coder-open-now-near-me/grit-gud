@@ -9,6 +9,7 @@ namespace GritGud.Application.Gameplay
     {
         None,
         ActorNotActive,
+        ActorIncapacitated,
         OperationInProgress,
         ItemNotFound,
         ItemNotEquippable,
@@ -16,6 +17,7 @@ namespace GritGud.Application.Gameplay
         AlreadyInRequestedState,
         InsufficientActionPoints,
         InsufficientMovementOpportunity,
+        ActorPinned,
     }
 
     public sealed class GameplayEquipmentSession
@@ -38,29 +40,20 @@ namespace GritGud.Application.Gameplay
             string actorId,
             string itemId)
         {
-            if (gameplay.Operation != GameplaySessionOperation.None)
-            {
-                return Availability(
-                    null,
-                    default,
-                    isSwitch: false,
-                    EquipmentChangeFailure.OperationInProgress);
-            }
-
-            if (!gameplay.TryGetActor(
+            if (!GameplayActorActionAuthority.TryAuthorize(
+                    gameplay,
                     actorId,
-                    out GameplayActorSnapshot actor)
-                || (gameplay.Mode == GameplaySessionMode.TurnBased
-                    && !string.Equals(
-                        gameplay.ActiveActorId,
-                        actorId,
-                        StringComparison.Ordinal)))
+                    GameplayActionTiming.Immediate,
+                    startsEncounter: false,
+                    blocksPinnedActor: true,
+                    out GameplayActorSnapshot actor,
+                    out GameplayActorActionFailure authorizationFailure))
             {
                 return Availability(
                     null,
                     default,
                     isSwitch: false,
-                    EquipmentChangeFailure.ActorNotActive);
+                    ToEquipmentFailure(authorizationFailure));
             }
 
             InventoryItemDefinition requested = gameplay.GetInventoryItem(
@@ -115,6 +108,30 @@ namespace GritGud.Application.Gameplay
             out GameplayActionRecord action,
             out EquipmentChangeFailure failure)
         {
+            var notifications = new GameplayNotificationBatch();
+            bool resolved = TryResolve(
+                actorId,
+                itemId,
+                equip,
+                notifications,
+                out action,
+                out failure);
+            if (resolved)
+            {
+                notifications.Publish();
+            }
+
+            return resolved;
+        }
+
+        private bool TryResolve(
+            string actorId,
+            string itemId,
+            bool equip,
+            GameplayNotificationBatch notifications,
+            out GameplayActionRecord action,
+            out EquipmentChangeFailure failure)
+        {
             action = null;
             if (!TryPrepare(
                     actorId,
@@ -143,7 +160,7 @@ namespace GritGud.Application.Gameplay
                 actor.TurnBudget,
                 resultingBudget,
                 new[] { new EquipmentChangedActionOutcome(change) });
-            Commit(action);
+            Commit(action, notifications);
             failure = EquipmentChangeFailure.None;
             return true;
         }
@@ -196,10 +213,12 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
+            var notifications = new GameplayNotificationBatch();
             if (!TryResolve(
                     actorId,
                     current.Id,
                     equip: false,
+                    notifications,
                     out unequipAction,
                     out failure))
             {
@@ -210,6 +229,7 @@ namespace GritGud.Application.Gameplay
                     actorId,
                     target.Id,
                     equip: true,
+                    notifications,
                     out equipAction,
                     out failure))
             {
@@ -217,11 +237,21 @@ namespace GritGud.Application.Gameplay
                     "A prevalidated equipment switch failed after unequipping.");
             }
 
+            notifications.Publish();
             failure = EquipmentChangeFailure.None;
             return true;
         }
 
         public void Commit(GameplayActionRecord action)
+        {
+            var notifications = new GameplayNotificationBatch();
+            Commit(action, notifications);
+            notifications.Publish();
+        }
+
+        private void Commit(
+            GameplayActionRecord action,
+            GameplayNotificationBatch notifications)
         {
             if (action == null)
             {
@@ -236,7 +266,7 @@ namespace GritGud.Application.Gameplay
                     nameof(action));
             }
 
-            gameplay.CommitAction(action);
+            gameplay.CommitAction(action, notifications);
             records.Add(outcome.Change);
         }
 
@@ -252,20 +282,16 @@ namespace GritGud.Application.Gameplay
             item = null;
             actor = default;
             change = null;
-            if (gameplay.Operation != GameplaySessionOperation.None)
+            if (!GameplayActorActionAuthority.TryAuthorize(
+                    gameplay,
+                    actorId,
+                    GameplayActionTiming.Immediate,
+                    startsEncounter: false,
+                    blocksPinnedActor: true,
+                    out actor,
+                    out GameplayActorActionFailure authorizationFailure))
             {
-                failure = EquipmentChangeFailure.OperationInProgress;
-                return false;
-            }
-
-            if (!gameplay.TryGetActor(actorId, out actor)
-                || (gameplay.Mode == GameplaySessionMode.TurnBased
-                    && !string.Equals(
-                        gameplay.ActiveActorId,
-                        actorId,
-                        StringComparison.Ordinal)))
-            {
-                failure = EquipmentChangeFailure.ActorNotActive;
+                failure = ToEquipmentFailure(authorizationFailure);
                 return false;
             }
 
@@ -346,8 +372,27 @@ namespace GritGud.Application.Gameplay
                 first.MovementOpportunity + second.MovementOpportunity,
                 first.Mobility == ActionMobility.Set
                     || second.Mobility == ActionMobility.Set
-                        ? ActionMobility.Set
-                        : ActionMobility.Mobile);
+                    ? ActionMobility.Set
+                    : ActionMobility.Mobile);
+
+        private static EquipmentChangeFailure ToEquipmentFailure(
+            GameplayActorActionFailure failure)
+        {
+            switch (failure)
+            {
+                case GameplayActorActionFailure.ActorUnavailable:
+                case GameplayActorActionFailure.ActorNotActive:
+                    return EquipmentChangeFailure.ActorNotActive;
+                case GameplayActorActionFailure.ActorIncapacitated:
+                    return EquipmentChangeFailure.ActorIncapacitated;
+                case GameplayActorActionFailure.ActorPinned:
+                    return EquipmentChangeFailure.ActorPinned;
+                case GameplayActorActionFailure.OperationInProgress:
+                    return EquipmentChangeFailure.OperationInProgress;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(failure));
+            }
+        }
 
         private static InventoryEquipmentAvailability Availability(
             InventoryItemDefinition item,

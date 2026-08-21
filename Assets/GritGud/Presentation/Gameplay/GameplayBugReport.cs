@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
+using GritGud.Domain.Turns;
 using GritGud.Presentation.Persistence;
 using UnityEngine;
 
@@ -136,8 +138,7 @@ namespace GritGud.Presentation.Gameplay
             GameplayGuidanceEntry guidance,
             GameplayBugReportRouteState route,
             GameplayBugReportRuntime runtime,
-            GameplayPartyControlSnapshot? partyControl = null,
-            GameplayPartyProgressionSession partyProgression = null)
+            GameplayPartyControlSnapshot? partyControl = null)
         {
             if (session == null)
             {
@@ -201,7 +202,6 @@ namespace GritGud.Presentation.Gameplay
                     report,
                     "Party defeated",
                     FormatBool(IsPartyDefeated(session)));
-                AppendPartyProgression(report, partyProgression);
             }
             report.AppendLine("Actors:");
             foreach (string actorId in session.InitiativeOrder)
@@ -340,7 +340,9 @@ namespace GritGud.Presentation.Gameplay
                 .Append(" | actor=")
                 .Append(turn.EndingActorId)
                 .Append(" | next=")
-                .AppendLine(turn.NextActorId);
+                .Append(turn.NextActorId);
+            AppendPersonalTurnStart(report, turn.PersonalTurnStart);
+            report.AppendLine();
         }
 
         private static void AppendGameplayJournal(
@@ -374,36 +376,6 @@ namespace GritGud.Presentation.Gameplay
                     case EncounterChangedJournalEntry encounter:
                         report.Append("EncounterChanged | active=")
                             .AppendLine(FormatBool(encounter.IsActive));
-                        break;
-                    case EnemyDecisionCommittedJournalEntry enemy:
-                        EnemyTacticalDecisionRecord decision = enemy.Decision;
-                        report.Append("EnemyDecisionCommitted | actor=")
-                            .Append(decision.ActorId)
-                            .Append(" | target=")
-                            .Append(decision.TargetId)
-                            .Append(" | kind=")
-                            .Append(decision.Kind)
-                            .Append(" | rationale=")
-                            .Append(decision.Rationale);
-                        if (decision.Exposure != null)
-                        {
-                            report.Append(" | exposure=")
-                                .Append(decision.Exposure.VisibleSampleCount
-                                    .ToString(CultureInfo.InvariantCulture))
-                                .Append('/')
-                                .Append(decision.Exposure.TotalSampleCount
-                                    .ToString(CultureInfo.InvariantCulture));
-                        }
-                        if (decision.MovementRoute != null)
-                        {
-                            report.Append(" | route-cost=")
-                                .Append(FormatFloat(
-                                    decision.MovementRoute.TotalCost))
-                                .Append(" | destination=")
-                                .Append(FormatPosition(
-                                    decision.MovementRoute.Destination));
-                        }
-                        report.AppendLine();
                         break;
                     case MovementBudgetSpentJournalEntry movementSpent:
                         report.Append("MovementBudgetSpent | actor=")
@@ -513,7 +485,11 @@ namespace GritGud.Presentation.Gameplay
                         report.Append("TurnEnded | actor=")
                             .Append(turn.Turn.EndingActorId)
                             .Append(" | next=")
-                            .AppendLine(turn.Turn.NextActorId);
+                            .Append(turn.Turn.NextActorId);
+                        AppendPersonalTurnStart(
+                            report,
+                            turn.Turn.PersonalTurnStart);
+                        report.AppendLine();
                         break;
                     case VoluntaryTurnCycleCompletedJournalEntry cycle:
                         report.Append("VoluntaryTurnCycleCompleted | cycle=")
@@ -525,6 +501,30 @@ namespace GritGud.Presentation.Gameplay
                         break;
                 }
             }
+        }
+
+        private static void AppendPersonalTurnStart(
+            StringBuilder report,
+            PersonalTurnStartRecord start)
+        {
+            if (start == null) return;
+            PersonalTurnActionPointGrant ap = start.ActionPoints;
+            report.Append(" | AP grant=")
+                .Append(ap.PreviousActionPoints.ToString(
+                    CultureInfo.InvariantCulture))
+                .Append(" + ")
+                .Append(ap.GrantedActionPoints.ToString(
+                    CultureInfo.InvariantCulture))
+                .Append(" = ")
+                .Append(ap.ResultingActionPoints.ToString(
+                    CultureInfo.InvariantCulture))
+                .Append(" | requested=")
+                .Append(ap.RequestedIncome.ToString(
+                    CultureInfo.InvariantCulture))
+                .Append(" | cap-waste=")
+                .Append(ap.CapWaste.ToString(CultureInfo.InvariantCulture))
+                .Append(" | move=")
+                .Append(FormatFloat(start.RefreshedMovement));
         }
 
         private static void AppendMovementJournalLine(
@@ -621,7 +621,23 @@ namespace GritGud.Presentation.Gameplay
                             .Append(" | aim=")
                             .Append(FormatPosition(discharge.AimPoint))
                             .Append(" | distance=")
-                            .AppendLine(FormatFloat(discharge.Distance));
+                            .Append(FormatFloat(discharge.Distance));
+                        if (discharge.Impact != null)
+                        {
+                            report.Append(" | impact-surface=")
+                                .Append(discharge.Impact.SurfaceId)
+                                .Append(" | impact-revision=")
+                                .Append(discharge.Impact.WorldStateRevision.ToString(
+                                    CultureInfo.InvariantCulture));
+                        }
+                        if (discharge.Damage != null)
+                        {
+                            report.Append(" | prop-damage=")
+                                .Append(FormatFloat(discharge.Damage.AppliedDamage))
+                                .Append(" | prop-state=")
+                                .Append(discharge.Damage.Resulting.State);
+                        }
+                        report.AppendLine();
                         break;
                     case ProjectileLaunchedActionOutcome launchedProjectile:
                         ProjectileLaunchRecord launch = launchedProjectile.Launch;
@@ -682,12 +698,47 @@ namespace GritGud.Presentation.Gameplay
                                 .Append(FormatFloat(
                                     smoke.MinimumObscuredPath));
                         }
+                        else if (thrown.FireField != null)
+                        {
+                            FireFieldDefinition fire =
+                                thrown.FireField.Definition;
+                            report.Append(" | fire-field=")
+                                .Append(thrown.FireField.Id)
+                                .Append(" | fire-initial-radius=")
+                                .Append(FormatFloat(fire.InitialRadius))
+                                .Append(" | fire-maximum-radius=")
+                                .Append(FormatFloat(fire.MaximumRadius))
+                                .Append(" | fire-height=")
+                                .Append(FormatFloat(fire.Height))
+                                .Append(" | fire-exploration-seconds=")
+                                .Append(FormatFloat(
+                                    fire.ExplorationDurationSeconds))
+                                .Append(" | fire-turn-ends=")
+                                .Append(fire.DurationTurnEnds.ToString(
+                                    CultureInfo.InvariantCulture))
+                                .Append(" | fire-pulse-seconds=")
+                                .Append(FormatFloat(
+                                    fire.ExplorationPulseSeconds));
+                        }
                         else
                         {
                             report.Append(" | blast-radius=")
                                 .Append(FormatFloat(
                                     thrown.Definition.BlastRadius));
                         }
+                        foreach (ConcussiveActionPointEffectRecord effect
+                            in thrown.ConcussiveEffects)
+                            report.Append(" | concussion[")
+                                .Append(effect.ActorId)
+                                .Append("]=")
+                                .Append(effect.PreviousActionPoints.ToString(
+                                    CultureInfo.InvariantCulture))
+                                .Append("-")
+                                .Append(effect.RemovedActionPoints.ToString(
+                                    CultureInfo.InvariantCulture))
+                                .Append("=")
+                                .Append(effect.ResultingActionPoints.ToString(
+                                    CultureInfo.InvariantCulture));
                         report.AppendLine();
                         break;
                     case InventoryQuantityChangedActionOutcome inventory:
@@ -702,6 +753,47 @@ namespace GritGud.Presentation.Gameplay
                                 CultureInfo.InvariantCulture))
                             .Append(" = ")
                             .AppendLine(change.ResultingQuantity.ToString(
+                                CultureInfo.InvariantCulture));
+                        break;
+                    case AmmunitionSpentActionOutcome ammunition:
+                        WeaponAmmunitionDelta ammo = ammunition.Change;
+                        report.Append("    AmmunitionSpent | weapon=")
+                            .Append(ammo.WeaponItemId)
+                            .Append(" | type=")
+                            .Append(ammo.AmmoTypeId)
+                            .Append(" | loaded=")
+                            .Append(ammo.PreviousLoadedRounds.ToString(
+                                CultureInfo.InvariantCulture))
+                            .Append(" - ")
+                            .Append(ammo.ChangedRounds.ToString(
+                                CultureInfo.InvariantCulture))
+                            .Append(" = ")
+                            .Append(ammo.ResultingLoadedRounds.ToString(
+                                CultureInfo.InvariantCulture))
+                            .Append(" | reserve=")
+                            .AppendLine(ammo.ResultingReserveRounds.ToString(
+                                CultureInfo.InvariantCulture));
+                        break;
+                    case WeaponReloadedActionOutcome reloaded:
+                        WeaponAmmunitionDelta reload = reloaded.Change;
+                        report.Append("    WeaponReloaded | weapon=")
+                            .Append(reload.WeaponItemId)
+                            .Append(" | type=")
+                            .Append(reload.AmmoTypeId)
+                            .Append(" | loaded=")
+                            .Append(reload.PreviousLoadedRounds.ToString(
+                                CultureInfo.InvariantCulture))
+                            .Append(" + ")
+                            .Append(reload.ChangedRounds.ToString(
+                                CultureInfo.InvariantCulture))
+                            .Append(" = ")
+                            .Append(reload.ResultingLoadedRounds.ToString(
+                                CultureInfo.InvariantCulture))
+                            .Append(" | reserve=")
+                            .Append(reload.PreviousReserveRounds.ToString(
+                                CultureInfo.InvariantCulture))
+                            .Append(" -> ")
+                            .AppendLine(reload.ResultingReserveRounds.ToString(
                                 CultureInfo.InvariantCulture));
                         break;
                     default:
@@ -731,6 +823,9 @@ namespace GritGud.Presentation.Gameplay
                     CultureInfo.InvariantCulture))
                 .Append(" | move=")
                 .Append(FormatFloat(actor.TurnBudget.MovementOpportunity))
+                .Append(" | attacks-this-turn=")
+                .Append(actor.AttacksCommittedThisTurn.ToString(
+                    CultureInfo.InvariantCulture))
                 .Append(" | wounds=")
                 .Append(actor.Wounds.WoundCount.ToString(
                     CultureInfo.InvariantCulture))
@@ -764,35 +859,10 @@ namespace GritGud.Presentation.Gameplay
                 .Append(FormatBool(actor.IsIncapacitated))
                 .Append(" | inventory=")
                 .Append(FormatInventory(actor.Inventory))
+                .Append(" | ammunition=")
+                .Append(FormatAmmunition(actor.Ammunition))
                 .Append(" | wound-move-penalty=")
                 .AppendLine(FormatFloat(actor.Wounds.MovementPenalty));
-        }
-
-        private static void AppendPartyProgression(
-            StringBuilder report,
-            GameplayPartyProgressionSession progression)
-        {
-            report.AppendLine("Party progression:");
-            if (progression == null)
-            {
-                report.AppendLine("  <not bound>");
-                return;
-            }
-
-            foreach (string actorId in progression.ActorIds)
-            {
-                CharacterProgressionSnapshot snapshot =
-                    progression.GetSnapshot(actorId);
-                report.Append("  ")
-                    .Append(actorId)
-                    .Append(" | identity=")
-                    .Append(snapshot.IdentityId)
-                    .Append(" | unspent=")
-                    .Append(snapshot.UnspentPoints.ToString(
-                        CultureInfo.InvariantCulture))
-                    .Append(" | bonuses=")
-                    .AppendLine(FormatBonuses(snapshot.Bonuses));
-            }
         }
 
         private static bool IsPartyDefeated(GameplaySession session)
@@ -801,28 +871,6 @@ namespace GritGud.Presentation.Gameplay
                 if (!session.IsActorIncapacitated(actorId))
                     return false;
             return true;
-        }
-
-        private static string FormatBonuses(
-            System.Collections.Generic.IReadOnlyDictionary<string, int> bonuses)
-        {
-            if (bonuses.Count == 0)
-                return "<none>";
-
-            var keys = new string[bonuses.Count];
-            int keyIndex = 0;
-            foreach (string key in bonuses.Keys)
-                keys[keyIndex++] = key;
-            Array.Sort(keys, StringComparer.Ordinal);
-            var values = new string[keys.Length];
-            for (int index = 0; index < keys.Length; index++)
-            {
-                string key = keys[index];
-                values[index] = key + ":"
-                    + bonuses[key].ToString(CultureInfo.InvariantCulture);
-            }
-
-            return string.Join(",", values);
         }
 
         private static string FormatInventory(ActorInventorySnapshot inventory)
@@ -841,6 +889,22 @@ namespace GritGud.Presentation.Gameplay
             }
 
             return string.Join(",", values);
+        }
+
+        private static string FormatAmmunition(
+            ActorAmmunitionSnapshot ammunition)
+        {
+            var values = new List<string>();
+            foreach (WeaponMagazineSnapshot magazine in ammunition.Magazines)
+                values.Add(magazine.WeaponItemId + ":"
+                    + magazine.LoadedRounds.ToString(
+                        CultureInfo.InvariantCulture)
+                    + "/" + magazine.Capacity.ToString(
+                        CultureInfo.InvariantCulture));
+            foreach (AmmunitionReserveSnapshot reserve in ammunition.Reserves)
+                values.Add(reserve.AmmoTypeId + "-reserve:"
+                    + reserve.Rounds.ToString(CultureInfo.InvariantCulture));
+            return values.Count == 0 ? "<none>" : string.Join(",", values);
         }
 
         private static void AppendField(
@@ -883,8 +947,7 @@ namespace GritGud.Presentation.Gameplay
             TurnMovementController turnMovement,
             GameplayGuidanceEntry guidance,
             string playerNote = null,
-            GameplayPartyControlSnapshot? partyControl = null,
-            GameplayPartyProgressionSession partyProgression = null)
+            GameplayPartyControlSnapshot? partyControl = null)
         {
             GameplayBugReportRuntime runtime =
                 GameplayBugReportRuntime.Capture();
@@ -893,8 +956,7 @@ namespace GritGud.Presentation.Gameplay
                 guidance,
                 GameplayBugReportRouteState.Capture(turnMovement),
                 runtime,
-                partyControl,
-                partyProgression);
+                partyControl);
             report = PrependPlayerNote(report, playerNote);
             string fileName = "grit-gud-bug-report-"
                 + runtime.GeneratedAtUtc.ToString(

@@ -50,12 +50,13 @@ namespace GritGud.Presentation.Gameplay
             IGameplayInputSource gameplayInput,
             ActorStancePresenter actorStancePresenter = null)
         {
-            Unbind();
-            target = followTarget != null
-                ? followTarget
-                : throw new ArgumentNullException(nameof(followTarget));
-            inputSource = gameplayInput ??
+            if (followTarget == null)
+                throw new ArgumentNullException(nameof(followTarget));
+            if (gameplayInput == null)
                 throw new ArgumentNullException(nameof(gameplayInput));
+
+            Unbind();
+            inputSource = gameplayInput;
             View = GameplayCameraView.ThirdPerson;
             thirdPersonZoom = 1f;
             SetTarget(followTarget, actorStancePresenter);
@@ -73,18 +74,28 @@ namespace GritGud.Presentation.Gameplay
                     "Bind the gameplay camera before changing its target.");
             }
 
-            target = followTarget != null
+            Transform nextTarget = followTarget != null
                 ? followTarget
                 : throw new ArgumentNullException(nameof(followTarget));
+            bool targetChanged = target != nextTarget;
+            if (!targetChanged)
+            {
+                stancePresenter = actorStancePresenter;
+                playerVisibility?.SetVisible(
+                    View == GameplayCameraView.ThirdPerson);
+                RefreshNow();
+                return;
+            }
+
+            var nextVisibility = new LocalPlayerCameraVisibility(nextTarget);
+            LocalPlayerCameraVisibility previousVisibility = playerVisibility;
+            target = nextTarget;
             stancePresenter = actorStancePresenter;
             yaw = followTarget.eulerAngles.y;
-            playerVisibility?.Dispose();
-            playerVisibility = new LocalPlayerCameraVisibility(
-                GetComponent<Camera>(),
-                followTarget,
-                LocalPlayerLayerName);
+            playerVisibility = nextVisibility;
             playerVisibility.SetVisible(
                 View == GameplayCameraView.ThirdPerson);
+            previousVisibility?.Dispose();
             RefreshNow();
         }
 
@@ -181,6 +192,7 @@ namespace GritGud.Presentation.Gameplay
 
         public void RefreshNow()
         {
+            playerVisibility?.Refresh();
             if (target == null)
             {
                 return;
@@ -288,50 +300,36 @@ namespace GritGud.Presentation.Gameplay
         private void OnDestroy()
         {
             playerVisibility?.Dispose();
+            playerVisibility = null;
+        }
+
+        private void OnDisable()
+        {
+            playerVisibility?.SetVisible(true);
+        }
+
+        private void OnEnable()
+        {
+            playerVisibility?.SetVisible(
+                View == GameplayCameraView.ThirdPerson);
         }
     }
 
     internal sealed class LocalPlayerCameraVisibility : IDisposable
     {
-        private readonly Camera gameplayCamera;
-        private readonly Dictionary<GameObject, int> originalLayers =
-            new Dictionary<GameObject, int>();
-        private readonly int originalCullingMask;
-        private readonly int localPlayerLayer;
+        private readonly object owner = new object();
+        private readonly Transform player;
+        private readonly HashSet<Renderer> renderers =
+            new HashSet<Renderer>();
+        private bool visible = true;
         private bool disposed;
 
-        public LocalPlayerCameraVisibility(
-            Camera camera,
-            Transform player,
-            string layerName)
+        public LocalPlayerCameraVisibility(Transform playerTransform)
         {
-            gameplayCamera = camera != null
-                ? camera
-                : throw new ArgumentNullException(nameof(camera));
-            if (player == null)
-            {
-                throw new ArgumentNullException(nameof(player));
-            }
-
-            localPlayerLayer = LayerMask.NameToLayer(layerName);
-            if (localPlayerLayer < 0)
-            {
-                throw new InvalidOperationException(
-                    $"Gameplay camera requires the '{layerName}' project layer.");
-            }
-
-            originalCullingMask = gameplayCamera.cullingMask;
-            foreach (Renderer renderer in player.GetComponentsInChildren<Renderer>(true))
-            {
-                GameObject rendererObject = renderer.gameObject;
-                if (originalLayers.ContainsKey(rendererObject))
-                {
-                    continue;
-                }
-
-                originalLayers.Add(rendererObject, rendererObject.layer);
-                rendererObject.layer = localPlayerLayer;
-            }
+            player = playerTransform != null
+                ? playerTransform
+                : throw new ArgumentNullException(nameof(playerTransform));
+            Refresh();
         }
 
         public void SetVisible(bool visible)
@@ -341,10 +339,46 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            int localPlayerMask = 1 << localPlayerLayer;
-            gameplayCamera.cullingMask = visible
-                ? gameplayCamera.cullingMask | localPlayerMask
-                : gameplayCamera.cullingMask & ~localPlayerMask;
+            Refresh();
+            this.visible = visible;
+            foreach (Renderer renderer in renderers)
+            {
+                LocalPlayerRendererVisibilityOverrides.SetHidden(
+                    renderer,
+                    owner,
+                    !visible);
+            }
+        }
+
+        public void Refresh()
+        {
+            if (disposed)
+                return;
+
+            var current = new HashSet<Renderer>(
+                player.GetComponentsInChildren<Renderer>(true));
+            foreach (Renderer renderer in current)
+            {
+                if (renderer != null && renderers.Add(renderer) && !visible)
+                {
+                    LocalPlayerRendererVisibilityOverrides.SetHidden(
+                        renderer,
+                        owner,
+                        hidden: true);
+                }
+            }
+
+            renderers.RemoveWhere(renderer =>
+            {
+                if (renderer != null && current.Contains(renderer))
+                    return false;
+
+                LocalPlayerRendererVisibilityOverrides.SetHidden(
+                    renderer,
+                    owner,
+                    hidden: false);
+                return true;
+            });
         }
 
         public void Dispose()
@@ -354,17 +388,91 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            foreach (KeyValuePair<GameObject, int> entry in originalLayers)
+            LocalPlayerRendererVisibilityOverrides.Release(owner);
+            renderers.Clear();
+            disposed = true;
+        }
+    }
+
+    internal static class LocalPlayerRendererVisibilityOverrides
+    {
+        private sealed class RendererOverride
+        {
+            public RendererOverride(Renderer renderer)
             {
-                if (entry.Key != null)
-                {
-                    entry.Key.layer = entry.Value;
-                }
+                Renderer = renderer;
+                OriginalForceRenderingOff = renderer.forceRenderingOff;
             }
 
-            gameplayCamera.cullingMask = originalCullingMask;
-            originalLayers.Clear();
-            disposed = true;
+            public Renderer Renderer { get; }
+
+            public bool OriginalForceRenderingOff { get; }
+
+            public HashSet<object> HiddenOwners { get; } =
+                new HashSet<object>();
+        }
+
+        private static readonly Dictionary<Renderer, RendererOverride>
+            Overrides = new Dictionary<Renderer, RendererOverride>();
+
+        public static void SetHidden(
+            Renderer renderer,
+            object owner,
+            bool hidden)
+        {
+            if (owner == null)
+                throw new ArgumentNullException(nameof(owner));
+            if (renderer == null)
+                return;
+
+            if (!Overrides.TryGetValue(
+                    renderer,
+                    out RendererOverride entry))
+            {
+                if (!hidden)
+                    return;
+                entry = new RendererOverride(renderer);
+                Overrides.Add(renderer, entry);
+            }
+
+            if (hidden)
+                entry.HiddenOwners.Add(owner);
+            else
+                entry.HiddenOwners.Remove(owner);
+            ApplyOrRelease(renderer, entry);
+        }
+
+        public static void Release(object owner)
+        {
+            if (owner == null)
+                return;
+
+            var renderers = new List<Renderer>(Overrides.Keys);
+            foreach (Renderer renderer in renderers)
+            {
+                RendererOverride entry = Overrides[renderer];
+                entry.HiddenOwners.Remove(owner);
+                ApplyOrRelease(renderer, entry);
+            }
+        }
+
+        private static void ApplyOrRelease(
+            Renderer renderer,
+            RendererOverride entry)
+        {
+            if (entry.HiddenOwners.Count > 0)
+            {
+                if (entry.Renderer != null)
+                    entry.Renderer.forceRenderingOff = true;
+                return;
+            }
+
+            if (entry.Renderer != null)
+            {
+                entry.Renderer.forceRenderingOff =
+                    entry.OriginalForceRenderingOff;
+            }
+            Overrides.Remove(renderer);
         }
     }
 }

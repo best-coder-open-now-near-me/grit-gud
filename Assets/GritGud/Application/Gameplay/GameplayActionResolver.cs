@@ -14,6 +14,7 @@ namespace GritGud.Application.Gameplay
         TargetOutOfRange,
         InsufficientActionPoints,
         InsufficientMovementOpportunity,
+        ActorPinned,
     }
 
     public sealed class GameplayActionResolver
@@ -81,6 +82,11 @@ namespace GritGud.Application.Gameplay
             if (!session.TryGetActor(actorId, out GameplayActorSnapshot actor))
             {
                 failure = GameplayActionFailure.ActorNotActive;
+                return false;
+            }
+            if (actor.IsPinned)
+            {
+                failure = GameplayActionFailure.ActorPinned;
                 return false;
             }
 

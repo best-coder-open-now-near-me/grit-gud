@@ -31,6 +31,8 @@ namespace GritGud.Editor
             "Assets/GritGud/Presentation/Actors/Animation/DefaultPlayerAnimationProfile.asset";
         internal const string MotionProfilePath =
             "Assets/GritGud/Presentation/Actors/DefaultActorMotionProfile.asset";
+        internal const string RagdollProfilePath =
+            "Assets/GritGud/Presentation/Actors/DefaultActorRagdollProfile.asset";
         internal const string PrefabPath =
             "Assets/GritGud/Content/Resources/Actors/DefaultPlayerActor.prefab";
         internal const string SourceVisualPath =
@@ -44,6 +46,8 @@ namespace GritGud.Editor
         internal const string ShooterAnimationRoot = "Assets/Basic Shooter Pack";
         internal const string RifleFirePath =
             ShooterAnimationRoot + "/firing rifle.fbx";
+        internal const string JumpPath =
+            ShooterAnimationRoot + "/rifle jump.fbx";
         internal const string TurnLeftPath =
             ShooterAnimationRoot + "/turn left.fbx";
         internal const string TurnRightPath =
@@ -54,6 +58,12 @@ namespace GritGud.Editor
             SourceAnimationRoot + "/Combat/Bazooka/HumanM@Bazooka_Aim01_Shoot01.fbx";
         internal const string ThrowPath =
             SourceAnimationRoot + "/Combat/Grenade/HumanM@ThrowGrenade01_L.fbx";
+        internal const string KnifeIdlePath = "Assets/Mixamo/Knife Idle.fbx";
+        internal const string KnifeStrikePath = "Assets/Mixamo/Stabbing.fbx";
+        internal const string ShoulderFallPath =
+            "Assets/Mixamo/Shoulder Hit And Fall.fbx";
+        internal const string FallOverPath = "Assets/Mixamo/Fall Over.fbx";
+        internal const string PushPath = "Assets/Mixamo/Push.fbx";
         internal const string UpperBodyMaskPath =
             "Assets/Kevin Iglesias/Human Animations/Models/Avatar Masks/Human Body Upper Mask.mask";
         internal const string LowerBodyMaskPath =
@@ -101,10 +111,33 @@ namespace GritGud.Editor
         internal const float ActionTransitionSeconds = 0.08f;
         internal const float ActionExitNormalizedTime = 0.92f;
         internal const float ActionReturnTransitionSeconds = 0.1f;
+        internal const float ContactStrikeSeconds =
+            GritGud.Presentation.Gameplay
+                .GameplayCloseQuartersPresentationTiming
+                .ContactStrikeSeconds;
+        internal const float PushSeconds =
+            GritGud.Application.Gameplay
+                .GameplayDisplacementPresentationTiming.PushSeconds;
+        internal const float HitReactionExitNormalizedTime = 0.3f;
+        internal const string RagdollTraceSchemaId = "default-humanoid-v1";
+        internal const int RagdollTraceSchemaVersion = 1;
+        internal const float RagdollTotalMass = 72f;
+        internal const float RagdollHandoffNormalizedTime = 0.72f;
+        internal const float RagdollSampleIntervalSeconds = 0.05f;
+        internal const float RagdollMinimumActiveSeconds = 0.45f;
+        internal const float RagdollSettleHoldSeconds = 0.35f;
+        internal const float RagdollMaximumActiveSeconds = 2.25f;
+        internal const float RagdollSettleLinearSpeed = 0.12f;
+        internal const float RagdollSettleAngularSpeed = 0.3f;
+        internal const float RagdollMaximumImpulseSpeed = 2.4f;
+        internal const float RagdollUpwardImpulseFraction = 0.22f;
+        internal const int RagdollMaximumStoredTraces = 4;
+        internal const float RagdollLinearDamping = 0.08f;
+        internal const float RagdollAngularDamping = 0.12f;
 
         internal static readonly DefaultActorClipDefinition[] ClipDefinitions =
         {
-            new("Idle", "Idles/HumanM@Idle01.fbx", Vector2.zero),
+            new("Neutral Idle", "Idles/HumanM@Idle02.fbx", Vector2.zero),
             new("Walk Forward", "Movement/Walk/HumanM@Walk01_Forward.fbx", new Vector2(0f, 0.6f)),
             new("Walk Backward", "Movement/Walk/HumanM@Walk01_Backward.fbx", new Vector2(0f, -0.6f)),
             new("Walk Left", "Movement/Walk/HumanM@Walk01_Left.fbx", new Vector2(-0.6f, 0f)),

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Presentation.Actors.Animation;
@@ -18,6 +17,8 @@ namespace GritGud.Presentation.Gameplay
         private ActorAnimationCoordinator animationCoordinator;
         private float standingHeight;
         private Vector3 standingCenter;
+
+        public event Action<ActorStance> StanceChanged;
 
         public ActorStance Stance { get; private set; } = ActorStance.Standing;
 
@@ -57,31 +58,6 @@ namespace GritGud.Presentation.Gameplay
                         TargetRegionId.Head,
                         Stance));
             }
-        }
-
-        public IReadOnlyList<ActorTargetRegionSample> GetTargetRegionSamples()
-        {
-            EnsureInitialized();
-            var samples = new List<ActorTargetRegionSample>();
-            Vector3 scale = transform.lossyScale;
-            float radiusScale = Mathf.Max(
-                Mathf.Abs(scale.x),
-                Mathf.Abs(scale.y),
-                Mathf.Abs(scale.z));
-            foreach (ActorTargetRegionDefinition region in spatialProfile.TargetRegions)
-            {
-                if (region == null)
-                {
-                    continue;
-                }
-
-                samples.Add(new ActorTargetRegionSample(
-                    region.Id,
-                    transform.TransformPoint(region.GetLocalCenter(Stance)),
-                    region.SampleRadius * radiusScale));
-            }
-
-            return samples.AsReadOnly();
         }
 
         private void Awake()
@@ -145,6 +121,7 @@ namespace GritGud.Presentation.Gameplay
             controller.center = center;
             Stance = stance;
             animationCoordinator?.PresentStance(stance);
+            StanceChanged?.Invoke(stance);
         }
 
         private void GetShape(ActorStance stance, out float height, out Vector3 center)

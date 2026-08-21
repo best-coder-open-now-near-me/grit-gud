@@ -23,6 +23,12 @@ namespace GritGud.Editor
             AnimationClip launcherAim,
             AnimationClip launcherFire,
             AnimationClip throwClip,
+            AnimationClip jumpClip,
+            AnimationClip knifeIdleClip,
+            AnimationClip knifeStrikeClip,
+            AnimationClip pushClip,
+            AnimationClip shoulderFallClip,
+            AnimationClip fallOverClip,
             AvatarMask upperBodyMask)
         {
             AssetDatabase.DeleteAsset(ControllerPath);
@@ -79,13 +85,24 @@ namespace GritGud.Editor
                 controller,
                 rifleLocomotion,
                 launcherAim,
+                knifeIdleClip,
                 upperBodyMask);
             AddRecoilLayer(
                 controller,
                 rifleFire,
                 launcherFire,
                 upperBodyMask);
-            AddActionLayer(controller, throwClip, upperBodyMask);
+            AddActionLayer(
+                controller,
+                throwClip,
+                knifeStrikeClip,
+                upperBodyMask);
+            AddTraversalLayer(controller, jumpClip);
+            AddDisplacementLayer(controller, pushClip);
+            AddReactionLayer(
+                controller,
+                shoulderFallClip,
+                fallOverClip);
             EditorUtility.SetDirty(locomotion);
             EditorUtility.SetDirty(crouchedLocomotion);
             EditorUtility.SetDirty(controller);
@@ -181,6 +198,7 @@ namespace GritGud.Editor
             IReadOnlyDictionary<DefaultActorClipDefinition, AnimationClip>
                 rifleLocomotion,
             AnimationClip launcherAimClip,
+            AnimationClip knifeIdleClip,
             AvatarMask upperBodyMask)
         {
             controller.AddLayer(ActorAnimationParameters.WeaponLayerName);
@@ -228,20 +246,34 @@ namespace GritGud.Editor
                 new Vector3(300f, 210f));
             launcherAim.motion = launcherAimClip;
             launcherAim.writeDefaultValues = false;
+            AnimatorState knifeIdle = machine.AddState(
+                ActorAnimationParameters.KnifeIdleStateName,
+                new Vector3(550f, 210f));
+            knifeIdle.motion = knifeIdleClip;
+            knifeIdle.writeDefaultValues = false;
             machine.defaultState = empty;
 
             AddWeaponPoseTransition(empty, rifleAim, RiflePoseValue);
             AddWeaponPoseTransition(empty, launcherAim, LauncherPoseValue);
+            AddWeaponPoseTransition(empty, knifeIdle, MeleePoseValue);
             AddWeaponPoseTransition(rifleAim, empty, EmptyPoseValue);
             AddWeaponPoseTransition(
                 rifleAim,
                 launcherAim,
                 LauncherPoseValue);
+            AddWeaponPoseTransition(rifleAim, knifeIdle, MeleePoseValue);
             AddWeaponPoseTransition(launcherAim, empty, EmptyPoseValue);
             AddWeaponPoseTransition(
                 launcherAim,
                 rifleAim,
                 RiflePoseValue);
+            AddWeaponPoseTransition(launcherAim, knifeIdle, MeleePoseValue);
+            AddWeaponPoseTransition(knifeIdle, empty, EmptyPoseValue);
+            AddWeaponPoseTransition(knifeIdle, rifleAim, RiflePoseValue);
+            AddWeaponPoseTransition(
+                knifeIdle,
+                launcherAim,
+                LauncherPoseValue);
             EditorUtility.SetDirty(rifleBlend);
             EditorUtility.SetDirty(machine);
         }
@@ -290,6 +322,7 @@ namespace GritGud.Editor
         private static void AddActionLayer(
             AnimatorController controller,
             AnimationClip throwClip,
+            AnimationClip knifeStrikeClip,
             AvatarMask upperBodyMask)
         {
             controller.AddLayer(ActorAnimationParameters.ActionLayerName);
@@ -316,12 +349,23 @@ namespace GritGud.Editor
                 new Vector3(300f, 120f));
             throwing.motion = throwClip;
             throwing.writeDefaultValues = false;
+            AnimatorState knifeStrike = machine.AddState(
+                ActorAnimationParameters.KnifeStrikeStateName,
+                new Vector3(300f, 240f));
+            knifeStrike.motion = knifeStrikeClip;
+            knifeStrike.speed = Mathf.Max(
+                0.01f,
+                knifeStrikeClip.length / ContactStrikeSeconds);
+            knifeStrike.writeDefaultValues = false;
 
-            AnimatorStateTransition exit = throwing.AddTransition(idle);
-            exit.hasExitTime = true;
-            exit.exitTime = ActionExitNormalizedTime;
-            exit.hasFixedDuration = true;
-            exit.duration = ActionReturnTransitionSeconds;
+            AddActionReturnTransition(
+                throwing,
+                idle,
+                ActionExitNormalizedTime);
+            AddActionReturnTransition(
+                knifeStrike,
+                idle,
+                ActionExitNormalizedTime);
             machine.defaultState = idle;
             EditorUtility.SetDirty(machine);
         }
@@ -340,6 +384,138 @@ namespace GritGud.Editor
                 AnimatorConditionMode.Equals,
                 poseValue,
                 ActorAnimationParameters.WeaponPoseName);
+        }
+
+        private static void AddTraversalLayer(
+            AnimatorController controller,
+            AnimationClip jumpClip)
+        {
+            controller.AddLayer(ActorAnimationParameters.TraversalLayerName);
+            AnimatorControllerLayer[] layers = controller.layers;
+            int layerIndex = layers.Length - 1;
+            AnimatorControllerLayer layer = layers[layerIndex];
+            layer.avatarMask = null;
+            layer.blendingMode = AnimatorLayerBlendingMode.Override;
+            layer.defaultWeight = 0f;
+            layer.iKPass = false;
+            layers[layerIndex] = layer;
+            controller.layers = layers;
+
+            AnimatorStateMachine machine = layer.stateMachine;
+            machine.name = ActorAnimationParameters.TraversalLayerName;
+            AnimatorState idle = machine.AddState(
+                ActorAnimationParameters.NoTraversalStateName,
+                new Vector3(50f, 120f));
+            idle.writeDefaultValues = false;
+            idle.AddStateMachineBehaviour<ActorActionLayerReleaseBehaviour>();
+            AnimatorState jump = machine.AddState(
+                ActorAnimationParameters.JumpStateName,
+                new Vector3(300f, 120f));
+            jump.motion = jumpClip;
+            jump.writeDefaultValues = false;
+
+            AnimatorStateTransition exit = jump.AddTransition(idle);
+            exit.hasExitTime = true;
+            exit.exitTime = ActionExitNormalizedTime;
+            exit.hasFixedDuration = true;
+            exit.duration = ActionReturnTransitionSeconds;
+            machine.defaultState = idle;
+            EditorUtility.SetDirty(machine);
+        }
+
+        private static void AddReactionLayer(
+            AnimatorController controller,
+            AnimationClip shoulderFallClip,
+            AnimationClip fallOverClip)
+        {
+            controller.AddLayer(ActorAnimationParameters.ReactionLayerName);
+            AnimatorControllerLayer[] layers = controller.layers;
+            int layerIndex = layers.Length - 1;
+            AnimatorControllerLayer layer = layers[layerIndex];
+            layer.avatarMask = null;
+            layer.blendingMode = AnimatorLayerBlendingMode.Override;
+            layer.defaultWeight = 0f;
+            layer.iKPass = false;
+            layers[layerIndex] = layer;
+            controller.layers = layers;
+
+            AnimatorStateMachine machine = layer.stateMachine;
+            machine.name = ActorAnimationParameters.ReactionLayerName;
+            AnimatorState idle = machine.AddState(
+                ActorAnimationParameters.NoReactionStateName,
+                new Vector3(50f, 160f));
+            idle.writeDefaultValues = false;
+            idle.AddStateMachineBehaviour<ActorActionLayerReleaseBehaviour>();
+            AnimatorState hit = machine.AddState(
+                ActorAnimationParameters.HitReactionStateName,
+                new Vector3(300f, 40f));
+            hit.motion = shoulderFallClip;
+            hit.writeDefaultValues = false;
+            AddActionReturnTransition(
+                hit,
+                idle,
+                HitReactionExitNormalizedTime);
+            AnimatorState shoulderFall = machine.AddState(
+                ActorAnimationParameters.ShoulderFallStateName,
+                new Vector3(300f, 160f));
+            shoulderFall.motion = shoulderFallClip;
+            shoulderFall.writeDefaultValues = false;
+            AnimatorState fallOver = machine.AddState(
+                ActorAnimationParameters.FallOverStateName,
+                new Vector3(300f, 280f));
+            fallOver.motion = fallOverClip;
+            fallOver.writeDefaultValues = false;
+            machine.defaultState = idle;
+            EditorUtility.SetDirty(machine);
+        }
+
+        private static void AddDisplacementLayer(
+            AnimatorController controller,
+            AnimationClip pushClip)
+        {
+            controller.AddLayer(
+                ActorAnimationParameters.DisplacementLayerName);
+            AnimatorControllerLayer[] layers = controller.layers;
+            int layerIndex = layers.Length - 1;
+            AnimatorControllerLayer layer = layers[layerIndex];
+            layer.avatarMask = null;
+            layer.blendingMode = AnimatorLayerBlendingMode.Override;
+            layer.defaultWeight = 0f;
+            layer.iKPass = false;
+            layers[layerIndex] = layer;
+            controller.layers = layers;
+
+            AnimatorStateMachine machine = layer.stateMachine;
+            machine.name = ActorAnimationParameters.DisplacementLayerName;
+            AnimatorState idle = machine.AddState(
+                ActorAnimationParameters.NoDisplacementStateName,
+                new Vector3(50f, 120f));
+            idle.writeDefaultValues = false;
+            idle.AddStateMachineBehaviour<ActorActionLayerReleaseBehaviour>();
+            AnimatorState push = machine.AddState(
+                ActorAnimationParameters.PushStateName,
+                new Vector3(300f, 120f));
+            push.motion = pushClip;
+            push.speed = Mathf.Max(0.01f, pushClip.length / PushSeconds);
+            push.writeDefaultValues = false;
+            AddActionReturnTransition(
+                push,
+                idle,
+                ActionExitNormalizedTime);
+            machine.defaultState = idle;
+            EditorUtility.SetDirty(machine);
+        }
+
+        private static void AddActionReturnTransition(
+            AnimatorState action,
+            AnimatorState idle,
+            float exitNormalizedTime)
+        {
+            AnimatorStateTransition exit = action.AddTransition(idle);
+            exit.hasExitTime = true;
+            exit.exitTime = exitNormalizedTime;
+            exit.hasFixedDuration = true;
+            exit.duration = ActionReturnTransitionSeconds;
         }
 
         private static void AddRecoilReturnTransition(

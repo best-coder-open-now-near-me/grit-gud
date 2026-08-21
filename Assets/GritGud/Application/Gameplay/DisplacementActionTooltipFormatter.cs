@@ -126,6 +126,8 @@ namespace GritGud.Application.Gameplay
                     return string.Empty;
                 case DisplacementActionAvailabilityFailure.ActorUnavailable:
                     return "ACTOR UNAVAILABLE";
+                case DisplacementActionAvailabilityFailure.ActorIncapacitated:
+                    return "ACTOR INCAPACITATED";
                 case DisplacementActionAvailabilityFailure.ActionUnavailable:
                     return "ACTION UNAVAILABLE";
                 case DisplacementActionAvailabilityFailure.OperationInProgress:
@@ -136,6 +138,10 @@ namespace GritGud.Application.Gameplay
                     return "REQUIRED HANDS ARE OCCUPIED";
                 case DisplacementActionAvailabilityFailure.InsufficientTurnBudget:
                     return "INSUFFICIENT AP";
+                case DisplacementActionAvailabilityFailure.ActorPinned:
+                    return "PUSH OFF THE PINNING PROP FIRST";
+                case DisplacementActionAvailabilityFailure.ActorNotPinned:
+                    return "ONLY AVAILABLE WHILE PINNED";
                 default:
                     throw new ArgumentOutOfRangeException(nameof(failure));
             }

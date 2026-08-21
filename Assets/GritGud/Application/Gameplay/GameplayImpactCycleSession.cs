@@ -57,7 +57,7 @@ namespace GritGud.Application.Gameplay
 
             float preReactionTurnTime =
                 (float)launch.RemainingActionPointsAfterLaunch
-                / launch.TurnActionPointAllowance;
+                / launch.TurnActionPointTimeScale;
             if (preReactionTurnTime > 0f)
             {
                 Advance(launch.ProjectileId, preReactionTurnTime);
@@ -87,14 +87,14 @@ namespace GritGud.Application.Gameplay
             int actionPointAllowance = Math.Max(
                 1,
                 Math.Min(
-                    launch.TurnActionPointAllowance,
+                    launch.TurnActionPointTimeScale,
                     (int)Math.Ceiling(
                         (prediction.CollisionTurnTime
-                            * launch.TurnActionPointAllowance)
+                            * launch.TurnActionPointTimeScale)
                         - 0.0001f)));
             float sharedTurnTime =
                 (float)actionPointAllowance
-                / launch.TurnActionPointAllowance;
+                / launch.TurnActionPointTimeScale;
             bool opened = emergencyCycle.TryOpen(
                 "projectile",
                 launch.ProjectileId,

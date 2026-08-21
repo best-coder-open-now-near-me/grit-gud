@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+    <UseAppHost>false</UseAppHost>
+    <RestoreIgnoreFailedSources>true</RestoreIgnoreFailedSources>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="GritGud.Application.csproj" />
+    <ProjectReference Include="GritGud.Domain.csproj" />
+    <Compile Include="SimulationChecks.cs" />
+    <Compile Include="SimulationParityChecks.cs" />
+    <Compile Include="SimulationRepositoryContent.cs" />
+  </ItemGroup>
+</Project>

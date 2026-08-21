@@ -44,6 +44,85 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
+        public void FractureMaskUsesPreferredChunkAndGrowsMonotonically()
+        {
+            var session = new DestructiblePropSession(new[]
+            {
+                new DestructiblePropDefinition(
+                    "fractured-cover",
+                    10f,
+                    DestructiblePropState.Intact,
+                    new GameplayPropPose(
+                        new GameplayPosition(0f, 0f, 0f),
+                        0f,
+                        0f,
+                        0f),
+                    DestructiblePropPosture.Upright,
+                    fractureChunkCount: 12),
+            });
+
+            Assert.That(
+                session.TryPrepareDamage(
+                    "fractured-cover",
+                    2f,
+                    preferredFractureChunkIndex: 7,
+                    out DestructibleDamageRecord first),
+                Is.True);
+            Assert.That(
+                (first.Resulting.DetachedFractureChunks & (1UL << 7)) != 0UL,
+                Is.True);
+            Assert.That(
+                DestructibleFracture.CountDetachedChunks(
+                    first.Resulting.DetachedFractureChunks),
+                Is.EqualTo(3));
+            session.CommitDamage(first);
+
+            session.TryPrepareDamage(
+                "fractured-cover",
+                4f,
+                preferredFractureChunkIndex: 2,
+                out DestructibleDamageRecord second);
+
+            Assert.That(
+                second.Resulting.DetachedFractureChunks
+                    & first.Resulting.DetachedFractureChunks,
+                Is.EqualTo(first.Resulting.DetachedFractureChunks));
+            Assert.That(
+                (second.Resulting.DetachedFractureChunks & (1UL << 2)) != 0UL,
+                Is.True);
+            Assert.That(
+                DestructibleFracture.CountDetachedChunks(
+                    second.Resulting.DetachedFractureChunks),
+                Is.EqualTo(8));
+        }
+
+        [Test]
+        public void DestroyedFractureDetachesEveryChunkAndReplaysExactly()
+        {
+            var source = new DestructiblePropSession(new[]
+            {
+                CreateFracturedDefinition(),
+            });
+            var replay = new DestructiblePropSession(new[]
+            {
+                CreateFracturedDefinition(),
+            });
+
+            source.TryApplyDamage("fractured-cover", 20f, out var record);
+            replay.CommitDamage(record);
+
+            Assert.That(
+                record.Resulting.DetachedFractureChunks,
+                Is.EqualTo(DestructibleFracture.AllChunksMask(12)));
+            Assert.That(
+                replay.GetProp("fractured-cover").DetachedFractureChunks,
+                Is.EqualTo(record.Resulting.DetachedFractureChunks));
+            Assert.That(
+                replay.GetProp("fractured-cover").State,
+                Is.EqualTo(DestructiblePropState.Destroyed));
+        }
+
+        [Test]
         public void DamagePreservesAnAuthoredWorldPosition()
         {
             var position = new GameplayPosition(2f, 0f, -3f);
@@ -161,5 +240,18 @@ namespace GritGud.Domain.Tests.Gameplay
                     10f,
                     DestructiblePropState.Intact),
             });
+
+        private static DestructiblePropDefinition CreateFracturedDefinition() =>
+            new DestructiblePropDefinition(
+                "fractured-cover",
+                10f,
+                DestructiblePropState.Intact,
+                new GameplayPropPose(
+                    new GameplayPosition(0f, 0f, 0f),
+                    0f,
+                    0f,
+                    0f),
+                DestructiblePropPosture.Upright,
+                fractureChunkCount: 12);
     }
 }

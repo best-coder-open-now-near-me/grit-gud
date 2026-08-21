@@ -2,6 +2,7 @@ using System;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using UnityEngine;
+using GritGud.Presentation.Characters;
 
 namespace GritGud.Presentation.Gameplay
 {
@@ -9,7 +10,9 @@ namespace GritGud.Presentation.Gameplay
     {
         public static GameObject CreateActor(
             ScenarioActorRuntimeDefinition actor,
-            ActorPresentationCatalog catalog)
+            ActorPresentationCatalog catalog,
+            CharacterAppearanceCatalog appearanceCatalog,
+            UnityCharacterLibrary characters)
         {
             if (actor == null)
             {
@@ -36,6 +39,17 @@ namespace GritGud.Presentation.Gameplay
             }
 
             instance.name = actor.DisplayName;
+            if (!string.IsNullOrWhiteSpace(actor.CharacterId))
+            {
+                PublishedCharacterEntry character = characters?.Find(actor.CharacterId)
+                    ?? throw new InvalidOperationException(
+                        $"Character '{actor.CharacterId}' is unavailable.");
+                CharacterAppearanceProjector.Apply(
+                    instance,
+                    character.CreateSnapshot().appearance,
+                    appearanceCatalog);
+                instance.GetComponent<ActorCelShadingPresenter>().Apply();
+            }
             GameplayActorPose pose = actor.GameplayDefinition.StartingPose;
             instance.transform.SetPositionAndRotation(
                 new Vector3(

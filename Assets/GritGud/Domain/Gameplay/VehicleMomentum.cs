@@ -14,34 +14,21 @@ namespace GritGud.Domain.Gameplay
             float baseTurningRadius,
             float speedTurningRadiusFactor)
         {
-            MaximumSpeed = RequirePositive(maximumSpeed, nameof(maximumSpeed));
-            AccelerationPerTurn = RequirePositive(
+            Validate(
+                maximumSpeed,
                 accelerationPerTurn,
-                nameof(accelerationPerTurn));
-            BrakingPerTurn = RequirePositive(brakingPerTurn, nameof(brakingPerTurn));
-            LowSpeedTurnDegrees = RequireTurnDegrees(
+                brakingPerTurn,
                 lowSpeedTurnDegrees,
-                nameof(lowSpeedTurnDegrees));
-            HighSpeedTurnDegrees = RequireTurnDegrees(
                 highSpeedTurnDegrees,
-                nameof(highSpeedTurnDegrees));
-            if (highSpeedTurnDegrees > lowSpeedTurnDegrees)
-            {
-                throw new ArgumentException(
-                    "Vehicle steering must narrow or remain equal as speed increases.",
-                    nameof(highSpeedTurnDegrees));
-            }
-
-            BaseTurningRadius = RequirePositive(
                 baseTurningRadius,
-                nameof(baseTurningRadius));
-            if (!IsFinite(speedTurningRadiusFactor)
-                || speedTurningRadiusFactor < 0f)
-            {
-                throw new ArgumentOutOfRangeException(
-                    nameof(speedTurningRadiusFactor));
-            }
+                speedTurningRadiusFactor);
 
+            MaximumSpeed = maximumSpeed;
+            AccelerationPerTurn = accelerationPerTurn;
+            BrakingPerTurn = brakingPerTurn;
+            LowSpeedTurnDegrees = lowSpeedTurnDegrees;
+            HighSpeedTurnDegrees = highSpeedTurnDegrees;
+            BaseTurningRadius = baseTurningRadius;
             SpeedTurningRadiusFactor = speedTurningRadiusFactor;
         }
 
@@ -62,6 +49,74 @@ namespace GritGud.Domain.Gameplay
         public float GetMinimumTurningRadius(float speed) =>
             BaseTurningRadius
             + (Math.Max(0f, speed) * SpeedTurningRadiusFactor);
+
+        public bool IsValidSpeed(float speed) =>
+            IsValidSpeed(speed, MaximumSpeed);
+
+        public static bool IsValidSpeed(float speed, float maximumSpeed) =>
+            IsFinite(speed)
+            && speed >= 0f
+            && speed <= maximumSpeed;
+
+        public static bool TryValidate(
+            float maximumSpeed,
+            float accelerationPerTurn,
+            float brakingPerTurn,
+            float lowSpeedTurnDegrees,
+            float highSpeedTurnDegrees,
+            float baseTurningRadius,
+            float speedTurningRadiusFactor,
+            out string error)
+        {
+            try
+            {
+                Validate(
+                    maximumSpeed,
+                    accelerationPerTurn,
+                    brakingPerTurn,
+                    lowSpeedTurnDegrees,
+                    highSpeedTurnDegrees,
+                    baseTurningRadius,
+                    speedTurningRadiusFactor);
+                error = string.Empty;
+                return true;
+            }
+            catch (ArgumentException exception)
+            {
+                error = exception.Message;
+                return false;
+            }
+        }
+
+        private static void Validate(
+            float maximumSpeed,
+            float accelerationPerTurn,
+            float brakingPerTurn,
+            float lowSpeedTurnDegrees,
+            float highSpeedTurnDegrees,
+            float baseTurningRadius,
+            float speedTurningRadiusFactor)
+        {
+            RequirePositive(maximumSpeed, nameof(maximumSpeed));
+            RequirePositive(accelerationPerTurn, nameof(accelerationPerTurn));
+            RequirePositive(brakingPerTurn, nameof(brakingPerTurn));
+            RequireTurnDegrees(lowSpeedTurnDegrees, nameof(lowSpeedTurnDegrees));
+            RequireTurnDegrees(highSpeedTurnDegrees, nameof(highSpeedTurnDegrees));
+            if (highSpeedTurnDegrees > lowSpeedTurnDegrees)
+            {
+                throw new ArgumentException(
+                    "Vehicle steering must narrow or remain equal as speed increases.",
+                    nameof(highSpeedTurnDegrees));
+            }
+
+            RequirePositive(baseTurningRadius, nameof(baseTurningRadius));
+            if (!IsFinite(speedTurningRadiusFactor)
+                || speedTurningRadiusFactor < 0f)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(speedTurningRadiusFactor));
+            }
+        }
 
         private static float RequirePositive(float value, string parameterName)
         {

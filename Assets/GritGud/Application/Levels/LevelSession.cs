@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using GritGud.Application;
 using GritGud.Domain.Levels;
 
 namespace GritGud.Application.Levels
@@ -47,9 +48,10 @@ namespace GritGud.Application.Levels
         private int savedHistoryPosition;
         private int revision;
 
-        public LevelSession(LevelDocument document)
+        public LevelSession(LevelDocument document, bool initiallySaved = true)
         {
             this.document = document?.DeepCopy() ?? throw new ArgumentNullException(nameof(document));
+            savedHistoryPosition = initiallySaved ? 0 : -1;
         }
 
         public event EventHandler<LevelSessionChangedEventArgs> Changed;
@@ -85,7 +87,7 @@ namespace GritGud.Application.Levels
             history.Add(command);
             historyPosition++;
             revision++;
-            Changed?.Invoke(this, new LevelSessionChangedEventArgs(
+            PublishChanged(new LevelSessionChangedEventArgs(
                 LevelSessionChangeKind.Execute,
                 revision,
                 command));
@@ -107,7 +109,7 @@ namespace GritGud.Application.Levels
             command.Revert(document);
             historyPosition--;
             revision++;
-            Changed?.Invoke(this, new LevelSessionChangedEventArgs(
+            PublishChanged(new LevelSessionChangedEventArgs(
                 LevelSessionChangeKind.Undo,
                 revision,
                 command));
@@ -125,23 +127,31 @@ namespace GritGud.Application.Levels
             command.Apply(document);
             historyPosition++;
             revision++;
-            Changed?.Invoke(this, new LevelSessionChangedEventArgs(
+            PublishChanged(new LevelSessionChangedEventArgs(
                 LevelSessionChangeKind.Redo,
                 revision,
                 command));
             return true;
         }
 
-        public void ReplaceDocument(LevelDocument document)
+        public void ReplaceDocument(LevelDocument document, bool isSaved = true)
         {
             this.document = document?.DeepCopy() ?? throw new ArgumentNullException(nameof(document));
             history.Clear();
             historyPosition = 0;
-            savedHistoryPosition = 0;
+            savedHistoryPosition = isSaved ? 0 : -1;
             revision++;
-            Changed?.Invoke(this, new LevelSessionChangedEventArgs(
+            PublishChanged(new LevelSessionChangedEventArgs(
                 LevelSessionChangeKind.ReplaceDocument,
                 revision));
+        }
+
+        private void PublishChanged(LevelSessionChangedEventArgs args)
+        {
+            var notifications = new PostCommitNotificationBatch();
+            notifications.Add(Changed, this, args);
+            notifications.Publish(
+                "One or more level-session observers failed after the authoritative edit committed.");
         }
 
         public void MarkSaved()
@@ -161,7 +171,11 @@ namespace GritGud.Application.Levels
                 return null;
             }
 
-            document.Normalize();
+            if (document.entities == null)
+            {
+                return null;
+            }
+
             foreach (LevelEntity entity in document.entities)
             {
                 if (string.Equals(entity?.id, entityId, StringComparison.Ordinal))
@@ -180,7 +194,11 @@ namespace GritGud.Application.Levels
                 return null;
             }
 
-            document.Normalize();
+            if (document.terrainSurfaces == null)
+            {
+                return null;
+            }
+
             foreach (TerrainSurfaceData surface in document.terrainSurfaces)
             {
                 if (string.Equals(surface?.id, surfaceId, StringComparison.Ordinal))

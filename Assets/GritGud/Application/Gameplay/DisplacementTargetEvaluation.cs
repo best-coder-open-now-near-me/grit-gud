@@ -8,11 +8,14 @@ namespace GritGud.Application.Gameplay
     {
         None,
         ActorUnavailable,
+        ActorIncapacitated,
         ActionUnavailable,
         OperationInProgress,
         ActorNotActive,
         HandsOccupied,
         InsufficientTurnBudget,
+        ActorPinned,
+        ActorNotPinned,
     }
 
     public sealed class DisplacementActionAvailability
@@ -82,6 +85,8 @@ namespace GritGud.Application.Gameplay
         SubjectTooHeavy,
         SubjectTooLarge,
         SubjectOutOfReach,
+        NotPinningActor,
+        SubjectPinned,
     }
 
     public sealed class DisplacementTargetEvaluation

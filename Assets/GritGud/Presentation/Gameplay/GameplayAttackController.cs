@@ -35,8 +35,10 @@ namespace GritGud.Presentation.Gameplay
             TargetAcquisitionPresenter targetAcquisition,
             GameplayDialogueLog dialogueLog,
             string authoritativeActorId,
-            uint scenarioSeed,
-            Func<GameplayActionRecord, bool> onEncounterStartRequested = null)
+            Func<GameplayActionRecord, bool> onEncounterStartRequested = null,
+            DestructiblePropSession destructibleSession = null,
+            IGameplayTacticalContextQuery tacticalContextQuery = null,
+            GameplayTacticalContextEvaluator tacticalContextEvaluator = null)
         {
             Unbind();
             Session = session ?? throw new ArgumentNullException(nameof(session));
@@ -53,7 +55,11 @@ namespace GritGud.Presentation.Gameplay
 
             beginEncounter = onEncounterStartRequested
                 ?? Session.BeginEncounterFromAction;
-            attacks = new GameplayAttackSession(Session, scenarioSeed);
+            attacks = new GameplayAttackSession(
+                Session,
+                destructibleSession,
+                tacticalContextQuery,
+                tacticalContextEvaluator);
             LastFailure = AttackResolutionFailure.None;
             LastResolvedAction = null;
             LastResolution = null;
@@ -128,9 +134,19 @@ namespace GritGud.Presentation.Gameplay
                 return false;
             }
 
+            var impact = new DirectFireImpactRecord(
+                aim.TargetId,
+                aim.SurfaceId,
+                ToGameplayPosition(aim.Position),
+                aim.Normal.x,
+                aim.Normal.y,
+                aim.Normal.z,
+                aim.WorldStateRevision,
+                aim.PreferredFractureChunkIndex);
             return TryDischarge(
                 aim.TargetId,
-                ToGameplayPosition(aim.Position));
+                ToGameplayPosition(aim.Position),
+                impact);
         }
 
         internal bool TryDischarge(GameplayPosition aimPoint) =>
@@ -138,7 +154,13 @@ namespace GritGud.Presentation.Gameplay
 
         internal bool TryDischarge(
             string targetId,
-            GameplayPosition aimPoint)
+            GameplayPosition aimPoint) =>
+            TryDischarge(targetId, aimPoint, impact: null);
+
+        internal bool TryDischarge(
+            string targetId,
+            GameplayPosition aimPoint,
+            DirectFireImpactRecord impact)
         {
             if (attacks == null || actorId == null)
             {
@@ -150,7 +172,8 @@ namespace GritGud.Presentation.Gameplay
             AttackResolutionFailure readiness = attacks.EvaluateDischarge(
                 actorId,
                 targetId,
-                aimPoint);
+                aimPoint,
+                impact);
             if (readiness != AttackResolutionFailure.None)
             {
                 LastFailure = readiness;
@@ -162,6 +185,7 @@ namespace GritGud.Presentation.Gameplay
                     actorId,
                     targetId,
                     aimPoint,
+                    impact,
                     out GameplayActionRecord action,
                     out AttackResolutionFailure failure))
             {
@@ -171,7 +195,9 @@ namespace GritGud.Presentation.Gameplay
             }
 
             WeaponDischargeRecord discharge =
-                ((WeaponDischargedActionOutcome)action.Outcomes[0]).Discharge;
+                GameplayWeaponActionOutcomes
+                    .RequirePrimary<WeaponDischargedActionOutcome>(action)
+                    .Discharge;
             GameplayEncounterActionTransition.BeginAfterCommittedAction(
                 Session,
                 action,
@@ -181,8 +207,11 @@ namespace GritGud.Presentation.Gameplay
             LastResolvedAction = action;
             LastResolution = null;
             LastDischarge = discharge;
-            StatusMessage = Session.GetEquippedAttack(actorId)?.DisplayName
-                ?? "Weapon fired.";
+            StatusMessage = discharge.Damage == null
+                ? Session.GetEquippedAttack(actorId)?.DisplayName
+                    ?? "Weapon fired."
+                : $"Hit {discharge.Damage.PropId}: "
+                    + $"{discharge.Damage.Resulting.State.ToString().ToLowerInvariant()}.";
             if (GameplayCombatDiagnosticFormatter.TryFormatAction(
                     action,
                     out GameplayDiagnosticProjection diagnostic))
@@ -260,12 +289,33 @@ namespace GritGud.Presentation.Gameplay
             }
 
             AttackResolutionRecord resolution =
-                ((AttackResolvedActionOutcome)action.Outcomes[0]).Attack;
+                GameplayWeaponActionOutcomes
+                    .RequirePrimary<AttackResolvedActionOutcome>(action)
+                    .Attack;
             GameplayEncounterActionTransition.BeginAfterCommittedAction(
                 Session,
                 action,
                 beginEncounter,
                 "attack");
+            PresentResolvedAction(action);
+            failure = AttackResolutionFailure.None;
+            return true;
+        }
+
+        internal void PresentResolvedAction(GameplayActionRecord action)
+        {
+            if (action == null) throw new ArgumentNullException(nameof(action));
+            AttackResolutionRecord resolution = null;
+            foreach (GameplayActionOutcome outcome in action.Outcomes)
+                if (outcome is AttackResolvedActionOutcome attack)
+                {
+                    resolution = attack.Attack;
+                    break;
+                }
+            if (resolution == null)
+                throw new ArgumentException(
+                    "Attack presentation requires an attack outcome.",
+                    nameof(action));
             LastFailure = AttackResolutionFailure.None;
             LastResolvedAction = action;
             LastResolution = resolution;
@@ -280,8 +330,6 @@ namespace GritGud.Presentation.Gameplay
                 dialogue.AppendCombatDiagnostic(diagnostic);
             }
             AttackResolved?.Invoke(action);
-            failure = AttackResolutionFailure.None;
-            return true;
         }
 
         public void ClearStatus()
@@ -299,6 +347,8 @@ namespace GritGud.Presentation.Gameplay
                     return "Only the active actor can attack.";
                 case AttackResolutionFailure.ActorIncapacitated:
                     return "An incapacitated actor cannot attack.";
+                case AttackResolutionFailure.ActorPinned:
+                    return "Push off the pinning prop before attacking.";
                 case AttackResolutionFailure.OperationInProgress:
                     return "Wait for the current movement to resolve.";
                 case AttackResolutionFailure.AttackUnavailable:
@@ -313,10 +363,14 @@ namespace GritGud.Presentation.Gameplay
                     return "This attack requires an actor target.";
                 case AttackResolutionFailure.TargetOutOfReach:
                     return "That target is outside this attack's reach.";
+                case AttackResolutionFailure.WorldStateChanged:
+                    return "The aimed world state changed; aim again.";
                 case AttackResolutionFailure.InsufficientActionPoints:
                     return "Not enough AP remains for this attack.";
                 case AttackResolutionFailure.InsufficientMovementOpportunity:
                     return "Not enough movement remains for this attack.";
+                case AttackResolutionFailure.InsufficientLoadedAmmunition:
+                    return "The equipped weapon is empty. Reload before firing.";
                 case AttackResolutionFailure.None:
                     return string.Empty;
                 default:

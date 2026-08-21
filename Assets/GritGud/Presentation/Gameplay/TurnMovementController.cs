@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
+using GritGud.Domain.Levels;
 using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
@@ -22,10 +24,15 @@ namespace GritGud.Presentation.Gameplay
         private MovementRoutePlaybackPresenter playbackPresenter;
         private float pendingPlanDistance;
         private long plannerTurnSequence = -1L;
+        private IReadOnlyList<LevelTraversalLinkData> traversalLinks =
+            Array.Empty<LevelTraversalLinkData>();
 
         public GameplaySession Session { get; private set; }
 
         public float PlannedCost => planner?.TotalCost ?? 0f;
+
+        public int PlannedActionPointCost =>
+            planner?.TotalActionPointCost ?? 0;
 
         public int PlanPointCount => planner?.Points.Count ?? 0;
 
@@ -34,6 +41,9 @@ namespace GritGud.Presentation.Gameplay
         public float CommittedCost => playbackPresenter?.CommittedCost ?? 0f;
 
         internal float PlanningMaximumCost => planner?.MaximumCost ?? 0f;
+
+        internal int PlanningMaximumActionPoints =>
+            planner?.MaximumActionPoints ?? 0;
 
         public RoutePlanFailure LastPlanFailure { get; private set; }
 
@@ -44,7 +54,8 @@ namespace GritGud.Presentation.Gameplay
             ExplorationMovementInput cameraRelativeInput,
             IGameplayInputSource gameplayInput,
             ThirdPersonMotor actorMotor,
-            string authoritativeActorId)
+            string authoritativeActorId,
+            IEnumerable<LevelTraversalLinkData> authoredTraversalLinks = null)
         {
             if (session == null)
             {
@@ -59,6 +70,14 @@ namespace GritGud.Presentation.Gameplay
             Unbind();
             Session = session;
             inputSource = gameplayInput;
+            var links = new List<LevelTraversalLinkData>();
+            foreach (LevelTraversalLinkData link in authoredTraversalLinks
+                ?? Array.Empty<LevelTraversalLinkData>())
+            {
+                if (link != null)
+                    links.Add(link.DeepCopy());
+            }
+            traversalLinks = links.AsReadOnly();
             SetActor(
                 cameraRelativeInput,
                 actorMotor,
@@ -105,7 +124,9 @@ namespace GritGud.Presentation.Gameplay
             actorId = authoritativeActorId;
             ghostPresenter = new MovementRouteGhostPresenter(actorTransform);
             playbackPresenter = new MovementRoutePlaybackPresenter(actorMotor);
-            SegmentValidator = new UnityMovementRouteSegmentValidator(controller);
+            SegmentValidator = new UnityMovementRouteSegmentValidator(
+                controller,
+                traversalLinks);
             pendingPlanDistance = 0f;
             plannerTurnSequence = -1L;
             LastPlanFailure = RoutePlanFailure.None;
@@ -130,6 +151,7 @@ namespace GritGud.Presentation.Gameplay
             actorTransform = null;
             actorId = null;
             Session = null;
+            traversalLinks = Array.Empty<LevelTraversalLinkData>();
             pendingPlanDistance = 0f;
             plannerTurnSequence = -1L;
             LastPlanFailure = RoutePlanFailure.None;
@@ -144,14 +166,46 @@ namespace GritGud.Presentation.Gameplay
 
         private void Update()
         {
+            AdvanceFrame(Time.deltaTime);
+        }
+
+        /// <summary>
+        /// Advances the route presentation before accepting another planning
+        /// input. Canonical movement reduces its final gameplay state
+        /// immediately, whereas legacy movement remains in
+        /// ResolvingMovement until its visual route completes. The visual
+        /// lifetime is therefore owned here rather than inferred solely from
+        /// the session operation.
+        /// </summary>
+        internal void AdvanceFrame(float deltaTime)
+        {
             if (Session == null)
             {
                 return;
             }
 
+            if (playbackPresenter?.IsPlaying == true)
+            {
+                TickPlayback(deltaTime);
+                return;
+            }
+
             if (Session.Operation == GameplaySessionOperation.ResolvingMovement)
             {
-                TickPlayback();
+                MovementRouteRecord pendingRoute = Session.PendingMovementRoute;
+                if (pendingRoute == null || playbackPresenter == null)
+                {
+                    StatusMessage = "Movement is waiting for its route playback.";
+                    return;
+                }
+
+                playbackPresenter.Begin(pendingRoute);
+                ghostPresenter?.Hide();
+                planner = null;
+                pendingPlanDistance = 0f;
+                LastPlanFailure = RoutePlanFailure.None;
+                StatusMessage = "Resolving movement...";
+                TickPlayback(deltaTime);
                 return;
             }
 
@@ -160,8 +214,8 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            HandlePlanningInput();
-            ghostPresenter?.Present(planner, Time.deltaTime);
+            HandlePlanningInput(deltaTime);
+            ghostPresenter?.Present(planner, deltaTime);
         }
 
         internal bool SynchronizePlanningState()
@@ -173,6 +227,7 @@ namespace GritGud.Presentation.Gameplay
 
             if (Session.Mode != GameplaySessionMode.TurnBased ||
                 Session.Operation != GameplaySessionOperation.None ||
+                Session.GetActor(actorId).IsPinned ||
                 !string.Equals(
                     Session.ActiveActorId,
                     actorId,
@@ -189,19 +244,43 @@ namespace GritGud.Presentation.Gameplay
         private void EnsurePlanner()
         {
             long currentTurnSequence = Session.LastEndedTurn?.Sequence ?? 0L;
-            if (planner != null && plannerTurnSequence == currentTurnSequence)
+            GameplayActorSnapshot actor = Session.GetActor(actorId);
+            if (planner != null
+                && plannerTurnSequence == currentTurnSequence
+                && PlannerMatchesActorState(planner, actor))
             {
                 return;
             }
 
             planner?.Cancel();
             planner = new MovementRoutePlanner(
-                Session.GetActor(actorId),
+                actor,
                 SegmentValidator);
             plannerTurnSequence = currentTurnSequence;
         }
 
-        private void HandlePlanningInput()
+        private static bool PlannerMatchesActorState(
+            MovementRoutePlanner currentPlanner,
+            GameplayActorSnapshot actor)
+        {
+            GameplayActorPose origin = currentPlanner.OriginPose;
+            GameplayActorPose current = actor.Pose;
+            return string.Equals(
+                    currentPlanner.ActorId,
+                    actor.ActorId,
+                    StringComparison.Ordinal)
+                && origin.Position.X == current.Position.X
+                && origin.Position.Y == current.Position.Y
+                && origin.Position.Z == current.Position.Z
+                && origin.FacingDegrees == current.FacingDegrees
+                && origin.Stance == current.Stance
+                && currentPlanner.MaximumActionPoints
+                    == actor.TurnBudget.ActionPoints
+                && currentPlanner.MaximumCost
+                    == actor.TurnBudget.MovementOpportunity;
+        }
+
+        private void HandlePlanningInput(float deltaTime)
         {
             GameplayInputFrame input = inputSource?.CurrentFrame ?? default;
 
@@ -229,6 +308,11 @@ namespace GritGud.Presentation.Gameplay
             {
                 MovementRouteRecord route = planner.Confirm();
                 Session.CommitMovementRoute(route);
+                if (playbackPresenter.IsPlaying)
+                {
+                    StatusMessage = "Movement is already resolving.";
+                    return;
+                }
                 playbackPresenter.Begin(route);
                 ghostPresenter.Hide();
                 planner = null;
@@ -247,7 +331,7 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            pendingPlanDistance += PlanningSpeed * Time.deltaTime;
+            pendingPlanDistance += PlanningSpeed * Mathf.Max(0f, deltaTime);
             while (pendingPlanDistance >= RouteSampleDistance)
             {
                 float remainingBudget = planner.MaximumCost - planner.TotalCost;
@@ -275,23 +359,32 @@ namespace GritGud.Presentation.Gameplay
 
                 pendingPlanDistance -= RouteSampleDistance;
                 LastPlanFailure = RoutePlanFailure.None;
-                StatusMessage = string.Empty;
+                MovementRouteSegmentRecord appended =
+                    planner.Segments[planner.Segments.Count - 1];
+                StatusMessage = appended.IsTraversal
+                    ? $"{appended.Kind.ToString().ToUpperInvariant()}"
+                        + $" - {appended.MovementCost:0.##} MOVE"
+                        + $" - {appended.ActionPointCost} AP"
+                    : string.Empty;
             }
         }
 
-        private void TickPlayback()
+        private void TickPlayback(float deltaTime)
         {
             if (playbackPresenter == null || !playbackPresenter.IsPlaying)
             {
                 return;
             }
 
-            if (!playbackPresenter.Tick(Time.deltaTime))
+            if (!playbackPresenter.Tick(deltaTime))
             {
                 return;
             }
 
-            Session.CompleteMovementResolution();
+            if (Session.Operation == GameplaySessionOperation.ResolvingMovement)
+            {
+                Session.CompleteMovementResolution();
+            }
             GameplayActorSnapshot resolvedActor = Session.GetActor(actorId);
             actorTransform.SetPositionAndRotation(
                 MovementRouteSampling.ToVector3(resolvedActor.Pose.Position),

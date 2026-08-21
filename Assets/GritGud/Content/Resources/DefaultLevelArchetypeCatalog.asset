@@ -23,12 +23,17 @@ MonoBehaviour:
     positionSnap: 2.5
     angleSnap: 90
     placementSurface: 1
+    placementSurfaceKind: flat
+    placementSurfaceNegativeZHeight: 0
+    placementSurfacePositiveZHeight: 0
     providesCover: 0
     defaultCoverCenter: {x: 0, y: 0, z: 0}
     defaultCoverSize: {x: 1, y: 1, z: 1}
     destructible: 0
+    vehicle: 0
     initialDestructibleState: intact
     initialIntegrity: 0
+    fractureProfile: {fileID: 0}
   - archetypeId: structure.wall.standard
     displayName: Wall
     category: Structure
@@ -39,12 +44,17 @@ MonoBehaviour:
     positionSnap: 2.5
     angleSnap: 90
     placementSurface: 0
+    placementSurfaceKind: flat
+    placementSurfaceNegativeZHeight: 0
+    placementSurfacePositiveZHeight: 0
     providesCover: 1
     defaultCoverCenter: {x: -1.25, y: 1.5, z: 0}
     defaultCoverSize: {x: 2.5, y: 3, z: 0.225}
     destructible: 0
+    vehicle: 0
     initialDestructibleState: intact
     initialIntegrity: 0
+    fractureProfile: {fileID: 0}
   - archetypeId: structure.wall.doorway
     displayName: Doorway Wall
     category: Structure
@@ -55,12 +65,17 @@ MonoBehaviour:
     positionSnap: 2.5
     angleSnap: 90
     placementSurface: 0
+    placementSurfaceKind: flat
+    placementSurfaceNegativeZHeight: 0
+    placementSurfacePositiveZHeight: 0
     providesCover: 0
     defaultCoverCenter: {x: 0, y: 0, z: 0}
     defaultCoverSize: {x: 1, y: 1, z: 1}
     destructible: 0
+    vehicle: 0
     initialDestructibleState: intact
     initialIntegrity: 0
+    fractureProfile: {fileID: 0}
   - archetypeId: structure.stairs.standard
     displayName: Stairs
     category: Structure
@@ -71,12 +86,17 @@ MonoBehaviour:
     positionSnap: 2.5
     angleSnap: 90
     placementSurface: 1
+    placementSurfaceKind: ramp-z
+    placementSurfaceNegativeZHeight: 1.5
+    placementSurfacePositiveZHeight: 0
     providesCover: 0
     defaultCoverCenter: {x: 0, y: 0, z: 0}
     defaultCoverSize: {x: 1, y: 1, z: 1}
     destructible: 0
+    vehicle: 0
     initialDestructibleState: intact
     initialIntegrity: 0
+    fractureProfile: {fileID: 0}
   - archetypeId: prop.crate.standard
     displayName: Crate
     category: Props
@@ -91,8 +111,10 @@ MonoBehaviour:
     defaultCoverCenter: {x: 0.14, y: 0.48, z: -0.32}
     defaultCoverSize: {x: 1.08, y: 0.95, z: 1.46}
     destructible: 1
+    vehicle: 0
     initialDestructibleState: intact
     initialIntegrity: 10
+    fractureProfile: {fileID: 11400000, guid: 8554c9d47e1f1904684ee6cc9aece9ed, type: 2}
   - archetypeId: prop.barrel.metal
     displayName: Metal Barrel
     category: Props
@@ -107,8 +129,10 @@ MonoBehaviour:
     defaultCoverCenter: {x: 0, y: 0.55, z: 0}
     defaultCoverSize: {x: 0.9, y: 1.1, z: 0.9}
     destructible: 1
+    vehicle: 0
     initialDestructibleState: intact
     initialIntegrity: 8
+    fractureProfile: {fileID: 11400000, guid: 4206395a9d3a6c249a34b67c98070952, type: 2}
   - archetypeId: vehicle.buggy.standard
     displayName: Buggy
     category: Vehicles
@@ -123,5 +147,169 @@ MonoBehaviour:
     defaultCoverCenter: {x: 0, y: 0, z: 0}
     defaultCoverSize: {x: 1, y: 1, z: 1}
     destructible: 0
+    vehicle: 1
     initialDestructibleState: intact
     initialIntegrity: 0
+    fractureProfile: {fileID: 0}
+  - archetypeId: vehicle.drone.scout
+    displayName: Scout Drone
+    category: Vehicles
+    surfacePresentationId: surface.metal
+    prefab: {fileID: 100000, guid: e97b7d3b78394d52a40c7893eb50d70e, type: 3}
+    localBoundsCenter: {x: 0, y: 0, z: 0}
+    localBoundsSize: {x: 1.6, y: 0.6, z: 1.6}
+    positionSnap: 0.25
+    angleSnap: 15
+    placementSurface: 2
+    providesCover: 0
+    defaultCoverCenter: {x: 0, y: 0, z: 0}
+    defaultCoverSize: {x: 1, y: 1, z: 1}
+    destructible: 0
+    vehicle: 1
+    initialDestructibleState: intact
+    initialIntegrity: 0
+    fractureProfile: {fileID: 0}
+  - archetypeId: structure.barrier.concrete
+    displayName: Concrete Barrier
+    category: Infrastructure
+    surfacePresentationId: surface.concrete
+    prefab: {fileID: 1481980865230784, guid: 2252526341f17ff40b51a7eac1c47b29, type: 3}
+    localBoundsCenter: {x: 0, y: 0.5, z: 0}
+    localBoundsSize: {x: 2.5, y: 1, z: 0.75}
+    positionSnap: 0.25
+    angleSnap: 15
+    placementSurface: 0
+    providesCover: 0
+    defaultCoverCenter: {x: 0, y: 0, z: 0}
+    defaultCoverSize: {x: 1, y: 1, z: 1}
+    destructible: 0
+    vehicle: 0
+    initialDestructibleState: intact
+    initialIntegrity: 0
+    fractureProfile: {fileID: 0}
+  - archetypeId: structure.barricade.wood
+    displayName: Wooden Barricade
+    category: Infrastructure
+    surfacePresentationId: surface.wood
+    prefab: {fileID: 1224111418291396, guid: 8895dea04dd3bd942a9039e333512a11, type: 3}
+    localBoundsCenter: {x: 0, y: 0.6, z: 0}
+    localBoundsSize: {x: 2, y: 1.2, z: 0.6}
+    positionSnap: 0.25
+    angleSnap: 15
+    placementSurface: 0
+    providesCover: 0
+    defaultCoverCenter: {x: 0, y: 0, z: 0}
+    defaultCoverSize: {x: 1, y: 1, z: 1}
+    destructible: 1
+    vehicle: 0
+    initialDestructibleState: intact
+    initialIntegrity: 12
+    fractureProfile: {fileID: 0}
+  - archetypeId: prop.pallet-stack.standard
+    displayName: Pallet Stack
+    category: Props
+    surfacePresentationId: surface.wood
+    prefab: {fileID: 1727010828578688, guid: 08e7fa694cf2f0a42abac3bb71f497e1, type: 3}
+    localBoundsCenter: {x: 0, y: 0.6, z: 0}
+    localBoundsSize: {x: 1.2, y: 1.2, z: 1}
+    positionSnap: 0.25
+    angleSnap: 15
+    placementSurface: 0
+    providesCover: 0
+    defaultCoverCenter: {x: 0, y: 0, z: 0}
+    defaultCoverSize: {x: 1, y: 1, z: 1}
+    destructible: 1
+    vehicle: 0
+    initialDestructibleState: intact
+    initialIntegrity: 10
+    fractureProfile: {fileID: 0}
+  - archetypeId: structure.wire-fence.standard
+    displayName: Wire Fence
+    category: Infrastructure
+    surfacePresentationId: surface.metal
+    prefab: {fileID: 1712709652979322, guid: 0d64cf1bb9d6db5458fc4331eed07b15, type: 3}
+    localBoundsCenter: {x: 0, y: 1, z: 0}
+    localBoundsSize: {x: 3, y: 2, z: 0.2}
+    positionSnap: 0.25
+    angleSnap: 15
+    placementSurface: 0
+    providesCover: 0
+    defaultCoverCenter: {x: 0, y: 0, z: 0}
+    defaultCoverSize: {x: 1, y: 1, z: 1}
+    destructible: 1
+    vehicle: 0
+    initialDestructibleState: intact
+    initialIntegrity: 8
+    fractureProfile: {fileID: 0}
+  - archetypeId: structure.container.small
+    displayName: Small Container
+    category: Infrastructure
+    surfacePresentationId: surface.metal
+    prefab: {fileID: 1808195246080866, guid: 84a99c98a26b5db42a6ae70961fcf1f0, type: 3}
+    localBoundsCenter: {x: 0, y: 1.25, z: 0}
+    localBoundsSize: {x: 2.4, y: 2.5, z: 3}
+    positionSnap: 0.25
+    angleSnap: 15
+    placementSurface: 0
+    providesCover: 0
+    defaultCoverCenter: {x: 0, y: 0, z: 0}
+    defaultCoverSize: {x: 1, y: 1, z: 1}
+    destructible: 0
+    vehicle: 0
+    initialDestructibleState: intact
+    initialIntegrity: 0
+    fractureProfile: {fileID: 0}
+  - archetypeId: prop.generator.standard
+    displayName: Generator
+    category: Industrial
+    surfacePresentationId: surface.metal
+    prefab: {fileID: 1906143108443636, guid: 8c366b74a8be11d409236ded1f90f979, type: 3}
+    localBoundsCenter: {x: 0, y: 0.65, z: 0}
+    localBoundsSize: {x: 1.5, y: 1.3, z: 0.8}
+    positionSnap: 0.25
+    angleSnap: 15
+    placementSurface: 0
+    providesCover: 0
+    defaultCoverCenter: {x: 0, y: 0, z: 0}
+    defaultCoverSize: {x: 1, y: 1, z: 1}
+    destructible: 1
+    vehicle: 0
+    initialDestructibleState: intact
+    initialIntegrity: 18
+    fractureProfile: {fileID: 0}
+  - archetypeId: prop.tire-stack.standard
+    displayName: Tire Stack
+    category: Props
+    surfacePresentationId: surface.metal
+    prefab: {fileID: 1663826478253228, guid: d470efb7df5223c46b0cfeb12c77f9cf, type: 3}
+    localBoundsCenter: {x: 0, y: 0.5, z: 0}
+    localBoundsSize: {x: 1, y: 1, z: 1}
+    positionSnap: 0.25
+    angleSnap: 15
+    placementSurface: 0
+    providesCover: 0
+    defaultCoverCenter: {x: 0, y: 0, z: 0}
+    defaultCoverSize: {x: 1, y: 1, z: 1}
+    destructible: 1
+    vehicle: 0
+    initialDestructibleState: intact
+    initialIntegrity: 12
+    fractureProfile: {fileID: 0}
+  - archetypeId: prop.propane.standard
+    displayName: Propane Tank
+    category: Industrial
+    surfacePresentationId: surface.metal
+    prefab: {fileID: 1653737757666486, guid: 7743057cd2e40b34e9a050f84fd6fad8, type: 3}
+    localBoundsCenter: {x: 0, y: 0.5, z: 0}
+    localBoundsSize: {x: 0.5, y: 1, z: 0.5}
+    positionSnap: 0.25
+    angleSnap: 15
+    placementSurface: 0
+    providesCover: 0
+    defaultCoverCenter: {x: 0, y: 0, z: 0}
+    defaultCoverSize: {x: 1, y: 1, z: 1}
+    destructible: 1
+    vehicle: 0
+    initialDestructibleState: intact
+    initialIntegrity: 6
+    fractureProfile: {fileID: 0}

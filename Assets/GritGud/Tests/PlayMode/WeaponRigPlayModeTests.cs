@@ -46,8 +46,7 @@ namespace GritGud.PlayMode.Tests
                     session,
                     acquisition,
                     new GameplayDialogueLog(),
-                    "player",
-                    scenarioSeed: 7u);
+                    "player");
                 var projectiles =
                     player.AddComponent<GameplayProjectileController>();
                 ActorAnimationCoordinator animation =

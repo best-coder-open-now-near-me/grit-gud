@@ -13,6 +13,10 @@ namespace GritGud.Application.Gameplay
             InventoryItemDefinition equippedItem,
             bool chargesTurnCost)
         {
+            DisplacementResultPolicies allowedResults =
+                definition?.AllowedResults ?? DisplacementResultPolicies.None;
+            if (definition?.Intent == DisplacementActionKind.Push)
+                allowedResults |= DisplacementResultPolicies.Release;
             if (action == null
                 || displacement == null
                 || definition == null
@@ -34,7 +38,7 @@ namespace GritGud.Application.Gameplay
                     > definition.MaximumSubjectMass
                 || displacement.Request.SubjectSize
                     > definition.MaximumSubjectSize
-                || (displacement.AppliedResults & ~definition.AllowedResults)
+                || (displacement.AppliedResults & ~allowedResults)
                     != 0)
             {
                 throw InvalidDisplacement();

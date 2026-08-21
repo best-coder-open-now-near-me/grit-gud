@@ -24,12 +24,12 @@ MonoBehaviour:
     muzzleLightIntensity: 3.6
     muzzleLightRange: 3.4
     muzzleLightSeconds: 0.055
+    impactEffectScaleMultiplier: 0.2
+    impactEffectWidthMultiplier: 4
     maximumAimCorrectionDegrees: 18
     attackPresentation: 0
-    contactSwingAxisLocal: {x: 0, y: 1, z: 0}
-    contactSwingDegrees: 0
     contactStrikeSeconds: 0.34
-    contactHandExtension: 0
+    contactImpactNormalizedTime: 0.4
   - itemId: weapon.rocket-launcher
     prefab: {fileID: 8814187127111966184, guid: a20ee11edd52c0a41871190c48b4531e, type: 3}
     animationSetId: pose.launcher
@@ -41,12 +41,12 @@ MonoBehaviour:
     muzzleLightIntensity: 4.2
     muzzleLightRange: 4
     muzzleLightSeconds: 0.085
+    impactEffectScaleMultiplier: 1
+    impactEffectWidthMultiplier: 1
     maximumAimCorrectionDegrees: 12
     attackPresentation: 0
-    contactSwingAxisLocal: {x: 0, y: 1, z: 0}
-    contactSwingDegrees: 0
     contactStrikeSeconds: 0.34
-    contactHandExtension: 0
+    contactImpactNormalizedTime: 0.4
   - itemId: weapon.combat-knife
     prefab: {fileID: 3102909436067329747, guid: 7117933b3d815094e8dce8191bf95f37, type: 3}
     animationSetId: pose.melee
@@ -58,9 +58,9 @@ MonoBehaviour:
     muzzleLightIntensity: 0
     muzzleLightRange: 1
     muzzleLightSeconds: 0.01
+    impactEffectScaleMultiplier: 1
+    impactEffectWidthMultiplier: 1
     maximumAimCorrectionDegrees: 1
     attackPresentation: 1
-    contactSwingAxisLocal: {x: 0, y: 1, z: 0}
-    contactSwingDegrees: -82
-    contactStrikeSeconds: 0.38
-    contactHandExtension: 0.34
+    contactStrikeSeconds: 0.8
+    contactImpactNormalizedTime: 0.4

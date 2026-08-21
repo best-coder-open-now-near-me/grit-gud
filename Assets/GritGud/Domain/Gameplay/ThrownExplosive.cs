@@ -19,7 +19,9 @@ namespace GritGud.Domain.Gameplay
             float blastRadius,
             float blastWoundMovementPenalty = 0f,
             float blastIntegrityDamage = 0f,
-            SmokeFieldDefinition smokeField = null)
+            SmokeFieldDefinition smokeField = null,
+            FireFieldDefinition fireField = null,
+            int blastActionPointReduction = 0)
             : base(id, turnCost)
         {
             if (!IsFinite(maximumRange)
@@ -36,10 +38,12 @@ namespace GritGud.Domain.Gameplay
                 || uncertaintyPerMeter < 0f || blastRadius < 0f
                 || blastWoundMovementPenalty < 0f
                 || blastIntegrityDamage < 0f
+                || blastActionPointReduction < 0
                 || ((blastWoundMovementPenalty > 0f
-                        || blastIntegrityDamage > 0f)
+                        || blastIntegrityDamage > 0f
+                        || blastActionPointReduction > 0)
                     != (blastRadius > 0f))
-                || ((blastRadius > 0f) == (smokeField != null)))
+                || CountPayloads(blastRadius, smokeField, fireField) != 1)
                 throw new ArgumentOutOfRangeException(nameof(maximumRange));
             MaximumRange = maximumRange;
             StandingLaunchHeight = standingLaunchHeight;
@@ -50,6 +54,8 @@ namespace GritGud.Domain.Gameplay
             BlastWoundMovementPenalty = blastWoundMovementPenalty;
             BlastIntegrityDamage = blastIntegrityDamage;
             SmokeField = smokeField;
+            FireField = fireField;
+            BlastActionPointReduction = blastActionPointReduction;
         }
 
         public override string PowerTypeId => TypeId;
@@ -63,8 +69,14 @@ namespace GritGud.Domain.Gameplay
         public float BlastWoundMovementPenalty { get; }
         public float BlastIntegrityDamage { get; }
         public SmokeFieldDefinition SmokeField { get; }
+        public FireFieldDefinition FireField { get; }
+        public int BlastActionPointReduction { get; }
+        public bool IsConcussive => BlastActionPointReduction > 0;
         public bool DeploysSmoke => SmokeField != null;
-        public float AreaRadius => SmokeField?.Radius ?? BlastRadius;
+        public bool DeploysFire => FireField != null;
+        public float AreaRadius => SmokeField?.Radius
+            ?? FireField?.MaximumRadius
+            ?? BlastRadius;
 
         public GameplayPosition GetLaunchOrigin(GameplayActorPose pose)
         {
@@ -86,6 +98,14 @@ namespace GritGud.Domain.Gameplay
 
         private static bool IsFinite(float value) =>
             !float.IsNaN(value) && !float.IsInfinity(value);
+
+        private static int CountPayloads(
+            float blastRadius,
+            SmokeFieldDefinition smokeField,
+            FireFieldDefinition fireField) =>
+            (blastRadius > 0f ? 1 : 0)
+            + (smokeField != null ? 1 : 0)
+            + (fireField != null ? 1 : 0);
     }
 
     public sealed class ThrownExplosiveRecord
@@ -102,7 +122,10 @@ namespace GritGud.Domain.Gameplay
             float uncertaintyRadius,
             long worldStateRevision,
             IEnumerable<BlastEffectRecord> blastEffects,
-            SmokeFieldRecord smokeField = null)
+            SmokeFieldRecord smokeField = null,
+            FireFieldRecord fireField = null,
+            IEnumerable<ConcussiveActionPointEffectRecord>
+                concussiveEffects = null)
         {
             if (sequence <= 0) throw new ArgumentOutOfRangeException(nameof(sequence));
             if (string.IsNullOrWhiteSpace(throwerId)) throw new ArgumentException("Throws require an actor.", nameof(throwerId));
@@ -142,6 +165,46 @@ namespace GritGud.Domain.Gameplay
                     "The smoke field does not match its thrown payload.",
                     nameof(smokeField));
             SmokeField = smokeField;
+            if ((Definition.FireField == null) != (fireField == null))
+                throw new ArgumentException(
+                    "Incendiary payloads require their matching fire field record.",
+                    nameof(fireField));
+            if (fireField != null
+                && (!string.Equals(
+                        fireField.SourceActorId,
+                        throwerId,
+                        StringComparison.Ordinal)
+                    || !string.Equals(
+                        fireField.SourceItemId,
+                        Definition.Id,
+                        StringComparison.Ordinal)
+                    || fireField.Origin.DistanceTo(resolvedLanding) > 0f
+                    || !Definition.FireField.Matches(
+                        fireField.Definition)))
+            {
+                throw new ArgumentException(
+                    "The fire field does not match its thrown payload.",
+                    nameof(fireField));
+            }
+            FireField = fireField;
+            var concussive = new List<ConcussiveActionPointEffectRecord>(
+                concussiveEffects
+                    ?? Array.Empty<ConcussiveActionPointEffectRecord>());
+            var actorIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (ConcussiveActionPointEffectRecord effect in concussive)
+                if (effect == null || !actorIds.Add(effect.ActorId))
+                    throw new ArgumentException(
+                        "Concussive effects require unique non-null actors.",
+                        nameof(concussiveEffects));
+            concussive.Sort((left, right) => string.CompareOrdinal(
+                left.ActorId,
+                right.ActorId));
+            ValidateConcussiveEffects(
+                Definition,
+                BlastEffects,
+                concussive,
+                nameof(concussiveEffects));
+            ConcussiveEffects = concussive.AsReadOnly();
         }
 
         public long Sequence { get; }
@@ -156,6 +219,42 @@ namespace GritGud.Domain.Gameplay
         public long WorldStateRevision { get; }
         public IReadOnlyList<BlastEffectRecord> BlastEffects { get; }
         public SmokeFieldRecord SmokeField { get; }
+        public FireFieldRecord FireField { get; }
+        public IReadOnlyList<ConcussiveActionPointEffectRecord>
+            ConcussiveEffects { get; }
+
+        private static void ValidateConcussiveEffects(
+            ThrownExplosiveDefinition definition,
+            IReadOnlyList<BlastEffectRecord> blastEffects,
+            IReadOnlyList<ConcussiveActionPointEffectRecord> effects,
+            string parameter)
+        {
+            var expected = new Dictionary<string, int>(StringComparer.Ordinal);
+            if (definition.BlastActionPointReduction > 0)
+                foreach (BlastEffectRecord blast in blastEffects)
+                    if (blast.SubjectKind == BlastSubjectKind.Actor
+                        && blast.Exposure > 0f)
+                    {
+                        if (!expected.TryAdd(
+                                blast.EntityId,
+                                ConcussiveActionPointRules.RequestedReduction(
+                                    definition.BlastActionPointReduction,
+                                    blast.Exposure)))
+                            throw new ArgumentException(
+                                "Concussive blast evidence repeats an actor.",
+                                nameof(blastEffects));
+                    }
+            if (expected.Count != effects.Count)
+                throw new ArgumentException(
+                    "Concussive effects do not cover the exposed actor set.",
+                    parameter);
+            foreach (ConcussiveActionPointEffectRecord effect in effects)
+                if (!expected.TryGetValue(effect.ActorId, out int requested)
+                    || requested != effect.RequestedReduction)
+                    throw new ArgumentException(
+                        "Concussive AP reduction does not match blast exposure.",
+                        parameter);
+        }
     }
 
     public sealed class ThrownExplosiveActionOutcome : GameplayActionOutcome

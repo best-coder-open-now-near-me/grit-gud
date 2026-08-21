@@ -9,6 +9,7 @@ namespace GritGud.Application.Gameplay
         None,
         ZeroLengthSegment,
         ExceedsMovementBudget,
+        ExceedsActionPointBudget,
         SegmentBlocked,
     }
 
@@ -17,16 +18,20 @@ namespace GritGud.Application.Gameplay
         private MovementRouteSegmentValidation(
             bool isValid,
             GameplayPosition resolvedPosition,
+            MovementRouteSegmentRecord segment,
             string failureReason)
         {
             IsValid = isValid;
             ResolvedPosition = resolvedPosition;
+            Segment = segment;
             FailureReason = failureReason;
         }
 
         public bool IsValid { get; }
 
         public GameplayPosition ResolvedPosition { get; }
+
+        public MovementRouteSegmentRecord Segment { get; }
 
         public string FailureReason { get; }
 
@@ -36,6 +41,19 @@ namespace GritGud.Application.Gameplay
             return new MovementRouteSegmentValidation(
                 true,
                 resolvedPosition,
+                null,
+                string.Empty);
+        }
+
+        public static MovementRouteSegmentValidation Accepted(
+            MovementRouteSegmentRecord segment)
+        {
+            if (segment == null)
+                throw new ArgumentNullException(nameof(segment));
+            return new MovementRouteSegmentValidation(
+                true,
+                segment.To,
+                segment,
                 string.Empty);
         }
 
@@ -51,6 +69,7 @@ namespace GritGud.Application.Gameplay
             return new MovementRouteSegmentValidation(
                 false,
                 default(GameplayPosition),
+                null,
                 reason);
         }
     }
@@ -72,8 +91,13 @@ namespace GritGud.Application.Gameplay
         private readonly GameplayActorSnapshot actor;
         private readonly IMovementRouteSegmentValidator segmentValidator;
         private readonly List<GameplayPosition> points;
+        private readonly List<MovementRouteSegmentRecord> segments;
         private readonly IReadOnlyList<GameplayPosition> readOnlyPoints;
+        private readonly IReadOnlyList<MovementRouteSegmentRecord>
+            readOnlySegments;
         private float totalCost;
+        private int totalActionPointCost;
+        private float totalPlaybackDurationSeconds;
 
         public MovementRoutePlanner(
             GameplayActorSnapshot actor,
@@ -90,20 +114,32 @@ namespace GritGud.Application.Gameplay
             this.segmentValidator = segmentValidator
                 ?? throw new ArgumentNullException(nameof(segmentValidator));
             points = new List<GameplayPosition> { actor.Pose.Position };
+            segments = new List<MovementRouteSegmentRecord>();
             readOnlyPoints = points.AsReadOnly();
+            readOnlySegments = segments.AsReadOnly();
         }
 
         public string ActorId => actor.ActorId;
 
         public GameplayActorPose OriginPose => actor.Pose;
 
+        public int MaximumActionPoints => actor.TurnBudget.ActionPoints;
+
         public float MaximumCost => actor.TurnBudget.MovementOpportunity;
 
         public IReadOnlyList<GameplayPosition> Points => readOnlyPoints;
 
+        public IReadOnlyList<MovementRouteSegmentRecord> Segments =>
+            readOnlySegments;
+
         public GameplayPosition Destination => points[points.Count - 1];
 
         public float TotalCost => totalCost;
+
+        public int TotalActionPointCost => totalActionPointCost;
+
+        public float TotalPlaybackDurationSeconds =>
+            totalPlaybackDurationSeconds;
 
         public bool CanConfirm => points.Count > 1;
 
@@ -127,7 +163,18 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
-            float segmentCost = from.DistanceTo(validation.ResolvedPosition);
+            MovementRouteSegmentRecord segment = validation.Segment
+                ?? new MovementRouteSegmentRecord(
+                    from,
+                    validation.ResolvedPosition);
+            if (from.DistanceTo(segment.From) > MeaningfulSegmentDistance)
+            {
+                failure = RoutePlanFailure.SegmentBlocked;
+                LastFailureReason =
+                    "The resolved route segment does not begin at the planned destination.";
+                return false;
+            }
+            float segmentCost = segment.MovementCost;
             if (segmentCost <= MeaningfulSegmentDistance)
             {
                 failure = RoutePlanFailure.ZeroLengthSegment;
@@ -142,8 +189,21 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
-            points.Add(validation.ResolvedPosition);
+            if (segment.ActionPointCost
+                > actor.TurnBudget.ActionPoints - totalActionPointCost)
+            {
+                failure = RoutePlanFailure.ExceedsActionPointBudget;
+                LastFailureReason =
+                    "The route exceeds the actor's remaining action points.";
+                return false;
+            }
+
+            segments.Add(segment);
+            points.Add(segment.To);
             totalCost += segmentCost;
+            totalActionPointCost += segment.ActionPointCost;
+            totalPlaybackDurationSeconds +=
+                segment.PlaybackDurationSeconds;
             failure = RoutePlanFailure.None;
             LastFailureReason = string.Empty;
             return true;
@@ -157,6 +217,7 @@ namespace GritGud.Application.Gameplay
             }
 
             points.RemoveAt(points.Count - 1);
+            segments.RemoveAt(segments.Count - 1);
             RecalculateCost();
             LastFailureReason = string.Empty;
             return true;
@@ -169,7 +230,11 @@ namespace GritGud.Application.Gameplay
                 points.RemoveRange(1, points.Count - 1);
             }
 
+            segments.Clear();
+
             totalCost = 0f;
+            totalActionPointCost = 0;
+            totalPlaybackDurationSeconds = 0f;
             LastFailureReason = string.Empty;
         }
 
@@ -181,21 +246,24 @@ namespace GritGud.Application.Gameplay
                     "A route must contain movement before it can be confirmed.");
             }
 
-            var waypoints = new List<GameplayPosition>(points.Count - 1);
-            for (int index = 1; index < points.Count; index++)
-            {
-                waypoints.Add(points[index]);
-            }
-
-            return new MovementRouteRecord(actor.ActorId, actor.Pose, waypoints);
+            return new MovementRouteRecord(
+                actor.ActorId,
+                actor.Pose,
+                actor.TurnBudget,
+                segments);
         }
 
         private void RecalculateCost()
         {
             totalCost = 0f;
-            for (int index = 1; index < points.Count; index++)
+            totalActionPointCost = 0;
+            totalPlaybackDurationSeconds = 0f;
+            foreach (MovementRouteSegmentRecord segment in segments)
             {
-                totalCost += points[index - 1].DistanceTo(points[index]);
+                totalCost += segment.MovementCost;
+                totalActionPointCost += segment.ActionPointCost;
+                totalPlaybackDurationSeconds +=
+                    segment.PlaybackDurationSeconds;
             }
         }
     }

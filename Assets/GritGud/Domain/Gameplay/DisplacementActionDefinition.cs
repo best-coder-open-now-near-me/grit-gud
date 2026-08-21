@@ -100,6 +100,7 @@ namespace GritGud.Domain.Gameplay
         Topple = 1 << 0,
         Release = 1 << 1,
         CollisionDamage = 1 << 2,
+        Pin = 1 << 3,
     }
 
     public sealed class DisplacementActionDefinition
@@ -196,7 +197,8 @@ namespace GritGud.Domain.Gameplay
             DisplacementResultPolicies knownResults =
                 DisplacementResultPolicies.Topple
                 | DisplacementResultPolicies.Release
-                | DisplacementResultPolicies.CollisionDamage;
+                | DisplacementResultPolicies.CollisionDamage
+                | DisplacementResultPolicies.Pin;
             if ((allowedResults & ~knownResults) != 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(allowedResults));
@@ -209,6 +211,23 @@ namespace GritGud.Domain.Gameplay
                 throw new ArgumentException(
                     "Combatant displacement requires a Close-Quarters Control contest.",
                     nameof(contestPolicy));
+            }
+
+            if (allowedResults.HasFlag(DisplacementResultPolicies.Pin)
+                && !allowedResults.HasFlag(DisplacementResultPolicies.Topple))
+            {
+                throw new ArgumentException(
+                    "Pinning displacement actions must also allow toppling.",
+                    nameof(allowedResults));
+            }
+            if (intent == DisplacementActionKind.PushOff
+                && (acceptedSubjects != DisplacementSubjectKinds.Prop
+                    || !allowedResults.HasFlag(
+                        DisplacementResultPolicies.Release)))
+            {
+                throw new ArgumentException(
+                    "Push Off must target props and allow pin release.",
+                    nameof(allowedResults));
             }
 
             if (distanceDecay != null

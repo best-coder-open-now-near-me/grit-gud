@@ -7,6 +7,9 @@ namespace GritGud.Presentation.LevelEditing.Persistence
     public sealed class LevelEditorLocalPreferences
     {
         public bool snapEnabled = true;
+        public bool gridVisible = true;
+        public float gridSpacing = 2.5f;
+        public float gridElevation;
         public LevelEditorCameraState camera;
     }
 

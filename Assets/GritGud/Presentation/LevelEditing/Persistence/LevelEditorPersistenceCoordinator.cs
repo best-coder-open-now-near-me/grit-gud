@@ -4,47 +4,63 @@ using GritGud.Application.Levels;
 using GritGud.Domain.Levels;
 using GritGud.Presentation.Levels;
 using GritGud.Presentation.Levels.Persistence;
-using GritGud.Presentation.Levels.Runtime;
+using GritGud.Presentation.Persistence;
+using UnityEngine;
 
 namespace GritGud.Presentation.LevelEditing.Persistence
 {
     public sealed class LevelDocumentLoadedEventArgs : EventArgs
     {
-        public LevelDocumentLoadedEventArgs(LevelDocument document, string sourceLabel)
+        public LevelDocumentLoadedEventArgs(
+            LevelDocument document,
+            string sourceLabel,
+            bool isSaved = true)
         {
             Document = document ?? throw new ArgumentNullException(nameof(document));
             SourceLabel = sourceLabel ?? throw new ArgumentNullException(nameof(sourceLabel));
+            IsSaved = isSaved;
         }
 
         public LevelDocument Document { get; }
 
         public string SourceLabel { get; }
+
+        public bool IsSaved { get; }
     }
 
     public sealed class LevelEditorPersistenceCoordinator : IDisposable
     {
+        public const int RecoveryGenerationCount = 3;
+        public const double AutosaveDelaySeconds = 15d;
         private const string DraftSlot = "active";
+        private const string RecoverySlotPrefix = "recovery.";
 
         private readonly UnityLevelJsonSerializer serializer;
         private readonly ILevelDraftStore draftStore;
-        private readonly LevelTextTransfer textTransfer;
-        private readonly LevelArchetypeCatalog catalog;
+        private readonly TextFileImportReceiver textTransfer;
+        private readonly LevelValidationContent validationContent;
+        private string desktopImportPath;
+        private long pendingImportRequestId;
+        private int pendingAutosaveRevision = -1;
+        private int lastAutosavedRevision = -1;
+        private double autosaveDueAt = double.PositiveInfinity;
         private bool disposed;
 
         public LevelEditorPersistenceCoordinator(
             UnityLevelJsonSerializer serializer,
             ILevelDraftStore draftStore,
-            LevelTextTransfer textTransfer,
-            LevelArchetypeCatalog catalog)
+            TextFileImportReceiver textTransfer,
+            LevelValidationContent validationContent)
         {
             this.serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             this.draftStore = draftStore ?? throw new ArgumentNullException(nameof(draftStore));
             this.textTransfer = textTransfer ?? throw new ArgumentNullException(nameof(textTransfer));
-            this.catalog = catalog != null
-                ? catalog
-                : throw new ArgumentNullException(nameof(catalog));
-            textTransfer.ImportCompleted += HandleImportedText;
-            textTransfer.ImportFailed += HandleImportFailure;
+            this.validationContent = validationContent
+                ?? throw new ArgumentNullException(nameof(validationContent));
+            desktopImportPath = System.IO.Path.Combine(
+                UnityEngine.Application.persistentDataPath,
+                "Imports",
+                "level.json");
         }
 
         public event EventHandler<LevelDocumentLoadedEventArgs> DocumentLoaded;
@@ -53,12 +69,18 @@ namespace GritGud.Presentation.LevelEditing.Persistence
 
         public bool HasDraft => draftStore.HasDraft(DraftSlot);
 
+        public bool HasRecovery(int generation)
+        {
+            ThrowIfDisposed();
+            return draftStore.HasDraft(RecoverySlot(generation));
+        }
+
         public bool UsesBrowserFileDialog => textTransfer.UsesBrowserFileDialog;
 
         public string DesktopImportPath
         {
-            get => textTransfer.DesktopImportPath;
-            set => textTransfer.DesktopImportPath = value;
+            get => desktopImportPath;
+            set => desktopImportPath = value;
         }
 
         public LevelDocument Deserialize(string text)
@@ -70,16 +92,16 @@ namespace GritGud.Presentation.LevelEditing.Persistence
         public void SaveDraft(LevelEditorWorkspace workspace)
         {
             ThrowIfDisposed();
-            if (!CanPublish(workspace, "saving the draft"))
+            if (workspace == null)
             {
-                return;
+                throw new ArgumentNullException(nameof(workspace));
             }
 
             try
             {
                 draftStore.SaveDraft(DraftSlot, serializer.Serialize(workspace.CreateSnapshot()));
                 workspace.MarkSaved();
-                Report("Saved the active browser/local draft.");
+                Report("Saved the local recovery draft.");
             }
             catch (Exception exception)
             {
@@ -92,7 +114,74 @@ namespace GritGud.Presentation.LevelEditing.Persistence
             ThrowIfDisposed();
             try
             {
-                AdoptSerializedDocument(draftStore.LoadDraft(DraftSlot), "draft");
+                AdoptSerializedDocument(
+                    draftStore.LoadDraft(DraftSlot),
+                    "draft",
+                    requireAuthoringValidity: false);
+            }
+            catch (Exception exception)
+            {
+                Report(exception.Message);
+            }
+        }
+
+        public void ScheduleAutosave(int revision, double currentTime)
+        {
+            ThrowIfDisposed();
+            if (revision < 0
+                || double.IsNaN(currentTime)
+                || double.IsInfinity(currentTime))
+            {
+                throw new ArgumentOutOfRangeException(nameof(revision));
+            }
+
+            pendingAutosaveRevision = revision;
+            autosaveDueAt = currentTime + AutosaveDelaySeconds;
+        }
+
+        public bool TickAutosave(LevelEditorWorkspace workspace, double currentTime)
+        {
+            ThrowIfDisposed();
+            if (workspace == null)
+                throw new ArgumentNullException(nameof(workspace));
+            if (double.IsNaN(currentTime) || double.IsInfinity(currentTime))
+                throw new ArgumentOutOfRangeException(nameof(currentTime));
+            if (!workspace.IsDirty
+                || pendingAutosaveRevision < 0
+                || pendingAutosaveRevision == lastAutosavedRevision
+                || currentTime < autosaveDueAt)
+            {
+                return false;
+            }
+
+            try
+            {
+                string serialized = serializer.Serialize(workspace.CreateSnapshot());
+                RotateRecoveryHistory();
+                draftStore.SaveDraft(RecoverySlot(0), serialized);
+                lastAutosavedRevision = pendingAutosaveRevision;
+                autosaveDueAt = double.PositiveInfinity;
+                Report("Autosaved a recoverable level snapshot.");
+                return true;
+            }
+            catch (Exception exception)
+            {
+                autosaveDueAt = currentTime + AutosaveDelaySeconds;
+                Report($"Autosave failed: {exception.Message}");
+                return false;
+            }
+        }
+
+        public void LoadRecovery(int generation)
+        {
+            ThrowIfDisposed();
+            try
+            {
+                AdoptSerializedDocument(
+                    draftStore.LoadDraft(RecoverySlot(generation)),
+                    $"recovery {generation + 1}",
+                    requireAuthoringValidity: false,
+                    isSaved: false);
             }
             catch (Exception exception)
             {
@@ -111,9 +200,13 @@ namespace GritGud.Presentation.LevelEditing.Persistence
             try
             {
                 LevelDocument snapshot = workspace.CreateSnapshot();
-                Report(textTransfer.Export(
-                    snapshot.displayName,
-                    serializer.Serialize(snapshot)));
+                Report(TextFileTransfer.Export(
+                    TextFileTransfer.CreateSlugFileName(
+                        snapshot.displayName,
+                        "level",
+                        ".json"),
+                    serializer.Serialize(snapshot),
+                    "application/json;charset=utf-8"));
             }
             catch (Exception exception)
             {
@@ -124,10 +217,19 @@ namespace GritGud.Presentation.LevelEditing.Persistence
         public void RequestImport()
         {
             ThrowIfDisposed();
+            if (pendingImportRequestId != 0)
+            {
+                Report("A level import is already in progress.");
+                return;
+            }
             try
             {
-                textTransfer.RequestImport();
-                if (textTransfer.UsesBrowserFileDialog)
+                pendingImportRequestId = textTransfer.RequestImport(
+                    desktopImportPath,
+                    HandleImportedText,
+                    HandleImportFailure);
+                if (pendingImportRequestId != 0
+                    && textTransfer.UsesBrowserFileDialog)
                 {
                     Report("Choose a portable level JSON file.");
                 }
@@ -145,8 +247,11 @@ namespace GritGud.Presentation.LevelEditing.Persistence
                 return;
             }
 
-            textTransfer.ImportCompleted -= HandleImportedText;
-            textTransfer.ImportFailed -= HandleImportFailure;
+            if (pendingImportRequestId != 0)
+            {
+                textTransfer.CancelImport(pendingImportRequestId);
+                pendingImportRequestId = 0;
+            }
             disposed = true;
         }
 
@@ -168,9 +273,13 @@ namespace GritGud.Presentation.LevelEditing.Persistence
 
         private void HandleImportedText(string text)
         {
+            pendingImportRequestId = 0;
             try
             {
-                AdoptSerializedDocument(text, "import");
+                AdoptSerializedDocument(
+                    text,
+                    "import",
+                    requireAuthoringValidity: true);
             }
             catch (Exception exception)
             {
@@ -180,28 +289,61 @@ namespace GritGud.Presentation.LevelEditing.Persistence
 
         private void HandleImportFailure(string message)
         {
+            pendingImportRequestId = 0;
             Report(message);
         }
 
-        private void AdoptSerializedDocument(string text, string sourceLabel)
+        private void AdoptSerializedDocument(
+            string text,
+            string sourceLabel,
+            bool requireAuthoringValidity,
+            bool isSaved = true)
         {
             LevelDocument imported = serializer.Deserialize(text);
-            var issues = LevelValidator.Validate(
-                imported,
-                catalog.CreateKnownIdSet(),
-                LevelValidationProfile.Authoring);
-            if (LevelValidator.HasErrors(issues))
+            if (requireAuthoringValidity)
             {
-                string firstError = issues
-                    .First(issue => issue.Severity == LevelValidationSeverity.Error)
-                    .Message;
-                throw new LevelSerializationException(
-                    $"The {sourceLabel} was not loaded: {firstError}");
+                var issues = LevelValidator.Validate(
+                    imported,
+                    validationContent,
+                    LevelValidationProfile.Authoring);
+                if (LevelValidator.HasErrors(issues))
+                {
+                    string firstError = issues
+                        .First(issue => issue.Severity == LevelValidationSeverity.Error)
+                        .Message;
+                    throw new LevelSerializationException(
+                        $"The {sourceLabel} was not loaded: {firstError}");
+                }
             }
 
             DocumentLoaded?.Invoke(
                 this,
-                new LevelDocumentLoadedEventArgs(imported, sourceLabel));
+                new LevelDocumentLoadedEventArgs(imported, sourceLabel, isSaved));
+        }
+
+        private void RotateRecoveryHistory()
+        {
+            for (int generation = RecoveryGenerationCount - 1; generation > 0; generation--)
+            {
+                string source = RecoverySlot(generation - 1);
+                string destination = RecoverySlot(generation);
+                if (draftStore.HasDraft(source))
+                    draftStore.SaveDraft(destination, draftStore.LoadDraft(source));
+                else if (draftStore.HasDraft(destination))
+                    draftStore.DeleteDraft(destination);
+            }
+        }
+
+        private static string RecoverySlot(int generation)
+        {
+            if (generation < 0 || generation >= RecoveryGenerationCount)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(generation),
+                    $"Recovery generations range from 0 to {RecoveryGenerationCount - 1}.");
+            }
+
+            return RecoverySlotPrefix + generation;
         }
 
         private void Report(string message)

@@ -26,7 +26,6 @@ namespace GritGud.Presentation.Gameplay
         private string actorId;
         private string objectiveId;
         private GameplayEmergencyCycleSession emergencyCycle;
-        private float remainingWorldTurnPresentationSeconds;
 
         public GameplaySession Session { get; private set; }
 
@@ -37,6 +36,8 @@ namespace GritGud.Presentation.Gameplay
         public TurnEndFailure LastTurnEndFailure { get; private set; }
 
         public TurnModeExitFailure LastTurnModeExitFailure { get; private set; }
+
+        public GameplayReloadFailure LastReloadFailure { get; private set; }
 
         public GameplayActionRecord LastResolvedAction { get; private set; }
 
@@ -58,33 +59,6 @@ namespace GritGud.Presentation.Gameplay
             : Session.GetObjective(objectiveId).Interaction.DisplayName;
 
         public event Action<GameplayActionRecord> ActionResolved;
-
-        private void Update()
-        {
-            if (remainingWorldTurnPresentationSeconds <= 0f)
-            {
-                return;
-            }
-
-            if (Session?.Operation != GameplaySessionOperation.ResolvingWorldTurn)
-            {
-                remainingWorldTurnPresentationSeconds = 0f;
-                return;
-            }
-
-            remainingWorldTurnPresentationSeconds -= Time.unscaledDeltaTime;
-            if (remainingWorldTurnPresentationSeconds > 0f)
-            {
-                return;
-            }
-
-            remainingWorldTurnPresentationSeconds = 0f;
-            if (Session.CompleteVoluntaryWorldTurn())
-            {
-                StatusMessage = "World turn complete. New tactical interval ready.";
-                sessionPresenter.RefreshModePresentation();
-            }
-        }
 
         public void Bind(
             GameplaySession session,
@@ -118,7 +92,6 @@ namespace GritGud.Presentation.Gameplay
             ClearFailures();
             LastResolvedAction = null;
             StatusMessage = string.Empty;
-            remainingWorldTurnPresentationSeconds = 0f;
             enabled = true;
             SetActor(actorAnimationCoordinator, authoritativeActorId);
         }
@@ -162,7 +135,6 @@ namespace GritGud.Presentation.Gameplay
             ClearFailures();
             LastResolvedAction = null;
             StatusMessage = string.Empty;
-            remainingWorldTurnPresentationSeconds = 0f;
             ActionResolved = null;
             enabled = false;
         }
@@ -226,6 +198,44 @@ namespace GritGud.Presentation.Gameplay
             return true;
         }
 
+        public bool TryReload()
+        {
+            if (Session == null || actorId == null)
+            {
+                LastReloadFailure = GameplayReloadFailure.ActorNotActive;
+                StatusMessage = DescribeReloadFailure(LastReloadFailure);
+                return false;
+            }
+
+            if (!new GameplayReloadSession(Session).TryResolve(
+                    actorId,
+                    out GameplayActionRecord record,
+                    out GameplayReloadFailure failure))
+            {
+                LastReloadFailure = failure;
+                StatusMessage = DescribeReloadFailure(failure);
+                return false;
+            }
+
+            ClearFailures();
+            LastResolvedAction = record;
+            var reload = (WeaponReloadedActionOutcome)record.Outcomes[0];
+            InventoryItemDefinition weapon = Session.GetInventoryItem(
+                actorId,
+                reload.Change.WeaponItemId);
+            LastReloadFailure = GameplayReloadFailure.None;
+            StatusMessage = weapon.DisplayName
+                + " reloaded: "
+                + reload.Change.ResultingLoadedRounds
+                + " / "
+                + reload.Change.ResultingReserveRounds
+                + ".";
+            animationCoordinator?.TryRequestAction(
+                ActorAnimationAction.Reload);
+            ActionResolved?.Invoke(record);
+            return true;
+        }
+
         public bool TryEndTurn()
         {
             if (Session == null || actorId == null)
@@ -254,7 +264,6 @@ namespace GritGud.Presentation.Gameplay
             ClearFailures();
             if (encounterTurn)
             {
-                remainingWorldTurnPresentationSeconds = 0f;
                 StatusMessage = !Session.EncounterActive
                     ? "Encounter complete. Exploration resumed."
                     : Session.TurnPhase == GameplayTurnPhase.EmergencyReaction
@@ -263,9 +272,10 @@ namespace GritGud.Presentation.Gameplay
             }
             else
             {
-                remainingWorldTurnPresentationSeconds =
-                    Session.Scenario.Timing.MinimumVoluntaryTurnSeconds;
-                StatusMessage = "World turn resolving...";
+                bool completed = Session.CompleteVoluntaryWorldTurn();
+                StatusMessage = completed
+                    ? "World turn complete. New tactical interval ready."
+                    : "World turn resolution did not complete.";
             }
 
             sessionPresenter.RefreshModePresentation();
@@ -331,8 +341,20 @@ namespace GritGud.Presentation.Gameplay
                 return false;
             }
 
+            // Leaving a voluntary interval creates the canonical world-turn
+            // result. Resolve that result immediately instead of leaving the
+            // exploration controls behind a presentation countdown. The
+            // interval still advances time and restores resources; it simply
+            // cannot become a hidden input lock.
+            if (Session.Operation
+                == GameplaySessionOperation.ResolvingWorldTurn)
+            {
+                Session.CompleteVoluntaryWorldTurn();
+                sessionPresenter.RefreshModePresentation();
+            }
+
             ClearFailures();
-            StatusMessage = "World turn advancing...";
+            StatusMessage = "Exploration resumed.";
             return true;
         }
 
@@ -381,6 +403,7 @@ namespace GritGud.Presentation.Gameplay
             LastTurnModeEntryFailure = TurnModeEntryFailure.None;
             LastTurnEndFailure = TurnEndFailure.None;
             LastTurnModeExitFailure = TurnModeExitFailure.None;
+            LastReloadFailure = GameplayReloadFailure.None;
         }
 
         private string DescribeTurnModeEntryFailure(
@@ -421,6 +444,8 @@ namespace GritGud.Presentation.Gameplay
                     return "Not enough AP remains for this interaction.";
                 case GameplayActionFailure.InsufficientMovementOpportunity:
                     return "Not enough movement remains for this interaction.";
+                case GameplayActionFailure.ActorPinned:
+                    return "Push off the pinning prop before interacting.";
                 case GameplayActionFailure.None:
                     return string.Empty;
                 default:
@@ -457,6 +482,41 @@ namespace GritGud.Presentation.Gameplay
                 case TurnModeExitFailure.EncounterActive:
                     return "Finish the encounter before leaving turn mode.";
                 case TurnModeExitFailure.None:
+                    return string.Empty;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(failure));
+            }
+        }
+
+        private static string DescribeReloadFailure(
+            GameplayReloadFailure failure)
+        {
+            switch (failure)
+            {
+                case GameplayReloadFailure.ActorNotActive:
+                    return "Only the active actor can reload.";
+                case GameplayReloadFailure.OperationInProgress:
+                    return "Wait for the current action to resolve.";
+                case GameplayReloadFailure.ActorIncapacitated:
+                    return "An incapacitated actor cannot reload.";
+                case GameplayReloadFailure.ActorPinned:
+                    return "Push off the pinning prop before reloading.";
+                case GameplayReloadFailure.ItemNotFound:
+                case GameplayReloadFailure.AmmunitionUnavailable:
+                    return "The equipped weapon does not use ammunition.";
+                case GameplayReloadFailure.WeaponNotEquipped:
+                    return "Equip an ammunition weapon before reloading.";
+                case GameplayReloadFailure.ProfileMismatch:
+                    return "The reload capability does not match this weapon.";
+                case GameplayReloadFailure.MagazineFull:
+                    return "The equipped weapon is already fully loaded.";
+                case GameplayReloadFailure.ReserveEmpty:
+                    return "No compatible reserve ammunition remains.";
+                case GameplayReloadFailure.InsufficientActionPoints:
+                    return "Not enough AP remains to reload.";
+                case GameplayReloadFailure.InsufficientMovementOpportunity:
+                    return "Not enough movement remains to reload.";
+                case GameplayReloadFailure.None:
                     return string.Empty;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(failure));

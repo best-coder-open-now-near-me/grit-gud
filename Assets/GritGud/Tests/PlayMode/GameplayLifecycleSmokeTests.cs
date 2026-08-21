@@ -1,4 +1,10 @@
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using GritGud.Application.Gameplay;
+using GritGud.Application.Levels;
+using GritGud.Domain.Gameplay;
+using GritGud.Presentation.Actors.Animation;
 using GritGud.Presentation.Bootstrap;
 using GritGud.Presentation.Gameplay;
 using NUnit.Framework;
@@ -16,20 +22,7 @@ namespace GritGud.PlayMode.Tests
         [UnityTest]
         public IEnumerator DefaultGameplaySurvivesSustainedFrameUpdates()
         {
-            bootstrap = GameBootstrap.Instance;
-            if (bootstrap == null)
-            {
-                ownedApplication = new GameObject(
-                    "Gameplay Lifecycle Smoke Test");
-                bootstrap = ownedApplication.AddComponent<GameBootstrap>();
-            }
-
-            if (Camera.main == null)
-            {
-                ownedCamera = new GameObject("Main Camera");
-                ownedCamera.tag = "MainCamera";
-                ownedCamera.AddComponent<Camera>();
-            }
+            EnsureBootstrap();
 
             bootstrap.ReturnToMenu();
             bootstrap.PlayMainLevel();
@@ -38,6 +31,13 @@ namespace GritGud.PlayMode.Tests
                 bootstrap.GetComponent<GameplayController>();
             Assert.That(gameplay, Is.Not.Null);
             Assert.That(gameplay.IsRunning, Is.True);
+            GameplayInputController input =
+                bootstrap.GetComponent<GameplayInputController>();
+            Assert.That(input, Is.Not.Null);
+            Assert.That(
+                bootstrap.GetComponents<MonoBehaviour>()
+                    .Select(component => component.GetType().Name),
+                Does.Not.Contain("GameplayAdvancementHud"));
 
             const int sustainedFrameCount = 180;
             for (int frame = 0; frame < sustainedFrameCount; frame++)
@@ -58,6 +58,405 @@ namespace GritGud.PlayMode.Tests
             Assert.That(gameplay.IsRunning, Is.False);
         }
 
+        [UnityTest]
+        public IEnumerator EveryPlayableCommittedLevelBootsAndTearsDown()
+        {
+            EnsureBootstrap();
+            bootstrap.ReturnToMenu();
+            int playableLevelCount = 0;
+
+            foreach (CommittedLevelEntry entry in bootstrap.CommittedLevels)
+            {
+                if (!entry.CanPlay)
+                {
+                    continue;
+                }
+
+                playableLevelCount++;
+                bootstrap.PlayCommittedLevel(entry.ResourceKey);
+                yield return WaitForMode(ApplicationMode.Gameplay);
+
+                GameplayController gameplay =
+                    bootstrap.GetComponent<GameplayController>();
+                Assert.That(gameplay, Is.Not.Null, entry.ResourceKey);
+                Assert.That(gameplay.IsRunning, Is.True, entry.ResourceKey);
+                Assert.That(gameplay.Session, Is.Not.Null, entry.ResourceKey);
+
+                bootstrap.ReturnToMenu();
+                yield return null;
+                Assert.That(
+                    bootstrap.CurrentMode,
+                    Is.EqualTo(ApplicationMode.Menu),
+                    entry.ResourceKey);
+                Assert.That(gameplay.IsRunning, Is.False, entry.ResourceKey);
+            }
+
+            Assert.That(playableLevelCount, Is.GreaterThan(0));
+        }
+
+        [UnityTest]
+        public IEnumerator ExplorationCanSwitchFromRifleToLauncher()
+        {
+            EnsureBootstrap();
+            bootstrap.ReturnToMenu();
+            bootstrap.PlayMainLevel();
+            yield return WaitForMode(ApplicationMode.Gameplay);
+
+            GameplayController gameplay =
+                bootstrap.GetComponent<GameplayController>();
+            GameplayEquipmentController equipment =
+                bootstrap.GetComponent<GameplayEquipmentController>();
+            Assert.That(equipment.TryActivateItem("weapon.rocket-launcher"),
+                Is.True);
+            Assert.That(equipment.TryActivateItem("weapon.rocket-launcher"),
+                Is.True, equipment.LastFailure.ToString());
+            Assert.That(
+                gameplay.Session.GetActor("player").EquippedItemId,
+                Is.EqualTo("weapon.rocket-launcher"));
+
+            bootstrap.ReturnToMenu();
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator PublishedTopplingFixtureCommitsAndRestoresExactLivePose()
+        {
+            EnsureBootstrap();
+            bootstrap.ReturnToMenu();
+            bootstrap.PlayMainLevel();
+            yield return WaitForMode(ApplicationMode.Gameplay);
+            yield return new WaitForFixedUpdate();
+
+            GameplayController gameplay =
+                bootstrap.GetComponent<GameplayController>();
+            GameplayDisplacementController displacement =
+                bootstrap.GetComponent<GameplayDisplacementController>();
+            GameplayDestructibleController destructibles =
+                bootstrap.GetComponent<GameplayDestructibleController>();
+            const string propId = "barrel-yard-01";
+            string actingActorId =
+                gameplay.PartyControl.Snapshot.SelectedActorId;
+            DestructiblePropSnapshot before =
+                destructibles.Session.GetProp(propId);
+            GameplayPosition actorPosition = gameplay.Session
+                .GetActor(actingActorId).Pose.Position;
+            ArrangeActorPose(
+                gameplay,
+                actingActorId,
+                new Vector3(
+                    before.Pose.Position.X + 1.25f,
+                    actorPosition.Y,
+                    before.Pose.Position.Z));
+            Transform prop = gameplay.WorldRegistry
+                .GetLevelEntity(propId).transform;
+            DisplacementDestinationEvaluation destination =
+                displacement.Session.EvaluateIntentDestination(
+                    actingActorId,
+                    "close-quarters.push",
+                    propId);
+            Assert.That(destination.IsEligible, Is.True,
+                destination.Failure.ToString());
+            Vector3 liveDestination = new Vector3(
+                destination.Destination.X,
+                destination.Destination.Y,
+                destination.Destination.Z);
+
+            bool resolved = displacement.TryDisplaceSubject(
+                actingActorId,
+                "close-quarters.push",
+                propId,
+                liveDestination,
+                out DisplacementRecord record,
+                out DisplacementResolutionFailure failure);
+            yield return null;
+
+            Assert.That(resolved, Is.True, failure.ToString());
+            Assert.That(record.AppliedResults.HasFlag(
+                DisplacementResultPolicies.Topple), Is.True);
+            Assert.That(record.ResultingPropState.Posture,
+                Is.EqualTo(DestructiblePropPosture.Toppled));
+            Assert.That(destructibles.Session.GetProp(propId).Posture,
+                Is.EqualTo(DestructiblePropPosture.Toppled));
+            Assert.That(gameplay.WorldRegistry.GetActor(actingActorId)
+                    .Transform.GetComponent<ActorAnimationCoordinator>()
+                    .LastRequestedAction,
+                Is.EqualTo(ActorAnimationAction.Push));
+            Vector3 expectedPosition = new Vector3(
+                record.ResultingPosition.X,
+                record.ResultingPosition.Y,
+                record.ResultingPosition.Z);
+            Quaternion expectedRotation = Quaternion.Euler(
+                record.ResultingPropState.Pose.PitchDegrees,
+                record.ResultingPropState.Pose.YawDegrees,
+                record.ResultingPropState.Pose.RollDegrees);
+            Assert.That(prop.position, Is.EqualTo(expectedPosition));
+            Assert.That(Quaternion.Angle(prop.rotation, expectedRotation),
+                Is.LessThan(0.01f));
+
+            destructibles.PresentReplay(
+                new List<DestructiblePropSnapshot> { before });
+            Physics.SyncTransforms();
+            Assert.That(prop.position, Is.Not.EqualTo(expectedPosition));
+
+            destructibles.RestoreAuthoritativePresentation();
+            Physics.SyncTransforms();
+            Assert.That(prop.position, Is.EqualTo(expectedPosition));
+            Assert.That(Quaternion.Angle(prop.rotation, expectedRotation),
+                Is.LessThan(0.01f));
+
+            bootstrap.ReturnToMenu();
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator PublishedPinFixtureEntersDirectionalPushOffAndCommitsChoice()
+        {
+            EnsureBootstrap();
+            bootstrap.ReturnToMenu();
+            bootstrap.PlayMainLevel();
+            yield return WaitForMode(ApplicationMode.Gameplay);
+            yield return new WaitForFixedUpdate();
+
+            GameplayController gameplay =
+                bootstrap.GetComponent<GameplayController>();
+            GameplayDisplacementController displacement =
+                bootstrap.GetComponent<GameplayDisplacementController>();
+            GameplayDestructibleController destructibles =
+                bootstrap.GetComponent<GameplayDestructibleController>();
+            const string actorId = "oren-vale";
+            const string propId = "barrel-yard-01";
+            DestructiblePropSnapshot propSnapshot = destructibles.Session
+                .GetProp(propId);
+            GameplayPosition playerPosition = gameplay.Session
+                .GetActor("player").Pose.Position;
+            GameplayPosition pinnedActorPosition = gameplay.Session
+                .GetActor(actorId).Pose.Position;
+            ArrangeActorPose(
+                gameplay,
+                "player",
+                new Vector3(
+                    propSnapshot.Pose.Position.X + 1.25f,
+                    playerPosition.Y,
+                    propSnapshot.Pose.Position.Z));
+            ArrangeActorPose(
+                gameplay,
+                actorId,
+                new Vector3(
+                    propSnapshot.Pose.Position.X - 1f,
+                    pinnedActorPosition.Y,
+                    propSnapshot.Pose.Position.Z));
+            Transform prop = gameplay.WorldRegistry.GetLevelEntity(propId)
+                .transform;
+            DisplacementDestinationEvaluation pinDestination =
+                displacement.Session.EvaluateIntentDestination(
+                    "player",
+                    "close-quarters.push",
+                    propId);
+            Assert.That(pinDestination.IsEligible, Is.True,
+                pinDestination.Failure.ToString());
+
+            Assert.That(displacement.TryDisplaceSubject(
+                "player",
+                "close-quarters.push",
+                propId,
+                new Vector3(
+                    pinDestination.Destination.X,
+                    pinDestination.Destination.Y,
+                    pinDestination.Destination.Z),
+                out DisplacementRecord pinRecord,
+                out DisplacementResolutionFailure pinFailure),
+                Is.True,
+                pinFailure.ToString());
+            yield return null;
+            Assert.That(pinRecord.PinTransition, Is.Not.Null);
+            Assert.That(pinRecord.PinTransition.EstablishesPin, Is.True);
+            Assert.That(pinRecord.PinTransition.ActorId, Is.EqualTo(actorId));
+            Assert.That(gameplay.Session.GetActor(actorId).IsPinned, Is.True);
+            GameplayActorView pinnedView = gameplay.WorldRegistry
+                .GetActor(actorId);
+            ActorAnimationCoordinator pinnedAnimation = pinnedView.Root
+                .GetComponent<ActorAnimationCoordinator>();
+            Assert.That(pinnedAnimation, Is.Not.Null);
+            Assert.That(
+                pinnedAnimation.LastRequestedAction,
+                Is.EqualTo(ActorAnimationAction.Incapacitate));
+            Assert.That(
+                pinnedView.TargetProfile.ProfileKind,
+                Is.EqualTo(ActorTargetProfileKind.PinnedDown));
+
+            displacement.SetActor(actorId);
+            Assert.That(displacement.TryToggleTargeting(
+                "close-quarters.push-off"), Is.True);
+            Assert.That(displacement.IsChoosingPushOffDirection, Is.True);
+            Assert.That(displacement.LockedSubjectId, Is.EqualTo(propId));
+            Assert.That(displacement.CurrentWarningHint.Text,
+                Does.Contain("AIM PUSH-OFF DIRECTION"));
+            Assert.That(displacement.CancelTargeting(), Is.True);
+
+            GameplayPosition propOrigin = new GameplayPosition(
+                prop.position.x,
+                prop.position.y,
+                prop.position.z);
+            DisplacementDestinationEvaluation choice =
+                displacement.Session.EvaluateDirectionalPushOffDestination(
+                    actorId,
+                    "close-quarters.push-off",
+                    propId,
+                    new GameplayPosition(
+                        propOrigin.X - 10f,
+                        propOrigin.Y,
+                        propOrigin.Z));
+            Assert.That(choice.IsEligible, Is.True, choice.Failure.ToString());
+            Assert.That(choice.Destination.X, Is.LessThan(propOrigin.X));
+            Assert.That(displacement.TryDisplaceSubject(
+                actorId,
+                "close-quarters.push-off",
+                propId,
+                new Vector3(
+                    choice.Destination.X,
+                    choice.Destination.Y,
+                    choice.Destination.Z),
+                out DisplacementRecord releaseRecord,
+                out DisplacementResolutionFailure releaseFailure),
+                Is.True,
+                releaseFailure.ToString());
+            yield return null;
+            yield return new WaitForSeconds(0.2f);
+
+            Assert.That(releaseRecord.PinTransition.ReleasesPin, Is.True);
+            Assert.That(gameplay.Session.GetActor(actorId).IsPinned, Is.False);
+            Assert.That(
+                pinnedView.TargetProfile.ProfileKind,
+                Is.EqualTo(ActorTargetProfileCatalog.Resolve(
+                    pinnedView.Stance.Stance,
+                    pinned: false).Kind));
+            int reactionLayer = pinnedAnimation.TargetAnimator.GetLayerIndex(
+                ActorAnimationParameters.ReactionLayerName);
+            Assert.That(
+                pinnedAnimation.TargetAnimator
+                    .GetCurrentAnimatorStateInfo(reactionLayer)
+                    .IsName(ActorAnimationParameters.NoReactionStateName),
+                Is.True);
+            Assert.That(
+                pinnedAnimation.TargetAnimator.GetLayerWeight(reactionLayer),
+                Is.Zero);
+            Assert.That(prop.position.x,
+                Is.EqualTo(choice.Destination.X).Within(0.001f));
+            Assert.That(prop.position.z,
+                Is.EqualTo(choice.Destination.Z).Within(0.001f));
+
+            bootstrap.ReturnToMenu();
+            yield return null;
+        }
+
+        private static void ArrangeActorPose(
+            GameplayController gameplay,
+            string actorId,
+            Vector3 position)
+        {
+            GameplayActorView view = gameplay.WorldRegistry.GetActor(actorId);
+            view.Transform.position = position;
+            GameplayActorSnapshot actor = gameplay.Session.GetActor(actorId);
+            gameplay.Session.UpdateExplorationPose(
+                actorId,
+                new GameplayActorPose(
+                    new GameplayPosition(position.x, position.y, position.z),
+                    view.Transform.eulerAngles.y,
+                    actor.Pose.Stance));
+            Physics.SyncTransforms();
+        }
+
+        [UnityTest]
+        public IEnumerator PublishedCrateFracturesAndReplayRestoresExactChunkMask()
+        {
+            EnsureBootstrap();
+            bootstrap.ReturnToMenu();
+            bootstrap.PlayMainLevel();
+            yield return WaitForMode(ApplicationMode.Gameplay);
+
+            GameplayController gameplay =
+                bootstrap.GetComponent<GameplayController>();
+            GameplayDestructibleController destructibles =
+                bootstrap.GetComponent<GameplayDestructibleController>();
+            GameplayAttackController attacks =
+                bootstrap.GetComponent<GameplayAttackController>();
+            const string propId = "crate-yard-01";
+            DestructiblePropSnapshot before =
+                destructibles.Session.GetProp(propId);
+            GameObject prop = gameplay.WorldRegistry
+                .GetLevelEntity(propId).gameObject;
+            DestructiblePropPresenter presenter =
+                prop.GetComponent<DestructiblePropPresenter>();
+            Renderer originalRenderer = prop.GetComponentInChildren<Renderer>();
+            Collider originalCollider = prop.GetComponentInChildren<Collider>();
+
+            Assert.That(before.FractureChunkCount, Is.EqualTo(12));
+            Assert.That(before.DetachedFractureChunks, Is.Zero);
+            Assert.That(originalRenderer, Is.Not.Null);
+            Assert.That(originalCollider, Is.Not.Null);
+            attacks.SetActor(gameplay.PartyControl.Snapshot.SelectedActorId);
+            var impact = new DirectFireImpactRecord(
+                propId,
+                "surface.wood",
+                before.Pose.Position,
+                normalX: 0f,
+                normalY: 1f,
+                normalZ: 0f,
+                worldStateRevision:
+                    gameplay.Session.Journal.LastEntry?.Sequence ?? 0L);
+            Assert.That(attacks.TryDischarge(
+                propId,
+                before.Pose.Position,
+                impact), Is.True, attacks.LastFailure.ToString());
+            DestructibleDamageRecord record = attacks.LastDischarge.Damage;
+            yield return null;
+
+            DestructiblePropSnapshot damaged =
+                destructibles.Session.GetProp(propId);
+            DestructibleFractureChunk[] chunks = prop
+                .GetComponentsInChildren<DestructibleFractureChunk>(true);
+            int detachedCount = DestructibleFracture.CountDetachedChunks(
+                damaged.DetachedFractureChunks);
+            Assert.That(damaged.State,
+                Is.EqualTo(DestructiblePropState.Damaged));
+            Assert.That(damaged.DetachedFractureChunks,
+                Is.EqualTo(record.Resulting.DetachedFractureChunks));
+            Assert.That(detachedCount, Is.EqualTo(5));
+            Assert.That(chunks.Length, Is.EqualTo(12));
+            Assert.That(originalRenderer.enabled, Is.False);
+            Assert.That(originalCollider.enabled, Is.False);
+            Assert.That(
+                chunks.Count(chunk => chunk.gameObject.activeInHierarchy),
+                Is.EqualTo(12 - detachedCount));
+            Assert.That(presenter.ActiveTransientDebrisCount,
+                Is.EqualTo(detachedCount));
+
+            destructibles.ClearReplayTransients();
+            Assert.That(presenter.ActiveTransientDebrisCount, Is.Zero);
+            destructibles.PresentReplay(
+                new List<DestructiblePropSnapshot> { before });
+            Physics.SyncTransforms();
+            Assert.That(originalRenderer.enabled, Is.True);
+            Assert.That(originalCollider.enabled, Is.True);
+            Assert.That(
+                chunks.Count(chunk => chunk.gameObject.activeInHierarchy),
+                Is.Zero);
+
+            destructibles.RestoreAuthoritativePresentation();
+            Physics.SyncTransforms();
+            Assert.That(originalRenderer.enabled, Is.False);
+            Assert.That(originalCollider.enabled, Is.False);
+            Assert.That(
+                chunks.Count(chunk => chunk.gameObject.activeInHierarchy),
+                Is.EqualTo(12 - detachedCount));
+            Assert.That(
+                destructibles.Session.GetProp(propId).DetachedFractureChunks,
+                Is.EqualTo(damaged.DetachedFractureChunks));
+
+            bootstrap.ReturnToMenu();
+            yield return null;
+        }
+
         [UnityTearDown]
         public IEnumerator TearDown()
         {
@@ -76,6 +475,37 @@ namespace GritGud.PlayMode.Tests
             bootstrap = null;
             ownedCamera = null;
             ownedApplication = null;
+        }
+
+        private void EnsureBootstrap()
+        {
+            bootstrap = GameBootstrap.Instance;
+            if (bootstrap == null)
+            {
+                ownedApplication = new GameObject(
+                    "Gameplay Lifecycle Smoke Test");
+                bootstrap = ownedApplication.AddComponent<GameBootstrap>();
+            }
+
+            if (Camera.main == null)
+            {
+                ownedCamera = new GameObject("Main Camera");
+                ownedCamera.tag = "MainCamera";
+                ownedCamera.AddComponent<Camera>();
+            }
+        }
+
+        private IEnumerator WaitForMode(ApplicationMode expectedMode)
+        {
+            const int maximumFrames = 30;
+            for (int frame = 0;
+                frame < maximumFrames && bootstrap.CurrentMode != expectedMode;
+                frame++)
+            {
+                yield return null;
+            }
+
+            Assert.That(bootstrap.CurrentMode, Is.EqualTo(expectedMode));
         }
     }
 }

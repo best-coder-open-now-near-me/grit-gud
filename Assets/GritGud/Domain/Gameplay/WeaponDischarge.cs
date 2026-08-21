@@ -32,6 +32,27 @@ namespace GritGud.Domain.Gameplay
             string targetId,
             GameplayPosition origin,
             GameplayPosition aimPoint)
+            : this(
+                sequence,
+                attackerId,
+                actionId,
+                targetId,
+                origin,
+                aimPoint,
+                impact: null,
+                damage: null)
+        {
+        }
+
+        public WeaponDischargeRecord(
+            long sequence,
+            string attackerId,
+            string actionId,
+            string targetId,
+            GameplayPosition origin,
+            GameplayPosition aimPoint,
+            DirectFireImpactRecord impact,
+            DestructibleDamageRecord damage)
         {
             if (sequence <= 0)
             {
@@ -66,12 +87,38 @@ namespace GritGud.Domain.Gameplay
                     nameof(aimPoint));
             }
 
+            if (impact != null
+                && (!string.Equals(
+                        impact.TargetId,
+                        targetId,
+                        StringComparison.Ordinal)
+                    || impact.Point.DistanceTo(aimPoint) > 0.0001f))
+            {
+                throw new ArgumentException(
+                    "Direct-fire impact evidence must match the discharge target and aim point.",
+                    nameof(impact));
+            }
+
+            if (damage != null
+                && (impact == null
+                    || !string.Equals(
+                        damage.PropId,
+                        targetId,
+                        StringComparison.Ordinal)))
+            {
+                throw new ArgumentException(
+                    "Direct-fire prop damage requires matching impact evidence.",
+                    nameof(damage));
+            }
+
             Sequence = sequence;
             AttackerId = attackerId;
             ActionId = actionId;
             TargetId = targetId;
             Origin = origin;
             AimPoint = aimPoint;
+            Impact = impact;
+            Damage = damage;
         }
 
         public long Sequence { get; }
@@ -85,6 +132,10 @@ namespace GritGud.Domain.Gameplay
         public GameplayPosition Origin { get; }
 
         public GameplayPosition AimPoint { get; }
+
+        public DirectFireImpactRecord Impact { get; }
+
+        public DestructibleDamageRecord Damage { get; }
 
         public float Distance => Origin.DistanceTo(AimPoint);
     }

@@ -20,6 +20,7 @@ namespace GritGud.Presentation.Gameplay
         private InputAction aim;
         private InputAction cameraZoom;
         private InputAction attack;
+        private InputAction reload;
         private InputAction toggleTurnMode;
         private InputAction toggleStance;
         private InputAction toggleCameraView;
@@ -38,6 +39,34 @@ namespace GritGud.Presentation.Gameplay
 
         public GameplayInputFrame CurrentFrame { get; private set; }
 
+        public bool CameraOnly { get; private set; }
+
+        public bool Suppressed { get; private set; }
+
+        public void SetSuppressed(bool suppressed)
+        {
+            Suppressed = suppressed;
+            if (suppressed)
+                CurrentFrame = default;
+        }
+
+        public void SetCameraOnly(bool cameraOnly)
+        {
+            CameraOnly = cameraOnly;
+            if (cameraOnly)
+            {
+                CurrentFrame = new GameplayInputFrame(
+                    Vector2.zero,
+                    CurrentFrame.LookDelta,
+                    false,
+                    CurrentFrame.AimHeld,
+                    false,
+                    false,
+                    false,
+                    CurrentFrame.CameraZoomDelta);
+            }
+        }
+
         public void Begin(Action<GameplayControl> onCommandRequested)
         {
             End();
@@ -52,6 +81,7 @@ namespace GritGud.Presentation.Gameplay
                 aim = RequireAction("Aim");
                 cameraZoom = RequireAction("CameraZoom");
                 attack = RequireAction("Attack");
+                reload = RequireAction("Reload");
                 toggleTurnMode = RequireAction("ToggleTurnMode");
                 toggleStance = RequireAction("ToggleStance");
                 toggleCameraView = RequireAction("ToggleCameraView");
@@ -84,6 +114,8 @@ namespace GritGud.Presentation.Gameplay
         {
             CurrentFrame = default;
             commandRequested = null;
+            CameraOnly = false;
+            Suppressed = false;
             if (inputActions != null)
             {
                 inputActions.Disable();
@@ -97,6 +129,7 @@ namespace GritGud.Presentation.Gameplay
             aim = null;
             cameraZoom = null;
             attack = null;
+            reload = null;
             toggleTurnMode = null;
             toggleStance = null;
             toggleCameraView = null;
@@ -138,22 +171,37 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
+            if (Suppressed)
+            {
+                CurrentFrame = default;
+                return;
+            }
+
             CurrentFrame = new GameplayInputFrame(
-                move.ReadValue<Vector2>(),
+                CameraOnly ? Vector2.zero : move.ReadValue<Vector2>(),
                 look.ReadValue<Vector2>(),
-                sprint.IsPressed(),
+                !CameraOnly && sprint.IsPressed(),
                 aim.IsPressed(),
-                cancelRoute.WasPressedThisFrame(),
-                undoRoute.WasPressedThisFrame(),
-                confirmRoute.WasPressedThisFrame(),
+                !CameraOnly && cancelRoute.WasPressedThisFrame(),
+                !CameraOnly && undoRoute.WasPressedThisFrame(),
+                !CameraOnly && confirmRoute.WasPressedThisFrame(),
                 cameraZoom.ReadValue<float>());
             if (escape.WasPressedThisFrame())
             {
                 HandleEscapePressed();
             }
 
+            if (CameraOnly)
+            {
+                DispatchIfPressed(
+                    toggleCameraView,
+                    GameplayControl.ToggleCameraView);
+                return;
+            }
+
             DispatchIfPressed(toggleTurnMode, GameplayControl.ToggleTurnMode);
             DispatchIfPressed(attack, GameplayControl.Attack);
+            DispatchIfPressed(reload, GameplayControl.Reload);
             DispatchIfPressed(toggleStance, GameplayControl.ToggleStance);
             DispatchIfPressed(toggleCameraView, GameplayControl.ToggleCameraView);
             DispatchIfPressed(exportBugReport, GameplayControl.ExportBugReport);
@@ -222,6 +270,8 @@ namespace GritGud.Presentation.Gameplay
                     return cameraZoom;
                 case GameplayControl.Attack:
                     return attack;
+                case GameplayControl.Reload:
+                    return reload;
                 case GameplayControl.ToggleTurnMode:
                     return toggleTurnMode;
                 case GameplayControl.ToggleStance:

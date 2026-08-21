@@ -4,49 +4,59 @@ using System.Globalization;
 using System.Linq;
 using GritGud.Application.Levels;
 using GritGud.Domain.Levels;
+using GritGud.Domain.Turns;
 using GritGud.Presentation.LevelEditing.Core;
 using GritGud.Presentation.LevelEditing.Persistence;
 using GritGud.Presentation.LevelEditing.Tools;
 using GritGud.Presentation.Levels.Runtime;
+using GritGud.Presentation.Characters;
 using UnityEngine;
 
 namespace GritGud.Presentation.LevelEditing.UI
 {
-    public sealed class LevelEditorGui
+    public sealed partial class LevelEditorGui
     {
-        public const float ToolbarHeight = 92f;
-        public const float PaletteWidth = 240f;
-        public const float InspectorWidth = 330f;
+        private static readonly string[] ObjectiveMobilityLabels =
+            { "MOBILE", "MOMENTUM", "SET" };
+        private static readonly string[] ObjectiveMobilityValues =
+        {
+            ActionMobilityCodec.MobileValue,
+            ActionMobilityCodec.MomentumValue,
+            ActionMobilityCodec.SetValue,
+        };
 
-        private readonly LevelEditorWorkspace workspace;
         private readonly LevelSelectionModel selection;
         private readonly LevelArchetypeCatalog catalog;
+        private readonly ScenarioAuthoringCatalog scenarioCatalog;
+        private readonly LevelDressingCatalog dressingCatalog;
+        private readonly UnityCharacterLibrary characterLibrary;
         private readonly LevelEditorToolManager toolManager;
         private readonly PlacementLevelEditorTool placementTool;
         private readonly TerrainToolPanelModel terrainPanel;
         private readonly SelectionLevelEditorTool selectionTool;
         private readonly LevelSnapSettings snapSettings;
-        private readonly LevelEditorPersistenceCoordinator persistence;
-        private readonly Action back;
-        private readonly Action togglePreview;
-        private readonly Action testPlay;
-        private readonly Action createNew;
-        private readonly Action loadMainLevel;
-        private readonly Action frameSelection;
-        private readonly Action frameLevel;
-        private readonly Action<string> focusEntity;
-        private readonly Action<string, string, string, string> applyTransform;
-        private readonly Action<string, string, string, string> applyPlayerStart;
-        private readonly Action addInteractionPoint;
-        private readonly Action<string, string, string, string, string> applyInteractionPoint;
-        private readonly Action deleteInteractionPoint;
-        private readonly Action<string, string, string> applyDestructibleDefaults;
+        private readonly LevelEditorPresentationState presentationState;
+        private readonly ILevelEditorFileActions fileActions;
+        private readonly ILevelEditorHistoryActions historyActions;
+        private readonly ILevelEditorSelectionGroupActions
+            selectionGroupActions;
+        private readonly ILevelEditorEnvironmentDressingActions
+            environmentDressingActions;
+        private readonly ILevelEditorSpatialPlacementActions
+            spatialPlacementActions;
+        private readonly ILevelEditorPreviewTestActions previewTestActions;
+        private readonly LevelEditorDocumentActionConfirmation documentActionConfirmation =
+            new LevelEditorDocumentActionConfirmation();
         private Vector2 paletteScroll;
         private Vector2 inspectorScroll;
         private string xText = "0";
         private string yText = "0";
         private string zText = "0";
+        private string pitchText = "0";
         private string yawText = "0";
+        private string rollText = "0";
+        private string physicsDropHeightText = "2";
+        private bool physicsKeepUpright;
         private string playerStartXText = "0";
         private string playerStartYText = "0";
         private string playerStartZText = "0";
@@ -63,94 +73,201 @@ namespace GritGud.Presentation.LevelEditing.UI
         private string lastDestructibleEntityId = string.Empty;
         private string paletteSearch = string.Empty;
         private string paletteCategory = string.Empty;
+        private readonly HashSet<string> collapsedPaletteCategories =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private string hierarchySearch = string.Empty;
-        private bool showScenePanel;
+        private string scenarioXText = "0";
+        private string scenarioYText = "0";
+        private string scenarioZText = "0";
+        private string scenarioYawText = "0";
+        private string levelDisplayNameText = string.Empty;
+        private string synchronizedLevelIdentity = string.Empty;
+        private bool scenarioPlayerControlled;
+        private bool scenarioInitiallySelected;
+        private bool scenarioPrimaryTarget;
+        private string lastScenarioPropEntityId = string.Empty;
+        private bool scenarioPropEnabled;
+        private string scenarioPropMassText = "25";
+        private string scenarioPropSize = "medium";
+        private bool scenarioPropStartsEncounter;
+        private bool scenarioPropTopplingEnabled;
+        private string scenarioPropTopplePitchText = "0";
+        private string scenarioPropToppleRollText = "90";
+        private string scenarioPropToppleElevationText = "0.5";
+        private bool scenarioPropPinningEnabled;
+        private string scenarioPropMaximumPinnedMassText = "100";
+        private string scenarioPropMinimumPinDepthText = "0";
+        private string lastScenarioObjectiveKey = string.Empty;
+        private bool scenarioObjectiveEnabled;
+        private string scenarioObjectiveDisplayName = "Objective";
+        private string scenarioObjectiveActiveText = "Complete the objective";
+        private string scenarioObjectiveCompletedText = "Objective complete";
+        private string scenarioObjectiveCostText = "1";
+        private string scenarioObjectiveMovementCostText = "0";
+        private string scenarioObjectiveMobility =
+            ActionMobilityCodec.SetValue;
+        private string lastScenarioVehicleEntityId = string.Empty;
+        private bool scenarioVehicleEnabled;
+        private string scenarioVehicleMaximumSpeedText = "12";
+        private string scenarioVehicleAccelerationText = "3";
+        private string scenarioVehicleBrakingText = "4";
+        private string scenarioVehicleLowTurnText = "45";
+        private string scenarioVehicleHighTurnText = "15";
+        private string scenarioVehicleBaseRadiusText = "2";
+        private string scenarioVehicleRadiusFactorText = "0.25";
+        private string scenarioVehicleStartingSpeedText = "0";
+        private string scenarioVehicleOccupantId = string.Empty;
+        private bool scenarioVehicleStartsEncounter;
         private bool showControls;
+        private bool showActorTemplates;
+        private bool showValidation = true;
+        private bool showPortableFiles;
+        private bool showTransformSection = true;
+        private bool showRotationSection;
+        private bool showPhysicsSection;
+        private bool showInteractionSection;
+        private bool showDestructibleSection;
+        private bool showEntityArraySection;
+        private bool showLevelLayoutSection;
+        private bool showPlayabilitySection;
+        private bool showLeftPanel = true;
+        private bool showInspectorPanel = true;
+        private bool shellLayoutInitialized;
+        private bool shellWasCompact;
+        private bool drawingPreviewMode;
+        private LevelEditorInspectorTarget lastResponsiveInspectorTarget;
+        private LevelEditorMenuKind activeMenu;
+        private Rect activeMenuAnchor;
+        private Rect activeMenuRect;
+        private readonly LevelEditorGuiStyles styles = new LevelEditorGuiStyles();
+
+        private string SelectedScenarioActorId =>
+            presentationState.InspectorTarget.Kind
+                == LevelEditorInspectorTargetKind.ScenarioActor
+                ? presentationState.InspectorTarget.TargetId
+                : string.Empty;
 
         public LevelEditorGui(
-            LevelEditorWorkspace workspace,
             LevelSelectionModel selection,
             LevelArchetypeCatalog catalog,
+            ScenarioAuthoringCatalog scenarioCatalog,
+            LevelDressingCatalog dressingCatalog,
+            UnityCharacterLibrary characterLibrary,
             LevelEditorToolManager toolManager,
             PlacementLevelEditorTool placementTool,
             TerrainToolPanelModel terrainPanel,
             SelectionLevelEditorTool selectionTool,
             LevelSnapSettings snapSettings,
-            LevelEditorPersistenceCoordinator persistence,
-            Action back,
-            Action togglePreview,
-            Action testPlay,
-            Action createNew,
-            Action loadMainLevel,
-            Action frameSelection,
-            Action frameLevel,
-            Action<string> focusEntity,
-            Action<string, string, string, string> applyTransform,
-            Action<string, string, string, string> applyPlayerStart,
-            Action addInteractionPoint,
-            Action<string, string, string, string, string> applyInteractionPoint,
-            Action deleteInteractionPoint,
-            Action<string, string, string> applyDestructibleDefaults)
+            LevelEditorPresentationState presentationState,
+            ILevelEditorFileActions fileActions,
+            ILevelEditorHistoryActions historyActions,
+            ILevelEditorSelectionGroupActions selectionGroupActions,
+            ILevelEditorEnvironmentDressingActions environmentDressingActions,
+            ILevelEditorSpatialPlacementActions spatialPlacementActions,
+            ILevelEditorPreviewTestActions previewTestActions)
         {
-            this.workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
             this.selection = selection ?? throw new ArgumentNullException(nameof(selection));
             this.catalog = catalog != null ? catalog : throw new ArgumentNullException(nameof(catalog));
+            this.scenarioCatalog = scenarioCatalog
+                ?? throw new ArgumentNullException(nameof(scenarioCatalog));
+            this.dressingCatalog = dressingCatalog
+                ?? throw new ArgumentNullException(nameof(dressingCatalog));
+            this.characterLibrary = characterLibrary
+                ?? throw new ArgumentNullException(nameof(characterLibrary));
             this.toolManager = toolManager ?? throw new ArgumentNullException(nameof(toolManager));
             this.placementTool = placementTool ?? throw new ArgumentNullException(nameof(placementTool));
             this.terrainPanel = terrainPanel ?? throw new ArgumentNullException(nameof(terrainPanel));
             this.selectionTool = selectionTool ?? throw new ArgumentNullException(nameof(selectionTool));
             this.snapSettings = snapSettings ?? throw new ArgumentNullException(nameof(snapSettings));
-            this.persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
-            this.back = back ?? throw new ArgumentNullException(nameof(back));
-            this.togglePreview = togglePreview ?? throw new ArgumentNullException(nameof(togglePreview));
-            this.testPlay = testPlay ?? throw new ArgumentNullException(nameof(testPlay));
-            this.createNew = createNew ?? throw new ArgumentNullException(nameof(createNew));
-            this.loadMainLevel = loadMainLevel
-                ?? throw new ArgumentNullException(nameof(loadMainLevel));
-            this.frameSelection = frameSelection
-                ?? throw new ArgumentNullException(nameof(frameSelection));
-            this.frameLevel = frameLevel ?? throw new ArgumentNullException(nameof(frameLevel));
-            this.focusEntity = focusEntity
-                ?? throw new ArgumentNullException(nameof(focusEntity));
-            this.applyTransform = applyTransform ?? throw new ArgumentNullException(nameof(applyTransform));
-            this.applyPlayerStart = applyPlayerStart
-                ?? throw new ArgumentNullException(nameof(applyPlayerStart));
-            this.addInteractionPoint = addInteractionPoint
-                ?? throw new ArgumentNullException(nameof(addInteractionPoint));
-            this.applyInteractionPoint = applyInteractionPoint
-                ?? throw new ArgumentNullException(nameof(applyInteractionPoint));
-            this.deleteInteractionPoint = deleteInteractionPoint
-                ?? throw new ArgumentNullException(nameof(deleteInteractionPoint));
-            this.applyDestructibleDefaults = applyDestructibleDefaults
-                ?? throw new ArgumentNullException(nameof(applyDestructibleDefaults));
+            this.presentationState = presentationState
+                ?? throw new ArgumentNullException(nameof(presentationState));
+            this.fileActions = fileActions ?? throw new ArgumentNullException(
+                nameof(fileActions));
+            this.historyActions = historyActions ?? throw new ArgumentNullException(
+                nameof(historyActions));
+            this.selectionGroupActions = selectionGroupActions
+                ?? throw new ArgumentNullException(nameof(selectionGroupActions));
+            this.environmentDressingActions = environmentDressingActions
+                ?? throw new ArgumentNullException(nameof(environmentDressingActions));
+            this.spatialPlacementActions = spatialPlacementActions
+                ?? throw new ArgumentNullException(nameof(spatialPlacementActions));
+            this.previewTestActions = previewTestActions
+                ?? throw new ArgumentNullException(nameof(previewTestActions));
         }
 
-        public void Draw(
-            bool previewMode,
-            LevelEntityView selectedView,
-            IReadOnlyList<LevelValidationIssue> validationIssues,
-            string statusMessage)
+        public void Draw(LevelEditorViewState state)
         {
-            DrawToolbar(previewMode);
-            if (!previewMode)
-            {
-                DrawPalette();
-                DrawInspector(selectedView, validationIssues);
-            }
+            if (state == null)
+                throw new ArgumentNullException(nameof(state));
 
-            DrawStatusBar(statusMessage);
+            GUISkin previousSkin = GUI.skin;
+            GUI.skin = styles.ResolveSkin(previousSkin);
+            try
+            {
+                drawingPreviewMode = state.PreviewMode;
+                SynchronizeResponsiveShell();
+                DrawToolbar(state, !documentActionConfirmation.HasPendingAction);
+                HandleMenuDismissal();
+                GUI.enabled = !documentActionConfirmation.HasPendingAction;
+                if (!state.PreviewMode)
+                {
+                    if (showLeftPanel)
+                        DrawPalette(state.Document);
+                    if (showInspectorPanel)
+                        DrawInspector(state);
+                }
+
+                DrawViewportToolbar(state);
+
+                if (showControls)
+                    DrawShortcutsOverlay();
+
+                GUI.enabled = true;
+                DrawStatusBar(state.StatusMessage);
+                DrawActiveMenu(state);
+                if (documentActionConfirmation.HasPendingAction)
+                    DrawUnsavedChangesConfirmation();
+            }
+            finally
+            {
+                GUI.enabled = true;
+                GUI.skin = previousSkin;
+            }
         }
 
         public bool IsPointerOverInterface(Vector2 screenPosition)
         {
+            if (documentActionConfirmation.HasPendingAction)
+                return true;
+
             float guiY = Screen.height - screenPosition.y;
-            if (guiY <= ToolbarHeight || guiY >= Screen.height - 30f)
+            if (guiY <= LevelEditorGuiMetrics.ToolbarHeight
+                || guiY >= Screen.height - LevelEditorGuiMetrics.StatusBarHeight)
             {
                 return true;
             }
 
-            return screenPosition.x <= PaletteWidth
-                || screenPosition.x >= Screen.width - InspectorWidth;
+            if (showControls && ShortcutOverlayRect().Contains(new Vector2(screenPosition.x, guiY)))
+            {
+                return true;
+            }
+
+            Vector2 guiPosition = new Vector2(screenPosition.x, guiY);
+            if (activeMenu != LevelEditorMenuKind.None && activeMenuRect.Contains(guiPosition))
+                return true;
+            if (ViewportToolbarRect().Contains(guiPosition)
+                || LeftPanelRevealRect().Contains(guiPosition)
+                || InspectorRevealRect().Contains(guiPosition))
+            {
+                return true;
+            }
+
+            return (!drawingPreviewMode
+                    && showLeftPanel
+                    && screenPosition.x <= LevelEditorGuiMetrics.LeftPanelWidth)
+                || (!drawingPreviewMode
+                    && showInspectorPanel
+                    && screenPosition.x >= Screen.width - LevelEditorGuiMetrics.InspectorWidth);
         }
 
         public void SyncTransformFields(LevelTransformData value)
@@ -158,7 +275,9 @@ namespace GritGud.Presentation.LevelEditing.UI
             xText = value.position.x.ToString("0.###", CultureInfo.InvariantCulture);
             yText = value.position.y.ToString("0.###", CultureInfo.InvariantCulture);
             zText = value.position.z.ToString("0.###", CultureInfo.InvariantCulture);
+            pitchText = value.pitchDegrees.ToString("0.###", CultureInfo.InvariantCulture);
             yawText = value.yawDegrees.ToString("0.###", CultureInfo.InvariantCulture);
+            rollText = value.rollDegrees.ToString("0.###", CultureInfo.InvariantCulture);
         }
 
         public void SyncPlayerStartFields(LevelTransformData value)
@@ -169,666 +288,266 @@ namespace GritGud.Presentation.LevelEditing.UI
             playerStartYawText = value.yawDegrees.ToString("0.###", CultureInfo.InvariantCulture);
         }
 
-        private void DrawToolbar(bool previewMode)
+        public void SelectScenarioActor(string actorId)
         {
-            GUILayout.BeginArea(new Rect(0f, 0f, Screen.width, ToolbarHeight), GUI.skin.box);
+            presentationState.ShowPage(LevelEditorWorkspacePage.Scenario);
+            presentationState.FocusScenarioActor(actorId);
+        }
+
+        public void SyncScenarioActorFields(LevelScenarioActorData actor)
+        {
+            if (actor == null)
+                return;
+            presentationState.FocusScenarioActor(actor.id);
+            scenarioXText = actor.transform.position.x.ToString(
+                "0.###",
+                CultureInfo.InvariantCulture);
+            scenarioYText = actor.transform.position.y.ToString(
+                "0.###",
+                CultureInfo.InvariantCulture);
+            scenarioZText = actor.transform.position.z.ToString(
+                "0.###",
+                CultureInfo.InvariantCulture);
+            scenarioYawText = actor.transform.yawDegrees.ToString(
+                "0.###",
+                CultureInfo.InvariantCulture);
+            scenarioPlayerControlled = actor.playerControlled;
+            scenarioInitiallySelected = actor.initiallySelected;
+            scenarioPrimaryTarget = actor.primaryTarget;
+        }
+
+        public void SyncScenarioFields(LevelDocument document, bool forceLevelIdentity = false)
+        {
+            string levelIdentity = document == null
+                ? string.Empty
+                : $"{document.levelId}\n{document.displayName}";
+            if (forceLevelIdentity
+                || !string.Equals(
+                    synchronizedLevelIdentity,
+                    levelIdentity,
+                    StringComparison.Ordinal))
+            {
+                synchronizedLevelIdentity = levelIdentity;
+                levelDisplayNameText = document?.displayName ?? string.Empty;
+            }
+
+            lastScenarioPropEntityId = string.Empty;
+            lastScenarioObjectiveKey = string.Empty;
+            lastScenarioVehicleEntityId = string.Empty;
+            LevelScenarioActorData player = document?.scenario?
+                .FindInitiallySelectedPlayer();
+            if (player != null)
+                SyncPlayerStartFields(player.transform);
+            LevelScenarioActorData selected = document?.scenario?.actors
+                .FirstOrDefault(actor => string.Equals(
+                    actor?.id,
+                    SelectedScenarioActorId,
+                    StringComparison.Ordinal));
+            if (selected != null)
+                SyncScenarioActorFields(selected);
+            else if (presentationState.InspectorTarget.Kind
+                == LevelEditorInspectorTargetKind.ScenarioActor)
+                presentationState.ClearInspectorFocus();
+        }
+
+        private void DrawToolbar(LevelEditorViewState state, bool interactionsEnabled)
+        {
+            bool previewMode = state.PreviewMode;
+            GUILayout.BeginArea(
+                new Rect(0f, 0f, Screen.width, LevelEditorGuiMetrics.ToolbarHeight),
+                styles.Toolbar);
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("BACK", GUILayout.Width(72f), GUILayout.Height(30f)))
-            {
-                back();
-            }
-
+            GUI.enabled = interactionsEnabled;
             if (GUILayout.Button(
-                previewMode ? "RETURN TO EDIT" : "LEVEL PREVIEW",
-                GUILayout.Width(128f),
-                GUILayout.Height(30f)))
+                    new GUIContent("< LIBRARY", "Return to the level library"),
+                    ToolbarButtonLayout(82f)))
             {
-                togglePreview();
+                documentActionConfirmation.Request(
+                    state.IsDirty,
+                    "Return to the main menu and discard this level's unsaved changes?",
+                    previewTestActions.ReturnToMenu);
             }
 
-            GUI.enabled = !previewMode;
-            if (GUILayout.Button("TEST PLAY", GUILayout.Width(92f), GUILayout.Height(30f)))
+            GUI.enabled = interactionsEnabled;
+            DrawToolbarMenuButton("FILE", LevelEditorMenuKind.File, 54f);
+            DrawToolbarMenuButton("EDIT", LevelEditorMenuKind.Edit, 54f);
+            DrawToolbarMenuButton("VIEW", LevelEditorMenuKind.View, 58f);
+
+            GUI.enabled = interactionsEnabled && state.CanUndo && !previewMode;
+            if (GUILayout.Button(new GUIContent("UNDO", "Undo (Ctrl+Z)"), ToolbarButtonLayout(48f)))
             {
-                testPlay();
+                historyActions.Undo();
             }
 
-            GUI.enabled = !previewMode;
-            if (GUILayout.Button("NEW", GUILayout.Width(60f), GUILayout.Height(30f)))
+            GUI.enabled = interactionsEnabled && state.CanRedo && !previewMode;
+            if (GUILayout.Button(new GUIContent("REDO", "Redo (Ctrl+Y)"), ToolbarButtonLayout(48f)))
             {
-                createNew();
+                historyActions.Redo();
             }
 
-            if (GUILayout.Button("LOAD MAIN", GUILayout.Width(100f), GUILayout.Height(30f)))
-            {
-                loadMainLevel();
-            }
-
-            GUI.enabled = workspace.CanUndo && !previewMode;
-            if (GUILayout.Button("UNDO", GUILayout.Width(64f), GUILayout.Height(30f)))
-            {
-                workspace.Undo();
-            }
-
-            GUI.enabled = workspace.CanRedo && !previewMode;
-            if (GUILayout.Button("REDO", GUILayout.Width(64f), GUILayout.Height(30f)))
-            {
-                workspace.Redo();
-            }
-
-            GUI.enabled = !previewMode && selection.Primary != null;
-            if (GUILayout.Button("FRAME", GUILayout.Width(68f), GUILayout.Height(30f)))
-            {
-                frameSelection();
-            }
-
-            GUI.enabled = !previewMode && selection.Targets.Count > 0;
-            if (GUILayout.Button("DUPLICATE", GUILayout.Width(86f), GUILayout.Height(30f)))
-            {
-                selectionTool.DuplicateSelection();
-            }
-
-            GUI.enabled = !previewMode;
-            if (GUILayout.Button("FRAME ALL", GUILayout.Width(86f), GUILayout.Height(30f)))
-            {
-                frameLevel();
-            }
-
-            GUI.enabled = true;
-            if (GUILayout.Button(
-                showControls ? "HIDE HELP" : "CONTROLS",
-                GUILayout.Width(88f),
-                GUILayout.Height(30f)))
-            {
-                showControls = !showControls;
-            }
-
-            GUI.enabled = true;
+            GUI.enabled = interactionsEnabled;
             GUILayout.FlexibleSpace();
             GUILayout.Label(
-                previewMode
-                    ? "LEVEL PREVIEW — AUTHORING LOCKED"
-                    : workspace.IsDirty ? "UNSAVED DRAFT" : "SAVED",
-                GUILayout.Height(30f));
-            GUILayout.EndHorizontal();
+                ToolbarDocumentLabel(state),
+                styles.ToolbarTitle,
+                GUILayout.Height(LevelEditorGuiMetrics.ToolbarControlHeight));
 
-            GUILayout.BeginHorizontal();
-            GUI.enabled = !previewMode;
+            GUI.enabled = interactionsEnabled && !previewMode;
             snapSettings.Enabled = GUILayout.Toggle(
                 snapSettings.Enabled,
                 "SNAP",
                 GUI.skin.button,
-                GUILayout.Width(68f),
-                GUILayout.Height(30f));
-            if (GUILayout.Button("SAVE DRAFT", GUILayout.Width(96f), GUILayout.Height(30f)))
+                ToolbarButtonLayout(58f));
+            if (GUILayout.Button(new GUIContent("SAVE", "Save the local recovery draft"),
+                    ToolbarButtonLayout(68f)))
             {
-                persistence.SaveDraft(workspace);
+                fileActions.SaveDraft();
             }
 
-            GUI.enabled = !previewMode && persistence.HasDraft;
-            if (GUILayout.Button("LOAD DRAFT", GUILayout.Width(96f), GUILayout.Height(30f)))
+            GUI.enabled = interactionsEnabled;
+            if (GUILayout.Button(
+                    previewMode ? "EDIT MODE" : "PREVIEW",
+                    ToolbarButtonLayout(92f)))
             {
-                persistence.LoadDraft();
+                previewTestActions.TogglePreview();
             }
-
-            GUI.enabled = !previewMode;
-            if (GUILayout.Button("EXPORT", GUILayout.Width(76f), GUILayout.Height(30f)))
-            {
-                persistence.Export(workspace);
-            }
-
-            if (GUILayout.Button("IMPORT", GUILayout.Width(76f), GUILayout.Height(30f)))
-            {
-                persistence.RequestImport();
-            }
-
-            GUI.enabled = true;
-            if (selectionTool.IsDragging)
-            {
-                GUILayout.FlexibleSpace();
-                GUILayout.Label(selectionTool.DragFeedback, GUI.skin.box, GUILayout.Height(30f));
-            }
-
-            GUI.enabled = true;
-            GUILayout.EndHorizontal();
-            GUILayout.EndArea();
-        }
-
-        private void DrawPalette()
-        {
-            GUILayout.BeginArea(
-                new Rect(0f, ToolbarHeight, PaletteWidth, Screen.height - ToolbarHeight - 30f),
-                GUI.skin.box);
-            paletteScroll = GUILayout.BeginScrollView(paletteScroll);
-            GUILayout.BeginHorizontal();
-            Color panelToggleColor = GUI.backgroundColor;
-            if (!showScenePanel)
-            {
-                GUI.backgroundColor = new Color(0.2f, 0.75f, 1f);
-            }
-            if (GUILayout.Button("LIBRARY", GUILayout.Height(30f)))
-            {
-                showScenePanel = false;
-            }
-            GUI.backgroundColor = panelToggleColor;
-            if (showScenePanel)
-            {
-                GUI.backgroundColor = new Color(0.2f, 0.75f, 1f);
-            }
-            if (GUILayout.Button("SCENE", GUILayout.Height(30f)))
-            {
-                showScenePanel = true;
-            }
-            GUI.backgroundColor = panelToggleColor;
-            GUILayout.EndHorizontal();
-
-            if (showScenePanel)
-            {
-                DrawHierarchy();
-                GUILayout.EndScrollView();
-                GUILayout.EndArea();
-                return;
-            }
-
-            GUILayout.Label("TOOLS");
+            GUI.enabled = interactionsEnabled && !previewMode;
             Color previous = GUI.backgroundColor;
-            if (toolManager.ActiveTool == selectionTool)
+            GUI.backgroundColor = LevelEditorTheme.PrimaryAction;
+            if (GUILayout.Button("TEST PLAY", ToolbarButtonLayout(92f)))
             {
-                GUI.backgroundColor = new Color(0.2f, 0.75f, 1f);
-            }
-
-            if (GUILayout.Button("SELECT / MOVE", GUILayout.Height(34f)))
-            {
-                toolManager.Activate(SelectionLevelEditorTool.ToolId);
+                previewTestActions.StartTestPlay();
             }
             GUI.backgroundColor = previous;
 
-            if (showControls)
-            {
-                GUILayout.Space(6f);
-                GUILayout.Label("CAMERA", GUI.skin.box);
-                GUILayout.Label("WASD / arrows — pan (Shift: fast)");
-                GUILayout.Label("Right-drag — orbit; middle-drag — pan");
-                GUILayout.Label("Wheel — zoom; F — frame; Home — frame all");
-                GUILayout.Label("EDITING", GUI.skin.box);
-                GUILayout.Label("Click — select; Ctrl-click — add/remove");
-                GUILayout.Label("R — rotate; Delete — remove; Esc — cancel");
-                GUILayout.Label("Ctrl+C / Ctrl+V — copy / paste; Ctrl+D — duplicate");
-                GUILayout.Label("Ctrl+Z / Ctrl+Y — undo / redo");
-            }
-
-            GUILayout.Space(8f);
-            GUILayout.Label("TERRAIN HEIGHT");
-            GUILayout.BeginHorizontal();
-            if (terrainPanel.IsRaiseActive)
-            {
-                GUI.backgroundColor = new Color(0.3f, 0.9f, 0.4f);
-            }
-            if (GUILayout.Button("RAISE", GUILayout.Height(30f)))
-            {
-                terrainPanel.ActivateRaise();
-            }
-            GUI.backgroundColor = previous;
-
-            if (terrainPanel.IsLowerActive)
-            {
-                GUI.backgroundColor = new Color(1f, 0.4f, 0.25f);
-            }
-            if (GUILayout.Button("LOWER", GUILayout.Height(30f)))
-            {
-                terrainPanel.ActivateLower();
-            }
-            GUI.backgroundColor = previous;
+            GUI.enabled = true;
             GUILayout.EndHorizontal();
-            if (GUILayout.Button("FRAME TERRAIN", GUILayout.Height(30f)))
-            {
-                terrainPanel.FrameTerrain();
-            }
-            GUILayout.Label($"Radius: {terrainPanel.RadiusInSamples} samples");
-            terrainPanel.RadiusInSamples = Mathf.RoundToInt(GUILayout.HorizontalSlider(
-                terrainPanel.RadiusInSamples,
-                1f,
-                16f));
-            GUILayout.Label($"Strength: {terrainPanel.QuantizedStrength} steps");
-            terrainPanel.QuantizedStrength = Mathf.RoundToInt(GUILayout.HorizontalSlider(
-                terrainPanel.QuantizedStrength,
-                1f,
-                20f));
-            GUILayout.Space(8f);
-            GUILayout.Label("ARCHETYPES");
-            GUILayout.Label("Choose a piece, then click in the world.");
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Search", GUILayout.Width(50f));
-            paletteSearch = GUILayout.TextField(paletteSearch ?? string.Empty);
-            GUILayout.EndHorizontal();
-
-            IReadOnlyList<string> categories = catalog.Entries
-                .Where(entry => entry != null && !string.IsNullOrWhiteSpace(entry.Category))
-                .Select(entry => entry.Category)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-            GUILayout.BeginHorizontal();
-            DrawPaletteCategoryButton("ALL", string.Empty, previous);
-            foreach (string entryCategory in categories)
-            {
-                DrawPaletteCategoryButton(entryCategory, entryCategory, previous);
-            }
-            GUILayout.EndHorizontal();
-
-            string category = null;
-            IReadOnlyList<LevelArchetypeDefinition> filteredEntries = catalog.Entries
-                .Where(MatchesPaletteFilter)
-                .ToArray();
-            if (filteredEntries.Count == 0)
-            {
-                GUILayout.Label("No archetypes match this filter.");
-            }
-
-            foreach (LevelArchetypeDefinition entry in filteredEntries)
-            {
-                if (!string.Equals(category, entry.Category, StringComparison.Ordinal))
-                {
-                    category = entry.Category;
-                    GUILayout.Space(8f);
-                    GUILayout.Label(category.ToUpperInvariant());
-                }
-
-                bool active = toolManager.ActiveTool == placementTool
-                    && ReferenceEquals(placementTool.Archetype, entry);
-                previous = GUI.backgroundColor;
-                if (active)
-                {
-                    GUI.backgroundColor = new Color(0.95f, 0.55f, 0.2f);
-                }
-
-                if (GUILayout.Button(entry.DisplayName, GUILayout.Height(34f)))
-                {
-                    placementTool.SelectArchetype(entry);
-                    toolManager.Activate(PlacementLevelEditorTool.ToolId);
-                }
-
-                GUI.backgroundColor = previous;
-            }
-
-            GUILayout.EndScrollView();
             GUILayout.EndArea();
         }
 
-        private void DrawHierarchy()
+        private string ToolbarDocumentLabel(LevelEditorViewState state)
         {
-            LevelDocument document = workspace.CreateSnapshot();
-            GUILayout.Space(8f);
-            GUILayout.Label("SCENARIO", GUI.skin.box);
-            LevelTransformData start = document.playtest.playerStart;
-            GUILayout.Label($"PLAYER START  ({start.position.x:0.##}, {start.position.y:0.##}, {start.position.z:0.##})");
-            GUILayout.Space(8f);
-            GUILayout.Label($"ENTITIES ({document.entities.Count})", GUI.skin.box);
-            hierarchySearch = GUILayout.TextField(hierarchySearch ?? string.Empty);
-            string previousCategory = null;
-            int matches = 0;
-            foreach (LevelEntity entity in document.entities
-                .Where(MatchesHierarchyFilter)
-                .OrderBy(EntityCategory, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(EntityDisplayName, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(entity => entity.id, StringComparer.Ordinal))
-            {
-                string category = EntityCategory(entity);
-                if (!string.Equals(previousCategory, category, StringComparison.Ordinal))
-                {
-                    previousCategory = category;
-                    GUILayout.Label(category.ToUpperInvariant(), GUI.skin.box);
-                }
-
-                matches++;
-                Color previous = GUI.backgroundColor;
-                if (string.Equals(selection.PrimaryEntityId, entity.id, StringComparison.Ordinal))
-                {
-                    GUI.backgroundColor = new Color(0.2f, 0.75f, 1f);
-                }
-
-                if (GUILayout.Button(EntityDisplayName(entity), GUILayout.Height(26f)))
-                {
-                    focusEntity(entity.id);
-                }
-
-                GUI.backgroundColor = previous;
-            }
-
-            if (matches == 0)
-            {
-                GUILayout.Label("No entities match this filter.");
-            }
+            string displayName = state.Document?.displayName ?? "Untitled level";
+            if (state.PreviewMode)
+                return $"{displayName}  ·  Preview locked";
+            return $"{displayName}  ·  {(state.IsDirty ? "Unsaved" : "Saved")}";
         }
 
-        private bool MatchesHierarchyFilter(LevelEntity entity)
+        private void DrawUnsavedChangesConfirmation()
         {
-            if (entity == null)
-            {
-                return false;
-            }
-
-            string search = hierarchySearch?.Trim();
-            return string.IsNullOrEmpty(search)
-                || EntityDisplayName(entity).IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0
-                || entity.id.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0
-                || EntityCategory(entity).IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-
-        private string EntityDisplayName(LevelEntity entity)
-        {
-            return catalog.TryGet(entity.archetypeId, out LevelArchetypeDefinition archetype)
-                ? archetype.DisplayName
-                : entity.archetypeId;
-        }
-
-        private string EntityCategory(LevelEntity entity)
-        {
-            return catalog.TryGet(entity.archetypeId, out LevelArchetypeDefinition archetype)
-                && !string.IsNullOrWhiteSpace(archetype.Category)
-                ? archetype.Category
-                : "Unknown";
-        }
-
-        private void DrawPaletteCategoryButton(string label, string category, Color previous)
-        {
-            bool active = string.Equals(paletteCategory, category, StringComparison.OrdinalIgnoreCase);
-            if (active)
-            {
-                GUI.backgroundColor = new Color(0.2f, 0.75f, 1f);
-            }
-
-            if (GUILayout.Button(label, GUILayout.Height(26f)))
-            {
-                paletteCategory = category;
-            }
-
-            GUI.backgroundColor = previous;
-        }
-
-        private bool MatchesPaletteFilter(LevelArchetypeDefinition entry)
-        {
-            if (entry == null || !string.Equals(
-                    paletteCategory,
-                    string.Empty,
-                    StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(entry.Category, paletteCategory, StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            string search = paletteSearch?.Trim();
-            return string.IsNullOrEmpty(search)
-                || entry.DisplayName.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0
-                || entry.ArchetypeId.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0
-                || entry.Category.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0;
-        }
-
-        private void DrawInspector(
-            LevelEntityView selectedView,
-            IReadOnlyList<LevelValidationIssue> validationIssues)
-        {
-            float left = Screen.width - InspectorWidth;
-            GUILayout.BeginArea(
-                new Rect(left, ToolbarHeight, InspectorWidth, Screen.height - ToolbarHeight - 30f),
-                GUI.skin.box);
-            inspectorScroll = GUILayout.BeginScrollView(inspectorScroll);
-            GUILayout.Label("INSPECTOR");
-            DrawPlayerStartInspector();
-            if (selectedView == null)
-            {
-                GUILayout.Label("Click an entity to select and drag it across its current elevation.");
-            }
-            else
-            {
-                GUILayout.Label(selectedView.Archetype.DisplayName);
-                GUILayout.Label($"ID: {selection.PrimaryEntityId}");
-                LevelEntity entity = workspace.FindEntitySnapshot(selection.PrimaryEntityId);
-                LevelSelectionTarget? primary = selection.Primary;
-                if (selection.Targets.Count > 1)
-                {
-                    GUILayout.Label($"{selection.Targets.Count} entities selected");
-                }
-                GUILayout.Space(8f);
-                DrawLabeledField("X", ref xText);
-                DrawLabeledField("Y", ref yText);
-                DrawLabeledField("Z", ref zText);
-                DrawLabeledField("Yaw", ref yawText);
-                if (GUILayout.Button("APPLY TRANSFORM", GUILayout.Height(34f)))
-                {
-                    applyTransform(xText, yText, zText, yawText);
-                }
-
-                GUILayout.BeginHorizontal();
-                float angleSnap = selectedView.Archetype.PlacementRules.AngleSnap;
-                if (GUILayout.Button($"ROTATE -{angleSnap:0.#}°"))
-                {
-                    selectionTool.RotateSelection(-angleSnap);
-                }
-
-                if (GUILayout.Button($"ROTATE +{angleSnap:0.#}°"))
-                {
-                    selectionTool.RotateSelection(angleSnap);
-                }
-                GUILayout.EndHorizontal();
-                Color previous = GUI.backgroundColor;
-                GUI.backgroundColor = new Color(0.7f, 0.25f, 0.2f);
-                if (GUILayout.Button("DELETE", GUILayout.Height(34f)))
-                {
-                    selectionTool.DeleteSelection();
-                }
-                GUI.backgroundColor = previous;
-
-                GUILayout.Space(12f);
-                DrawInteractionInspector(entity, primary);
-                DrawDestructibleInspector(selectedView, entity);
-            }
-
-            GUILayout.Space(16f);
-            GUILayout.Label("VALIDATION");
-            if (validationIssues == null || validationIssues.Count == 0)
-            {
-                GUILayout.Label("No validation issues.");
-            }
-            else
-            {
-                foreach (LevelValidationIssue issue in validationIssues.Take(8))
-                {
-                    string issueText = $"{issue.Severity}: {issue.Message}";
-                    if (string.IsNullOrWhiteSpace(issue.EntityId))
-                    {
-                        GUILayout.Label(issueText);
-                    }
-                    else if (GUILayout.Button(issueText))
-                    {
-                        focusEntity(issue.EntityId);
-                    }
-                }
-
-                if (validationIssues.Count > 8)
-                {
-                    GUILayout.Label($"…and {validationIssues.Count - 8} more.");
-                }
-            }
-
-            GUILayout.Space(16f);
-            GUILayout.Label("PORTABLE FILES");
-            if (persistence.UsesBrowserFileDialog)
-            {
-                GUILayout.Label("Import opens the browser file picker. Export downloads a JSON file.");
-            }
-            else
-            {
-                GUILayout.Label("Desktop import path:");
-                persistence.DesktopImportPath = GUILayout.TextField(persistence.DesktopImportPath);
-                GUILayout.Label("Exports are written beneath the application's persistent-data folder.");
-            }
-
-            GUILayout.EndScrollView();
+            const float width = 480f;
+            const float height = 176f;
+            Rect panel = new Rect(
+                Mathf.Max(8f, (Screen.width - width) * 0.5f),
+                Mathf.Max(8f, (Screen.height - height) * 0.5f),
+                Mathf.Min(width, Screen.width - 16f),
+                height);
+            GUILayout.BeginArea(panel, "UNSAVED CHANGES", styles.FloatingPanel);
+            GUILayout.Space(LevelEditorGuiMetrics.SpaceGroup);
+            GUILayout.Label(documentActionConfirmation.Prompt);
+            GUILayout.Label("Save a draft or export first if you want to keep this work.");
+            GUILayout.FlexibleSpace();
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("KEEP EDITING", PanelPrimaryButtonLayout()))
+                documentActionConfirmation.Cancel();
+            if (GUILayout.Button("DISCARD & CONTINUE", PanelPrimaryButtonLayout()))
+                documentActionConfirmation.ConfirmDiscard();
+            GUILayout.EndHorizontal();
             GUILayout.EndArea();
         }
 
-        private void DrawPlayerStartInspector()
+        private void DrawShortcutsOverlay()
         {
-            GUILayout.Label("PLAYTEST PLAYER START", GUI.skin.box);
-            DrawLabeledField("X", ref playerStartXText);
-            DrawLabeledField("Y", ref playerStartYText);
-            DrawLabeledField("Z", ref playerStartZText);
-            DrawLabeledField("Yaw", ref playerStartYawText);
-            if (GUILayout.Button("APPLY PLAYER START", GUILayout.Height(30f)))
-            {
-                applyPlayerStart(
-                    playerStartXText,
-                    playerStartYText,
-                    playerStartZText,
-                    playerStartYawText);
-            }
-
-            GUILayout.Space(12f);
+            GUILayout.BeginArea(ShortcutOverlayRect(), styles.FloatingPanel);
+            DrawSectionHeader("SHORTCUTS");
+            GUILayout.Label("CAMERA");
+            GUILayout.Label("WASD/arrows: pan  ·  Shift: fast");
+            GUILayout.Label("MMB/RMB drag: orbit  ·  Wheel: zoom");
+            GUILayout.Label("F: frame  ·  Home: frame all");
+            GUILayout.Space(LevelEditorGuiMetrics.SpaceSmall);
+            GUILayout.Label("AUTHORING");
+            GUILayout.Label("Click: select/place  ·  Ctrl-click: add/remove");
+            GUILayout.Label("R: rotate  ·  Delete: remove  ·  Esc: cancel");
+            GUILayout.Label("Ctrl+C/V: copy/paste  ·  Ctrl+D: duplicate");
+            GUILayout.Label("Ctrl+Z/Y: undo/redo");
+            GUILayout.EndArea();
         }
 
-        private void DrawInteractionInspector(LevelEntity entity, LevelSelectionTarget? primary)
+        private Rect ShortcutOverlayRect()
         {
-            GUILayout.Label("INTERACTION POINTS", GUI.skin.box);
-            if (entity == null)
-            {
-                return;
-            }
-
-            if (primary != null && primary.Value.Kind == LevelSelectionKind.InteractionPoint)
-            {
-                InteractionPointData point = entity.interactionPoints.FirstOrDefault(candidate =>
-                    string.Equals(candidate?.id, primary.Value.ElementId, StringComparison.Ordinal));
-                if (point != null)
-                {
-                    SyncInteractionFields(point);
-                    GUILayout.Label($"ID: {point.id}");
-                    interactionType = GUILayout.SelectionGrid(
-                        interactionType == "doorway" ? 1 : 0,
-                        new[] { "OBJECTIVE", "DOORWAY" },
-                        2) == 1 ? "doorway" : "objective";
-                    DrawLabeledField("X", ref interactionXText);
-                    DrawLabeledField("Y", ref interactionYText);
-                    DrawLabeledField("Z", ref interactionZText);
-                    DrawLabeledField("Radius", ref interactionRadiusText);
-                    if (GUILayout.Button("APPLY INTERACTION", GUILayout.Height(30f)))
-                    {
-                        applyInteractionPoint(
-                            interactionType,
-                            interactionXText,
-                            interactionYText,
-                            interactionZText,
-                            interactionRadiusText);
-                    }
-
-                    Color previous = GUI.backgroundColor;
-                    GUI.backgroundColor = new Color(0.7f, 0.25f, 0.2f);
-                    if (GUILayout.Button("DELETE INTERACTION", GUILayout.Height(30f)))
-                    {
-                        deleteInteractionPoint();
-                    }
-                    GUI.backgroundColor = previous;
-                    return;
-                }
-            }
-
-            if (GUILayout.Button("ADD INTERACTION", GUILayout.Height(30f)))
-            {
-                addInteractionPoint();
-            }
-            GUILayout.Label("Select a pink world handle to edit an existing point.");
+            Rect viewport = ViewportRect;
+            float width = Mathf.Min(420f, Mathf.Max(0f, viewport.width - 16f));
+            return new Rect(
+                viewport.x + 8f,
+                LevelEditorGuiMetrics.ToolbarHeight + 48f,
+                width,
+                202f);
         }
 
-        private void DrawDestructibleInspector(LevelEntityView view, LevelEntity entity)
+        private void DrawStatusBar(string statusMessage)
         {
-            if ((view.Archetype.Capabilities & LevelArchetypeCapabilities.Destructible) == 0)
-            {
-                return;
-            }
-
-            GUILayout.Space(12f);
-            GUILayout.Label("DESTRUCTIBLE DEFAULTS", GUI.skin.box);
-            DestructibleInstanceData data = entity?.destructible;
-            if (!string.Equals(lastDestructibleEntityId, entity?.id, StringComparison.Ordinal))
-            {
-                lastDestructibleEntityId = entity?.id ?? string.Empty;
-                if (data != null)
-                {
-                    destructibleEnabled = data.enabled;
-                    destructibleState = data.initialState;
-                    destructibleIntegrity = data.integrity.ToString("0.###", CultureInfo.InvariantCulture);
-                }
-                else
-                {
-                    destructibleEnabled = true;
-                    destructibleState = "intact";
-                    destructibleIntegrity = "10";
-                }
-            }
-
-            destructibleEnabled = GUILayout.Toggle(destructibleEnabled, "ENABLED");
-            destructibleState = GUILayout.SelectionGrid(
-                DestructibleStateIndex(destructibleState),
-                new[] { "INTACT", "DAMAGED", "DESTROYED" },
-                3) switch
-            {
-                1 => "damaged",
-                2 => "destroyed",
-                _ => "intact",
-            };
-            DrawLabeledField("Integrity", ref destructibleIntegrity);
-            if (GUILayout.Button("APPLY DESTRUCTIBLE", GUILayout.Height(30f)))
-            {
-                applyDestructibleDefaults(
-                    destructibleEnabled ? "true" : "false",
-                    destructibleState,
-                    destructibleIntegrity);
-            }
-        }
-
-        private void SyncInteractionFields(InteractionPointData point)
-        {
-            if (string.Equals(lastInteractionSelectionId, point.id, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            lastInteractionSelectionId = point.id;
-            interactionType = point.type;
-            interactionXText = point.localPosition.x.ToString("0.###", CultureInfo.InvariantCulture);
-            interactionYText = point.localPosition.y.ToString("0.###", CultureInfo.InvariantCulture);
-            interactionZText = point.localPosition.z.ToString("0.###", CultureInfo.InvariantCulture);
-            interactionRadiusText = point.radius.ToString("0.###", CultureInfo.InvariantCulture);
-        }
-
-        private static int DestructibleStateIndex(string value)
-        {
-            if (string.Equals(value, "damaged", StringComparison.OrdinalIgnoreCase))
-            {
-                return 1;
-            }
-
-            return string.Equals(value, "destroyed", StringComparison.OrdinalIgnoreCase) ? 2 : 0;
-        }
-
-        private static void DrawStatusBar(string statusMessage)
-        {
+            float left = VisibleLeftPanelWidth;
+            float right = VisibleInspectorWidth;
             GUILayout.BeginArea(
                 new Rect(
-                    PaletteWidth,
-                    Screen.height - 30f,
-                    Screen.width - PaletteWidth - InspectorWidth,
-                    30f),
-                GUI.skin.box);
-            GUILayout.Label(statusMessage ?? string.Empty);
+                    left,
+                    Screen.height - LevelEditorGuiMetrics.StatusBarHeight,
+                    Mathf.Max(0f, Screen.width - left - right),
+                    LevelEditorGuiMetrics.StatusBarHeight),
+                styles.StatusBar);
+            GUILayout.Label(statusMessage ?? string.Empty, styles.MutedLabel);
             GUILayout.EndArea();
         }
 
-        private static void DrawLabeledField(string label, ref string value)
+        private static GUILayoutOption[] ToolbarButtonLayout(float width)
         {
-            GUILayout.BeginHorizontal();
-            GUILayout.Label(label, GUILayout.Width(42f));
-            value = GUILayout.TextField(value);
-            GUILayout.EndHorizontal();
+            return new[]
+            {
+                GUILayout.Width(width),
+                GUILayout.Height(LevelEditorGuiMetrics.ToolbarControlHeight),
+            };
+        }
+
+        private static GUILayoutOption[] PanelButtonLayout()
+        {
+            return new[] { GUILayout.Height(LevelEditorGuiMetrics.PanelControlHeight) };
+        }
+
+        private static GUILayoutOption[] PanelPrimaryButtonLayout()
+        {
+            return new[] { GUILayout.Height(LevelEditorGuiMetrics.PanelPrimaryControlHeight) };
+        }
+
+        private static GUILayoutOption[] PanelCompactButtonLayout()
+        {
+            return new[] { GUILayout.Height(LevelEditorGuiMetrics.PanelCompactControlHeight) };
+        }
+
+        private static GUILayoutOption[] PanelIconButtonLayout()
+        {
+            return new[] { GUILayout.Height(LevelEditorGuiMetrics.PanelIconControlHeight) };
+        }
+
+        private static GUILayoutOption[] PanelApplyButtonLayout()
+        {
+            return new[] { GUILayout.Height(LevelEditorGuiMetrics.PanelApplyControlHeight) };
+        }
+
+        private void DrawSectionHeader(string label)
+        {
+            GUILayout.Label(label, styles.SectionHeader);
+        }
+
+        private bool DrawSectionExpander(string label, ref bool expanded)
+        {
+            if (GUILayout.Button(
+                    $"{(expanded ? "▼" : "▶")} {label}",
+                    styles.SectionHeader,
+                    PanelCompactButtonLayout()))
+            {
+                expanded = !expanded;
+            }
+            return expanded;
         }
     }
 }

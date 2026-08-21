@@ -14,6 +14,7 @@ namespace GritGud.Application.Gameplay
         private readonly List<DestructibleDamageRecord> damageRecords =
             new List<DestructibleDamageRecord>();
         private readonly IReadOnlyList<DestructibleDamageRecord> readOnlyDamageRecords;
+        private bool canonicalProjectionBound;
 
         public DestructiblePropSession(
             IEnumerable<DestructiblePropDefinition> definitions,
@@ -61,9 +62,79 @@ namespace GritGud.Application.Gameplay
 
         public event Action<DestructibleDamageRecord> Damaged;
 
+        internal void BindCanonicalProjection(
+            IReadOnlyList<DestructiblePropSnapshot> snapshots)
+        {
+            if (canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Destructibles already have a canonical runtime projection.");
+            ValidateCanonicalProjection(snapshots);
+            foreach (DestructiblePropSnapshot snapshot in snapshots)
+                if (!SnapshotsMatch(props[snapshot.PropId], snapshot))
+                    throw new InvalidOperationException(
+                        "Destructible session does not match the initial canonical state.");
+            canonicalProjectionBound = true;
+        }
+
+        internal void ValidateCanonicalProjection(
+            IReadOnlyList<DestructiblePropSnapshot> snapshots)
+        {
+            if (snapshots == null)
+                throw new ArgumentNullException(nameof(snapshots));
+            if (snapshots.Count != props.Count)
+                throw new InvalidOperationException(
+                    "Canonical projection changed the destructible set.");
+            foreach (DestructiblePropSnapshot snapshot in snapshots)
+            {
+                if (!props.TryGetValue(
+                        snapshot.PropId,
+                        out DestructiblePropSnapshot current)
+                    || !Approximately(
+                        current.MaximumIntegrity,
+                        snapshot.MaximumIntegrity)
+                    || current.FractureChunkCount
+                        != snapshot.FractureChunkCount)
+                {
+                    throw new InvalidOperationException(
+                        $"Canonical destructible '{snapshot.PropId}' changed authored identity.");
+                }
+            }
+        }
+
+        internal void InstallCanonicalProjection(
+            IReadOnlyList<DestructiblePropSnapshot> snapshots,
+            long causalSequence,
+            GameplayNotificationBatch notifications)
+        {
+            if (!canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Destructibles are not bound to a canonical runtime.");
+            if (causalSequence <= 0L)
+                throw new ArgumentOutOfRangeException(nameof(causalSequence));
+            if (notifications == null)
+                throw new ArgumentNullException(nameof(notifications));
+            ValidateCanonicalProjection(snapshots);
+            foreach (DestructiblePropSnapshot snapshot in snapshots)
+            {
+                DestructiblePropSnapshot previous = props[snapshot.PropId];
+                props[snapshot.PropId] = snapshot;
+                float appliedDamage = previous.RemainingIntegrity
+                    - snapshot.RemainingIntegrity;
+                if (appliedDamage <= IntegrityTolerance) continue;
+                var record = new DestructibleDamageRecord(
+                    causalSequence,
+                    appliedDamage,
+                    previous,
+                    snapshot);
+                damageRecords.Add(record);
+                notifications.Add(Damaged, record);
+            }
+        }
+
         public static DestructiblePropSession FromLevel(
             LevelDocument level,
-            GameplayJournal journal = null)
+            GameplayJournal journal = null,
+            Func<LevelEntity, int> fractureChunkCountResolver = null)
         {
             if (level == null)
             {
@@ -91,7 +162,8 @@ namespace GritGud.Application.Gameplay
                         pitchDegrees: 0f,
                         yawDegrees: entity.transform.yawDegrees,
                         rollDegrees: 0f),
-                    DestructiblePropPosture.Upright));
+                    DestructiblePropPosture.Upright,
+                    fractureChunkCountResolver?.Invoke(entity) ?? 0));
             }
 
             return new DestructiblePropSession(definitions, journal);
@@ -118,12 +190,72 @@ namespace GritGud.Application.Gameplay
             float requestedDamage,
             out DestructibleDamageRecord record)
         {
+            var notifications = new GameplayNotificationBatch();
+            bool applied = TryApplyDamage(
+                propId,
+                requestedDamage,
+                out record,
+                notifications);
+            notifications.Publish();
+            return applied;
+        }
+
+        internal bool TryApplyDamage(
+            string propId,
+            float requestedDamage,
+            out DestructibleDamageRecord record,
+            GameplayNotificationBatch notifications)
+        {
+            if (notifications == null)
+            {
+                throw new ArgumentNullException(nameof(notifications));
+            }
+
+            if (!TryPrepareDamage(propId, requestedDamage, out record))
+            {
+                return false;
+            }
+
+            CommitDamage(record, notifications);
+            return true;
+        }
+
+        public bool TryPrepareDamage(
+            string propId,
+            float requestedDamage,
+            out DestructibleDamageRecord record)
+            => TryPrepareDamage(
+                propId,
+                requestedDamage,
+                preferredFractureChunkIndex: -1,
+                out record);
+
+        public bool TryPrepareDamage(
+            string propId,
+            float requestedDamage,
+            int preferredFractureChunkIndex,
+            out DestructibleDamageRecord record) => TryPrepareDamage(
+                propId,
+                requestedDamage,
+                preferredFractureChunkIndex,
+                damageRecords.Count + 1L,
+                out record);
+
+        public bool TryPrepareDamage(
+            string propId,
+            float requestedDamage,
+            int preferredFractureChunkIndex,
+            long causalSequence,
+            out DestructibleDamageRecord record)
+        {
             if (float.IsNaN(requestedDamage)
                 || float.IsInfinity(requestedDamage)
                 || requestedDamage <= 0f)
             {
                 throw new ArgumentOutOfRangeException(nameof(requestedDamage));
             }
+            if (causalSequence <= 0L)
+                throw new ArgumentOutOfRangeException(nameof(causalSequence));
 
             DestructiblePropSnapshot previous = GetProp(propId);
             if (previous.State == DestructiblePropState.Destroyed)
@@ -141,34 +273,69 @@ namespace GritGud.Application.Gameplay
             DestructiblePropState resultingState = remainingIntegrity <= 0f
                 ? DestructiblePropState.Destroyed
                 : DestructiblePropState.Damaged;
+            ulong detachedChunks = DestructibleFracture.CreateResultingMask(
+                previous.PropId,
+                previous.FractureChunkCount,
+                previous.DetachedFractureChunks,
+                previous.MaximumIntegrity,
+                remainingIntegrity,
+                preferredFractureChunkIndex);
             var resulting = new DestructiblePropSnapshot(
                 previous.PropId,
                 resultingState,
                 previous.MaximumIntegrity,
                 remainingIntegrity,
                 previous.Pose,
-                previous.Posture);
+                previous.Posture,
+                previous.FractureChunkCount,
+                detachedChunks);
             record = new DestructibleDamageRecord(
-                damageRecords.Count + 1L,
+                causalSequence,
                 appliedDamage,
                 previous,
-                resulting);
-            CommitDamage(record);
+                resulting,
+                preferredFractureChunkIndex);
             return true;
         }
 
         public void CommitDamage(DestructibleDamageRecord record)
+        {
+            var notifications = new GameplayNotificationBatch();
+            CommitDamage(record, notifications);
+            notifications.Publish();
+        }
+
+        internal void CommitDamage(
+            DestructibleDamageRecord record,
+            GameplayNotificationBatch notifications)
+        {
+            RequireLegacyMutationAllowed(nameof(CommitDamage));
+            if (notifications == null)
+            {
+                throw new ArgumentNullException(nameof(notifications));
+            }
+
+            ValidateDamage(record);
+
+            props[record.PropId] = record.Resulting;
+            damageRecords.Add(record);
+            Journal.RecordDestructibleDamaged(record);
+            notifications.Add(Damaged, record);
+        }
+
+        internal void ValidateDamage(DestructibleDamageRecord record)
         {
             if (record == null)
             {
                 throw new ArgumentNullException(nameof(record));
             }
 
-            long expectedSequence = damageRecords.Count + 1L;
-            if (record.Sequence != expectedSequence)
+            if (damageRecords.Count > 0
+                && record.Sequence
+                    < damageRecords[damageRecords.Count - 1].Sequence)
             {
                 throw new InvalidOperationException(
-                    "The damage record is not the next authoritative sequence.");
+                    "Destructible damage cannot precede an installed causal sequence.");
             }
 
             DestructiblePropSnapshot current = GetProp(record.PropId);
@@ -184,8 +351,20 @@ namespace GritGud.Application.Gameplay
             DestructiblePropState expectedState = expectedRemaining <= 0f
                 ? DestructiblePropState.Destroyed
                 : DestructiblePropState.Damaged;
+            ulong expectedDetachedChunks =
+                DestructibleFracture.CreateResultingMask(
+                    current.PropId,
+                    current.FractureChunkCount,
+                    current.DetachedFractureChunks,
+                    current.MaximumIntegrity,
+                    expectedRemaining,
+                    record.PreferredFractureChunkIndex);
             if (!Approximately(expectedRemaining, record.Resulting.RemainingIntegrity)
                 || record.Resulting.State != expectedState
+                || record.Resulting.FractureChunkCount
+                    != current.FractureChunkCount
+                || record.Resulting.DetachedFractureChunks
+                    != expectedDetachedChunks
                 || !Approximately(
                     current.MaximumIntegrity,
                     record.Resulting.MaximumIntegrity)
@@ -194,15 +373,11 @@ namespace GritGud.Application.Gameplay
                 throw new InvalidOperationException(
                     "The damage record's resulting prop state is inconsistent.");
             }
-
-            props[record.PropId] = record.Resulting;
-            damageRecords.Add(record);
-            Journal.RecordDestructibleDamaged(record);
-            Damaged?.Invoke(record);
         }
 
         public void CommitDisplacement(DisplacementRecord record)
         {
+            RequireLegacyMutationAllowed(nameof(CommitDisplacement));
             if (record == null)
             {
                 throw new ArgumentNullException(nameof(record));
@@ -233,7 +408,9 @@ namespace GritGud.Application.Gameplay
                 current.MaximumIntegrity,
                 current.RemainingIntegrity,
                 resulting.Pose,
-                resulting.Posture);
+                resulting.Posture,
+                current.FractureChunkCount,
+                current.DetachedFractureChunks);
         }
 
         public static DestructiblePropState ParseState(string value)
@@ -265,6 +442,8 @@ namespace GritGud.Application.Gameplay
             && left.State == right.State
             && Approximately(left.MaximumIntegrity, right.MaximumIntegrity)
             && Approximately(left.RemainingIntegrity, right.RemainingIntegrity)
+            && left.FractureChunkCount == right.FractureChunkCount
+            && left.DetachedFractureChunks == right.DetachedFractureChunks
             && PropStatesMatch(left, right);
 
         private static bool PropStatesMatch(
@@ -296,5 +475,12 @@ namespace GritGud.Application.Gameplay
 
         private static bool Approximately(float left, float right) =>
             Math.Abs(left - right) <= IntegrityTolerance;
+
+        private void RequireLegacyMutationAllowed(string operation)
+        {
+            if (canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    $"Legacy destructible mutation '{operation}' is disabled while the semantic runtime owns state.");
+        }
     }
 }

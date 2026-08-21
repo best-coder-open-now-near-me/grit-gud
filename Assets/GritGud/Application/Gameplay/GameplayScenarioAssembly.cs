@@ -32,6 +32,7 @@ namespace GritGud.Application.Gameplay
         internal ScenarioActorRuntimeDefinition(
             string displayName,
             string presentationId,
+            string characterId,
             bool targetable,
             float mass,
             ScenarioActorDefinition gameplayDefinition,
@@ -47,6 +48,7 @@ namespace GritGud.Application.Gameplay
                     "Actor presentation identifiers cannot be empty.",
                     nameof(presentationId))
                 : presentationId;
+            CharacterId = characterId?.Trim() ?? string.Empty;
             Targetable = targetable;
             Mass = mass;
             GameplayDefinition = gameplayDefinition
@@ -59,6 +61,8 @@ namespace GritGud.Application.Gameplay
         public string DisplayName { get; }
 
         public string PresentationId { get; }
+
+        public string CharacterId { get; }
 
         public bool Targetable { get; }
 
@@ -73,6 +77,7 @@ namespace GritGud.Application.Gameplay
             new ScenarioActorRuntimeDefinition(
                 DisplayName,
                 PresentationId,
+                CharacterId,
                 Targetable,
                 Mass,
                 gameplayDefinition,
@@ -94,6 +99,11 @@ namespace GritGud.Application.Gameplay
                 : entityId;
             MomentumProfile = momentumProfile
                 ?? throw new ArgumentNullException(nameof(momentumProfile));
+            if (!momentumProfile.IsValidSpeed(startingSpeed))
+            {
+                throw new ArgumentOutOfRangeException(nameof(startingSpeed));
+            }
+
             StartingSpeed = startingSpeed;
             StartingOccupantActorId = string.IsNullOrWhiteSpace(
                 startingOccupantActorId)
@@ -116,10 +126,13 @@ namespace GritGud.Application.Gameplay
             actors;
         private readonly Dictionary<string, ScenarioVehicleRuntimeDefinition>
             vehicles;
+        private readonly Dictionary<string, DroneDefinition> drones;
         private readonly Dictionary<string, ScenarioObjectiveRuntimeDefinition>
             objectives;
         private readonly Dictionary<string, DisplacementSubjectDefinition>
             displacementSubjects;
+        private readonly IReadOnlyList<TacticalContextRuleDefinition>
+            tacticalRules;
 
         internal GameplayScenarioAssembly(
             string displayName,
@@ -132,7 +145,9 @@ namespace GritGud.Application.Gameplay
                 objectiveIndex,
             Dictionary<string, ScenarioVehicleRuntimeDefinition> vehicleIndex,
             Dictionary<string, DisplacementSubjectDefinition>
-                displacementSubjectIndex)
+                displacementSubjectIndex,
+            IEnumerable<TacticalContextRuleDefinition> tacticalRuleDefinitions = null,
+            Dictionary<string, DroneDefinition> droneIndex = null)
         {
             DisplayName = string.IsNullOrWhiteSpace(displayName)
                 ? throw new ArgumentException(
@@ -147,11 +162,17 @@ namespace GritGud.Application.Gameplay
                 ?? throw new ArgumentNullException(nameof(actorIndex));
             vehicles = vehicleIndex
                 ?? throw new ArgumentNullException(nameof(vehicleIndex));
+            drones = droneIndex ?? new Dictionary<string, DroneDefinition>(
+                StringComparer.Ordinal);
             objectives = objectiveIndex
                 ?? throw new ArgumentNullException(nameof(objectiveIndex));
             displacementSubjects = displacementSubjectIndex
                 ?? throw new ArgumentNullException(
                     nameof(displacementSubjectIndex));
+            tacticalRules = new List<TacticalContextRuleDefinition>(
+                tacticalRuleDefinitions
+                    ?? Array.Empty<TacticalContextRuleDefinition>())
+                .AsReadOnly();
         }
 
         public string DisplayName { get; }
@@ -201,8 +222,19 @@ namespace GritGud.Application.Gameplay
         public IReadOnlyCollection<ScenarioVehicleRuntimeDefinition> Vehicles =>
             vehicles.Values;
 
+        public IReadOnlyCollection<DroneDefinition> Drones => drones.Values;
+
+        public DroneDefinition GetDrone(string droneId) =>
+            drones.TryGetValue(droneId ?? string.Empty, out DroneDefinition drone)
+                ? drone
+                : throw new KeyNotFoundException(
+                    $"Scenario drone '{droneId}' is not defined.");
+
         public IReadOnlyCollection<DisplacementSubjectDefinition>
             DisplacementSubjects => displacementSubjects.Values;
+
+        public IReadOnlyList<TacticalContextRuleDefinition> TacticalRules =>
+            tacticalRules;
 
         public GameplayScenarioAssembly WithResolvedActorPoses(
             IReadOnlyDictionary<string, GameplayActorPose> resolvedPoses)
@@ -235,7 +267,9 @@ namespace GritGud.Application.Gameplay
                 resolvedActors,
                 objectives,
                 vehicles,
-                displacementSubjects);
+                displacementSubjects,
+                tacticalRules,
+                drones);
         }
 
         public bool TryGetDisplacementSubject(

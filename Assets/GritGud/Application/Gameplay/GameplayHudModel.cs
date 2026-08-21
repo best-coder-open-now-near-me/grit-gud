@@ -12,6 +12,7 @@ namespace GritGud.Application.Gameplay
         AimLook,
         CameraZoom,
         Attack,
+        Reload,
         ToggleTurnMode,
         ToggleStance,
         ToggleCameraView,
@@ -113,11 +114,20 @@ namespace GritGud.Application.Gameplay
             string equipmentTooltip,
             GameplayHotbarBindingKind bindingKind =
                 GameplayHotbarBindingKind.InventoryItem,
-            IEnumerable<GameplayHotbarAbilityOptionModel> abilityOptions = null)
+            IEnumerable<GameplayHotbarAbilityOptionModel> abilityOptions = null,
+            int? loadedRounds = null,
+            int? reserveRounds = null)
         {
             if (slotNumber <= 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(slotNumber));
+            }
+            if (loadedRounds.HasValue != reserveRounds.HasValue
+                || loadedRounds < 0
+                || reserveRounds < 0)
+            {
+                throw new ArgumentException(
+                    "Hotbar ammunition requires non-negative loaded and reserve values.");
             }
 
             SlotNumber = slotNumber;
@@ -134,6 +144,8 @@ namespace GritGud.Application.Gameplay
             PowerTooltip = powerTooltip ?? string.Empty;
             EquipmentTooltip = equipmentTooltip ?? string.Empty;
             AbilityOptions = CopyAbilityOptions(abilityOptions);
+            LoadedRounds = loadedRounds;
+            ReserveRounds = reserveRounds;
         }
 
         public int SlotNumber { get; }
@@ -161,6 +173,10 @@ namespace GritGud.Application.Gameplay
         public string PowerTooltip { get; }
 
         public string EquipmentTooltip { get; }
+
+        public int? LoadedRounds { get; }
+
+        public int? ReserveRounds { get; }
 
         public IReadOnlyList<GameplayHotbarAbilityOptionModel> AbilityOptions
         { get; }
@@ -804,6 +820,23 @@ namespace GritGud.Application.Gameplay
                 int? remainingQuantity = item.ConsumablePower == null
                     ? null
                     : session.GetInventoryQuantity(playerActorId, item.Id);
+                int? loadedRounds = null;
+                int? reserveRounds = null;
+                if (item.Ammunition != null)
+                {
+                    if (!actor.Ammunition.TryGetMagazine(
+                            item.Id,
+                            out WeaponMagazineSnapshot magazine)
+                        || !actor.Ammunition.TryGetReserve(
+                            item.Ammunition.AmmoTypeId,
+                            out int reserve))
+                    {
+                        throw new InvalidOperationException(
+                            $"Weapon '{item.Id}' has no canonical ammunition state.");
+                    }
+                    loadedRounds = magazine.LoadedRounds;
+                    reserveRounds = reserve;
+                }
                 string equipmentLabel = !item.IsEquippable
                     ? string.Empty
                     : isEquipped
@@ -815,6 +848,10 @@ namespace GritGud.Application.Gameplay
                     item.DisplayName.ToUpperInvariant()
                         + (remainingQuantity.HasValue
                             ? "  x" + remainingQuantity.Value
+                            : loadedRounds.HasValue
+                                ? "  " + FormatAmmunition(
+                                    loadedRounds.Value,
+                                    reserveRounds.Value)
                             : string.Empty),
                     powerAvailability.IsAvailable,
                     isEquipped,
@@ -834,13 +871,17 @@ namespace GritGud.Application.Gameplay
                         item,
                         powerAvailability,
                         turnBased,
-                        remainingQuantity),
+                        remainingQuantity,
+                        loadedRounds,
+                        reserveRounds),
                     BuildEquipmentTooltip(
                         equipped,
                         item,
                         isEquipped,
                         equipmentAvailability,
-                        turnBased)));
+                        turnBased),
+                    loadedRounds: loadedRounds,
+                    reserveRounds: reserveRounds));
             }
 
             return slots.AsReadOnly();
@@ -874,17 +915,16 @@ namespace GritGud.Application.Gameplay
             InventoryItemDefinition item,
             InventoryPowerAvailability availability,
             bool turnBased,
-            int? remainingQuantity)
+            int? remainingQuantity,
+            int? loadedRounds,
+            int? reserveRounds)
         {
             string heading = item.DisplayName.ToUpperInvariant();
             if (item.ConsumablePower
                 is ThrownExplosiveDefinition thrownExplosive)
             {
-                string area = thrownExplosive.SmokeField == null
-                    ? "\nBLAST - "
-                        + thrownExplosive.BlastRadius.ToString("0.#")
-                        + " M"
-                    : "\nSMOKE - "
+                string area = thrownExplosive.SmokeField != null
+                    ? "\nSMOKE - "
                         + thrownExplosive.SmokeField.Radius.ToString("0.#")
                         + " M RADIUS"
                         + "\nHEIGHT - "
@@ -900,7 +940,33 @@ namespace GritGud.Application.Gameplay
                         + "\nSIGHT BLOCK - "
                         + thrownExplosive.SmokeField.MinimumObscuredPath
                             .ToString("0.#")
-                        + " M THROUGH SMOKE";
+                        + " M THROUGH SMOKE"
+                    : thrownExplosive.FireField != null
+                    ? "\nFIRE - "
+                        + thrownExplosive.FireField.InitialRadius.ToString("0.#")
+                        + "-"
+                        + thrownExplosive.FireField.MaximumRadius.ToString("0.#")
+                        + " M RADIUS"
+                        + "\nDURATION - "
+                        + (turnBased
+                            ? thrownExplosive.FireField.DurationTurnEnds
+                                + " TURN ENDS"
+                            : thrownExplosive.FireField
+                                .ExplorationDurationSeconds.ToString("0.#")
+                                + " SEC")
+                        + "\nPULSE - "
+                        + thrownExplosive.FireField.ExplorationPulseSeconds
+                            .ToString("0.#")
+                        + " SEC"
+                    : thrownExplosive.IsConcussive
+                    ? "\nCONCUSSION - "
+                        + thrownExplosive.BlastRadius.ToString("0.#")
+                        + " M"
+                        + "\nCURRENT AP REDUCTION - UP TO "
+                        + thrownExplosive.BlastActionPointReduction
+                    : "\nBLAST - "
+                        + thrownExplosive.BlastRadius.ToString("0.#")
+                        + " M";
                 return AppendRequirement(heading
                     + "\nPOWER - THROW"
                     + "\nQUANTITY - " + remainingQuantity.GetValueOrDefault()
@@ -932,11 +998,22 @@ namespace GritGud.Application.Gameplay
                 : "\nREACH - "
                     + item.Attack.Contact.MaximumReach.ToString("0.#")
                     + " M\nTARGET - ACTOR ONLY";
+            string ammunition = !loadedRounds.HasValue
+                ? string.Empty
+                : "\nAMMO - " + FormatAmmunition(
+                    loadedRounds.Value,
+                    reserveRounds.Value)
+                    + "\nRELOAD - "
+                    + FormatCost(item.Ammunition.ReloadTurnCost)
+                    + (item.Ammunition.ConsumesRemainingMovement
+                        ? " + ENDS MOVE"
+                        : string.Empty);
             return AppendRequirement(heading
                 + "\nPOWER - "
                 + item.Attack.DisplayName.ToUpperInvariant()
-                + "\nCOST - "
-                + FormatResolvedPowerCost(availability, turnBased)
+                 + "\nCOST - "
+                 + FormatResolvedPowerCost(availability, turnBased)
+                + ammunition
                 + targeting
                 + "\nEQUIPPED MOVE SPEED - "
                 + FormatMultiplier(item.EquippedEffects.MovementSpeedMultiplier),
@@ -1006,6 +1083,13 @@ namespace GritGud.Application.Gameplay
 
             return formatted;
         }
+
+        private static string FormatAmmunition(
+            int loadedRounds,
+            int reserveRounds) =>
+            (loadedRounds == 0 ? "EMPTY" : loadedRounds.ToString())
+            + " / "
+            + reserveRounds;
 
         private static string FormatResolvedCost(
             ActionCost cost,
@@ -1079,7 +1163,7 @@ namespace GritGud.Application.Gameplay
                     return new GameplayTurnResourceModel(
                         actor.ActorId,
                         actor.TurnBudget.ActionPoints,
-                        definition.StartingTurnBudget.ActionPoints,
+                        actor.ActionPointEconomy.MaximumHeldActionPoints,
                         actor.TurnBudget.MovementOpportunity,
                         definition.StartingTurnBudget.MovementOpportunity);
                 }
@@ -1141,6 +1225,7 @@ namespace GritGud.Application.Gameplay
                 new GameplayCommandHintModel(GameplayControl.ToggleStance, "CROUCH/STAND"),
                 new GameplayCommandHintModel(GameplayControl.ToggleCameraView, "CAMERA"),
                 new GameplayCommandHintModel(GameplayControl.Interact, "INTERACT"),
+                new GameplayCommandHintModel(GameplayControl.Reload, "RELOAD"),
                 new GameplayCommandHintModel(GameplayControl.ToggleTurnMode, "TURN MODE"),
             };
 
@@ -1148,12 +1233,15 @@ namespace GritGud.Application.Gameplay
             new[]
             {
                 new GameplayCommandHintModel(GameplayControl.Attack, "FIRE"),
+                new GameplayCommandHintModel(GameplayControl.Reload, "RELOAD"),
                 new GameplayCommandHintModel(GameplayControl.Interact, "INTERACT"),
                 new GameplayCommandHintModel(GameplayControl.EndTurn, "END TURN"),
                 new GameplayCommandHintModel(GameplayControl.ToggleTurnMode, "EXIT TURN MODE"),
                 new GameplayCommandHintModel(GameplayControl.ToggleCameraView, "CAMERA"),
                 new GameplayCommandHintModel(GameplayControl.CameraZoom, "ZOOM"),
                 new GameplayCommandHintModel(GameplayControl.Move, "PLAN"),
+                new GameplayCommandHintModel(GameplayControl.UndoRoute, "RETRACT"),
+                new GameplayCommandHintModel(GameplayControl.CancelRoute, "CLEAR ROUTE"),
                 new GameplayCommandHintModel(GameplayControl.ConfirmRoute, "MOVE"),
             };
     }

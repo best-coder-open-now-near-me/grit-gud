@@ -15,6 +15,26 @@ namespace GritGud.Presentation.Tests
     public sealed class GameplayThrownExplosiveControllerTests
     {
         [Test]
+        public void AimFailuresUsePointerValidationLanguage()
+        {
+            Assert.That(
+                GameplayThrownExplosiveController.FormatAimFailure(
+                    ThrownExplosiveFailure.OutOfRange,
+                    12f),
+                Is.EqualTo("OUT OF RANGE  12 M MAX"));
+            Assert.That(
+                GameplayThrownExplosiveController.FormatAimFailure(
+                    ThrownExplosiveFailure.InsufficientActionPoints,
+                    12f),
+                Is.EqualTo("THROW UNAVAILABLE - INSUFFICIENT AP"));
+            Assert.That(
+                GameplayThrownExplosiveController.FormatAimFailure(
+                    ThrownExplosiveFailure.ActorPinned,
+                    12f),
+                Is.EqualTo("THROW UNAVAILABLE - ACTOR PINNED"));
+        }
+
+        [Test]
         public void DefaultCatalogAuthorsTheProductionGrenadeVisuals()
         {
             ConsumablePresentationCatalog catalog =
@@ -126,9 +146,21 @@ namespace GritGud.Presentation.Tests
                 Assert.That(
                     session.GetInventoryQuantity("player", "item.grenade"),
                     Is.EqualTo(3));
+                Transform armedProjectile = FindDescendant(
+                    actorRoot.transform,
+                    "Armed Thrown Explosive");
+                Assert.That(armedProjectile, Is.Not.Null);
+                foreach (Collider collider in
+                    armedProjectile.GetComponentsInChildren<Collider>(true))
+                {
+                    Assert.That(collider.enabled, Is.False);
+                }
 
                 Assert.That(controller.TryToggleAim("item.grenade"), Is.True);
                 Assert.That(controller.IsAiming, Is.False);
+                Assert.That(
+                    FindDescendant(actorRoot.transform, "Armed Thrown Explosive"),
+                    Is.Null);
                 Assert.That(controller.StatusMessage, Is.EqualTo("Throw canceled."));
                 Assert.That(encounterStartRequests, Is.Zero);
                 Assert.That(session.Mode,
@@ -362,6 +394,20 @@ namespace GritGud.Presentation.Tests
                 Vector3.zero,
                 0.2f,
                 0.65f);
+
+        private static Transform FindDescendant(Transform root, string name)
+        {
+            foreach (Transform descendant in
+                root.GetComponentsInChildren<Transform>(true))
+            {
+                if (descendant.name == name)
+                {
+                    return descendant;
+                }
+            }
+
+            return null;
+        }
 
         private sealed class TestConsumablePowerDefinition
             : ConsumablePowerDefinition

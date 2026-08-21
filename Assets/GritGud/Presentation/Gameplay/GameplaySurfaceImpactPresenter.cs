@@ -16,6 +16,7 @@ namespace GritGud.Presentation.Gameplay
         private GameplayAttackController attacks;
         private GameplayWorldRegistry registry;
         private SurfacePresentationCatalog catalog;
+        private WeaponPresentationCatalog weapons;
         private GameObject root;
         private Material decalMaterial;
 
@@ -23,7 +24,8 @@ namespace GritGud.Presentation.Gameplay
             GameplayAttackController attackController,
             GameplayWorldRegistry worldRegistry,
             SurfacePresentationCatalog surfaceCatalog,
-            Transform parent)
+            Transform parent,
+            WeaponPresentationCatalog weaponCatalog = null)
         {
             if (attackController == null)
             {
@@ -46,6 +48,7 @@ namespace GritGud.Presentation.Gameplay
             attacks = attackController;
             registry = worldRegistry;
             catalog = surfaceCatalog;
+            weapons = weaponCatalog ?? WeaponPresentationCatalog.LoadDefault();
             root = new GameObject("Gameplay Surface Impacts");
             root.transform.SetParent(parent, false);
             attacks.AttackResolved += HandleAttackResolved;
@@ -64,6 +67,7 @@ namespace GritGud.Presentation.Gameplay
             attacks = null;
             registry = null;
             catalog = null;
+            weapons = null;
             GameplayObjectLifecycle.Destroy(root);
             GameplayObjectLifecycle.Destroy(decalMaterial);
             root = null;
@@ -87,11 +91,16 @@ namespace GritGud.Presentation.Gameplay
                 ? attacker.Transform.position + Vector3.up
                 : position - Vector3.forward;
             Vector3 normal = (attackerPosition - position).normalized;
+            float scale = ResolveImpactScaleMultiplier(
+                resolution.AttackerId,
+                out float width);
             PresentImpact(
                 SurfacePresentationCatalog.ActorSurfaceId,
                 position,
                 normal.sqrMagnitude > 0.0001f ? normal : Vector3.up,
-                createDecal: false);
+                createDecal: false,
+                scale,
+                width);
         }
 
         private void HandleWeaponDischarged(GameplayActionRecord action)
@@ -109,10 +118,17 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            string surfaceId = ResolveSurfaceId(discharge.TargetId);
+            string surfaceId = discharge.Impact?.SurfaceId
+                ?? ResolveSurfaceId(discharge.TargetId);
             Vector3 position = aimPoint;
-            Vector3 normal = -direction.normalized;
-            if (Physics.Raycast(
+            Vector3 normal = discharge.Impact == null
+                ? -direction.normalized
+                : new Vector3(
+                    discharge.Impact.NormalX,
+                    discharge.Impact.NormalY,
+                    discharge.Impact.NormalZ).normalized;
+            if (discharge.Impact == null
+                && Physics.Raycast(
                     origin,
                     direction.normalized,
                     out RaycastHit hit,
@@ -130,7 +146,16 @@ namespace GritGud.Presentation.Gameplay
                 }
             }
 
-            PresentImpact(surfaceId, position, normal, createDecal: true);
+            float scale = ResolveImpactScaleMultiplier(
+                discharge.AttackerId,
+                out float width);
+            PresentImpact(
+                surfaceId,
+                position,
+                normal,
+                createDecal: true,
+                scale,
+                width);
         }
 
         private string ResolveSurfaceId(string targetId)
@@ -144,27 +169,22 @@ namespace GritGud.Presentation.Gameplay
             string surfaceId,
             Vector3 position,
             Vector3 normal,
-            bool createDecal)
+            bool createDecal,
+            float scaleMultiplier,
+            float widthMultiplier)
         {
             SurfacePresentationDefinition definition = catalog.Get(surfaceId);
             if (definition.ImpactEffectPrefab != null)
             {
                 Quaternion orientation = Quaternion.LookRotation(normal)
                     * definition.ImpactRotation;
-                GameObject effect = Instantiate(
-                    definition.ImpactEffectPrefab,
+                GameObject effect = CreateImpactVisual(
+                    definition,
                     position + (normal * 0.012f),
                     orientation,
-                    root.transform);
-                effect.name = definition.SurfaceId + " Impact";
-                effect.transform.localScale =
-                    definition.ImpactEffectPrefab.transform.localScale
-                    * definition.ImpactScale;
-                foreach (ParticleSystem particles in
-                    effect.GetComponentsInChildren<ParticleSystem>(true))
-                {
-                    particles.Play(withChildren: true);
-                }
+                    root.transform,
+                    scaleMultiplier,
+                    widthMultiplier);
                 Destroy(effect, definition.ImpactLifetimeSeconds);
             }
 
@@ -172,6 +192,73 @@ namespace GritGud.Presentation.Gameplay
             {
                 CreateDecal(definition, position, normal);
             }
+        }
+
+        internal static GameObject CreateImpactVisual(
+            SurfacePresentationDefinition definition,
+            Vector3 position,
+            Quaternion orientation,
+            Transform parent,
+            float scaleMultiplier,
+            float widthMultiplier)
+        {
+            if (definition == null)
+                throw new ArgumentNullException(nameof(definition));
+            if (definition.ImpactEffectPrefab == null)
+                throw new InvalidOperationException(
+                    $"Surface '{definition.SurfaceId}' has no impact effect.");
+            if (parent == null)
+                throw new ArgumentNullException(nameof(parent));
+
+            GameObject effect = Instantiate(
+                definition.ImpactEffectPrefab,
+                position,
+                orientation,
+                parent);
+            effect.name = definition.SurfaceId + " Impact";
+            ParticleSystem[] systems = effect.GetComponentsInChildren<
+                ParticleSystem>(true);
+            foreach (ParticleSystem particles in systems)
+            {
+                particles.Stop(
+                    withChildren: false,
+                    ParticleSystemStopBehavior.StopEmittingAndClear);
+                ParticleSystem.MainModule main = particles.main;
+                main.playOnAwake = false;
+                main.scalingMode = ParticleSystemScalingMode.Hierarchy;
+            }
+            Vector3 uniformScale =
+                definition.ImpactEffectPrefab.transform.localScale
+                * definition.ImpactScale
+                * Mathf.Max(0f, scaleMultiplier);
+            effect.transform.localScale = Vector3.Scale(
+                uniformScale,
+                new Vector3(
+                    Mathf.Max(0f, widthMultiplier),
+                    Mathf.Max(0f, widthMultiplier),
+                    1f));
+            foreach (ParticleSystem particles in systems)
+                particles.Play(withChildren: false);
+            return effect;
+        }
+
+        private float ResolveImpactScaleMultiplier(
+            string attackerId,
+            out float widthMultiplier)
+        {
+            string equippedItemId = attacks?.Session?.GetActor(attackerId)
+                .EquippedItemId;
+            if (equippedItemId != null
+                && weapons != null
+                && weapons.TryGet(
+                    equippedItemId,
+                    out WeaponPresentationDefinition weapon))
+            {
+                widthMultiplier = weapon.ImpactEffectWidthMultiplier;
+                return weapon.ImpactEffectScaleMultiplier;
+            }
+            widthMultiplier = 1f;
+            return 1f;
         }
 
         private void CreateDecal(
@@ -224,7 +311,7 @@ namespace GritGud.Presentation.Gameplay
         {
             TargetRegionId requested = region ?? TargetRegionId.Torso;
             IReadOnlyList<ActorTargetRegionSample> samples =
-                actor.Stance.GetTargetRegionSamples();
+                actor.TargetProfile.GetTargetRegionSamples();
             foreach (ActorTargetRegionSample sample in samples)
             {
                 if (sample.Id == requested)
@@ -240,9 +327,9 @@ namespace GritGud.Presentation.Gameplay
             GameplayActionRecord action,
             out AttackResolutionRecord resolution)
         {
-            if (action != null
-                && action.Outcomes.Count == 1
-                && action.Outcomes[0] is AttackResolvedActionOutcome outcome)
+            if (GameplayWeaponActionOutcomes.TryGetPrimary(
+                    action,
+                    out AttackResolvedActionOutcome outcome))
             {
                 resolution = outcome.Attack;
                 return true;
@@ -256,9 +343,9 @@ namespace GritGud.Presentation.Gameplay
             GameplayActionRecord action,
             out WeaponDischargeRecord discharge)
         {
-            if (action != null
-                && action.Outcomes.Count == 1
-                && action.Outcomes[0] is WeaponDischargedActionOutcome outcome)
+            if (GameplayWeaponActionOutcomes.TryGetPrimary(
+                    action,
+                    out WeaponDischargedActionOutcome outcome))
             {
                 discharge = outcome.Discharge;
                 return true;

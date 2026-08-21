@@ -11,7 +11,9 @@ namespace GritGud.Application.Gameplay
         TurnModeRequired,
         ActorNotActive,
         ActorIncapacitated,
+        ActorPinned,
         OperationInProgress,
+        WorldStateChanged,
         Depleted,
         OutOfRange,
         InsufficientActionPoints,
@@ -25,6 +27,7 @@ namespace GritGud.Application.Gameplay
         private readonly IBlastWorldQuery blast;
         private readonly GameplayBlastConsequenceResolver consequences;
         private readonly GameplaySmokeFieldSession smokeFields;
+        private readonly GameplayFireFieldSession fireFields;
         private readonly IUncertaintySampler uncertainty;
         private readonly List<ThrownExplosiveRecord> throws = new List<ThrownExplosiveRecord>();
         private readonly IReadOnlyList<ThrownExplosiveRecord> readOnlyThrows;
@@ -35,7 +38,8 @@ namespace GritGud.Application.Gameplay
             IBlastWorldQuery blastQuery,
             GameplayBlastConsequenceResolver consequenceResolver,
             IUncertaintySampler uncertaintySampler,
-            GameplaySmokeFieldSession smokeFieldSession = null)
+            GameplaySmokeFieldSession smokeFieldSession = null,
+            GameplayFireFieldSession fireFieldSession = null)
         {
             gameplay = gameplaySession ?? throw new ArgumentNullException(nameof(gameplaySession));
             landing = landingQuery ?? throw new ArgumentNullException(
@@ -45,6 +49,7 @@ namespace GritGud.Application.Gameplay
             consequences = consequenceResolver ??
                 throw new ArgumentNullException(nameof(consequenceResolver));
             smokeFields = smokeFieldSession;
+            fireFields = fireFieldSession;
             uncertainty = uncertaintySampler ?? throw new ArgumentNullException(nameof(uncertaintySampler));
             readOnlyThrows = throws.AsReadOnly();
         }
@@ -116,7 +121,17 @@ namespace GritGud.Application.Gameplay
 
             float distance = actor.Pose.Position.DistanceTo(intendedLanding);
             float radius = definition.GetUncertaintyRadius(distance);
-            GameplayPosition sampled = uncertainty.Sample(intendedLanding, radius);
+            var transition = new GameplayTransitionIdentity(
+                gameplay.NextActionSequence,
+                GameplaySemanticCapability.ThrowExplosive.ToString(),
+                actorId,
+                definition.Id);
+            GameplayPosition sampled = uncertainty.Sample(
+                intendedLanding,
+                radius,
+                gameplay.RunIdentity,
+                transition,
+                "landing-error");
             if (sampled.DistanceTo(intendedLanding) > radius + 0.0001f)
                 throw new InvalidOperationException(
                     "Uncertainty samplers must return a point inside the previewed region.");
@@ -135,7 +150,7 @@ namespace GritGud.Application.Gameplay
                     "Landing and blast evidence must describe one world revision.");
             }
 
-            long sequence = throws.Count + 1L;
+            long sequence = gameplay.NextActionSequence;
             SmokeFieldRecord smokeField = definition.SmokeField == null
                 ? null
                 : new SmokeFieldRecord(
@@ -144,12 +159,26 @@ namespace GritGud.Application.Gameplay
                     definition.Id,
                     landingResult.LandingPosition,
                     definition.SmokeField);
+            FireFieldRecord fireField = definition.FireField == null
+                ? null
+                : new FireFieldRecord(
+                    $"fire.{actorId}.{sequence}",
+                    actorId,
+                    definition.Id,
+                    landingResult.LandingPosition,
+                    definition.FireField);
+            IReadOnlyList<ConcussiveActionPointEffectRecord>
+                concussiveEffects = consequences.ResolveConcussiveEffects(
+                    blastResult.Effects,
+                    definition.BlastActionPointReduction);
             prepared = new ThrownExplosiveRecord(
                 sequence, actorId, definition, actor.Pose.Position,
                 launchOrigin, intendedLanding, sampled,
                 landingResult.LandingPosition, radius,
                 blastResult.WorldStateRevision, blastResult.Effects,
-                smokeField);
+                smokeField,
+                fireField,
+                concussiveEffects);
             failure = ThrownExplosiveFailure.None;
             return true;
         }
@@ -187,10 +216,14 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentNullException(nameof(prepared));
             }
 
-            if (prepared.Sequence != throws.Count + 1L)
+            if (prepared.Sequence != gameplay.NextActionSequence
+                || (gameplay.IsCanonicalProjectionBound
+                    && prepared.WorldStateRevision
+                        != gameplay.WorldStateRevision))
             {
-                throw new InvalidOperationException(
-                    "The prepared explosive is not the next authoritative throw.");
+                return Fail(
+                    ThrownExplosiveFailure.WorldStateChanged,
+                    out failure);
             }
 
             bool startsEncounter = gameplay.ThrownExplosiveStartsEncounter(
@@ -210,6 +243,28 @@ namespace GritGud.Application.Gameplay
                 prepared.Definition,
                 startsEncounter);
             TurnBudget resultingBudget = actor.TurnBudget.SpendAction(cost);
+            IReadOnlyList<ConcussiveActionPointEffectRecord>
+                committedConcussiveEffects =
+                    consequences.ResolveConcussiveEffects(
+                        prepared.BlastEffects,
+                        prepared.Definition.BlastActionPointReduction,
+                        prepared.ThrowerId,
+                        resultingBudget.ActionPoints);
+            var committedRecord = new ThrownExplosiveRecord(
+                prepared.Sequence,
+                prepared.ThrowerId,
+                prepared.Definition,
+                prepared.Origin,
+                prepared.LaunchOrigin,
+                prepared.IntendedLanding,
+                prepared.SampledLanding,
+                prepared.ResolvedLanding,
+                prepared.UncertaintyRadius,
+                prepared.WorldStateRevision,
+                prepared.BlastEffects,
+                prepared.SmokeField,
+                prepared.FireField,
+                committedConcussiveEffects);
             int previousQuantity = gameplay.GetInventoryQuantity(
                 prepared.ThrowerId,
                 prepared.Definition.Id);
@@ -220,7 +275,7 @@ namespace GritGud.Application.Gameplay
                 consumedQuantity: 1,
                 resultingQuantity: previousQuantity - 1);
             action = new GameplayActionRecord(
-                gameplay.LastResolvedAction == null ? 1L : gameplay.LastResolvedAction.Sequence + 1L,
+                prepared.Sequence,
                 new GameplayActionRequest(
                     prepared.ThrowerId,
                     prepared.Definition.Id,
@@ -230,7 +285,7 @@ namespace GritGud.Application.Gameplay
                 resultingBudget,
                 new GameplayActionOutcome[]
                 {
-                    new ThrownExplosiveActionOutcome(prepared),
+                    new ThrownExplosiveActionOutcome(committedRecord),
                     new InventoryQuantityChangedActionOutcome(quantityChange),
                 });
             CommitThrow(action);
@@ -273,9 +328,9 @@ namespace GritGud.Application.Gameplay
                 throw new InvalidOperationException(
                     "Thrown explosive actions must consume their matching inventory item.");
             }
-            if (outcome.Record.Sequence != throws.Count + 1L)
+            if (outcome.Record.Sequence != action.Sequence)
                 throw new InvalidOperationException(
-                    "The thrown explosive is not the next authoritative throw.");
+                    "The thrown explosive does not share its canonical action sequence.");
             consequences.Validate(
                 outcome.Record.BlastEffects,
                 outcome.Record.Definition.BlastWoundMovementPenalty,
@@ -283,16 +338,54 @@ namespace GritGud.Application.Gameplay
             if (outcome.Record.SmokeField != null && smokeFields == null)
                 throw new InvalidOperationException(
                     "Thrown smoke requires an authoritative smoke-field session.");
-            gameplay.CommitAction(action);
+            if (outcome.Record.SmokeField != null
+                && smokeFields.TryGetField(
+                    outcome.Record.SmokeField.Id,
+                    out _))
+            {
+                throw new InvalidOperationException(
+                    $"Smoke field '{outcome.Record.SmokeField.Id}' is already active.");
+            }
+            if (outcome.Record.FireField != null && fireFields == null)
+                throw new InvalidOperationException(
+                    "Thrown incendiaries require an authoritative fire-field session.");
+            if (outcome.Record.FireField != null
+                && fireFields.TryGetField(outcome.Record.FireField.Id, out _))
+            {
+                throw new InvalidOperationException(
+                    $"Fire field '{outcome.Record.FireField.Id}' is already active.");
+            }
+
+            var notifications = new GameplayNotificationBatch();
+            gameplay.CommitAction(action, notifications);
             throws.Add(outcome.Record);
+            if (gameplay.IsCanonicalProjectionBound)
+            {
+                notifications.Publish();
+                return;
+            }
             consequences.Apply(
                 outcome.Record.BlastEffects,
                 outcome.Record.Definition.BlastWoundMovementPenalty,
-                outcome.Record.Definition.BlastIntegrityDamage);
+                outcome.Record.Definition.BlastIntegrityDamage,
+                notifications);
+            consequences.ApplyConcussiveEffects(
+                outcome.Record.ConcussiveEffects,
+                notifications);
             if (outcome.Record.SmokeField != null)
             {
-                smokeFields.Deploy(outcome.Record.SmokeField);
+                smokeFields.Deploy(
+                    outcome.Record.SmokeField,
+                    notifications);
             }
+            if (outcome.Record.FireField != null)
+            {
+                fireFields.Deploy(
+                    outcome.Record.FireField,
+                    notifications);
+            }
+
+            notifications.Publish();
         }
 
         private static bool TryGetOutcomes(
@@ -353,38 +446,17 @@ namespace GritGud.Application.Gameplay
             out ThrownExplosiveFailure failure)
         {
             actor = default;
-            if (gameplay.Operation != GameplaySessionOperation.None)
-                return Fail(ThrownExplosiveFailure.OperationInProgress, out failure);
-            if (gameplay.Mode == GameplaySessionMode.TurnBased)
-            {
-                if (!TryGetActiveActor(actorId, out actor))
-                {
-                    return Fail(
-                        ThrownExplosiveFailure.ActorNotActive,
-                        out failure);
-                }
-            }
-            else if (!gameplay.TryGetActor(actorId, out actor))
-            {
-                return Fail(ThrownExplosiveFailure.ActorNotActive, out failure);
-            }
-
-            if (gameplay.IsActorIncapacitated(actorId))
-            {
+            if (!GameplayActorActionAuthority.TryAuthorize(
+                    gameplay,
+                    actorId,
+                    GameplayActionTiming.Immediate,
+                    startsEncounter,
+                    blocksPinnedActor: true,
+                    out actor,
+                    out GameplayActorActionFailure authorizationFailure))
                 return Fail(
-                    ThrownExplosiveFailure.ActorIncapacitated,
+                    ToThrownFailure(authorizationFailure),
                     out failure);
-            }
-
-            if (startsEncounter
-                && !gameplay.EncounterActive
-                && gameplay.Mode == GameplaySessionMode.Exploration
-                && !gameplay.CanEnterTurnMode)
-            {
-                return Fail(
-                    ThrownExplosiveFailure.TurnModeRequired,
-                    out failure);
-            }
 
             if (gameplay.GetInventoryQuantity(actorId, definition.Id) <= 0)
             {
@@ -399,16 +471,25 @@ namespace GritGud.Application.Gameplay
                 out failure);
         }
 
-        private bool TryGetActiveActor(
-            string actorId,
-            out GameplayActorSnapshot actor)
+        private static ThrownExplosiveFailure ToThrownFailure(
+            GameplayActorActionFailure failure)
         {
-            actor = default;
-            return string.Equals(
-                gameplay.ActiveActorId,
-                actorId,
-                StringComparison.Ordinal)
-            && gameplay.TryGetActor(actorId, out actor);
+            switch (failure)
+            {
+                case GameplayActorActionFailure.ActorUnavailable:
+                case GameplayActorActionFailure.ActorNotActive:
+                    return ThrownExplosiveFailure.ActorNotActive;
+                case GameplayActorActionFailure.ActorIncapacitated:
+                    return ThrownExplosiveFailure.ActorIncapacitated;
+                case GameplayActorActionFailure.ActorPinned:
+                    return ThrownExplosiveFailure.ActorPinned;
+                case GameplayActorActionFailure.OperationInProgress:
+                    return ThrownExplosiveFailure.OperationInProgress;
+                case GameplayActorActionFailure.TurnModeRequired:
+                    return ThrownExplosiveFailure.TurnModeRequired;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(failure));
+            }
         }
 
         private static bool TryValidateRangeAndCost(

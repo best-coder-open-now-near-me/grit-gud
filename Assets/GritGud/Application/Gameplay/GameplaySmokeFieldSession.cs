@@ -13,9 +13,16 @@ namespace GritGud.Application.Gameplay
         private sealed class ActiveField
         {
             public ActiveField(SmokeFieldRecord field)
+                : this(field, 1f)
+            {
+            }
+
+            public ActiveField(
+                SmokeFieldRecord field,
+                float remainingFraction)
             {
                 Field = field;
-                RemainingFraction = 1f;
+                RemainingFraction = remainingFraction;
             }
 
             public SmokeFieldRecord Field { get; }
@@ -28,6 +35,7 @@ namespace GritGud.Application.Gameplay
             new Dictionary<string, ActiveField>(StringComparer.Ordinal);
         private readonly List<string> expiredIds = new List<string>();
         private bool disposed;
+        private bool canonicalProjectionBound;
 
         public GameplaySmokeFieldSession(GameplaySession gameplaySession)
         {
@@ -43,6 +51,78 @@ namespace GritGud.Application.Gameplay
         public event Action<SmokeFieldRecord> FieldDeployed;
 
         public event Action<SmokeFieldRecord> FieldExpired;
+
+        internal void BindCanonicalProjection(
+            IReadOnlyList<SmokeFieldSnapshot> snapshots)
+        {
+            if (canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Smoke fields already have a canonical runtime projection.");
+            ValidateCanonicalProjection(snapshots);
+            if (!Matches(snapshots))
+                throw new InvalidOperationException(
+                    "Smoke field session does not match the initial canonical state.");
+            canonicalProjectionBound = true;
+        }
+
+        internal void ValidateCanonicalProjection(
+            IReadOnlyList<SmokeFieldSnapshot> snapshots)
+        {
+            ThrowIfDisposed();
+            if (snapshots == null)
+                throw new ArgumentNullException(nameof(snapshots));
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (SmokeFieldSnapshot snapshot in snapshots)
+            {
+                if (!ids.Add(snapshot.Field.Id))
+                    throw new InvalidOperationException(
+                        $"Canonical smoke field '{snapshot.Field.Id}' is duplicated.");
+                if (active.TryGetValue(
+                        snapshot.Field.Id,
+                        out ActiveField current)
+                    && !string.Equals(
+                        GameplayCanonicalValueDigest.Calculate(current.Field),
+                        GameplayCanonicalValueDigest.Calculate(snapshot.Field),
+                        StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Canonical smoke field '{snapshot.Field.Id}' changed its definition.");
+                }
+            }
+        }
+
+        internal void InstallCanonicalProjection(
+            IReadOnlyList<SmokeFieldSnapshot> snapshots,
+            GameplayNotificationBatch notifications)
+        {
+            if (!canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Smoke fields are not bound to a canonical runtime.");
+            if (notifications == null)
+                throw new ArgumentNullException(nameof(notifications));
+            ValidateCanonicalProjection(snapshots);
+            if (Matches(snapshots)) return;
+
+            var next = new Dictionary<string, ActiveField>(
+                StringComparer.Ordinal);
+            foreach (SmokeFieldSnapshot snapshot in snapshots)
+            {
+                next.Add(
+                    snapshot.Field.Id,
+                    new ActiveField(
+                        snapshot.Field,
+                        snapshot.RemainingFraction));
+                if (!active.ContainsKey(snapshot.Field.Id))
+                    notifications.Add(FieldDeployed, snapshot.Field);
+            }
+            foreach (KeyValuePair<string, ActiveField> entry in active)
+                if (!next.ContainsKey(entry.Key))
+                    notifications.Add(FieldExpired, entry.Value.Field);
+            active.Clear();
+            foreach (KeyValuePair<string, ActiveField> entry in next)
+                active.Add(entry.Key, entry.Value);
+            Revision++;
+        }
 
         public IReadOnlyList<SmokeFieldSnapshot> CaptureActiveFields()
         {
@@ -81,6 +161,18 @@ namespace GritGud.Application.Gameplay
 
         public void Deploy(SmokeFieldRecord field)
         {
+            var notifications = new GameplayNotificationBatch();
+            Deploy(field, notifications);
+            notifications.Publish();
+        }
+
+        internal void Deploy(
+            SmokeFieldRecord field,
+            GameplayNotificationBatch notifications)
+        {
+            RequireLegacyMutationAllowed(nameof(Deploy));
+            if (notifications == null)
+                throw new ArgumentNullException(nameof(notifications));
             ThrowIfDisposed();
             if (field == null)
                 throw new ArgumentNullException(nameof(field));
@@ -89,11 +181,12 @@ namespace GritGud.Application.Gameplay
                     $"Smoke field '{field.Id}' is already active.");
 
             Revision++;
-            FieldDeployed?.Invoke(field);
+            notifications.Add(FieldDeployed, field);
         }
 
         public void AdvanceContinuousTime(float deltaTime)
         {
+            RequireLegacyMutationAllowed(nameof(AdvanceContinuousTime));
             ThrowIfDisposed();
             if (float.IsNaN(deltaTime)
                 || float.IsInfinity(deltaTime)
@@ -189,8 +282,26 @@ namespace GritGud.Application.Gameplay
 
         private void HandleTurnEnded(TurnEndRecord _)
         {
+            if (canonicalProjectionBound) return;
             AdvanceFields(state => 1f
                 / state.Field.Definition.DurationTurnEnds);
+        }
+
+        private bool Matches(IReadOnlyList<SmokeFieldSnapshot> snapshots)
+        {
+            if (snapshots.Count != active.Count) return false;
+            foreach (SmokeFieldSnapshot snapshot in snapshots)
+                if (!active.TryGetValue(
+                        snapshot.Field.Id,
+                        out ActiveField current)
+                    || current.RemainingFraction
+                        != snapshot.RemainingFraction
+                    || !string.Equals(
+                        GameplayCanonicalValueDigest.Calculate(current.Field),
+                        GameplayCanonicalValueDigest.Calculate(snapshot.Field),
+                        StringComparison.Ordinal))
+                    return false;
+            return true;
         }
 
         private void AdvanceFields(Func<ActiveField, float> getStep)
@@ -276,6 +387,13 @@ namespace GritGud.Application.Gameplay
             if (disposed)
                 throw new ObjectDisposedException(
                     nameof(GameplaySmokeFieldSession));
+        }
+
+        private void RequireLegacyMutationAllowed(string operation)
+        {
+            if (canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    $"Legacy smoke mutation '{operation}' is disabled while the semantic runtime owns state.");
         }
     }
 }

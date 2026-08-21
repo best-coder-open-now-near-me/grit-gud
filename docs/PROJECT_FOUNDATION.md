@@ -104,8 +104,11 @@ Inert walls and unconfigured scenery remain ordinary surface discharges.
   on frame rate.
 - Line of sight and cover are sampled against stable target regions rather than
   exact animated mesh triangles.
-- Standing and crouched stances move those stable regions. Physical geometry
-  determines occlusion; stance does not grant an intrinsic cover bonus.
+- Standing, crouched, and pinned-down profiles move those stable regions.
+  The same profile supplies player acquisition bounds and live/headless
+  exposure; the upright movement collider is never an aiming bound. Physical
+  geometry determines occlusion; stance does not grant an intrinsic cover
+  bonus.
 - Non-physical concealment such as smoke or darkness attenuates perception and
   attack confidence without automatically blocking projectile travel.
 - Small, documented tolerances handle boundary cases such as grazing cover or
@@ -201,7 +204,16 @@ Throw. A knife is an equipped attack: it uses authored reach and AP cost,
 seeded attack resolution,
 ordinary wound consequences, and replay diagnostics. Eligible props may also
 enter an explicit toppled state whose collider, cover, and navigation effects
-are authoritative. These close-quarters interactions precede deployable
+are authoritative. A toppled prop may also pin a character as a first-class
+gameplay result when its committed contact geometry and authored mass rules
+qualify. The pinned state identifies the responsible prop, restricts movement
+and incompatible actions, and is cleared only by a committed escape result.
+The character's Push Off action must atomically record the released prop pose,
+cleared actor state, cost, and get-up transition; animation cannot decide any
+of those outcomes. Entering the canonical pinned-down profile holds its prone
+pose and horizontal aiming silhouette; leaving it restores the actor's current
+stance silhouette and explicitly releases the held fall layer. These
+close-quarters interactions precede deployable
 companions on the implementation roadmap.
 
 Displacement targeting is action-first rather than pointer-gated. The player
@@ -316,40 +328,44 @@ attack penalties, dropped weapons, and reduced movement. Explicit body-part
 selection is reserved for a future exceptional action if a concrete scenario
 needs it.
 
-## Authored characters and progression
+## Authored characters and starting builds
 
-Characters are authored identities rather than blank templates for a broad
-character creator. Their baseline attributes, starting skills, talents, and
-general capabilities come with the character. Starting identity should remain
-recognizable throughout progression.
+Characters are authored identities. Their baseline attributes, starting skills,
+talents, appearance, starting loadout, and general capabilities are selected in
+the pre-level Character Creator and remain fixed during play. There is no
+runtime XP, advancement-point, or player-side rating-spending system.
 
 Every character has exactly four core attributes rated from 1 to 5:
 
 - Strength contributes to melee and opposed displacement checks.
-- Dexterity determines initiative and movement allowance. Initiative equals
-  Dexterity; movement allowance is four plus Dexterity world units per turn.
+- Dexterity determines base initiative and movement allowance. At session start,
+  Dexterity maps onto a reaction advance from `1` through `N`, where `N` is the
+  total number of friendly and hostile initiative participants. The advance is
+  `1 + floor(((clamp(Dexterity, 1, 5) - 1) * (N - 1)) / 4)` and is retained in
+  the Application result. Movement allowance is four plus Dexterity world units
+  per turn.
 - Grit contributes to resistance checks for consequences such as concussion,
   bleeding, and other statuses. It does not create hit points or increase the
   number of ordinary gunshot wounds an actor can survive.
 - Charisma contributes to social checks when social resolution is introduced.
 
-Initiative ties are resolved by stable actor ID so identical content produces
-the same ordering on every platform. Opposed Close-Quarters Control currently
+Reaction-advance ties prefer higher Dexterity and then stable actor ID, so
+identical content produces the same ordering on every platform. The complete
+Dexterity, combatant count, reaction advance, and final position are projected
+into the Dialogue window's Combat channel. Opposed Close-Quarters Control currently
 uses `d20 + Strength + control skill + talent modifier`.
 
 Customization comes primarily from:
 
+- Pre-level appearance, attribute, skill, talent, and starting-loadout choices.
 - Equipped weapons, armor, tools, and carried objects.
-- Level-progression points spent within deliberately constrained advancement
-  options.
 - Tactical consequences such as wounds, recovery, and changes in equipment or
   role.
 
 Skills are rated competencies used by shared resolution rules, including the
 opposed Close-Quarters Control check. Talents are authored capabilities or rule
-modifiers that distinguish characters and can provide specific counters. The
-size and structure of each character's advancement pool remain open, but it
-must not become an unrestricted build system that erases their starting role.
+modifiers that distinguish characters and can provide specific counters. Their
+values are authored before a level and do not expose an in-game spending path.
 
 ## In-game level editor
 
@@ -389,8 +405,8 @@ outcome.
 - Momentum parameters, vehicle controls, and which non-vehicle actions retain
   speed between turns.
 - Which attacks initiate impact cycles and how simultaneous projectiles behave.
-- Party and roster structure, skill taxonomy, talent pools, and progression
-  rates.
+- Party and roster structure, skill taxonomy, talent pools, and pre-level build
+  constraints.
 - Destructible-object granularity, material rules, and debris behavior.
 - Exact hit-roll formula and defensive statistics.
 - Vitality, wound severity, healing, recovery, and permanent-death rules.

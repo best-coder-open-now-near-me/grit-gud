@@ -32,5 +32,19 @@ namespace GritGud.Presentation.Tests
                     "GameObject.CreatePrimitive adds it through native code.");
             }
         }
+
+        [Test]
+        public void CanonicalReplayTypesAreRetainedInPlayerBuilds()
+        {
+            string linkerConfig = File.ReadAllText(LinkerConfigPath);
+            Assert.That(
+                linkerConfig,
+                Does.Contain(
+                    "fullname=\"GritGud.Application\" preserve=\"all\""));
+            Assert.That(
+                linkerConfig,
+                Does.Contain(
+                    "fullname=\"GritGud.Domain\" preserve=\"all\""));
+        }
     }
 }

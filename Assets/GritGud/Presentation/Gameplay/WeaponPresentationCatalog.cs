@@ -5,6 +5,12 @@ using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
 {
+    public static class GameplayCloseQuartersPresentationTiming
+    {
+        public const float ContactStrikeSeconds = 0.8f;
+        public const float ContactImpactNormalizedTime = 0.4f;
+    }
+
     public enum WeaponAttackPresentationKind
     {
         Firearm = 0,
@@ -52,23 +58,25 @@ namespace GritGud.Presentation.Gameplay
         [SerializeField, Min(0.01f)]
         private float muzzleLightSeconds = 0.06f;
 
+        [SerializeField, Min(0f)]
+        private float impactEffectScaleMultiplier = 1f;
+
+        [SerializeField, Min(0f)]
+        private float impactEffectWidthMultiplier = 1f;
+
         [SerializeField, Range(1f, 90f)]
         private float maximumAimCorrectionDegrees = 55f;
 
         [SerializeField]
         private WeaponAttackPresentationKind attackPresentation;
 
-        [SerializeField]
-        private Vector3 contactSwingAxisLocal = Vector3.up;
-
-        [SerializeField]
-        private float contactSwingDegrees = 75f;
-
         [SerializeField, Min(0.05f)]
         private float contactStrikeSeconds = 0.34f;
 
-        [SerializeField, Min(0f)]
-        private float contactHandExtension = 0.32f;
+        [SerializeField, Range(0f, 1f)]
+        private float contactImpactNormalizedTime =
+            GameplayCloseQuartersPresentationTiming
+                .ContactImpactNormalizedTime;
 
         public WeaponPresentationDefinition(
             string inventoryItemId,
@@ -81,14 +89,16 @@ namespace GritGud.Presentation.Gameplay
             float maxAimCorrectionDegrees = 55f,
             WeaponAttackPresentationKind attackPresentationKind =
                 WeaponAttackPresentationKind.Firearm,
-            Vector3 localContactSwingAxis = default(Vector3),
-            float localContactSwingDegrees = 75f,
             float contactDurationSeconds = 0.34f,
-            float handExtension = 0.32f,
             Color? shotLightColor = null,
             float shotLightIntensity = 3f,
             float shotLightRange = 3f,
-            float shotLightSeconds = 0.06f)
+            float shotLightSeconds = 0.06f,
+            float contactImpactTime =
+                GameplayCloseQuartersPresentationTiming
+                    .ContactImpactNormalizedTime,
+            float impactScaleMultiplier = 1f,
+            float impactWidthMultiplier = 1f)
         {
             itemId = inventoryItemId ?? string.Empty;
             prefab = weaponRigPrefab;
@@ -99,15 +109,15 @@ namespace GritGud.Presentation.Gameplay
             tracerWidth = lineWidth;
             maximumAimCorrectionDegrees = maxAimCorrectionDegrees;
             attackPresentation = attackPresentationKind;
-            contactSwingAxisLocal = localContactSwingAxis;
-            contactSwingDegrees = localContactSwingDegrees;
             contactStrikeSeconds = contactDurationSeconds;
-            contactHandExtension = handExtension;
+            contactImpactNormalizedTime = contactImpactTime;
             muzzleLightColor = shotLightColor
                 ?? new Color(1.4f, 0.5f, 0.08f, 1f);
             muzzleLightIntensity = Mathf.Max(0f, shotLightIntensity);
             muzzleLightRange = Mathf.Max(0.01f, shotLightRange);
             muzzleLightSeconds = Mathf.Max(0.01f, shotLightSeconds);
+            impactEffectScaleMultiplier = Mathf.Max(0f, impactScaleMultiplier);
+            impactEffectWidthMultiplier = Mathf.Max(0f, impactWidthMultiplier);
         }
 
         public string ItemId => itemId;
@@ -136,24 +146,24 @@ namespace GritGud.Presentation.Gameplay
 
         public float MuzzleLightSeconds => Mathf.Max(0.01f, muzzleLightSeconds);
 
+        public float ImpactEffectScaleMultiplier =>
+            Mathf.Max(0f, impactEffectScaleMultiplier);
+
+        public float ImpactEffectWidthMultiplier =>
+            Mathf.Max(0f, impactEffectWidthMultiplier);
+
         public float MaximumAimCorrectionDegrees =>
             Mathf.Clamp(maximumAimCorrectionDegrees, 1f, 90f);
 
         public WeaponAttackPresentationKind AttackPresentation =>
             attackPresentation;
 
-        public Vector3 ContactSwingAxisLocal =>
-            contactSwingAxisLocal.sqrMagnitude > 0.0001f
-                ? contactSwingAxisLocal.normalized
-                : Vector3.up;
-
-        public float ContactSwingDegrees => contactSwingDegrees;
-
         public float ContactStrikeSeconds =>
             Mathf.Max(0.05f, contactStrikeSeconds);
 
-        public float ContactHandExtension =>
-            Mathf.Max(0f, contactHandExtension);
+        public float ContactImpactNormalizedTime =>
+            Mathf.Clamp01(contactImpactNormalizedTime);
+
     }
 
     [CreateAssetMenu(
@@ -195,6 +205,14 @@ namespace GritGud.Presentation.Gameplay
             }
 
             return definition;
+        }
+
+        public bool TryGet(
+            string itemId,
+            out WeaponPresentationDefinition definition)
+        {
+            EnsureIndex();
+            return index.TryGetValue(itemId ?? string.Empty, out definition);
         }
 
         internal static WeaponPresentationCatalog CreateRuntime(

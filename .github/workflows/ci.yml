@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  merge_group:
+    types:
+      - checks_requested
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source:
+    name: Source and contract checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Run fast source gate
+        uses: ./.github/actions/fast-source-gate
+
+  unity:
+    name: Licensed Unity tests
+    needs: source
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      checks: write
+      contents: read
+    env:
+      UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+      UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+      UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+      UNITY_LICENSING_SERVER: ${{ secrets.UNITY_LICENSING_SERVER }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Read licensed asset revision
+        id: licensed_asset_config
+        shell: bash
+        run: |
+          ref="$(tr -d '\r\n' < .github/private-assets-ref)"
+          if [ -z "$ref" ]; then
+            echo "The tracked private asset ref is empty." >&2
+            exit 1
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: Check out licensed test assets
+        uses: actions/checkout@v4
+        with:
+          repository: best-coder-open-now-near-me/private-assets
+          ref: ${{ steps.licensed_asset_config.outputs.ref }}
+          token: ${{ secrets.PRIVATE_ASSETS }}
+          path: .private-assets
+          lfs: true
+          persist-credentials: false
+
+      - name: Install licensed test assets
+        id: licensed_assets
+        shell: bash
+        run: |
+          revision="$(git -C .private-assets rev-parse HEAD)"
+          python tools/private-assets-manifest.py preinstall \
+            --manifest .github/private-assets-manifest.json \
+            --checkout .private-assets \
+            --workspace .
+          # Licensed assets supplement the tracked project. They must never
+          # replace newer authored gameplay/content files from this commit.
+          rsync -a --ignore-existing --exclude='.git*' .private-assets/grit-gud/Assets/ Assets/
+          python tools/private-assets-manifest.py installed \
+            --manifest .github/private-assets-manifest.json \
+            --checkout .private-assets \
+            --workspace .
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+          rm -rf .private-assets
+
+      - name: Reclaim runner disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo apt-get clean
+          sudo docker system prune --all --force
+
+      - name: Restore Unity import cache
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: Unity-Library-${{ runner.os }}-Tests-${{ hashFiles('ProjectSettings/ProjectVersion.txt', 'Packages/manifest.json', 'Packages/packages-lock.json') }}-${{ steps.licensed_assets.outputs.revision }}
+          restore-keys: |
+            Unity-Library-${{ runner.os }}-Tests-
+            Unity-Library-${{ runner.os }}-WebGL-
+
+      - name: Run EditMode tests
+        uses: game-ci/unity-test-runner@v4
+        with:
+          projectPath: .
+          unityVersion: auto
+          testMode: editmode
+          artifactsPath: artifacts/editmode
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: CI EditMode test results
+
+      - name: Upload EditMode results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-editmode-test-results-${{ github.run_id }}
+          path: artifacts/editmode
+          if-no-files-found: ignore
+
+      - name: Run PlayMode lifecycle tests
+        uses: game-ci/unity-test-runner@v4
+        with:
+          projectPath: .
+          unityVersion: auto
+          testMode: playmode
+          artifactsPath: artifacts/playmode
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: CI PlayMode lifecycle test results
+
+      - name: Upload PlayMode results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-playmode-test-results-${{ github.run_id }}
+          path: artifacts/playmode
+          if-no-files-found: ignore
