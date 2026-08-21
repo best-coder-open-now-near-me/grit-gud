@@ -512,7 +512,7 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
-        public void RangedWeaponPoseTracksPointerBeforeShotIsArmed()
+        public void RangedWeaponPoseOnlyTracksPointerAfterShotIsArmed()
         {
             var host = new GameObject("Pre-Arm Weapon Aim Host");
             GameObject playerPrefab = Resources.Load<GameObject>(
@@ -579,20 +579,29 @@ namespace GritGud.Presentation.Tests
 
                 Assert.That(
                     rig.HasAimPoint,
-                    Is.True,
-                    "The ranged pose must receive its pointer aim before "
-                        + "the shot is armed.");
+                    Is.False,
+                    "Ordinary pointer preview must not aim the character.");
+                Assert.That(
+                    Quaternion.Angle(
+                        initialRotation,
+                        player.transform.rotation),
+                    Is.LessThan(0.001f),
+                    "Ordinary pointer preview must not rotate the character.");
+                Assert.That(
+                    acquisition.WeaponTargetingActive,
+                    Is.False,
+                    "Pointer preview must not implicitly arm the attack.");
+
+                acquisition.SetWeaponTargetingActive(true);
+                aim.Tick(1f);
+
+                Assert.That(rig.HasAimPoint, Is.True);
                 Assert.That(
                     Quaternion.Angle(
                         initialRotation,
                         player.transform.rotation),
                     Is.GreaterThan(0.1f),
-                    "Pre-arm aiming must visibly turn the actor toward the "
-                        + "pointer instead of waiting for confirmation.");
-                Assert.That(
-                    acquisition.WeaponTargetingActive,
-                    Is.False,
-                    "Pose tracking must not implicitly arm the attack.");
+                    "Explicit weapon targeting should still turn the actor.");
             }
             finally
             {

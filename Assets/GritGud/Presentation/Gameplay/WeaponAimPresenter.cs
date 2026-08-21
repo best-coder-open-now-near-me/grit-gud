@@ -151,6 +151,7 @@ namespace GritGud.Presentation.Gameplay
             if (weaponDefinition == null
                 || acquisition == null
                 || rig == null
+                || !acquisition.WeaponTargetingActive
                 || !acquisition.TryGetPresentationAimPoint(
                     out Vector3 aimPoint)
                 || weaponDefinition.AttackPresentation ==
