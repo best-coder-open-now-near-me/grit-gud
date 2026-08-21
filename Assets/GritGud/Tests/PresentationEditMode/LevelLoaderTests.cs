@@ -235,6 +235,39 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void MainLevelExposesReloadToEveryEnemyPolicy()
+        {
+            GameplayContentPackage content = GameplayContentLoader.LoadDefault();
+            var reachable = GameplayReachableInputEnumerator.Enumerate(
+                content.Assembly,
+                content.Level);
+            string[] enemyActorIds =
+            {
+                "depot-rifleman",
+                "depot-yard-support",
+                "depot-warehouse-patrol",
+                "depot-loading-guard",
+            };
+
+            foreach (string actorId in enemyActorIds)
+            {
+                GameplayReachableInput reload = reachable.Single(input =>
+                    input.ActorId == actorId
+                    && input.Profile.Capability
+                        == GameplaySemanticCapability.Reload);
+
+                Assert.That(reload.Kind,
+                    Is.EqualTo(GameplayReachableInputKind.EnemyDecision),
+                    actorId);
+                Assert.That(reload.SubjectIdHint,
+                    Is.EqualTo("weapon.rifle"), actorId);
+                Assert.That(reload.SourceId,
+                    Does.StartWith("ai.").And.EndWith(
+                        ".reload.weapon.rifle"), actorId);
+            }
+        }
+
+        [Test]
         public void SandboxPackageUsesDetachedLevelAndOnlyTheSelectedPlayerActor()
         {
             TextAsset asset = Resources.Load<TextAsset>("Levels/basic-construction");
