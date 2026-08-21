@@ -12,9 +12,122 @@ namespace GritGud.Presentation.Gameplay
     /// </summary>
     internal sealed class GameplayTurnReplayWorldPresenter : IDisposable
     {
+        private sealed class OptionalWorldProjection
+        {
+            private readonly string name;
+            private readonly Action begin;
+            private readonly Action<GameplayPresentationWorldStateSample> present;
+            private readonly Action clearTransients;
+            private readonly Action end;
+            private bool active;
+            private bool started;
+
+            public OptionalWorldProjection(
+                string projectionName,
+                Action beginPresentation,
+                Action<GameplayPresentationWorldStateSample> presentSample,
+                Action clearPresentationTransients,
+                Action endPresentation)
+            {
+                name = projectionName;
+                begin = beginPresentation ?? throw new ArgumentNullException(
+                    nameof(beginPresentation));
+                present = presentSample ?? throw new ArgumentNullException(
+                    nameof(presentSample));
+                clearTransients = clearPresentationTransients
+                    ?? throw new ArgumentNullException(
+                        nameof(clearPresentationTransients));
+                end = endPresentation ?? throw new ArgumentNullException(
+                    nameof(endPresentation));
+            }
+
+            public void Begin()
+            {
+                active = true;
+                started = true;
+                try
+                {
+                    begin();
+                }
+                catch (Exception exception)
+                {
+                    Disable("start", exception);
+                }
+            }
+
+            public void Present(GameplayPresentationWorldStateSample sample)
+            {
+                if (!active) return;
+                try
+                {
+                    present(sample);
+                }
+                catch (Exception exception)
+                {
+                    Disable("sample", exception);
+                }
+            }
+
+            public void ClearTransients()
+            {
+                if (!active) return;
+                try
+                {
+                    clearTransients();
+                }
+                catch (Exception exception)
+                {
+                    Disable("clear transients", exception);
+                }
+            }
+
+            public void End()
+            {
+                if (!started) return;
+                try
+                {
+                    end();
+                }
+                catch (Exception exception)
+                {
+                    Warn("restore", exception);
+                }
+                finally
+                {
+                    active = false;
+                    started = false;
+                }
+            }
+
+            private void Disable(string operation, Exception exception)
+            {
+                active = false;
+                if (started)
+                {
+                    try
+                    {
+                        end();
+                    }
+                    catch (Exception restoreException)
+                    {
+                        Warn("restore after failure", restoreException);
+                    }
+                }
+                started = false;
+                Warn(operation, exception);
+            }
+
+            private void Warn(string operation, Exception exception) =>
+                Debug.LogWarning(
+                    $"Replay {name} presentation could not {operation} and "
+                    + $"was disabled for this playback: {exception.Message}");
+        }
+
         private readonly Dictionary<string, GameplayTurnReplayActorPresenter>
             actors = new Dictionary<string, GameplayTurnReplayActorPresenter>(
                 StringComparer.Ordinal);
+        private readonly List<OptionalWorldProjection> optionalProjections =
+            new List<OptionalWorldProjection>();
         private readonly List<Behaviour> liveBehaviours =
             new List<Behaviour>();
         private readonly List<bool> liveBehaviourEnabled =
@@ -22,15 +135,6 @@ namespace GritGud.Presentation.Gameplay
         private GameplayWorldRegistry world;
         private GameplayInputController input;
         private GameplayTurnReplayHud hud;
-        private GameplayProjectileController projectiles;
-        private GameplayDestructibleController destructibles;
-        private GameplayVehicleController vehicles;
-        private GameplaySmokeFieldController smoke;
-        private GameplayFireFieldController fire;
-        private GameplayDroneController drones;
-        private GameplayCameraRig cameraRig;
-        private GameplayReplayCameraCutPresenter cameraCuts;
-        private GameplaySession gameplay;
         private GameplayHud gameplayHud;
         private GameplayPartyHud partyHud;
         private GameplayEnemyController enemies;
@@ -49,10 +153,6 @@ namespace GritGud.Presentation.Gameplay
             GameplayVehicleController vehicleController,
             GameplaySmokeFieldController smokeController,
             GameplayFireFieldController fireController,
-            GameplayDroneController droneController,
-            GameplayCameraRig replayCameraRig,
-            GameplayReplayCameraCutPresenter replayCameraCuts,
-            GameplaySession session,
             GameplayHud liveGameplayHud,
             GameplayPartyHud livePartyHud,
             GameplayEnemyController enemyController,
@@ -63,24 +163,6 @@ namespace GritGud.Presentation.Gameplay
             input = inputController ?? throw new ArgumentNullException(
                 nameof(inputController));
             hud = replayHud ?? throw new ArgumentNullException(nameof(replayHud));
-            projectiles = projectileController ?? throw new ArgumentNullException(
-                nameof(projectileController));
-            destructibles = destructibleController ?? throw new ArgumentNullException(
-                nameof(destructibleController));
-            vehicles = vehicleController ?? throw new ArgumentNullException(
-                nameof(vehicleController));
-            smoke = smokeController ?? throw new ArgumentNullException(
-                nameof(smokeController));
-            fire = fireController ?? throw new ArgumentNullException(
-                nameof(fireController));
-            drones = droneController ?? throw new ArgumentNullException(
-                nameof(droneController));
-            cameraRig = replayCameraRig ?? throw new ArgumentNullException(
-                nameof(replayCameraRig));
-            cameraCuts = replayCameraCuts ?? throw new ArgumentNullException(
-                nameof(replayCameraCuts));
-            gameplay = session ?? throw new ArgumentNullException(
-                nameof(session));
             gameplayHud = liveGameplayHud ?? throw new ArgumentNullException(
                 nameof(liveGameplayHud));
             partyHud = livePartyHud ?? throw new ArgumentNullException(
@@ -97,6 +179,12 @@ namespace GritGud.Presentation.Gameplay
                 if (!liveBehaviours.Contains(behaviour))
                     liveBehaviours.Add(behaviour);
             }
+            RegisterOptionalProjections(
+                projectileController,
+                destructibleController,
+                vehicleController,
+                smokeController,
+                fireController);
             hud.OpenChanged += HandleOpenChanged;
             hud.PlayheadChanged += HandlePlayheadChanged;
         }
@@ -112,18 +200,10 @@ namespace GritGud.Presentation.Gameplay
             world = null;
             input = null;
             hud = null;
-            projectiles = null;
-            destructibles = null;
-            vehicles = null;
-            smoke = null;
-            fire = null;
-            drones = null;
-            cameraRig = null;
-            cameraCuts = null;
-            gameplay = null;
             gameplayHud = null;
             partyHud = null;
             enemies = null;
+            optionalProjections.Clear();
             liveBehaviours.Clear();
             liveBehaviourEnabled.Clear();
         }
@@ -163,13 +243,11 @@ namespace GritGud.Presentation.Gameplay
                     actors.Add(actor.ActorId, presenter);
                     presenter.Begin();
                 }
-                projectiles.BeginReplayPresentation();
-                vehicles.BeginReplayPresentation();
-                smoke.BeginReplayPresentation();
-                fire.BeginReplayPresentation();
-                drones.BeginReplayPresentation();
-                cameraCuts.Begin(cameraRig, world);
-                destructibles.ClearReplayTransients();
+                foreach (OptionalWorldProjection projection in
+                    optionalProjections)
+                {
+                    projection.Begin();
+                }
                 Present();
             }
             catch
@@ -198,34 +276,9 @@ namespace GritGud.Presentation.Gameplay
                 GameplaySemanticReplaySampler.Sample(
                     position.Frame,
                     position.Progress);
-            string actorId = position.Frame.Transition.Payload.ActorId;
-            ScenarioActorDefinition definition = gameplay.Scenario.GetActor(
-                actorId);
-            string focusId = actorId;
-            string focusLabel = definition.CharacterProfile?.DisplayName
-                ?? actorId;
-            if (position.Frame.Transition.Payload
-                is GameplayDroneMoveTransitionPayload droneMove)
-            {
-                focusId = droneMove.Movement.DroneId;
-                focusLabel = FormatSubjectLabel(focusId);
-            }
-            else if (position.Frame.Transition.Payload
-                is GameplayDroneAttackTransitionPayload droneAttack)
-            {
-                focusId = droneAttack.Action.DroneId;
-                focusLabel = FormatSubjectLabel(focusId);
-            }
-            cameraCuts.Focus(
-                focusId,
-                focusLabel);
             PresentActors(sample, position);
-            destructibles.PresentReplay(sample.Destructibles);
-            projectiles.PresentReplay(sample.Projectiles);
-            vehicles.PresentReplay(sample.Vehicles);
-            smoke.PresentReplay(sample.SmokeFields);
-            fire.PresentReplay(sample.FireFields);
-            drones.PresentReplay(sample.Drones);
+            foreach (OptionalWorldProjection projection in optionalProjections)
+                projection.Present(sample);
         }
 
         private void PresentActors(
@@ -306,7 +359,8 @@ namespace GritGud.Presentation.Gameplay
         {
             foreach (GameplayTurnReplayActorPresenter actor in actors.Values)
                 actor.ClearTransients();
-            destructibles.ClearReplayTransients();
+            foreach (OptionalWorldProjection projection in optionalProjections)
+                projection.ClearTransients();
         }
 
         private void Restore()
@@ -316,25 +370,12 @@ namespace GritGud.Presentation.Gameplay
             Exception failure = null;
             foreach (GameplayTurnReplayActorPresenter actor in actors.Values)
                 TryRestore(actor.Dispose, ref failure);
-            TryRestore(
-                () => projectiles?.EndReplayPresentation(),
-                ref failure);
-            TryRestore(
-                () => destructibles?.RestoreAuthoritativePresentation(),
-                ref failure);
-            TryRestore(
-                () => vehicles?.EndReplayPresentation(),
-                ref failure);
-            TryRestore(
-                () => smoke?.EndReplayPresentation(),
-                ref failure);
-            TryRestore(
-                () => fire?.EndReplayPresentation(),
-                ref failure);
-            TryRestore(
-                () => drones?.EndReplayPresentation(),
-                ref failure);
-            TryRestore(() => cameraCuts?.End(), ref failure);
+            for (int index = optionalProjections.Count - 1;
+                index >= 0;
+                index--)
+            {
+                optionalProjections[index].End();
+            }
             TryRestore(() => input?.SetCameraOnly(false), ref failure);
             TryRestore(() => Time.timeScale = priorTimeScale, ref failure);
             TryRestore(
@@ -361,7 +402,11 @@ namespace GritGud.Presentation.Gameplay
             actors.Clear();
             presenting = false;
             if (failure != null)
-                throw failure;
+            {
+                Debug.LogWarning(
+                    "Replay restored its core state but an optional live "
+                    + $"presentation detail failed to restore: {failure.Message}");
+            }
         }
 
         private static void TryRestore(Action restore, ref Exception failure)
@@ -376,7 +421,61 @@ namespace GritGud.Presentation.Gameplay
             }
         }
 
-        private static string FormatSubjectLabel(string subjectId) =>
-            subjectId.Replace('-', ' ');
+        private void RegisterOptionalProjections(
+            GameplayProjectileController projectileController,
+            GameplayDestructibleController destructibleController,
+            GameplayVehicleController vehicleController,
+            GameplaySmokeFieldController smokeController,
+            GameplayFireFieldController fireController)
+        {
+            optionalProjections.Clear();
+            if (projectileController != null)
+            {
+                optionalProjections.Add(new OptionalWorldProjection(
+                    "projectile",
+                    projectileController.BeginReplayPresentation,
+                    sample => projectileController.PresentReplay(
+                        sample.Projectiles),
+                    () => { },
+                    projectileController.EndReplayPresentation));
+            }
+            if (destructibleController != null)
+            {
+                optionalProjections.Add(new OptionalWorldProjection(
+                    "destructible",
+                    destructibleController.ClearReplayTransients,
+                    sample => destructibleController.PresentReplay(
+                        sample.Destructibles),
+                    destructibleController.ClearReplayTransients,
+                    destructibleController.RestoreAuthoritativePresentation));
+            }
+            if (vehicleController != null)
+            {
+                optionalProjections.Add(new OptionalWorldProjection(
+                    "vehicle",
+                    vehicleController.BeginReplayPresentation,
+                    sample => vehicleController.PresentReplay(sample.Vehicles),
+                    () => { },
+                    vehicleController.EndReplayPresentation));
+            }
+            if (smokeController != null)
+            {
+                optionalProjections.Add(new OptionalWorldProjection(
+                    "smoke-field",
+                    smokeController.BeginReplayPresentation,
+                    sample => smokeController.PresentReplay(sample.SmokeFields),
+                    () => { },
+                    smokeController.EndReplayPresentation));
+            }
+            if (fireController != null)
+            {
+                optionalProjections.Add(new OptionalWorldProjection(
+                    "fire-field",
+                    fireController.BeginReplayPresentation,
+                    sample => fireController.PresentReplay(sample.FireFields),
+                    () => { },
+                    fireController.EndReplayPresentation));
+            }
+        }
     }
 }

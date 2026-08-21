@@ -70,9 +70,6 @@ namespace GritGud.Presentation.Tests
                 Assert.That(
                     root.GetComponent<GameplayBattleReplayController>(),
                     Is.Not.Null);
-                Assert.That(
-                    root.GetComponent<GameplayReplayCameraCutPresenter>(),
-                    Is.Not.Null);
                 Assert.DoesNotThrow(controller.EndSession);
                 Assert.DoesNotThrow(controller.EndSession);
                 Assert.That(root.GetComponent<GameplayHud>().IsVisible, Is.False);

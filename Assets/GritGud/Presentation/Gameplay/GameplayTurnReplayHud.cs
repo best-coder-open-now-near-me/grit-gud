@@ -115,7 +115,8 @@ namespace GritGud.Presentation.Gameplay
                 RefreshPlayback();
                 isPlaying = playback != null;
                 playhead = 0f;
-                PlayheadChanged?.Invoke(playhead);
+                if (!TryNotifyPlayheadChanged())
+                    AbortPlayback();
             }
         }
 
@@ -125,7 +126,7 @@ namespace GritGud.Presentation.Gameplay
             {
                 isOpen = false;
                 isPlaying = false;
-                OpenChanged?.Invoke(false);
+                TryNotifyOpenChanged(false);
                 replay = null;
                 playback = null;
                 return;
@@ -140,8 +141,11 @@ namespace GritGud.Presentation.Gameplay
             // belongs in a history inspector, not this control.
             isPlaying = true;
             playhead = 0f;
-            OpenChanged?.Invoke(true);
-            PlayheadChanged?.Invoke(playhead);
+            if (!TryNotifyOpenChanged(true)
+                || !TryNotifyPlayheadChanged())
+            {
+                AbortPlayback();
+            }
         }
 
         internal void OpenVerifiedExternalReplay()
@@ -171,7 +175,11 @@ namespace GritGud.Presentation.Gameplay
             playhead = Mathf.Min(
                 playback.TotalDurationSeconds,
                 playhead + (Time.unscaledDeltaTime * speed));
-            PlayheadChanged?.Invoke(playhead);
+            if (!TryNotifyPlayheadChanged())
+            {
+                AbortPlayback();
+                return;
+            }
             if (playhead >= playback.TotalDurationSeconds)
                 isPlaying = false;
         }
@@ -315,7 +323,10 @@ namespace GritGud.Presentation.Gameplay
                 0f,
                 playback.TotalDurationSeconds);
             if (!Mathf.Approximately(previousPlayhead, playhead))
-                PlayheadChanged?.Invoke(playhead);
+            {
+                if (!TryNotifyPlayheadChanged())
+                    AbortPlayback();
+            }
         }
 
         private void RefreshPlayback()
@@ -355,6 +366,64 @@ namespace GritGud.Presentation.Gameplay
                 return actorId ?? string.Empty;
             var actor = gameplay.Scenario.GetActor(actorId);
             return actor.CharacterProfile?.DisplayName ?? actorId;
+        }
+
+        private bool TryNotifyOpenChanged(bool open)
+        {
+            bool succeeded = true;
+            Delegate[] subscribers = OpenChanged?.GetInvocationList();
+            if (subscribers == null) return true;
+            foreach (Delegate subscriber in subscribers)
+            {
+                try
+                {
+                    ((Action<bool>)subscriber)(open);
+                }
+                catch (Exception exception)
+                {
+                    succeeded = false;
+                    Debug.LogError(
+                        $"Replay could not {(open ? "open" : "close")}: "
+                        + exception.Message,
+                        this);
+                }
+            }
+            return succeeded;
+        }
+
+        private bool TryNotifyPlayheadChanged()
+        {
+            bool succeeded = true;
+            Delegate[] subscribers = PlayheadChanged?.GetInvocationList();
+            if (subscribers == null) return true;
+            foreach (Delegate subscriber in subscribers)
+            {
+                try
+                {
+                    ((Action<float>)subscriber)(playhead);
+                }
+                catch (Exception exception)
+                {
+                    succeeded = false;
+                    Debug.LogError(
+                        "Replay world presentation could not apply the current "
+                        + $"sample: {exception.Message}",
+                        this);
+                }
+            }
+            return succeeded;
+        }
+
+        private void AbortPlayback()
+        {
+            bool wasOpen = isOpen;
+            isOpen = false;
+            isPlaying = false;
+            playhead = 0f;
+            if (wasOpen)
+                TryNotifyOpenChanged(false);
+            replay = null;
+            playback = null;
         }
 
         private static Rect CalculateBarRectangle(

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Presentation.Actors;
@@ -18,6 +19,8 @@ namespace GritGud.Presentation.Gameplay
         private readonly ActorRagdollPresenter ragdoll;
         private readonly ThirdPersonMotor motor;
         private readonly ExplorationMovementInput movementInput;
+        private readonly HashSet<string> failedOptionalPresentation =
+            new HashSet<string>(StringComparer.Ordinal);
         private bool locomotionEnabled;
         private bool aimEnabled;
         private bool aimRigEnabled;
@@ -32,14 +35,12 @@ namespace GritGud.Presentation.Gameplay
         public GameplayTurnReplayActorPresenter(GameplayActorView actorView)
         {
             view = actorView ?? throw new ArgumentNullException(nameof(actorView));
-            animation = view.Root.GetComponent<ActorAnimationCoordinator>()
-                ?? throw new InvalidOperationException(
-                    $"Actor '{view.ActorId}' requires an animation coordinator for replay.");
+            animation = view.Root.GetComponent<ActorAnimationCoordinator>();
             weapon = view.Root.GetComponent<GameplayWeaponPresenter>();
             locomotion = view.Root.GetComponent<
                 ActorLocomotionAnimationPresenter>();
             aim = view.Root.GetComponent<WeaponAimPresenter>();
-            aimRig = animation.TargetAnimator != null
+            aimRig = animation?.TargetAnimator != null
                 ? animation.TargetAnimator.GetComponent<WeaponAimRig>()
                 : null;
             ragdoll = view.Root.GetComponent<ActorRagdollPresenter>();
@@ -65,34 +66,35 @@ namespace GritGud.Presentation.Gameplay
             originalRotation = view.Transform.rotation;
             originalStance = view.Stance.Stance;
             originalPinState = view.ReplayActions.CurrentPinState;
+            failedOptionalPresentation.Clear();
             presenting = true;
-            try
-            {
-                ragdoll?.BeginReplayPresentation();
-                animation.BeginReplayPresentation();
-                weapon?.BeginReplayPresentation();
-                view.Wounds.BeginReplayPresentation();
-                if (locomotion != null)
-                    locomotion.enabled = false;
-                if (aim != null)
-                    aim.enabled = false;
-                if (aimRig != null)
-                    aimRig.enabled = false;
-                motor?.StopPlanarMovement();
-                // Replay is the transform authority. The normal motor and
-                // movement-input pair otherwise continue their frame updates
-                // alongside the replay projection, which can overwrite a
-                // sampled pose or restart a locomotion blend.
-                if (movementInput != null)
-                    movementInput.enabled = false;
-                if (motor != null)
-                    motor.enabled = false;
-            }
-            catch
-            {
-                End();
-                throw;
-            }
+            TryOptional(
+                "ragdoll",
+                () => ragdoll?.BeginReplayPresentation());
+            TryOptional(
+                "animation",
+                () => animation?.BeginReplayPresentation());
+            TryOptional(
+                "weapon",
+                () => weapon?.BeginReplayPresentation());
+            TryOptional(
+                "wounds",
+                view.Wounds.BeginReplayPresentation);
+            if (locomotion != null)
+                locomotion.enabled = false;
+            if (aim != null)
+                aim.enabled = false;
+            if (aimRig != null)
+                aimRig.enabled = false;
+            motor?.StopPlanarMovement();
+            // Replay is the transform authority. The normal motor and
+            // movement-input pair otherwise continue their frame updates
+            // alongside the replay projection, which can overwrite a
+            // sampled pose or restart a locomotion blend.
+            if (movementInput != null)
+                movementInput.enabled = false;
+            if (motor != null)
+                motor.enabled = false;
         }
 
         internal void Present(
@@ -126,38 +128,60 @@ namespace GritGud.Presentation.Gameplay
                 Quaternion.Euler(0f, pose.FacingDegrees, 0f));
             if (view.Stance.Stance != pose.Stance)
                 view.Stance.ApplyResolved(pose.Stance);
-            view.Wounds.PresentReplay(snapshot.Wounds);
-            weapon?.PresentReplayEquipment(snapshot.EquippedItemId);
-            weapon?.PresentReplayAction(action);
-            view.ReplayActions.Present(action);
-            view.ReplayActions.PresentPinState(snapshot.PinState);
-            ResolveAnimationProjection(
-                snapshot,
-                action,
-                out ActorAnimationAction? animationAction,
-                out float animationProgress);
-            animation.PresentReplayLocomotion(
-                pose.Stance,
-                replayVelocity ?? Vector3.zero,
-                replayGrounded);
-            animation.PresentReplayAction(
-                pose.Stance,
-                animationAction,
-                animationProgress);
+            TryOptional(
+                "wounds",
+                () => view.Wounds.PresentReplay(snapshot.Wounds));
+            TryOptional(
+                "weapon",
+                () =>
+                {
+                    weapon?.PresentReplayEquipment(snapshot.EquippedItemId);
+                    weapon?.PresentReplayAction(action);
+                });
+            TryOptional(
+                "actor-state hooks",
+                () =>
+                {
+                    view.ReplayActions.Present(action);
+                    view.ReplayActions.PresentPinState(snapshot.PinState);
+                });
+            TryOptional(
+                "animation",
+                () =>
+                {
+                    if (animation == null) return;
+                    ResolveAnimationProjection(
+                        snapshot,
+                        action,
+                        out ActorAnimationAction? animationAction,
+                        out float animationProgress);
+                    animation.PresentReplayLocomotion(
+                        pose.Stance,
+                        replayVelocity ?? Vector3.zero,
+                        replayGrounded);
+                    animation.PresentReplayAction(
+                        pose.Stance,
+                        animationAction,
+                        animationProgress);
+                });
             if (playback.HasValue)
             {
                 GameplaySemanticReplayPlaybackPosition position =
                     playback.Value;
-                ragdoll?.PresentReplay(
-                    position.Frame.Transition.Identity.Sequence,
-                    position.Progress,
-                    position.PlaybackFrame.DurationSeconds);
+                TryOptional(
+                    "ragdoll",
+                    () => ragdoll?.PresentReplay(
+                        position.Frame.Transition.Identity.Sequence,
+                        position.Progress,
+                        position.PlaybackFrame.DurationSeconds));
             }
         }
 
         internal void ClearTransients()
         {
-            weapon?.ClearReplayTransients();
+            TryOptional(
+                "weapon",
+                () => weapon?.ClearReplayTransients());
         }
 
         public void Dispose() => End();
@@ -186,7 +210,9 @@ namespace GritGud.Presentation.Gameplay
                         view.Stance.ApplyResolved(originalStance);
                 },
                 ref failure);
-            TryRestore(animation.EndReplayPresentation, ref failure);
+            TryRestore(
+                () => animation?.EndReplayPresentation(),
+                ref failure);
             TryRestore(
                 () => ragdoll?.EndReplayPresentation(),
                 ref failure);
@@ -206,8 +232,14 @@ namespace GritGud.Presentation.Gameplay
                 },
                 ref failure);
             presenting = false;
+            failedOptionalPresentation.Clear();
             if (failure != null)
-                throw failure;
+            {
+                Debug.LogWarning(
+                    $"Replay actor '{view.ActorId}' could not restore every "
+                    + $"optional presentation detail: {failure.Message}",
+                    view.Root);
+            }
         }
 
         private static void TryRestore(Action restore, ref Exception failure)
@@ -219,6 +251,27 @@ namespace GritGud.Presentation.Gameplay
             catch (Exception exception)
             {
                 failure ??= exception;
+            }
+        }
+
+        private void TryOptional(string feature, Action present)
+        {
+            if (present == null
+                || failedOptionalPresentation.Contains(feature))
+            {
+                return;
+            }
+            try
+            {
+                present();
+            }
+            catch (Exception exception)
+            {
+                failedOptionalPresentation.Add(feature);
+                Debug.LogWarning(
+                    $"Replay actor '{view.ActorId}' disabled optional "
+                    + $"{feature} presentation: {exception.Message}",
+                    view.Root);
             }
         }
 

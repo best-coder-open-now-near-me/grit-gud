@@ -165,10 +165,7 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplayVehicleController vehicles;
         private readonly GameplaySmokeFieldController smokeFieldPresenter;
         private readonly GameplayFireFieldController fireFieldPresenter;
-        private readonly GameplayDroneController drones;
         private readonly GameplayPartyHud partyHud;
-        private readonly GameplayCameraRig cameraRig;
-        private readonly GameplayReplayCameraCutPresenter cameraCuts;
         private readonly GameplayBattleReplayController battleReplay;
         private readonly bool simulationViewer;
         private readonly GameplayBattleReplayPreparationResult<
@@ -191,10 +188,7 @@ namespace GritGud.Presentation.Gameplay
             GameplayVehicleController vehicles,
             GameplaySmokeFieldController smokeFieldPresenter,
             GameplayFireFieldController fireFieldPresenter,
-            GameplayDroneController drones,
             GameplayPartyHud partyHud,
-            GameplayCameraRig gameplayCameraRig,
-            GameplayReplayCameraCutPresenter replayCameraCuts,
             GameplayBattleReplayController battleReplayController,
             bool asSimulationViewer,
             GameplayBattleReplayPreparationResult<
@@ -213,23 +207,14 @@ namespace GritGud.Presentation.Gameplay
             this.input = input ?? throw new ArgumentNullException(nameof(input));
             this.partyControl = partyControl ?? throw new ArgumentNullException(
                 nameof(partyControl));
-            this.destructibles = destructibles ?? throw new ArgumentNullException(
-                nameof(destructibles));
-            this.projectiles = projectiles ?? throw new ArgumentNullException(
-                nameof(projectiles));
+            this.destructibles = destructibles;
+            this.projectiles = projectiles;
             this.worldRegistry = worldRegistry ?? throw new ArgumentNullException(
                 nameof(worldRegistry));
-            this.vehicles = vehicles ?? throw new ArgumentNullException(nameof(vehicles));
-            this.smokeFieldPresenter = smokeFieldPresenter
-                ?? throw new ArgumentNullException(nameof(smokeFieldPresenter));
-            this.fireFieldPresenter = fireFieldPresenter
-                ?? throw new ArgumentNullException(nameof(fireFieldPresenter));
-            this.drones = drones ?? throw new ArgumentNullException(nameof(drones));
+            this.vehicles = vehicles;
+            this.smokeFieldPresenter = smokeFieldPresenter;
+            this.fireFieldPresenter = fireFieldPresenter;
             this.partyHud = partyHud ?? throw new ArgumentNullException(nameof(partyHud));
-            cameraRig = gameplayCameraRig ?? throw new ArgumentNullException(
-                nameof(gameplayCameraRig));
-            cameraCuts = replayCameraCuts ?? throw new ArgumentNullException(
-                nameof(replayCameraCuts));
             battleReplay = battleReplayController
                 ?? throw new ArgumentNullException(
                     nameof(battleReplayController));
@@ -275,10 +260,6 @@ namespace GritGud.Presentation.Gameplay
                 vehicles,
                 smokeFieldPresenter,
                 fireFieldPresenter,
-                drones,
-                cameraRig,
-                cameraCuts,
-                session,
                 gameplayHud,
                 partyHud,
                 enemies,

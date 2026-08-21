@@ -28,7 +28,6 @@ namespace GritGud.Presentation.Gameplay
         private Func<Vector2, bool> pointerBlocked;
         private string commandDroneId;
         private CommandMode mode;
-        private bool replayPresenting;
 
         public bool IsTargeting => mode != CommandMode.None;
         public GameplayDroneSession Session => drones;
@@ -105,38 +104,6 @@ namespace GritGud.Presentation.Gameplay
         {
             mode = CommandMode.None;
             commandDroneId = null;
-        }
-
-        internal void BeginReplayPresentation()
-        {
-            if (drones == null)
-                throw new InvalidOperationException(
-                    "Bind drones before replay presentation.");
-            replayPresenting = true;
-        }
-
-        internal void PresentReplay(IReadOnlyList<DroneSnapshot> snapshots)
-        {
-            if (!replayPresenting)
-                throw new InvalidOperationException(
-                    "Begin drone replay presentation before sampling it.");
-            if (snapshots == null)
-                throw new ArgumentNullException(nameof(snapshots));
-            var retained = new HashSet<string>(StringComparer.Ordinal);
-            foreach (DroneSnapshot snapshot in snapshots)
-            {
-                retained.Add(snapshot.DroneId);
-                ApplySnapshot(snapshot);
-            }
-            foreach (KeyValuePair<string, GameObject> entry in roots)
-                entry.Value.SetActive(retained.Contains(entry.Key));
-        }
-
-        internal void EndReplayPresentation()
-        {
-            if (!replayPresenting) return;
-            replayPresenting = false;
-            RefreshAuthoritativePresentation();
         }
 
         internal void RefreshAuthoritativePresentation()
@@ -304,7 +271,6 @@ namespace GritGud.Presentation.Gameplay
         public void Unbind()
         {
             CancelTargeting();
-            replayPresenting = false;
             roots.Clear();
             drones = null;
             gameplay = null;

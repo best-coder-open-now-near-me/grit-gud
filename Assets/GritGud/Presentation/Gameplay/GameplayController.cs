@@ -30,7 +30,6 @@ namespace GritGud.Presentation.Gameplay
         private GameplayPartyHud partyHud;
         private GameplayTurnReplayHud turnReplayHud;
         private GameplayTurnReplayWorldPresenter turnReplayWorldPresenter;
-        private GameplayReplayCameraCutPresenter replayCameraCutPresenter;
         private GameplayBattleReplayController battleReplayController;
         private GameplayDialogueDrawer dialogueDrawer;
         private GameplaySessionPresenter sessionPresenter;
@@ -97,8 +96,6 @@ namespace GritGud.Presentation.Gameplay
             partyHud = GetOrAddComponent<GameplayPartyHud>();
             turnReplayHud = GetOrAddComponent<GameplayTurnReplayHud>();
             turnReplayWorldPresenter ??= new GameplayTurnReplayWorldPresenter();
-            replayCameraCutPresenter =
-                GetOrAddComponent<GameplayReplayCameraCutPresenter>();
             battleReplayController =
                 GetOrAddComponent<GameplayBattleReplayController>();
             dialogueDrawer = GetOrAddComponent<GameplayDialogueDrawer>();
@@ -578,10 +575,7 @@ namespace GritGud.Presentation.Gameplay
                     vehicleController,
                     smokeFieldController,
                     fireFieldController,
-                    droneController,
                     partyHud,
-                    cameraRig,
-                    replayCameraCutPresenter,
                     battleReplayController,
                     simulationViewer,
                     preparedSimulation,
@@ -594,7 +588,6 @@ namespace GritGud.Presentation.Gameplay
                         turnMovementController,
                         displacementController,
                         thrownExplosiveController,
-                        droneController,
                         combatReactionPresenter,
                         tacticalTransitionPresenter,
                     },
