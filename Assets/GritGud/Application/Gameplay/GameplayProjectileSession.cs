@@ -356,7 +356,6 @@ namespace GritGud.Application.Gameplay
                     actorId,
                     intendedTargetId,
                     aimPoint,
-                    gameplay.CanEnterTurnMode,
                     out GameplayActionRecord action,
                     out failure))
                 return false;

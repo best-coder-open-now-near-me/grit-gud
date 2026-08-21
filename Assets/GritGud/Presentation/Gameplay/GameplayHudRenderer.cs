@@ -103,6 +103,7 @@ namespace GritGud.Presentation.Gameplay
         private GUIStyle tooltipStyle => styles.Tooltip;
         private GUIStyle confirmationFlyoutStyle => styles.ConfirmationFlyout;
         private GUIStyle warningHintStyle => styles.WarningHint;
+        private GUIStyle encounterNoticeStyle => styles.EncounterNotice;
         private GUIStyle choiceHeaderStyle => styles.ChoiceHeader;
         private GUIStyle tipTitleStyle => styles.TipTitle;
         private GUIStyle tipBodyStyle => styles.TipBody;
@@ -370,6 +371,7 @@ namespace GritGud.Presentation.Gameplay
                     canvasWidth);
                 DrawWarningHint(
                     commandBarRectangle,
+                    canvasWidth,
                     model.CommandBar.WarningHint);
                 guidanceDrawer.DrawAnimatedFlyout(
                     canvasWidth,
@@ -422,6 +424,10 @@ namespace GritGud.Presentation.Gameplay
             Rect commandBarRectangle) =>
             GameplayHudLayout.CalculateWarningHintRectangle(
                 commandBarRectangle);
+
+        internal static Rect CalculateEncounterNoticeRectangle(
+            float canvasWidth) =>
+            GameplayHudLayout.CalculateEncounterNoticeRectangle(canvasWidth);
 
         internal static Rect CalculateBodyStatusRectangle(
             float canvasWidth,
@@ -892,6 +898,7 @@ namespace GritGud.Presentation.Gameplay
 
         private void DrawWarningHint(
             Rect commandBarRectangle,
+            float canvasWidth,
             GameplayWarningHintModel warningHint)
         {
             if (warningHint == null || warningHintReveal <= 0f)
@@ -899,8 +906,16 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            Rect rectangle = CalculateWarningHintRectangle(
-                commandBarRectangle);
+            if (string.Equals(
+                    warningHint.SourceId,
+                    "encounter.started",
+                    StringComparison.Ordinal))
+            {
+                DrawEncounterNotice(canvasWidth, warningHint);
+                return;
+            }
+
+            Rect rectangle = CalculateWarningHintRectangle(commandBarRectangle);
             float eased = EvaluateFlyoutReveal(warningHintReveal);
             float revealHeight = rectangle.height * eased;
             float revealTop = rectangle.yMax - revealHeight;
@@ -916,6 +931,37 @@ namespace GritGud.Presentation.Gameplay
                 rectangle.width,
                 rectangle.height);
             GUI.Label(clippedRectangle, warningHint.Text, warningHintStyle);
+            GUI.EndClip();
+            DrawHorizontalLaserReveal(
+                rectangle.x,
+                revealTop,
+                rectangle.width,
+                EquipmentSignalColor,
+                warningHintReveal);
+        }
+
+        private void DrawEncounterNotice(
+            float canvasWidth,
+            GameplayWarningHintModel warningHint)
+        {
+            Rect rectangle = CalculateEncounterNoticeRectangle(canvasWidth);
+            float eased = EvaluateFlyoutReveal(warningHintReveal);
+            float revealHeight = rectangle.height * eased;
+            float revealTop = rectangle.yMax - revealHeight;
+            var clipRectangle = new Rect(
+                rectangle.x,
+                revealTop,
+                rectangle.width,
+                revealHeight);
+            GUI.BeginClip(clipRectangle);
+            var clippedRectangle = new Rect(
+                0f,
+                rectangle.y - clipRectangle.y,
+                rectangle.width,
+                rectangle.height);
+            DrawFramedPanel(clippedRectangle, PanelStrongColor);
+            GUI.Label(clippedRectangle, warningHint.Text, encounterNoticeStyle);
+            DrawGlowFrame(clippedRectangle, EquipmentSignalColor);
             GUI.EndClip();
             DrawHorizontalLaserReveal(
                 rectangle.x,

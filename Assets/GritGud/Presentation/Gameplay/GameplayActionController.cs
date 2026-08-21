@@ -26,7 +26,6 @@ namespace GritGud.Presentation.Gameplay
         private string actorId;
         private string objectiveId;
         private GameplayEmergencyCycleSession emergencyCycle;
-        private float remainingWorldTurnPresentationSeconds;
 
         public GameplaySession Session { get; private set; }
 
@@ -61,33 +60,6 @@ namespace GritGud.Presentation.Gameplay
 
         public event Action<GameplayActionRecord> ActionResolved;
 
-        private void Update()
-        {
-            if (remainingWorldTurnPresentationSeconds <= 0f)
-            {
-                return;
-            }
-
-            if (Session?.Operation != GameplaySessionOperation.ResolvingWorldTurn)
-            {
-                remainingWorldTurnPresentationSeconds = 0f;
-                return;
-            }
-
-            remainingWorldTurnPresentationSeconds -= Time.unscaledDeltaTime;
-            if (remainingWorldTurnPresentationSeconds > 0f)
-            {
-                return;
-            }
-
-            remainingWorldTurnPresentationSeconds = 0f;
-            if (Session.CompleteVoluntaryWorldTurn())
-            {
-                StatusMessage = "World turn complete. New tactical interval ready.";
-                sessionPresenter.RefreshModePresentation();
-            }
-        }
-
         public void Bind(
             GameplaySession session,
             GameplaySessionPresenter modePresenter,
@@ -120,7 +92,6 @@ namespace GritGud.Presentation.Gameplay
             ClearFailures();
             LastResolvedAction = null;
             StatusMessage = string.Empty;
-            remainingWorldTurnPresentationSeconds = 0f;
             enabled = true;
             SetActor(actorAnimationCoordinator, authoritativeActorId);
         }
@@ -164,7 +135,6 @@ namespace GritGud.Presentation.Gameplay
             ClearFailures();
             LastResolvedAction = null;
             StatusMessage = string.Empty;
-            remainingWorldTurnPresentationSeconds = 0f;
             ActionResolved = null;
             enabled = false;
         }
@@ -294,7 +264,6 @@ namespace GritGud.Presentation.Gameplay
             ClearFailures();
             if (encounterTurn)
             {
-                remainingWorldTurnPresentationSeconds = 0f;
                 StatusMessage = !Session.EncounterActive
                     ? "Encounter complete. Exploration resumed."
                     : Session.TurnPhase == GameplayTurnPhase.EmergencyReaction
@@ -303,9 +272,10 @@ namespace GritGud.Presentation.Gameplay
             }
             else
             {
-                remainingWorldTurnPresentationSeconds =
-                    Session.Scenario.Timing.MinimumVoluntaryTurnSeconds;
-                StatusMessage = "World turn resolving...";
+                bool completed = Session.CompleteVoluntaryWorldTurn();
+                StatusMessage = completed
+                    ? "World turn complete. New tactical interval ready."
+                    : "World turn resolution did not complete.";
             }
 
             sessionPresenter.RefreshModePresentation();
@@ -371,8 +341,20 @@ namespace GritGud.Presentation.Gameplay
                 return false;
             }
 
+            // Leaving a voluntary interval creates the canonical world-turn
+            // result. Resolve that result immediately instead of leaving the
+            // exploration controls behind a presentation countdown. The
+            // interval still advances time and restores resources; it simply
+            // cannot become a hidden input lock.
+            if (Session.Operation
+                == GameplaySessionOperation.ResolvingWorldTurn)
+            {
+                Session.CompleteVoluntaryWorldTurn();
+                sessionPresenter.RefreshModePresentation();
+            }
+
             ClearFailures();
-            StatusMessage = "World turn advancing...";
+            StatusMessage = "Exploration resumed.";
             return true;
         }
 

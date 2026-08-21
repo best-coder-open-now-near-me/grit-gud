@@ -218,7 +218,7 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
-        public void DetectionScopeStaysLocalWhileActionScopeIncludesAllHostiles()
+        public void DetectionAndActionScopesShareLocalPartyAndReinforcementPolicy()
         {
             CommittedLevelLibrary library =
                 UnityCommittedLevelLibrary.LoadDefault();
@@ -234,10 +234,10 @@ namespace GritGud.Presentation.Tests
             Assert.That(scope, Does.Contain("depot-rifleman"));
             Assert.That(scope, Does.Contain("depot-yard-support"));
             Assert.That(scope, Does.Contain("player"));
-            Assert.That(scope, Does.Not.Contain("oren-vale"));
+            Assert.That(scope, Does.Contain("oren-vale"));
             Assert.That(scope, Does.Not.Contain("depot-warehouse-patrol"));
             Assert.That(scope, Does.Not.Contain("depot-loading-guard"));
-            Assert.That(scope, Has.Count.EqualTo(3));
+            Assert.That(scope, Has.Count.EqualTo(4));
 
             var actionScope = gameplay.CreateEncounterScope(
                 "player",
@@ -249,13 +249,12 @@ namespace GritGud.Presentation.Tests
                 "oren-vale",
                 "depot-rifleman",
                 "depot-yard-support",
-                "depot-warehouse-patrol",
-                "depot-loading-guard",
             }));
+            Assert.That(actionScope, Is.EquivalentTo(scope));
         }
 
         [Test]
-        public void CombatEntryPresentationLocksAndRestoresPlayerInput()
+        public void CombatEntryPresentationLeavesPlayerInputAndInterfaceLive()
         {
             CommittedLevelLibrary library =
                 UnityCommittedLevelLibrary.LoadDefault();
@@ -281,9 +280,10 @@ namespace GritGud.Presentation.Tests
 
                 transition.BeginCombatEntry("depot-rifleman", "player");
 
-                Assert.That(input.Suppressed, Is.True);
-                Assert.That(hud.enabled, Is.False);
-                Assert.That(partyHud.enabled, Is.False);
+                Assert.That(input.Suppressed, Is.False);
+                Assert.That(hud.enabled, Is.True);
+                Assert.That(partyHud.enabled, Is.True);
+                Assert.That(transition.CombatEntryReady, Is.True);
 
                 transition.CompleteCombatEntry();
 

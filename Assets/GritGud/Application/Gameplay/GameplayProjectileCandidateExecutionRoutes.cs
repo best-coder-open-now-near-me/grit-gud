@@ -50,7 +50,6 @@ namespace GritGud.Application.Gameplay
             string actorId,
             string intendedTargetId,
             GameplayPosition aimPoint,
-            bool canEnterTurnMode,
             out GameplayActionRecord action,
             out ProjectileLaunchFailure failure)
         {
@@ -84,48 +83,17 @@ namespace GritGud.Application.Gameplay
                     targetId,
                     out AttackResponseDefinition response)
                 && response.StartsEncounter;
-            bool explorationOpeningAction =
-                session.Mode == GameplaySessionMode.Exploration
-                && startsEncounter;
-            if (session.Mode != GameplaySessionMode.TurnBased
-                && !explorationOpeningAction)
-                return Fail(
-                    ProjectileLaunchFailure.TurnModeRequired,
-                    out failure);
-            if (explorationOpeningAction && !canEnterTurnMode)
-                return Fail(
-                    ProjectileLaunchFailure.TurnModeRequired,
-                    out failure);
-            if (session.Operation != GameplaySessionOperation.None)
-                return Fail(
-                    ProjectileLaunchFailure.OperationInProgress,
-                    out failure);
-
-            GameplayActorSnapshot actor;
-            try
-            {
-                actor = session.GetActor(actorId);
-            }
-            catch (KeyNotFoundException)
-            {
-                return Fail(
-                    ProjectileLaunchFailure.ActorNotActive,
-                    out failure);
-            }
-            if (session.Mode == GameplaySessionMode.TurnBased
-                && !string.Equals(
-                    session.ActiveActorId,
+            if (!GameplayActorActionAuthority.TryAuthorize(
+                    session,
                     actorId,
-                    StringComparison.Ordinal))
+                    GameplayActionTiming.RequiresTurnInterval,
+                    startsEncounter,
+                    blocksPinnedActor: true,
+                    out GameplayActorSnapshot actor,
+                    out GameplayActorActionFailure authorizationFailure))
                 return Fail(
-                    ProjectileLaunchFailure.ActorNotActive,
+                    ToProjectileFailure(authorizationFailure),
                     out failure);
-            if (actor.IsIncapacitated)
-                return Fail(
-                    ProjectileLaunchFailure.ActorIncapacitated,
-                    out failure);
-            if (actor.IsPinned)
-                return Fail(ProjectileLaunchFailure.ActorPinned, out failure);
 
             AttackDefinition weapon = GameplayDirectAttackPreparation
                 .GetEquippedAttack(scenario, actor);
@@ -198,6 +166,27 @@ namespace GritGud.Application.Gameplay
                 outcomes);
             failure = ProjectileLaunchFailure.None;
             return true;
+        }
+
+        private static ProjectileLaunchFailure ToProjectileFailure(
+            GameplayActorActionFailure failure)
+        {
+            switch (failure)
+            {
+                case GameplayActorActionFailure.ActorUnavailable:
+                case GameplayActorActionFailure.ActorNotActive:
+                    return ProjectileLaunchFailure.ActorNotActive;
+                case GameplayActorActionFailure.ActorIncapacitated:
+                    return ProjectileLaunchFailure.ActorIncapacitated;
+                case GameplayActorActionFailure.ActorPinned:
+                    return ProjectileLaunchFailure.ActorPinned;
+                case GameplayActorActionFailure.OperationInProgress:
+                    return ProjectileLaunchFailure.OperationInProgress;
+                case GameplayActorActionFailure.TurnModeRequired:
+                    return ProjectileLaunchFailure.TurnModeRequired;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(failure));
+            }
         }
 
         public static ProjectileAdvanceRecord PrepareAdvance(
@@ -435,7 +424,6 @@ namespace GritGud.Application.Gameplay
                     candidate.ActorId,
                     candidate.SubjectId,
                     aimPoint,
-                    canEnterTurnMode: false,
                     out GameplayActionRecord action,
                     out ProjectileLaunchFailure launchFailure))
                 return Illegal(

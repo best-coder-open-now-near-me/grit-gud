@@ -424,8 +424,10 @@ namespace GritGud.Presentation.Gameplay
                         && beginTurnMode != null
                         && beginTurnMode();
                 case ProjectileLaunchModeRequirement.Encounter:
-                    return Session.Mode != GameplaySessionMode.Exploration
-                        || Session.CanEnterTurnMode;
+                    // The committed launch itself opens the encounter.  A
+                    // voluntary-turn cooldown is not an input lock and must
+                    // not prevent an opening shot.
+                    return true;
                 default:
                     throw new ArgumentOutOfRangeException();
             }

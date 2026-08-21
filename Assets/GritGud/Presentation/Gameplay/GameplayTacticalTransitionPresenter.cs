@@ -21,8 +21,6 @@ namespace GritGud.Presentation.Gameplay
         private string combatEntryMessage = string.Empty;
         private float encounterAnnouncementSecondsRemaining;
         private string encounterAnnouncementMessage = string.Empty;
-        private bool hudWasEnabled;
-        private bool partyHudWasEnabled;
 
         public void Bind(
             GameplaySession gameplaySession,
@@ -56,8 +54,6 @@ namespace GritGud.Presentation.Gameplay
 
         public void Unbind()
         {
-            input?.SetSuppressed(false);
-            RestoreInterfaceState();
             session = null;
             input = null;
             hud = null;
@@ -81,33 +77,21 @@ namespace GritGud.Presentation.Gameplay
                 throw new InvalidOperationException(
                     "Bind the tactical transition presenter before use.");
             combatEntryActive = true;
-            remainingSeconds = definition.CombatEntryDelaySeconds;
+            // Combat entry is a state transition, not a modal cinematic.  The
+            // coordinator may use this one-frame marker to sequence its
+            // detection result, but player input and the existing interface
+            // stay live throughout.  The mode-change announcement below is
+            // responsible for communicating that combat has started.
+            remainingSeconds = 0f;
             combatEntryMessage = "CONTACT\n" + detectedActorId.ToUpperInvariant()
                 + " DETECTED";
-            input.SetSuppressed(true);
-            hudWasEnabled = hud.enabled;
-            partyHudWasEnabled = partyHud.enabled;
-            hud.enabled = false;
-            partyHud.enabled = false;
         }
 
         public void CompleteCombatEntry()
         {
-            RestoreInterfaceState();
             combatEntryActive = false;
             remainingSeconds = 0f;
             combatEntryMessage = string.Empty;
-            input?.SetSuppressed(false);
-        }
-
-        private void RestoreInterfaceState()
-        {
-            if (!combatEntryActive)
-                return;
-            if (hud != null)
-                hud.enabled = hudWasEnabled;
-            if (partyHud != null)
-                partyHud.enabled = partyHudWasEnabled;
         }
 
         private void Update()

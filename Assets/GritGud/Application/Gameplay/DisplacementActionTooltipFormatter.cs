@@ -126,6 +126,8 @@ namespace GritGud.Application.Gameplay
                     return string.Empty;
                 case DisplacementActionAvailabilityFailure.ActorUnavailable:
                     return "ACTOR UNAVAILABLE";
+                case DisplacementActionAvailabilityFailure.ActorIncapacitated:
+                    return "ACTOR INCAPACITATED";
                 case DisplacementActionAvailabilityFailure.ActionUnavailable:
                     return "ACTION UNAVAILABLE";
                 case DisplacementActionAvailabilityFailure.OperationInProgress:

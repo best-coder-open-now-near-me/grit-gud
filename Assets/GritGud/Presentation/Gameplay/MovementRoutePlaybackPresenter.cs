@@ -45,8 +45,21 @@ namespace GritGud.Presentation.Gameplay
 
             if (IsPlaying)
             {
-                throw new InvalidOperationException(
-                    "A movement route is already playing.");
+                if (ReferenceEquals(route, movementRoute))
+                {
+                    // Canonical commit and presentation can both observe the
+                    // same route in one frame. It is already being shown.
+                    return;
+                }
+
+                // Presentation must never reject a committed movement action.
+                // Keep the newest authoritative route and leave a diagnostic
+                // trail rather than turning a duplicate callback into a
+                // gameplay-stopping exception.
+                Debug.LogWarning(
+                    "Movement playback received a newer route while another "
+                    + "route was still presenting; replacing the stale visual route.");
+                Finish();
             }
 
             route = movementRoute;

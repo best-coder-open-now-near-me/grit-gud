@@ -113,13 +113,9 @@ namespace GritGud.Presentation.Tests
                 Is.EqualTo(GameplaySessionMode.TurnBased));
             Assert.That(
                 gameplay.Session.Operation,
-                Is.EqualTo(GameplaySessionOperation.ResolvingWorldTurn));
-            Assert.That(actions.StatusMessage, Is.EqualTo("World turn resolving..."));
-            Assert.That(hud.IsEndTurnAvailable, Is.False);
-            Assert.That(gameplay.Session.LastCompletedVoluntaryTurnCycle, Is.Null);
-            Assert.That(turnMovement.SynchronizePlanningState(), Is.False);
-            Assert.That(turnMovement.PlanPointCount, Is.Zero);
-            Assert.That(gameplay.Session.CompleteVoluntaryWorldTurn(), Is.True);
+                Is.EqualTo(GameplaySessionOperation.None));
+            Assert.That(actions.StatusMessage,
+                Is.EqualTo("World turn complete. New tactical interval ready."));
             Assert.That(turnMovement.SynchronizePlanningState(), Is.True);
             Assert.That(
                 turnMovement.PlanningMaximumCost,
@@ -132,6 +128,9 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 gameplay.Session.Mode,
                 Is.EqualTo(GameplaySessionMode.Exploration));
+            Assert.That(
+                gameplay.Session.Operation,
+                Is.EqualTo(GameplaySessionOperation.None));
             Assert.That(hud.IsCommandBarVisible, Is.True);
             Assert.That(hud.AreTurnResourcesVisible, Is.False);
             Assert.That(activePartyInput.InputEnabled, Is.True);

@@ -91,63 +91,9 @@ namespace GritGud.Application.Gameplay
             string triggerSubjectId)
         {
             RequireActor(initiatorActorId);
-            var scope = new HashSet<string>(StringComparer.Ordinal);
-            if (Scenario.PlayerParty != null)
-            {
-                foreach (string actorId in Scenario.PlayerParty.ActorIds)
-                    scope.Add(actorId);
-            }
-            scope.Add(initiatorActorId);
-            if (!string.IsNullOrWhiteSpace(triggerSubjectId)
-                && actors.ContainsKey(triggerSubjectId))
-            {
-                scope.Add(triggerSubjectId);
-            }
-
-            AddCapableHostileActors(scope);
-
-            var pending = new Queue<string>(scope);
-            while (pending.Count > 0)
-            {
-                string actorId = pending.Dequeue();
-                EnemyBehaviorDefinition behavior = Scenario.GetActor(actorId)
-                    .Combat.EnemyBehavior;
-                if (behavior == null)
-                    continue;
-                foreach (string reinforcementId in
-                    behavior.ReinforcementActorIds)
-                {
-                    if (scope.Add(reinforcementId))
-                        pending.Enqueue(reinforcementId);
-                }
-            }
-            return OrderByInitiative(scope);
-        }
-
-        private void AddCapableHostileActors(ISet<string> scope)
-        {
-            if (Scenario.PlayerParty == null)
-            {
-                return;
-            }
-
-            foreach (ScenarioActorDefinition candidate in Scenario.Actors)
-            {
-                if (actors[candidate.Id].IsIncapacitated)
-                {
-                    continue;
-                }
-
-                foreach (string partyActorId in Scenario.PlayerParty.ActorIds)
-                {
-                    if (IsHostile(partyActorId, candidate.Id)
-                        || IsHostile(candidate.Id, partyActorId))
-                    {
-                        scope.Add(candidate.Id);
-                        break;
-                    }
-                }
-            }
+            return CreateLocalEncounterScope(
+                initiatorActorId,
+                triggerSubjectId);
         }
 
         public IReadOnlyList<string> CreateDetectionEncounterScope(
@@ -156,26 +102,22 @@ namespace GritGud.Application.Gameplay
         {
             RequireActor(observerActorId);
             RequireActor(detectedActorId);
-            var scope = new HashSet<string>(StringComparer.Ordinal)
-            {
-                observerActorId,
-                detectedActorId,
-            };
-            var pending = new Queue<string>(scope);
-            while (pending.Count > 0)
-            {
-                EnemyBehaviorDefinition behavior = Scenario.GetActor(
-                    pending.Dequeue()).Combat.EnemyBehavior;
-                if (behavior == null)
-                    continue;
-                foreach (string reinforcementId in behavior.ReinforcementActorIds)
-                {
-                    if (scope.Add(reinforcementId))
-                        pending.Enqueue(reinforcementId);
-                }
-            }
-            return OrderByInitiative(scope);
+            return CreateLocalEncounterScope(observerActorId, detectedActorId);
         }
+
+        /// <summary>
+        /// Both detected and action-triggered combat use the same local scope:
+        /// the party, the two involved actors, and only explicitly authored
+        /// reinforcement links. Global faction hostility is not encounter
+        /// membership; distant enemies must be brought in by spatial evidence
+        /// or authored reinforcement, not by existing in the same scenario.
+        /// </summary>
+        private IReadOnlyList<string> CreateLocalEncounterScope(
+            params string[] involvedActorIds)
+            => GameplayEncounterScopeResolver.Resolve(
+                Scenario,
+                allInitiativeOrder,
+                involvedActorIds);
 
         public EnemyAwarenessTransitionRecord PrepareAwarenessTransition(
             string actorId,

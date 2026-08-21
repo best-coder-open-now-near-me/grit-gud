@@ -7,7 +7,6 @@ using GritGud.Presentation.Actors.Animation;
 using GritGud.Presentation.Bootstrap;
 using GritGud.Presentation.Levels;
 using GritGud.Presentation.Levels.Runtime;
-using GritGud.Presentation.Persistence;
 using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
@@ -49,7 +48,6 @@ namespace GritGud.Presentation.Gameplay
         private GameplayFireFieldSession fireFieldSession;
         private GameplayConsumableController consumableController;
         private GameplayPartyControlSession partyControl;
-        private GameplayPartyPersistenceSession partyPersistence;
         private GameplayPartyPresentationSession partyPresentation;
         private GameplayWeaponTargetingController weaponTargetingController;
         private GameplayTargetingCursorPresenter targetingCursorPresenter;
@@ -362,18 +360,12 @@ namespace GritGud.Presentation.Gameplay
 
         private GameplaySession BuildSession(GameplayWorldStart worldStart)
         {
-            partyPersistence = new GameplayPartyPersistenceSession(
-                new PlayerPrefsGameplayPartySaveStore());
-            GameplayPartySave restoredParty = partyPersistence.Load(
-                scenarioAssembly.Scenario);
             var session = new GameplaySession(
                 scenarioAssembly.Scenario,
                 worldStart.Journal,
-                scenarioAssembly.RandomSeed,
-                restoredParty);
+                scenarioAssembly.RandomSeed);
             dialogueLog = new GameplayDialogueLog();
             partyControl = new GameplayPartyControlSession(session);
-            partyPersistence.Bind(session);
             smokeFieldSession = new GameplaySmokeFieldSession(session);
             smokeFieldController.Bind(smokeFieldSession);
             fireFieldSession = new GameplayFireFieldSession(
@@ -715,8 +707,6 @@ namespace GritGud.Presentation.Gameplay
             partyPresentation = null;
             partyControl?.Dispose();
             partyControl = null;
-            partyPersistence?.Dispose();
-            partyPersistence = null;
             consumableController?.CancelPending();
             consumableController = null;
             smokeFieldSession?.Dispose();
@@ -822,17 +812,6 @@ namespace GritGud.Presentation.Gameplay
             weaponTargetingController.SetActor(control.SelectedActorId);
             hud.SetActor(control.SelectedActorId);
             player = selectedView.Motor;
-        }
-
-        private void OnApplicationPause(bool paused)
-        {
-            if (paused)
-                partyPersistence?.Flush();
-        }
-
-        private void OnApplicationQuit()
-        {
-            partyPersistence?.Flush();
         }
 
         private void ExportBugReport(string playerNote)

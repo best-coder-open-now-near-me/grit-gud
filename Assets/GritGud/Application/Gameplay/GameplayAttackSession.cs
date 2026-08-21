@@ -78,7 +78,6 @@ namespace GritGud.Application.Gameplay
                 state,
                 actorId,
                 exposure,
-                gameplay.CanEnterTurnMode,
                 out _,
                 out AttackResolutionFailure failure)
                     ? AttackResolutionFailure.None
@@ -138,7 +137,6 @@ namespace GritGud.Application.Gameplay
                     previous,
                     actorId,
                     exposure,
-                    gameplay.CanEnterTurnMode,
                     out GameplayActorAttackEvaluation evaluation,
                     out failure))
             {
@@ -225,7 +223,6 @@ namespace GritGud.Application.Gameplay
                 targetId,
                 aimPoint,
                 impact,
-                gameplay.CanEnterTurnMode,
                 out prepared,
                 out failure);
 

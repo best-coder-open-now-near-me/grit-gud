@@ -19,7 +19,6 @@ namespace GritGud.Application.Gameplay
             string targetId,
             GameplayPosition aimPoint,
             DirectFireImpactRecord impact,
-            bool canEnterTurnMode,
             out GameplayPreparedTransition<GameplayActionRecord> prepared,
             out AttackResolutionFailure failure)
         {
@@ -54,49 +53,22 @@ namespace GritGud.Application.Gameplay
                 return Fail(
                     AttackResolutionFailure.WorldStateChanged,
                     out failure);
-            if (session.Operation != GameplaySessionOperation.None)
-                return Fail(
-                    AttackResolutionFailure.OperationInProgress,
-                    out failure);
-            if (session.Mode == GameplaySessionMode.TurnBased
-                && !string.Equals(
-                    session.ActiveActorId,
+            if (!GameplayActorActionAuthority.TryAuthorize(
+                    session,
                     actorId,
-                    StringComparison.Ordinal))
+                    GameplayActionTiming.Immediate,
+                    startsEncounter: false,
+                    blocksPinnedActor: true,
+                    out GameplayActorSnapshot actor,
+                    out GameplayActorActionFailure authorizationFailure))
                 return Fail(
-                    AttackResolutionFailure.ActorNotActive,
+                    ToAttackFailure(authorizationFailure),
                     out failure);
-
-            GameplayActorSnapshot actor;
-            try
-            {
-                actor = session.GetActor(actorId);
-            }
-            catch (KeyNotFoundException)
-            {
-                return Fail(
-                    AttackResolutionFailure.ActorNotActive,
-                    out failure);
-            }
-            if (actor.IsIncapacitated)
-                return Fail(
-                    AttackResolutionFailure.ActorIncapacitated,
-                    out failure);
-            if (actor.IsPinned)
-                return Fail(AttackResolutionFailure.ActorPinned, out failure);
 
             bool startsEncounter = scenario.TryGetAttackResponse(
                     targetId,
                     out AttackResponseDefinition response)
                 && response.StartsEncounter;
-            if (startsEncounter
-                && !session.EncounterActive
-                && session.Mode == GameplaySessionMode.Exploration
-                && !canEnterTurnMode)
-                return Fail(
-                    AttackResolutionFailure.TurnModeRequired,
-                    out failure);
-
             AttackDefinition attack = GetEquippedAttack(
                 scenario,
                 actor);
@@ -243,6 +215,27 @@ namespace GritGud.Application.Gameplay
                 impact.PreferredFractureChunkIndex);
         }
 
+        private static AttackResolutionFailure ToAttackFailure(
+            GameplayActorActionFailure failure)
+        {
+            switch (failure)
+            {
+                case GameplayActorActionFailure.ActorUnavailable:
+                case GameplayActorActionFailure.ActorNotActive:
+                    return AttackResolutionFailure.ActorNotActive;
+                case GameplayActorActionFailure.ActorIncapacitated:
+                    return AttackResolutionFailure.ActorIncapacitated;
+                case GameplayActorActionFailure.ActorPinned:
+                    return AttackResolutionFailure.ActorPinned;
+                case GameplayActorActionFailure.OperationInProgress:
+                    return AttackResolutionFailure.OperationInProgress;
+                case GameplayActorActionFailure.TurnModeRequired:
+                    return AttackResolutionFailure.TurnModeRequired;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(failure));
+            }
+        }
+
         private static bool TryFindProp(
             IEnumerable<DestructiblePropSnapshot> props,
             string propId,
@@ -362,7 +355,6 @@ namespace GritGud.Application.Gameplay
                     candidate.SubjectId,
                     aimPoint,
                     impact,
-                    canEnterTurnMode: false,
                     out GameplayPreparedTransition<GameplayActionRecord> prepared,
                     out AttackResolutionFailure attackFailure))
                 return Illegal(

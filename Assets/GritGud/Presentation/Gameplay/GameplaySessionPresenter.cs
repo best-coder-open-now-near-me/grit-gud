@@ -10,7 +10,7 @@ namespace GritGud.Presentation.Gameplay
         IGameplayWarningHintSource
     {
         private const float ExplorationSimulationStepSeconds = 0.1f;
-        private const float EncounterNoticeDurationSeconds = 4f;
+        private const float EncounterNoticeDurationSeconds = 6f;
         private const int EncounterNoticePriority = 200;
 
         private ExplorationMovementInput explorationInput;
@@ -331,7 +331,10 @@ namespace GritGud.Presentation.Gameplay
                 message);
             encounterWarningHint = new GameplayWarningHintModel(
                 "encounter.started",
-                "ENCOUNTER STARTED - " + roster.ToUpperInvariant(),
+                "COMBAT STARTED\n"
+                + activeActor.ToUpperInvariant()
+                + " HAS INITIATIVE\n"
+                + roster.ToUpperInvariant(),
                 EncounterNoticePriority);
             encounterNoticeSecondsRemaining = EncounterNoticeDurationSeconds;
         }

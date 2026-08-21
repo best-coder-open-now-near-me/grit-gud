@@ -8,6 +8,7 @@ namespace GritGud.Application.Gameplay
     {
         None,
         ActorUnavailable,
+        ActorIncapacitated,
         ActionUnavailable,
         OperationInProgress,
         ActorNotActive,

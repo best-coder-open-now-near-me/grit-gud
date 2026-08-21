@@ -446,44 +446,17 @@ namespace GritGud.Application.Gameplay
             out ThrownExplosiveFailure failure)
         {
             actor = default;
-            if (gameplay.Operation != GameplaySessionOperation.None)
-                return Fail(ThrownExplosiveFailure.OperationInProgress, out failure);
-            if (gameplay.Mode == GameplaySessionMode.TurnBased)
-            {
-                if (!TryGetActiveActor(actorId, out actor))
-                {
-                    return Fail(
-                        ThrownExplosiveFailure.ActorNotActive,
-                        out failure);
-                }
-            }
-            else if (!gameplay.TryGetActor(actorId, out actor))
-            {
-                return Fail(ThrownExplosiveFailure.ActorNotActive, out failure);
-            }
-
-            if (gameplay.IsActorIncapacitated(actorId))
-            {
+            if (!GameplayActorActionAuthority.TryAuthorize(
+                    gameplay,
+                    actorId,
+                    GameplayActionTiming.Immediate,
+                    startsEncounter,
+                    blocksPinnedActor: true,
+                    out actor,
+                    out GameplayActorActionFailure authorizationFailure))
                 return Fail(
-                    ThrownExplosiveFailure.ActorIncapacitated,
+                    ToThrownFailure(authorizationFailure),
                     out failure);
-            }
-            if (actor.IsPinned)
-            {
-                return Fail(
-                    ThrownExplosiveFailure.ActorPinned,
-                    out failure);
-            }
-
-            if (startsEncounter
-                && !gameplay.EncounterActive
-                && gameplay.Mode == GameplaySessionMode.Exploration
-                && !gameplay.CanEnterTurnMode)
-            {
-                return Fail(
-                    ThrownExplosiveFailure.TurnModeRequired,
-                    out failure);
-            }
 
             if (gameplay.GetInventoryQuantity(actorId, definition.Id) <= 0)
             {
@@ -498,16 +471,25 @@ namespace GritGud.Application.Gameplay
                 out failure);
         }
 
-        private bool TryGetActiveActor(
-            string actorId,
-            out GameplayActorSnapshot actor)
+        private static ThrownExplosiveFailure ToThrownFailure(
+            GameplayActorActionFailure failure)
         {
-            actor = default;
-            return string.Equals(
-                gameplay.ActiveActorId,
-                actorId,
-                StringComparison.Ordinal)
-            && gameplay.TryGetActor(actorId, out actor);
+            switch (failure)
+            {
+                case GameplayActorActionFailure.ActorUnavailable:
+                case GameplayActorActionFailure.ActorNotActive:
+                    return ThrownExplosiveFailure.ActorNotActive;
+                case GameplayActorActionFailure.ActorIncapacitated:
+                    return ThrownExplosiveFailure.ActorIncapacitated;
+                case GameplayActorActionFailure.ActorPinned:
+                    return ThrownExplosiveFailure.ActorPinned;
+                case GameplayActorActionFailure.OperationInProgress:
+                    return ThrownExplosiveFailure.OperationInProgress;
+                case GameplayActorActionFailure.TurnModeRequired:
+                    return ThrownExplosiveFailure.TurnModeRequired;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(failure));
+            }
         }
 
         private static bool TryValidateRangeAndCost(

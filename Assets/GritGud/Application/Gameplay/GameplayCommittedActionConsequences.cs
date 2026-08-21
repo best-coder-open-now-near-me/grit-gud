@@ -165,27 +165,11 @@ namespace GritGud.Application.Gameplay
             ScenarioDefinition scenario,
             IReadOnlyList<string> initiative,
             string observerId,
-            string sourceId)
-        {
-            var scope = new HashSet<string>(StringComparer.Ordinal)
-            {
+            string sourceId) => GameplayEncounterScopeResolver.Resolve(
+                scenario,
+                initiative,
                 observerId,
-                sourceId,
-            };
-            var pending = new Queue<string>(scope);
-            while (pending.Count > 0)
-            {
-                EnemyBehaviorDefinition behavior = scenario.GetActor(
-                    pending.Dequeue()).Combat.EnemyBehavior;
-                if (behavior == null) continue;
-                foreach (string reinforcement in behavior.ReinforcementActorIds)
-                    if (scope.Add(reinforcement)) pending.Enqueue(reinforcement);
-            }
-            var ordered = new List<string>();
-            foreach (string actorId in initiative)
-                if (scope.Contains(actorId)) ordered.Add(actorId);
-            return ordered.AsReadOnly();
-        }
+                sourceId);
 
         private static float ResolveSoundSignature(
             GameplayActionRecord action,
@@ -220,6 +204,14 @@ namespace GritGud.Application.Gameplay
         private readonly Func<IReadOnlyList<string>, bool> beginEncounter;
         private bool disposed;
 
+        /// <summary>
+        /// A presentation-owned encounter start can fail after the action has
+        /// already committed. Preserve that diagnostic without converting a
+        /// valid action into an exception that disables the whole control path.
+        /// </summary>
+        public string LastEncounterStartFailure { get; private set; } =
+            string.Empty;
+
         public GameplayCommittedActionConsequenceCoordinator(
             GameplaySession gameplaySession,
             IGameplayCommittedActionSoundQuery committedSoundQuery,
@@ -243,6 +235,7 @@ namespace GritGud.Application.Gameplay
 
         private void HandleCommittedAction(GameplayActionRecord action)
         {
+            LastEncounterStartFailure = string.Empty;
             float signature = ResolveSoundSignature(action);
             GameplayActorSnapshot source = session.GetActor(
                 action.Request.ActorId);
@@ -292,9 +285,9 @@ namespace GritGud.Application.Gameplay
                     session.CreateDetectionEncounterScope(
                         alertedObservers[0],
                         source.ActorId);
-                if (!beginEncounter(scope))
-                    throw new InvalidOperationException(
-                        "Committed sound produced Alert awareness but could not begin its encounter.");
+                TryBeginEncounter(
+                    scope,
+                    "Committed sound produced Alert awareness but could not begin its encounter.");
                 return;
             }
             if (session.ActionStartsEncounter(action))
@@ -302,9 +295,27 @@ namespace GritGud.Application.Gameplay
                 IReadOnlyList<string> scope = session.CreateEncounterScope(
                     source.ActorId,
                     action.Request.TargetId);
-                if (!beginEncounter(scope))
-                    throw new InvalidOperationException(
-                        "Authored committed action could not begin its encounter.");
+                TryBeginEncounter(
+                    scope,
+                    "Authored committed action could not begin its encounter.");
+            }
+        }
+
+        private void TryBeginEncounter(
+            IReadOnlyList<string> scope,
+            string failureMessage)
+        {
+            try
+            {
+                if (beginEncounter(scope))
+                    return;
+
+                LastEncounterStartFailure = failureMessage;
+            }
+            catch (Exception exception)
+            {
+                LastEncounterStartFailure = failureMessage + " "
+                    + exception.Message;
             }
         }
 

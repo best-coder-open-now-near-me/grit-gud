@@ -135,6 +135,8 @@ namespace GritGud.Presentation.Tests
             Rect warningHint =
                 GameplayHud.CalculateWarningHintRectangle(
                     commandBar);
+            Rect encounterNotice =
+                GameplayHud.CalculateEncounterNoticeRectangle(1280f);
             Rect dialoguePanel = GameplayDialogueDrawer.CalculatePanelRectangle(
                 1280f,
                 commandBar,
@@ -197,6 +199,13 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 warningHint.height,
                 Is.EqualTo(GameplayHud.WarningHintHeight));
+            Assert.That(encounterNotice.y,
+                Is.EqualTo(GameplayHud.EncounterNoticeTop));
+            Assert.That(encounterNotice.height,
+                Is.EqualTo(GameplayHud.EncounterNoticeHeight));
+            Assert.That(encounterNotice.width,
+                Is.EqualTo(GameplayHud.EncounterNoticeMaximumWidth));
+            Assert.That(encounterNotice.center.x, Is.EqualTo(640f));
             Assert.That(1280f - dialoguePanel.xMax,
                 Is.EqualTo(GameplayHud.CommandBarMargin));
             Assert.That(

@@ -20,6 +20,9 @@ namespace GritGud.Presentation.Gameplay
         public const float EquipmentFlyoutTop = 126f;
         public const float WarningHintHeight = 16f;
         public const float WarningHintGap = 5f;
+        public const float EncounterNoticeTop = 38f;
+        public const float EncounterNoticeHeight = 74f;
+        public const float EncounterNoticeMaximumWidth = 720f;
         public const int HotbarSlotCount =
             GameplayCommandBarModel.HotbarSlotCount;
 
@@ -176,6 +179,24 @@ namespace GritGud.Presentation.Gameplay
                     - WarningHintHeight,
                 hotbarRectangle.width,
                 WarningHintHeight);
+        }
+
+        /// <summary>
+        /// Encounter entry is an interrupting state change, not routine command
+        /// guidance. Keep its notice in a dedicated, prominent location rather
+        /// than squeezing it into the command-bar hint strip.
+        /// </summary>
+        public static Rect CalculateEncounterNoticeRectangle(
+            float canvasWidth)
+        {
+            float width = Mathf.Min(
+                EncounterNoticeMaximumWidth,
+                Mathf.Max(0f, canvasWidth - (CommandBarMargin * 2f)));
+            return new Rect(
+                (canvasWidth - width) * 0.5f,
+                EncounterNoticeTop,
+                width,
+                EncounterNoticeHeight);
         }
 
         public static Rect CalculateBodyStatusRectangle(

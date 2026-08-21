@@ -323,7 +323,6 @@ namespace GritGud.Application.Gameplay
                     context.State,
                     candidate.ActorId,
                     exposure,
-                    canEnterTurnMode: false,
                     out GameplayActorAttackEvaluation attack,
                     out AttackResolutionFailure failure))
                 return Illegal(

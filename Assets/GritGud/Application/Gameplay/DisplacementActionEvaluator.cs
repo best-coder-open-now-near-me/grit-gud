@@ -54,12 +54,19 @@ namespace GritGud.Application.Gameplay
             RequireId(actorId, nameof(actorId));
             RequireId(actionId, nameof(actionId));
 
-            if (!gameplay.TryGetActor(actorId, out GameplayActorSnapshot actor))
+            if (!GameplayActorActionAuthority.TryAuthorize(
+                    gameplay,
+                    actorId,
+                    GameplayActionTiming.Immediate,
+                    startsEncounter,
+                    blocksPinnedActor: false,
+                    out GameplayActorSnapshot actor,
+                    out GameplayActorActionFailure authorizationFailure))
             {
                 return CreateAvailability(
                     actorId,
                     actionId,
-                    DisplacementActionAvailabilityFailure.ActorUnavailable);
+                    ToAvailabilityFailure(authorizationFailure));
             }
 
             if (!gameplay.TryGetDisplacementAction(
@@ -113,32 +120,6 @@ namespace GritGud.Application.Gameplay
                 cost = ActionCost.Combine(
                     cost,
                     ResolveEquipmentCost(equipped, startsEncounter));
-            }
-
-            if (gameplay.Operation != GameplaySessionOperation.None)
-            {
-                return CreateAvailability(
-                    actorId,
-                    actionId,
-                    DisplacementActionAvailabilityFailure.OperationInProgress,
-                    action,
-                    cost,
-                    autoStowItemId);
-            }
-
-            if (gameplay.Mode == GameplaySessionMode.TurnBased
-                && !string.Equals(
-                    gameplay.ActiveActorId,
-                    actorId,
-                    StringComparison.Ordinal))
-            {
-                return CreateAvailability(
-                    actorId,
-                    actionId,
-                    DisplacementActionAvailabilityFailure.ActorNotActive,
-                    action,
-                    cost,
-                    autoStowItemId);
             }
 
             if (!actor.TurnBudget.CanAfford(cost))
@@ -393,6 +374,8 @@ namespace GritGud.Application.Gameplay
                     return DisplacementResolutionFailure.OperationInProgress;
                 case DisplacementActionAvailabilityFailure.ActorNotActive:
                     return DisplacementResolutionFailure.ActorNotActive;
+                case DisplacementActionAvailabilityFailure.ActorIncapacitated:
+                    return DisplacementResolutionFailure.ActorIncapacitated;
                 case DisplacementActionAvailabilityFailure.HandsOccupied:
                     return DisplacementResolutionFailure.HandsOccupied;
                 case DisplacementActionAvailabilityFailure.InsufficientTurnBudget:
@@ -407,6 +390,24 @@ namespace GritGud.Application.Gameplay
                     throw new ArgumentException(
                         "Available actions do not have resolution failures.",
                         nameof(failure));
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(failure));
+            }
+        }
+
+        private static DisplacementActionAvailabilityFailure
+            ToAvailabilityFailure(GameplayActorActionFailure failure)
+        {
+            switch (failure)
+            {
+                case GameplayActorActionFailure.ActorUnavailable:
+                    return DisplacementActionAvailabilityFailure.ActorUnavailable;
+                case GameplayActorActionFailure.ActorIncapacitated:
+                    return DisplacementActionAvailabilityFailure.ActorIncapacitated;
+                case GameplayActorActionFailure.ActorNotActive:
+                    return DisplacementActionAvailabilityFailure.ActorNotActive;
+                case GameplayActorActionFailure.OperationInProgress:
+                    return DisplacementActionAvailabilityFailure.OperationInProgress;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(failure));
             }

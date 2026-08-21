@@ -16,6 +16,7 @@ namespace GritGud.Application.Gameplay
         DestinationBlocked,
         InsufficientTurnBudget,
         ActorNotActive,
+        ActorIncapacitated,
         HandsOccupied,
         OperationInProgress,
         ActionUnavailable,
@@ -336,14 +337,6 @@ namespace GritGud.Application.Gameplay
             bool startsEncounter = target.Subject.Kind
                     == DisplacementSubjectKind.Combatant
                 && gameplay.AttackStartsEncounter(subjectId);
-            if (startsEncounter
-                && !gameplay.EncounterActive
-                && gameplay.Mode == GameplaySessionMode.Exploration
-                && !gameplay.CanEnterTurnMode)
-            {
-                failure = DisplacementResolutionFailure.TurnModeRequired;
-                return false;
-            }
             if (startsEncounter)
             {
                 availability = EvaluateActionAvailability(

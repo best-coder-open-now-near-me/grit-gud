@@ -142,7 +142,6 @@ namespace GritGud.Application.Gameplay
             GameplayCombatStateSnapshot state,
             string actorId,
             TargetExposureSnapshot exposure,
-            bool canEnterTurnMode,
             out GameplayActorAttackEvaluation evaluation,
             out AttackResolutionFailure failure)
         {
@@ -157,35 +156,16 @@ namespace GritGud.Application.Gameplay
                     nameof(state));
 
             GameplaySessionStateSnapshot session = state.Session;
-            if (session.Operation != GameplaySessionOperation.None)
-            {
-                failure = AttackResolutionFailure.OperationInProgress;
-                return false;
-            }
-
-            if (session.Mode == GameplaySessionMode.TurnBased
-                && !string.Equals(
-                    session.ActiveActorId,
+            if (!GameplayActorActionAuthority.TryAuthorize(
+                    session,
                     actorId,
-                    StringComparison.Ordinal))
+                    GameplayActionTiming.Immediate,
+                    startsEncounter: false,
+                    blocksPinnedActor: true,
+                    out GameplayActorSnapshot actor,
+                    out GameplayActorActionFailure authorizationFailure))
             {
-                failure = AttackResolutionFailure.ActorNotActive;
-                return false;
-            }
-
-            if (!TryGetActor(session, actorId, out GameplayActorSnapshot actor))
-            {
-                failure = AttackResolutionFailure.ActorNotActive;
-                return false;
-            }
-            if (actor.IsIncapacitated)
-            {
-                failure = AttackResolutionFailure.ActorIncapacitated;
-                return false;
-            }
-            if (actor.IsPinned)
-            {
-                failure = AttackResolutionFailure.ActorPinned;
+                failure = ToAttackFailure(authorizationFailure);
                 return false;
             }
 
@@ -195,15 +175,6 @@ namespace GritGud.Application.Gameplay
                     exposure.TargetId,
                     out AttackResponseDefinition response)
                 && response.StartsEncounter;
-            if (startsEncounter
-                && !session.EncounterActive
-                && session.Mode == GameplaySessionMode.Exploration
-                && !canEnterTurnMode)
-            {
-                failure = AttackResolutionFailure.TurnModeRequired;
-                return false;
-            }
-
             AttackDefinition attack = GetEquippedAttack(actor);
             if (attack == null || attack.Projectile != null)
             {
@@ -387,6 +358,27 @@ namespace GritGud.Application.Gameplay
             }
             failure = AttackResolutionFailure.None;
             return contextEvaluator.Evaluate(snapshot);
+        }
+
+        private static AttackResolutionFailure ToAttackFailure(
+            GameplayActorActionFailure failure)
+        {
+            switch (failure)
+            {
+                case GameplayActorActionFailure.ActorUnavailable:
+                case GameplayActorActionFailure.ActorNotActive:
+                    return AttackResolutionFailure.ActorNotActive;
+                case GameplayActorActionFailure.ActorIncapacitated:
+                    return AttackResolutionFailure.ActorIncapacitated;
+                case GameplayActorActionFailure.ActorPinned:
+                    return AttackResolutionFailure.ActorPinned;
+                case GameplayActorActionFailure.OperationInProgress:
+                    return AttackResolutionFailure.OperationInProgress;
+                case GameplayActorActionFailure.TurnModeRequired:
+                    return AttackResolutionFailure.TurnModeRequired;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(failure));
+            }
         }
 
         private AttackDefinition GetEquippedAttack(GameplayActorSnapshot actor)

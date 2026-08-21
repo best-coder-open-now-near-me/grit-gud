@@ -61,24 +61,15 @@ namespace GritGud.Application.Gameplay
                 throw new InvalidOperationException(
                     "Reload content does not match canonical scenario state.");
             payload = null;
-            if (session.Operation != GameplaySessionOperation.None)
-                return Fail(
-                    GameplayReloadFailure.OperationInProgress,
-                    out failure);
-            if (!TryGetActor(session.Actors, actorId, out
-                    GameplayActorSnapshot actor)
-                || (session.Mode == GameplaySessionMode.TurnBased
-                    && !string.Equals(
-                        session.ActiveActorId,
-                        actorId,
-                        StringComparison.Ordinal)))
-                return Fail(GameplayReloadFailure.ActorNotActive, out failure);
-            if (actor.IsIncapacitated)
-                return Fail(
-                    GameplayReloadFailure.ActorIncapacitated,
-                    out failure);
-            if (actor.IsPinned)
-                return Fail(GameplayReloadFailure.ActorPinned, out failure);
+            if (!GameplayActorActionAuthority.TryAuthorize(
+                    session,
+                    actorId,
+                    GameplayActionTiming.Immediate,
+                    startsEncounter: false,
+                    blocksPinnedActor: true,
+                    out GameplayActorSnapshot actor,
+                    out GameplayActorActionFailure authorizationFailure))
+                return Fail(ToReloadFailure(authorizationFailure), out failure);
 
             ScenarioActorDefinition actorDefinition = scenario.GetActor(
                 actor.ActorId);
@@ -226,6 +217,25 @@ namespace GritGud.Application.Gameplay
             catch (ArgumentException)
             {
                 return false;
+            }
+        }
+
+        private static GameplayReloadFailure ToReloadFailure(
+            GameplayActorActionFailure failure)
+        {
+            switch (failure)
+            {
+                case GameplayActorActionFailure.ActorUnavailable:
+                case GameplayActorActionFailure.ActorNotActive:
+                    return GameplayReloadFailure.ActorNotActive;
+                case GameplayActorActionFailure.ActorIncapacitated:
+                    return GameplayReloadFailure.ActorIncapacitated;
+                case GameplayActorActionFailure.ActorPinned:
+                    return GameplayReloadFailure.ActorPinned;
+                case GameplayActorActionFailure.OperationInProgress:
+                    return GameplayReloadFailure.OperationInProgress;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(failure));
             }
         }
 

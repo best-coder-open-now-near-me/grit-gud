@@ -265,7 +265,7 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
-        public void ExplorationAttackCannotBypassVoluntaryReentryLock()
+        public void ExplorationAttackStartsEncounterDuringVoluntaryReentryCooldown()
         {
             var host = new GameObject("Locked Exploration Attack Test");
             try
@@ -284,10 +284,12 @@ namespace GritGud.Presentation.Tests
                     onEncounterStartRequested:
                         session.BeginEncounterFromAction);
 
-                Assert.That(controller.TryAttack(CreateExposure()), Is.False);
-                Assert.That(session.EncounterActive, Is.False);
+                Assert.That(controller.TryAttack(CreateExposure()), Is.True);
+                Assert.That(session.EncounterActive, Is.True);
+                Assert.That(session.Mode,
+                    Is.EqualTo(GameplaySessionMode.TurnBased));
                 Assert.That(controller.LastFailure,
-                    Is.EqualTo(AttackResolutionFailure.TurnModeRequired));
+                    Is.EqualTo(AttackResolutionFailure.None));
             }
             finally
             {

@@ -142,6 +142,38 @@ namespace GritGud.Domain.Tests.Gameplay
                 Is.EqualTo(1));
         }
 
+        [Test]
+        public void EncounterStartPresentationFailureDoesNotRejectCommittedAction()
+        {
+            GameplaySession gameplay = CreateSession(soundSuspicionGain: 100);
+            var attacks = new GameplayAttackSession(gameplay);
+            using var consequences =
+                new GameplayCommittedActionConsequenceCoordinator(
+                    gameplay,
+                    new AudibleSoundQuery(),
+                    _ => false);
+            var exposure = new TargetExposureSnapshot(
+                "player",
+                "enemy",
+                new[]
+                {
+                    new TargetRegionExposure(TargetRegionId.Torso, 1, 1),
+                });
+
+            Assert.That(attacks.TryResolve(
+                "player",
+                exposure,
+                out GameplayActionRecord action,
+                out AttackResolutionFailure failure), Is.True);
+
+            Assert.That(action, Is.Not.Null);
+            Assert.That(failure, Is.EqualTo(AttackResolutionFailure.None));
+            Assert.That(gameplay.ResolvedActions, Has.Count.EqualTo(1));
+            Assert.That(gameplay.EncounterActive, Is.False);
+            Assert.That(consequences.LastEncounterStartFailure,
+                Does.Contain("could not begin its encounter"));
+        }
+
         private static GameplaySession CreateSession(
             int soundSuspicionGain = 60)
         {
