@@ -57,7 +57,7 @@ namespace GritGud.Presentation.Gameplay
             && (externalReplay != null
                 || (source == GameplayReplaySource.LiveEncounter
                     && gameplay?.Mode == GameplaySessionMode.TurnBased
-                    && runtime.Trajectory.Count > 0));
+                    && runtime.HasLastCompletedTurnReplay));
 
         internal string ActionLabel => externalReplay == null
             ? "REPLAY"
@@ -135,10 +135,11 @@ namespace GritGud.Presentation.Gameplay
             if (playback == null)
                 return;
             isOpen = true;
-            isPlaying = externalReplay != null;
-            playhead = externalReplay == null
-                ? playback.TotalDurationSeconds
-                : 0f;
+            // REPLAY should replay. Live and verified timelines both begin at
+            // their initial state and advance immediately; a final-state view
+            // belongs in a history inspector, not this control.
+            isPlaying = true;
+            playhead = 0f;
             OpenChanged?.Invoke(true);
             PlayheadChanged?.Invoke(playhead);
         }
@@ -325,7 +326,19 @@ namespace GritGud.Presentation.Gameplay
                 playback = null;
                 return;
             }
-            replay = externalReplay ?? runtime.CreateReplayTimeline();
+            if (externalReplay != null)
+            {
+                replay = externalReplay;
+            }
+            else if (!runtime.TryCreateLastCompletedTurnReplay(out replay))
+            {
+                replay = null;
+            }
+            if (replay == null)
+            {
+                playback = null;
+                return;
+            }
             playback = new GameplaySemanticReplayPlaybackTimeline(replay);
             if (playback.Frames.Count == 0)
             {

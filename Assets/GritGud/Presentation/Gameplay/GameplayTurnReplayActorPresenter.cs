@@ -98,7 +98,9 @@ namespace GritGud.Presentation.Gameplay
         internal void Present(
             GameplayActorSnapshot snapshot,
             TurnReplayActorActionState action,
-            GameplaySemanticReplayPlaybackPosition? playback = null)
+            GameplaySemanticReplayPlaybackPosition? playback = null,
+            Vector3? replayVelocity = null,
+            bool replayGrounded = true)
         {
             if (!presenting)
             {
@@ -134,6 +136,10 @@ namespace GritGud.Presentation.Gameplay
                 action,
                 out ActorAnimationAction? animationAction,
                 out float animationProgress);
+            animation.PresentReplayLocomotion(
+                pose.Stance,
+                replayVelocity ?? Vector3.zero,
+                replayGrounded);
             animation.PresentReplayAction(
                 pose.Stance,
                 animationAction,

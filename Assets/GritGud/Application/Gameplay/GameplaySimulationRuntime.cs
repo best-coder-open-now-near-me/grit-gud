@@ -30,6 +30,12 @@ namespace GritGud.Application.Gameplay
         private readonly GameplayAtomicCombatStateStore stateStore;
         private readonly List<GameplayTrajectoryStep> trajectory =
             new List<GameplayTrajectoryStep>();
+        private readonly List<GameplayReplayWindow> completedTurnReplayWindows =
+            new List<GameplayReplayWindow>();
+        private readonly IReadOnlyList<GameplayReplayWindow>
+            readOnlyCompletedTurnReplayWindows;
+        private GameplayCombatStateSnapshot openReplayWindowInitialState;
+        private int openReplayWindowStartTrajectoryIndex;
 
         public GameplaySimulationRuntime(
             GameplayExecutionIdentity executionIdentity,
@@ -53,6 +59,10 @@ namespace GritGud.Application.Gameplay
             InitialState = initialState;
             stateStore = new GameplayAtomicCombatStateStore(initialState);
             stateStore.DomainEventPublished += PublishDomainEvent;
+            openReplayWindowInitialState = initialState;
+            openReplayWindowStartTrajectoryIndex = 0;
+            readOnlyCompletedTurnReplayWindows =
+                completedTurnReplayWindows.AsReadOnly();
         }
 
         public GameplayExecutionIdentity ExecutionIdentity { get; }
@@ -60,6 +70,15 @@ namespace GritGud.Application.Gameplay
         public GameplayCombatStateSnapshot CurrentState => stateStore.Current;
         public IReadOnlyList<GameplayTrajectoryStep> Trajectory =>
             trajectory.AsReadOnly();
+
+        public IReadOnlyList<GameplayReplayWindow> CompletedTurnReplayWindows =>
+            readOnlyCompletedTurnReplayWindows;
+
+        public GameplayReplayWindow LastCompletedTurnReplayWindow =>
+            completedTurnReplayWindows.Count == 0
+                ? null
+                : completedTurnReplayWindows[
+                    completedTurnReplayWindows.Count - 1];
 
         public event Action<GameplayDomainEvent> DomainEventPublished;
 
@@ -140,7 +159,9 @@ namespace GritGud.Application.Gameplay
                 reduction,
                 installed =>
                 {
+                    int trajectoryIndex = trajectory.Count;
                     trajectory.Add(step);
+                    RecordReplayWindow(reduction, trajectoryIndex);
                     PublishStateInstalled(installed);
                 });
             return reduction;
@@ -164,6 +185,86 @@ namespace GritGud.Application.Gameplay
                 InitialState,
                 trajectory,
                 reducers);
+
+        /// <summary>
+        /// Replays exactly the most recently completed personal turn. A turn
+        /// has a variable number of semantic transitions, so this window is
+        /// recorded at authoritative turn-end installation rather than guessed
+        /// from a fixed number of trajectory frames.
+        /// </summary>
+        public bool TryCreateLastCompletedTurnReplay(
+            out GameplaySemanticReplayTimeline replay)
+        {
+            GameplayReplayWindow window = LastCompletedTurnReplayWindow;
+            if (window == null)
+            {
+                replay = null;
+                return false;
+            }
+
+            replay = new GameplaySemanticReplayTimeline(
+                window.InitialState,
+                trajectory.GetRange(
+                    window.StartTrajectoryIndex,
+                    window.TransitionCount),
+                reducers);
+            return true;
+        }
+
+        private void RecordReplayWindow(
+            GameplayReductionResult reduction,
+            int trajectoryIndex)
+        {
+            if (EnteredEncounter(reduction))
+            {
+                // A runtime may have been alive during exploration before an
+                // encounter begins. Do not offer that unrelated history from
+                // the live battle replay control.
+                completedTurnReplayWindows.Clear();
+                openReplayWindowInitialState = reduction.Resulting;
+                openReplayWindowStartTrajectoryIndex = checked(
+                    trajectoryIndex + 1);
+                return;
+            }
+
+            TurnEndRecord endedTurn = FindTurnEndRecord(reduction);
+            if (endedTurn == null)
+                return;
+
+            completedTurnReplayWindows.Add(new GameplayReplayWindow(
+                endedTurn.EndingActorId,
+                endedTurn.Sequence,
+                openReplayWindowInitialState,
+                openReplayWindowStartTrajectoryIndex,
+                trajectoryIndex));
+            openReplayWindowInitialState = reduction.Resulting;
+            openReplayWindowStartTrajectoryIndex = checked(
+                trajectoryIndex + 1);
+        }
+
+        private static bool EnteredEncounter(GameplayReductionResult reduction)
+        {
+            GameplaySessionStateSnapshot previous = reduction.Previous.Session;
+            GameplaySessionStateSnapshot resulting = reduction.Resulting.Session;
+            return !previous.EncounterActive
+                && resulting.EncounterActive
+                && resulting.Mode == GameplaySessionMode.TurnBased;
+        }
+
+        private static TurnEndRecord FindTurnEndRecord(
+            GameplayReductionResult reduction)
+        {
+            foreach (GameplayDomainEvent domainEvent in reduction.DomainEvents)
+            {
+                if (domainEvent is GameplayTransitionReducedEvent reduced
+                    && reduced.SemanticRecord is TurnEndRecord turnEnd)
+                {
+                    return turnEnd;
+                }
+            }
+
+            return null;
+        }
 
         private void PublishDomainEvent(GameplayDomainEvent domainEvent) =>
             DomainEventPublished?.Invoke(domainEvent);

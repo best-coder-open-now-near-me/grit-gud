@@ -236,6 +236,37 @@ namespace GritGud.Presentation.Actors.Animation
             TargetAnimator?.Update(0f);
         }
 
+        /// <summary>
+        /// Applies locomotion parameters while replay owns the actor transform.
+        /// The normal locomotion presenter is intentionally suspended during
+        /// replay, so it cannot be the source of this animation state.
+        /// </summary>
+        internal void PresentReplayLocomotion(
+            ActorStance stance,
+            Vector3 worldVelocity,
+            bool grounded)
+        {
+            if (!IsPresentingReplay)
+            {
+                throw new InvalidOperationException(
+                    "Begin actor replay presentation before projecting locomotion.");
+            }
+
+            ActorLocomotionAnimationState locomotion =
+                ActorLocomotionAnimationProjector.Project(
+                    worldVelocity,
+                    transform.rotation,
+                    grounded,
+                    0f,
+                    profile.LocomotionReferenceSpeed,
+                    profile.TurnReferenceDegreesPerSecond);
+            locomotionChannel.Present(
+                new ActorAnimationFrame(locomotion, stance),
+                profile,
+                0f,
+                animatorDriver);
+        }
+
         internal void EndReplayPresentation()
         {
             if (!IsPresentingReplay)

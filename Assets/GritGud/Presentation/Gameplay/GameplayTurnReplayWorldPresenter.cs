@@ -252,8 +252,54 @@ namespace GritGud.Presentation.Gameplay
                 actionStates.TryGetValue(
                     entry.Key,
                     out TurnReplayActorActionState action);
-                actor.Present(entry.Value, action, position);
+                TryResolveReplayLocomotion(
+                    position,
+                    entry.Key,
+                    out Vector3 replayVelocity,
+                    out bool replayGrounded);
+                actor.Present(
+                    entry.Value,
+                    action,
+                    position,
+                    replayVelocity,
+                    replayGrounded);
             }
+        }
+
+        private static bool TryResolveReplayLocomotion(
+            GameplaySemanticReplayPlaybackPosition position,
+            string actorId,
+            out Vector3 velocity,
+            out bool grounded)
+        {
+            velocity = Vector3.zero;
+            grounded = true;
+            if (position.Progress >= 1f
+                || !(position.Frame.SemanticRecord is MovementRouteRecord route)
+                || !string.Equals(route.ActorId, actorId, StringComparison.Ordinal)
+                || !GameplayMovementPresentationSampler.TrySample(
+                    route,
+                    route.TotalPlaybackDurationSeconds * position.Progress,
+                    out GameplayMovementPresentationSample sampled)
+                || sampled.SegmentIndex < 0
+                || sampled.SegmentIndex >= route.Segments.Count)
+            {
+                return false;
+            }
+
+            MovementRouteSegmentRecord segment = route.Segments[
+                sampled.SegmentIndex];
+            float normalizedFrameDuration = position.PlaybackFrame
+                .DurationSeconds / route.TotalPlaybackDurationSeconds;
+            float segmentDuration = Mathf.Max(
+                0.0001f,
+                segment.PlaybackDurationSeconds * normalizedFrameDuration);
+            velocity = new Vector3(
+                (segment.To.X - segment.From.X) / segmentDuration,
+                (segment.To.Y - segment.From.Y) / segmentDuration,
+                (segment.To.Z - segment.From.Z) / segmentDuration);
+            grounded = !segment.IsTraversal;
+            return true;
         }
 
         private void ClearTransients()

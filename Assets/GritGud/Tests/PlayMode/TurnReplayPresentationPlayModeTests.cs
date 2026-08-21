@@ -115,6 +115,26 @@ namespace GritGud.PlayMode.Tests
                     Assert.That(motor.enabled, Is.False);
                     Assert.That(movementInput.enabled, Is.False);
 
+                    // The live locomotion presenter stays disabled for replay,
+                    // so ordinary route motion must still drive the animator
+                    // through the replay presenter itself.
+                    replay.Present(
+                        new GameplayActorSnapshot(
+                            "player",
+                            new GameplayActorPose(
+                                new GameplayPosition(4.25f, 0f, 3f),
+                                90f,
+                                ActorStance.Crouched),
+                            new TurnBudget(2, 4f)),
+                        action: null,
+                        replayVelocity: new Vector3(0f, 0f, 6f));
+                    Assert.That(animator.GetFloat(
+                            ActorAnimationParameters.Speed),
+                        Is.EqualTo(6f).Within(0.001f));
+                    Assert.That(animator.GetBool(
+                            ActorAnimationParameters.Grounded),
+                        Is.True);
+
                     replay.Present(
                         new GameplayActorSnapshot(
                             "player",
@@ -127,12 +147,17 @@ namespace GritGud.PlayMode.Tests
                             "player",
                             TurnReplayActorActionKind.Jump,
                             journalSequence: 2,
-                            normalizedProgress: 0.5f));
+                            normalizedProgress: 0.5f),
+                        replayVelocity: new Vector3(0f, 0f, 5f),
+                        replayGrounded: false);
 
                     Assert.That(animation.ReplayAction,
                         Is.EqualTo(ActorAnimationAction.Jump));
                     Assert.That(view.ReplayActions.CurrentState.Kind,
                         Is.EqualTo(TurnReplayActorActionKind.Jump));
+                    Assert.That(animator.GetBool(
+                            ActorAnimationParameters.Grounded),
+                        Is.False);
 
                     ActorPinState replayPin = CreatePinState(
                         "player",

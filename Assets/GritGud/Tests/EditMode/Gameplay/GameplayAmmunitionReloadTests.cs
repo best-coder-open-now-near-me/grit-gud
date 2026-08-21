@@ -299,6 +299,10 @@ namespace GritGud.Domain.Tests.Gameplay
                 reducers,
                 capabilities);
 
+            Assert.That(runtime.TryCreateLastCompletedTurnReplay(
+                out GameplaySemanticReplayTimeline unavailable), Is.False);
+            Assert.That(unavailable, Is.Null);
+
             Execute(runtime, routes, attack);
             AssertAmmunition(runtime.CurrentState, loaded: 0, reserve: 2);
             Assert.That(Evaluate(runtime, routes, attack).IsLegal, Is.False);
@@ -306,11 +310,38 @@ namespace GritGud.Domain.Tests.Gameplay
             Execute(runtime, routes, playerEnd);
             Execute(runtime, routes, targetEnd);
 
+            Assert.That(runtime.CompletedTurnReplayWindows,
+                Has.Count.EqualTo(2));
+            Assert.That(runtime.LastCompletedTurnReplayWindow.ActorId,
+                Is.EqualTo("target"));
+            Assert.That(runtime.LastCompletedTurnReplayWindow
+                    .TransitionCount,
+                Is.EqualTo(1));
+            Assert.That(runtime.TryCreateLastCompletedTurnReplay(
+                out GameplaySemanticReplayTimeline targetTurnReplay), Is.True);
+            Assert.That(targetTurnReplay.Frames, Has.Count.EqualTo(1));
+            Assert.That(
+                ((TurnEndRecord)targetTurnReplay.Frames[0].SemanticRecord)
+                    .EndingActorId,
+                Is.EqualTo("target"));
+
             Execute(runtime, routes, reload);
             AssertAmmunition(runtime.CurrentState, loaded: 2, reserve: 0);
             Assert.That(Evaluate(runtime, routes, attack).IsLegal, Is.True);
             Assert.That(Evaluate(runtime, routes, reload).IsLegal, Is.False);
             Execute(runtime, routes, playerEnd);
+
+            Assert.That(runtime.LastCompletedTurnReplayWindow.ActorId,
+                Is.EqualTo("player"));
+            Assert.That(runtime.LastCompletedTurnReplayWindow
+                    .TransitionCount,
+                Is.EqualTo(2));
+            Assert.That(runtime.TryCreateLastCompletedTurnReplay(
+                out GameplaySemanticReplayTimeline playerTurnReplay), Is.True);
+            Assert.That(playerTurnReplay.Frames[0].Transition.Profile.Capability,
+                Is.EqualTo(GameplaySemanticCapability.Reload));
+            Assert.That(playerTurnReplay.Frames[1].Transition.Profile.Capability,
+                Is.EqualTo(GameplaySemanticCapability.EndTurn));
             Execute(runtime, routes, targetEnd);
 
             Execute(runtime, routes, attack);
@@ -349,6 +380,13 @@ namespace GritGud.Domain.Tests.Gameplay
                 Assert.That(GameplayCombatStateCapture.Capture(liveGameplay)
                     .CanonicalHash,
                     Is.EqualTo(runtime.CurrentState.CanonicalHash));
+                Assert.That(live.TryCreateLastCompletedTurnReplay(
+                    out GameplaySemanticReplayTimeline liveTurnReplay), Is.True);
+                Assert.That(liveTurnReplay.Frames, Has.Count.EqualTo(1));
+                Assert.That(
+                    ((TurnEndRecord)liveTurnReplay.Frames[0].SemanticRecord)
+                        .EndingActorId,
+                    Is.EqualTo("target"));
             }
         }
 
