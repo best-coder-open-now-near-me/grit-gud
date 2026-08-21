@@ -83,25 +83,120 @@ namespace GritGud.Application.Gameplay
     }
 
     /// <summary>
-    /// Owns the complete portable static-spatial contract for a gameplay
+    /// Owns the complete portable simulation-spatial contract for a gameplay
     /// level. Both live Unity play and engine-free battle execution consume
     /// this object, so fracture topology cannot silently default on one path.
     /// </summary>
     public sealed class GameplayStaticSpatialContent
     {
+        /// <summary>
+        /// Version two narrows the fingerprint from the entire authoring
+        /// document to the data that the simulation and replay viewer actually
+        /// use as spatial evidence. Presentation-only data such as lighting,
+        /// dressing, editor groups, and display labels must not invalidate a
+        /// deterministic battle artifact.
+        /// </summary>
+        public const int CurrentEvidenceAlgorithmVersion = 2;
+
         private sealed class CanonicalDefinition
         {
             public CanonicalDefinition(
-                string levelDigest,
-                string fractureCatalogDigest)
+                List<CanonicalEntityDefinition> entities,
+                List<CanonicalTerrainDefinition> terrainSurfaces,
+                List<LevelTraversalLinkData> traversalLinks,
+                GameplayFractureSpatialCatalogDocument fractureCatalog)
             {
-                LevelDigest = levelDigest;
-                FractureCatalogDigest = fractureCatalogDigest;
+                this.entities = entities;
+                this.terrainSurfaces = terrainSurfaces;
+                this.traversalLinks = traversalLinks;
+                this.fractureCatalog = fractureCatalog;
             }
 
-            public string LevelDigest { get; }
+            public List<CanonicalEntityDefinition> entities;
 
-            public string FractureCatalogDigest { get; }
+            public List<CanonicalTerrainDefinition> terrainSurfaces;
+
+            public List<LevelTraversalLinkData> traversalLinks;
+
+            public GameplayFractureSpatialCatalogDocument fractureCatalog;
+        }
+
+        private sealed class CanonicalEntityDefinition
+        {
+            public CanonicalEntityDefinition(LevelEntity source)
+            {
+                id = source.id ?? string.Empty;
+                archetypeId = source.archetypeId ?? string.Empty;
+                transform = source.transform;
+                destructible = source.destructible?.DeepCopy();
+                placementSurface = source.placementSurface?.DeepCopy();
+                coverVolumes = new List<CoverVolumeData>();
+                if (source.coverVolumes != null)
+                {
+                    foreach (CoverVolumeData volume in source.coverVolumes)
+                        coverVolumes.Add(volume?.DeepCopy());
+                }
+                interactionPoints = new List<InteractionPointData>();
+                if (source.interactionPoints != null)
+                {
+                    foreach (InteractionPointData point in source.interactionPoints)
+                        interactionPoints.Add(point?.DeepCopy());
+                }
+            }
+
+            // This intentionally omits authoring-only entity data such as the
+            // editor group and rotation pivot. The retained fields feed static
+            // collision, placement, destructible, vehicle, objective, and
+            // fracture evidence.
+            public string id;
+
+            public string archetypeId;
+
+            public LevelTransformData transform;
+
+            public List<CoverVolumeData> coverVolumes;
+
+            public List<InteractionPointData> interactionPoints;
+
+            public DestructibleInstanceData destructible;
+
+            public LevelPlacementSurfaceData placementSurface;
+        }
+
+        private sealed class CanonicalTerrainDefinition
+        {
+            public CanonicalTerrainDefinition(TerrainSurfaceData source)
+            {
+                id = source.id ?? string.Empty;
+                origin = source.origin;
+                sampleCountX = source.sampleCountX;
+                sampleCountZ = source.sampleCountZ;
+                sampleSpacing = source.sampleSpacing;
+                minimumElevation = source.minimumElevation;
+                elevationIncrement = source.elevationIncrement;
+                heightSamples = source.heightSamples != null
+                    ? new List<int>(source.heightSamples)
+                    : new List<int>();
+            }
+
+            // Material and appearance samples are presentation data. Headless
+            // movement, placement, and projectile evidence use terrain shape
+            // only.
+            public string id;
+
+            public Float3Data origin;
+
+            public int sampleCountX;
+
+            public int sampleCountZ;
+
+            public float sampleSpacing;
+
+            public float minimumElevation;
+
+            public float elevationIncrement;
+
+            public List<int> heightSamples;
         }
 
         private readonly IReadOnlyDictionary<
@@ -172,13 +267,9 @@ namespace GritGud.Application.Gameplay
             Identity = new SpatialContentIdentity(
                 Level.levelId,
                 Level.schemaVersion,
-                evidenceAlgorithmVersion: 1,
-                GameplayCanonicalValueDigest.Calculate(
-                    new CanonicalDefinition(
-                        GameplayCanonicalValueDigest
-                            .CalculateSerializableFields(Level),
-                        GameplayCanonicalValueDigest
-                            .CalculateSerializableFields(FractureCatalog))));
+                evidenceAlgorithmVersion: CurrentEvidenceAlgorithmVersion,
+                GameplayCanonicalValueDigest.CalculateSerializableFields(
+                    CreateCanonicalDefinition(Level, FractureCatalog)));
         }
 
         public LevelDocument Level { get; }
@@ -208,5 +299,46 @@ namespace GritGud.Application.Gameplay
 
         private static GameplayPosition ToPosition(Float3Data value) =>
             new GameplayPosition(value.x, value.y, value.z);
+
+        private static CanonicalDefinition CreateCanonicalDefinition(
+            LevelDocument level,
+            GameplayFractureSpatialCatalogDocument fractureCatalog)
+        {
+            var entities = new List<CanonicalEntityDefinition>();
+            foreach (LevelEntity entity in level.entities)
+            {
+                if (entity != null)
+                    entities.Add(new CanonicalEntityDefinition(entity));
+            }
+            entities.Sort((left, right) => StringComparer.Ordinal.Compare(
+                left.id,
+                right.id));
+
+            var terrainSurfaces = new List<CanonicalTerrainDefinition>();
+            foreach (TerrainSurfaceData terrain in level.terrainSurfaces)
+            {
+                if (terrain != null)
+                    terrainSurfaces.Add(new CanonicalTerrainDefinition(terrain));
+            }
+            terrainSurfaces.Sort((left, right) => StringComparer.Ordinal.Compare(
+                left.id,
+                right.id));
+
+            var traversalLinks = new List<LevelTraversalLinkData>();
+            foreach (LevelTraversalLinkData link in level.traversalLinks)
+            {
+                if (link != null)
+                    traversalLinks.Add(link.DeepCopy());
+            }
+            traversalLinks.Sort((left, right) => StringComparer.Ordinal.Compare(
+                left.id,
+                right.id));
+
+            return new CanonicalDefinition(
+                entities,
+                terrainSurfaces,
+                traversalLinks,
+                fractureCatalog.DeepCopy());
+        }
     }
 }

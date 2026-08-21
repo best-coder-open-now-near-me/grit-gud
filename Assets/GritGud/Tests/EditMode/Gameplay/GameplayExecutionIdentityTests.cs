@@ -164,10 +164,15 @@ namespace GritGud.Domain.Tests.Gameplay
                 catalog.DeepCopy();
             changed.profiles[0].chunks[0].center.x = 0.25f;
             var second = new GameplayStaticSpatialContent(level, changed);
-            LevelDocument changedLevel = level.DeepCopy();
-            changedLevel.displayName = "Changed level content";
+            LevelDocument presentationChangedLevel = level.DeepCopy();
+            presentationChangedLevel.displayName = "Changed presentation label";
             var third = new GameplayStaticSpatialContent(
-                changedLevel,
+                presentationChangedLevel,
+                catalog);
+            LevelDocument geometryChangedLevel = level.DeepCopy();
+            geometryChangedLevel.entities[0].transform.position.x = 0.25f;
+            var fourth = new GameplayStaticSpatialContent(
+                geometryChangedLevel,
                 catalog);
 
             Assert.That(
@@ -178,6 +183,9 @@ namespace GritGud.Domain.Tests.Gameplay
                 Is.False);
             Assert.That(
                 first.Identity.HasSameIdentity(third.Identity),
+                Is.True);
+            Assert.That(
+                first.Identity.HasSameIdentity(fourth.Identity),
                 Is.False);
         }
 

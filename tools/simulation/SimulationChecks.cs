@@ -3289,14 +3289,22 @@ internal static class SimulationChecks
         Require(!spatialContent.Identity.HasSameIdentity(
                 changedFractureContent.Identity),
             "Static spatial identity ignored fracture topology changes.");
-        LevelDocument changedLevel = level.DeepCopy();
-        changedLevel.displayName += " identity mutation";
-        var changedLevelContent = new GameplayStaticSpatialContent(
-            changedLevel,
+        LevelDocument presentationChangedLevel = level.DeepCopy();
+        presentationChangedLevel.displayName += " presentation mutation";
+        var presentationChangedContent = new GameplayStaticSpatialContent(
+            presentationChangedLevel,
+            spatialContent.FractureCatalog);
+        Require(spatialContent.Identity.HasSameIdentity(
+                presentationChangedContent.Identity),
+            "Static spatial identity included presentation-only level content.");
+        LevelDocument geometryChangedLevel = level.DeepCopy();
+        geometryChangedLevel.entities[0].transform.position.x += 0.125f;
+        var geometryChangedContent = new GameplayStaticSpatialContent(
+            geometryChangedLevel,
             spatialContent.FractureCatalog);
         Require(!spatialContent.Identity.HasSameIdentity(
-                changedLevelContent.Identity),
-            "Static spatial identity ignored level content changes.");
+                geometryChangedContent.Identity),
+            "Static spatial identity ignored simulation geometry changes.");
         var identity = new GameplayExecutionIdentity(
             new GameplayContentIdentity(
                 assembly.Scenario.Id,
