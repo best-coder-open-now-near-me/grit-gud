@@ -99,7 +99,10 @@ namespace GritGud.Application.Gameplay
         public static GameplayExecutionDeadlinePolicy Default { get; } =
             new GameplayExecutionDeadlinePolicy(
                 TimeSpan.FromSeconds(2),
-                TimeSpan.FromSeconds(2),
+                // Permanent scenarios evaluate evidence for roughly two
+                // thousand candidates. Keep this stage above the profiled
+                // Depot peak while retaining the tighter limits elsewhere.
+                TimeSpan.FromSeconds(5),
                 TimeSpan.FromSeconds(2),
                 TimeSpan.FromSeconds(2),
                 TimeSpan.FromSeconds(2),

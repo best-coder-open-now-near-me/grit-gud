@@ -126,6 +126,7 @@ namespace GritGud.Application.Gameplay
             Score = result.Selection.Value;
             ScoreComponents = new List<GameplayPolicyScoreComponent>(
                 result.Selection.Components).AsReadOnly();
+            Diagnostic = result.Diagnostic;
             TransitionSequence = result.Transition.Identity.Sequence;
             TransitionPayloadDigest = GameplayTransitionPayloadDigest
                 .Calculate(result.Transition);
@@ -147,6 +148,11 @@ namespace GritGud.Application.Gameplay
         {
             get;
         }
+        /// <summary>
+        /// Non-canonical wall-clock diagnostics for profiling this execution.
+        /// Artifact construction deliberately copies only deterministic fields.
+        /// </summary>
+        public GameplayDecisionDiagnostic Diagnostic { get; }
         public long TransitionSequence { get; }
         public string TransitionPayloadDigest { get; }
         public string ResultingStateHash { get; }
