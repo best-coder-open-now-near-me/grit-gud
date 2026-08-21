@@ -439,6 +439,7 @@ namespace GritGud.Presentation.Gameplay
                     sessionPresenter,
                     projectileController,
                     thrownExplosiveController,
+                    inputController,
                     smokeFieldSession,
                     fireFieldSession,
                     actorId,

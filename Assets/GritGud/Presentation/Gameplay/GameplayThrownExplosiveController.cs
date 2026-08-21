@@ -14,6 +14,8 @@ namespace GritGud.Presentation.Gameplay
     {
         private const int CircleSegments = 64;
         private const int TrajectorySegments = 32;
+        private const float MinimumAimDistance = 1f;
+        private const float AimDistanceMetersPerSecond = 8f;
         private GameplayThrownExplosiveSession throws;
         private GameplayWorldRegistry registry;
         private string actorId;
@@ -23,8 +25,10 @@ namespace GritGud.Presentation.Gameplay
         private Transform actorTransform;
         private ActorAnimationCoordinator animationCoordinator;
         private ConsumablePresentationCatalog presentationCatalog;
+        private GameplayInputController gameplayInput;
         private string aimedItemId;
         private ThrownExplosivePresentationDefinition aimedPresentation;
+        private float aimDistance;
         private LineRenderer uncertaintyCircle;
         private LineRenderer blastCircle;
         private LineRenderer trajectoryLine;
@@ -40,6 +44,8 @@ namespace GritGud.Presentation.Gameplay
         public ThrownExplosiveRecord LastThrow { get; private set; }
         public string StatusMessage { get; private set; } = string.Empty;
         public bool IsAiming => aimedItemId != null;
+
+        internal float AimDistance => aimDistance;
 
         bool IGameplayConsumablePowerHandler.IsPending => IsAiming;
 
@@ -69,7 +75,8 @@ namespace GritGud.Presentation.Gameplay
             Func<GameplayActionRecord, bool> onEncounterStartRequested = null,
             ConsumablePresentationCatalog presentation = null,
             GameplaySmokeFieldSession smokeFieldSession = null,
-            GameplayFireFieldSession fireFieldSession = null)
+            GameplayFireFieldSession fireFieldSession = null,
+            GameplayInputController inputController = null)
         {
             Unbind();
             Session = session ?? throw new ArgumentNullException(nameof(session));
@@ -82,6 +89,7 @@ namespace GritGud.Presentation.Gameplay
                 ?? throw new ArgumentNullException(nameof(registry));
             presentationCatalog = presentation
                 ?? ConsumablePresentationCatalog.LoadDefault();
+            gameplayInput = inputController;
             Session.GetActor(authoritativeActorId);
             throws = new GameplayThrownExplosiveSession(
                 Session,
@@ -139,6 +147,8 @@ namespace GritGud.Presentation.Gameplay
             actorTransform = null;
             animationCoordinator = null;
             presentationCatalog = null;
+            gameplayInput = null;
+            aimDistance = 0f;
             LastFailure = ThrownExplosiveFailure.None;
             LastThrow = null;
             StatusMessage = string.Empty;
@@ -149,6 +159,7 @@ namespace GritGud.Presentation.Gameplay
         {
             if (IsAiming)
             {
+                AdjustAimDistance(Time.unscaledDeltaTime);
                 RefreshAimPreview();
             }
         }
@@ -178,7 +189,7 @@ namespace GritGud.Presentation.Gameplay
             string itemId = aimedItemId;
             if (!TryGetAimPoint(out GameplayPosition aimPoint))
             {
-                StatusMessage = "Aim at reachable ground before throwing.";
+                StatusMessage = "Aim the cursor toward a throw direction.";
                 return false;
             }
 
@@ -210,8 +221,7 @@ namespace GritGud.Presentation.Gameplay
                 StatusMessage = $"Throw unavailable: {failure}.";
                 if (failure == ThrownExplosiveFailure.Depleted)
                 {
-                    aimedItemId = null;
-                    aimedPresentation = null;
+                    ClearAimingState();
                     HideAimPreview();
                     ClearAimFeedback();
                 }
@@ -255,8 +265,7 @@ namespace GritGud.Presentation.Gameplay
                 : ToVector3(LastThrow.LaunchOrigin);
             PresentThrow(LastThrow, visualLaunchOrigin);
             HideAimPreview();
-            aimedItemId = null;
-            aimedPresentation = null;
+            ClearAimingState();
             ClearAimFeedback();
             int exposedTargetCount = CountExposedTargets(
                 LastThrow.BlastEffects);
@@ -300,8 +309,7 @@ namespace GritGud.Presentation.Gameplay
                 return false;
             }
 
-            aimedItemId = null;
-            aimedPresentation = null;
+            ClearAimingState();
             HideAimPreview();
             ClearAimFeedback();
             StatusMessage = "Throw canceled.";
@@ -327,12 +335,18 @@ namespace GritGud.Presentation.Gameplay
 
             aimedPresentation = presentationCatalog.GetThrownExplosive(itemId);
             aimedItemId = itemId;
+            var thrownExplosive =
+                (ThrownExplosiveDefinition)item.ConsumablePower;
+            aimDistance = ResolveInitialAimDistance(
+                thrownExplosive.MaximumRange);
+            gameplayInput?.SetMovementCaptured(this, true);
             acquisition.SetFeedbackSuppressed(this, true);
             EnsureAimPreview(aimedPresentation);
             PresentArmedProjectile(aimedPresentation);
             RefreshAimPreview();
             StatusMessage = "AIMING " + item.DisplayName.ToUpperInvariant()
-                + " - LMB THROW; PRESS ITS BUTTON/HOTKEY AGAIN OR ESC TO CANCEL";
+                + " - CURSOR AIM; W/S OR UP/DOWN DISTANCE; LMB THROW; "
+                + "PRESS ITS BUTTON/HOTKEY AGAIN OR ESC TO CANCEL";
             return true;
         }
 
@@ -351,8 +365,7 @@ namespace GritGud.Presentation.Gameplay
                     targetId: null,
                     targetRoot: null,
                     isValid: false,
-                    $"INVALID LANDING - AIM AT GROUND WITHIN "
-                        + $"{thrownExplosive.MaximumRange:0.#} M");
+                    "INVALID DIRECTION - AIM WITH THE CURSOR");
                 return;
             }
 
@@ -402,7 +415,50 @@ namespace GritGud.Presentation.Gameplay
                 targetRoot: null,
                 isValid: true,
                 $"VALID LANDING  {distance:0.#} / "
-                    + $"{thrownExplosive.MaximumRange:0.#} M");
+                    + $"{thrownExplosive.MaximumRange:0.#} M  "
+                    + "W/S OR UP/DOWN ADJUST");
+        }
+
+        private void AdjustAimDistance(float deltaTime)
+        {
+            if (gameplayInput == null || !IsAiming)
+            {
+                return;
+            }
+
+            ThrownExplosiveDefinition definition =
+                (ThrownExplosiveDefinition)Session
+                    .GetInventoryItem(actorId, aimedItemId)
+                    .ConsumablePower;
+            aimDistance = ApplyAimDistanceInput(
+                aimDistance,
+                gameplayInput.CurrentFrame.ThrowDistanceInput,
+                definition.MaximumRange,
+                deltaTime);
+        }
+
+        internal static float ResolveInitialAimDistance(float maximumRange) =>
+            Mathf.Clamp(
+                maximumRange * 0.5f,
+                Mathf.Min(MinimumAimDistance, maximumRange),
+                maximumRange);
+
+        internal static float ApplyAimDistanceInput(
+            float currentDistance,
+            float input,
+            float maximumRange,
+            float deltaTime)
+        {
+            float minimumDistance = Mathf.Min(
+                MinimumAimDistance,
+                maximumRange);
+            return Mathf.Clamp(
+                currentDistance
+                    + (Mathf.Clamp(input, -1f, 1f)
+                        * AimDistanceMetersPerSecond
+                        * Mathf.Max(0f, deltaTime)),
+                minimumDistance,
+                maximumRange);
         }
 
         internal static string FormatAimFailure(
@@ -565,6 +621,7 @@ namespace GritGud.Presentation.Gameplay
 
         private void OnDestroy()
         {
+            gameplayInput?.SetMovementCaptured(this, false);
             ClearPlayback();
             GameplayObjectLifecycle.Destroy(uncertaintyMaterial);
             GameplayObjectLifecycle.Destroy(blastMaterial);
@@ -766,13 +823,21 @@ namespace GritGud.Presentation.Gameplay
                 if (item.ConsumablePower
                         is ThrownExplosiveDefinition definition)
                 {
-                    GameplayPosition launchOrigin = definition.GetLaunchOrigin(
-                        Session.GetActor(actorId).Pose);
-                    if (acquisition.TryGetPointerSurfacePoint(
-                            ToVector3(launchOrigin),
-                            definition.MaximumRange,
-                            out Vector3 aimPoint))
+                    GameplayActorPose actorPose = Session.GetActor(actorId).Pose;
+                    Vector3 actorPosition = ToVector3(actorPose.Position);
+                    if (acquisition.TryGetPointerRay(out Ray pointerRay)
+                        && TryResolveAimDirection(
+                            pointerRay,
+                            actorPosition,
+                            out Vector3 aimDirection))
                     {
+                        Vector3 aimPoint = actorPosition
+                            + (aimDirection * Mathf.Clamp(
+                                aimDistance,
+                                Mathf.Min(
+                                    MinimumAimDistance,
+                                    definition.MaximumRange),
+                                definition.MaximumRange));
                         point = new GameplayPosition(
                             aimPoint.x,
                             aimPoint.y,
@@ -785,5 +850,70 @@ namespace GritGud.Presentation.Gameplay
             point = default;
             return false;
         }
+
+        internal static bool TryResolveAimDirection(
+            Ray pointerRay,
+            Vector3 actorPosition,
+            out Vector3 direction)
+        {
+            if (!IsFinite(pointerRay.origin)
+                || !IsFinite(pointerRay.direction)
+                || pointerRay.direction.sqrMagnitude <= 0.0001f
+                || !IsFinite(actorPosition))
+            {
+                direction = default;
+                return false;
+            }
+
+            var normalizedRay = new Ray(
+                pointerRay.origin,
+                pointerRay.direction.normalized);
+            var actorPlane = new Plane(Vector3.up, actorPosition);
+            Vector3 flatDirection = default;
+            if (actorPlane.Raycast(normalizedRay, out float distance)
+                && distance >= 0f)
+            {
+                flatDirection = Vector3.ProjectOnPlane(
+                    normalizedRay.GetPoint(distance) - actorPosition,
+                    Vector3.up);
+            }
+
+            if (flatDirection.sqrMagnitude <= 0.0001f)
+            {
+                flatDirection = Vector3.ProjectOnPlane(
+                    normalizedRay.direction,
+                    Vector3.up);
+            }
+            if (flatDirection.sqrMagnitude <= 0.0001f)
+            {
+                flatDirection = Vector3.ProjectOnPlane(
+                    actorPosition - normalizedRay.origin,
+                    Vector3.up);
+            }
+            if (flatDirection.sqrMagnitude <= 0.0001f)
+            {
+                direction = default;
+                return false;
+            }
+
+            direction = flatDirection.normalized;
+            return true;
+        }
+
+        private void ClearAimingState()
+        {
+            gameplayInput?.SetMovementCaptured(this, false);
+            aimedItemId = null;
+            aimedPresentation = null;
+            aimDistance = 0f;
+        }
+
+        private static bool IsFinite(Vector3 value) =>
+            !float.IsNaN(value.x)
+            && !float.IsInfinity(value.x)
+            && !float.IsNaN(value.y)
+            && !float.IsInfinity(value.y)
+            && !float.IsNaN(value.z)
+            && !float.IsInfinity(value.z);
     }
 }

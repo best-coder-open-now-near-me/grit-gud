@@ -35,6 +35,54 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void CursorRayControlsDirectionWithoutRequiringSurfaceGeometry()
+        {
+            var pointerRay = new Ray(
+                new Vector3(0f, 5f, -5f),
+                new Vector3(1f, -1f, 1f));
+
+            bool resolved = GameplayThrownExplosiveController
+                .TryResolveAimDirection(
+                    pointerRay,
+                    Vector3.zero,
+                    out Vector3 direction);
+
+            Assert.That(resolved, Is.True);
+            Assert.That(direction.x, Is.EqualTo(1f).Within(0.001f));
+            Assert.That(direction.y, Is.Zero.Within(0.001f));
+            Assert.That(direction.z, Is.Zero.Within(0.001f));
+        }
+
+        [Test]
+        public void DistanceInputAdjustsAndClampsWithinThrowRange()
+        {
+            Assert.That(
+                GameplayThrownExplosiveController.ResolveInitialAimDistance(10f),
+                Is.EqualTo(5f));
+            Assert.That(
+                GameplayThrownExplosiveController.ApplyAimDistanceInput(
+                    currentDistance: 5f,
+                    input: 1f,
+                    maximumRange: 10f,
+                    deltaTime: 0.25f),
+                Is.EqualTo(7f));
+            Assert.That(
+                GameplayThrownExplosiveController.ApplyAimDistanceInput(
+                    currentDistance: 1f,
+                    input: -1f,
+                    maximumRange: 10f,
+                    deltaTime: 1f),
+                Is.EqualTo(1f));
+            Assert.That(
+                GameplayThrownExplosiveController.ApplyAimDistanceInput(
+                    currentDistance: 9f,
+                    input: 1f,
+                    maximumRange: 10f,
+                    deltaTime: 1f),
+                Is.EqualTo(10f));
+        }
+
+        [Test]
         public void DefaultCatalogAuthorsTheProductionGrenadeVisuals()
         {
             ConsumablePresentationCatalog catalog =
@@ -110,6 +158,8 @@ namespace GritGud.Presentation.Tests
                 acquisition.Bind(session, registry, "player");
                 GameplayThrownExplosiveController controller =
                     host.AddComponent<GameplayThrownExplosiveController>();
+                GameplayInputController input =
+                    host.AddComponent<GameplayInputController>();
                 var destructibles = new DestructiblePropSession(
                     Array.Empty<DestructiblePropDefinition>());
                 int encounterStartRequests = 0;
@@ -132,11 +182,13 @@ namespace GritGud.Presentation.Tests
                         encounterStartRequests++;
                         return session.BeginEncounterFromAction(action);
                     },
-                    presentation: presentation);
+                    presentation: presentation,
+                    inputController: input);
                 int journalEntryCount = session.Journal.Entries.Count;
 
                 Assert.That(controller.TryToggleAim("item.grenade"), Is.True);
                 Assert.That(controller.IsAiming, Is.True);
+                Assert.That(input.IsMovementCaptured, Is.True);
                 Assert.That(encounterStartRequests, Is.Zero);
                 Assert.That(session.Mode,
                     Is.EqualTo(GameplaySessionMode.Exploration));
@@ -158,6 +210,7 @@ namespace GritGud.Presentation.Tests
 
                 Assert.That(controller.TryToggleAim("item.grenade"), Is.True);
                 Assert.That(controller.IsAiming, Is.False);
+                Assert.That(input.IsMovementCaptured, Is.False);
                 Assert.That(
                     FindDescendant(actorRoot.transform, "Armed Thrown Explosive"),
                     Is.Null);
@@ -174,6 +227,7 @@ namespace GritGud.Presentation.Tests
                 Assert.That(controller.TryToggleAim("item.grenade"), Is.True);
                 Assert.That(controller.CancelAim(), Is.True);
                 Assert.That(controller.IsAiming, Is.False);
+                Assert.That(input.IsMovementCaptured, Is.False);
                 Assert.That(encounterStartRequests, Is.Zero);
                 Assert.That(session.Mode,
                     Is.EqualTo(GameplaySessionMode.Exploration));
@@ -186,9 +240,18 @@ namespace GritGud.Presentation.Tests
                 Assert.That(
                     controller.TryToggleAim("item.grenade"),
                     Is.True);
-                Assert.That(controller.TryConfirmThrow(
-                    new GameplayPosition(4f, 0f, 0f)), Is.True);
+                acquisition.RefreshNow(new Ray(
+                    new Vector3(0f, 5f, -5f),
+                    new Vector3(0f, -1f, 1f)));
+                Assert.That(controller.TryConfirmThrow(), Is.True);
                 Assert.That(controller.IsAiming, Is.False);
+                Assert.That(input.IsMovementCaptured, Is.False);
+                Assert.That(
+                    controller.LastThrow.IntendedLanding.X,
+                    Is.Zero.Within(0.001f));
+                Assert.That(
+                    controller.LastThrow.IntendedLanding.Z,
+                    Is.EqualTo(5f).Within(0.001f));
                 Assert.That(encounterStartRequests, Is.Zero);
                 Assert.That(session.EncounterActive, Is.False);
                 Assert.That(session.Mode,

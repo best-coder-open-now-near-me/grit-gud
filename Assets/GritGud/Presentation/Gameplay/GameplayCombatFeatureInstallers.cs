@@ -131,6 +131,7 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplaySessionPresenter sessionPresenter;
         private readonly GameplayProjectileController projectiles;
         private readonly GameplayThrownExplosiveController thrownExplosives;
+        private readonly GameplayInputController input;
         private readonly GameplaySmokeFieldSession smokeFields;
         private readonly GameplayFireFieldSession fireFields;
         private readonly string actorId;
@@ -149,6 +150,7 @@ namespace GritGud.Presentation.Gameplay
             GameplaySessionPresenter sessionPresenter,
             GameplayProjectileController projectiles,
             GameplayThrownExplosiveController thrownExplosives,
+            GameplayInputController gameplayInput,
             GameplaySmokeFieldSession smokeFields,
             GameplayFireFieldSession fireFields,
             string actorId,
@@ -170,6 +172,8 @@ namespace GritGud.Presentation.Gameplay
                 nameof(projectiles));
             this.thrownExplosives = thrownExplosives
                 ?? throw new ArgumentNullException(nameof(thrownExplosives));
+            input = gameplayInput
+                ?? throw new ArgumentNullException(nameof(gameplayInput));
             this.smokeFields = smokeFields ?? throw new ArgumentNullException(
                 nameof(smokeFields));
             this.fireFields = fireFields ?? throw new ArgumentNullException(
@@ -216,7 +220,8 @@ namespace GritGud.Presentation.Gameplay
                 thrownExplosiveRandomSeed,
                 sessionPresenter.TryBeginEncounterFromAction,
                 smokeFieldSession: smokeFields,
-                fireFieldSession: fireFields);
+                fireFieldSession: fireFields,
+                inputController: input);
             captureInstalled(
                 emergencyCycle,
                 new GameplayConsumableController(session, thrownExplosives));

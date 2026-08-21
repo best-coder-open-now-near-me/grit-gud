@@ -13,7 +13,8 @@ namespace GritGud.Presentation.Gameplay
             bool cancelRoutePressed,
             bool undoRoutePressed,
             bool confirmRoutePressed,
-            float cameraZoomDelta = 0f)
+            float cameraZoomDelta = 0f,
+            float throwDistanceInput = 0f)
         {
             Movement = Vector2.ClampMagnitude(movement, 1f);
             LookDelta = lookDelta;
@@ -23,6 +24,7 @@ namespace GritGud.Presentation.Gameplay
             UndoRoutePressed = undoRoutePressed;
             ConfirmRoutePressed = confirmRoutePressed;
             CameraZoomDelta = cameraZoomDelta;
+            ThrowDistanceInput = Mathf.Clamp(throwDistanceInput, -1f, 1f);
         }
 
         public Vector2 Movement { get; }
@@ -34,6 +36,8 @@ namespace GritGud.Presentation.Gameplay
         public bool AimHeld { get; }
 
         public float CameraZoomDelta { get; }
+
+        public float ThrowDistanceInput { get; }
 
         public bool CancelRoutePressed { get; }
 

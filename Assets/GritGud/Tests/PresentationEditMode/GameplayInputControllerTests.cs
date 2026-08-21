@@ -24,6 +24,9 @@ namespace GritGud.Presentation.Tests
                 Assert.That(gameplay.FindAction("Look", true), Is.Not.Null);
                 Assert.That(gameplay.FindAction("Aim", true), Is.Not.Null);
                 Assert.That(gameplay.FindAction("CameraZoom", true), Is.Not.Null);
+                Assert.That(
+                    gameplay.FindAction("AdjustThrowDistance", true),
+                    Is.Not.Null);
                 Assert.That(gameplay.FindAction("Attack", true), Is.Not.Null);
                 Assert.That(gameplay.FindAction("Reload", true), Is.Not.Null);
                 Assert.That(gameplay.FindAction("ToggleTurnMode", true), Is.Not.Null);
@@ -55,6 +58,17 @@ namespace GritGud.Presentation.Tests
                         .Select(binding => binding.path),
                     Is.EquivalentTo(new[] { "<Mouse>/scroll/y" }));
                 Assert.That(
+                    gameplay.FindAction("AdjustThrowDistance", true).bindings
+                        .Where(binding => !binding.isComposite)
+                        .Select(binding => binding.path),
+                    Is.EquivalentTo(new[]
+                    {
+                        "<Keyboard>/w",
+                        "<Keyboard>/s",
+                        "<Keyboard>/upArrow",
+                        "<Keyboard>/downArrow",
+                    }));
+                Assert.That(
                     gameplay.FindAction("CyclePartyMember", true).bindings
                         .Select(binding => binding.path),
                     Is.EquivalentTo(new[] { "<Keyboard>/tab" }));
@@ -70,6 +84,34 @@ namespace GritGud.Presentation.Tests
             finally
             {
                 Object.DestroyImmediate(asset);
+            }
+        }
+
+        [Test]
+        public void MovementCaptureIsOwnedAndIdempotent()
+        {
+            var host = new GameObject("Gameplay Input Capture Test");
+            try
+            {
+                GameplayInputController controller =
+                    host.AddComponent<GameplayInputController>();
+                var firstOwner = new object();
+                var secondOwner = new object();
+
+                controller.SetMovementCaptured(firstOwner, true);
+                controller.SetMovementCaptured(firstOwner, true);
+                controller.SetMovementCaptured(secondOwner, true);
+                controller.SetMovementCaptured(firstOwner, false);
+
+                Assert.That(controller.IsMovementCaptured, Is.True);
+
+                controller.SetMovementCaptured(secondOwner, false);
+
+                Assert.That(controller.IsMovementCaptured, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
             }
         }
 

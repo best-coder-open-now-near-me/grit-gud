@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -19,6 +20,7 @@ namespace GritGud.Presentation.Gameplay
         private InputAction look;
         private InputAction aim;
         private InputAction cameraZoom;
+        private InputAction adjustThrowDistance;
         private InputAction attack;
         private InputAction reload;
         private InputAction toggleTurnMode;
@@ -34,6 +36,8 @@ namespace GritGud.Presentation.Gameplay
         private InputAction escape;
         private InputAction cancelPendingAction;
         private readonly InputAction[] hotbar = new InputAction[8];
+        private readonly HashSet<object> movementCaptureOwners =
+            new HashSet<object>();
 
         public bool IsActive => enabled && inputActions != null;
 
@@ -42,6 +46,33 @@ namespace GritGud.Presentation.Gameplay
         public bool CameraOnly { get; private set; }
 
         public bool Suppressed { get; private set; }
+
+        internal bool IsMovementCaptured => movementCaptureOwners.Count > 0;
+
+        internal void SetMovementCaptured(object owner, bool captured)
+        {
+            if (owner == null)
+                throw new ArgumentNullException(nameof(owner));
+
+            if (captured)
+            {
+                movementCaptureOwners.Add(owner);
+                CurrentFrame = new GameplayInputFrame(
+                    Vector2.zero,
+                    CurrentFrame.LookDelta,
+                    false,
+                    CurrentFrame.AimHeld,
+                    CurrentFrame.CancelRoutePressed,
+                    CurrentFrame.UndoRoutePressed,
+                    CurrentFrame.ConfirmRoutePressed,
+                    CurrentFrame.CameraZoomDelta,
+                    CurrentFrame.ThrowDistanceInput);
+            }
+            else
+            {
+                movementCaptureOwners.Remove(owner);
+            }
+        }
 
         public void SetSuppressed(bool suppressed)
         {
@@ -80,6 +111,7 @@ namespace GritGud.Presentation.Gameplay
                 look = RequireAction("Look");
                 aim = RequireAction("Aim");
                 cameraZoom = RequireAction("CameraZoom");
+                adjustThrowDistance = RequireAction("AdjustThrowDistance");
                 attack = RequireAction("Attack");
                 reload = RequireAction("Reload");
                 toggleTurnMode = RequireAction("ToggleTurnMode");
@@ -116,6 +148,7 @@ namespace GritGud.Presentation.Gameplay
             commandRequested = null;
             CameraOnly = false;
             Suppressed = false;
+            movementCaptureOwners.Clear();
             if (inputActions != null)
             {
                 inputActions.Disable();
@@ -128,6 +161,7 @@ namespace GritGud.Presentation.Gameplay
             look = null;
             aim = null;
             cameraZoom = null;
+            adjustThrowDistance = null;
             attack = null;
             reload = null;
             toggleTurnMode = null;
@@ -177,15 +211,21 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
+            bool movementCaptured = IsMovementCaptured;
             CurrentFrame = new GameplayInputFrame(
-                CameraOnly ? Vector2.zero : move.ReadValue<Vector2>(),
+                CameraOnly || movementCaptured
+                    ? Vector2.zero
+                    : move.ReadValue<Vector2>(),
                 look.ReadValue<Vector2>(),
-                !CameraOnly && sprint.IsPressed(),
+                !CameraOnly && !movementCaptured && sprint.IsPressed(),
                 aim.IsPressed(),
                 !CameraOnly && cancelRoute.WasPressedThisFrame(),
                 !CameraOnly && undoRoute.WasPressedThisFrame(),
                 !CameraOnly && confirmRoute.WasPressedThisFrame(),
-                cameraZoom.ReadValue<float>());
+                cameraZoom.ReadValue<float>(),
+                CameraOnly
+                    ? 0f
+                    : adjustThrowDistance.ReadValue<float>());
             if (escape.WasPressedThisFrame())
             {
                 HandleEscapePressed();
