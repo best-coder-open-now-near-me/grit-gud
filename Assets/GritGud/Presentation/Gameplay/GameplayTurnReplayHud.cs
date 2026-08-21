@@ -170,11 +170,23 @@ namespace GritGud.Presentation.Gameplay
 
         private void Update()
         {
+            AdvancePlayback(Time.unscaledDeltaTime);
+        }
+
+        internal void AdvancePlayback(float unscaledDeltaSeconds)
+        {
+            if (float.IsNaN(unscaledDeltaSeconds)
+                || float.IsInfinity(unscaledDeltaSeconds)
+                || unscaledDeltaSeconds < 0f)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(unscaledDeltaSeconds));
+            }
             if (!isOpen || !isPlaying || playback == null)
                 return;
             playhead = Mathf.Min(
                 playback.TotalDurationSeconds,
-                playhead + (Time.unscaledDeltaTime * speed));
+                playhead + (unscaledDeltaSeconds * speed));
             if (!TryNotifyPlayheadChanged())
             {
                 AbortPlayback();

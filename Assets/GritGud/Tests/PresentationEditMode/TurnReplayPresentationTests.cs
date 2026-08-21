@@ -1,5 +1,6 @@
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
+using GritGud.Domain.Turns;
 using GritGud.Presentation.Actors.Animation;
 using GritGud.Presentation.Gameplay;
 using NUnit.Framework;
@@ -10,6 +11,48 @@ namespace GritGud.Presentation.Tests
 {
     public sealed class TurnReplayPresentationTests
     {
+        [Test]
+        public void ActorReplayAppliesCorePoseWithoutAnimationComponents()
+        {
+            var actor = new GameObject("Animation-Free Replay Actor");
+            try
+            {
+                actor.AddComponent<CharacterController>();
+                actor.AddComponent<ActorStancePresenter>();
+                var view = new GameplayActorView(
+                    "plain-actor",
+                    string.Empty,
+                    targetable: false,
+                    actor);
+                var presenter = new GameplayTurnReplayActorPresenter(view);
+
+                presenter.Begin();
+                presenter.Present(
+                    new GameplayActorSnapshot(
+                        "plain-actor",
+                        new GameplayActorPose(
+                            new GameplayPosition(4f, 0f, -2f),
+                            90f,
+                            ActorStance.Crouched),
+                        new TurnBudget(2, 3f),
+                        new ActorWoundSnapshot("plain-actor", 0, 0f)),
+                    action: null);
+
+                Assert.That(
+                    actor.transform.position,
+                    Is.EqualTo(new Vector3(4f, 0f, -2f)));
+                Assert.That(view.Stance.Stance, Is.EqualTo(ActorStance.Crouched));
+
+                presenter.Dispose();
+                Assert.That(actor.transform.position, Is.EqualTo(Vector3.zero));
+                Assert.That(view.Stance.Stance, Is.EqualTo(ActorStance.Standing));
+            }
+            finally
+            {
+                Object.DestroyImmediate(actor);
+            }
+        }
+
         [Test]
         public void WoundVariantsSeekAndRestoreExactLivePresentation()
         {

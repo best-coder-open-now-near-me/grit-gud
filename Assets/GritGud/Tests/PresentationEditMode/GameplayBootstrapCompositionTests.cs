@@ -307,6 +307,10 @@ namespace GritGud.Presentation.Tests
                 .GetComponent<GameplayBattleReplayController>();
             GameplayTurnReplayHud replayHud = runtime.Bootstrap
                 .GetComponent<GameplayTurnReplayHud>();
+            GameplayDroneController drones = runtime.Bootstrap
+                .GetComponent<GameplayDroneController>();
+            GameplayCameraController camera = runtime.Bootstrap
+                .GetComponent<GameplayCameraController>();
 
             Assert.That(
                 runtime.Bootstrap.CurrentMode,
@@ -324,6 +328,46 @@ namespace GritGud.Presentation.Tests
             Assert.That(runtime.Hud.IsVisible, Is.False);
             Assert.That(runtime.PartyHud.IsPresentationSuppressed, Is.True);
             Assert.That(Time.timeScale, Is.Zero);
+
+            GameplaySemanticReplayPlaybackFrame movementFrame = replayHud
+                .Playback.Frames.First(frame =>
+                    frame.Frame.SemanticRecord is MovementRouteRecord);
+            var movement = (MovementRouteRecord)movementFrame.Frame
+                .SemanticRecord;
+            const float movementProgress = 0.5f;
+            GameplayPosition sampledPosition = GameplaySemanticReplaySampler
+                .Sample(movementFrame.Frame, movementProgress)
+                .Actors[movement.ActorId]
+                .Pose.Position;
+            var expectedPosition = new Vector3(
+                sampledPosition.X,
+                sampledPosition.Y,
+                sampledPosition.Z);
+
+            // Recreate the original failure condition: replay presentation is
+            // opened with no bound drone feature. Actor/world playback remains
+            // authoritative, and camera ownership stays with the player.
+            replayHud.Toggle();
+            drones.Unbind();
+            Assert.That(drones.Session, Is.Null);
+            Transform cameraTarget = camera.Target;
+            Transform replayedActor = gameplay.WorldRegistry
+                .GetActor(movement.ActorId).Transform;
+            replayHud.OpenVerifiedExternalReplay();
+            Vector3 replayStart = replayedActor.position;
+            replayHud.AdvancePlayback(
+                movementFrame.StartSeconds
+                + (movementFrame.DurationSeconds * movementProgress));
+
+            Assert.That(replayHud.IsOpen, Is.True);
+            Assert.That(replayHud.TimeSeconds, Is.GreaterThan(0f));
+            Assert.That(
+                Vector3.Distance(replayedActor.position, expectedPosition),
+                Is.LessThan(0.001f));
+            Assert.That(
+                Vector3.Distance(replayedActor.position, replayStart),
+                Is.GreaterThan(0.01f));
+            Assert.That(camera.Target, Is.SameAs(cameraTarget));
 
             runtime.Bootstrap.PlayMainLevel();
             Assert.That(

@@ -588,6 +588,7 @@ namespace GritGud.Presentation.Gameplay
                         turnMovementController,
                         displacementController,
                         thrownExplosiveController,
+                        droneController,
                         combatReactionPresenter,
                         tacticalTransitionPresenter,
                     },
