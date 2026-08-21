@@ -27,29 +27,32 @@ internal static class SimulationRepositoryContent
             "Content",
             "Resources");
         JsonSerializerOptions json = CreateJsonOptions();
+        string levelPath = Path.Combine(
+            contentRoot,
+            "Levels",
+            "Published",
+            "main-level.json");
+        string fractureCatalogPath = Path.Combine(
+            contentRoot,
+            "Gameplay",
+            "fracture-spatial-catalog.json");
         ScenarioContentDocument scenario = ReadJson<ScenarioContentDocument>(
             Path.Combine(contentRoot, "Scenarios", "depot-yard.json"),
             json);
         level = new LevelDocumentMigrator().MigrateToCurrent(
-            ReadJson<LevelDocument>(
-                Path.Combine(
-                    contentRoot,
-                    "Levels",
-                    "Published",
-                    "main-level.json"),
-                json));
+            ReadJson<LevelDocument>(levelPath, json));
         scenario.Normalize();
         level.Normalize();
         GameplayFractureSpatialCatalogDocument fractureCatalog = ReadJson<
             GameplayFractureSpatialCatalogDocument>(
-                Path.Combine(
-                    contentRoot,
-                    "Gameplay",
-                    "fracture-spatial-catalog.json"),
+                fractureCatalogPath,
                 json);
         spatialContent = new GameplayStaticSpatialContent(
             level,
-            fractureCatalog);
+            fractureCatalog,
+            GameplayStaticSpatialContent.CalculateCanonicalSourceDigest(
+                File.ReadAllText(levelPath),
+                File.ReadAllText(fractureCatalogPath)));
         GameplayScenarioAssembly authored = new GameplayScenarioAssembler()
             .Assemble(scenario, level);
         assembly = GameplayHeadlessScenarioGrounding.Resolve(

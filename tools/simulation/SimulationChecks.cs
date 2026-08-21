@@ -3280,13 +3280,16 @@ internal static class SimulationChecks
             out GameplayStaticSpatialContent spatialContent);
         GameplayCombatStateSnapshot initial =
             GameplayHeadlessBattleStateFactory.Create(assembly, spatialContent);
+        var semanticSpatialContent = new GameplayStaticSpatialContent(
+            level,
+            spatialContent.FractureCatalog);
         GameplayFractureSpatialCatalogDocument changedFractureCatalog =
             spatialContent.FractureCatalog.DeepCopy();
         changedFractureCatalog.profiles[0].chunks[0].center.x += 0.125f;
         var changedFractureContent = new GameplayStaticSpatialContent(
             level,
             changedFractureCatalog);
-        Require(!spatialContent.Identity.HasSameIdentity(
+        Require(!semanticSpatialContent.Identity.HasSameIdentity(
                 changedFractureContent.Identity),
             "Static spatial identity ignored fracture topology changes.");
         LevelDocument presentationChangedLevel = level.DeepCopy();
@@ -3294,7 +3297,7 @@ internal static class SimulationChecks
         var presentationChangedContent = new GameplayStaticSpatialContent(
             presentationChangedLevel,
             spatialContent.FractureCatalog);
-        Require(spatialContent.Identity.HasSameIdentity(
+        Require(semanticSpatialContent.Identity.HasSameIdentity(
                 presentationChangedContent.Identity),
             "Static spatial identity included presentation-only level content.");
         LevelDocument geometryChangedLevel = level.DeepCopy();
@@ -3302,7 +3305,7 @@ internal static class SimulationChecks
         var geometryChangedContent = new GameplayStaticSpatialContent(
             geometryChangedLevel,
             spatialContent.FractureCatalog);
-        Require(!spatialContent.Identity.HasSameIdentity(
+        Require(!semanticSpatialContent.Identity.HasSameIdentity(
                 geometryChangedContent.Identity),
             "Static spatial identity ignored simulation geometry changes.");
         var identity = new GameplayExecutionIdentity(

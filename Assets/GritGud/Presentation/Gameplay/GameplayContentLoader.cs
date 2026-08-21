@@ -126,7 +126,11 @@ namespace GritGud.Presentation.Gameplay
                 "level");
             LevelDocument level = new UnityLevelJsonSerializer().Deserialize(
                 levelAsset.text);
-            return CreatePackage(manifest, scenario, level);
+            return CreatePackage(
+                manifest,
+                scenario,
+                level,
+                canonicalLevelSource: levelAsset.text);
         }
 
         public static GameplayContentPackage LoadSandbox(LevelDocument source)
@@ -331,7 +335,8 @@ namespace GritGud.Presentation.Gameplay
             GameplayContentManifestDocument manifest,
             ScenarioContentDocument scenario,
             LevelDocument level,
-            bool isSandbox = false)
+            bool isSandbox = false,
+            string canonicalLevelSource = null)
         {
             LevelArchetypeCatalog archetypes = LevelArchetypeCatalog.LoadDefault();
             ActorPresentationCatalog actorPresentations =
@@ -353,7 +358,13 @@ namespace GritGud.Presentation.Gameplay
                     "The fracture spatial catalog is invalid JSON.");
             var spatialContent = new GameplayStaticSpatialContent(
                 level,
-                fractureCatalog);
+                fractureCatalog,
+                string.IsNullOrWhiteSpace(canonicalLevelSource)
+                    ? null
+                    : GameplayStaticSpatialContent
+                        .CalculateCanonicalSourceDigest(
+                            canonicalLevelSource,
+                            fractureCatalogAsset.text));
             GameplaySpatialContentAssembler.ValidateFractureProfiles(
                 spatialContent,
                 archetypes);

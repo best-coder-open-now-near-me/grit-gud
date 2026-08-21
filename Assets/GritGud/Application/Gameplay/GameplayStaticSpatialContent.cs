@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Text;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Levels;
 
@@ -90,13 +91,13 @@ namespace GritGud.Application.Gameplay
     public sealed class GameplayStaticSpatialContent
     {
         /// <summary>
-        /// Version two narrows the fingerprint from the entire authoring
-        /// document to the data that the simulation and replay viewer actually
-        /// use as spatial evidence. Presentation-only data such as lighting,
-        /// dressing, editor groups, and display labels must not invalidate a
-        /// deterministic battle artifact.
+        /// Version three derives the published-content fingerprint from the
+        /// canonical source documents shared by Unity and the engine-free
+        /// generator. This prevents differences in their JSON materialization
+        /// behavior from invalidating a replay. In-memory authored content
+        /// continues to use the normalized simulation-spatial definition.
         /// </summary>
-        public const int CurrentEvidenceAlgorithmVersion = 2;
+        public const int CurrentEvidenceAlgorithmVersion = 3;
 
         private sealed class CanonicalDefinition
         {
@@ -205,7 +206,8 @@ namespace GritGud.Application.Gameplay
 
         public GameplayStaticSpatialContent(
             LevelDocument level,
-            GameplayFractureSpatialCatalogDocument fractureCatalog)
+            GameplayFractureSpatialCatalogDocument fractureCatalog,
+            string canonicalSourceDigest = null)
         {
             Level = level?.DeepCopy()
                 ?? throw new ArgumentNullException(nameof(level));
@@ -268,8 +270,9 @@ namespace GritGud.Application.Gameplay
                 Level.levelId,
                 Level.schemaVersion,
                 evidenceAlgorithmVersion: CurrentEvidenceAlgorithmVersion,
-                GameplayCanonicalValueDigest.CalculateSerializableFields(
-                    CreateCanonicalDefinition(Level, FractureCatalog)));
+                canonicalSourceDigest ?? GameplayCanonicalValueDigest
+                    .CalculateSerializableFields(
+                        CreateCanonicalDefinition(Level, FractureCatalog)));
         }
 
         public LevelDocument Level { get; }
@@ -297,8 +300,124 @@ namespace GritGud.Application.Gameplay
                     : 0;
         }
 
+        /// <summary>
+        /// Produces the published-content digest before Unity's JsonUtility or
+        /// System.Text.Json can apply their own omitted-field behavior. Object
+        /// keys are sorted and string escapes normalized, so formatting alone
+        /// does not affect the identity.
+        /// </summary>
+        public static string CalculateCanonicalSourceDigest(
+            string levelSource,
+            string fractureCatalogSource)
+        {
+            var canonical = new StringBuilder();
+            AppendCanonicalSource(
+                canonical,
+                "level",
+                levelSource);
+            AppendCanonicalSource(
+                canonical,
+                "fracture-catalog",
+                fractureCatalogSource);
+            return GameplayCanonicalValueDigest.CalculateCanonicalJson(
+                canonical.ToString());
+        }
+
         private static GameplayPosition ToPosition(Float3Data value) =>
             new GameplayPosition(value.x, value.y, value.z);
+
+        private static void AppendCanonicalSource(
+            StringBuilder destination,
+            string label,
+            string source)
+        {
+            if (string.IsNullOrWhiteSpace(source))
+                throw new ArgumentException(
+                    "Spatial source JSON cannot be empty.",
+                    nameof(source));
+            destination.Append(label).Append(':');
+            AppendCanonicalJson(
+                destination,
+                new GameplayBattleArtifactCodec.Parser(source).Parse());
+            destination.Append('\n');
+        }
+
+        private static void AppendCanonicalJson(
+            StringBuilder destination,
+            GameplayBattleArtifactCodec.JsonNode value)
+        {
+            switch (value.Kind)
+            {
+                case GameplayBattleArtifactCodec.JsonKind.Null:
+                    destination.Append("null");
+                    return;
+                case GameplayBattleArtifactCodec.JsonKind.Boolean:
+                    destination.Append(value.Boolean ? "true" : "false");
+                    return;
+                case GameplayBattleArtifactCodec.JsonKind.Number:
+                    destination.Append(value.Text);
+                    return;
+                case GameplayBattleArtifactCodec.JsonKind.String:
+                    AppendCanonicalString(destination, value.Text);
+                    return;
+                case GameplayBattleArtifactCodec.JsonKind.Array:
+                    destination.Append('[');
+                    for (int index = 0; index < value.Array.Count; index++)
+                    {
+                        if (index > 0) destination.Append(',');
+                        AppendCanonicalJson(destination, value.Array[index]);
+                    }
+                    destination.Append(']');
+                    return;
+                case GameplayBattleArtifactCodec.JsonKind.Object:
+                    var keys = new List<string>(value.Properties.Keys);
+                    keys.Sort(StringComparer.Ordinal);
+                    destination.Append('{');
+                    for (int index = 0; index < keys.Count; index++)
+                    {
+                        if (index > 0) destination.Append(',');
+                        string key = keys[index];
+                        AppendCanonicalString(destination, key);
+                        destination.Append(':');
+                        AppendCanonicalJson(
+                            destination,
+                            value.Properties[key]);
+                    }
+                    destination.Append('}');
+                    return;
+                default:
+                    throw new InvalidOperationException(
+                        "Spatial source contains an unsupported JSON value.");
+            }
+        }
+
+        private static void AppendCanonicalString(
+            StringBuilder destination,
+            string value)
+        {
+            destination.Append('"');
+            foreach (char character in value)
+            {
+                switch (character)
+                {
+                    case '"': destination.Append("\\\""); break;
+                    case '\\': destination.Append("\\\\"); break;
+                    case '\b': destination.Append("\\b"); break;
+                    case '\f': destination.Append("\\f"); break;
+                    case '\n': destination.Append("\\n"); break;
+                    case '\r': destination.Append("\\r"); break;
+                    case '\t': destination.Append("\\t"); break;
+                    default:
+                        if (character < ' ')
+                            destination.Append("\\u").Append(
+                                ((int)character).ToString("x4"));
+                        else
+                            destination.Append(character);
+                        break;
+                }
+            }
+            destination.Append('"');
+        }
 
         private static CanonicalDefinition CreateCanonicalDefinition(
             LevelDocument level,

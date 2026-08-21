@@ -189,6 +189,26 @@ namespace GritGud.Domain.Tests.Gameplay
                 Is.False);
         }
 
+        [Test]
+        public void SourceSpatialIdentityIsStableAcrossFormattingAndKeyOrder()
+        {
+            string first = GameplayStaticSpatialContent
+                .CalculateCanonicalSourceDigest(
+                    "{\"levelId\":\"depot\",\"schemaVersion\":17}",
+                    "{\"profiles\":[],\"schemaVersion\":1}");
+            string formatted = GameplayStaticSpatialContent
+                .CalculateCanonicalSourceDigest(
+                    "{ \"schemaVersion\" : 17, \"levelId\" : \"depot\" }",
+                    "{\n\"schemaVersion\":1,\n\"profiles\":[]\n}");
+            string changed = GameplayStaticSpatialContent
+                .CalculateCanonicalSourceDigest(
+                    "{\"levelId\":\"depot-variant\",\"schemaVersion\":17}",
+                    "{\"profiles\":[],\"schemaVersion\":1}");
+
+            Assert.That(first, Is.EqualTo(formatted));
+            Assert.That(first, Is.Not.EqualTo(changed));
+        }
+
         private static GameplayFractureSpatialChunkData Chunk(float x) =>
             new GameplayFractureSpatialChunkData
             {
