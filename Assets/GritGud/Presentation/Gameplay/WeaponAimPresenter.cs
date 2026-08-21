@@ -139,18 +139,23 @@ namespace GritGud.Presentation.Gameplay
 
         internal void Tick(float deltaTime)
         {
+            if (rig?.IsRecoiling == true
+                && acquisition?.WeaponTargetingActive != true)
+            {
+                // Confirmation closes targeting before recoil playback. Keep
+                // the solved shot direction until recoil has returned, then
+                // resume the ordinary pointer preview.
+                return;
+            }
+
             if (weaponDefinition == null
                 || acquisition == null
                 || rig == null
-                || !acquisition.WeaponTargetingActive
                 || !acquisition.TryGetPresentationAimPoint(
                     out Vector3 aimPoint)
                 || weaponDefinition.AttackPresentation ==
                     WeaponAttackPresentationKind.ContactStrike)
             {
-                // Confirming a shot closes targeting before this component's
-                // Update. Preserve the solved shot direction while recoil is
-                // active so the much larger aim-return motion cannot mask it.
                 rig?.ClearAimPointWhenSettled();
                 return;
             }

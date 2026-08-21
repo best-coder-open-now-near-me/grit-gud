@@ -344,6 +344,115 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void RangedPreviewUsesTheSameMuzzlePathBeforeAndAfterArming()
+        {
+            var host = new GameObject("Stable Pre-Arm Aim Test");
+            var observer = CreateActorObject(
+                "Stable Pre-Arm Observer",
+                Vector3.zero,
+                withVisual: false);
+            var target = CreateActorObject(
+                "Stable Pre-Arm Target",
+                new Vector3(0f, 0f, 5f),
+                withVisual: true);
+            var obstruction = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            LevelWorld world = null;
+            GameplayWorldRegistry registry = null;
+            try
+            {
+                obstruction.name = "Muzzle Path Obstruction";
+                obstruction.transform.position = new Vector3(
+                    -1.2f,
+                    1.2f,
+                    2f);
+                obstruction.transform.localScale = new Vector3(
+                    0.5f,
+                    2f,
+                    0.5f);
+                world = new LevelWorld(
+                    new GameObject("Stable Pre-Arm Aim World"),
+                    new Dictionary<string, LevelEntityView>(),
+                    null);
+                registry = new GameplayWorldRegistry(world);
+                registry.RegisterActor(
+                    "observer",
+                    "test",
+                    targetable: false,
+                    observer);
+                registry.RegisterActor(
+                    "target",
+                    "test",
+                    targetable: true,
+                    target);
+                TargetAcquisitionPresenter presenter =
+                    host.AddComponent<TargetAcquisitionPresenter>();
+                presenter.Bind(
+                    CreateSession(includeRangedAttack: true),
+                    registry,
+                    "observer");
+                presenter.SetWeaponAimOriginProvider(
+                    () => new Vector3(-2f, 1.2f, 0f));
+                Physics.SyncTransforms();
+                presenter.RefreshNow(new Ray(
+                    new Vector3(0f, 1.2f, 0f),
+                    Vector3.forward));
+
+                Assert.That(
+                    presenter.CurrentTargetActorId,
+                    Is.Null,
+                    "Preview must reject an actor blocked from the muzzle, "
+                        + "even when the camera ray can see it.");
+                Assert.That(
+                    presenter.TryGetWeaponAim(
+                        out GameplayWeaponAim previewAim),
+                    Is.True);
+                Assert.That(
+                    previewAim.TargetId,
+                    Is.EqualTo(GameplayTargetIds.WorldAimPoint));
+                Assert.That(
+                    presenter.TryGetPresentationAimPoint(
+                        out Vector3 previewPresentationAim),
+                    Is.True);
+                Assert.That(
+                    previewPresentationAim,
+                    Is.EqualTo(previewAim.Position)
+                        .Using(Vector3ComparerWithEqualsOperator.Instance));
+
+                presenter.SetWeaponTargetingActive(true);
+
+                Assert.That(presenter.CurrentTargetActorId, Is.Null);
+                Assert.That(
+                    presenter.TryGetWeaponAim(
+                        out GameplayWeaponAim armedAim),
+                    Is.True);
+                Assert.That(
+                    armedAim.TargetId,
+                    Is.EqualTo(previewAim.TargetId));
+                Assert.That(
+                    armedAim.Position,
+                    Is.EqualTo(previewAim.Position)
+                        .Using(Vector3ComparerWithEqualsOperator.Instance));
+                Assert.That(
+                    presenter.TryGetPresentationAimPoint(
+                        out Vector3 armedPresentationAim),
+                    Is.True);
+                Assert.That(
+                    armedPresentationAim,
+                    Is.EqualTo(previewPresentationAim)
+                        .Using(Vector3ComparerWithEqualsOperator.Instance));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                registry?.Dispose();
+                world?.Dispose();
+                Object.DestroyImmediate(observer);
+                Object.DestroyImmediate(target);
+                Object.DestroyImmediate(obstruction);
+            }
+        }
+
+        [Test]
         public void WeaponTargetingHighlightsStableCharacterPathObstruction()
         {
             var host = new GameObject("Stable Character Path Target Test");

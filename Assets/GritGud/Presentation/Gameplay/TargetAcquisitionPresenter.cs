@@ -500,7 +500,7 @@ namespace GritGud.Presentation.Gameplay
             }
 
             GameplayActorView target;
-            if (UsesAuthoritativeWeaponAim())
+            if (UsesRangedWeaponAim())
             {
                 if (!TryGetWeaponAim(out GameplayWeaponAim resolvedAim)
                     || !registry.TryGetActor(resolvedAim.TargetId, out target)
@@ -1050,12 +1050,10 @@ namespace GritGud.Presentation.Gameplay
                     : GameplayTargetIds.WorldAimPoint;
         }
 
-        private bool UsesAuthoritativeWeaponAim()
+        private bool UsesRangedWeaponAim()
         {
             AttackDefinition attack = session?.GetEquippedAttack(observerId);
-            return WeaponTargetingActive
-                && attack != null
-                && attack.Contact == null;
+            return attack != null && attack.Contact == null;
         }
 
         private bool BelongsToObserver(Transform candidate) =>

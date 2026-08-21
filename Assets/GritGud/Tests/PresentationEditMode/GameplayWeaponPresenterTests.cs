@@ -512,6 +512,99 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void RangedWeaponPoseTracksPointerBeforeShotIsArmed()
+        {
+            var host = new GameObject("Pre-Arm Weapon Aim Host");
+            GameObject playerPrefab = Resources.Load<GameObject>(
+                "Actors/DefaultPlayerActor");
+            Assert.That(playerPrefab, Is.Not.Null);
+            GameObject player = Object.Instantiate(playerPrefab);
+            LevelWorld world = null;
+            GameplayWorldRegistry registry = null;
+            WeaponPresentationCatalog catalog = null;
+            try
+            {
+                world = new LevelWorld(
+                    new GameObject("Pre-Arm Weapon Aim World"),
+                    new Dictionary<string, LevelEntityView>(),
+                    null);
+                registry = new GameplayWorldRegistry(world);
+                registry.RegisterActor(
+                    "player",
+                    "test",
+                    targetable: false,
+                    player);
+                GameplaySession session = CreateSession();
+                TargetAcquisitionPresenter acquisition =
+                    host.AddComponent<TargetAcquisitionPresenter>();
+                acquisition.Bind(session, registry, "player");
+                WeaponPresentationDefinition source =
+                    WeaponPresentationCatalog.LoadDefault().Get(
+                        "weapon.rifle");
+                catalog = WeaponPresentationCatalog.CreateRuntime(
+                    CreateDefinition(
+                        "rifle",
+                        source.Prefab,
+                        ActorAnimationPoseIds.Rifle));
+                ActorAnimationCoordinator animation = player.GetComponent<
+                    ActorAnimationCoordinator>();
+                GameplayWeaponPresenter presenter =
+                    host.AddComponent<GameplayWeaponPresenter>();
+                presenter.Bind(
+                    session,
+                    registry,
+                    host.AddComponent<GameplayAttackController>(),
+                    host.AddComponent<GameplayProjectileController>(),
+                    animation,
+                    "player",
+                    catalog,
+                    targetAcquisition: acquisition);
+                acquisition.SetWeaponAimOriginProvider(
+                    () => presenter.Muzzle.position);
+                Physics.SyncTransforms();
+                acquisition.RefreshNow(new Ray(
+                    new Vector3(3f, 1.2f, 0f),
+                    Vector3.forward));
+                WeaponAimPresenter aim =
+                    host.GetComponent<WeaponAimPresenter>();
+                WeaponAimRig rig = animation.TargetAnimator.GetComponent<
+                    WeaponAimRig>();
+                Quaternion initialRotation = player.transform.rotation;
+
+                Assert.That(acquisition.WeaponTargetingActive, Is.False);
+                Assert.That(rig, Is.Not.Null);
+                Assert.That(rig.HasAimPoint, Is.False);
+
+                aim.Tick(1f);
+
+                Assert.That(
+                    rig.HasAimPoint,
+                    Is.True,
+                    "The ranged pose must receive its pointer aim before "
+                        + "the shot is armed.");
+                Assert.That(
+                    Quaternion.Angle(
+                        initialRotation,
+                        player.transform.rotation),
+                    Is.GreaterThan(0.1f),
+                    "Pre-arm aiming must visibly turn the actor toward the "
+                        + "pointer instead of waiting for confirmation.");
+                Assert.That(
+                    acquisition.WeaponTargetingActive,
+                    Is.False,
+                    "Pose tracking must not implicitly arm the attack.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                registry?.Dispose();
+                world?.Dispose();
+                Object.DestroyImmediate(player);
+                Object.DestroyImmediate(catalog);
+            }
+        }
+
+        [Test]
         public void ReplayEquipmentProjectionRestoresLiveHeldModel()
         {
             var host = new GameObject("Replay Weapon Presenter Host");
