@@ -229,10 +229,16 @@ namespace GritGud.Presentation.Gameplay
             if (session == null || replayPaused)
                 return;
 
+            outcomes.PresentEncounterStarted();
             outcomes.PresentNewIncapacitations();
             if (partyControl.IsPartyDefeated)
             {
                 outcomes.ResolvePartyIncapacitation();
+                return;
+            }
+
+            if (outcomes.ContinuePartyVictoryExit())
+            {
                 return;
             }
 
@@ -248,7 +254,7 @@ namespace GritGud.Presentation.Gameplay
 
             if (!partyControl.HasCapableHostileActor())
             {
-                outcomes.RequestEncounterCompletion();
+                outcomes.BeginPartyVictory();
                 return;
             }
 

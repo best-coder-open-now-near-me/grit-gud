@@ -15,6 +15,8 @@ namespace GritGud.Presentation.Gameplay
         private readonly HashSet<string> reportedPartyIncapacitations =
             new HashSet<string>(StringComparer.Ordinal);
         private bool partyIncapacitationReported;
+        private bool encounterWasActive;
+        private bool partyVictoryExitPending;
 
         public GameplayEnemyOutcomePresenter(
             GameplaySession session,
@@ -69,6 +71,28 @@ namespace GritGud.Presentation.Gameplay
             }
         }
 
+        public void PresentEncounterStarted()
+        {
+            bool encounterIsActive = session.EncounterActive;
+            if (encounterIsActive == encounterWasActive)
+            {
+                return;
+            }
+
+            encounterWasActive = encounterIsActive;
+            if (!encounterIsActive)
+            {
+                return;
+            }
+
+            string message = BuildEncounterRosterMessage();
+            dialogue.Append(
+                GameplayDialogueChannel.System,
+                "ENCOUNTER STARTED",
+                message);
+            actionController.PresentExternalStatus(message);
+        }
+
         public void ResolvePartyIncapacitation()
         {
             if (!partyIncapacitationReported)
@@ -84,18 +108,57 @@ namespace GritGud.Presentation.Gameplay
             CompleteEncounter("The party is incapacitated.");
         }
 
-        public void RequestEncounterCompletion()
+        public bool BeginPartyVictory()
         {
-            if (!session.RequestEncounterCompletionAtTurnEnd())
-                return;
+            if (!session.EncounterActive)
+            {
+                return false;
+            }
+
+            session.CompleteEncounter();
+            partyVictoryExitPending = session.Mode
+                == GameplaySessionMode.TurnBased;
             const string message =
-                "All hostile actors are incapacitated. End the current turn to conclude the encounter.";
+                "All hostile actors are incapacitated. Encounter complete.";
             dialogue.Append(
                 GameplayDialogueChannel.System,
-                "HOSTILES INCAPACITATED",
+                "ENCOUNTER COMPLETE",
                 message);
             actionController.PresentExternalStatus(message);
             sessionPresenter.RefreshModePresentation();
+            ContinuePartyVictoryExit();
+            return true;
+        }
+
+        public bool ContinuePartyVictoryExit()
+        {
+            if (!partyVictoryExitPending)
+            {
+                return false;
+            }
+
+            if (session.Mode == GameplaySessionMode.Exploration)
+            {
+                partyVictoryExitPending = false;
+                return true;
+            }
+
+            if (session.Mode != GameplaySessionMode.TurnBased)
+            {
+                return true;
+            }
+
+            if (actionController.TryExitTurnMode())
+            {
+                partyVictoryExitPending = false;
+                actionController.PresentExternalStatus(
+                    "Encounter complete. Exploration resumed.");
+                return true;
+            }
+
+            actionController.PresentExternalStatus(
+                "Encounter complete. Waiting for the current presentation to finish.");
+            return true;
         }
 
         private string GetActorDisplayName(string actorId) =>
@@ -113,6 +176,20 @@ namespace GritGud.Presentation.Gameplay
                 message);
             actionController.PresentExternalStatus(message);
             sessionPresenter.RefreshModePresentation();
+        }
+
+        private string BuildEncounterRosterMessage()
+        {
+            var combatants = new List<string>();
+            foreach (string actorId in session.InitiativeOrder)
+                combatants.Add(GetActorDisplayName(actorId));
+            return combatants.Count == 0
+                ? "Combat started. No combatants were registered."
+                : "Combat started. Roster ("
+                    + combatants.Count
+                    + "): "
+                    + string.Join(", ", combatants)
+                    + ".";
         }
     }
 }

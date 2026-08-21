@@ -155,6 +155,18 @@ namespace GritGud.Presentation.Tests
                 }),
                 Is.True);
             sessionPresenter.RefreshModePresentation();
+            yield return null;
+            GameplayDialogueEntry encounterStarted = null;
+            foreach (GameplayDialogueEntry entry in gameplay.DialogueLog.Entries)
+            {
+                if (entry.Channel == GameplayDialogueChannel.System
+                    && entry.Title == "ENCOUNTER STARTED")
+                {
+                    encounterStarted = entry;
+                }
+            }
+            Assert.That(encounterStarted, Is.Not.Null);
+            StringAssert.Contains("Roster (3)", encounterStarted.Message);
             Assert.That(gameplay.Session.ActiveActorId, Is.EqualTo("oren-vale"));
             Assert.That(actions.CanExitTurnMode, Is.False);
             Assert.That(
