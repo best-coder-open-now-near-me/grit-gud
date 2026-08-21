@@ -596,6 +596,7 @@ namespace GritGud.Presentation.Gameplay
                     enemyController,
                     new Behaviour[]
                     {
+                        sessionPresenter,
                         enemyController,
                         actionController,
                         turnMovementController,

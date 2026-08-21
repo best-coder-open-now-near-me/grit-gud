@@ -16,9 +16,13 @@ namespace GritGud.Presentation.Gameplay
         private readonly WeaponAimPresenter aim;
         private readonly WeaponAimRig aimRig;
         private readonly ActorRagdollPresenter ragdoll;
+        private readonly ThirdPersonMotor motor;
+        private readonly ExplorationMovementInput movementInput;
         private bool locomotionEnabled;
         private bool aimEnabled;
         private bool aimRigEnabled;
+        private bool motorEnabled;
+        private bool movementInputEnabled;
         private bool presenting;
         private Vector3 originalPosition;
         private Quaternion originalRotation;
@@ -39,6 +43,8 @@ namespace GritGud.Presentation.Gameplay
                 ? animation.TargetAnimator.GetComponent<WeaponAimRig>()
                 : null;
             ragdoll = view.Root.GetComponent<ActorRagdollPresenter>();
+            motor = view.Motor;
+            movementInput = view.MovementInput;
         }
 
         internal bool IsPresenting => presenting;
@@ -53,6 +59,8 @@ namespace GritGud.Presentation.Gameplay
             locomotionEnabled = locomotion != null && locomotion.enabled;
             aimEnabled = aim != null && aim.enabled;
             aimRigEnabled = aimRig != null && aimRig.enabled;
+            motorEnabled = motor != null && motor.enabled;
+            movementInputEnabled = movementInput != null && movementInput.enabled;
             originalPosition = view.Transform.position;
             originalRotation = view.Transform.rotation;
             originalStance = view.Stance.Stance;
@@ -70,7 +78,15 @@ namespace GritGud.Presentation.Gameplay
                     aim.enabled = false;
                 if (aimRig != null)
                     aimRig.enabled = false;
-                view.Motor?.StopPlanarMovement();
+                motor?.StopPlanarMovement();
+                // Replay is the transform authority. The normal motor and
+                // movement-input pair otherwise continue their frame updates
+                // alongside the replay projection, which can overwrite a
+                // sampled pose or restart a locomotion blend.
+                if (movementInput != null)
+                    movementInput.enabled = false;
+                if (motor != null)
+                    motor.enabled = false;
             }
             catch
             {
@@ -177,6 +193,10 @@ namespace GritGud.Presentation.Gameplay
                         aim.enabled = aimEnabled;
                     if (aimRig != null)
                         aimRig.enabled = aimRigEnabled;
+                    if (movementInput != null)
+                        movementInput.enabled = movementInputEnabled;
+                    if (motor != null)
+                        motor.enabled = motorEnabled;
                 },
                 ref failure);
             presenting = false;

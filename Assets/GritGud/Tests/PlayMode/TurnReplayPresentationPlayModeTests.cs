@@ -65,6 +65,11 @@ namespace GritGud.PlayMode.Tests
                 Quaternion liveRotation = actor.transform.rotation;
                 bool locomotionEnabled = actor.GetComponent<
                     ActorLocomotionAnimationPresenter>().enabled;
+                ThirdPersonMotor motor = actor.GetComponent<ThirdPersonMotor>();
+                ExplorationMovementInput movementInput = actor.GetComponent<
+                    ExplorationMovementInput>();
+                bool motorEnabled = motor.enabled;
+                bool movementInputEnabled = movementInput.enabled;
 
                 using (var replay =
                     new GameplayTurnReplayActorPresenter(view))
@@ -107,6 +112,8 @@ namespace GritGud.PlayMode.Tests
                     Assert.That(actor.GetComponent<
                         ActorLocomotionAnimationPresenter>().enabled,
                         Is.False);
+                    Assert.That(motor.enabled, Is.False);
+                    Assert.That(movementInput.enabled, Is.False);
 
                     replay.Present(
                         new GameplayActorSnapshot(
@@ -320,6 +327,9 @@ namespace GritGud.PlayMode.Tests
                 Assert.That(actor.GetComponent<
                     ActorLocomotionAnimationPresenter>().enabled,
                     Is.EqualTo(locomotionEnabled));
+                Assert.That(motor.enabled, Is.EqualTo(motorEnabled));
+                Assert.That(movementInput.enabled,
+                    Is.EqualTo(movementInputEnabled));
             }
             finally
             {
