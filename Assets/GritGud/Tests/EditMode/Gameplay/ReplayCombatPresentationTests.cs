@@ -86,6 +86,37 @@ namespace GritGud.Domain.Tests
         }
 
         [Test]
+        public void ProjectileImpactReactionStartsAtTheCollisionThreshold()
+        {
+            ProjectileAdvanceRecord advance = CreateImpactAdvance();
+            GameplayActorSnapshot previous = CreateActor(
+                "target",
+                woundCount: 0,
+                maximumWounds: 1);
+            GameplayActorSnapshot resulting = CreateActor(
+                "target",
+                woundCount: 1,
+                maximumWounds: 1);
+
+            TurnReplayActorActionState reaction =
+                TurnReplayActorActionProjector
+                    .ProjectProjectileImpactReactions(
+                        advance,
+                        sequence: 9,
+                        progress: 0.25f,
+                        new[] { previous },
+                        new[] { resulting })[0];
+
+            Assert.That(
+                reaction.EventNormalizedTime,
+                Is.EqualTo(GameplaySemanticReplayPresentationTiming
+                    .GetProjectileImpactProgress(advance)));
+            Assert.That(reaction.ActorId, Is.EqualTo("target"));
+            Assert.That(reaction.ResultingWoundCount, Is.EqualTo(1));
+            Assert.That(resulting.IsIncapacitated, Is.True);
+        }
+
+        [Test]
         public void RangedReactionWaitsForTheSharedResolutionEvent()
         {
             var state = new TurnReplayActorActionState(
@@ -148,5 +179,20 @@ namespace GritGud.Domain.Tests
                 worldStateRevision: 4,
                 collisionFraction: 0.25f);
         }
+
+        private static GameplayActorSnapshot CreateActor(
+            string actorId,
+            int woundCount,
+            int maximumWounds) => new GameplayActorSnapshot(
+                actorId,
+                new GameplayActorPose(
+                    new GameplayPosition(0f, 0f, 5f),
+                    0f,
+                    ActorStance.Standing),
+                new TurnBudget(2, 3f),
+                new ActorWoundSnapshot(actorId, woundCount, 0f),
+                equippedItemId: null,
+                equipmentEffects: EquipmentEffectSet.None,
+                maximumWounds: maximumWounds);
     }
 }

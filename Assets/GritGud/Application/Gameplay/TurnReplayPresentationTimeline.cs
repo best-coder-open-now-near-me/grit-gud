@@ -647,10 +647,37 @@ namespace GritGud.Application.Gameplay
             float progress,
             ICollection<TurnReplayActorActionState> states)
         {
+            foreach (TurnReplayActorActionState state in
+                ProjectProjectileImpactReactions(
+                    advance,
+                    sequence,
+                    progress,
+                    frame.Previous.Session.Actors,
+                    frame.Resulting.Session.Actors))
+                states.Add(state);
+        }
+
+        internal static IReadOnlyList<TurnReplayActorActionState>
+            ProjectProjectileImpactReactions(
+                ProjectileAdvanceRecord advance,
+                long sequence,
+                float progress,
+                IReadOnlyList<GameplayActorSnapshot> previousActors,
+                IReadOnlyList<GameplayActorSnapshot> resultingActors)
+        {
+            if (advance == null) throw new ArgumentNullException(nameof(advance));
+            if (sequence <= 0) throw new ArgumentOutOfRangeException(
+                nameof(sequence));
+            if (previousActors == null) throw new ArgumentNullException(
+                nameof(previousActors));
+            if (resultingActors == null) throw new ArgumentNullException(
+                nameof(resultingActors));
             ProjectileImpactRecord impact = advance.Resulting.Impact;
-            if (impact == null) return;
+            if (impact == null)
+                return Array.Empty<TurnReplayActorActionState>();
             float eventTime = GameplaySemanticReplayPresentationTiming
                 .GetProjectileImpactProgress(advance);
+            var states = new List<TurnReplayActorActionState>();
             var reacted = new HashSet<string>(StringComparer.Ordinal);
             foreach (BlastEffectRecord effect in impact.BlastEffects)
             {
@@ -658,7 +685,8 @@ namespace GritGud.Application.Gameplay
                     || !reacted.Add(effect.EntityId))
                     continue;
                 AddProjectileReaction(
-                    frame,
+                    previousActors,
+                    resultingActors,
                     effect.EntityId,
                     effect.InjuryRegion,
                     sequence,
@@ -670,7 +698,8 @@ namespace GritGud.Application.Gameplay
             if (reacted.Add(impact.HitEntityId))
             {
                 AddProjectileReaction(
-                    frame,
+                    previousActors,
+                    resultingActors,
                     impact.HitEntityId,
                     hitRegion: null,
                     sequence,
@@ -678,10 +707,14 @@ namespace GritGud.Application.Gameplay
                     eventTime,
                     states);
             }
+            return states.Count == 0
+                ? Array.Empty<TurnReplayActorActionState>()
+                : states.AsReadOnly();
         }
 
         private static void AddProjectileReaction(
-            GameplaySemanticReplayFrame frame,
+            IReadOnlyList<GameplayActorSnapshot> previousActors,
+            IReadOnlyList<GameplayActorSnapshot> resultingActors,
             string actorId,
             TargetRegionId? hitRegion,
             long sequence,
@@ -690,11 +723,11 @@ namespace GritGud.Application.Gameplay
             ICollection<TurnReplayActorActionState> states)
         {
             if (!TryFindActor(
-                frame.Resulting.Session.Actors,
+                resultingActors,
                 actorId,
                 out GameplayActorSnapshot resulting)
                 || !TryFindActor(
-                frame.Previous.Session.Actors,
+                previousActors,
                 actorId,
                 out GameplayActorSnapshot previous)
                 || resulting.Wounds.WoundCount
