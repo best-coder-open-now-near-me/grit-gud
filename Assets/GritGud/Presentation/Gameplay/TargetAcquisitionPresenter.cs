@@ -99,7 +99,8 @@ namespace GritGud.Presentation.Gameplay
         private readonly List<TargetRegionSample> targetRegionBuffer =
             new List<TargetRegionSample>();
         private readonly UnityWeaponDischargeOriginResolver
-            weaponOriginResolver = new UnityWeaponDischargeOriginResolver();
+            weaponClearanceResolver =
+                new UnityWeaponDischargeOriginResolver();
         private GameplaySession session;
         private GameplayWorldRegistry registry;
         private GameplayActorView observer;
@@ -112,8 +113,11 @@ namespace GritGud.Presentation.Gameplay
         private bool hasPointerRay;
         private Func<Vector2, bool> isPointerBlocked;
         private Func<Vector3?> getWeaponAimOrigin;
+        private Func<Transform> getWeaponMuzzle;
         private bool hasLockedWeaponAimOrigin;
         private Vector3 lockedWeaponAimOriginLocal;
+        private bool hasLockedWeaponDischargeLine;
+        private Vector3 lockedAntiMuzzleLocal;
         private bool hasResolvedWeaponAim;
         private GameplayWeaponAim resolvedWeaponAim;
         private ISightObscuranceQuery sightObscurance;
@@ -220,6 +224,7 @@ namespace GritGud.Presentation.Gameplay
             observerId = nextObserverId;
             observer = registry.GetActor(observerId);
             hasLockedWeaponAimOrigin = false;
+            hasLockedWeaponDischargeLine = false;
             hasResolvedWeaponAim = false;
             pointerQuery = new UnityPointerTargetQuery(
                 observer.Transform,
@@ -260,8 +265,11 @@ namespace GritGud.Presentation.Gameplay
             WeaponTargetingActive = false;
             isPointerBlocked = null;
             getWeaponAimOrigin = null;
+            getWeaponMuzzle = null;
             hasLockedWeaponAimOrigin = false;
             lockedWeaponAimOriginLocal = default;
+            hasLockedWeaponDischargeLine = false;
+            lockedAntiMuzzleLocal = default;
             hasResolvedWeaponAim = false;
             resolvedWeaponAim = default;
             enabled = false;
@@ -407,6 +415,7 @@ namespace GritGud.Presentation.Gameplay
             else if (!active)
             {
                 hasLockedWeaponAimOrigin = false;
+                hasLockedWeaponDischargeLine = false;
                 hasResolvedWeaponAim = false;
                 resolvedWeaponAim = default;
             }
@@ -429,6 +438,20 @@ namespace GritGud.Presentation.Gameplay
         internal void SetWeaponAimOriginProvider(Func<Vector3?> originProvider)
         {
             getWeaponAimOrigin = originProvider;
+            if (WeaponTargetingActive)
+            {
+                LockWeaponAimOrigin();
+                if (hasPointerRay)
+                {
+                    RefreshNow(currentPointerRay);
+                }
+            }
+        }
+
+        internal void SetWeaponAimTransformProvider(
+            Func<Transform> muzzleProvider)
+        {
+            getWeaponMuzzle = muzzleProvider;
             if (WeaponTargetingActive)
             {
                 LockWeaponAimOrigin();
@@ -627,6 +650,13 @@ namespace GritGud.Presentation.Gameplay
                 return false;
             }
 
+            if (TryResolveWeaponDischargeObstruction(
+                    out RaycastHit obstruction))
+            {
+                aimPoint = obstruction.point;
+                return true;
+            }
+
             return TryResolvePointerAimPoint(
                 ResolveWeaponAimOrigin(),
                 fallbackDistance,
@@ -646,26 +676,53 @@ namespace GritGud.Presentation.Gameplay
                 return true;
             }
 
-            if (!IsBound || observer == null
-                || !TryResolvePointerAimPoint(
-                    ResolveWeaponAimOrigin(),
-                    WorldAimFallbackDistance,
-                    allowRangeFallback: true,
-                    out Vector3 aimPoint,
-                    out string targetId))
+            if (!IsBound || observer == null)
             {
                 aim = default;
                 return false;
             }
 
             Vector3 origin = ResolveWeaponAimOrigin();
-            ResolveWeaponImpactEvidence(
-                origin,
-                ref aimPoint,
-                ref targetId,
-                out Vector3 normal,
-                out string surfaceId,
-                out int preferredFractureChunkIndex);
+            Vector3 aimPoint;
+            string targetId;
+            Vector3 normal;
+            string surfaceId;
+            int preferredFractureChunkIndex;
+            if (TryResolveWeaponDischargeObstruction(
+                    out RaycastHit obstruction))
+            {
+                aimPoint = obstruction.point;
+                targetId = ResolveAimTargetId(
+                    obstruction.collider.transform);
+                ResolveWeaponImpactEvidence(
+                    obstruction,
+                    ref aimPoint,
+                    ref targetId,
+                    out normal,
+                    out surfaceId,
+                    out preferredFractureChunkIndex);
+            }
+            else
+            {
+                if (!TryResolvePointerAimPoint(
+                        origin,
+                        WorldAimFallbackDistance,
+                        allowRangeFallback: true,
+                        out aimPoint,
+                        out targetId))
+                {
+                    aim = default;
+                    return false;
+                }
+
+                ResolveWeaponImpactEvidence(
+                    origin,
+                    ref aimPoint,
+                    ref targetId,
+                    out normal,
+                    out surfaceId,
+                    out preferredFractureChunkIndex);
+            }
             aim = new GameplayWeaponAim(
                 aimPoint,
                 targetId,
@@ -754,13 +811,52 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            aimPoint = nearest.point;
-            normal = nearest.normal.sqrMagnitude > 0.0001f
-                ? nearest.normal.normalized
+            ApplyWeaponImpactEvidence(
+                nearest,
+                ref aimPoint,
+                ref targetId,
+                ref normal,
+                ref surfaceId,
+                ref preferredFractureChunkIndex);
+        }
+
+        private void ResolveWeaponImpactEvidence(
+            RaycastHit impact,
+            ref Vector3 aimPoint,
+            ref string targetId,
+            out Vector3 normal,
+            out string surfaceId,
+            out int preferredFractureChunkIndex)
+        {
+            normal = impact.normal.sqrMagnitude > 0.0001f
+                ? impact.normal.normalized
+                : Vector3.up;
+            surfaceId = SurfacePresentationCatalog.DefaultSurfaceId;
+            preferredFractureChunkIndex = -1;
+            ApplyWeaponImpactEvidence(
+                impact,
+                ref aimPoint,
+                ref targetId,
+                ref normal,
+                ref surfaceId,
+                ref preferredFractureChunkIndex);
+        }
+
+        private void ApplyWeaponImpactEvidence(
+            RaycastHit impact,
+            ref Vector3 aimPoint,
+            ref string targetId,
+            ref Vector3 normal,
+            ref string surfaceId,
+            ref int preferredFractureChunkIndex)
+        {
+            aimPoint = impact.point;
+            normal = impact.normal.sqrMagnitude > 0.0001f
+                ? impact.normal.normalized
                 : normal;
-            targetId = ResolveAimTargetId(nearest.collider.transform);
+            targetId = ResolveAimTargetId(impact.collider.transform);
             if (registry.TryGetLevelEntityContaining(
-                    nearest.collider.transform,
+                    impact.collider.transform,
                     out LevelEntityView entity))
             {
                 surfaceId = entity.Archetype.SurfacePresentationId;
@@ -769,7 +865,7 @@ namespace GritGud.Presentation.Gameplay
                 if (fracture != null)
                 {
                     preferredFractureChunkIndex = fracture.FindClosestChunkIndex(
-                        entity.transform.InverseTransformPoint(nearest.point));
+                        entity.transform.InverseTransformPoint(impact.point));
                 }
             }
         }
@@ -955,20 +1051,59 @@ namespace GritGud.Presentation.Gameplay
 
         private Vector3 ResolveWeaponAimOrigin()
         {
-            Vector3 presentedOrigin;
             if (WeaponTargetingActive && hasLockedWeaponAimOrigin)
             {
-                presentedOrigin = observer.Transform.TransformPoint(
+                return observer.Transform.TransformPoint(
                     lockedWeaponAimOriginLocal);
             }
-            else
+
+            Transform presentedMuzzle = getWeaponMuzzle?.Invoke();
+            if (presentedMuzzle != null)
             {
-                Vector3? providedOrigin = getWeaponAimOrigin?.Invoke();
-                presentedOrigin = providedOrigin.HasValue
-                    ? providedOrigin.Value
-                    : observer.Stance.FirstPersonEyePosition;
+                return presentedMuzzle.position;
             }
-            return weaponOriginResolver.Resolve(observer, presentedOrigin);
+
+            Vector3? providedOrigin = getWeaponAimOrigin?.Invoke();
+            return providedOrigin.HasValue
+                ? providedOrigin.Value
+                : observer.Stance.FirstPersonEyePosition;
+        }
+
+        internal bool TryResolveWeaponDischargeObstruction(
+            out RaycastHit obstruction)
+        {
+            if (observer == null
+                || !TryResolveWeaponDischargeLine(out WeaponDischargeLine line))
+            {
+                obstruction = default;
+                return false;
+            }
+
+            return weaponClearanceResolver.TryResolve(
+                observer.Transform,
+                line,
+                out obstruction);
+        }
+
+        private bool TryResolveWeaponDischargeLine(
+            out WeaponDischargeLine line)
+        {
+            if (WeaponTargetingActive && hasLockedWeaponDischargeLine)
+            {
+                line = new WeaponDischargeLine(
+                    observer.Transform.TransformPoint(lockedAntiMuzzleLocal),
+                    observer.Transform.TransformPoint(
+                        lockedWeaponAimOriginLocal));
+                return true;
+            }
+
+            Transform presentedMuzzle = getWeaponMuzzle?.Invoke();
+            line = default;
+            return presentedMuzzle != null
+                && weaponClearanceResolver.TryBuildDischargeLine(
+                    observer,
+                    presentedMuzzle,
+                    out line);
         }
 
         private void LockWeaponAimOrigin()
@@ -978,16 +1113,31 @@ namespace GritGud.Presentation.Gameplay
             if (observer == null)
             {
                 hasLockedWeaponAimOrigin = false;
+                hasLockedWeaponDischargeLine = false;
                 return;
             }
 
-            Vector3? presentedOrigin = getWeaponAimOrigin?.Invoke();
+            Transform presentedMuzzle = getWeaponMuzzle?.Invoke();
+            WeaponDischargeLine presentedLine = default;
+            bool hasPresentedLine = presentedMuzzle != null
+                && weaponClearanceResolver.TryBuildDischargeLine(
+                    observer,
+                    presentedMuzzle,
+                    out presentedLine);
+            Vector3? presentedOrigin = presentedMuzzle != null
+                ? presentedMuzzle.position
+                : getWeaponAimOrigin?.Invoke();
             Vector3 worldOrigin = presentedOrigin.HasValue
                 ? presentedOrigin.Value
                 : observer.Stance.FirstPersonEyePosition;
             lockedWeaponAimOriginLocal = observer.Transform
                 .InverseTransformPoint(worldOrigin);
             hasLockedWeaponAimOrigin = true;
+            hasLockedWeaponDischargeLine = hasPresentedLine;
+            lockedAntiMuzzleLocal = hasPresentedLine
+                ? observer.Transform.InverseTransformPoint(
+                    presentedLine.AntiMuzzlePosition)
+                : default;
         }
 
         private bool TryFindNearestCharacterSideHit(

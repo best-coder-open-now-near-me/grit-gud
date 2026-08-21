@@ -162,7 +162,8 @@ namespace GritGud.Presentation.Gameplay
         public void Install()
         {
             targets.SetWeaponAimOriginProvider(ResolveMuzzlePosition);
-            projectiles.BindVisualLaunchOrigin(ResolveMuzzlePosition);
+            targets.SetWeaponAimTransformProvider(selectedMuzzle);
+            projectiles.BindVisualLaunchOrigin(ResolveVisualLaunchPosition);
             weaponTargeting.Bind(
                 session,
                 actorId,
@@ -175,6 +176,14 @@ namespace GritGud.Presentation.Gameplay
         {
             Transform muzzle = selectedMuzzle();
             return muzzle != null ? muzzle.position : (Vector3?)null;
+        }
+
+        private Vector3? ResolveVisualLaunchPosition()
+        {
+            return targets.TryResolveWeaponDischargeObstruction(
+                    out RaycastHit obstruction)
+                ? obstruction.point
+                : ResolveMuzzlePosition();
         }
     }
 

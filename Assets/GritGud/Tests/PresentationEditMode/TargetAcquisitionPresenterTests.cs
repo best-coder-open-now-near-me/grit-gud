@@ -344,6 +344,81 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void WeaponAimStopsAtCapsuleToMuzzleObstruction()
+        {
+            var host = new GameObject("Barrel Clearance Aim Test");
+            var observer = CreateActorObject(
+                "Barrel Clearance Observer",
+                Vector3.zero,
+                withVisual: false);
+            var pointerSurface = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var barrelObstruction = GameObject.CreatePrimitive(
+                PrimitiveType.Cube);
+            var muzzle = new GameObject("Capsule Clearance Muzzle");
+            LevelWorld world = null;
+            GameplayWorldRegistry registry = null;
+            try
+            {
+                pointerSurface.transform.position = new Vector3(2f, 1.2f, 6f);
+                pointerSurface.transform.localScale = new Vector3(1f, 2f, 0.2f);
+                barrelObstruction.transform.position =
+                    new Vector3(0f, 1.2f, 1f);
+                barrelObstruction.transform.localScale =
+                    new Vector3(2f, 2f, 0.2f);
+                muzzle.transform.SetParent(observer.transform, false);
+                muzzle.transform.localPosition = new Vector3(0f, 1.2f, 2f);
+                world = new LevelWorld(
+                    new GameObject("Barrel Clearance Aim World"),
+                    new Dictionary<string, LevelEntityView>(),
+                    null);
+                registry = new GameplayWorldRegistry(world);
+                registry.RegisterActor(
+                    "observer",
+                    "test",
+                    targetable: false,
+                    observer);
+                TargetAcquisitionPresenter presenter =
+                    host.AddComponent<TargetAcquisitionPresenter>();
+                presenter.Bind(
+                    CreateSession(includeRangedAttack: true),
+                    registry,
+                    "observer");
+                presenter.SetWeaponAimTransformProvider(
+                    () => muzzle.transform);
+                Physics.SyncTransforms();
+                presenter.RefreshNow(new Ray(
+                    new Vector3(2f, 1.2f, 0f),
+                    Vector3.forward));
+
+                Assert.That(
+                    presenter.TryGetWeaponAim(out GameplayWeaponAim aim),
+                    Is.True);
+                Assert.That(
+                    aim.TargetId,
+                    Is.EqualTo(GameplayTargetIds.WorldAimPoint));
+                Assert.That(aim.Position.z, Is.EqualTo(0.9f).Within(0.01f));
+                Assert.That(
+                    presenter.TryGetPresentationAimPoint(
+                        out Vector3 presentationAim),
+                    Is.True);
+                Assert.That(
+                    presentationAim,
+                    Is.EqualTo(aim.Position)
+                        .Using(Vector3ComparerWithEqualsOperator.Instance));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                registry?.Dispose();
+                world?.Dispose();
+                Object.DestroyImmediate(muzzle);
+                Object.DestroyImmediate(observer);
+                Object.DestroyImmediate(pointerSurface);
+                Object.DestroyImmediate(barrelObstruction);
+            }
+        }
+
+        [Test]
         public void RangedPreviewUsesTheSameMuzzlePathBeforeAndAfterArming()
         {
             var host = new GameObject("Stable Pre-Arm Aim Test");

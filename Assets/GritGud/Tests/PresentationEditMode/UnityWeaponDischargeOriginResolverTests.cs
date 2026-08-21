@@ -1,44 +1,54 @@
 using GritGud.Presentation.Gameplay;
 using NUnit.Framework;
 using UnityEngine;
-using UnityEngine.TestTools.Utils;
 
 namespace GritGud.Presentation.Tests
 {
     public sealed class UnityWeaponDischargeOriginResolverTests
     {
         [Test]
-        public void MuzzleAcrossWallFallsBackToActorEye()
+        public void CapsuleToMuzzleLineAcrossWallReturnsFirstObstruction()
         {
-            var actor = new GameObject("Discharge Origin Actor");
+            var actor = new GameObject("Discharge Clearance Actor");
+            var muzzle = new GameObject("Discharge Clearance Muzzle");
             var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
             try
             {
-                CharacterController controller = actor
+                CharacterController capsule = actor
                     .AddComponent<CharacterController>();
-                controller.center = new Vector3(0f, 0.9f, 0f);
-                controller.height = 1.8f;
-                ActorStancePresenter stance = actor
-                    .AddComponent<ActorStancePresenter>();
+                capsule.center = new Vector3(0f, 0.9f, 0f);
+                capsule.height = 1.8f;
+                actor.AddComponent<ActorStancePresenter>();
                 var view = new GameplayActorView(
                     "actor",
                     "test",
                     targetable: false,
                     actor);
-                Vector3 eye = stance.FirstPersonEyePosition;
-                Vector3 muzzle = eye + (Vector3.forward * 2f);
-                wall.name = "Muzzle Clearance Wall";
-                wall.transform.position = eye + Vector3.forward;
+                muzzle.transform.SetParent(actor.transform, false);
+                muzzle.transform.localPosition = new Vector3(0f, 1.2f, 2f);
+                wall.name = "Barrel Clearance Wall";
+                wall.transform.position = new Vector3(0f, 1.2f, 1f);
                 wall.transform.localScale = new Vector3(2f, 2f, 0.2f);
                 Physics.SyncTransforms();
 
-                Vector3 resolved = new UnityWeaponDischargeOriginResolver()
-                    .Resolve(view, muzzle);
+                var resolver = new UnityWeaponDischargeOriginResolver();
+                Assert.That(
+                    resolver.TryBuildDischargeLine(
+                        view,
+                        muzzle.transform,
+                        out WeaponDischargeLine line),
+                    Is.True);
+                bool blocked = resolver.TryResolve(
+                    view,
+                    muzzle.transform,
+                    out RaycastHit obstruction);
 
                 Assert.That(
-                    resolved,
-                    Is.EqualTo(eye)
-                        .Using(Vector3ComparerWithEqualsOperator.Instance));
+                    line.AntiMuzzlePosition.z,
+                    Is.EqualTo(0.5f).Within(0.01f));
+                Assert.That(blocked, Is.True);
+                Assert.That(obstruction.collider.gameObject, Is.SameAs(wall));
+                Assert.That(obstruction.point.z, Is.EqualTo(0.9f).Within(0.01f));
             }
             finally
             {
@@ -48,33 +58,33 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
-        public void ClearMuzzleUsesPresentedOrigin()
+        public void ClearBarrelLineHasNoObstruction()
         {
-            var actor = new GameObject("Clear Discharge Origin Actor");
+            var actor = new GameObject("Clear Discharge Line Actor");
+            var muzzle = new GameObject("Clear Discharge Line Muzzle");
             try
             {
-                CharacterController controller = actor
+                CharacterController capsule = actor
                     .AddComponent<CharacterController>();
-                controller.center = new Vector3(0f, 0.9f, 0f);
-                controller.height = 1.8f;
-                ActorStancePresenter stance = actor
-                    .AddComponent<ActorStancePresenter>();
+                capsule.center = new Vector3(0f, 0.9f, 0f);
+                capsule.height = 1.8f;
+                actor.AddComponent<ActorStancePresenter>();
                 var view = new GameplayActorView(
                     "actor",
                     "test",
                     targetable: false,
                     actor);
-                Vector3 muzzle = stance.FirstPersonEyePosition
-                    + (Vector3.forward * 2f);
+                muzzle.transform.SetParent(actor.transform, false);
+                muzzle.transform.localPosition = new Vector3(0f, 1.2f, 2f);
                 Physics.SyncTransforms();
 
-                Vector3 resolved = new UnityWeaponDischargeOriginResolver()
-                    .Resolve(view, muzzle);
+                bool blocked = new UnityWeaponDischargeOriginResolver()
+                    .TryResolve(
+                        view,
+                        muzzle.transform,
+                        out _);
 
-                Assert.That(
-                    resolved,
-                    Is.EqualTo(muzzle)
-                        .Using(Vector3ComparerWithEqualsOperator.Instance));
+                Assert.That(blocked, Is.False);
             }
             finally
             {

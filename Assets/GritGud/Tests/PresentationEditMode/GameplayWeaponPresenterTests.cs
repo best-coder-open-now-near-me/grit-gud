@@ -998,6 +998,26 @@ namespace GritGud.Presentation.Tests
                 Assert.That(
                     Vector3.Distance(muzzlePosition, hand.position),
                     Is.GreaterThan(0.05f));
+                var actorView = new GameplayActorView(
+                    "player",
+                    "test",
+                    targetable: false,
+                    player);
+                Physics.SyncTransforms();
+                Assert.That(
+                    new UnityWeaponDischargeOriginResolver()
+                        .TryBuildDischargeLine(
+                            actorView,
+                            sockets.Muzzle,
+                            out WeaponDischargeLine dischargeLine),
+                    Is.True,
+                    $"{itemId} muzzle backward must intersect the owning "
+                        + "character capsule.");
+                Assert.That(
+                    Vector3.Distance(
+                        dischargeLine.AntiMuzzlePosition,
+                        dischargeLine.MuzzlePosition),
+                    Is.GreaterThan(0.05f));
                 if (animationSetId == ActorAnimationPoseIds.Rifle)
                 {
                     Vector3 barrelDirection = sockets.Muzzle.forward;

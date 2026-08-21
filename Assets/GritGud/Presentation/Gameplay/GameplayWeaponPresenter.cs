@@ -24,7 +24,8 @@ namespace GritGud.Presentation.Gameplay
         private WeaponActionEffectsPresenter effectsPresenter;
         private WeaponAimPresenter aimPresenter;
         private readonly UnityWeaponDischargeOriginResolver
-            weaponOriginResolver = new UnityWeaponDischargeOriginResolver();
+            weaponClearanceResolver =
+                new UnityWeaponDischargeOriginResolver();
         private bool localPlayerPresentation;
         private bool replayPresentation;
         private string replayOriginalItemId;
@@ -392,12 +393,18 @@ namespace GritGud.Presentation.Gameplay
                     currentDefinition.AnimationSetId);
             animationCoordinator.TryPresentWeaponFire();
             GameplayActorView actor = registry.GetActor(actorId);
-            Vector3 presentedOrigin = Muzzle != null
+            Vector3 origin = Muzzle != null
                 ? Muzzle.position
                 : actor.Stance.FirstPersonEyePosition;
-            Vector3 origin = weaponOriginResolver.Resolve(
-                actor,
-                presentedOrigin);
+            if (Muzzle != null
+                && weaponClearanceResolver.TryResolve(
+                    actor,
+                    Muzzle,
+                    out RaycastHit obstruction))
+            {
+                destination = obstruction.point;
+                drawTracer = false;
+            }
             effectsPresenter.PresentShot(
                 currentDefinition,
                 origin,
