@@ -130,6 +130,11 @@ namespace GritGud.Presentation.Tests
                     GameplayHotbarBindingKind.ActorAbility,
                     GameplayCoreActorAbilities.StanceId)));
             Assert.That(
+                hotbar.Bindings[GameplayDroneController.HotbarSlot],
+                Is.EqualTo(new GameplayHotbarBinding(
+                    GameplayHotbarBindingKind.ActorAbility,
+                    GameplayDroneController.AbilityId)));
+            Assert.That(
                 gameplay.Session.GetActor("player").Pose.Stance,
                 Is.EqualTo(ActorStance.Standing));
             Assert.That(
