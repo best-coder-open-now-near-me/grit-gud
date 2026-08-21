@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using GritGud.Application.Gameplay;
@@ -131,17 +133,14 @@ namespace GritGud.Presentation.Gameplay
                 CreateLoadedIdentity(assembly, level);
             GameplayExecutionIdentity artifactIdentity = artifact.Content
                 .ExecutionIdentity;
-            if (!loadedIdentity.HasSameIdentity(artifactIdentity))
-            {
-                throw new InvalidOperationException(
-                    "First-sim " + DescribeIdentityMismatch(
-                        artifactIdentity,
-                        loadedIdentity));
-            }
+            RequireViewerIdentityCompatibility(
+                artifactIdentity,
+                loadedIdentity);
 
             GameplaySemanticReplayTimeline replay =
                 GameplayBattleArtifactReplayLoader.Load(artifact);
             cancellationToken.ThrowIfCancellationRequested();
+            RequireViewerEntityCompatibility(assembly, replay.InitialState);
             return GameplayBattleReplayPreparationResult<
                 GameplayBattleArtifact,
                 GameplaySemanticReplayTimeline>.Ready(artifact, replay);
@@ -224,6 +223,81 @@ namespace GritGud.Presentation.Gameplay
                 + actual.Gameplay.ScenarioSchemaVersion + "/rules-v"
                 + actual.Gameplay.RulesSchemaVersion + "/"
                 + ShortDigest(actual.Gameplay.DefinitionDigest) + ").";
+        }
+
+        private static void RequireViewerIdentityCompatibility(
+            GameplayExecutionIdentity expected,
+            GameplayExecutionIdentity actual)
+        {
+            if (!actual.Run.HasSameIdentity(expected.Run)
+                || !actual.Spatial.HasSameIdentity(expected.Spatial)
+                || actual.Gameplay.SchemaVersion
+                    != expected.Gameplay.SchemaVersion
+                || actual.Gameplay.ScenarioSchemaVersion
+                    != expected.Gameplay.ScenarioSchemaVersion
+                || actual.Gameplay.RulesSchemaVersion
+                    != expected.Gameplay.RulesSchemaVersion
+                || !string.Equals(
+                    actual.Gameplay.ScenarioId,
+                    expected.Gameplay.ScenarioId,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "First-sim " + DescribeIdentityMismatch(expected, actual));
+            }
+
+            // Full definition-digest equality remains mandatory when the
+            // artifact is generated or re-simulated. This viewer executes no
+            // gameplay: it presents the artifact's independently verified
+            // states and events against the exact spatial content, so its
+            // remaining dependency is the presentation entity graph below.
+        }
+
+        private static void RequireViewerEntityCompatibility(
+            GameplayScenarioAssembly assembly,
+            GameplayCombatStateSnapshot initial)
+        {
+            RequireSameIds(
+                "actor",
+                initial.Session.Actors.Select(value => value.ActorId),
+                assembly.Actors.Select(value => value.Id));
+            RequireSameIds(
+                "objective",
+                initial.Session.Objectives.Select(value => value.ObjectiveId),
+                assembly.Scenario.Objectives.Select(value => value.Id));
+            RequireSameIds(
+                "vehicle",
+                initial.Vehicles.Select(value => value.VehicleId),
+                assembly.Vehicles.Select(value => value.EntityId));
+            RequireSameIds(
+                "drone",
+                initial.Drones.Select(value => value.DroneId),
+                assembly.Drones.Select(value => value.Id));
+        }
+
+        private static void RequireSameIds(
+            string label,
+            IEnumerable<string> expected,
+            IEnumerable<string> actual)
+        {
+            var expectedIds = new HashSet<string>(
+                expected,
+                StringComparer.Ordinal);
+            var actualIds = new HashSet<string>(
+                actual,
+                StringComparer.Ordinal);
+            if (expectedIds.SetEquals(actualIds)) return;
+            string missing = string.Join(
+                ",",
+                expectedIds.Except(actualIds).OrderBy(value => value));
+            string extra = string.Join(
+                ",",
+                actualIds.Except(expectedIds).OrderBy(value => value));
+            throw new InvalidOperationException(
+                "First-sim " + label + " roster mismatch (missing loaded: "
+                + (string.IsNullOrEmpty(missing) ? "none" : missing)
+                + "; extra loaded: "
+                + (string.IsNullOrEmpty(extra) ? "none" : extra) + ").");
         }
 
         private static string ShortDigest(string value) =>

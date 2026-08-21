@@ -37,8 +37,11 @@ namespace GritGud.Presentation.Gameplay
                     PrimitiveType.Cylinder,
                     positions[index],
                     new Vector3(0.42f, 0.018f, 0.42f)).transform;
-            var collider = gameObject.GetComponent<SphereCollider>()
-                ?? gameObject.AddComponent<SphereCollider>();
+            SphereCollider collider = gameObject.GetComponent<SphereCollider>();
+            // Unity reports destroyed native components through its overloaded
+            // null check, which the CLR null-coalescing operator bypasses.
+            if (collider == null)
+                collider = gameObject.AddComponent<SphereCollider>();
             collider.radius = 0.8f;
             collider.center = Vector3.zero;
         }
@@ -72,7 +75,11 @@ namespace GritGud.Presentation.Gameplay
             part.transform.localPosition = localPosition;
             part.transform.localScale = localScale;
             Collider collider = part.GetComponent<Collider>();
-            if (collider != null) GameplayObjectLifecycle.Destroy(collider);
+            if (collider != null)
+            {
+                collider.enabled = false;
+                GameplayObjectLifecycle.Destroy(collider);
+            }
             Renderer renderer = part.GetComponent<Renderer>();
             if (overrideColor.HasValue)
             {
