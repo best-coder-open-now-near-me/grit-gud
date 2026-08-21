@@ -43,6 +43,8 @@ namespace GritGud.Domain.Tests.Gameplay
                 Is.Zero);
             Assert.That(exploration.CommandBar.Hints.Any(
                 hint => hint.Control == GameplayControl.AimLook), Is.True);
+            Assert.That(exploration.CommandBar.Hints.Any(
+                hint => hint.Control == GameplayControl.Reload), Is.True);
 
             Assert.That(session.EnterTurnMode(), Is.True);
             var resolver = new GameplayActionResolver(session);
@@ -77,6 +79,8 @@ namespace GritGud.Domain.Tests.Gameplay
                 Is.True);
             Assert.That(turn.CommandBar.Hints.Any(
                 hint => hint.Control == GameplayControl.Attack), Is.True);
+            Assert.That(turn.CommandBar.Hints.Any(
+                hint => hint.Control == GameplayControl.Reload), Is.True);
             Assert.That(
                 turn.CommandBar.Hints.Single(
                     hint => hint.Control == GameplayControl.UndoRoute).Label,
@@ -316,6 +320,51 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(launcher.EquipmentTooltip, Does.Contain("2 AP"));
             Assert.That(launcher.EquipmentTooltip, Does.Contain("75%"));
             Assert.That(launcher.EquipmentTooltip, Does.Contain("100%"));
+        }
+
+        [Test]
+        public void HotbarProjectsCanonicalLoadedAndReserveAmmunition()
+        {
+            GameplaySession session = CreateAmmunitionSession(
+                loaded: 0,
+                reserve: 2);
+
+            GameplayHudModel empty = GameplayHudModelBuilder.Build(
+                session,
+                "player",
+                "Depot Yard",
+                CreateObjectiveContent(),
+                interactionAvailable: false,
+                default,
+                string.Empty,
+                turnModeExitAvailable: false);
+
+            GameplayHotbarSlotModel rifle = empty.CommandBar.HotbarSlots[0];
+            Assert.That(rifle.Label, Is.EqualTo("RIFLE  EMPTY / 2"));
+            Assert.That(rifle.LoadedRounds, Is.Zero);
+            Assert.That(rifle.ReserveRounds, Is.EqualTo(2));
+            Assert.That(rifle.PowerTooltip, Does.Contain("AMMO - EMPTY / 2"));
+            Assert.That(rifle.PowerTooltip,
+                Does.Contain("RELOAD - 2 AP + ENDS MOVE"));
+
+            Assert.That(new GameplayReloadSession(session).TryResolve(
+                "player",
+                out _,
+                out GameplayReloadFailure failure), Is.True);
+            Assert.That(failure, Is.EqualTo(GameplayReloadFailure.None));
+
+            GameplayHotbarSlotModel reloaded = GameplayHudModelBuilder.Build(
+                session,
+                "player",
+                "Depot Yard",
+                CreateObjectiveContent(),
+                interactionAvailable: false,
+                default,
+                string.Empty,
+                turnModeExitAvailable: false).CommandBar.HotbarSlots[0];
+            Assert.That(reloaded.Label, Is.EqualTo("RIFLE  2 / 0"));
+            Assert.That(reloaded.LoadedRounds, Is.EqualTo(2));
+            Assert.That(reloaded.ReserveRounds, Is.Zero);
         }
 
         [Test]
@@ -726,6 +775,54 @@ namespace GritGud.Domain.Tests.Gameplay
                 "rifle");
             return new GameplaySession(new ScenarioDefinition(
                 "equipment-hud-test",
+                new ScenarioTimingDefinition(1f),
+                new[] { player },
+                new ScenarioObjectiveDefinition[0]));
+        }
+
+        private static GameplaySession CreateAmmunitionSession(
+            int loaded,
+            int reserve)
+        {
+            var rifle = new InventoryItemDefinition(
+                "weapon.rifle",
+                "Rifle",
+                1,
+                InventoryItemKind.Weapon,
+                new ActionCost(1, 0f, ActionMobility.Set),
+                new EquipmentEffectSet(0.9f),
+                new AttackDefinition(
+                    "attack.rifle",
+                    "Fire rifle",
+                    new ActionCost(1, 0f, ActionMobility.Set),
+                    2f,
+                    accuracyDecay: AccuracyDecayDefinition.None),
+                ammunition: new WeaponAmmunitionDefinition(
+                    "ammo.rifle",
+                    magazineCapacity: 6,
+                    initialLoadedRounds: loaded,
+                    roundsPerUse: 1,
+                    reloadTurnCost: new ActionCost(
+                        2,
+                        0f,
+                        ActionMobility.Set),
+                    consumesRemainingMovement: true,
+                    reloadPolicyVersion: 1));
+            var player = new ScenarioActorDefinition(
+                "player",
+                10,
+                new GameplayActorPose(
+                    new GameplayPosition(0f, 0f, 0f),
+                    0f),
+                new TurnBudget(4, 8f),
+                new[] { rifle },
+                rifle.Id,
+                ammunitionReserves: new[]
+                {
+                    new AmmunitionReserveDefinition("ammo.rifle", reserve),
+                });
+            return new GameplaySession(new ScenarioDefinition(
+                "ammunition-hud-test",
                 new ScenarioTimingDefinition(1f),
                 new[] { player },
                 new ScenarioObjectiveDefinition[0]));

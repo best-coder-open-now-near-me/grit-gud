@@ -38,6 +38,8 @@ namespace GritGud.Presentation.Gameplay
 
         public TurnModeExitFailure LastTurnModeExitFailure { get; private set; }
 
+        public GameplayReloadFailure LastReloadFailure { get; private set; }
+
         public GameplayActionRecord LastResolvedAction { get; private set; }
 
         public string StatusMessage { get; private set; } = string.Empty;
@@ -226,6 +228,44 @@ namespace GritGud.Presentation.Gameplay
             return true;
         }
 
+        public bool TryReload()
+        {
+            if (Session == null || actorId == null)
+            {
+                LastReloadFailure = GameplayReloadFailure.ActorNotActive;
+                StatusMessage = DescribeReloadFailure(LastReloadFailure);
+                return false;
+            }
+
+            if (!new GameplayReloadSession(Session).TryResolve(
+                    actorId,
+                    out GameplayActionRecord record,
+                    out GameplayReloadFailure failure))
+            {
+                LastReloadFailure = failure;
+                StatusMessage = DescribeReloadFailure(failure);
+                return false;
+            }
+
+            ClearFailures();
+            LastResolvedAction = record;
+            var reload = (WeaponReloadedActionOutcome)record.Outcomes[0];
+            InventoryItemDefinition weapon = Session.GetInventoryItem(
+                actorId,
+                reload.Change.WeaponItemId);
+            LastReloadFailure = GameplayReloadFailure.None;
+            StatusMessage = weapon.DisplayName
+                + " reloaded: "
+                + reload.Change.ResultingLoadedRounds
+                + " / "
+                + reload.Change.ResultingReserveRounds
+                + ".";
+            animationCoordinator?.TryRequestAction(
+                ActorAnimationAction.Reload);
+            ActionResolved?.Invoke(record);
+            return true;
+        }
+
         public bool TryEndTurn()
         {
             if (Session == null || actorId == null)
@@ -381,6 +421,7 @@ namespace GritGud.Presentation.Gameplay
             LastTurnModeEntryFailure = TurnModeEntryFailure.None;
             LastTurnEndFailure = TurnEndFailure.None;
             LastTurnModeExitFailure = TurnModeExitFailure.None;
+            LastReloadFailure = GameplayReloadFailure.None;
         }
 
         private string DescribeTurnModeEntryFailure(
@@ -459,6 +500,41 @@ namespace GritGud.Presentation.Gameplay
                 case TurnModeExitFailure.EncounterActive:
                     return "Finish the encounter before leaving turn mode.";
                 case TurnModeExitFailure.None:
+                    return string.Empty;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(failure));
+            }
+        }
+
+        private static string DescribeReloadFailure(
+            GameplayReloadFailure failure)
+        {
+            switch (failure)
+            {
+                case GameplayReloadFailure.ActorNotActive:
+                    return "Only the active actor can reload.";
+                case GameplayReloadFailure.OperationInProgress:
+                    return "Wait for the current action to resolve.";
+                case GameplayReloadFailure.ActorIncapacitated:
+                    return "An incapacitated actor cannot reload.";
+                case GameplayReloadFailure.ActorPinned:
+                    return "Push off the pinning prop before reloading.";
+                case GameplayReloadFailure.ItemNotFound:
+                case GameplayReloadFailure.AmmunitionUnavailable:
+                    return "The equipped weapon does not use ammunition.";
+                case GameplayReloadFailure.WeaponNotEquipped:
+                    return "Equip an ammunition weapon before reloading.";
+                case GameplayReloadFailure.ProfileMismatch:
+                    return "The reload capability does not match this weapon.";
+                case GameplayReloadFailure.MagazineFull:
+                    return "The equipped weapon is already fully loaded.";
+                case GameplayReloadFailure.ReserveEmpty:
+                    return "No compatible reserve ammunition remains.";
+                case GameplayReloadFailure.InsufficientActionPoints:
+                    return "Not enough AP remains to reload.";
+                case GameplayReloadFailure.InsufficientMovementOpportunity:
+                    return "Not enough movement remains to reload.";
+                case GameplayReloadFailure.None:
                     return string.Empty;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(failure));

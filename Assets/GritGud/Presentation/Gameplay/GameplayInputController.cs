@@ -20,6 +20,7 @@ namespace GritGud.Presentation.Gameplay
         private InputAction aim;
         private InputAction cameraZoom;
         private InputAction attack;
+        private InputAction reload;
         private InputAction toggleTurnMode;
         private InputAction toggleStance;
         private InputAction toggleCameraView;
@@ -80,6 +81,7 @@ namespace GritGud.Presentation.Gameplay
                 aim = RequireAction("Aim");
                 cameraZoom = RequireAction("CameraZoom");
                 attack = RequireAction("Attack");
+                reload = RequireAction("Reload");
                 toggleTurnMode = RequireAction("ToggleTurnMode");
                 toggleStance = RequireAction("ToggleStance");
                 toggleCameraView = RequireAction("ToggleCameraView");
@@ -127,6 +129,7 @@ namespace GritGud.Presentation.Gameplay
             aim = null;
             cameraZoom = null;
             attack = null;
+            reload = null;
             toggleTurnMode = null;
             toggleStance = null;
             toggleCameraView = null;
@@ -198,6 +201,7 @@ namespace GritGud.Presentation.Gameplay
 
             DispatchIfPressed(toggleTurnMode, GameplayControl.ToggleTurnMode);
             DispatchIfPressed(attack, GameplayControl.Attack);
+            DispatchIfPressed(reload, GameplayControl.Reload);
             DispatchIfPressed(toggleStance, GameplayControl.ToggleStance);
             DispatchIfPressed(toggleCameraView, GameplayControl.ToggleCameraView);
             DispatchIfPressed(exportBugReport, GameplayControl.ExportBugReport);
@@ -266,6 +270,8 @@ namespace GritGud.Presentation.Gameplay
                     return cameraZoom;
                 case GameplayControl.Attack:
                     return attack;
+                case GameplayControl.Reload:
+                    return reload;
                 case GameplayControl.ToggleTurnMode:
                     return toggleTurnMode;
                 case GameplayControl.ToggleStance:

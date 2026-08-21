@@ -118,6 +118,9 @@ namespace GritGud.Presentation.Gameplay
                 case GameplayControl.Attack:
                     HandleAttack();
                     break;
+                case GameplayControl.Reload:
+                    actionController.TryReload();
+                    break;
                 case GameplayControl.ToggleStance:
                     sessionPresenter.ToggleStance();
                     break;

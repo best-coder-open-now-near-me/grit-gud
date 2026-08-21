@@ -58,6 +58,12 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 inputController.GetBindingDisplay(GameplayControl.Attack),
                 Is.EqualTo("LMB"));
+            Assert.That(
+                inputController.GetBindingDisplay(GameplayControl.Reload),
+                Is.EqualTo("R"));
+            Assert.That(
+                inputController.GetBindingDisplay(GameplayControl.CancelRoute),
+                Is.EqualTo("X"));
             Assert.That(Cursor.lockState, Is.EqualTo(CursorLockMode.None));
             Assert.That(Cursor.visible, Is.True);
             inputController.HandleEscapePressed();
