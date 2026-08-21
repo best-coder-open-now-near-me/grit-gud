@@ -288,6 +288,117 @@ namespace GritGud.Presentation.Tests
             }
         }
 
+        [Test]
+        public void ReplaySamplesCloseBothGripsAtZeroDeltaBeforeAndAfterRebind()
+        {
+            GameObject player = InstantiatePlayer(
+                out ActorAnimationCoordinator presenter);
+            GameObject rifleObject = null;
+            GameObject launcherObject = null;
+            try
+            {
+                Animator animator = presenter.TargetAnimator;
+                Transform rightHand = animator.GetBoneTransform(
+                    HumanBodyBones.RightHand);
+                Transform leftHand = animator.GetBoneTransform(
+                    HumanBodyBones.LeftHand);
+                WeaponAimRig rig = animator.gameObject
+                    .AddComponent<WeaponAimRig>();
+                WeaponPresentationCatalog catalog =
+                    WeaponPresentationCatalog.LoadDefault();
+
+                presenter.BeginReplayPresentation();
+                rig.BeginReplayPresentation();
+
+                WeaponPresentationDefinition rifle = catalog.Get(
+                    "weapon.rifle");
+                rifleObject = Object.Instantiate(rifle.Prefab);
+                WeaponRigSocketSet rifleSockets = rifleObject.GetComponent<
+                    WeaponRigSocketSet>();
+                Bind(rig, player, rifleObject, rifleSockets, rifle, presenter);
+                presenter.PresentWeaponPose(ActorAnimationPoseIds.Rifle);
+                presenter.PresentReplayAction(
+                    GritGud.Domain.Gameplay.ActorStance.Standing,
+                    ActorAnimationAction.WeaponFire,
+                    0.5f);
+                rig.SetReplaySupportWeightImmediate();
+                rig.SynchronizeAfterAnimation(0f);
+
+                AssertPrimaryGripClosed(
+                    rightHand,
+                    rifleSockets.RightHandGrip);
+                Assert.That(
+                    Vector3.Distance(
+                        leftHand.position,
+                        rifleSockets.SupportHand.position),
+                    Is.LessThan(0.015f),
+                    "Paused replay must solve the support hand without "
+                    + "waiting for scaled time.");
+                Assert.That(rig.SupportBlendWeight, Is.EqualTo(1f));
+
+                WeaponPresentationDefinition launcher = catalog.Get(
+                    "weapon.rocket-launcher");
+                launcherObject = Object.Instantiate(launcher.Prefab);
+                WeaponRigSocketSet launcherSockets = launcherObject.GetComponent<
+                    WeaponRigSocketSet>();
+                Bind(
+                    rig,
+                    player,
+                    launcherObject,
+                    launcherSockets,
+                    launcher,
+                    presenter);
+                presenter.PresentWeaponPose(ActorAnimationPoseIds.Launcher);
+                presenter.PresentReplayAction(
+                    GritGud.Domain.Gameplay.ActorStance.Standing,
+                    ActorAnimationAction.WeaponFire,
+                    0.75f);
+                rig.SetReplaySupportWeightImmediate();
+                rig.SynchronizeAfterAnimation(0f);
+
+                AssertPrimaryGripClosed(
+                    rightHand,
+                    launcherSockets.RightHandGrip);
+                Assert.That(
+                    Vector3.Distance(
+                        leftHand.position,
+                        launcherSockets.SupportHand.position),
+                    Is.LessThan(0.015f),
+                    "Rebinding historical equipment must use the same replay "
+                    + "grip solve as unchanged equipment.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(launcherObject);
+                Object.DestroyImmediate(rifleObject);
+                Object.DestroyImmediate(player);
+            }
+        }
+
+        private static void Bind(
+            WeaponAimRig rig,
+            GameObject player,
+            GameObject weapon,
+            WeaponRigSocketSet sockets,
+            WeaponPresentationDefinition definition,
+            ActorAnimationCoordinator presenter)
+        {
+            rig.Bind(
+                player.transform,
+                weapon.transform,
+                sockets.Muzzle,
+                sockets.SupportHand,
+                sockets.SupportElbowHint,
+                sockets.SupportPositionWeight,
+                sockets.SupportRotationWeight,
+                sockets.SupportElbowHintWeight,
+                sockets.SupportBlendSeconds,
+                definition.MaximumAimCorrectionDegrees,
+                presenter.Profile.MaximumBodyAimCorrectionDegrees,
+                presenter.Profile.BodyAimDegreesPerSecond,
+                presenter.Profile.WeaponAimDegreesPerSecond);
+        }
+
         private static GameObject InstantiatePlayer(
             out ActorAnimationCoordinator presenter)
         {

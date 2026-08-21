@@ -78,14 +78,18 @@ namespace GritGud.Presentation.Gameplay
                 "weapon",
                 () => weapon?.BeginReplayPresentation());
             TryOptional(
+                "weapon aim",
+                () => aim?.BeginReplayPresentation());
+            TryOptional(
+                "weapon aim rig",
+                () => aimRig?.BeginReplayPresentation());
+            TryOptional(
                 "wounds",
                 view.Wounds.BeginReplayPresentation);
             if (locomotion != null)
                 locomotion.enabled = false;
             if (aim != null)
                 aim.enabled = false;
-            if (aimRig != null)
-                aimRig.enabled = false;
             motor?.StopPlanarMovement();
             // Replay is the transform authority. The normal motor and
             // movement-input pair otherwise continue their frame updates
@@ -164,6 +168,14 @@ namespace GritGud.Presentation.Gameplay
                         animationAction,
                         animationProgress);
                 });
+            TryOptional(
+                "weapon aim rig",
+                () =>
+                {
+                    if (aimRig == null) return;
+                    aimRig.SetReplaySupportWeightImmediate();
+                    aimRig.SynchronizeAfterAnimation(0f);
+                });
             if (playback.HasValue)
             {
                 GameplaySemanticReplayPlaybackPosition position =
@@ -198,6 +210,8 @@ namespace GritGud.Presentation.Gameplay
                 ref failure);
             TryRestore(view.Wounds.EndReplayPresentation, ref failure);
             TryRestore(() => weapon?.EndReplayPresentation(), ref failure);
+            TryRestore(() => aimRig?.EndReplayPresentation(), ref failure);
+            TryRestore(() => aim?.EndReplayPresentation(), ref failure);
             TryRestore(
                 () => view.Transform.SetPositionAndRotation(
                     originalPosition,

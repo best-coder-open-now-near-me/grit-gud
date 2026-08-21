@@ -50,11 +50,13 @@ namespace GritGud.Presentation.Gameplay
         private float recoilHoldSeconds;
         private float recoilReturnSeconds = 0.01f;
         private float recoilElapsed = -1f;
+        private bool replayPresentation;
 
         internal float SupportBlendWeight => blendWeight;
         internal bool FollowsAnimatedPrimaryGrip => true;
         internal bool HasAimPoint => hasAimPoint;
         internal bool IsRecoiling => recoilElapsed >= 0f;
+        internal bool IsReplayPresentation => replayPresentation;
         internal float AimErrorDegrees { get; private set; }
         internal float RecoilWeight { get; private set; }
 
@@ -204,6 +206,38 @@ namespace GritGud.Presentation.Gameplay
             blendWeight = 0f;
         }
 
+        internal void BeginReplayPresentation()
+        {
+            if (replayPresentation)
+            {
+                throw new InvalidOperationException(
+                    "Weapon-aim replay presentation is already active.");
+            }
+
+            replayPresentation = true;
+            ClearAimPoint();
+            ClearRecoil();
+            enabled = true;
+        }
+
+        internal void SetReplaySupportWeightImmediate()
+        {
+            if (!replayPresentation)
+            {
+                throw new InvalidOperationException(
+                    "Begin weapon-aim replay presentation before snapping support weight.");
+            }
+
+            blendWeight = blendTarget;
+        }
+
+        internal void EndReplayPresentation()
+        {
+            replayPresentation = false;
+            ClearAimPoint();
+            ClearRecoil();
+        }
+
         internal void TickSupportBlend(float deltaTime)
         {
             blendWeight = Mathf.MoveTowards(
@@ -212,9 +246,17 @@ namespace GritGud.Presentation.Gameplay
                 Mathf.Max(0f, deltaTime) / Mathf.Max(0.01f, blendSeconds));
         }
 
-        private void Update() => TickSupportBlend(Time.deltaTime);
+        private void Update()
+        {
+            if (!replayPresentation)
+                TickSupportBlend(Time.deltaTime);
+        }
 
-        private void LateUpdate() => SynchronizeAfterAnimation(Time.deltaTime);
+        private void LateUpdate()
+        {
+            if (!replayPresentation)
+                SynchronizeAfterAnimation(Time.deltaTime);
+        }
 
         internal void SynchronizeAfterAnimation(float deltaTime) =>
             SynchronizeAfterAnimation(deltaTime, snapAim: false);
@@ -228,7 +270,7 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            if (IsActionOverrideActive())
+            if (!replayPresentation && IsActionOverrideActive())
             {
                 blendWeight = 0f;
                 AlignWeaponToAnimatedPrimaryGrip();

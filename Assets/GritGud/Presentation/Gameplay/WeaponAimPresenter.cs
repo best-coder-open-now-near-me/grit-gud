@@ -17,6 +17,7 @@ namespace GritGud.Presentation.Gameplay
         private WeaponPresentationDefinition weaponDefinition;
         private WeaponAimRig rig;
         private ActorAnimationProfile animationProfile;
+        private bool replayPresentation;
 
         internal bool HasRig => rig != null;
 
@@ -104,6 +105,24 @@ namespace GritGud.Presentation.Gameplay
             rig?.ClearTarget();
         }
 
+        internal void BeginReplayPresentation()
+        {
+            if (replayPresentation)
+            {
+                throw new InvalidOperationException(
+                    "Weapon-aim replay presentation is already active.");
+            }
+
+            replayPresentation = true;
+            rig?.ClearAimPoint();
+        }
+
+        internal void EndReplayPresentation()
+        {
+            replayPresentation = false;
+            rig?.ClearAimPoint();
+        }
+
         internal float SynchronizeForShot(Vector3 destination)
         {
             SynchronizeAuthoritativeFacing();
@@ -139,6 +158,9 @@ namespace GritGud.Presentation.Gameplay
 
         internal void Tick(float deltaTime)
         {
+            if (replayPresentation)
+                return;
+
             if (rig?.IsRecoiling == true
                 && acquisition?.WeaponTargetingActive != true)
             {
@@ -174,6 +196,7 @@ namespace GritGud.Presentation.Gameplay
             actorId = null;
             rig = null;
             animationProfile = null;
+            replayPresentation = false;
             enabled = false;
         }
 
