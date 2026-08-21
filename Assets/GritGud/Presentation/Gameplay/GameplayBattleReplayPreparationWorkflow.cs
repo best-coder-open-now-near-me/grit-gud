@@ -127,11 +127,16 @@ namespace GritGud.Presentation.Gameplay
 
             GameplayBattleArtifact artifact = LoadArtifact();
             cancellationToken.ThrowIfCancellationRequested();
-            if (!MatchesLoadedContent(assembly, level, artifact))
+            GameplayExecutionIdentity loadedIdentity =
+                CreateLoadedIdentity(assembly, level);
+            GameplayExecutionIdentity artifactIdentity = artifact.Content
+                .ExecutionIdentity;
+            if (!loadedIdentity.HasSameIdentity(artifactIdentity))
             {
-                return GameplayBattleReplayPreparationResult<
-                    GameplayBattleArtifact,
-                    GameplaySemanticReplayTimeline>.ContentMismatch(artifact);
+                throw new InvalidOperationException(
+                    "First-sim " + DescribeIdentityMismatch(
+                        artifactIdentity,
+                        loadedIdentity));
             }
 
             GameplaySemanticReplayTimeline replay =
@@ -159,30 +164,69 @@ namespace GritGud.Presentation.Gameplay
             }
         }
 
-        private static bool MatchesLoadedContent(
+        private static GameplayExecutionIdentity CreateLoadedIdentity(
             GameplayScenarioAssembly assembly,
-            LevelDocument level,
-            GameplayBattleArtifact expected)
+            LevelDocument level)
         {
-            GameplayExecutionIdentity identity = expected.Content
-                .ExecutionIdentity;
-            var actual = new GameplayExecutionIdentity(
+            var spatial = new SpatialContentIdentity(
+                level.levelId,
+                level.schemaVersion,
+                evidenceAlgorithmVersion: 1,
+                GameplayCanonicalValueDigest.Calculate(level));
+            GameplayScenarioAssembly grounded =
+                GameplayHeadlessScenarioGrounding.Resolve(
+                    assembly,
+                    new GameplayHeadlessSpatialEvidence(level, spatial));
+            return new GameplayExecutionIdentity(
                 new GameplayContentIdentity(
-                    assembly.Scenario.Id,
+                    grounded.Scenario.Id,
                     ScenarioContentDocument.CurrentSchemaVersion,
                     GameplayCombatStateSnapshot.CurrentSchemaVersion,
                     GameplayCanonicalValueDigest.Calculate(
-                        assembly.Scenario)),
-                new SpatialContentIdentity(
-                    level.levelId,
-                    level.schemaVersion,
-                    evidenceAlgorithmVersion: 1,
-                    GameplayCanonicalValueDigest.Calculate(level)),
+                        grounded.Scenario)),
+                spatial,
                 new ScenarioRunIdentity(
-                    assembly.Scenario.Id + ".run",
-                    assembly.RandomSeed));
-            return actual.HasSameIdentity(identity);
+                    grounded.Scenario.Id + ".run",
+                    grounded.RandomSeed));
         }
 
+        private static string DescribeIdentityMismatch(
+            GameplayExecutionIdentity expected,
+            GameplayExecutionIdentity actual)
+        {
+            if (!actual.Run.HasSameIdentity(expected.Run))
+            {
+                return "run identity mismatch (expected "
+                    + expected.Run.RunId + "/" + expected.Run.ScenarioSeed
+                    + "/random-v" + expected.Run.RandomSchemaVersion
+                    + ", loaded " + actual.Run.RunId + "/"
+                    + actual.Run.ScenarioSeed + "/random-v"
+                    + actual.Run.RandomSchemaVersion + ").";
+            }
+            if (!actual.Spatial.HasSameIdentity(expected.Spatial))
+            {
+                return "spatial identity mismatch (expected "
+                    + expected.Spatial.LevelId + "/"
+                    + expected.Spatial.LevelSchemaVersion + "/evidence-v"
+                    + expected.Spatial.EvidenceAlgorithmVersion + "/"
+                    + ShortDigest(expected.Spatial.StaticSpatialDigest)
+                    + ", loaded " + actual.Spatial.LevelId + "/"
+                    + actual.Spatial.LevelSchemaVersion + "/evidence-v"
+                    + actual.Spatial.EvidenceAlgorithmVersion + "/"
+                    + ShortDigest(actual.Spatial.StaticSpatialDigest) + ").";
+            }
+            return "gameplay identity mismatch (expected "
+                + expected.Gameplay.ScenarioId + "/"
+                + expected.Gameplay.ScenarioSchemaVersion + "/rules-v"
+                + expected.Gameplay.RulesSchemaVersion + "/"
+                + ShortDigest(expected.Gameplay.DefinitionDigest)
+                + ", loaded " + actual.Gameplay.ScenarioId + "/"
+                + actual.Gameplay.ScenarioSchemaVersion + "/rules-v"
+                + actual.Gameplay.RulesSchemaVersion + "/"
+                + ShortDigest(actual.Gameplay.DefinitionDigest) + ").";
+        }
+
+        private static string ShortDigest(string value) =>
+            value.Substring(0, 12);
     }
 }
