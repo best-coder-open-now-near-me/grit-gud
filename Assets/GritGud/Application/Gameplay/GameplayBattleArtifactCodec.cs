@@ -345,14 +345,23 @@ namespace GritGud.Application.Gameplay
                 value.Take("Actors"),
                 ReadActorScore,
                 "Actors");
+            IReadOnlyList<GameplayBattleAmmunitionScore> ammunition = ReadList(
+                value.Take("Ammunition"),
+                ReadAmmunitionScore,
+                "Ammunition");
             int attacks = value.Int32("Attacks");
             int concussive = value.Int32("ConcussiveTargets");
             int decisions = value.Int32("Decisions");
             int droneAttacks = value.Int32("DroneAttacks");
             int droneMoves = value.Int32("DroneMoves");
             int throws = value.Int32("ExplosiveThrows");
+            int finalLoaded = value.Int32("FinalLoadedRounds");
+            int finalReserve = value.Int32("FinalReserveRounds");
             int fires = value.Int32("FireDeployments");
             int hits = value.Int32("Hits");
+            int reloads = value.Int32("Reloads");
+            int roundsReloaded = value.Int32("RoundsReloaded");
+            int roundsSpent = value.Int32("RoundsSpent");
             int transitions = value.Int32("Transitions");
             int turns = value.Int32("TurnsCompleted");
             int wounds = value.Int32("Wounds");
@@ -369,7 +378,13 @@ namespace GritGud.Application.Gameplay
                 fires,
                 droneMoves,
                 droneAttacks,
-                actors);
+                reloads,
+                roundsSpent,
+                roundsReloaded,
+                finalLoaded,
+                finalReserve,
+                actors,
+                ammunition);
         }
 
         private static GameplayBattleActorScore ReadActorScore(JsonNode node)
@@ -383,11 +398,16 @@ namespace GritGud.Application.Gameplay
             int droneMoves = value.Int32("DroneMoves");
             int throws = value.Int32("ExplosiveThrows");
             int fires = value.Int32("FireDeployments");
+            int finalLoaded = value.Int32("FinalLoadedRounds");
+            int finalReserve = value.Int32("FinalReserveRounds");
             int finalWounds = value.Int32("FinalWounds");
             int hits = value.Int32("Hits");
             bool incapacitated = value.Boolean("Incapacitated");
             float distance = value.Single("MovementDistance");
             int moves = value.Int32("Moves");
+            int reloads = value.Int32("Reloads");
+            int roundsReloaded = value.Int32("RoundsReloaded");
+            int roundsSpent = value.Int32("RoundsSpent");
             int turns = value.Int32("TurnsCompleted");
             int wounds = value.Int32("WoundsDealt");
             value.Complete();
@@ -405,8 +425,33 @@ namespace GritGud.Application.Gameplay
                 fires,
                 droneMoves,
                 droneAttacks,
+                reloads,
+                roundsSpent,
+                roundsReloaded,
+                finalLoaded,
+                finalReserve,
                 finalWounds,
                 incapacitated);
+        }
+
+        private static GameplayBattleAmmunitionScore ReadAmmunitionScore(
+            JsonNode node)
+        {
+            var value = Typed(node, typeof(GameplayBattleAmmunitionScore));
+            string ammoTypeId = value.String("AmmoTypeId");
+            int finalLoaded = value.Int32("FinalLoadedRounds");
+            int finalReserve = value.Int32("FinalReserveRounds");
+            int reloads = value.Int32("Reloads");
+            int roundsReloaded = value.Int32("RoundsReloaded");
+            int roundsSpent = value.Int32("RoundsSpent");
+            value.Complete();
+            return new GameplayBattleAmmunitionScore(
+                ammoTypeId,
+                reloads,
+                roundsSpent,
+                roundsReloaded,
+                finalLoaded,
+                finalReserve);
         }
 
         private static ObjectReader Typed(JsonNode node, Type type)

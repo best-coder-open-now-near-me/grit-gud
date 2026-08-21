@@ -50,6 +50,7 @@ internal static class SimulationCli
             assembly,
             level,
             identity,
+            deadlinePolicy: ArtifactDeadlinePolicy(),
             logicalGuardPolicy: new GameplayExecutionLogicalGuardPolicy(
                 maximumTransitions: 2000,
                 maximumRepeatedMaterialStates: 4,
@@ -114,6 +115,7 @@ internal static class SimulationCli
             assembly,
             level,
             identity,
+            deadlinePolicy: ArtifactDeadlinePolicy(),
             logicalGuardPolicy: new GameplayExecutionLogicalGuardPolicy(
                 maximumTransitions: 2000,
                 maximumRepeatedMaterialStates: 4,
@@ -176,6 +178,20 @@ internal static class SimulationCli
             + " fire=" + score.FireDeployments
             + " drone-moves=" + score.DroneMoves
             + " drone-attacks=" + score.DroneAttacks);
+        Console.WriteLine(
+            "reloads=" + score.Reloads
+            + " rounds-spent=" + score.RoundsSpent
+            + " rounds-reloaded=" + score.RoundsReloaded
+            + " final-loaded=" + score.FinalLoadedRounds
+            + " final-reserve=" + score.FinalReserveRounds);
+        foreach (GameplayBattleAmmunitionScore ammunition in score.Ammunition)
+            Console.WriteLine(
+                "ammo=" + ammunition.AmmoTypeId
+                + " reloads=" + ammunition.Reloads
+                + " spent=" + ammunition.RoundsSpent
+                + " reloaded=" + ammunition.RoundsReloaded
+                + " final-loaded=" + ammunition.FinalLoadedRounds
+                + " final-reserve=" + ammunition.FinalReserveRounds);
         var replay = new GameplaySemanticReplayTimeline(
             run.InitialState,
             run.CreateTrajectory(),
@@ -187,6 +203,18 @@ internal static class SimulationCli
                 "0.###",
                 CultureInfo.InvariantCulture));
     }
+
+    private static GameplayExecutionDeadlinePolicy ArtifactDeadlinePolicy() =>
+        new GameplayExecutionDeadlinePolicy(
+            TimeSpan.FromSeconds(30),
+            TimeSpan.FromSeconds(30),
+            TimeSpan.FromSeconds(30),
+            TimeSpan.FromSeconds(30),
+            TimeSpan.FromSeconds(30),
+            TimeSpan.FromSeconds(30),
+            TimeSpan.FromMinutes(2),
+            TimeSpan.FromMinutes(10),
+            TimeSpan.FromMinutes(30));
 
     private static IReadOnlyDictionary<string, string> ParseOptions(
         IReadOnlyList<string> args,

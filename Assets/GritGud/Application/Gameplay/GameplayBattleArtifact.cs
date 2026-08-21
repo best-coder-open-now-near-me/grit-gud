@@ -382,6 +382,11 @@ namespace GritGud.Application.Gameplay
             int fireDeployments,
             int droneMoves,
             int droneAttacks,
+            int reloads,
+            int roundsSpent,
+            int roundsReloaded,
+            int finalLoadedRounds,
+            int finalReserveRounds,
             int finalWounds,
             bool incapacitated)
         {
@@ -415,6 +420,17 @@ namespace GritGud.Application.Gameplay
                 nameof(fireDeployments));
             DroneMoves = NonNegative(droneMoves, nameof(droneMoves));
             DroneAttacks = NonNegative(droneAttacks, nameof(droneAttacks));
+            Reloads = NonNegative(reloads, nameof(reloads));
+            RoundsSpent = NonNegative(roundsSpent, nameof(roundsSpent));
+            RoundsReloaded = NonNegative(
+                roundsReloaded,
+                nameof(roundsReloaded));
+            FinalLoadedRounds = NonNegative(
+                finalLoadedRounds,
+                nameof(finalLoadedRounds));
+            FinalReserveRounds = NonNegative(
+                finalReserveRounds,
+                nameof(finalReserveRounds));
             FinalWounds = NonNegative(finalWounds, nameof(finalWounds));
             Incapacitated = incapacitated;
         }
@@ -432,8 +448,53 @@ namespace GritGud.Application.Gameplay
         public int FireDeployments { get; }
         public int DroneMoves { get; }
         public int DroneAttacks { get; }
+        public int Reloads { get; }
+        public int RoundsSpent { get; }
+        public int RoundsReloaded { get; }
+        public int FinalLoadedRounds { get; }
+        public int FinalReserveRounds { get; }
         public int FinalWounds { get; }
         public bool Incapacitated { get; }
+
+        private static int NonNegative(int value, string name)
+        {
+            if (value < 0) throw new ArgumentOutOfRangeException(name);
+            return value;
+        }
+    }
+
+    public sealed class GameplayBattleAmmunitionScore
+    {
+        public GameplayBattleAmmunitionScore(
+            string ammoTypeId,
+            int reloads,
+            int roundsSpent,
+            int roundsReloaded,
+            int finalLoadedRounds,
+            int finalReserveRounds)
+        {
+            AmmoTypeId = GameplayContentIdentity.RequireText(
+                ammoTypeId,
+                nameof(ammoTypeId));
+            Reloads = NonNegative(reloads, nameof(reloads));
+            RoundsSpent = NonNegative(roundsSpent, nameof(roundsSpent));
+            RoundsReloaded = NonNegative(
+                roundsReloaded,
+                nameof(roundsReloaded));
+            FinalLoadedRounds = NonNegative(
+                finalLoadedRounds,
+                nameof(finalLoadedRounds));
+            FinalReserveRounds = NonNegative(
+                finalReserveRounds,
+                nameof(finalReserveRounds));
+        }
+
+        public string AmmoTypeId { get; }
+        public int Reloads { get; }
+        public int RoundsSpent { get; }
+        public int RoundsReloaded { get; }
+        public int FinalLoadedRounds { get; }
+        public int FinalReserveRounds { get; }
 
         private static int NonNegative(int value, string name)
         {
@@ -456,7 +517,13 @@ namespace GritGud.Application.Gameplay
             int fireDeployments,
             int droneMoves,
             int droneAttacks,
-            IEnumerable<GameplayBattleActorScore> actors)
+            int reloads,
+            int roundsSpent,
+            int roundsReloaded,
+            int finalLoadedRounds,
+            int finalReserveRounds,
+            IEnumerable<GameplayBattleActorScore> actors,
+            IEnumerable<GameplayBattleAmmunitionScore> ammunition)
         {
             Decisions = NonNegative(decisions, nameof(decisions));
             Transitions = NonNegative(transitions, nameof(transitions));
@@ -477,6 +544,17 @@ namespace GritGud.Application.Gameplay
                 nameof(fireDeployments));
             DroneMoves = NonNegative(droneMoves, nameof(droneMoves));
             DroneAttacks = NonNegative(droneAttacks, nameof(droneAttacks));
+            Reloads = NonNegative(reloads, nameof(reloads));
+            RoundsSpent = NonNegative(roundsSpent, nameof(roundsSpent));
+            RoundsReloaded = NonNegative(
+                roundsReloaded,
+                nameof(roundsReloaded));
+            FinalLoadedRounds = NonNegative(
+                finalLoadedRounds,
+                nameof(finalLoadedRounds));
+            FinalReserveRounds = NonNegative(
+                finalReserveRounds,
+                nameof(finalReserveRounds));
             var copied = new List<GameplayBattleActorScore>(actors
                 ?? throw new ArgumentNullException(nameof(actors)));
             copied.Sort((left, right) => StringComparer.Ordinal.Compare(
@@ -497,6 +575,26 @@ namespace GritGud.Application.Gameplay
                         nameof(actors));
             }
             Actors = copied.AsReadOnly();
+            var copiedAmmunition = new List<GameplayBattleAmmunitionScore>(
+                ammunition ?? throw new ArgumentNullException(
+                    nameof(ammunition)));
+            copiedAmmunition.Sort((left, right) => StringComparer.Ordinal
+                .Compare(left?.AmmoTypeId, right?.AmmoTypeId));
+            for (int index = 0; index < copiedAmmunition.Count; index++)
+            {
+                if (copiedAmmunition[index] == null)
+                    throw new ArgumentException(
+                        "Battle scoreboard ammunition entries cannot be null.",
+                        nameof(ammunition));
+                if (index > 0 && string.Equals(
+                        copiedAmmunition[index - 1].AmmoTypeId,
+                        copiedAmmunition[index].AmmoTypeId,
+                        StringComparison.Ordinal))
+                    throw new ArgumentException(
+                        "Battle scoreboard ammunition types must be unique.",
+                        nameof(ammunition));
+            }
+            Ammunition = copiedAmmunition.AsReadOnly();
         }
 
         public int Decisions { get; }
@@ -510,7 +608,13 @@ namespace GritGud.Application.Gameplay
         public int FireDeployments { get; }
         public int DroneMoves { get; }
         public int DroneAttacks { get; }
+        public int Reloads { get; }
+        public int RoundsSpent { get; }
+        public int RoundsReloaded { get; }
+        public int FinalLoadedRounds { get; }
+        public int FinalReserveRounds { get; }
         public IReadOnlyList<GameplayBattleActorScore> Actors { get; }
+        public IReadOnlyList<GameplayBattleAmmunitionScore> Ammunition { get; }
 
         private static int NonNegative(int value, string name)
         {
@@ -670,7 +774,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplayBattleArtifact
     {
-        public const int CurrentSchemaVersion = 2;
+        public const int CurrentSchemaVersion = 3;
         public const string FormatId = "grit-gud-battle-artifact";
 
         public GameplayBattleArtifact(
@@ -986,6 +1090,9 @@ namespace GritGud.Application.Gameplay
         {
             var actorScores = new Dictionary<string, MutableActorScore>(
                 StringComparer.Ordinal);
+            var ammunitionScores = new Dictionary<
+                string,
+                MutableAmmunitionScore>(StringComparer.Ordinal);
             foreach (GameplayActorSnapshot actor in run.InitialState.Session
                 .Actors)
                 actorScores.Add(actor.ActorId, new MutableActorScore(
@@ -1001,6 +1108,9 @@ namespace GritGud.Application.Gameplay
             int fires = 0;
             int droneMoves = 0;
             int droneAttacks = 0;
+            int reloads = 0;
+            int roundsSpent = 0;
+            int roundsReloaded = 0;
             foreach (GameplayBattleTransitionRecord transition in
                 run.Transitions)
             {
@@ -1086,6 +1196,28 @@ namespace GritGud.Application.Gameplay
                                     score.FireDeployments++;
                                 }
                             }
+                            else if (outcome
+                                is AmmunitionSpentActionOutcome spent)
+                            {
+                                RegisterAmmunitionChange(
+                                    spent.Change,
+                                    score,
+                                    ammunitionScores,
+                                    ref reloads,
+                                    ref roundsSpent,
+                                    ref roundsReloaded);
+                            }
+                            else if (outcome
+                                is WeaponReloadedActionOutcome reloaded)
+                            {
+                                RegisterAmmunitionChange(
+                                    reloaded.Change,
+                                    score,
+                                    ammunitionScores,
+                                    ref reloads,
+                                    ref roundsSpent,
+                                    ref roundsReloaded);
+                            }
                         }
                     }
                 }
@@ -1101,6 +1233,33 @@ namespace GritGud.Application.Gameplay
                 GameplayActorSnapshot final = finalActors[score.ActorId];
                 actors.Add(score.Build(final));
             }
+            int finalLoadedRounds = 0;
+            int finalReserveRounds = 0;
+            foreach (GameplayActorSnapshot actor in finalActors.Values)
+            {
+                foreach (WeaponMagazineSnapshot magazine in actor.Ammunition
+                    .Magazines)
+                {
+                    MutableAmmunitionScore score = GetAmmunitionScore(
+                        ammunitionScores,
+                        magazine.AmmoTypeId);
+                    score.FinalLoadedRounds += magazine.LoadedRounds;
+                    finalLoadedRounds += magazine.LoadedRounds;
+                }
+                foreach (AmmunitionReserveSnapshot reserve in actor.Ammunition
+                    .Reserves)
+                {
+                    MutableAmmunitionScore score = GetAmmunitionScore(
+                        ammunitionScores,
+                        reserve.AmmoTypeId);
+                    score.FinalReserveRounds += reserve.Rounds;
+                    finalReserveRounds += reserve.Rounds;
+                }
+            }
+            var ammunition = new List<GameplayBattleAmmunitionScore>(
+                ammunitionScores.Count);
+            foreach (MutableAmmunitionScore score in ammunitionScores.Values)
+                ammunition.Add(score.Build());
             return new GameplayBattleScoreboard(
                 run.Decisions.Count,
                 run.Transitions.Count,
@@ -1113,7 +1272,53 @@ namespace GritGud.Application.Gameplay
                 fires,
                 droneMoves,
                 droneAttacks,
-                actors);
+                reloads,
+                roundsSpent,
+                roundsReloaded,
+                finalLoadedRounds,
+                finalReserveRounds,
+                actors,
+                ammunition);
+        }
+
+        private static void RegisterAmmunitionChange(
+            WeaponAmmunitionDelta change,
+            MutableActorScore actor,
+            IDictionary<string, MutableAmmunitionScore> ammunitionScores,
+            ref int reloads,
+            ref int roundsSpent,
+            ref int roundsReloaded)
+        {
+            MutableAmmunitionScore ammunition = GetAmmunitionScore(
+                ammunitionScores,
+                change.AmmoTypeId);
+            if (change.Kind == WeaponAmmunitionChangeKind.Spend)
+            {
+                actor.RoundsSpent += change.ChangedRounds;
+                ammunition.RoundsSpent += change.ChangedRounds;
+                roundsSpent += change.ChangedRounds;
+                return;
+            }
+
+            actor.Reloads++;
+            actor.RoundsReloaded += change.ChangedRounds;
+            ammunition.Reloads++;
+            ammunition.RoundsReloaded += change.ChangedRounds;
+            reloads++;
+            roundsReloaded += change.ChangedRounds;
+        }
+
+        private static MutableAmmunitionScore GetAmmunitionScore(
+            IDictionary<string, MutableAmmunitionScore> scores,
+            string ammoTypeId)
+        {
+            if (scores.TryGetValue(
+                    ammoTypeId,
+                    out MutableAmmunitionScore score))
+                return score;
+            score = new MutableAmmunitionScore(ammoTypeId);
+            scores.Add(ammoTypeId, score);
+            return score;
         }
 
         private static void AddResolution(
@@ -1147,9 +1352,21 @@ namespace GritGud.Application.Gameplay
             public int FireDeployments { get; set; }
             public int DroneMoves { get; set; }
             public int DroneAttacks { get; set; }
+            public int Reloads { get; set; }
+            public int RoundsSpent { get; set; }
+            public int RoundsReloaded { get; set; }
 
-            public GameplayBattleActorScore Build(GameplayActorSnapshot final) =>
-                new GameplayBattleActorScore(
+            public GameplayBattleActorScore Build(GameplayActorSnapshot final)
+            {
+                int loaded = 0;
+                foreach (WeaponMagazineSnapshot magazine in final.Ammunition
+                    .Magazines)
+                    loaded += magazine.LoadedRounds;
+                int reserve = 0;
+                foreach (AmmunitionReserveSnapshot ammunitionReserve in final
+                    .Ammunition.Reserves)
+                    reserve += ammunitionReserve.Rounds;
+                return new GameplayBattleActorScore(
                     ActorId,
                     Decisions,
                     TurnsCompleted,
@@ -1163,8 +1380,36 @@ namespace GritGud.Application.Gameplay
                     FireDeployments,
                     DroneMoves,
                     DroneAttacks,
+                    Reloads,
+                    RoundsSpent,
+                    RoundsReloaded,
+                    loaded,
+                    reserve,
                     final.Wounds.WoundCount,
                     final.IsIncapacitated);
+            }
+        }
+
+        private sealed class MutableAmmunitionScore
+        {
+            public MutableAmmunitionScore(string ammoTypeId) =>
+                AmmoTypeId = ammoTypeId;
+
+            public string AmmoTypeId { get; }
+            public int Reloads { get; set; }
+            public int RoundsSpent { get; set; }
+            public int RoundsReloaded { get; set; }
+            public int FinalLoadedRounds { get; set; }
+            public int FinalReserveRounds { get; set; }
+
+            public GameplayBattleAmmunitionScore Build() =>
+                new GameplayBattleAmmunitionScore(
+                    AmmoTypeId,
+                    Reloads,
+                    RoundsSpent,
+                    RoundsReloaded,
+                    FinalLoadedRounds,
+                    FinalReserveRounds);
         }
     }
 }

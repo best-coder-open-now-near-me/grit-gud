@@ -139,6 +139,63 @@ namespace GritGud.Domain.Tests.Gameplay
                 terminalSequence: 9L));
         }
 
+        [Test]
+        public void PreviousUnlimitedAmmunitionSchemaIsRejected()
+        {
+            GameplayBattleArtifactContent content = CreateContent();
+
+            Assert.Throws<ArgumentOutOfRangeException>(() =>
+                new GameplayBattleArtifact(
+                    2,
+                    GameplayCanonicalValueDigest.Calculate(content),
+                    content));
+        }
+
+        [Test]
+        public void StrictCodecRejectsTamperedAmmunitionDelta()
+        {
+            const string ammunitionCanonical =
+                "{\"ChangedRounds\":1,\"Kind\":\"Spend\"}";
+            string payloadDigest = GameplayCanonicalValueDigest
+                .CalculateCanonicalJson(ammunitionCanonical);
+            GameplayBattleArtifactTransition[] transitions =
+            {
+                CreateTransition(7L, InitialHash, FirstHash, null),
+                new GameplayBattleArtifactTransition(
+                    8L,
+                    "DirectAttack",
+                    "actor",
+                    "subject",
+                    FirstHash,
+                    FinalHash,
+                    payloadDigest,
+                    ammunitionCanonical,
+                    0,
+                    Array.Empty<string>(),
+                    Array.Empty<string>(),
+                    Array.Empty<string>(),
+                    CanonicalJson),
+            };
+            GameplayBattleArtifactDecision[] decisions =
+            {
+                CreateDecision(payloadDigest: payloadDigest),
+            };
+            GameplayBattleArtifactContent content = CreateContent(
+                transitions,
+                decisions);
+            var artifact = new GameplayBattleArtifact(
+                GameplayBattleArtifact.CurrentSchemaVersion,
+                GameplayCanonicalValueDigest.Calculate(content),
+                content);
+            string tampered = artifact.ToPortableJson().Replace(
+                "ChangedRounds\\\":1",
+                "ChangedRounds\\\":2");
+
+            Assert.That(tampered, Is.Not.EqualTo(artifact.ToPortableJson()));
+            Assert.Throws<GameplayBattleArtifactFormatException>(() =>
+                GameplayBattleArtifactCodec.Read(tampered));
+        }
+
         private static GameplayBattleArtifactContent CreateContent(
             GameplayBattleArtifactTransition[] transitions = null,
             GameplayBattleArtifactDecision[] decisions = null,
@@ -237,7 +294,13 @@ namespace GritGud.Domain.Tests.Gameplay
                 fireDeployments: 0,
                 droneMoves: 0,
                 droneAttacks: 0,
-                Array.Empty<GameplayBattleActorScore>());
+                reloads: 0,
+                roundsSpent: 0,
+                roundsReloaded: 0,
+                finalLoadedRounds: 0,
+                finalReserveRounds: 0,
+                Array.Empty<GameplayBattleActorScore>(),
+                Array.Empty<GameplayBattleAmmunitionScore>());
 
         private static GameplayExecutionIdentity CreateExecutionIdentity() =>
             new GameplayExecutionIdentity(
