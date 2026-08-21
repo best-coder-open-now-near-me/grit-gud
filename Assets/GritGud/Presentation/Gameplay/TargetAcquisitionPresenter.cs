@@ -98,6 +98,8 @@ namespace GritGud.Presentation.Gameplay
         private readonly RaycastHit[] aimHitBuffer = new RaycastHit[32];
         private readonly List<TargetRegionSample> targetRegionBuffer =
             new List<TargetRegionSample>();
+        private readonly UnityWeaponDischargeOriginResolver
+            weaponOriginResolver = new UnityWeaponDischargeOriginResolver();
         private GameplaySession session;
         private GameplayWorldRegistry registry;
         private GameplayActorView observer;
@@ -953,16 +955,20 @@ namespace GritGud.Presentation.Gameplay
 
         private Vector3 ResolveWeaponAimOrigin()
         {
+            Vector3 presentedOrigin;
             if (WeaponTargetingActive && hasLockedWeaponAimOrigin)
             {
-                return observer.Transform.TransformPoint(
+                presentedOrigin = observer.Transform.TransformPoint(
                     lockedWeaponAimOriginLocal);
             }
-
-            Vector3? presentedOrigin = getWeaponAimOrigin?.Invoke();
-            return presentedOrigin.HasValue
-                ? presentedOrigin.Value
-                : observer.Stance.FirstPersonEyePosition;
+            else
+            {
+                Vector3? providedOrigin = getWeaponAimOrigin?.Invoke();
+                presentedOrigin = providedOrigin.HasValue
+                    ? providedOrigin.Value
+                    : observer.Stance.FirstPersonEyePosition;
+            }
+            return weaponOriginResolver.Resolve(observer, presentedOrigin);
         }
 
         private void LockWeaponAimOrigin()
