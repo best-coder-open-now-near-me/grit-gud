@@ -610,6 +610,7 @@ namespace GritGud.Presentation.Gameplay
                 new GameplayHudFeatureInstaller(
                     hud,
                     inputController,
+                    sessionPresenter,
                     () => controlRouter,
                     ExportBugReport,
                     showHud: !simulationViewer),

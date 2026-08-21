@@ -229,7 +229,6 @@ namespace GritGud.Presentation.Gameplay
             if (session == null || replayPaused)
                 return;
 
-            outcomes.PresentEncounterStarted();
             outcomes.PresentNewIncapacitations();
             if (partyControl.IsPartyDefeated)
             {

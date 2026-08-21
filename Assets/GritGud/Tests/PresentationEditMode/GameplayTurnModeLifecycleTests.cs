@@ -147,14 +147,13 @@ namespace GritGud.Presentation.Tests
                 Is.EqualTo(TurnModeEntryFailure.VoluntaryReentryLocked));
 
             Assert.That(
-                gameplay.Session.BeginEncounter(new[]
+                sessionPresenter.TryBeginEncounter(new[]
                 {
                     "player",
                     "oren-vale",
                     "depot-rifleman",
                 }),
                 Is.True);
-            sessionPresenter.RefreshModePresentation();
             yield return null;
             GameplayDialogueEntry encounterStarted = null;
             foreach (GameplayDialogueEntry entry in gameplay.DialogueLog.Entries)
@@ -167,6 +166,10 @@ namespace GritGud.Presentation.Tests
             }
             Assert.That(encounterStarted, Is.Not.Null);
             StringAssert.Contains("Roster (3)", encounterStarted.Message);
+            Assert.That(sessionPresenter.CurrentWarningHint, Is.Not.Null);
+            StringAssert.Contains(
+                "ENCOUNTER STARTED",
+                sessionPresenter.CurrentWarningHint.Text);
             Assert.That(gameplay.Session.ActiveActorId, Is.EqualTo("oren-vale"));
             Assert.That(actions.CanExitTurnMode, Is.False);
             Assert.That(

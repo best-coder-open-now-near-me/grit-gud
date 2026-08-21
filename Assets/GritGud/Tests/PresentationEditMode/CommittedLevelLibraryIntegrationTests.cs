@@ -218,7 +218,7 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
-        public void DetectionScopeIncludesOnlyTheDetectedPartyMember()
+        public void DetectionScopeStaysLocalWhileActionScopeIncludesAllHostiles()
         {
             CommittedLevelLibrary library =
                 UnityCommittedLevelLibrary.LoadDefault();
@@ -238,6 +238,20 @@ namespace GritGud.Presentation.Tests
             Assert.That(scope, Does.Not.Contain("depot-warehouse-patrol"));
             Assert.That(scope, Does.Not.Contain("depot-loading-guard"));
             Assert.That(scope, Has.Count.EqualTo(3));
+
+            var actionScope = gameplay.CreateEncounterScope(
+                "player",
+                "depot-rifleman");
+
+            Assert.That(actionScope, Is.EquivalentTo(new[]
+            {
+                "player",
+                "oren-vale",
+                "depot-rifleman",
+                "depot-yard-support",
+                "depot-warehouse-patrol",
+                "depot-loading-guard",
+            }));
         }
 
         [Test]

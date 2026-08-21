@@ -168,7 +168,11 @@ namespace GritGud.Presentation.Gameplay
                 PanelColor);
 
             string header;
-            if (model.Members.Count == 1)
+            if (model.CombatRoster)
+            {
+                header = "BATTLE - INITIATIVE";
+            }
+            else if (model.Members.Count == 1)
             {
                 header = "CHARACTER";
             }
@@ -237,13 +241,15 @@ namespace GritGud.Presentation.Gameplay
             }
             GUI.enabled = previousEnabled;
 
-            Color frameColor = member.Selected
-                ? SelectedColor
-                : member.Commanding
+            Color frameColor = member.Active || member.Commanding
                     ? CommandColor
+                : member.Selected
+                    ? SelectedColor
                     : BorderColor;
-            DrawFrame(rectangle, frameColor, member.Selected ? 2f : 1f);
-            if (member.Commanding)
+            DrawFrame(rectangle, frameColor, member.Active || member.Selected
+                ? 2f
+                : 1f);
+            if (member.Active || member.Commanding)
             {
                 DrawRectangle(
                     new Rect(rectangle.x, rectangle.y, 3f, rectangle.height),
@@ -258,9 +264,15 @@ namespace GritGud.Presentation.Gameplay
                     20f),
                 member.DisplayName.ToUpperInvariant(),
                 nameStyle);
+            string affiliation = member.Hostile
+                ? "HOSTILE  -  "
+                : member.PartyMember
+                    ? "PARTY  -  "
+                    : "NEUTRAL  -  ";
             string details = member.Incapacitated
                 ? "INCAPACITATED"
-                : $"AP {member.TurnBudget.ActionPoints}  -  MOVE "
+                : affiliation
+                    + $"AP {member.TurnBudget.ActionPoints}  -  MOVE "
                     + $"{member.TurnBudget.MovementOpportunity:0.#}  -  "
                     + $"WOUNDS {member.WoundCount}/{member.MaximumWounds}";
             GUI.Label(

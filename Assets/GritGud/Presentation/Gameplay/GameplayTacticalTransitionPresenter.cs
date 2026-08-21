@@ -7,6 +7,8 @@ namespace GritGud.Presentation.Gameplay
     [DisallowMultipleComponent]
     internal sealed class GameplayTacticalTransitionPresenter : MonoBehaviour
     {
+        private const float EncounterAnnouncementDurationSeconds = 2.5f;
+
         private GameplaySession session;
         private GameplayInputController input;
         private GameplayHud hud;
@@ -17,6 +19,8 @@ namespace GritGud.Presentation.Gameplay
         private Texture2D whiteTexture;
         private bool combatEntryActive;
         private string combatEntryMessage = string.Empty;
+        private float encounterAnnouncementSecondsRemaining;
+        private string encounterAnnouncementMessage = string.Empty;
         private bool hudWasEnabled;
         private bool partyHudWasEnabled;
 
@@ -63,6 +67,8 @@ namespace GritGud.Presentation.Gameplay
             whiteTexture = null;
             combatEntryActive = false;
             combatEntryMessage = string.Empty;
+            encounterAnnouncementSecondsRemaining = 0f;
+            encounterAnnouncementMessage = string.Empty;
             enabled = false;
         }
 
@@ -113,18 +119,42 @@ namespace GritGud.Presentation.Gameplay
 
             if (!combatEntryActive && session.Mode != observedMode)
             {
+                bool enteredEncounter = observedMode
+                    == GameplaySessionMode.Exploration
+                    && session.Mode == GameplaySessionMode.TurnBased
+                    && session.EncounterActive;
                 observedMode = session.Mode;
                 remainingSeconds = definition.DurationSeconds;
+                if (enteredEncounter)
+                {
+                    encounterAnnouncementSecondsRemaining =
+                        EncounterAnnouncementDurationSeconds;
+                    encounterAnnouncementMessage = "COMBAT ENGAGED\n"
+                        + GetActorDisplayName(session.ActiveActorId)
+                            .ToUpperInvariant()
+                        + " HAS INITIATIVE";
+                }
             }
 
             remainingSeconds = Mathf.Max(
                 0f,
                 remainingSeconds - Time.unscaledDeltaTime);
+            encounterAnnouncementSecondsRemaining = Mathf.Max(
+                0f,
+                encounterAnnouncementSecondsRemaining - Time.unscaledDeltaTime);
+            if (encounterAnnouncementSecondsRemaining <= 0f)
+            {
+                encounterAnnouncementMessage = string.Empty;
+            }
         }
 
         private void OnGUI()
         {
-            if (remainingSeconds <= 0f || definition == null || whiteTexture == null)
+            bool showAnnouncement = combatEntryActive
+                || encounterAnnouncementSecondsRemaining > 0f;
+            if ((remainingSeconds <= 0f && !showAnnouncement)
+                || definition == null
+                || whiteTexture == null)
             {
                 return;
             }
@@ -132,80 +162,108 @@ namespace GritGud.Presentation.Gameplay
             float duration = combatEntryActive
                 ? definition.CombatEntryDelaySeconds
                 : definition.DurationSeconds;
-            float progress = 1f - (remainingSeconds / duration);
+            float progress = duration <= 0f
+                ? 1f
+                : 1f - (remainingSeconds / duration);
             float eased = 1f - Mathf.Pow(1f - Mathf.Clamp01(progress), 3f);
             float fade = Mathf.Sin(Mathf.Clamp01(progress) * Mathf.PI);
             Color signal = observedMode == GameplaySessionMode.TurnBased
                 ? definition.TurnModeColor
                 : definition.ExplorationColor;
 
-            DrawRect(
-                new Rect(0f, 0f, Screen.width, Screen.height),
-                new Color(
+            if (remainingSeconds > 0f)
+            {
+                DrawRect(
+                    new Rect(0f, 0f, Screen.width, Screen.height),
+                    new Color(
+                        signal.r,
+                        signal.g,
+                        signal.b,
+                        definition.WashOpacity * fade));
+            }
+
+            if (remainingSeconds > 0f)
+            {
+                float scanX = Mathf.Lerp(
+                    -definition.ScanLineWidth,
+                    Screen.width,
+                    eased);
+                Color lineColor = new Color(
                     signal.r,
                     signal.g,
                     signal.b,
-                    definition.WashOpacity * fade));
+                    0.74f * fade);
+                DrawRect(
+                    new Rect(
+                        scanX,
+                        0f,
+                        definition.ScanLineWidth,
+                        definition.EdgeBandHeight),
+                    lineColor);
+                DrawRect(
+                    new Rect(
+                        Screen.width - scanX - definition.ScanLineWidth,
+                        Screen.height - definition.EdgeBandHeight,
+                        definition.ScanLineWidth,
+                        definition.EdgeBandHeight),
+                    lineColor);
 
-            float scanX = Mathf.Lerp(
-                -definition.ScanLineWidth,
-                Screen.width,
-                eased);
-            Color lineColor = new Color(
-                signal.r,
-                signal.g,
-                signal.b,
-                0.74f * fade);
-            DrawRect(
-                new Rect(
-                    scanX,
-                    0f,
-                    definition.ScanLineWidth,
-                    definition.EdgeBandHeight),
-                lineColor);
-            DrawRect(
-                new Rect(
-                    Screen.width - scanX - definition.ScanLineWidth,
-                    Screen.height - definition.EdgeBandHeight,
-                    definition.ScanLineWidth,
-                    definition.EdgeBandHeight),
-                lineColor);
+                Color edgeColor = new Color(
+                    signal.r,
+                    signal.g,
+                    signal.b,
+                    0.16f * fade);
+                DrawRect(
+                    new Rect(0f, 0f, Screen.width * eased, 1f),
+                    edgeColor);
+                DrawRect(
+                    new Rect(
+                        Screen.width * (1f - eased),
+                        Screen.height - 1f,
+                        Screen.width * eased,
+                        1f),
+                    edgeColor);
+            }
 
-            Color edgeColor = new Color(
-                signal.r,
-                signal.g,
-                signal.b,
-                0.16f * fade);
-            DrawRect(
-                new Rect(0f, 0f, Screen.width * eased, 1f),
-                edgeColor);
-            DrawRect(
-                new Rect(
-                    Screen.width * (1f - eased),
-                    Screen.height - 1f,
-                    Screen.width * eased,
-                    1f),
-                edgeColor);
-
-            if (combatEntryActive)
+            if (showAnnouncement)
             {
+                float announcementProgress = combatEntryActive
+                    ? Mathf.Clamp01(progress)
+                    : 1f - (encounterAnnouncementSecondsRemaining
+                        / EncounterAnnouncementDurationSeconds);
+                float announcementFade = Mathf.Sin(
+                    Mathf.Clamp01(announcementProgress) * Mathf.PI);
                 var banner = new Rect(
-                    Screen.width * 0.5f - 180f,
-                    Screen.height * 0.22f,
-                    360f,
-                    74f);
-                DrawRect(banner, new Color(0.015f, 0.025f, 0.04f, 0.94f));
-                DrawRect(new Rect(banner.x, banner.y, banner.width, 3f), signal);
+                    Screen.width * 0.5f - 280f,
+                    Screen.height * 0.18f,
+                    560f,
+                    118f);
+                DrawRect(banner, new Color(
+                    0.015f,
+                    0.025f,
+                    0.04f,
+                    0.96f * announcementFade));
+                DrawRect(new Rect(banner.x, banner.y, banner.width, 4f),
+                    new Color(signal.r, signal.g, signal.b, announcementFade));
                 var style = new GUIStyle(GUI.skin.label)
                 {
                     alignment = TextAnchor.MiddleCenter,
                     fontStyle = FontStyle.Bold,
-                    fontSize = 18,
+                    fontSize = 28,
                 };
-                style.normal.textColor = Color.white;
-                GUI.Label(banner, combatEntryMessage, style);
+                style.normal.textColor = new Color(1f, 1f, 1f, announcementFade);
+                GUI.Label(
+                    banner,
+                    combatEntryActive
+                        ? combatEntryMessage
+                        : encounterAnnouncementMessage,
+                    style);
             }
         }
+
+        private string GetActorDisplayName(string actorId) =>
+            session.Scenario.GetActor(actorId).CharacterProfile?.DisplayName
+            ?? actorId;
 
         private void DrawRect(Rect rectangle, Color color)
         {

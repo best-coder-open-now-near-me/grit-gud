@@ -86,6 +86,12 @@ namespace GritGud.Domain.Tests
                 GameplayPartyHudModelBuilder.Build(gameplay, control);
 
             Assert.That(combat.InitiativeControlsSelection, Is.True);
+            Assert.That(combat.CombatRoster, Is.True);
+            Assert.That(combat.Members, Has.Count.EqualTo(3));
+            Assert.That(combat.Members[1].ActorId, Is.EqualTo("raider"));
+            Assert.That(combat.Members[1].PartyMember, Is.False);
+            Assert.That(combat.Members[1].Hostile, Is.True);
+            Assert.That(combat.Members[1].Active, Is.False);
             Assert.That(combat.Members[0].CanSelect, Is.False);
             Assert.That(combat.Members[1].CanSelect, Is.False);
             Assert.That(combat.Members[0].Commanding, Is.True);

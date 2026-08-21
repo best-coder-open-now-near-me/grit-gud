@@ -6,9 +6,12 @@ using UnityEngine;
 namespace GritGud.Presentation.Gameplay
 {
     [DisallowMultipleComponent]
-    public sealed class GameplaySessionPresenter : MonoBehaviour
+    public sealed class GameplaySessionPresenter : MonoBehaviour,
+        IGameplayWarningHintSource
     {
         private const float ExplorationSimulationStepSeconds = 0.1f;
+        private const float EncounterNoticeDurationSeconds = 4f;
+        private const int EncounterNoticePriority = 200;
 
         private ExplorationMovementInput explorationInput;
         private ThirdPersonMotor motor;
@@ -17,12 +20,30 @@ namespace GritGud.Presentation.Gameplay
         private Transform actorTransform;
         private string actorId;
         private float explorationElapsedSeconds;
+        private GameplayDialogueLog encounterDialogue;
+        private GameplayWarningHintModel encounterWarningHint;
+        private float encounterNoticeSecondsRemaining;
 
         public GameplaySession Session { get; private set; }
 
         public StanceChangeFailure LastStanceFailure { get; private set; }
 
         public string LastStanceFailureCode { get; private set; } = string.Empty;
+
+        public GameplayWarningHintModel CurrentWarningHint =>
+            encounterWarningHint;
+
+        internal void BindEncounterPresentation(GameplayDialogueLog dialogue)
+        {
+            if (Session == null)
+            {
+                throw new InvalidOperationException(
+                    "Bind the gameplay session presenter before encounter presentation.");
+            }
+
+            encounterDialogue = dialogue ?? throw new ArgumentNullException(
+                nameof(dialogue));
+        }
 
         public void Bind(
             GameplaySession session,
@@ -155,14 +176,24 @@ namespace GritGud.Presentation.Gameplay
             }
 
             SynchronizeExplorationPose();
-            if (!Session.BeginEncounter(participantIds))
+            return PresentEncounterStart(Session.BeginEncounter(participantIds));
+        }
+
+        private void Update()
+        {
+            if (encounterNoticeSecondsRemaining <= 0f)
             {
-                return false;
+                return;
             }
 
-            motor.StopPlanarMovement();
-            ApplyMode();
-            return true;
+            encounterNoticeSecondsRemaining -= Mathf.Max(
+                0f,
+                Time.unscaledDeltaTime);
+            if (encounterNoticeSecondsRemaining <= 0f)
+            {
+                encounterNoticeSecondsRemaining = 0f;
+                encounterWarningHint = null;
+            }
         }
 
         public bool TryBeginEncounterFromAction(GameplayActionRecord action)
@@ -173,14 +204,7 @@ namespace GritGud.Presentation.Gameplay
             }
 
             SynchronizeExplorationPose();
-            if (!Session.BeginEncounterFromAction(action))
-            {
-                return false;
-            }
-
-            motor.StopPlanarMovement();
-            ApplyMode();
-            return true;
+            return PresentEncounterStart(Session.BeginEncounterFromAction(action));
         }
 
         public void RefreshModePresentation()
@@ -260,6 +284,9 @@ namespace GritGud.Presentation.Gameplay
             actorTransform = null;
             actorId = null;
             explorationElapsedSeconds = 0f;
+            encounterDialogue = null;
+            encounterWarningHint = null;
+            encounterNoticeSecondsRemaining = 0f;
             Session = null;
             LastStanceFailure = StanceChangeFailure.None;
             LastStanceFailureCode = string.Empty;
@@ -276,6 +303,54 @@ namespace GritGud.Presentation.Gameplay
                 Session.Mode == GameplaySessionMode.Exploration
                 && !Session.IsActorIncapacitated(actorId)
                 && !Session.GetActor(actorId).IsPinned);
+        }
+
+        private void PresentEncounterStarted()
+        {
+            var combatants = new System.Collections.Generic.List<string>();
+            foreach (string participantId in Session.InitiativeOrder)
+            {
+                combatants.Add(GetActorDisplayName(participantId));
+            }
+
+            string roster = combatants.Count == 0
+                ? "No combatants were registered."
+                : "Roster ("
+                    + combatants.Count
+                    + "): "
+                    + string.Join(", ", combatants)
+                    + ".";
+            string activeActor = GetActorDisplayName(Session.ActiveActorId);
+            string message = "Combat started. "
+                + activeActor
+                + " has initiative. "
+                + roster;
+            encounterDialogue?.Append(
+                GameplayDialogueChannel.System,
+                "ENCOUNTER STARTED",
+                message);
+            encounterWarningHint = new GameplayWarningHintModel(
+                "encounter.started",
+                "ENCOUNTER STARTED - " + roster.ToUpperInvariant(),
+                EncounterNoticePriority);
+            encounterNoticeSecondsRemaining = EncounterNoticeDurationSeconds;
+        }
+
+        private string GetActorDisplayName(string participantId) =>
+            Session.Scenario.GetActor(participantId).CharacterProfile?.DisplayName
+            ?? participantId;
+
+        private bool PresentEncounterStart(bool encounterStarted)
+        {
+            if (!encounterStarted)
+            {
+                return false;
+            }
+
+            motor.StopPlanarMovement();
+            ApplyMode();
+            PresentEncounterStarted();
+            return true;
         }
 
         private void HandleEquipmentChanged(EquipmentChangeRecord _)

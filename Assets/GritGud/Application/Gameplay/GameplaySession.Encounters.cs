@@ -104,6 +104,8 @@ namespace GritGud.Application.Gameplay
                 scope.Add(triggerSubjectId);
             }
 
+            AddCapableHostileActors(scope);
+
             var pending = new Queue<string>(scope);
             while (pending.Count > 0)
             {
@@ -120,6 +122,32 @@ namespace GritGud.Application.Gameplay
                 }
             }
             return OrderByInitiative(scope);
+        }
+
+        private void AddCapableHostileActors(ISet<string> scope)
+        {
+            if (Scenario.PlayerParty == null)
+            {
+                return;
+            }
+
+            foreach (ScenarioActorDefinition candidate in Scenario.Actors)
+            {
+                if (actors[candidate.Id].IsIncapacitated)
+                {
+                    continue;
+                }
+
+                foreach (string partyActorId in Scenario.PlayerParty.ActorIds)
+                {
+                    if (IsHostile(partyActorId, candidate.Id)
+                        || IsHostile(candidate.Id, partyActorId))
+                    {
+                        scope.Add(candidate.Id);
+                        break;
+                    }
+                }
+            }
         }
 
         public IReadOnlyList<string> CreateDetectionEncounterScope(

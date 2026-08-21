@@ -86,6 +86,7 @@ namespace GritGud.Presentation.Gameplay
                     "Projectile delivery must install before encounter actors.");
             actions.BindEmergencyCycle(emergencyCycle);
             actions.RegisterTurnModeExitConstraint(projectiles);
+            sessionPresenter.BindEncounterPresentation(dialogue);
             var partyPresentation = new GameplayPartyPresentationSession(
                 session,
                 party,

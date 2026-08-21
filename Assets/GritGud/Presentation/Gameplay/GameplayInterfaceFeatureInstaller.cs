@@ -311,6 +311,7 @@ namespace GritGud.Presentation.Gameplay
     {
         private readonly GameplayHud hud;
         private readonly GameplayInputController input;
+        private readonly GameplaySessionPresenter sessionPresenter;
         private readonly Func<GameplayControlRouter> resolveControlRouter;
         private readonly Action<string> exportBugReport;
         private readonly bool showHud;
@@ -318,12 +319,15 @@ namespace GritGud.Presentation.Gameplay
         public GameplayHudFeatureInstaller(
             GameplayHud hud,
             GameplayInputController input,
+            GameplaySessionPresenter presenter,
             Func<GameplayControlRouter> resolveControlRouter,
             Action<string> exportBugReport,
             bool showHud = true)
         {
             this.hud = hud ?? throw new ArgumentNullException(nameof(hud));
             this.input = input ?? throw new ArgumentNullException(nameof(input));
+            sessionPresenter = presenter ?? throw new ArgumentNullException(
+                nameof(presenter));
             this.resolveControlRouter = resolveControlRouter
                 ?? throw new ArgumentNullException(nameof(resolveControlRouter));
             this.exportBugReport = exportBugReport
@@ -339,6 +343,7 @@ namespace GritGud.Presentation.Gameplay
                 ?? throw new InvalidOperationException(
                     "Control routing must install before the gameplay HUD.");
             hud.BindInputSource(input);
+            hud.BindWarningHintSource(sessionPresenter);
             hud.BindTurnModeToggle(() =>
                 controlRouter.Handle(GameplayControl.ToggleTurnMode));
             hud.BindBugReportExport(exportBugReport);

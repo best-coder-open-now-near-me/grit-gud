@@ -15,7 +15,6 @@ namespace GritGud.Presentation.Gameplay
         private readonly HashSet<string> reportedPartyIncapacitations =
             new HashSet<string>(StringComparer.Ordinal);
         private bool partyIncapacitationReported;
-        private bool encounterWasActive;
         private bool partyVictoryExitPending;
 
         public GameplayEnemyOutcomePresenter(
@@ -69,28 +68,6 @@ namespace GritGud.Presentation.Gameplay
                     "PARTY MEMBER INCAPACITATED",
                     $"{GetActorDisplayName(actorId)} can no longer act or respond.");
             }
-        }
-
-        public void PresentEncounterStarted()
-        {
-            bool encounterIsActive = session.EncounterActive;
-            if (encounterIsActive == encounterWasActive)
-            {
-                return;
-            }
-
-            encounterWasActive = encounterIsActive;
-            if (!encounterIsActive)
-            {
-                return;
-            }
-
-            string message = BuildEncounterRosterMessage();
-            dialogue.Append(
-                GameplayDialogueChannel.System,
-                "ENCOUNTER STARTED",
-                message);
-            actionController.PresentExternalStatus(message);
         }
 
         public void ResolvePartyIncapacitation()
@@ -178,18 +155,5 @@ namespace GritGud.Presentation.Gameplay
             sessionPresenter.RefreshModePresentation();
         }
 
-        private string BuildEncounterRosterMessage()
-        {
-            var combatants = new List<string>();
-            foreach (string actorId in session.InitiativeOrder)
-                combatants.Add(GetActorDisplayName(actorId));
-            return combatants.Count == 0
-                ? "Combat started. No combatants were registered."
-                : "Combat started. Roster ("
-                    + combatants.Count
-                    + "): "
-                    + string.Join(", ", combatants)
-                    + ".";
-        }
     }
 }
