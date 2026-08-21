@@ -743,6 +743,10 @@ namespace GritGud.Presentation.Gameplay
             dialogueLog = null;
             simulationViewer = false;
             preparedSimulation = null;
+            // Replay is the only gameplay feature that pauses global time.
+            // Reassert the session baseline even if a Unity domain reload or
+            // failed replay presentation lost its local restoration state.
+            Time.timeScale = 1f;
             enabled = false;
         }
 

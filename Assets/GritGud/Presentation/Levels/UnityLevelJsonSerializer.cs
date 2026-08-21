@@ -56,11 +56,11 @@ namespace GritGud.Presentation.Levels
 
             try
             {
-                LevelDocument document = JsonUtility.FromJson<LevelDocument>(text);
-                if (document == null)
-                {
-                    throw new LevelSerializationException("The imported text did not contain a level document.");
-                }
+                // Overwrite an initialized portable document so omitted JSON
+                // fields retain the same authored defaults used by the
+                // engine-free System.Text.Json content loader.
+                var document = new LevelDocument();
+                JsonUtility.FromJsonOverwrite(text, document);
 
                 if (document.schemaVersion <= 3)
                 {

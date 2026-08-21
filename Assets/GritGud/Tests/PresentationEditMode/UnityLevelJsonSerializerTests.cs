@@ -128,6 +128,25 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void OmittedFieldsRetainPortableDocumentDefaults()
+        {
+            const string json = "{\"schemaVersion\":17,"
+                + "\"levelId\":\"portable-defaults\"}";
+            var serializer = new UnityLevelJsonSerializer();
+
+            LevelDocument result = serializer.Deserialize(json);
+
+            Assert.That(result.environment.presetId,
+                Is.EqualTo("depot-night"));
+            Assert.That(result.environment.atmosphere.fogEnabled, Is.True);
+            Assert.That(result.environment.atmosphere.fogEndDistance,
+                Is.EqualTo(54f));
+            Assert.That(result.scenario.randomSeed, Is.EqualTo(12648430u));
+            Assert.That(result.scenario.minimumVoluntaryTurnSeconds,
+                Is.EqualTo(1.25f));
+        }
+
+        [Test]
         public void VersionThreeJsonMigratesLegacyPlaytestWithoutReexportingIt()
         {
             const string json = "{\"schemaVersion\":3,\"levelId\":\"legacy\","

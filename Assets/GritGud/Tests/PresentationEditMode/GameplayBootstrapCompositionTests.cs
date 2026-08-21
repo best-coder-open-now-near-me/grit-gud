@@ -319,10 +319,11 @@ namespace GritGud.Presentation.Tests
                 Is.EqualTo(GameplayReplaySource.VerifiedSimulation));
             Assert.That(replayHud.IsAvailable, Is.True);
             Assert.That(replayHud.IsOpen, Is.True);
-            Assert.That(replayHud.Replay.Frames.Count, Is.EqualTo(79));
+            Assert.That(replayHud.Replay.Frames.Count, Is.EqualTo(74));
             Assert.That(runtime.InputController.CameraOnly, Is.True);
             Assert.That(runtime.Hud.IsVisible, Is.False);
             Assert.That(runtime.PartyHud.IsPresentationSuppressed, Is.True);
+            Assert.That(Time.timeScale, Is.Zero);
 
             runtime.Bootstrap.PlayMainLevel();
             Assert.That(
@@ -336,6 +337,7 @@ namespace GritGud.Presentation.Tests
             Assert.That(gameplay.IsRunning, Is.False);
             Assert.That(battleReplay.enabled, Is.False);
             Assert.That(runtime.InputController.CameraOnly, Is.False);
+            Assert.That(Time.timeScale, Is.EqualTo(1f));
         }
     }
 }
