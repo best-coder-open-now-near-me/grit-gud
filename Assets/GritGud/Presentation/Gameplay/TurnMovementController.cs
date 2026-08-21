@@ -166,14 +166,46 @@ namespace GritGud.Presentation.Gameplay
 
         private void Update()
         {
+            AdvanceFrame(Time.deltaTime);
+        }
+
+        /// <summary>
+        /// Advances the route presentation before accepting another planning
+        /// input. Canonical movement reduces its final gameplay state
+        /// immediately, whereas legacy movement remains in
+        /// ResolvingMovement until its visual route completes. The visual
+        /// lifetime is therefore owned here rather than inferred solely from
+        /// the session operation.
+        /// </summary>
+        internal void AdvanceFrame(float deltaTime)
+        {
             if (Session == null)
             {
                 return;
             }
 
+            if (playbackPresenter?.IsPlaying == true)
+            {
+                TickPlayback(deltaTime);
+                return;
+            }
+
             if (Session.Operation == GameplaySessionOperation.ResolvingMovement)
             {
-                TickPlayback();
+                MovementRouteRecord pendingRoute = Session.PendingMovementRoute;
+                if (pendingRoute == null || playbackPresenter == null)
+                {
+                    StatusMessage = "Movement is waiting for its route playback.";
+                    return;
+                }
+
+                playbackPresenter.Begin(pendingRoute);
+                ghostPresenter?.Hide();
+                planner = null;
+                pendingPlanDistance = 0f;
+                LastPlanFailure = RoutePlanFailure.None;
+                StatusMessage = "Resolving movement...";
+                TickPlayback(deltaTime);
                 return;
             }
 
@@ -182,8 +214,8 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            HandlePlanningInput();
-            ghostPresenter?.Present(planner, Time.deltaTime);
+            HandlePlanningInput(deltaTime);
+            ghostPresenter?.Present(planner, deltaTime);
         }
 
         internal bool SynchronizePlanningState()
@@ -248,7 +280,7 @@ namespace GritGud.Presentation.Gameplay
                     == actor.TurnBudget.MovementOpportunity;
         }
 
-        private void HandlePlanningInput()
+        private void HandlePlanningInput(float deltaTime)
         {
             GameplayInputFrame input = inputSource?.CurrentFrame ?? default;
 
@@ -276,6 +308,11 @@ namespace GritGud.Presentation.Gameplay
             {
                 MovementRouteRecord route = planner.Confirm();
                 Session.CommitMovementRoute(route);
+                if (playbackPresenter.IsPlaying)
+                {
+                    StatusMessage = "Movement is already resolving.";
+                    return;
+                }
                 playbackPresenter.Begin(route);
                 ghostPresenter.Hide();
                 planner = null;
@@ -294,7 +331,7 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
 
-            pendingPlanDistance += PlanningSpeed * Time.deltaTime;
+            pendingPlanDistance += PlanningSpeed * Mathf.Max(0f, deltaTime);
             while (pendingPlanDistance >= RouteSampleDistance)
             {
                 float remainingBudget = planner.MaximumCost - planner.TotalCost;
@@ -332,19 +369,22 @@ namespace GritGud.Presentation.Gameplay
             }
         }
 
-        private void TickPlayback()
+        private void TickPlayback(float deltaTime)
         {
             if (playbackPresenter == null || !playbackPresenter.IsPlaying)
             {
                 return;
             }
 
-            if (!playbackPresenter.Tick(Time.deltaTime))
+            if (!playbackPresenter.Tick(deltaTime))
             {
                 return;
             }
 
-            Session.CompleteMovementResolution();
+            if (Session.Operation == GameplaySessionOperation.ResolvingMovement)
+            {
+                Session.CompleteMovementResolution();
+            }
             GameplayActorSnapshot resolvedActor = Session.GetActor(actorId);
             actorTransform.SetPositionAndRotation(
                 MovementRouteSampling.ToVector3(resolvedActor.Pose.Position),

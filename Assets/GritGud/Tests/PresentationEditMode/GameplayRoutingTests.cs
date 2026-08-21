@@ -137,6 +137,101 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void CanonicalRoutePlaybackCompletesBeforeAnotherRouteCanBePlanned()
+        {
+            var host = new GameObject("Canonical Route Playback Test");
+            var view = new GameObject("Canonical Route Playback View");
+            GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            try
+            {
+                ground.transform.position = Vector3.zero;
+                var actor = new ScenarioActorDefinition(
+                    "player",
+                    10,
+                    new GameplayActorPose(
+                        new GameplayPosition(0f, 0f, 0f),
+                        facingDegrees: 0f),
+                    new TurnBudget(actionPoints: 4, movementOpportunity: 8f));
+                var session = new GameplaySession(new ScenarioDefinition(
+                    "canonical-route-playback",
+                    new ScenarioTimingDefinition(1.25f),
+                    new[] { actor },
+                    System.Array.Empty<ScenarioObjectiveDefinition>()));
+                Assert.That(session.BeginEncounter(), Is.True);
+                GameplayCombatStateSnapshot initial =
+                    GameplayCombatStateCapture.Capture(session);
+                GameplayTransitionReducerRegistry reducers =
+                    GameplaySimulationReducers.CreateCurrent();
+                GameplayCapabilityRegistry capabilities =
+                    GameplayCurrentCapabilityCatalog.Create(
+                        reducers,
+                        System.Array.Empty<GameplayReachableInput>());
+                var input = new MutableGameplayInputSource();
+                CharacterController characterController =
+                    host.AddComponent<CharacterController>();
+                characterController.center = new Vector3(0f, 1f, 0f);
+                ExplorationMovementInput movementInput =
+                    host.AddComponent<ExplorationMovementInput>();
+                movementInput.BindInputSource(input);
+                movementInput.BindView(view.transform);
+                ThirdPersonMotor motor = host.AddComponent<ThirdPersonMotor>();
+                TurnMovementController controller =
+                    host.AddComponent<TurnMovementController>();
+
+                using (var live = new GameplayLiveSessionRuntime(
+                    session,
+                    CreateExecutionIdentity(session),
+                    initial,
+                    reducers,
+                    capabilities))
+                {
+                    controller.Bind(
+                        session,
+                        movementInput,
+                        input,
+                        motor,
+                        "player");
+                    input.Frame = CreateInputFrame(Vector2.up);
+                    controller.AdvanceFrame(0.1f);
+                    Assert.That(controller.PlanPointCount, Is.GreaterThan(1));
+
+                    input.Frame = CreateInputFrame(
+                        Vector2.zero,
+                        confirmRoutePressed: true);
+                    Assert.DoesNotThrow(() => controller.AdvanceFrame(0f));
+                    Assert.That(controller.IsPlaying, Is.True);
+                    Assert.That(session.Operation,
+                        Is.EqualTo(GameplaySessionOperation.None));
+
+                    // Repeated confirm input must advance the existing
+                    // presentation, never try to begin a second route.
+                    Assert.DoesNotThrow(() => controller.AdvanceFrame(0.01f));
+                    Assert.That(controller.IsPlaying, Is.True);
+
+                    input.Frame = CreateInputFrame(Vector2.zero);
+                    controller.AdvanceFrame(10f);
+                    Assert.That(controller.IsPlaying, Is.False);
+                    Assert.That(session.Operation,
+                        Is.EqualTo(GameplaySessionOperation.None));
+
+                    input.Frame = CreateInputFrame(Vector2.up);
+                    controller.AdvanceFrame(0.1f);
+                    input.Frame = CreateInputFrame(
+                        Vector2.zero,
+                        confirmRoutePressed: true);
+                    Assert.DoesNotThrow(() => controller.AdvanceFrame(0f));
+                    Assert.That(controller.IsPlaying, Is.True);
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                Object.DestroyImmediate(view);
+                Object.DestroyImmediate(ground);
+            }
+        }
+
+        [Test]
         public void CameraOrbitUsesMiddleMouseAndLeavesRightMouseContextual()
         {
             InputActionAsset inputActions = GameplayInputController.CreateInputAsset();
@@ -287,5 +382,40 @@ namespace GritGud.Presentation.Tests
             public string GetBindingDisplay(GameplayControl control) =>
                 string.Empty;
         }
+
+        private sealed class MutableGameplayInputSource : IGameplayInputSource
+        {
+            public GameplayInputFrame Frame { get; set; }
+
+            public GameplayInputFrame CurrentFrame => Frame;
+
+            public string GetBindingDisplay(GameplayControl control) =>
+                string.Empty;
+        }
+
+        private static GameplayInputFrame CreateInputFrame(
+            Vector2 movement,
+            bool confirmRoutePressed = false) => new GameplayInputFrame(
+                movement,
+                Vector2.zero,
+                sprintHeld: false,
+                aimHeld: false,
+                cancelRoutePressed: false,
+                undoRoutePressed: false,
+                confirmRoutePressed: confirmRoutePressed);
+
+        private static GameplayExecutionIdentity CreateExecutionIdentity(
+            GameplaySession session) => new GameplayExecutionIdentity(
+            new GameplayContentIdentity(
+                session.Scenario.Id,
+                scenarioSchemaVersion: 1,
+                rulesSchemaVersion: 1,
+                new string('a', 64)),
+            new SpatialContentIdentity(
+                "canonical-route-playback-level",
+                levelSchemaVersion: 1,
+                evidenceAlgorithmVersion: 1,
+                new string('b', 64)),
+            session.RunIdentity);
     }
 }
