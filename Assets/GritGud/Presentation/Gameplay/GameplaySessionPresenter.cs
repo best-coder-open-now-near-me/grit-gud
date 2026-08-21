@@ -290,7 +290,16 @@ namespace GritGud.Presentation.Gameplay
                     actorId,
                     StringComparison.Ordinal))
             {
-                motor?.StopPlanarMovement();
+                // Exploration pose updates are projected through the same
+                // canonical notification stream as real capability changes.
+                // Do not restart the motor for a pose-only update: doing so
+                // every simulation step repeatedly reset the walking blend.
+                if (Session?.Mode != GameplaySessionMode.Exploration
+                    || Session.IsActorIncapacitated(actorId)
+                    || Session.GetActor(actorId).IsPinned)
+                {
+                    motor?.StopPlanarMovement();
+                }
                 ApplyMode();
             }
         }

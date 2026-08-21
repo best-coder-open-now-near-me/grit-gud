@@ -56,11 +56,19 @@ namespace GritGud.Presentation.Levels
 
             try
             {
-                // Overwrite an initialized portable document so omitted JSON
-                // fields retain the same authored defaults used by the
-                // engine-free System.Text.Json content loader.
-                var document = new LevelDocument();
-                JsonUtility.FromJsonOverwrite(text, document);
+                // This is the canonical Unity deserialization path used when
+                // the embedded first-simulation artifact was generated.
+                // Keep it aligned with the engine-free content reader: an
+                // overwrite changes nested omitted-field semantics and thus
+                // produces a different static-spatial identity for the same
+                // authored level.
+                LevelDocument document = JsonUtility.FromJson<LevelDocument>(
+                    text);
+                if (document == null)
+                {
+                    throw new LevelSerializationException(
+                        "The imported text did not contain a level document.");
+                }
 
                 if (document.schemaVersion <= 3)
                 {

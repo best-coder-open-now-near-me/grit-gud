@@ -346,11 +346,11 @@ namespace GritGud.Presentation.Gameplay
             TextAsset fractureCatalogAsset = LoadRequiredText(
                 manifest.fractureSpatialCatalogResource,
                 "fracture spatial catalog");
-            var fractureCatalog =
-                new GameplayFractureSpatialCatalogDocument();
-            JsonUtility.FromJsonOverwrite(
-                fractureCatalogAsset.text,
-                fractureCatalog);
+            GameplayFractureSpatialCatalogDocument fractureCatalog =
+                JsonUtility.FromJson<GameplayFractureSpatialCatalogDocument>(
+                    fractureCatalogAsset.text)
+                ?? throw new InvalidOperationException(
+                    "The fracture spatial catalog is invalid JSON.");
             var spatialContent = new GameplayStaticSpatialContent(
                 level,
                 fractureCatalog);
