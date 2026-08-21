@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 18,
+  "schemaVersion": 19,
   "scenarioId": "depot-yard",
   "displayName": "Depot Yard",
   "levelId": "main-depot-yard-v1",
@@ -180,6 +180,20 @@
                 { "surfaceId": "surface.concrete", "multiplier": 0.0 }
               ]
             }
+          },
+          "ammunition": {
+            "enabled": true,
+            "ammoTypeId": "ammo.rifle",
+            "magazineCapacity": 6,
+            "initialLoadedRounds": 6,
+            "roundsPerUse": 1,
+            "reloadCost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "consumesRemainingMovement": true,
+            "reloadPolicyVersion": 1
           }
         },
         {
@@ -218,6 +232,20 @@
               "blastWoundMovementPenalty": 2.0,
               "blastIntegrityDamage": 4.0
             }
+          },
+          "ammunition": {
+            "enabled": true,
+            "ammoTypeId": "ammo.rocket",
+            "magazineCapacity": 1,
+            "initialLoadedRounds": 1,
+            "roundsPerUse": 1,
+            "reloadCost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "consumesRemainingMovement": true,
+            "reloadPolicyVersion": 1
           }
         },
         {
@@ -360,6 +388,10 @@
             "contact": { "enabled": true, "maximumReach": 2.0 }
           }
         }
+      ],
+      "ammunitionReserves": [
+        { "ammoTypeId": "ammo.rifle", "rounds": 18 },
+        { "ammoTypeId": "ammo.rocket", "rounds": 2 }
       ]
     },
     {
@@ -504,6 +536,20 @@
                 { "surfaceId": "surface.concrete", "multiplier": 0.0 }
               ]
             }
+          },
+          "ammunition": {
+            "enabled": true,
+            "ammoTypeId": "ammo.rifle",
+            "magazineCapacity": 6,
+            "initialLoadedRounds": 6,
+            "roundsPerUse": 1,
+            "reloadCost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "consumesRemainingMovement": true,
+            "reloadPolicyVersion": 1
           }
         },
         {
@@ -604,6 +650,9 @@
             "contact": { "enabled": true, "maximumReach": 2.0 }
           }
         }
+      ],
+      "ammunitionReserves": [
+        { "ammoTypeId": "ammo.rifle", "rounds": 18 }
       ]
     },
     {
@@ -732,8 +781,25 @@
                 { "surfaceId": "surface.concrete", "multiplier": 0.0 }
               ]
             }
+          },
+          "ammunition": {
+            "enabled": true,
+            "ammoTypeId": "ammo.rifle",
+            "magazineCapacity": 6,
+            "initialLoadedRounds": 6,
+            "roundsPerUse": 1,
+            "reloadCost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "consumesRemainingMovement": true,
+            "reloadPolicyVersion": 1
           }
         }
+      ],
+      "ammunitionReserves": [
+        { "ammoTypeId": "ammo.rifle", "rounds": 18 }
       ]
     },
     {
@@ -772,32 +838,65 @@
           "reinforcementActorIds": []
         }
       },
-      "attackCapability": {
-        "enabled": true,
-        "actionId": "attack.rifle",
-        "displayName": "Fire rifle",
-        "turnCost": {
-          "actionPoints": 1,
-          "movementOpportunity": 0.0,
-          "mobility": "set"
-        },
-        "woundMovementPenalty": 2.0,
-        "soundSignature": 1.0,
-        "directVehicleIntegrityDamage": 1.0,
-        "accuracyDecay": {
-          "halfLifeDistance": 45.0,
-          "minimumAccuracyPercent": 5.0
-        },
-        "directFireDamage": {
-          "damageTypeId": "damage.ballistic.rifle",
-          "baseIntegrityDamage": 2.0,
-          "surfaceModifiers": [
-            { "surfaceId": "surface.wood", "multiplier": 2.0 },
-            { "surfaceId": "surface.metal", "multiplier": 1.0 },
-            { "surfaceId": "surface.concrete", "multiplier": 0.0 }
-          ]
+      "initiallyEquippedItemId": "weapon.rifle",
+      "inventory": [
+        {
+          "id": "weapon.rifle",
+          "displayName": "Rifle",
+          "hotbarSlot": 1,
+          "kind": "weapon",
+          "occupiedHands": 2,
+          "equipmentCost": {
+            "actionPoints": 1,
+            "movementOpportunity": 0.0,
+            "mobility": "set"
+          },
+          "equippedEffects": { "movementSpeedMultiplier": 0.9 },
+          "attackCapability": {
+            "enabled": true,
+            "actionId": "attack.rifle",
+            "displayName": "Fire rifle",
+            "turnCost": {
+              "actionPoints": 1,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "woundMovementPenalty": 2.0,
+            "soundSignature": 1.0,
+            "directVehicleIntegrityDamage": 1.0,
+            "accuracyDecay": {
+              "halfLifeDistance": 45.0,
+              "minimumAccuracyPercent": 5.0
+            },
+            "directFireDamage": {
+              "damageTypeId": "damage.ballistic.rifle",
+              "baseIntegrityDamage": 2.0,
+              "surfaceModifiers": [
+                { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+              ]
+            }
+          },
+          "ammunition": {
+            "enabled": true,
+            "ammoTypeId": "ammo.rifle",
+            "magazineCapacity": 6,
+            "initialLoadedRounds": 6,
+            "roundsPerUse": 1,
+            "reloadCost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "consumesRemainingMovement": true,
+            "reloadPolicyVersion": 1
+          }
         }
-      },
+      ],
+      "ammunitionReserves": [
+        { "ammoTypeId": "ammo.rifle", "rounds": 18 }
+      ],
       "characterProfile": {
         "identityId": "character.depot-yard-support",
         "displayName": "Yard Support",
@@ -860,25 +959,65 @@
           "reinforcementActorIds": ["depot-loading-guard"]
         }
       },
-      "attackCapability": {
-        "enabled": true,
-        "actionId": "attack.rifle",
-        "displayName": "Fire rifle",
-        "turnCost": { "actionPoints": 1, "movementOpportunity": 0.0, "mobility": "set" },
-        "woundMovementPenalty": 2.0,
-        "soundSignature": 1.0,
-        "directVehicleIntegrityDamage": 1.0,
-        "accuracyDecay": { "halfLifeDistance": 42.0, "minimumAccuracyPercent": 5.0 },
-        "directFireDamage": {
-          "damageTypeId": "damage.ballistic.rifle",
-          "baseIntegrityDamage": 2.0,
-          "surfaceModifiers": [
-            { "surfaceId": "surface.wood", "multiplier": 2.0 },
-            { "surfaceId": "surface.metal", "multiplier": 1.0 },
-            { "surfaceId": "surface.concrete", "multiplier": 0.0 }
-          ]
+      "initiallyEquippedItemId": "weapon.rifle",
+      "inventory": [
+        {
+          "id": "weapon.rifle",
+          "displayName": "Rifle",
+          "hotbarSlot": 1,
+          "kind": "weapon",
+          "occupiedHands": 2,
+          "equipmentCost": {
+            "actionPoints": 1,
+            "movementOpportunity": 0.0,
+            "mobility": "set"
+          },
+          "equippedEffects": { "movementSpeedMultiplier": 0.9 },
+          "attackCapability": {
+            "enabled": true,
+            "actionId": "attack.rifle",
+            "displayName": "Fire rifle",
+            "turnCost": {
+              "actionPoints": 1,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "woundMovementPenalty": 2.0,
+            "soundSignature": 1.0,
+            "directVehicleIntegrityDamage": 1.0,
+            "accuracyDecay": {
+              "halfLifeDistance": 42.0,
+              "minimumAccuracyPercent": 5.0
+            },
+            "directFireDamage": {
+              "damageTypeId": "damage.ballistic.rifle",
+              "baseIntegrityDamage": 2.0,
+              "surfaceModifiers": [
+                { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+              ]
+            }
+          },
+          "ammunition": {
+            "enabled": true,
+            "ammoTypeId": "ammo.rifle",
+            "magazineCapacity": 6,
+            "initialLoadedRounds": 6,
+            "roundsPerUse": 1,
+            "reloadCost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "consumesRemainingMovement": true,
+            "reloadPolicyVersion": 1
+          }
         }
-      },
+      ],
+      "ammunitionReserves": [
+        { "ammoTypeId": "ammo.rifle", "rounds": 18 }
+      ],
       "characterProfile": {
         "identityId": "character.depot-warehouse-patrol",
         "displayName": "Warehouse Patrol",
@@ -932,25 +1071,65 @@
           "reinforcementActorIds": []
         }
       },
-      "attackCapability": {
-        "enabled": true,
-        "actionId": "attack.rifle",
-        "displayName": "Fire rifle",
-        "turnCost": { "actionPoints": 1, "movementOpportunity": 0.0, "mobility": "set" },
-        "woundMovementPenalty": 2.0,
-        "soundSignature": 1.0,
-        "directVehicleIntegrityDamage": 1.0,
-        "accuracyDecay": { "halfLifeDistance": 48.0, "minimumAccuracyPercent": 5.0 },
-        "directFireDamage": {
-          "damageTypeId": "damage.ballistic.rifle",
-          "baseIntegrityDamage": 2.0,
-          "surfaceModifiers": [
-            { "surfaceId": "surface.wood", "multiplier": 2.0 },
-            { "surfaceId": "surface.metal", "multiplier": 1.0 },
-            { "surfaceId": "surface.concrete", "multiplier": 0.0 }
-          ]
+      "initiallyEquippedItemId": "weapon.rifle",
+      "inventory": [
+        {
+          "id": "weapon.rifle",
+          "displayName": "Rifle",
+          "hotbarSlot": 1,
+          "kind": "weapon",
+          "occupiedHands": 2,
+          "equipmentCost": {
+            "actionPoints": 1,
+            "movementOpportunity": 0.0,
+            "mobility": "set"
+          },
+          "equippedEffects": { "movementSpeedMultiplier": 0.9 },
+          "attackCapability": {
+            "enabled": true,
+            "actionId": "attack.rifle",
+            "displayName": "Fire rifle",
+            "turnCost": {
+              "actionPoints": 1,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "woundMovementPenalty": 2.0,
+            "soundSignature": 1.0,
+            "directVehicleIntegrityDamage": 1.0,
+            "accuracyDecay": {
+              "halfLifeDistance": 48.0,
+              "minimumAccuracyPercent": 5.0
+            },
+            "directFireDamage": {
+              "damageTypeId": "damage.ballistic.rifle",
+              "baseIntegrityDamage": 2.0,
+              "surfaceModifiers": [
+                { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+              ]
+            }
+          },
+          "ammunition": {
+            "enabled": true,
+            "ammoTypeId": "ammo.rifle",
+            "magazineCapacity": 6,
+            "initialLoadedRounds": 6,
+            "roundsPerUse": 1,
+            "reloadCost": {
+              "actionPoints": 2,
+              "movementOpportunity": 0.0,
+              "mobility": "set"
+            },
+            "consumesRemainingMovement": true,
+            "reloadPolicyVersion": 1
+          }
         }
-      },
+      ],
+      "ammunitionReserves": [
+        { "ammoTypeId": "ammo.rifle", "rounds": 18 }
+      ],
       "characterProfile": {
         "identityId": "character.depot-loading-guard",
         "displayName": "Loading Guard",

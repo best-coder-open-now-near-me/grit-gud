@@ -242,6 +242,7 @@ namespace GritGud.Domain.Tests.Gameplay
                 },
                 ammunition = new ScenarioWeaponAmmunitionData
                 {
+                    enabled = true,
                     ammoTypeId = "ammo.rifle",
                     magazineCapacity = 6,
                     initialLoadedRounds = 5,

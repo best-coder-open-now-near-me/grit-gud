@@ -186,6 +186,9 @@ namespace GritGud.Domain.Gameplay
     [Serializable]
     public sealed class ScenarioWeaponAmmunitionData
     {
+        // JsonUtility materializes omitted/null nested objects. This explicit
+        // discriminator keeps ammunition-free items portable across serializers.
+        public bool enabled;
         public string ammoTypeId = string.Empty;
         public int magazineCapacity;
         public int initialLoadedRounds;

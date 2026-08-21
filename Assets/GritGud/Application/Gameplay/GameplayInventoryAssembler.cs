@@ -125,7 +125,7 @@ namespace GritGud.Application.Gameplay
                         $"Actor '{actor.id}' consumable '{item.id}' cannot author a weapon attack.");
                     ValidateConsumablePower(actor.id, item);
                     Require(
-                        item.ammunition == null,
+                        !IsAuthoredAmmunition(item.ammunition),
                         $"Actor '{actor.id}' consumable '{item.id}' cannot author ammunition.");
                 }
             }
@@ -357,7 +357,7 @@ namespace GritGud.Application.Gameplay
         private static WeaponAmmunitionDefinition CreateAmmunitionDefinition(
             ScenarioWeaponAmmunitionData data)
         {
-            if (data == null) return null;
+            if (!IsAuthoredAmmunition(data)) return null;
             ScenarioActionCostData reloadCost = data.reloadCost
                 ?? throw new InvalidOperationException(
                     "Weapon ammunition requires a reload cost.");
@@ -379,7 +379,7 @@ namespace GritGud.Application.Gameplay
             ScenarioInventoryItemData item)
         {
             ScenarioWeaponAmmunitionData ammunition = item.ammunition;
-            if (ammunition == null) return;
+            if (!IsAuthoredAmmunition(ammunition)) return;
             string prefix = $"Actor '{actorId}' weapon '{item.id}' ammunition";
             Require(
                 item.attackCapability.contact == null
@@ -414,7 +414,7 @@ namespace GritGud.Application.Gameplay
         {
             var requiredTypes = new HashSet<string>(StringComparer.Ordinal);
             foreach (ScenarioInventoryItemData item in inventory)
-                if (item?.ammunition != null)
+                if (IsAuthoredAmmunition(item?.ammunition))
                     requiredTypes.Add(item.ammunition.ammoTypeId);
 
             var authoredTypes = new HashSet<string>(StringComparer.Ordinal);
@@ -444,6 +444,10 @@ namespace GritGud.Application.Gameplay
                     authoredTypes.Contains(ammoTypeId),
                     $"Actor '{actor.id}' ammunition type '{ammoTypeId}' requires a reserve.");
         }
+
+        private static bool IsAuthoredAmmunition(
+            ScenarioWeaponAmmunitionData ammunition) =>
+            ammunition != null && ammunition.enabled;
 
         private static void ValidateFireField(
             string actorId,

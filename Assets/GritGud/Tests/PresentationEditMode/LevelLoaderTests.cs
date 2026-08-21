@@ -174,6 +174,67 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void MainLevelAuthorsCompleteAmmunitionEconomy()
+        {
+            GameplayContentPackage content = GameplayContentLoader.LoadDefault();
+            string[] rifleActorIds =
+            {
+                "player",
+                "oren-vale",
+                "depot-rifleman",
+                "depot-yard-support",
+                "depot-warehouse-patrol",
+                "depot-loading-guard",
+            };
+
+            foreach (string actorId in rifleActorIds)
+            {
+                ScenarioActorDefinition actor = content.Assembly
+                    .GetActorDefinition(actorId);
+                InventoryItemDefinition rifle = actor.GetInventoryItem(
+                    "weapon.rifle");
+
+                Assert.That(actor.InitiallyEquippedItemId,
+                    Is.EqualTo("weapon.rifle"), actorId);
+                Assert.That(rifle.Ammunition, Is.Not.Null, actorId);
+                Assert.That(rifle.Ammunition.AmmoTypeId,
+                    Is.EqualTo("ammo.rifle"), actorId);
+                Assert.That(rifle.Ammunition.MagazineCapacity,
+                    Is.EqualTo(6), actorId);
+                Assert.That(rifle.Ammunition.InitialLoadedRounds,
+                    Is.EqualTo(6), actorId);
+                Assert.That(rifle.Ammunition.RoundsPerUse,
+                    Is.EqualTo(1), actorId);
+                Assert.That(rifle.Ammunition.ReloadTurnCost.ActionPoints,
+                    Is.EqualTo(2), actorId);
+                Assert.That(rifle.Ammunition.ReloadTurnCost.Mobility,
+                    Is.EqualTo(ActionMobility.Set), actorId);
+                Assert.That(rifle.Ammunition.ConsumesRemainingMovement,
+                    Is.True, actorId);
+                Assert.That(actor.AmmunitionReserves.Single(reserve =>
+                        reserve.AmmoTypeId == "ammo.rifle").Rounds,
+                    Is.EqualTo(18), actorId);
+            }
+
+            ScenarioActorDefinition player = content.Assembly
+                .GetActorDefinition("player");
+            InventoryItemDefinition launcher = player.GetInventoryItem(
+                "weapon.rocket-launcher");
+            Assert.That(launcher.Ammunition.AmmoTypeId,
+                Is.EqualTo("ammo.rocket"));
+            Assert.That(launcher.Ammunition.MagazineCapacity, Is.EqualTo(1));
+            Assert.That(launcher.Ammunition.InitialLoadedRounds, Is.EqualTo(1));
+            Assert.That(player.AmmunitionReserves.Single(reserve =>
+                    reserve.AmmoTypeId == "ammo.rocket").Rounds,
+                Is.EqualTo(2));
+
+            foreach (string actorId in new[] { "player", "oren-vale" })
+                Assert.That(content.Assembly.GetActorDefinition(actorId)
+                    .GetInventoryItem("weapon.combat-knife").Ammunition,
+                    Is.Null, actorId);
+        }
+
+        [Test]
         public void SandboxPackageUsesDetachedLevelAndOnlyTheSelectedPlayerActor()
         {
             TextAsset asset = Resources.Load<TextAsset>("Levels/basic-construction");
