@@ -22,6 +22,8 @@ namespace GritGud.Presentation.Tests
             GameplayInputController inputController = runtime.InputController;
             GameplayHud hud = runtime.Hud;
             GameplayPartyHud partyHud = runtime.PartyHud;
+            GameplayTurnReplayHud replayHud = runtime.Bootstrap
+                .GetComponent<GameplayTurnReplayHud>();
             GameplayDialogueDrawer dialogueDrawer = runtime.DialogueDrawer;
             GameplaySessionPresenter sessionPresenter = runtime.SessionPresenter;
             TurnMovementController turnMovement = runtime.TurnMovement;
@@ -36,6 +38,14 @@ namespace GritGud.Presentation.Tests
                 Is.EqualTo(ApplicationMode.Gameplay));
             Assert.That(gameplay, Is.Not.Null);
             Assert.That(gameplay.IsRunning, Is.True);
+            Assert.That(gameplay.IsSimulationViewer, Is.False);
+            Assert.That(
+                runtime.Bootstrap.GetComponent<GameplayBattleReplayController>()
+                    .enabled,
+                Is.False);
+            Assert.That(
+                replayHud.Source,
+                Is.EqualTo(GameplayReplaySource.LiveEncounter));
             Assert.That(RenderSettings.fog, Is.True);
             Assert.That(GameObject.Find("Gameplay Environment Lighting"), Is.Not.Null);
             Assert.That(GameObject.Find("Gameplay Post Processing"), Is.Not.Null);
@@ -134,6 +144,14 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 gameplay.Session.GetActor("player").Pose.Stance,
                 Is.EqualTo(ActorStance.Standing));
+            Assert.That(replayHud.LiveTransitionCount, Is.GreaterThan(0));
+            Assert.That(
+                gameplay.Session.Mode,
+                Is.EqualTo(GameplaySessionMode.Exploration));
+            Assert.That(
+                replayHud.IsAvailable,
+                Is.False,
+                "Exploration events must not surface as a combat replay.");
             Assert.That(runtime.Projectiles, Is.Not.Null);
             Assert.That(actions.TurnModeExitConstraintCount, Is.EqualTo(1));
             Assert.That(objectivePresenter, Is.Not.Null);
@@ -234,6 +252,46 @@ namespace GritGud.Presentation.Tests
             Assert.That(objective.IsCompleted, Is.False);
             Assert.That(hud.Session, Is.SameAs(gameplay.Session));
             Assert.That(runtime.Editor == null || !runtime.Editor.enabled, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator WatchSimsLaunchesAnExclusiveSimulationViewer()
+        {
+            using var runtime = new GameplayRuntimeTestHarness();
+            yield return runtime.StartSimulation();
+
+            GameplayController gameplay = runtime.Gameplay;
+            GameplayBattleReplayController battleReplay = runtime.Bootstrap
+                .GetComponent<GameplayBattleReplayController>();
+            GameplayTurnReplayHud replayHud = runtime.Bootstrap
+                .GetComponent<GameplayTurnReplayHud>();
+
+            Assert.That(
+                runtime.Bootstrap.CurrentMode,
+                Is.EqualTo(ApplicationMode.SimulationViewer));
+            Assert.That(gameplay.IsRunning, Is.True);
+            Assert.That(gameplay.IsSimulationViewer, Is.True);
+            Assert.That(battleReplay.enabled, Is.True);
+            Assert.That(
+                replayHud.Source,
+                Is.EqualTo(GameplayReplaySource.VerifiedSimulation));
+            Assert.That(replayHud.IsAvailable, Is.False);
+            Assert.That(runtime.InputController.CameraOnly, Is.True);
+            Assert.That(runtime.Hud.IsVisible, Is.False);
+            Assert.That(runtime.PartyHud.IsPresentationSuppressed, Is.True);
+
+            runtime.Bootstrap.PlayMainLevel();
+            Assert.That(
+                runtime.Bootstrap.CurrentMode,
+                Is.EqualTo(ApplicationMode.SimulationViewer));
+
+            runtime.Bootstrap.ReturnToMenu();
+            Assert.That(
+                runtime.Bootstrap.CurrentMode,
+                Is.EqualTo(ApplicationMode.Menu));
+            Assert.That(gameplay.IsRunning, Is.False);
+            Assert.That(battleReplay.enabled, Is.False);
+            Assert.That(runtime.InputController.CameraOnly, Is.False);
         }
     }
 }

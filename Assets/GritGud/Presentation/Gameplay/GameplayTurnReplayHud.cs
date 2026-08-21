@@ -4,6 +4,12 @@ using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
 {
+    public enum GameplayReplaySource
+    {
+        LiveEncounter,
+        VerifiedSimulation,
+    }
+
     [DisallowMultipleComponent]
     public sealed class GameplayTurnReplayHud : MonoBehaviour
     {
@@ -22,6 +28,7 @@ namespace GritGud.Presentation.Gameplay
         private GameplayBattleScoreboard externalScoreboard;
         private bool isOpen;
         private bool isPlaying;
+        private GameplayReplaySource source;
         private float playhead;
         private float speed = 1f;
         private GUIStyle titleStyle;
@@ -38,12 +45,19 @@ namespace GritGud.Presentation.Gameplay
 
         internal bool IsPlaying => isPlaying;
 
+        internal GameplayReplaySource Source => source;
+
+        internal int LiveTransitionCount => runtime?.Trajectory.Count ?? 0;
+
         internal event Action<bool> OpenChanged;
 
         internal event Action<float> PlayheadChanged;
 
         public bool IsAvailable => runtime != null
-            && (externalReplay != null || runtime.Trajectory.Count > 0);
+            && (externalReplay != null
+                || (source == GameplayReplaySource.LiveEncounter
+                    && gameplay?.Mode == GameplaySessionMode.TurnBased
+                    && runtime.Trajectory.Count > 0));
 
         internal string ActionLabel => externalReplay == null
             ? "REPLAY"
@@ -51,13 +65,15 @@ namespace GritGud.Presentation.Gameplay
 
         public void Bind(
             GameplaySession session,
-            GameplayLiveSessionRuntime liveRuntime)
+            GameplayLiveSessionRuntime liveRuntime,
+            GameplayReplaySource replaySource)
         {
             Unbind();
             gameplay = session ?? throw new ArgumentNullException(
                 nameof(session));
             runtime = liveRuntime ?? throw new ArgumentNullException(
                 nameof(liveRuntime));
+            source = replaySource;
             enabled = true;
         }
 
@@ -73,6 +89,7 @@ namespace GritGud.Presentation.Gameplay
             externalScoreboard = null;
             isOpen = false;
             isPlaying = false;
+            source = default;
             playhead = 0f;
             enabled = false;
         }
@@ -124,6 +141,13 @@ namespace GritGud.Presentation.Gameplay
                 : 0f;
             OpenChanged?.Invoke(true);
             PlayheadChanged?.Invoke(playhead);
+        }
+
+        internal void OpenVerifiedExternalReplay()
+        {
+            if (externalReplay == null || isOpen)
+                return;
+            Toggle();
         }
 
         internal bool ContainsInteractiveScreenPoint(Vector2 screenPoint)

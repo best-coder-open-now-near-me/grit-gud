@@ -17,6 +17,7 @@ namespace GritGud.Presentation.Bootstrap
     {
         Menu,
         Gameplay,
+        SimulationViewer,
         LevelEditor,
         CharacterEditor,
     }
@@ -83,7 +84,7 @@ namespace GritGud.Presentation.Bootstrap
                     () => supabase?.Status),
                 new GameBootstrapCloudDraftNavigationHost(
                     () => gameplayStartRoutine == null
-                        && CurrentMode != ApplicationMode.Gameplay,
+                        && !IsGameplaySessionActive,
                     () => CurrentMode == ApplicationMode.Menu,
                     BeginCloudDraftGameplay,
                     BeginCloudDraftEditor));
@@ -156,7 +157,7 @@ namespace GritGud.Presentation.Bootstrap
 
         public void PlayCommittedLevel(string resourceKey)
         {
-            if (gameplayStartRoutine != null || CurrentMode == ApplicationMode.Gameplay)
+            if (gameplayStartRoutine != null || IsGameplaySessionActive)
             {
                 return;
             }
@@ -166,6 +167,25 @@ namespace GritGud.Presentation.Bootstrap
             EnsureCommittedLevels();
             LevelDocument level = committedLevels.OpenForPlay(resourceKey);
             gameplayStartRoutine = StartCoroutine(BeginGameplayOnNextFrame(level));
+        }
+
+        public void WatchFirstSimulation()
+        {
+            if (gameplayStartRoutine != null || IsGameplaySessionActive)
+            {
+                return;
+            }
+
+            CancelCloudNavigation();
+            ActiveCloudDraft = null;
+            CommittedLevelEntry entry = RequireDefaultCommittedLevel(
+                requirePlayable: true);
+            LevelDocument level = committedLevels.OpenForPlay(
+                entry.ResourceKey);
+            gameplayStartRoutine = StartCoroutine(
+                BeginGameplayOnNextFrame(
+                    level,
+                    simulationViewer: true));
         }
 
         public Task PlayCloudDraftAsync(
@@ -208,7 +228,7 @@ namespace GritGud.Presentation.Bootstrap
         }
         public void PlayEditorTest(LevelDocument snapshot)
         {
-            if (snapshot == null || gameplayStartRoutine != null || CurrentMode == ApplicationMode.Gameplay)
+            if (snapshot == null || gameplayStartRoutine != null || IsGameplaySessionActive)
             {
                 return;
             }
@@ -216,7 +236,10 @@ namespace GritGud.Presentation.Bootstrap
             gameplayStartRoutine = StartCoroutine(BeginEditorTestOnNextFrame(snapshot.DeepCopy()));
         }
 
-        private IEnumerator BeginGameplayOnNextFrame(LevelDocument level, bool sandbox = false)
+        private IEnumerator BeginGameplayOnNextFrame(
+            LevelDocument level,
+            bool sandbox = false,
+            bool simulationViewer = false)
         {
             EnsureStartMenu();
             editorTestActive = false;
@@ -235,9 +258,15 @@ namespace GritGud.Presentation.Bootstrap
 
             try
             {
-                if (sandbox) gameplay.BeginSandbox(level);
-                else gameplay.BeginCommitted(level);
-                CurrentMode = ApplicationMode.Gameplay;
+                if (simulationViewer)
+                    gameplay.BeginSimulation(level);
+                else if (sandbox)
+                    gameplay.BeginSandbox(level);
+                else
+                    gameplay.BeginCommitted(level);
+                CurrentMode = simulationViewer
+                    ? ApplicationMode.SimulationViewer
+                    : ApplicationMode.Gameplay;
             }
             catch
             {
@@ -318,6 +347,17 @@ namespace GritGud.Presentation.Bootstrap
 
         private void OnGUI()
         {
+            if (CurrentMode == ApplicationMode.SimulationViewer)
+            {
+                if (GUI.Button(
+                    new Rect(Screen.width - 180f, 18f, 162f, 36f),
+                    "RETURN TO MENU"))
+                {
+                    ReturnToMenu();
+                }
+                return;
+            }
+
             if (!editorTestActive || CurrentMode != ApplicationMode.Gameplay)
             {
                 return;
@@ -414,6 +454,10 @@ namespace GritGud.Presentation.Bootstrap
         }
 
         private void CancelCloudNavigation() => cloudNavigation?.Cancel();
+
+        private bool IsGameplaySessionActive =>
+            CurrentMode == ApplicationMode.Gameplay
+            || CurrentMode == ApplicationMode.SimulationViewer;
 
         private void EnsureStartMenu()
         {

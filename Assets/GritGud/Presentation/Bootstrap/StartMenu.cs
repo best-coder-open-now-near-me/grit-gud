@@ -133,7 +133,7 @@ namespace GritGud.Presentation.Bootstrap
                 new Rect(94f, 278f, 350f, 32f),
                 "LEVEL LIBRARY",
                 subtitleStyle);
-            DrawLevelList(new Rect(92f, 312f, 350f, 166f));
+            DrawLevelList(new Rect(92f, 312f, 350f, 142f));
 
             CommittedLevelEntry selected = FindSelectedLevel();
             LevelDraftSummary selectedDraft = FindSelectedDraft();
@@ -148,12 +148,12 @@ namespace GritGud.Presentation.Bootstrap
                 : selected == null
                 ? "No committed levels were found. You can still create a new level."
                 : selected.LevelId + "\n" + selected.StatusMessage;
-            GUI.Label(new Rect(94f, 486f, 420f, 48f), status, statusStyle);
+            GUI.Label(new Rect(94f, 462f, 420f, 38f), status, statusStyle);
 
             bool previousEnabled = GUI.enabled;
             GUI.enabled = (cloudSelected && selectedDraft != null && draftLibrary?.IsBusy != true)
                 || (!cloudSelected && selected?.CanPlay == true);
-            if (DrawMenuButton(new Rect(92f, 538f, 350f, 44f), "PLAY SELECTED"))
+            if (DrawMenuButton(new Rect(92f, 508f, 350f, 40f), "PLAY SELECTED"))
             {
                 if (cloudSelected)
                     _ = GameBootstrap.Instance.PlayCloudDraftAsync(
@@ -165,7 +165,7 @@ namespace GritGud.Presentation.Bootstrap
 
             GUI.enabled = (cloudSelected && selectedDraft != null && draftLibrary?.IsBusy != true)
                 || (!cloudSelected && selected?.CanEdit == true);
-            if (DrawMenuButton(new Rect(92f, 590f, 350f, 44f), "EDIT SELECTED"))
+            if (DrawMenuButton(new Rect(92f, 554f, 350f, 40f), "EDIT SELECTED"))
             {
                 if (cloudSelected)
                     _ = GameBootstrap.Instance.OpenCloudDraftEditorAsync(
@@ -176,17 +176,22 @@ namespace GritGud.Presentation.Bootstrap
             }
 
             GUI.enabled = previousEnabled;
-            if (DrawMenuButton(new Rect(92f, 642f, 350f, 44f), "NEW LEVEL"))
+            if (DrawMenuButton(new Rect(92f, 600f, 350f, 40f), "WATCH SIMS"))
+            {
+                GameBootstrap.Instance.WatchFirstSimulation();
+            }
+
+            if (DrawMenuButton(new Rect(92f, 646f, 350f, 40f), "NEW LEVEL"))
             {
                 GameBootstrap.Instance.OpenNewLevelEditor();
             }
 
-            if (DrawMenuButton(new Rect(92f, 694f, 350f, 44f), "CHARACTER EDITOR"))
+            if (DrawMenuButton(new Rect(92f, 692f, 350f, 40f), "CHARACTER EDITOR"))
             {
                 GameBootstrap.Instance.OpenCharacterEditor();
             }
 
-            if (DrawMenuButton(new Rect(92f, 746f, 350f, 44f), "QUIT"))
+            if (DrawMenuButton(new Rect(92f, 738f, 350f, 40f), "QUIT"))
             {
                 Quit();
             }

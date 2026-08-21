@@ -46,7 +46,12 @@ namespace GritGud.Presentation.Tests
 
         public LevelEditorController Editor { get; private set; }
 
-        public IEnumerator Start()
+        public IEnumerator Start() => StartSession(watchSimulation: false);
+
+        public IEnumerator StartSimulation() =>
+            StartSession(watchSimulation: true);
+
+        private IEnumerator StartSession(bool watchSimulation)
         {
             Bootstrap = GameBootstrap.Instance;
             if (Bootstrap == null)
@@ -65,7 +70,10 @@ namespace GritGud.Presentation.Tests
                 SceneCamera = ownedCamera.AddComponent<Camera>();
             }
 
-            Bootstrap.PlayMainLevel();
+            if (watchSimulation)
+                Bootstrap.WatchFirstSimulation();
+            else
+                Bootstrap.PlayMainLevel();
             yield return null;
 
             Gameplay = Bootstrap.GetComponent<GameplayController>();

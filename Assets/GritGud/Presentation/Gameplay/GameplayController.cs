@@ -66,6 +66,7 @@ namespace GritGud.Presentation.Gameplay
         private GameplayCombatReactionPresenter combatReactionPresenter;
         private GameplayControlRouter controlRouter;
         private GameplayLiveSessionRuntime liveRuntime;
+        private bool simulationViewer;
 
         public bool IsRunning => levelWorld != null && player != null;
 
@@ -80,6 +81,8 @@ namespace GritGud.Presentation.Gameplay
         internal GameplayScenarioAssembly ScenarioAssembly => scenarioAssembly;
 
         internal GameplayWorldRegistry WorldRegistry => worldRegistry;
+
+        internal bool IsSimulationViewer => simulationViewer;
 
         private void Awake()
         {
@@ -193,24 +196,38 @@ namespace GritGud.Presentation.Gameplay
 
         public void Begin()
         {
-            Begin(GameplayContentLoader.LoadDefault());
+            Begin(GameplayContentLoader.LoadDefault(), asSimulationViewer: false);
         }
 
         public void BeginCommitted(LevelDocument level)
         {
-            Begin(GameplayContentLoader.LoadCommitted(level));
+            Begin(
+                GameplayContentLoader.LoadCommitted(level),
+                asSimulationViewer: false);
         }
 
         public void BeginSandbox(LevelDocument level)
         {
-            Begin(GameplayContentLoader.LoadSandbox(level));
+            Begin(
+                GameplayContentLoader.LoadSandbox(level),
+                asSimulationViewer: false);
         }
 
-        private void Begin(GameplayContentPackage initialContent)
+        public void BeginSimulation(LevelDocument level)
+        {
+            Begin(
+                GameplayContentLoader.LoadCommitted(level),
+                asSimulationViewer: true);
+        }
+
+        private void Begin(
+            GameplayContentPackage initialContent,
+            bool asSimulationViewer)
         {
             EndSession();
             try
             {
+                simulationViewer = asSimulationViewer;
                 EnsureDependencies();
                 RequireBootstrap();
                 enabled = true;
@@ -552,6 +569,7 @@ namespace GritGud.Presentation.Gameplay
                     cameraRig,
                     replayCameraCutPresenter,
                     battleReplayController,
+                    simulationViewer,
                     enemyController,
                     new Behaviour[]
                     {
@@ -569,7 +587,8 @@ namespace GritGud.Presentation.Gameplay
                     hud,
                     inputController,
                     () => controlRouter,
-                    ExportBugReport),
+                    ExportBugReport,
+                    showHud: !simulationViewer),
             };
 
             new GameplayFeatureInstallationPipeline(
@@ -703,6 +722,7 @@ namespace GritGud.Presentation.Gameplay
             scenarioAssembly = null;
             content = null;
             dialogueLog = null;
+            simulationViewer = false;
             enabled = false;
         }
 

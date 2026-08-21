@@ -172,6 +172,7 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplayCameraRig cameraRig;
         private readonly GameplayReplayCameraCutPresenter cameraCuts;
         private readonly GameplayBattleReplayController battleReplay;
+        private readonly bool simulationViewer;
         private readonly IReadOnlyList<Behaviour> liveBehaviours;
         private readonly GameplayEnemyController enemies;
         private readonly Func<GameplayLiveSessionRuntime> resolveRuntime;
@@ -196,6 +197,7 @@ namespace GritGud.Presentation.Gameplay
             GameplayCameraRig gameplayCameraRig,
             GameplayReplayCameraCutPresenter replayCameraCuts,
             GameplayBattleReplayController battleReplayController,
+            bool asSimulationViewer,
             GameplayEnemyController enemyController,
             IEnumerable<Behaviour> behavioursToSuspend,
             Func<GameplayLiveSessionRuntime> resolveRuntime)
@@ -233,6 +235,7 @@ namespace GritGud.Presentation.Gameplay
             battleReplay = battleReplayController
                 ?? throw new ArgumentNullException(
                     nameof(battleReplayController));
+            simulationViewer = asSimulationViewer;
             enemies = enemyController ?? throw new ArgumentNullException(
                 nameof(enemyController));
             liveBehaviours = new List<Behaviour>(behavioursToSuspend
@@ -250,7 +253,12 @@ namespace GritGud.Presentation.Gameplay
             GameplayLiveSessionRuntime runtime = resolveRuntime()
                 ?? throw new InvalidOperationException(
                     "Semantic runtime must install before replay presentation.");
-            replayHud.Bind(session, runtime);
+            replayHud.Bind(
+                session,
+                runtime,
+                simulationViewer
+                    ? GameplayReplaySource.VerifiedSimulation
+                    : GameplayReplaySource.LiveEncounter);
             replayWorld.Bind(
                 worldRegistry,
                 input,
@@ -268,18 +276,28 @@ namespace GritGud.Presentation.Gameplay
                 partyHud,
                 enemies,
                 liveBehaviours);
-            partyHud.Bind(
-                session,
-                partyControl,
-                input,
-                () => replayHud.IsAvailable,
-                replayHud.Toggle,
-                () => replayHud.ActionLabel);
-            battleReplay.Bind(
-                scenario,
-                level,
-                runtime,
-                replayHud);
+            if (simulationViewer)
+            {
+                partyHud.Bind(session, partyControl, input);
+                battleReplay.Bind(
+                    scenario,
+                    level,
+                    runtime,
+                    replayHud,
+                    input,
+                    gameplayHud,
+                    partyHud);
+            }
+            else
+            {
+                partyHud.Bind(
+                    session,
+                    partyControl,
+                    input,
+                    () => replayHud.IsAvailable,
+                    replayHud.Toggle,
+                    () => replayHud.ActionLabel);
+            }
         }
     }
 
@@ -290,12 +308,14 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplayInputController input;
         private readonly Func<GameplayControlRouter> resolveControlRouter;
         private readonly Action<string> exportBugReport;
+        private readonly bool showHud;
 
         public GameplayHudFeatureInstaller(
             GameplayHud hud,
             GameplayInputController input,
             Func<GameplayControlRouter> resolveControlRouter,
-            Action<string> exportBugReport)
+            Action<string> exportBugReport,
+            bool showHud = true)
         {
             this.hud = hud ?? throw new ArgumentNullException(nameof(hud));
             this.input = input ?? throw new ArgumentNullException(nameof(input));
@@ -303,6 +323,7 @@ namespace GritGud.Presentation.Gameplay
                 ?? throw new ArgumentNullException(nameof(resolveControlRouter));
             this.exportBugReport = exportBugReport
                 ?? throw new ArgumentNullException(nameof(exportBugReport));
+            this.showHud = showHud;
         }
 
         public GameplayFeatureStage Stage => GameplayFeatureStage.HudPresentation;
@@ -316,7 +337,10 @@ namespace GritGud.Presentation.Gameplay
             hud.BindTurnModeToggle(() =>
                 controlRouter.Handle(GameplayControl.ToggleTurnMode));
             hud.BindBugReportExport(exportBugReport);
-            hud.Show();
+            if (showHud)
+                hud.Show();
+            else
+                hud.Hide();
         }
     }
 }
