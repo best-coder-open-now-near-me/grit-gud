@@ -330,15 +330,115 @@ namespace GritGud.Presentation.Tests
                         new Vector3(4f, 0f, 0f),
                         0.5f,
                         presentation);
+                Vector3 release =
+                    GameplayThrownExplosiveController.EvaluateThrowPosition(
+                        new Vector3(1f, 1.2f, 2f),
+                        new Vector3(4f, 0f, 0f),
+                        0f,
+                        presentation);
+                Vector3 landing =
+                    GameplayThrownExplosiveController.EvaluateThrowPosition(
+                        new Vector3(1f, 1.2f, 2f),
+                        new Vector3(4f, 0f, 0f),
+                        1f,
+                        presentation);
 
                 Assert.That(midpoint.x, Is.EqualTo(2f));
                 Assert.That(midpoint.y, Is.EqualTo(2f));
+                Assert.That(release,
+                    Is.EqualTo(new Vector3(1f, 1.2f, 2f)));
+                Assert.That(landing,
+                    Is.EqualTo(new Vector3(4f, 0f, 0f)));
             }
             finally
             {
                 UnityEngine.Object.DestroyImmediate(grenadeVisual);
                 UnityEngine.Object.DestroyImmediate(impactVisual);
             }
+        }
+
+        [Test]
+        public void LandingQueryProjectsAtDestinationNotAlongFlightChord()
+        {
+            var nearBlocker = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var destinationSurface = GameObject.CreatePrimitive(
+                PrimitiveType.Cube);
+            try
+            {
+                nearBlocker.name = "Near Flight Chord Blocker";
+                nearBlocker.transform.position = new Vector3(1f, 1f, 0f);
+                nearBlocker.transform.localScale = new Vector3(1f, 3f, 1f);
+                destinationSurface.name = "Destination Surface";
+                destinationSurface.transform.position =
+                    new Vector3(10f, -0.5f, 0f);
+                destinationSurface.transform.localScale =
+                    new Vector3(2f, 1f, 2f);
+                Physics.SyncTransforms();
+                var query = new UnityThrownExplosiveLandingQuery(
+                    () => 42L,
+                    ~0);
+
+                ThrownExplosiveLandingResult result = query.Resolve(
+                    new GameplayPosition(0f, 1.2f, 0f),
+                    new GameplayPosition(10f, 0f, 0f));
+
+                Assert.That(result.LandingPosition.X,
+                    Is.EqualTo(10f).Within(0.001f));
+                Assert.That(result.LandingPosition.Y,
+                    Is.Zero.Within(0.001f));
+                Assert.That(result.LandingPosition.Z,
+                    Is.Zero.Within(0.001f));
+                Assert.That(result.WorldStateRevision, Is.EqualTo(42L));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(nearBlocker);
+                UnityEngine.Object.DestroyImmediate(destinationSurface);
+            }
+        }
+
+        [Test]
+        public void LiveAndReplayFlightShareRecordedReleaseAndLanding()
+        {
+            var definition = new ThrownExplosiveDefinition(
+                "item.grenade",
+                new ActionCost(2, 0f, ActionMobility.Mobile),
+                maximumRange: 10f,
+                standingLaunchHeight: 1.2f,
+                crouchedLaunchHeight: 0.82f,
+                baseUncertaintyRadius: 0.5f,
+                uncertaintyPerMeter: 0.1f,
+                blastRadius: 5f,
+                blastWoundMovementPenalty: 1f);
+            var record = new ThrownExplosiveRecord(
+                1,
+                "player",
+                definition,
+                new GameplayPosition(0f, 0f, 0f),
+                new GameplayPosition(0f, 1.2f, 0f),
+                new GameplayPosition(10f, 0f, 0f),
+                new GameplayPosition(9.5f, 0f, 0f),
+                new GameplayPosition(9.5f, 0f, 0f),
+                1.5f,
+                42,
+                Array.Empty<BlastEffectRecord>(),
+                requestedLanding: new GameplayPosition(18f, 0f, 0f));
+
+            GameplayThrownExplosiveController.GetVisualFlightEndpoints(
+                record,
+                out Vector3 liveRelease,
+                out Vector3 liveLanding);
+            GameplayThrownExplosiveController.GetVisualFlightEndpoints(
+                record,
+                out Vector3 replayRelease,
+                out Vector3 replayLanding);
+
+            Assert.That(liveRelease, Is.EqualTo(replayRelease));
+            Assert.That(liveLanding, Is.EqualTo(replayLanding));
+            Assert.That(liveRelease,
+                Is.EqualTo(new Vector3(0f, 1.2f, 0f)));
+            Assert.That(liveLanding,
+                Is.EqualTo(new Vector3(9.5f, 0f, 0f)));
         }
 
         [Test]

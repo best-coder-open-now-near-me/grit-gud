@@ -8,6 +8,7 @@ namespace GritGud.Presentation.Gameplay
     internal sealed class UnityThrownExplosiveLandingQuery :
         IThrownExplosiveLandingQuery
     {
+        private const float SurfaceProbeHalfHeight = 8f;
         private readonly Func<long> worldStateRevision;
         private readonly int layerMask;
 
@@ -24,15 +25,30 @@ namespace GritGud.Presentation.Gameplay
             GameplayPosition launchOrigin,
             GameplayPosition sampledLanding)
         {
-            Vector3 start = ToVector3(launchOrigin);
             Vector3 requested = ToVector3(sampledLanding);
-            Vector3 direction = requested - start;
             Vector3 landing = requested;
-            if (direction.sqrMagnitude > 0.0001f
-                && Physics.Raycast(
-                    start, direction.normalized, out RaycastHit landingHit,
-                    direction.magnitude, layerMask, QueryTriggerInteraction.Ignore))
-                landing = landingHit.point;
+            Vector3 probeOrigin = requested
+                + (Vector3.up * SurfaceProbeHalfHeight);
+            RaycastHit[] surfaceHits = Physics.RaycastAll(
+                probeOrigin,
+                Vector3.down,
+                SurfaceProbeHalfHeight * 2f,
+                layerMask,
+                QueryTriggerInteraction.Ignore);
+            float closestHeightDelta = float.PositiveInfinity;
+            for (int index = 0; index < surfaceHits.Length; index++)
+            {
+                float heightDelta = Mathf.Abs(
+                    surfaceHits[index].point.y - requested.y);
+                bool sameHeight = Mathf.Abs(
+                    heightDelta - closestHeightDelta) <= 0.0001f;
+                if (heightDelta > closestHeightDelta
+                    || (sameHeight
+                        && surfaceHits[index].point.y <= landing.y))
+                    continue;
+                closestHeightDelta = heightDelta;
+                landing = surfaceHits[index].point;
+            }
 
             return new ThrownExplosiveLandingResult(
                 ToGameplayPosition(landing),

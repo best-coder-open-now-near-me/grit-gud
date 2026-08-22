@@ -112,9 +112,6 @@ namespace GritGud.Application.Gameplay
                 return Fail(
                     ThrownExplosiveFailure.InsufficientCapability,
                     out failure);
-            if (actor.Pose.Position.DistanceTo(intendedLanding)
-                > definition.MaximumRange + 0.0001f)
-                return Fail(ThrownExplosiveFailure.OutOfRange, out failure);
             if (!actor.Inventory.TryGetQuantity(
                     definition.Id,
                     out int previousQuantity)
@@ -122,7 +119,12 @@ namespace GritGud.Application.Gameplay
                 return Fail(ThrownExplosiveFailure.Depleted, out failure);
 
             long sequence = checked(session.LastActionSequence + 1L);
-            float distance = actor.Pose.Position.DistanceTo(intendedLanding);
+            ThrownExplosiveRangeProjection range =
+                ThrownExplosiveRangeRules.Project(
+                    actor.Pose.Position,
+                    intendedLanding,
+                    definition.MaximumRange);
+            float distance = range.IntendedDistance;
             float uncertaintyRadius = definition.GetUncertaintyRadius(distance);
             var randomIdentity = new GameplayTransitionIdentity(
                 sequence,
@@ -130,12 +132,12 @@ namespace GritGud.Application.Gameplay
                 actorId,
                 definition.Id);
             GameplayPosition sampled = uncertainty.Sample(
-                intendedLanding,
+                range.IntendedLanding,
                 uncertaintyRadius,
                 session.RunIdentity,
                 randomIdentity,
                 "landing-error");
-            if (sampled.DistanceTo(intendedLanding)
+            if (sampled.DistanceTo(range.IntendedLanding)
                 > uncertaintyRadius + 0.0001f)
                 throw new InvalidOperationException(
                     "Explosive uncertainty escaped its frozen preview radius.");
@@ -207,7 +209,7 @@ namespace GritGud.Application.Gameplay
                 definition,
                 actor.Pose.Position,
                 launchOrigin,
-                intendedLanding,
+                range.IntendedLanding,
                 sampled,
                 landingResult.LandingPosition,
                 uncertaintyRadius,
@@ -215,7 +217,8 @@ namespace GritGud.Application.Gameplay
                 blastResult.Effects,
                 smokeField,
                 fireField,
-                concussive);
+                concussive,
+                requestedLanding: intendedLanding);
             var quantity = new InventoryQuantityChangeRecord(
                 actorId,
                 definition.Id,

@@ -22,7 +22,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplaySessionStateSnapshot
     {
-        public const int CurrentSchemaVersion = 11;
+        public const int CurrentSchemaVersion = 12;
 
         public GameplaySessionStateSnapshot(
             string scenarioId,
@@ -207,7 +207,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplayCombatStateSnapshot
     {
-        public const int CurrentSchemaVersion = 11;
+        public const int CurrentSchemaVersion = 12;
 
         public GameplayCombatStateSnapshot(
             GameplaySessionStateSnapshot session,

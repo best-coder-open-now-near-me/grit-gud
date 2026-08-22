@@ -62,16 +62,35 @@ namespace GritGud.Application.Gameplay
             ThrownExplosiveDefinition definition,
             GameplayPosition intendedLanding,
             out float uncertaintyRadius,
+            out ThrownExplosiveFailure failure) => TryPreview(
+                actorId,
+                definition,
+                intendedLanding,
+                out _,
+                out uncertaintyRadius,
+                out failure);
+
+        public bool TryPreview(
+            string actorId,
+            ThrownExplosiveDefinition definition,
+            GameplayPosition requestedLanding,
+            out ThrownExplosiveRangeProjection range,
+            out float uncertaintyRadius,
             out ThrownExplosiveFailure failure)
         {
             if (definition == null) throw new ArgumentNullException(nameof(definition));
+            range = null;
             uncertaintyRadius = 0f;
             if (!TryValidatePreview(
-                    actorId, definition, intendedLanding,
+                    actorId, definition,
                     out GameplayActorSnapshot actor, out failure))
                 return false;
+            range = ThrownExplosiveRangeRules.Project(
+                actor.Pose.Position,
+                requestedLanding,
+                definition.MaximumRange);
             uncertaintyRadius = definition.GetUncertaintyRadius(
-                actor.Pose.Position.DistanceTo(intendedLanding));
+                range.IntendedDistance);
             return true;
         }
 
@@ -112,7 +131,6 @@ namespace GritGud.Application.Gameplay
             if (!TryValidateAction(
                     actorId,
                     definition,
-                    intendedLanding,
                     startsEncounter: false,
                     out GameplayActorSnapshot actor,
                     out failure))
@@ -120,7 +138,12 @@ namespace GritGud.Application.Gameplay
                 return false;
             }
 
-            float distance = actor.Pose.Position.DistanceTo(intendedLanding);
+            ThrownExplosiveRangeProjection range =
+                ThrownExplosiveRangeRules.Project(
+                    actor.Pose.Position,
+                    intendedLanding,
+                    definition.MaximumRange);
+            float distance = range.IntendedDistance;
             float radius = definition.GetUncertaintyRadius(distance);
             var transition = new GameplayTransitionIdentity(
                 gameplay.NextActionSequence,
@@ -128,12 +151,13 @@ namespace GritGud.Application.Gameplay
                 actorId,
                 definition.Id);
             GameplayPosition sampled = uncertainty.Sample(
-                intendedLanding,
+                range.IntendedLanding,
                 radius,
                 gameplay.RunIdentity,
                 transition,
                 "landing-error");
-            if (sampled.DistanceTo(intendedLanding) > radius + 0.0001f)
+            if (sampled.DistanceTo(range.IntendedLanding)
+                > radius + 0.0001f)
                 throw new InvalidOperationException(
                     "Uncertainty samplers must return a point inside the previewed region.");
             GameplayPosition launchOrigin = definition.GetLaunchOrigin(actor.Pose);
@@ -174,12 +198,13 @@ namespace GritGud.Application.Gameplay
                     definition.BlastActionPointReduction);
             prepared = new ThrownExplosiveRecord(
                 sequence, actorId, definition, actor.Pose.Position,
-                launchOrigin, intendedLanding, sampled,
+                launchOrigin, range.IntendedLanding, sampled,
                 landingResult.LandingPosition, radius,
                 blastResult.WorldStateRevision, blastResult.Effects,
                 smokeField,
                 fireField,
-                concussiveEffects);
+                concussiveEffects,
+                requestedLanding: intendedLanding);
             failure = ThrownExplosiveFailure.None;
             return true;
         }
@@ -232,7 +257,6 @@ namespace GritGud.Application.Gameplay
             if (!TryValidateAction(
                     prepared.ThrowerId,
                     prepared.Definition,
-                    prepared.IntendedLanding,
                     startsEncounter,
                     out GameplayActorSnapshot actor,
                     out failure))
@@ -265,7 +289,8 @@ namespace GritGud.Application.Gameplay
                 prepared.BlastEffects,
                 prepared.SmokeField,
                 prepared.FireField,
-                committedConcussiveEffects);
+                committedConcussiveEffects,
+                prepared.RequestedLanding);
             int previousQuantity = gameplay.GetInventoryQuantity(
                 prepared.ThrowerId,
                 prepared.Definition.Id);
@@ -432,13 +457,11 @@ namespace GritGud.Application.Gameplay
         private bool TryValidatePreview(
             string actorId,
             ThrownExplosiveDefinition definition,
-            GameplayPosition intendedLanding,
             out GameplayActorSnapshot actor,
             out ThrownExplosiveFailure failure) =>
             TryValidateAction(
                 actorId,
                 definition,
-                intendedLanding,
                 startsEncounter: false,
                 out actor,
                 out failure);
@@ -446,7 +469,6 @@ namespace GritGud.Application.Gameplay
         private bool TryValidateAction(
             string actorId,
             ThrownExplosiveDefinition definition,
-            GameplayPosition intendedLanding,
             bool startsEncounter,
             out GameplayActorSnapshot actor,
             out ThrownExplosiveFailure failure)
@@ -474,10 +496,8 @@ namespace GritGud.Application.Gameplay
                     ThrownExplosiveFailure.InsufficientCapability,
                     out failure);
 
-            return TryValidateRangeAndCost(
-                definition,
+            return TryValidateCost(
                 GetActionCost(definition, startsEncounter),
-                intendedLanding,
                 actor,
                 out failure);
         }
@@ -503,16 +523,11 @@ namespace GritGud.Application.Gameplay
             }
         }
 
-        private static bool TryValidateRangeAndCost(
-            ThrownExplosiveDefinition definition,
+        private static bool TryValidateCost(
             ActionCost cost,
-            GameplayPosition intendedLanding,
             GameplayActorSnapshot actor,
             out ThrownExplosiveFailure failure)
         {
-            float distance = actor.Pose.Position.DistanceTo(intendedLanding);
-            if (distance > definition.MaximumRange)
-                return Fail(ThrownExplosiveFailure.OutOfRange, out failure);
             if (actor.TurnBudget.ActionPoints < cost.ActionPoints)
                 return Fail(ThrownExplosiveFailure.InsufficientActionPoints, out failure);
             if (actor.TurnBudget.MovementOpportunity < cost.MovementOpportunity)

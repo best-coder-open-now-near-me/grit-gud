@@ -48,6 +48,11 @@ namespace GritGud.Presentation.Gameplay
         public ThrownExplosiveFailure LastFailure { get; private set; }
         public ThrownExplosiveRecord LastThrow { get; private set; }
         public string StatusMessage { get; private set; } = string.Empty;
+        public Vector3? LastReleaseSocketPosition { get; private set; }
+        public Vector3? LastVisualReleasePosition { get; private set; }
+        public Vector3? LastVisualFinalPosition { get; private set; }
+        public string LastPresentationDiagnostic { get; private set; }
+            = string.Empty;
         public bool IsAiming => aimedItemId != null;
 
         internal float AimDistance => aimDistance;
@@ -133,6 +138,7 @@ namespace GritGud.Presentation.Gameplay
                 ActorAnimationCoordinator>();
             LastFailure = ThrownExplosiveFailure.None;
             LastThrow = null;
+            ClearPresentationTrace();
             StatusMessage = string.Empty;
         }
 
@@ -159,6 +165,7 @@ namespace GritGud.Presentation.Gameplay
             aimDistance = 0f;
             LastFailure = ThrownExplosiveFailure.None;
             LastThrow = null;
+            ClearPresentationTrace();
             StatusMessage = string.Empty;
             enabled = false;
         }
@@ -269,6 +276,7 @@ namespace GritGud.Presentation.Gameplay
 
             LastFailure = ThrownExplosiveFailure.None;
             LastThrow = ((ThrownExplosiveActionOutcome)action.Outcomes[0]).Record;
+            ClearPresentationTrace();
             float authoritativeTargetFacing =
                 Session.GetActor(actorId).Pose.FacingDegrees;
             ActorTargetFacingActionPhase facingPhase =
@@ -393,6 +401,7 @@ namespace GritGud.Presentation.Gameplay
                     actorId,
                     thrownExplosive,
                     aimPoint,
+                    out ThrownExplosiveRangeProjection range,
                     out float uncertaintyRadius,
                     out ThrownExplosiveFailure failure))
             {
@@ -414,28 +423,29 @@ namespace GritGud.Presentation.Gameplay
                 aimedPresentation
                 ?? presentationCatalog.GetThrownExplosive(aimedItemId);
             EnsureAimPreview(presentation);
-            Vector3 center = ToVector3(aimPoint)
+            Vector3 center = ToVector3(range.IntendedLanding)
                 + Vector3.up * presentation.AimPreviewHeight;
             DrawCircle(uncertaintyCircle, center, uncertaintyRadius);
             DrawCircle(blastCircle, center, thrownExplosive.AreaRadius);
             DrawTrajectory(
                 trajectoryLine,
                 GetPresentationLaunchOrigin(thrownExplosive),
-                ToVector3(aimPoint),
+                ToVector3(range.IntendedLanding),
                 presentation);
             uncertaintyCircle.enabled = true;
             blastCircle.enabled = true;
             trajectoryLine.enabled = true;
             LastFailure = ThrownExplosiveFailure.None;
-            float distance = Session.GetActor(actorId).Pose.Position
-                .DistanceTo(aimPoint);
             acquisition.PresentValidationFeedback(
                 this,
                 targetId: null,
                 targetRoot: null,
                 isValid: true,
-                $"VALID LANDING  {distance:0.#} / "
+                $"VALID LANDING  {range.IntendedDistance:0.#} / "
                     + $"{thrownExplosive.MaximumRange:0.#} M  "
+                    + (range.WasClamped
+                        ? $"CLAMPED FROM {range.RequestedDistance:0.#} M  "
+                        : string.Empty)
                     + "W/S OR UP/DOWN ADJUST");
         }
 
@@ -720,21 +730,21 @@ namespace GritGud.Presentation.Gameplay
             }
             PresentFacing(facingPhase.TargetFacingDegrees);
 
-            Vector3 visualLaunchOrigin;
+            Vector3 releaseSocketPosition;
             if (armedProjectileRoot != null)
             {
                 playbackRoot = armedProjectileRoot;
                 armedProjectileRoot = null;
-                visualLaunchOrigin = playbackRoot.transform.position;
+                releaseSocketPosition = playbackRoot.transform.position;
                 playbackRoot.transform.SetParent(transform, true);
                 playbackRoot.transform.rotation = presentation.VisualRotation;
             }
             else
             {
-                visualLaunchOrigin = ToVector3(record.LaunchOrigin);
+                releaseSocketPosition = ToVector3(record.LaunchOrigin);
                 playbackRoot = Instantiate(
                     presentation.ProjectilePrefab,
-                    visualLaunchOrigin,
+                    releaseSocketPosition,
                     presentation.VisualRotation,
                     transform);
             }
@@ -747,8 +757,13 @@ namespace GritGud.Presentation.Gameplay
             {
                 collider.enabled = false;
             }
-            Vector3 origin = visualLaunchOrigin;
-            Vector3 landing = ToVector3(record.ResolvedLanding);
+            GetVisualFlightEndpoints(
+                record,
+                out Vector3 origin,
+                out Vector3 landing);
+            playbackRoot.transform.position = origin;
+            LastReleaseSocketPosition = releaseSocketPosition;
+            LastVisualReleasePosition = origin;
             float elapsed = 0f;
             while (elapsed < presentation.FlightSeconds && playbackRoot != null)
             {
@@ -767,6 +782,18 @@ namespace GritGud.Presentation.Gameplay
             }
 
             if (playbackRoot == null) yield break;
+            playbackRoot.transform.position = EvaluateThrowPosition(
+                origin,
+                landing,
+                1f,
+                presentation);
+            LastVisualFinalPosition = playbackRoot.transform.position;
+            LastPresentationDiagnostic = FormatPresentationDiagnostic(
+                record,
+                releaseSocketPosition,
+                origin,
+                LastVisualFinalPosition.Value);
+            Debug.Log(LastPresentationDiagnostic, this);
             GameplayObjectLifecycle.Destroy(playbackRoot);
             playbackRoot = null;
             if (presentation.ImpactEffectPrefab != null)
@@ -808,6 +835,7 @@ namespace GritGud.Presentation.Gameplay
                     "Bind thrown-explosive presentation before replay.");
             }
             ClearReplayPresentation();
+            ClearPresentationTrace();
             replayPresenting = true;
         }
 
@@ -856,6 +884,11 @@ namespace GritGud.Presentation.Gameplay
                 GameplayObjectLifecycle.Destroy(replayImpactRoot);
                 replayImpactRoot = null;
                 EnsureReplayFlightProjectile(record, presentation);
+                GetVisualFlightEndpoints(
+                    record,
+                    out Vector3 release,
+                    out Vector3 landing);
+                LastVisualReleasePosition = release;
                 float flightProgress = Mathf.InverseLerp(
                     GameplayThrownExplosivePresentationTiming
                         .ReleaseNormalizedTime,
@@ -864,8 +897,8 @@ namespace GritGud.Presentation.Gameplay
                     progress);
                 replayFlightProjectileRoot.transform.position =
                     EvaluateThrowPosition(
-                        ToVector3(record.LaunchOrigin),
-                        ToVector3(record.ResolvedLanding),
+                        release,
+                        landing,
                         flightProgress,
                         presentation);
                 float flightSeconds = flightProgress
@@ -879,6 +912,12 @@ namespace GritGud.Presentation.Gameplay
 
             GameplayObjectLifecycle.Destroy(replayFlightProjectileRoot);
             replayFlightProjectileRoot = null;
+            GetVisualFlightEndpoints(
+                record,
+                out Vector3 replayRelease,
+                out Vector3 replayLanding);
+            LastVisualReleasePosition = replayRelease;
+            LastVisualFinalPosition = replayLanding;
             EnsureReplayImpact(record, presentation, progress);
         }
 
@@ -939,9 +978,13 @@ namespace GritGud.Presentation.Gameplay
             ThrownExplosivePresentationDefinition presentation)
         {
             if (replayFlightProjectileRoot != null) return;
+            GetVisualFlightEndpoints(
+                record,
+                out Vector3 release,
+                out _);
             replayFlightProjectileRoot = Instantiate(
                 presentation.ProjectilePrefab,
-                ToVector3(record.LaunchOrigin),
+                release,
                 presentation.VisualRotation,
                 transform);
             replayFlightProjectileRoot.name =
@@ -1062,20 +1105,55 @@ namespace GritGud.Presentation.Gameplay
         private static Vector3 ToVector3(GameplayPosition position) =>
             new Vector3(position.X, position.Y, position.Z);
 
+        internal static void GetVisualFlightEndpoints(
+            ThrownExplosiveRecord record,
+            out Vector3 release,
+            out Vector3 landing)
+        {
+            if (record == null) throw new ArgumentNullException(nameof(record));
+            release = ToVector3(record.LaunchOrigin);
+            landing = ToVector3(record.ResolvedLanding);
+        }
+
         private Vector3 GetPresentationLaunchOrigin(
             ThrownExplosiveDefinition definition)
-        {
-            if (armedProjectileRoot != null)
-            {
-                return armedProjectileRoot.transform.position;
-            }
-
-            return ToVector3(definition.GetLaunchOrigin(
+            => ToVector3(definition.GetLaunchOrigin(
                 Session.GetActor(actorId).Pose));
-        }
 
         private static string FormatPosition(GameplayPosition position) =>
             $"({position.X:0.00}, {position.Y:0.00}, {position.Z:0.00})";
+
+        private static string FormatPosition(Vector3 position) =>
+            $"({position.x:0.00}, {position.y:0.00}, {position.z:0.00})";
+
+        private static string FormatPresentationDiagnostic(
+            ThrownExplosiveRecord record,
+            Vector3 releaseSocketPosition,
+            Vector3 visualReleasePosition,
+            Vector3 visualFinalPosition) =>
+            "THROW PRESENTATION - requestedAimPoint="
+            + FormatPosition(record.RequestedLanding)
+            + " actorOrigin=" + FormatPosition(record.Origin)
+            + $" requestedDistance={record.RequestedDistance:0.00}"
+            + $" configuredMaximumRange={record.Definition.MaximumRange:0.00}"
+            + " evaluatedIntendedLanding="
+            + FormatPosition(record.IntendedLanding)
+            + $" evaluatedDistance={record.IntendedDistance:0.00}"
+            + " releaseSocketPosition="
+            + FormatPosition(releaseSocketPosition)
+            + " visualReleasePosition="
+            + FormatPosition(visualReleasePosition)
+            + " visualFinalPosition=" + FormatPosition(visualFinalPosition)
+            + " collisionOrImpactPosition="
+            + FormatPosition(record.ResolvedLanding);
+
+        private void ClearPresentationTrace()
+        {
+            LastReleaseSocketPosition = null;
+            LastVisualReleasePosition = null;
+            LastVisualFinalPosition = null;
+            LastPresentationDiagnostic = string.Empty;
+        }
 
         private bool TryGetAimPoint(out GameplayPosition point)
         {

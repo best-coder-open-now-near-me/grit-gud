@@ -62,10 +62,10 @@ namespace GritGud.Domain.Tests.Gameplay
                 definition,
                 new GameplayPosition(0f, 0f, 0f),
                 new GameplayPosition(0f, 1.2f, 0f),
-                new GameplayPosition(4f, 0f, 0f),
-                new GameplayPosition(4.5f, 0f, 0f),
-                new GameplayPosition(4.25f, 0f, 0f),
-                0.9f,
+                new GameplayPosition(12f, 0f, 0f),
+                new GameplayPosition(12.5f, 0f, 0f),
+                new GameplayPosition(11.5f, 0f, 0f),
+                1.7f,
                 42,
                 new[]
                 {
@@ -82,7 +82,8 @@ namespace GritGud.Domain.Tests.Gameplay
                         2f,
                         0.25f,
                         0.5f),
-                });
+                },
+                requestedLanding: new GameplayPosition(18f, 0f, 0f));
             var action = new GameplayActionRecord(
                 1,
                 new GameplayActionRequest(
@@ -109,6 +110,17 @@ namespace GritGud.Domain.Tests.Gameplay
                     action,
                     out GameplayDiagnosticProjection diagnostic),
                 Is.True);
+            Assert.That(diagnostic.Lines, Has.Some.EqualTo(
+                "THROW RANGE - REQUESTED 18 m - EVALUATED 12 m - IMPACT "
+                + "11.5 m"));
+            Assert.That(diagnostic.Lines, Has.Some.EqualTo(
+                "REQUESTED RANGE - 18 m / 12 m max"));
+            Assert.That(diagnostic.Lines, Has.Some.EqualTo(
+                "EVALUATED RANGE - 12 m - CLAMPED"));
+            Assert.That(diagnostic.Lines, Has.Some.EqualTo(
+                "LAUNCH ORIGIN - (0, 1.2, 0)"));
+            Assert.That(diagnostic.Lines, Has.Some.EqualTo(
+                "COLLISION / IMPACT - (11.5, 0, 0)"));
             Assert.That(diagnostic.Lines, Has.Some.EqualTo(
                 "BLAST enemy - Actor - DISTANCE 1.5 m - OCCLUSION 0.5 "
                 + "x FALLOFF 0.8 = EXPOSURE 0.4 - REGION LeftArm"));

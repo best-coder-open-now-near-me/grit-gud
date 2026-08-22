@@ -64,20 +64,73 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
-        public void OutOfRangeThrowDoesNotSampleOrSpendBudget()
+        public void BeyondMaximumThrowClampsBeforeUncertaintyAndCommits()
         {
             GameplaySession gameplay = CreateGameplay();
             gameplay.BeginEncounter();
-            var sampler = new FixedSampler(new GameplayPosition(0f, 0f, 0f));
+            var sampler = new FixedSampler(new GameplayPosition(10f, 0f, 0f));
             var session = CreateThrownSession(
                 gameplay, new FixedWorldQuery(), sampler);
 
             Assert.That(session.TryThrow(
                 "player", CreateDefinition(), new GameplayPosition(20f, 0f, 0f),
-                out _, out ThrownExplosiveFailure failure), Is.False);
-            Assert.That(failure, Is.EqualTo(ThrownExplosiveFailure.OutOfRange));
-            Assert.That(sampler.CallCount, Is.Zero);
-            Assert.That(gameplay.GetActor("player").TurnBudget.ActionPoints, Is.EqualTo(4));
+                out GameplayActionRecord action,
+                out ThrownExplosiveFailure failure), Is.True);
+
+            ThrownExplosiveRecord record =
+                ((ThrownExplosiveActionOutcome)action.Outcomes[0]).Record;
+            Assert.That(failure, Is.EqualTo(ThrownExplosiveFailure.None));
+            Assert.That(record.RequestedLanding,
+                Is.EqualTo(new GameplayPosition(20f, 0f, 0f)));
+            Assert.That(record.RequestedDistance, Is.EqualTo(20f));
+            Assert.That(record.IntendedLanding,
+                Is.EqualTo(new GameplayPosition(10f, 0f, 0f)));
+            Assert.That(record.IntendedDistance, Is.EqualTo(10f));
+            Assert.That(record.UncertaintyRadius,
+                Is.EqualTo(2f).Within(0.001f));
+            Assert.That(sampler.CallCount, Is.EqualTo(1));
+            Assert.That(gameplay.GetActor("player").TurnBudget.ActionPoints,
+                Is.EqualTo(2));
+        }
+
+        [TestCase(5f, 5f, false)]
+        [TestCase(10f, 10f, false)]
+        [TestCase(18f, 10f, true)]
+        public void RangeProjectionCoversHalfMaximumAndBeyondMaximum(
+            float requestedDistance,
+            float expectedDistance,
+            bool expectedClamp)
+        {
+            ThrownExplosiveRangeProjection range =
+                ThrownExplosiveRangeRules.Project(
+                    new GameplayPosition(0f, 0f, 0f),
+                    new GameplayPosition(requestedDistance, 0f, 0f),
+                    maximumRange: 10f);
+
+            Assert.That(range.RequestedDistance,
+                Is.EqualTo(requestedDistance).Within(0.001f));
+            Assert.That(range.IntendedDistance,
+                Is.EqualTo(expectedDistance).Within(0.001f));
+            Assert.That(range.IntendedLanding.X,
+                Is.EqualTo(expectedDistance).Within(0.001f));
+            Assert.That(range.WasClamped, Is.EqualTo(expectedClamp));
+        }
+
+        [Test]
+        public void BeyondMaximumProjectionPreservesRequestedDirection()
+        {
+            ThrownExplosiveRangeProjection range =
+                ThrownExplosiveRangeRules.Project(
+                    new GameplayPosition(0f, 0f, 0f),
+                    new GameplayPosition(18f, 0f, 24f),
+                    maximumRange: 10f);
+
+            Assert.That(range.IntendedLanding.X,
+                Is.EqualTo(6f).Within(0.001f));
+            Assert.That(range.IntendedLanding.Z,
+                Is.EqualTo(8f).Within(0.001f));
+            Assert.That(range.IntendedDistance,
+                Is.EqualTo(10f).Within(0.001f));
         }
 
         [Test]

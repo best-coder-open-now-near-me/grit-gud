@@ -496,6 +496,23 @@ namespace GritGud.Application.Gameplay
             ThrownExplosiveRecord thrown)
         {
             AppendCost(lines, action);
+            lines.Add("THROW RANGE - REQUESTED "
+                + Format(thrown.RequestedDistance) + " m - EVALUATED "
+                + Format(thrown.IntendedDistance) + " m - IMPACT "
+                + Format(thrown.Origin.DistanceTo(thrown.ResolvedLanding))
+                + " m");
+            lines.Add("REQUESTED AIM - "
+                + FormatPosition(thrown.RequestedLanding));
+            lines.Add("ACTOR ORIGIN - " + FormatPosition(thrown.Origin));
+            lines.Add("REQUESTED RANGE - "
+                + Format(thrown.RequestedDistance) + " m / "
+                + Format(thrown.Definition.MaximumRange) + " m max");
+            lines.Add("EVALUATED RANGE - "
+                + Format(thrown.IntendedDistance) + " m"
+                + (thrown.RequestedDistance
+                        > thrown.Definition.MaximumRange
+                    ? " - CLAMPED"
+                    : string.Empty));
             lines.Add("UNCERTAINTY - "
                 + Format(thrown.UncertaintyRadius) + " m");
             lines.Add("LANDING ERROR - "
@@ -503,7 +520,10 @@ namespace GritGud.Application.Gameplay
                     thrown.SampledLanding)) + " m");
             lines.Add("INTENDED - " + FormatPosition(thrown.IntendedLanding));
             lines.Add("SAMPLED - " + FormatPosition(thrown.SampledLanding));
-            lines.Add("RESOLVED - " + FormatPosition(thrown.ResolvedLanding));
+            lines.Add("LAUNCH ORIGIN - "
+                + FormatPosition(thrown.LaunchOrigin));
+            lines.Add("COLLISION / IMPACT - "
+                + FormatPosition(thrown.ResolvedLanding));
             if (thrown.Definition.SmokeField != null)
             {
                 SmokeFieldDefinition smoke = thrown.Definition.SmokeField;

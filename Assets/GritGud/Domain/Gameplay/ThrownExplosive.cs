@@ -4,6 +4,60 @@ using GritGud.Domain.Turns;
 
 namespace GritGud.Domain.Gameplay
 {
+    public sealed class ThrownExplosiveRangeProjection
+    {
+        internal ThrownExplosiveRangeProjection(
+            GameplayPosition origin,
+            GameplayPosition requestedLanding,
+            GameplayPosition intendedLanding,
+            float maximumRange)
+        {
+            Origin = origin;
+            RequestedLanding = requestedLanding;
+            IntendedLanding = intendedLanding;
+            MaximumRange = maximumRange;
+            RequestedDistance = origin.DistanceTo(requestedLanding);
+            IntendedDistance = origin.DistanceTo(intendedLanding);
+        }
+
+        public GameplayPosition Origin { get; }
+        public GameplayPosition RequestedLanding { get; }
+        public GameplayPosition IntendedLanding { get; }
+        public float MaximumRange { get; }
+        public float RequestedDistance { get; }
+        public float IntendedDistance { get; }
+        public bool WasClamped => RequestedDistance > MaximumRange;
+    }
+
+    public static class ThrownExplosiveRangeRules
+    {
+        public static ThrownExplosiveRangeProjection Project(
+            GameplayPosition origin,
+            GameplayPosition requestedLanding,
+            float maximumRange)
+        {
+            if (float.IsNaN(maximumRange)
+                || float.IsInfinity(maximumRange)
+                || maximumRange <= 0f)
+                throw new ArgumentOutOfRangeException(nameof(maximumRange));
+            float requestedDistance = origin.DistanceTo(requestedLanding);
+            GameplayPosition intended = requestedLanding;
+            if (requestedDistance > maximumRange)
+            {
+                float scale = maximumRange / requestedDistance;
+                intended = new GameplayPosition(
+                    origin.X + ((requestedLanding.X - origin.X) * scale),
+                    origin.Y + ((requestedLanding.Y - origin.Y) * scale),
+                    origin.Z + ((requestedLanding.Z - origin.Z) * scale));
+            }
+            return new ThrownExplosiveRangeProjection(
+                origin,
+                requestedLanding,
+                intended,
+                maximumRange);
+        }
+    }
+
     public sealed class ThrownExplosiveDefinition : ConsumablePowerDefinition
     {
         public const string TypeId = "thrown-explosive";
@@ -125,7 +179,8 @@ namespace GritGud.Domain.Gameplay
             SmokeFieldRecord smokeField = null,
             FireFieldRecord fireField = null,
             IEnumerable<ConcussiveActionPointEffectRecord>
-                concussiveEffects = null)
+                concussiveEffects = null,
+            GameplayPosition? requestedLanding = null)
         {
             if (sequence <= 0) throw new ArgumentOutOfRangeException(nameof(sequence));
             if (string.IsNullOrWhiteSpace(throwerId)) throw new ArgumentException("Throws require an actor.", nameof(throwerId));
@@ -139,6 +194,16 @@ namespace GritGud.Domain.Gameplay
             ThrowerId = throwerId;
             Origin = origin;
             LaunchOrigin = launchOrigin;
+            RequestedLanding = requestedLanding ?? intendedLanding;
+            ThrownExplosiveRangeProjection range =
+                ThrownExplosiveRangeRules.Project(
+                    origin,
+                    RequestedLanding,
+                    Definition.MaximumRange);
+            if (range.IntendedLanding.DistanceTo(intendedLanding) > 0.0001f)
+                throw new ArgumentException(
+                    "Thrown explosive intended landing must be the canonical range projection of its request.",
+                    nameof(intendedLanding));
             IntendedLanding = intendedLanding;
             SampledLanding = sampledLanding;
             ResolvedLanding = resolvedLanding;
@@ -212,6 +277,7 @@ namespace GritGud.Domain.Gameplay
         public ThrownExplosiveDefinition Definition { get; }
         public GameplayPosition Origin { get; }
         public GameplayPosition LaunchOrigin { get; }
+        public GameplayPosition RequestedLanding { get; }
         public GameplayPosition IntendedLanding { get; }
         public GameplayPosition SampledLanding { get; }
         public GameplayPosition ResolvedLanding { get; }
@@ -222,6 +288,9 @@ namespace GritGud.Domain.Gameplay
         public FireFieldRecord FireField { get; }
         public IReadOnlyList<ConcussiveActionPointEffectRecord>
             ConcussiveEffects { get; }
+
+        public float RequestedDistance => Origin.DistanceTo(RequestedLanding);
+        public float IntendedDistance => Origin.DistanceTo(IntendedLanding);
 
         private static void ValidateConcussiveEffects(
             ThrownExplosiveDefinition definition,
