@@ -379,7 +379,7 @@ namespace GritGud.Presentation.Tests
                 Is.EqualTo(GameplayReplaySource.VerifiedSimulation));
             Assert.That(replayHud.IsAvailable, Is.True);
             Assert.That(replayHud.IsOpen, Is.True);
-            Assert.That(replayHud.Replay.Frames.Count, Is.EqualTo(74));
+            Assert.That(replayHud.Replay.Frames.Count, Is.EqualTo(90));
             Assert.That(replayHud.ActionLabel, Is.EqualTo("WATCH BATTLE"));
             Assert.That(replayHud.Playback.TurnGroups.Count, Is.GreaterThan(1));
             Assert.That(replayHud.ContentSummary, Is.Not.Null);

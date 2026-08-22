@@ -616,6 +616,48 @@ internal static class SimulationChecks
                 branch.Steps,
                 reducers).IsExact,
             "Drone disable, fall, impact, and reactions did not replay exactly.");
+        var replay = new GameplaySemanticReplayTimeline(
+            initial,
+            branch.Steps,
+            reducers);
+        GameplaySemanticReplayFrame crashFrame = null;
+        foreach (GameplaySemanticReplayFrame frame in replay.Frames)
+            if (frame.SemanticRecord is DroneCrashImpactRecord)
+            {
+                crashFrame = frame;
+                break;
+            }
+        Require(crashFrame != null,
+            "Drone crash transition was absent from semantic replay.");
+        GameplayPresentationWorldStateSample falling =
+            GameplaySemanticReplaySampler.Sample(crashFrame, 0.5f);
+        SummonedDroneSnapshot fallingDrone = default;
+        foreach (SummonedDroneSnapshot candidate in falling.Drones)
+            if (candidate.DroneId == target.DroneId)
+            {
+                fallingDrone = candidate;
+                break;
+            }
+        bool hasImpactEvent = false;
+        int replayReactions = 0;
+        foreach (ReplayCombatPresentationEvent presentationEvent in
+            ReplayCombatPresentationEventProjector.Project(crashFrame))
+        {
+            hasImpactEvent |= presentationEvent.Kind ==
+                ReplayCombatPresentationEventKind.DroneCrashImpact;
+            if (presentationEvent.Kind ==
+                ReplayCombatPresentationEventKind.Reaction)
+                replayReactions++;
+        }
+        int injuredActors = 0;
+        foreach (BlastEffectRecord effect in impact.Effects)
+            if (effect.IsLocalizedActorInjury) injuredActors++;
+        Require(fallingDrone.Lifecycle == SummonLifecycleState.Crashing
+            && fallingDrone.Position.DistanceTo(impact.Origin) > 0f
+            && fallingDrone.Position.DistanceTo(impact.ImpactPosition) > 0f
+            && hasImpactEvent
+            && replayReactions == injuredActors,
+            "Replay did not present the frozen fall, impact, and localized reactions.");
     }
 
     private static GameplayCandidate FindFirstCandidate(
