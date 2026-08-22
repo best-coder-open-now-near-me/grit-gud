@@ -80,6 +80,24 @@ namespace GritGud.Application.Gameplay
                 : completedTurnReplayWindows[
                     completedTurnReplayWindows.Count - 1];
 
+        public bool HasReplaySinceActorLastTurn(string controlledActorId)
+        {
+            if (string.IsNullOrWhiteSpace(controlledActorId))
+                return false;
+            for (int index = completedTurnReplayWindows.Count - 1;
+                index >= 0;
+                index--)
+            {
+                if (!string.Equals(
+                    completedTurnReplayWindows[index].ActorId,
+                    controlledActorId,
+                    StringComparison.Ordinal))
+                    continue;
+                return index < completedTurnReplayWindows.Count - 1;
+            }
+            return false;
+        }
+
         public event Action<GameplayDomainEvent> DomainEventPublished;
 
         public event Action<GameplayReductionResult> StateInstalled;
@@ -207,6 +225,62 @@ namespace GritGud.Application.Gameplay
                 trajectory.GetRange(
                     window.StartTrajectoryIndex,
                     window.TransitionCount),
+                reducers);
+            return true;
+        }
+
+        /// <summary>
+        /// Replays every completed turn since <paramref name="controlledActorId"/>
+        /// last ended a turn. This is the live player catch-up contract: the
+        /// last actor to act is never allowed to hide earlier turns that also
+        /// occurred while control was away.
+        /// </summary>
+        public bool TryCreateReplaySinceActorLastTurn(
+            string controlledActorId,
+            out GameplaySemanticReplayTimeline replay,
+            out GameplayPlayerAwayReplayInterval interval)
+        {
+            if (string.IsNullOrWhiteSpace(controlledActorId))
+                throw new ArgumentException(
+                    "Player-away replay requires a controlled actor identifier.",
+                    nameof(controlledActorId));
+
+            if (!HasReplaySinceActorLastTurn(controlledActorId))
+            {
+                replay = null;
+                interval = null;
+                return false;
+            }
+
+            int boundaryIndex = -1;
+            for (int index = completedTurnReplayWindows.Count - 1;
+                index >= 0;
+                index--)
+            {
+                if (!string.Equals(
+                        completedTurnReplayWindows[index].ActorId,
+                        controlledActorId,
+                        StringComparison.Ordinal))
+                    continue;
+                boundaryIndex = index;
+                break;
+            }
+
+            int firstAwayWindow = boundaryIndex + 1;
+
+            GameplayReplayWindow boundary = completedTurnReplayWindows[
+                boundaryIndex];
+            var awayWindows = completedTurnReplayWindows.GetRange(
+                firstAwayWindow,
+                completedTurnReplayWindows.Count - firstAwayWindow);
+            interval = new GameplayPlayerAwayReplayInterval(
+                boundary,
+                awayWindows);
+            replay = new GameplaySemanticReplayTimeline(
+                awayWindows[0].InitialState,
+                trajectory.GetRange(
+                    interval.StartTrajectoryIndex,
+                    interval.TransitionCount),
                 reducers);
             return true;
         }

@@ -283,6 +283,7 @@ namespace GritGud.Presentation.Gameplay
                 fireController);
             hud.OpenChanged += HandleOpenChanged;
             hud.PlayheadChanged += HandlePlayheadChanged;
+            hud.BindPresentationPreflight(RequireReplayDependencies);
         }
 
         public void Dispose()
@@ -290,6 +291,7 @@ namespace GritGud.Presentation.Gameplay
             Restore();
             if (hud != null)
             {
+                hud.ClearPresentationPreflight(RequireReplayDependencies);
                 hud.OpenChanged -= HandleOpenChanged;
                 hud.PlayheadChanged -= HandlePlayheadChanged;
             }
@@ -321,8 +323,6 @@ namespace GritGud.Presentation.Gameplay
             }
             if (hud.Playback == null)
                 return;
-
-            RequireReplayDependencies(hud.Playback.Replay);
 
             actors.Clear();
             timedEventCursor.Clear();
@@ -369,18 +369,21 @@ namespace GritGud.Presentation.Gameplay
             }
         }
 
-        private void RequireReplayDependencies(
+        private GameplayReplayPresentationCompatibility
+            RequireReplayDependencies(
             GameplaySemanticReplayTimeline replay)
         {
+            var matchedActorIds = new List<string>();
+            var missingActorIds = new List<string>();
             foreach (GameplayActorSnapshot snapshot in replay.InitialState
                 .Session.Actors)
             {
-                if (!world.TryGetActor(
-                        snapshot.ActorId,
-                        out GameplayActorView _))
-                    throw new InvalidOperationException(
-                        $"Replay cannot open: actor '{snapshot.ActorId}' has "
-                        + "no GameplayTurnReplayActorPresenter source view.");
+                if (world.TryGetActor(
+                    snapshot.ActorId,
+                    out GameplayActorView _))
+                    matchedActorIds.Add(snapshot.ActorId);
+                else
+                    missingActorIds.Add(snapshot.ActorId);
             }
             bool containsProjectiles = replay.InitialState.Projectiles.Count > 0;
             bool containsThrownExplosives = false;
@@ -414,6 +417,9 @@ namespace GritGud.Presentation.Gameplay
                     "Replay cannot open: the verified timeline contains "
                     + "drones but no bound GameplayDroneController exists for "
                     + "required projection.");
+            return new GameplayReplayPresentationCompatibility(
+                matchedActorIds,
+                missingActorIds);
         }
 
         private void HandlePlayheadChanged(

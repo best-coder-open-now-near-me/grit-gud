@@ -66,6 +66,12 @@ namespace GritGud.Application.Gameplay
         public bool HasLastCompletedTurnReplay =>
             runtime.LastCompletedTurnReplayWindow != null;
 
+        public bool HasReplaySinceActorLastTurn(string actorId)
+        {
+            ThrowIfDisposed();
+            return runtime.HasReplaySinceActorLastTurn(actorId);
+        }
+
         public event Action<GameplayDomainEvent> DomainEventPublished
         {
             add => runtime.DomainEventPublished += value;
@@ -151,6 +157,19 @@ namespace GritGud.Application.Gameplay
             ThrowIfDisposed();
             RequireProjectionMatchesAuthority();
             return runtime.TryCreateLastCompletedTurnReplay(out replay);
+        }
+
+        public bool TryCreateReplaySinceActorLastTurn(
+            string actorId,
+            out GameplaySemanticReplayTimeline replay,
+            out GameplayPlayerAwayReplayInterval interval)
+        {
+            ThrowIfDisposed();
+            RequireProjectionMatchesAuthority();
+            return runtime.TryCreateReplaySinceActorLastTurn(
+                actorId,
+                out replay,
+                out interval);
         }
 
         public async Task<GameplayDecisionExecutionResult>

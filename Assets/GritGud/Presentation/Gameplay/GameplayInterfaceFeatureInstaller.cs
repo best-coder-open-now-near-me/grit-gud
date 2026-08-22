@@ -273,7 +273,8 @@ namespace GritGud.Presentation.Gameplay
                 runtime,
                 simulationViewer
                     ? GameplayReplaySource.VerifiedSimulation
-                    : GameplayReplaySource.LiveEncounter);
+                    : GameplayReplaySource.LiveEncounter,
+                () => partyControl.CommandActorId);
             replayTranscript.Bind(
                 replayHud,
                 dialogueDrawer,

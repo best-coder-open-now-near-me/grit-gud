@@ -307,6 +307,8 @@ namespace GritGud.Presentation.Tests
                 .GetComponent<GameplayBattleReplayController>();
             GameplayTurnReplayHud replayHud = runtime.Bootstrap
                 .GetComponent<GameplayTurnReplayHud>();
+            GameplayDialogueDrawer replayDialogueDrawer =
+                runtime.DialogueDrawer;
             GameplayDroneController drones = runtime.Bootstrap
                 .GetComponent<GameplayDroneController>();
             GameplayCameraController camera = runtime.Bootstrap
@@ -326,6 +328,14 @@ namespace GritGud.Presentation.Tests
             Assert.That(replayHud.Replay.Frames.Count, Is.EqualTo(74));
             Assert.That(replayHud.ActionLabel, Is.EqualTo("WATCH BATTLE"));
             Assert.That(replayHud.Playback.TurnGroups.Count, Is.GreaterThan(1));
+            Assert.That(replayHud.ContentSummary, Is.Not.Null);
+            Assert.That(replayHud.ContentSummary.IsReadyToOpen, Is.True);
+            Assert.That(replayDialogueDrawer.IsExpanded, Is.True);
+            Assert.That(replayDialogueDrawer.HeaderLabel,
+                Is.EqualTo("REPLAY COMBAT TRANSCRIPT"));
+            StringAssert.Contains(
+                "REPLAY SOURCE: ARTIFACT",
+                replayDialogueDrawer.ContextStatus);
             Assert.That(
                 replayHud.Playback.TurnGroups[
                     replayHud.Playback.TurnGroups.Count - 1]
@@ -375,6 +385,9 @@ namespace GritGud.Presentation.Tests
             // Reopen the verified replay to prove every world presenter owns a
             // reversible projection boundary, including drones.
             replayHud.Toggle();
+            Assert.That(replayDialogueDrawer.IsExpanded, Is.False);
+            Assert.That(replayDialogueDrawer.HeaderLabel,
+                Is.EqualTo("DIALOGUE - TRANSCRIPT"));
             Assert.That(drones.Session, Is.Not.Null);
             Transform cameraTarget = camera.Target;
             Transform replayedActor = gameplay.WorldRegistry

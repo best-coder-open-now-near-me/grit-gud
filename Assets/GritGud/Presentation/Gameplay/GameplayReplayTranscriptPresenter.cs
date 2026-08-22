@@ -65,6 +65,12 @@ namespace GritGud.Presentation.Gameplay
         private Action liveExportRequested;
         private GameplaySemanticReplayPlaybackTimeline projectedPlayback;
         private GameplayReplayTranscriptSource replaySource;
+        private bool drawerStateCaptured;
+        private bool drawerWasExpanded;
+        private GameplayDialogueChannel drawerFilters;
+        private string drawerHeader;
+        private string drawerEmptyMessage;
+        private string drawerContextStatus;
 
         internal ReplayCombatTranscript Transcript => replaySource?.Transcript;
         internal IGameplayDialogueEntrySource VisibleSource => drawer?.Source;
@@ -97,25 +103,35 @@ namespace GritGud.Presentation.Gameplay
             if (drawer != null
                 && liveSource != null
                 && ReferenceEquals(drawer.Source, replaySource))
-                drawer.Bind(liveSource, liveExportRequested);
+                RestoreLiveDrawer();
             hud = null;
             drawer = null;
             liveSource = null;
             liveExportRequested = null;
             projectedPlayback = null;
             replaySource = null;
+            drawerStateCaptured = false;
         }
 
         private void HandleOpenChanged(bool open)
         {
             if (!open)
             {
-                drawer.Bind(liveSource, liveExportRequested);
+                RestoreLiveDrawer();
                 return;
             }
+            CaptureDrawerState();
             EnsureTranscript();
             replaySource.SetPlayhead(hud.TimeSeconds);
             drawer.Bind(replaySource);
+            drawer.ConfigurePresentation(
+                "REPLAY COMBAT TRANSCRIPT",
+                replaySource.Transcript.Entries.Count == 0
+                    ? "REPLAY CONTAINS ZERO COMBAT TRANSCRIPT EVENTS."
+                    : "NO REPLAY COMBAT EVENT HAS OCCURRED AT THIS PLAYHEAD.",
+                hud.ContentSummary?.ToDisplayText());
+            drawer.SetFilters(GameplayDialogueChannel.CombatDiagnostics);
+            drawer.SetExpanded(true);
         }
 
         private void HandlePlayheadChanged(GameplayReplayPlayheadChange change)
@@ -132,7 +148,33 @@ namespace GritGud.Presentation.Gameplay
                     "Replay transcript projection requires an active playback timeline.");
             if (ReferenceEquals(projectedPlayback, playback)) return;
             projectedPlayback = playback;
-            replaySource.Bind(new ReplayCombatTranscript(playback));
+            replaySource.Bind(
+                hud.ContentSummary?.Transcript
+                ?? new ReplayCombatTranscript(playback));
+        }
+
+        private void CaptureDrawerState()
+        {
+            if (drawerStateCaptured) return;
+            drawerStateCaptured = true;
+            drawerWasExpanded = drawer.IsExpanded;
+            drawerFilters = drawer.ActiveFilters;
+            drawerHeader = drawer.HeaderLabel;
+            drawerEmptyMessage = drawer.EmptyMessage;
+            drawerContextStatus = drawer.ContextStatus;
+        }
+
+        private void RestoreLiveDrawer()
+        {
+            drawer.Bind(liveSource, liveExportRequested);
+            if (!drawerStateCaptured) return;
+            drawer.ConfigurePresentation(
+                drawerHeader,
+                drawerEmptyMessage,
+                drawerContextStatus);
+            drawer.SetFilters(drawerFilters);
+            drawer.SetExpanded(drawerWasExpanded);
+            drawerStateCaptured = false;
         }
     }
 }

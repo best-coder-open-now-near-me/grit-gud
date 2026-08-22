@@ -6,6 +6,9 @@ namespace GritGud.Presentation.Gameplay
     [DisallowMultipleComponent]
     public sealed class GameplayDialogueDrawer : MonoBehaviour
     {
+        private const string DefaultHeaderLabel = "DIALOGUE - TRANSCRIPT";
+        private const string DefaultEmptyMessage =
+            "NO ENTRIES MATCH THE ACTIVE FILTERS.";
         private const float ReferenceHeight = 900f;
         private static readonly Color PanelColor = GameplayVisualPalette.Panel;
         private static readonly Color BorderColor = GameplayVisualPalette.WithAlpha(
@@ -24,6 +27,9 @@ namespace GritGud.Presentation.Gameplay
         private IGameplayDialogueEntrySource source;
         private Action exportRequested;
         private string exportStatus = string.Empty;
+        private string headerLabel = DefaultHeaderLabel;
+        private string emptyMessage = DefaultEmptyMessage;
+        private string contextStatus = string.Empty;
         private GameplayFlyoutMotionProfile flyoutMotion;
         private GameplayDialogueChannel filters = GameplayDialogueChannel.All;
         private GUIStyle headerStyle;
@@ -51,6 +57,12 @@ namespace GritGud.Presentation.Gameplay
         internal GameplayDialogueChannel ActiveFilters => filters;
 
         internal int VisibleEntryCount => source?.CountVisible(filters) ?? 0;
+
+        internal string HeaderLabel => headerLabel;
+
+        internal string EmptyMessage => emptyMessage;
+
+        internal string ContextStatus => contextStatus;
 
         private void Awake()
         {
@@ -131,6 +143,9 @@ namespace GritGud.Presentation.Gameplay
             observedSequence = 0;
             exportRequested = null;
             exportStatus = string.Empty;
+            headerLabel = DefaultHeaderLabel;
+            emptyMessage = DefaultEmptyMessage;
+            contextStatus = string.Empty;
         }
 
         public void Show()
@@ -152,6 +167,30 @@ namespace GritGud.Presentation.Gameplay
         internal void Toggle()
         {
             expanded = !expanded;
+        }
+
+        internal void SetExpanded(bool value)
+        {
+            expanded = value;
+        }
+
+        internal void SetFilters(GameplayDialogueChannel value)
+        {
+            filters = value;
+        }
+
+        internal void ConfigurePresentation(
+            string header,
+            string emptyState,
+            string status = null)
+        {
+            headerLabel = string.IsNullOrWhiteSpace(header)
+                ? DefaultHeaderLabel
+                : header.Trim();
+            emptyMessage = string.IsNullOrWhiteSpace(emptyState)
+                ? DefaultEmptyMessage
+                : emptyState.Trim();
+            contextStatus = status?.Trim() ?? string.Empty;
         }
 
         internal void ToggleFilter(GameplayDialogueChannel channel)
@@ -234,7 +273,7 @@ namespace GritGud.Presentation.Gameplay
             float y = panelRectangle.y + 14f;
             GUI.Label(
                 new Rect(contentX, y, contentWidth - 172f, 22f),
-                "DIALOGUE - TRANSCRIPT",
+                headerLabel,
                 headerStyle);
             if (exportRequested != null
                 && GUI.Button(
@@ -250,6 +289,19 @@ namespace GritGud.Presentation.Gameplay
                 GUI.Label(new Rect(contentX, y, contentWidth, 18f),
                     exportStatus.ToUpperInvariant(), entryHeaderStyle);
                 y += 20f;
+            }
+            if (!string.IsNullOrWhiteSpace(contextStatus))
+            {
+                float statusHeight = Mathf.Min(
+                    76f,
+                    bodyStyle.CalcHeight(
+                        new GUIContent(contextStatus),
+                        contentWidth));
+                GUI.Label(
+                    new Rect(contentX, y, contentWidth, statusHeight),
+                    contextStatus,
+                    bodyStyle);
+                y += statusHeight + 5f;
             }
             DrawFilters(contentX, y, contentWidth);
             y += 34f;
@@ -375,7 +427,7 @@ namespace GritGud.Presentation.Gameplay
             {
                 GUI.Label(
                     new Rect(8f, 8f, viewWidth - 16f, 36f),
-                    "NO ENTRIES MATCH THE ACTIVE FILTERS.",
+                    emptyMessage,
                     emptyStyle);
             }
 
