@@ -94,10 +94,8 @@ namespace GritGud.Presentation.Gameplay
                 presentationCatalog.DetectionIntervalSeconds);
             outcomes = new GameplayEnemyOutcomePresenter(
                 session,
-                enemies,
                 sessionPresenter,
                 actionController,
-                partyControl,
                 dialogue);
             enabled = true;
         }
@@ -229,7 +227,6 @@ namespace GritGud.Presentation.Gameplay
             if (session == null || replayPaused)
                 return;
 
-            outcomes.PresentNewIncapacitations();
             if (partyControl.IsPartyDefeated)
             {
                 outcomes.ResolvePartyIncapacitation();

@@ -918,7 +918,7 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
-        public void IncapacitatingContactAttackArmsRagdollWithJournalEvidence()
+        public void CanonicalLifeStatePresenterOwnsDelayedContactCollapse()
         {
             var host = new GameObject("Contact Ragdoll Host");
             GameObject actorPrefab = Resources.Load<GameObject>(
@@ -968,6 +968,15 @@ namespace GritGud.Presentation.Tests
                 GameplayCombatReactionPresenter reactions =
                     host.AddComponent<GameplayCombatReactionPresenter>();
                 reactions.Bind(session, registry, attacks, catalog);
+                var dialogue = new GameplayDialogueLog();
+                GameplayActorLifeStatePresenter lifeStates =
+                    host.AddComponent<GameplayActorLifeStatePresenter>();
+                lifeStates.Bind(
+                    session,
+                    registry,
+                    host.AddComponent<GameplayActionController>(),
+                    dialogue,
+                    catalog);
                 ActorAnimationCoordinator animation = targetObject
                     .GetComponent<ActorAnimationCoordinator>();
                 ActorRagdollPresenter ragdoll = targetObject.GetComponent<
@@ -975,18 +984,41 @@ namespace GritGud.Presentation.Tests
                 animation.TargetAnimator.cullingMode =
                     AnimatorCullingMode.AlwaysAnimate;
                 animation.TargetAnimator.Update(0f);
+                GameplayCombatStateSnapshot previous =
+                    GameplayCombatStateCapture.Capture(session);
 
                 Assert.That(attacks.TryAttack(CreateContactExposure()), Is.True);
-                reactions.Tick(0.17f);
+                const long transitionSequence = 17L;
+                GameplayCombatStateSnapshot resulting =
+                    GameplayCombatStateCapture.Capture(session);
+                lifeStates.PresentInstalledState(new GameplayReductionResult(
+                    previous,
+                    resulting,
+                    new GameplayDomainEvent[]
+                    {
+                        new GameplayTransitionReducedEvent(
+                            new GameplayTransitionIdentity(
+                                transitionSequence,
+                                "test-contact",
+                                "player",
+                                "target"),
+                            "target",
+                            attacks.LastResolvedAction),
+                    }));
 
                 Assert.That(session.IsActorIncapacitated("target"), Is.True);
+                Assert.That(reactions.PendingReactionCount, Is.Zero);
+                Assert.That(lifeStates.PendingPresentationCount, Is.EqualTo(1));
+                Assert.That(animation.LastRequestedAction, Is.Null);
+                lifeStates.Tick(0.17f);
                 Assert.That(
                     animation.LastRequestedAction,
                     Is.EqualTo(ActorAnimationAction.IncapacitateShoulder));
                 Assert.That(ragdoll.HasPendingActivation, Is.True);
-                long journalSequence = session.Journal.Entries
-                    .OfType<ActionResolvedJournalEntry>()
-                    .Single().Sequence;
+                Assert.That(dialogue.Entries.Count, Is.EqualTo(1));
+                Assert.That(
+                    dialogue.Entries[0].Title,
+                    Is.EqualTo("HOSTILE INCAPACITATED"));
                 bool activated = false;
                 for (int index = 0; index < 120 && !activated; index++)
                 {
@@ -996,7 +1028,7 @@ namespace GritGud.Presentation.Tests
 
                 Assert.That(activated, Is.True);
                 Assert.That(
-                    ragdoll.TryGetTrace(journalSequence, out var trace),
+                    ragdoll.TryGetTrace(transitionSequence, out var trace),
                     Is.True);
                 Assert.That(
                     trace.HandoffEventNormalizedTime,

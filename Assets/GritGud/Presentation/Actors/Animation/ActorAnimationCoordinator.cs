@@ -301,6 +301,15 @@ namespace GritGud.Presentation.Actors.Animation
             }
         }
 
+        internal bool PresentTerminalCollapse(TargetRegionId? region)
+        {
+            incapacitationPresentationDeferred = false;
+            ActorAnimationAction action = SelectIncapacitationAction(region);
+            if (LastRequestedAction == action)
+                return true;
+            return TryRequestAction(action);
+        }
+
         internal bool PresentWoundReaction(
             TargetRegionId region,
             bool incapacitated,
@@ -310,8 +319,7 @@ namespace GritGud.Presentation.Actors.Animation
             // overlays. This channel owns only non-recovering falls.
             if (!incapacitated)
                 return false;
-            incapacitationPresentationDeferred = false;
-            return TryRequestAction(SelectIncapacitationAction(region));
+            return PresentTerminalCollapse(region);
         }
 
         internal void DeferIncapacitationPresentation()

@@ -62,6 +62,7 @@ namespace GritGud.Presentation.Gameplay
         private GameplayTacticalTransitionPresenter tacticalTransitionPresenter;
         private GameplaySurfaceImpactPresenter surfaceImpactPresenter;
         private GameplayCombatReactionPresenter combatReactionPresenter;
+        private GameplayActorLifeStatePresenter actorLifeStatePresenter;
         private GameplayControlRouter controlRouter;
         private GameplayLiveSessionRuntime liveRuntime;
         private bool simulationViewer;
@@ -147,6 +148,8 @@ namespace GritGud.Presentation.Gameplay
                 GetOrAddComponent<GameplaySurfaceImpactPresenter>();
             combatReactionPresenter =
                 GetOrAddComponent<GameplayCombatReactionPresenter>();
+            actorLifeStatePresenter =
+                GetOrAddComponent<GameplayActorLifeStatePresenter>();
             ResetPresentationBindings();
         }
 
@@ -187,6 +190,7 @@ namespace GritGud.Presentation.Gameplay
             turnMovementController?.Unbind();
             actionController?.Unbind();
             combatReactionPresenter?.Unbind();
+            actorLifeStatePresenter?.Unbind();
             surfaceImpactPresenter?.Unbind();
             tacticalTransitionPresenter?.Unbind();
             characterGroundingPresenter?.Unbind();
@@ -614,6 +618,7 @@ namespace GritGud.Presentation.Gameplay
                         thrownExplosiveController,
                         droneController,
                         combatReactionPresenter,
+                        actorLifeStatePresenter,
                         tacticalTransitionPresenter,
                     },
                     () => liveRuntime),
@@ -665,6 +670,12 @@ namespace GritGud.Presentation.Gameplay
                 initial,
                 reducers,
                 capabilities);
+            actorLifeStatePresenter.Bind(
+                liveRuntime,
+                session,
+                worldRegistry,
+                actionController,
+                dialogueLog);
             enemyController.BindSemanticRuntime(
                 liveRuntime,
                 scenarioAssembly,

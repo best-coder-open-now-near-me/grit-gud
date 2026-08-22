@@ -2,16 +2,15 @@ using System;
 using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
-using GritGud.Presentation.Actors;
 using GritGud.Presentation.Actors.Animation;
 using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
 {
     /// <summary>
-    /// Projects committed wounds onto actor animation. Contact attacks defer
-    /// only this visual reaction until the authored strike point; gameplay
-    /// state and capability changes remain immediate and authoritative.
+    /// Projects ordinary committed wounds onto the recovering injury-overlay
+    /// channel. Terminal life-state animation and ragdoll handoff belong only
+    /// to GameplayActorLifeStatePresenter.
     /// </summary>
     [DisallowMultipleComponent]
     internal sealed class GameplayCombatReactionPresenter : MonoBehaviour
@@ -19,16 +18,12 @@ namespace GritGud.Presentation.Gameplay
         private sealed class PendingReaction
         {
             public PendingReaction(
-                GameplayActionRecord action,
                 AttackResolutionRecord resolution,
                 float remainingSeconds)
             {
-                Action = action;
                 Resolution = resolution;
                 RemainingSeconds = remainingSeconds;
             }
-
-            public GameplayActionRecord Action { get; }
 
             public AttackResolutionRecord Resolution { get; }
 
@@ -85,19 +80,15 @@ namespace GritGud.Presentation.Gameplay
             }
 
             float delay = ResolveDelaySeconds(resolution);
-            bool incapacitated = session.IsActorIncapacitated(
-                resolution.TargetId);
-            ActorAnimationCoordinator animation = target.Root.GetComponent<
-                ActorAnimationCoordinator>();
-            if (delay > 0f && incapacitated)
-                animation?.DeferIncapacitationPresentation();
+            if (session.IsActorIncapacitated(resolution.TargetId))
+                return;
             if (delay <= 0f)
             {
-                if (TryPresent(action, resolution))
+                if (TryPresent(resolution))
                     return;
             }
 
-            pending.Add(new PendingReaction(action, resolution, delay));
+            pending.Add(new PendingReaction(resolution, delay));
         }
 
         private float ResolveDelaySeconds(AttackResolutionRecord resolution)
@@ -127,14 +118,12 @@ namespace GritGud.Presentation.Gameplay
                 reaction.RemainingSeconds -= elapsed;
                 if (reaction.RemainingSeconds > 0f)
                     continue;
-                if (TryPresent(reaction.Action, reaction.Resolution))
+                if (TryPresent(reaction.Resolution))
                     pending.RemoveAt(index);
             }
         }
 
-        private bool TryPresent(
-            GameplayActionRecord action,
-            AttackResolutionRecord resolution)
+        private bool TryPresent(AttackResolutionRecord resolution)
         {
             if (!registry.TryGetActor(
                     resolution.TargetId,
@@ -147,54 +136,13 @@ namespace GritGud.Presentation.Gameplay
                 ActorAnimationCoordinator>();
             if (animation != null && animation.IsPresentingReplay)
                 return false;
-            bool incapacitated = session.IsActorIncapacitated(
-                resolution.TargetId);
+            if (session.IsActorIncapacitated(resolution.TargetId))
+                return true;
             bool pinned = session.GetActor(resolution.TargetId).IsPinned;
-            bool presented = incapacitated
-                ? animation != null && animation.PresentWoundReaction(
-                    resolution.HitRegion.Value,
-                    incapacitated: true,
-                    pinned)
-                : !pinned && target.InjuryOverlay.PresentHitReaction(
+            if (!pinned)
+                target.InjuryOverlay.PresentHitReaction(
                     resolution.HitRegion.Value);
-            if (presented && incapacitated)
-            {
-                Vector3 impulseDirection = target.Transform.forward;
-                if (registry.TryGetActor(
-                        resolution.AttackerId,
-                        out GameplayActorView attacker))
-                {
-                    Vector3 displacement = target.Transform.position -
-                        attacker.Transform.position;
-                    if (displacement.sqrMagnitude > 0.0001f)
-                        impulseDirection = displacement.normalized;
-                }
-                target.Root.GetComponent<ActorRagdollPresenter>()
-                    ?.ArmIncapacitation(
-                        ResolveJournalSequence(action),
-                        resolution.HitRegion,
-                        impulseDirection,
-                        resolution.IsContactAttack
-                            ? GameplayCloseQuartersPresentationTiming
-                                .ContactImpactNormalizedTime
-                            : 0f);
-            }
             return true;
-        }
-
-        private long ResolveJournalSequence(GameplayActionRecord action)
-        {
-            IReadOnlyList<GameplayJournalEntry> entries =
-                session.Journal.Entries;
-            for (int index = entries.Count - 1; index >= 0; index--)
-            {
-                if (entries[index] is ActionResolvedJournalEntry resolved &&
-                    ReferenceEquals(resolved.Action, action))
-                {
-                    return resolved.Sequence;
-                }
-            }
-            return 0L;
         }
 
         private static bool TryGetAttackResolution(

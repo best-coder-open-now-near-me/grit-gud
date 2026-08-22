@@ -78,6 +78,17 @@ namespace GritGud.Application.Gameplay
             remove => runtime.DomainEventPublished -= value;
         }
 
+        /// <summary>
+        /// Publishes each authoritative before/after root after the mutable
+        /// live projection has installed it. Presentation listeners therefore
+        /// observe the same committed state as every gameplay controller.
+        /// </summary>
+        public event Action<GameplayReductionResult> StateInstalled
+        {
+            add => runtime.StateInstalled += value;
+            remove => runtime.StateInstalled -= value;
+        }
+
         public GameplayReductionResult Execute(
             GameplaySemanticTransition transition)
         {
