@@ -105,6 +105,9 @@ namespace GritGud.Presentation.Actors
         private float handoffNormalizedTime = 0.72f;
 
         [SerializeField, Min(MinimumPositiveValue)]
+        private float maximumHandoffWaitSeconds = 1.5f;
+
+        [SerializeField, Min(MinimumPositiveValue)]
         private float sampleIntervalSeconds = 0.05f;
 
         [SerializeField, Min(0f)]
@@ -148,6 +151,10 @@ namespace GritGud.Presentation.Actors
         public float HandoffNormalizedTime => Mathf.Clamp01(
             handoffNormalizedTime);
 
+        public float MaximumHandoffWaitSeconds => Mathf.Max(
+            MinimumPositiveValue,
+            maximumHandoffWaitSeconds);
+
         public float SampleIntervalSeconds => Mathf.Max(
             MinimumPositiveValue,
             sampleIntervalSeconds);
@@ -186,6 +193,9 @@ namespace GritGud.Presentation.Actors
             traceSchemaVersion = Mathf.Max(1, traceSchemaVersion);
             totalMass = Mathf.Max(1f, totalMass);
             handoffNormalizedTime = Mathf.Clamp01(handoffNormalizedTime);
+            maximumHandoffWaitSeconds = Mathf.Max(
+                MinimumPositiveValue,
+                maximumHandoffWaitSeconds);
             sampleIntervalSeconds = Mathf.Max(
                 MinimumPositiveValue,
                 sampleIntervalSeconds);

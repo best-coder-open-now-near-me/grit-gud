@@ -7,6 +7,15 @@ using UnityEngine;
 
 namespace GritGud.Presentation.Actors
 {
+    internal enum ActorRagdollHandoffFallbackReason
+    {
+        None = 0,
+        AuthoredActionUnavailable = 1,
+        AuthoredHandoffTimedOut = 2,
+        RigUnavailable = 3,
+        CancelledByRecovery = 4,
+    }
+
     /// <summary>
     /// Owns the presentation-only handoff from an authored incapacitation pose
     /// to bounded ragdoll physics. Gameplay position and collision authority
@@ -40,21 +49,28 @@ namespace GritGud.Presentation.Actors
         private sealed class ActivationRequest
         {
             public ActivationRequest(
-                long journalSequence,
+                long sourceTransitionSequence,
+                ActorAnimationAction expectedAction,
                 TargetRegionId? hitRegion,
                 Vector3 impulseDirection,
-                float handoffEventNormalizedTime)
+                float handoffEventNormalizedTime,
+                float armedUnscaledTime)
             {
-                JournalSequence = journalSequence;
+                SourceTransitionSequence = sourceTransitionSequence;
+                ExpectedAction = expectedAction;
                 HitRegion = hitRegion;
                 ImpulseDirection = impulseDirection;
                 HandoffEventNormalizedTime = handoffEventNormalizedTime;
+                ArmedUnscaledTime = armedUnscaledTime;
             }
 
-            public long JournalSequence { get; }
+            public long SourceTransitionSequence { get; }
+            public ActorAnimationAction ExpectedAction { get; }
             public TargetRegionId? HitRegion { get; }
             public Vector3 ImpulseDirection { get; }
             public float HandoffEventNormalizedTime { get; }
+            public float ArmedUnscaledTime { get; }
+            public float WaitSeconds { get; set; }
         }
 
         private sealed class ReplayBoneSnapshot
@@ -116,6 +132,20 @@ namespace GritGud.Presentation.Actors
 
         internal bool HasPendingActivation => pendingActivation != null;
 
+        internal float PendingArmedUnscaledTime =>
+            pendingActivation?.ArmedUnscaledTime ?? -1f;
+
+        internal ActorAnimationAction? PendingExpectedAction =>
+            pendingActivation?.ExpectedAction;
+
+        internal long LastHandoffSourceTransitionSequence { get; private set; }
+
+        internal ActorRagdollHandoffFallbackReason LastHandoffFallbackReason
+        {
+            get;
+            private set;
+        }
+
         private Animator TargetAnimator => animatorDriver?.TargetAnimator;
 
         private void Awake()
@@ -133,7 +163,7 @@ namespace GritGud.Presentation.Actors
         }
 
         internal bool ArmIncapacitation(
-            long journalSequence,
+            long sourceTransitionSequence,
             TargetRegionId? hitRegion,
             Vector3 impulseDirection,
             float reactionStartEventNormalizedTime = 0f)
@@ -145,24 +175,44 @@ namespace GritGud.Presentation.Actors
             {
                 throw new ArgumentOutOfRangeException(nameof(impulseDirection));
             }
-            if (journalSequence < 0)
-                throw new ArgumentOutOfRangeException(nameof(journalSequence));
+            if (sourceTransitionSequence < 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(sourceTransitionSequence));
 
             float handoff = Mathf.Lerp(
                 Mathf.Clamp01(reactionStartEventNormalizedTime),
                 1f,
                 profile != null ? profile.HandoffNormalizedTime : 1f);
             var request = new ActivationRequest(
-                journalSequence,
+                sourceTransitionSequence,
+                ActorAnimationCoordinator.SelectIncapacitationAction(
+                    hitRegion),
                 hitRegion,
                 impulseDirection,
-                handoff);
+                handoff,
+                Time.unscaledTime);
             if (pendingActivation == null ||
-                (pendingActivation.JournalSequence == 0 &&
-                    journalSequence > 0))
+                (pendingActivation.SourceTransitionSequence == 0 &&
+                    sourceTransitionSequence > 0))
             {
                 pendingActivation = request;
+                LastHandoffSourceTransitionSequence =
+                    sourceTransitionSequence;
+                LastHandoffFallbackReason =
+                    ActorRagdollHandoffFallbackReason.None;
             }
+            return true;
+        }
+
+        internal bool CancelPendingIncapacitation()
+        {
+            if (pendingActivation == null)
+                return false;
+            LastHandoffSourceTransitionSequence =
+                pendingActivation.SourceTransitionSequence;
+            LastHandoffFallbackReason =
+                ActorRagdollHandoffFallbackReason.CancelledByRecovery;
+            pendingActivation = null;
             return true;
         }
 
@@ -372,7 +422,7 @@ namespace GritGud.Presentation.Actors
         }
 
         internal bool ActivateImmediatelyForTests(
-            long journalSequence,
+            long sourceTransitionSequence,
             TargetRegionId? hitRegion,
             Vector3 impulseDirection,
             float handoffEventNormalizedTime = 0.75f)
@@ -381,10 +431,13 @@ namespace GritGud.Presentation.Actors
             if (!rigBuilt || ragdollActive)
                 return false;
             Activate(new ActivationRequest(
-                journalSequence,
+                sourceTransitionSequence,
+                ActorAnimationCoordinator.SelectIncapacitationAction(
+                    hitRegion),
                 hitRegion,
                 impulseDirection,
-                handoffEventNormalizedTime));
+                handoffEventNormalizedTime,
+                Time.unscaledTime));
             return true;
         }
 
@@ -406,7 +459,7 @@ namespace GritGud.Presentation.Actors
 
         private void LateUpdate()
         {
-            TryActivateAtAuthoredHandoff();
+            TickPendingHandoff(Time.unscaledDeltaTime);
         }
 
         internal bool TryActivateAtAuthoredHandoff()
@@ -414,11 +467,38 @@ namespace GritGud.Presentation.Actors
             if (replaying || pendingActivation == null || ragdollActive)
                 return false;
             EnsureRuntimeRig();
-            if (!rigBuilt || !HasReachedAuthoredHandoff())
+            if (!rigBuilt || !HasReachedAuthoredHandoff(pendingActivation))
                 return false;
             ActivationRequest request = pendingActivation;
             pendingActivation = null;
             Activate(request);
+            return true;
+        }
+
+        internal bool TickPendingHandoff(float unscaledDeltaTime)
+        {
+            if (!IsFinite(unscaledDeltaTime) || unscaledDeltaTime < 0f)
+                throw new ArgumentOutOfRangeException(
+                    nameof(unscaledDeltaTime));
+            if (replaying || pendingActivation == null || ragdollActive)
+                return false;
+            if (TryActivateAtAuthoredHandoff())
+                return true;
+
+            pendingActivation.WaitSeconds += unscaledDeltaTime;
+            float maximumWait = profile != null
+                ? profile.MaximumHandoffWaitSeconds
+                : 0f;
+            if (pendingActivation.WaitSeconds < maximumWait)
+                return false;
+
+            ActivationRequest request = pendingActivation;
+            pendingActivation = null;
+            LastHandoffSourceTransitionSequence =
+                request.SourceTransitionSequence;
+            LastHandoffFallbackReason = ResolveFallbackReason(request);
+            if (rigBuilt)
+                Activate(request);
             return true;
         }
 
@@ -461,17 +541,16 @@ namespace GritGud.Presentation.Actors
             }
         }
 
-        private bool HasReachedAuthoredHandoff()
+        private bool HasReachedAuthoredHandoff(ActivationRequest request)
         {
             Animator animator = TargetAnimator;
             ActorAnimationAction? action = animationCoordinator
                 ?.LastRequestedAction;
             if (animator == null || !animator.enabled ||
-                (action != ActorAnimationAction.Incapacitate &&
-                    action != ActorAnimationAction.IncapacitateShoulder) ||
+                action != request.ExpectedAction ||
                 animationCoordinator.Profile == null ||
                 !animationCoordinator.Profile.TryGetActionBinding(
-                    action.Value,
+                    request.ExpectedAction,
                     out ActorAnimationActionBinding binding))
             {
                 return false;
@@ -495,6 +574,27 @@ namespace GritGud.Presentation.Actors
             return false;
         }
 
+        private ActorRagdollHandoffFallbackReason ResolveFallbackReason(
+            ActivationRequest request)
+        {
+            if (!rigBuilt)
+                return ActorRagdollHandoffFallbackReason.RigUnavailable;
+            Animator animator = TargetAnimator;
+            if (animator == null || !animator.enabled
+                || animationCoordinator?.LastRequestedAction
+                    != request.ExpectedAction
+                || animationCoordinator.Profile == null
+                || !animationCoordinator.Profile.TryGetActionBinding(
+                    request.ExpectedAction,
+                    out _))
+            {
+                return ActorRagdollHandoffFallbackReason
+                    .AuthoredActionUnavailable;
+            }
+            return ActorRagdollHandoffFallbackReason
+                .AuthoredHandoffTimedOut;
+        }
+
         private void Activate(ActivationRequest request)
         {
             ConfigureCollisionIgnores();
@@ -515,10 +615,10 @@ namespace GritGud.Presentation.Actors
             activeSeconds = 0f;
             quietSeconds = 0f;
             nextSampleSeconds = profile.SampleIntervalSeconds;
-            if (request.JournalSequence > 0)
+            if (request.SourceTransitionSequence > 0)
             {
                 activeTrace = new ActorRagdollPoseTrace(
-                    request.JournalSequence,
+                    request.SourceTransitionSequence,
                     profile.TraceSchemaId,
                     profile.TraceSchemaVersion,
                     runtimeBones.Count,

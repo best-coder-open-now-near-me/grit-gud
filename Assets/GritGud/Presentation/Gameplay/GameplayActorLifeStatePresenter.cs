@@ -156,6 +156,13 @@ namespace GritGud.Presentation.Gameplay
                     && resulting.LifeState == ActorLifeState.Active)
                 {
                     RemovePending(resulting.ActorId);
+                    if (registry.TryGetActor(
+                            resulting.ActorId,
+                            out GameplayActorView recovered))
+                    {
+                        recovered.Root.GetComponent<ActorRagdollPresenter>()
+                            ?.CancelPendingIncapacitation();
+                    }
                 }
             }
         }

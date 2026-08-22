@@ -34,7 +34,7 @@ namespace GritGud.PlayMode.Tests
                 ragdoll.EnsureRuntimeRig();
                 Assert.That(ragdoll.RuntimeBoneCount, Is.EqualTo(12));
                 Assert.That(ragdoll.ActivateImmediatelyForTests(
-                    journalSequence: 1,
+                    sourceTransitionSequence: 1,
                     hitRegion: TargetRegionId.Torso,
                     impulseDirection: Vector3.forward,
                     handoffEventNormalizedTime: 0.5f), Is.True);

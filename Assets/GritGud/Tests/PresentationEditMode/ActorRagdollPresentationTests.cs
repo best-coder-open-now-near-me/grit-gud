@@ -1,8 +1,11 @@
+using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Turns;
 using GritGud.Presentation.Actors;
 using GritGud.Presentation.Actors.Animation;
+using GritGud.Presentation.Gameplay;
+using GritGud.Presentation.Levels.Runtime;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -30,6 +33,8 @@ namespace GritGud.Presentation.Tests
             Assert.That(profile.Bones, Has.Count.EqualTo(12));
             Assert.That(profile.HandoffNormalizedTime,
                 Is.EqualTo(0.72f).Within(0.001f));
+            Assert.That(profile.MaximumHandoffWaitSeconds,
+                Is.EqualTo(1.5f).Within(0.001f));
             Assert.That(profile.MaximumActiveSeconds,
                 Is.EqualTo(2.25f).Within(0.001f));
             Assert.That(profile.MaximumStoredTraces, Is.EqualTo(4));
@@ -100,7 +105,7 @@ namespace GritGud.Presentation.Tests
                     TargetRegionId.Torso,
                     incapacitated: true), Is.True);
                 Assert.That(ragdoll.ArmIncapacitation(
-                    journalSequence: 11,
+                    sourceTransitionSequence: 11,
                     hitRegion: TargetRegionId.Torso,
                     impulseDirection: Vector3.forward), Is.True);
                 bool activated = false;
@@ -150,6 +155,57 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void AuthoredHandoffTimeoutActivatesFromCurrentPose()
+        {
+            GameObject actor = Object.Instantiate(Resources.Load<GameObject>(
+                "Actors/DefaultPlayerActor"));
+            try
+            {
+                ActorRagdollPresenter ragdoll = actor.GetComponent<
+                    ActorRagdollPresenter>();
+                ActorAnimationCoordinator animation = actor.GetComponent<
+                    ActorAnimationCoordinator>();
+                Animator animator = animation.TargetAnimator;
+                animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                animator.Update(0f);
+                ragdoll.EnsureRuntimeRig();
+                Assert.That(
+                    animation.PresentTerminalCollapse(TargetRegionId.Torso),
+                    Is.True);
+                Assert.That(ragdoll.ArmIncapacitation(
+                    sourceTransitionSequence: 23L,
+                    hitRegion: TargetRegionId.Torso,
+                    impulseDirection: Vector3.forward), Is.True);
+
+                Assert.That(ragdoll.PendingArmedUnscaledTime,
+                    Is.GreaterThanOrEqualTo(0f));
+                Assert.That(
+                    ragdoll.PendingExpectedAction,
+                    Is.EqualTo(
+                        ActorAnimationAction.IncapacitateShoulder));
+                Assert.That(ragdoll.TickPendingHandoff(
+                    ragdoll.Profile.MaximumHandoffWaitSeconds + 0.01f),
+                    Is.True);
+
+                Assert.That(ragdoll.HasPendingActivation, Is.False);
+                Assert.That(ragdoll.IsRagdollActive, Is.True);
+                Assert.That(
+                    ragdoll.LastHandoffSourceTransitionSequence,
+                    Is.EqualTo(23L));
+                Assert.That(
+                    ragdoll.LastHandoffFallbackReason,
+                    Is.EqualTo(ActorRagdollHandoffFallbackReason
+                        .AuthoredHandoffTimedOut));
+                Assert.That(animator.enabled, Is.False);
+                Assert.That(ragdoll.TryGetTrace(23L, out _), Is.True);
+            }
+            finally
+            {
+                Object.DestroyImmediate(actor);
+            }
+        }
+
+        [Test]
         public void ReplaySamplesRecordedTraceAndRestoresFrozenLivePose()
         {
             GameObject actor = Object.Instantiate(Resources.Load<GameObject>(
@@ -162,7 +218,7 @@ namespace GritGud.Presentation.Tests
                     ActorAnimationCoordinator>();
                 ragdoll.EnsureRuntimeRig();
                 Assert.That(ragdoll.ActivateImmediatelyForTests(
-                    journalSequence: 1,
+                    sourceTransitionSequence: 1,
                     hitRegion: TargetRegionId.Head,
                     impulseDirection: Vector3.forward,
                     handoffEventNormalizedTime: 0.5f), Is.True);
@@ -202,6 +258,75 @@ namespace GritGud.Presentation.Tests
             {
                 Object.DestroyImmediate(actor);
             }
+        }
+
+        [Test]
+        public void TerminalGroundingTracksTheAnimatedBodyFootprint()
+        {
+            var host = new GameObject("Terminal Grounding Host");
+            GameObject actor = Object.Instantiate(Resources.Load<GameObject>(
+                "Actors/DefaultPlayerActor"));
+            LevelWorld world = null;
+            GameplayWorldRegistry registry = null;
+            try
+            {
+                world = new LevelWorld(
+                    new GameObject("Terminal Grounding World"),
+                    new Dictionary<string, LevelEntityView>(),
+                    null);
+                registry = new GameplayWorldRegistry(world);
+                registry.RegisterActor(
+                    "actor", "test", targetable: true, actor);
+                GameplayCharacterGroundingPresenter grounding =
+                    host.AddComponent<GameplayCharacterGroundingPresenter>();
+                grounding.Bind(
+                    registry,
+                    GameplayVisualTheme.LoadDefault(),
+                    world.Root.transform);
+                ActorAnimationCoordinator animation = actor.GetComponent<
+                    ActorAnimationCoordinator>();
+                Animator animator = animation.TargetAnimator;
+                Assert.That(
+                    animation.PresentTerminalCollapse(TargetRegionId.Torso),
+                    Is.True);
+                animator.enabled = false;
+                PositionBone(animator, HumanBodyBones.Hips, 0f, 0.8f);
+                PositionBone(animator, HumanBodyBones.Chest, 0f, 1.25f);
+                PositionBone(animator, HumanBodyBones.UpperChest, 0f, 1.45f);
+                PositionBone(animator, HumanBodyBones.Head, 0f, 1.9f);
+                PositionBone(animator, HumanBodyBones.LeftHand, -0.25f, 1.1f);
+                PositionBone(animator, HumanBodyBones.RightHand, 0.25f, 1.1f);
+                PositionBone(animator, HumanBodyBones.LeftFoot, -0.18f, 0f);
+                PositionBone(animator, HumanBodyBones.RightFoot, 0.18f, 0f);
+
+                grounding.RefreshNow();
+
+                Transform visual = world.Root.transform.Find(
+                    "Gameplay Character Grounding/actor Contact Grounding");
+                Assert.That(visual, Is.Not.Null);
+                Assert.That(visual.position.z, Is.GreaterThan(0.7f));
+                Assert.That(visual.localScale.y, Is.GreaterThan(1.8f));
+                Assert.That(
+                    visual.localScale.y,
+                    Is.GreaterThan(visual.localScale.x * 2f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(host);
+                registry?.Dispose();
+                world?.Dispose();
+            }
+        }
+
+        private static void PositionBone(
+            Animator animator,
+            HumanBodyBones bone,
+            float x,
+            float z)
+        {
+            Transform target = animator.GetBoneTransform(bone);
+            if (target != null)
+                target.position = new Vector3(x, 0.5f, z);
         }
 
     }

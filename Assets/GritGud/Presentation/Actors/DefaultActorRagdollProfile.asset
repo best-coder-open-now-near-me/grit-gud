@@ -149,6 +149,7 @@ MonoBehaviour:
     swingTwoDegrees: 12
   totalMass: 72
   handoffNormalizedTime: 0.72
+  maximumHandoffWaitSeconds: 1.5
   sampleIntervalSeconds: 0.05
   minimumActiveSeconds: 0.45
   settleHoldSeconds: 0.35
