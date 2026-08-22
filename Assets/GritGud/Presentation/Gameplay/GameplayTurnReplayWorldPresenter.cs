@@ -250,6 +250,7 @@ namespace GritGud.Presentation.Gameplay
         private GameplaySemanticReplayPlaybackPosition replayCameraPosition;
         private bool hasReplayCameraPosition;
         private bool replayCameraAuto = true;
+        private bool replayCameraFree;
         private string manualReplayCameraSubjectKey;
         private bool gameplayHudWasVisible;
         private bool partyHudWasSuppressed;
@@ -344,6 +345,7 @@ namespace GritGud.Presentation.Gameplay
             replayCameraSample = null;
             hasReplayCameraPosition = false;
             replayCameraAuto = true;
+            replayCameraFree = false;
             manualReplayCameraSubjectKey = null;
             optionalProjections.Clear();
             liveBehaviours.Clear();
@@ -380,6 +382,7 @@ namespace GritGud.Presentation.Gameplay
                 priorTimeScale = Time.timeScale;
                 cameraSnapshot = camera?.CaptureReplaySnapshot();
                 replayCameraAuto = true;
+                replayCameraFree = false;
                 manualReplayCameraSubjectKey = null;
                 replayCameraSample = null;
                 hasReplayCameraPosition = false;
@@ -522,6 +525,8 @@ namespace GritGud.Presentation.Gameplay
             hasReplayCameraPosition = true;
             if (camera == null)
                 return;
+            if (replayCameraFree)
+                return;
             IReadOnlyList<ReplayCameraSubject> subjects =
                 BuildReplayCameraSubjects(sample);
             if (subjects.Count == 0)
@@ -597,9 +602,22 @@ namespace GritGud.Presentation.Gameplay
             if (!presenting || camera == null || replayCameraSample == null
                 || !hasReplayCameraPosition)
                 return;
+            if (command == GameplayReplayCameraCommand.Free)
+            {
+                replayCameraAuto = false;
+                replayCameraFree = true;
+                manualReplayCameraSubjectKey = null;
+                camera.BeginReplayFreeCamera();
+                hud.SetReplayCameraState(
+                    GameplayReplayCameraMode.Free,
+                    "FREE");
+                return;
+            }
             if (command == GameplayReplayCameraCommand.Auto)
             {
+                camera.EndReplayFreeCamera();
                 replayCameraAuto = true;
+                replayCameraFree = false;
                 manualReplayCameraSubjectKey = null;
                 PresentReplayCamera(
                     replayCameraSample,
@@ -609,6 +627,8 @@ namespace GritGud.Presentation.Gameplay
             if (command != GameplayReplayCameraCommand.PreviousSubject
                 && command != GameplayReplayCameraCommand.NextSubject)
                 return;
+            camera.EndReplayFreeCamera();
+            replayCameraFree = false;
             IReadOnlyList<ReplayCameraSubject> subjects =
                 BuildReplayCameraSubjects(replayCameraSample);
             if (subjects.Count == 0)
@@ -898,6 +918,7 @@ namespace GritGud.Presentation.Gameplay
             replayCameraSample = null;
             hasReplayCameraPosition = false;
             replayCameraAuto = true;
+            replayCameraFree = false;
             manualReplayCameraSubjectKey = null;
             TryRestore(() => input?.SetCameraOnly(false), ref failure);
             TryRestore(() => Time.timeScale = priorTimeScale, ref failure);

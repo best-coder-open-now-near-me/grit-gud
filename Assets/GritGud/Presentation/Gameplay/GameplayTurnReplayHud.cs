@@ -439,11 +439,15 @@ namespace GritGud.Presentation.Gameplay
                 ">"))
                 RequestCameraCommand(
                     GameplayReplayCameraCommand.NextSubject);
+            if (GUI.Button(
+                new Rect(bar.x + 394f, controlsY, 46f, 20f),
+                "FREE"))
+                RequestCameraCommand(GameplayReplayCameraCommand.Free);
 
             Rect scrubber = new Rect(
-                bar.x + 398f,
+                bar.x + 448f,
                 controlsY + 1f,
-                Mathf.Max(40f, bar.width - 408f),
+                Mathf.Max(40f, bar.width - 458f),
                 18f);
             Event guiEvent = Event.current;
             if (guiEvent.rawType == EventType.MouseDown

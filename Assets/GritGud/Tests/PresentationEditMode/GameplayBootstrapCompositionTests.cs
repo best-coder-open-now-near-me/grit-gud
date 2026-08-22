@@ -462,12 +462,40 @@ namespace GritGud.Presentation.Tests
                 replayGrenade,
                 Is.Not.Null,
                 "Replay must project the grenade between release and impact.");
+            ReplayFreeCameraController freeCamera = camera.GetComponent<
+                ReplayFreeCameraController>();
+            replayHud.RequestCameraCommand(GameplayReplayCameraCommand.Free);
+            Assert.That(
+                replayHud.ReplayCameraMode,
+                Is.EqualTo(GameplayReplayCameraMode.Free));
+            Assert.That(freeCamera.IsPresenting, Is.True);
+            Assert.That(camera.enabled, Is.False);
+            Vector3 freeStart = camera.transform.position;
+            Quaternion freeRotation = camera.transform.rotation;
+            freeCamera.Advance(
+                new ReplaySpectatorInputFrame(
+                    new Vector3(1f, 0.5f, 1f),
+                    new Vector2(20f, -10f),
+                    boosted: true),
+                0.5f);
+            Assert.That(
+                Vector3.Distance(camera.transform.position, freeStart),
+                Is.GreaterThan(1f));
+            Assert.That(
+                Quaternion.Angle(camera.transform.rotation, freeRotation),
+                Is.GreaterThan(0.1f));
+            Assert.That(
+                runtime.InputController.CurrentFrame.Movement,
+                Is.EqualTo(Vector2.zero),
+                "Spectator movement must not enter the actor input frame.");
             replayHud.Toggle();
             Assert.That(
                 gameplay.transform.Find("Replay Flying Thrown Explosive"),
                 Is.Null,
                 "Closing replay must clear the projected grenade.");
             Assert.That(camera.Target, Is.SameAs(cameraTarget));
+            Assert.That(freeCamera.IsPresenting, Is.False);
+            Assert.That(camera.enabled, Is.True);
             Assert.That(camera.View, Is.EqualTo(cameraView));
             Assert.That(camera.ThirdPersonZoom, Is.EqualTo(cameraZoom));
             Assert.That(

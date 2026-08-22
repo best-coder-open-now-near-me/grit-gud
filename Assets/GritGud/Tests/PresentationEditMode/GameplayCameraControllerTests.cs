@@ -358,6 +358,55 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void ReplayFreeCameraUsesOnlyItsSpectatorFrame()
+        {
+            var cameraObject = new GameObject("Replay Free Camera");
+            try
+            {
+                cameraObject.AddComponent<Camera>();
+                ReplayFreeCameraController free = cameraObject
+                    .AddComponent<ReplayFreeCameraController>();
+                free.Configure(new EmptySpectatorInputSource());
+                free.BeginPresentation();
+                Vector3 startingPosition = cameraObject.transform.position;
+
+                free.Advance(
+                    new ReplaySpectatorInputFrame(
+                        new Vector3(1f, 1f, 1f),
+                        new Vector2(25f, -15f),
+                        boosted: true),
+                    0.5f);
+
+                Assert.That(
+                    Vector3.Distance(
+                        cameraObject.transform.position,
+                        startingPosition),
+                    Is.GreaterThan(1f));
+                Assert.That(
+                    Quaternion.Angle(
+                        cameraObject.transform.rotation,
+                        Quaternion.identity),
+                    Is.GreaterThan(0.1f));
+                Vector3 stoppedPosition = cameraObject.transform.position;
+                free.EndPresentation();
+                free.Advance(
+                    new ReplaySpectatorInputFrame(
+                        Vector3.forward,
+                        Vector2.zero,
+                        boosted: false),
+                    1f);
+                Assert.That(
+                    cameraObject.transform.position,
+                    Is.EqualTo(stoppedPosition)
+                        .Using(Vector3ComparerWithEqualsOperator.Instance));
+            }
+            finally
+            {
+                Object.DestroyImmediate(cameraObject);
+            }
+        }
+
+        [Test]
         public void MultipleCameraOwnersRestoreRendererVisibilityOutOfOrder()
         {
             var actor = new GameObject("Shared Camera Actor");
@@ -479,6 +528,12 @@ namespace GritGud.Presentation.Tests
 
             public string GetBindingDisplay(GameplayControl control) =>
                 control.ToString();
+        }
+
+        private sealed class EmptySpectatorInputSource :
+            IReplaySpectatorInputSource
+        {
+            public ReplaySpectatorInputFrame ReadFrame() => default;
         }
     }
 }
