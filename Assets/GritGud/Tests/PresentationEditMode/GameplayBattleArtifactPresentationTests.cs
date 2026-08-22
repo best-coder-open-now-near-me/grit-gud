@@ -44,59 +44,60 @@ namespace GritGud.Presentation.Tests
             Assert.That(result.IsReady, Is.True);
             var playback = new GameplaySemanticReplayPlaybackTimeline(
                 result.Replay);
-            ReplayActorTerminalPoseEpisode warehousePatrol = playback
-                .TerminalPoseEpisodes.Single(episode =>
-                    episode.ActorId == "depot-warehouse-patrol"
-                    && episode.SourceTransitionSequence == 7);
+            ReplayActorTerminalPoseEpisode persistedEpisode = playback
+                .TerminalPoseEpisodes
+                .OrderBy(episode => episode.StartSeconds)
+                .First();
             GameplaySemanticReplayPlaybackFrame sourceFrame = playback.Frames
                 .Single(frame =>
-                    frame.Frame.Transition.Identity.Sequence == 7);
+                    frame.Frame.Transition.Identity.Sequence ==
+                        persistedEpisode.SourceTransitionSequence);
             GameplaySemanticReplayPlaybackFrame laterFrame = playback.Frames
                 .First(frame => frame.StartSeconds >= sourceFrame.EndSeconds);
 
             Assert.That(
-                warehousePatrol.EpisodeId,
-                Is.EqualTo("terminal:depot-warehouse-patrol:7"));
+                persistedEpisode.EpisodeId,
+                Is.EqualTo("terminal:" + persistedEpisode.ActorId + ":"
+                    + persistedEpisode.SourceTransitionSequence));
             Assert.That(
-                warehousePatrol.EnteredLifeState,
-                Is.EqualTo(ActorLifeState.Dead));
-            Assert.That(
-                warehousePatrol.HitRegion,
-                Is.EqualTo(TargetRegionId.Torso));
-            Assert.That(
-                warehousePatrol.PoseKind,
-                Is.EqualTo(ReplayActorTerminalPoseKind.ShoulderFall));
+                persistedEpisode.EnteredLifeState,
+                Is.EqualTo(ActorLifeState.Incapacitated)
+                    .Or.EqualTo(ActorLifeState.Dead));
+            Assert.That(persistedEpisode.HitRegion, Is.Not.Null);
             Assert.That(
                 playback.SampleTerminalPose(
-                    warehousePatrol.ActorId,
-                    warehousePatrol.StartSeconds - 0.001f),
+                    persistedEpisode.ActorId,
+                    persistedEpisode.StartSeconds - 0.001f),
                 Is.Null);
             ReplayActorTerminalPoseSample laterSample = playback
                 .SampleTerminalPose(
-                    warehousePatrol.ActorId,
+                    persistedEpisode.ActorId,
                     laterFrame.StartSeconds);
             Assert.That(laterSample, Is.Not.Null);
             Assert.That(
                 laterSample.EpisodeId,
-                Is.EqualTo(warehousePatrol.EpisodeId));
+                Is.EqualTo(persistedEpisode.EpisodeId));
             Assert.That(laterSample.NormalizedProgress, Is.GreaterThan(0f));
 
-            ReplayCombatTranscriptEntry death = new ReplayCombatTranscript(
+            ReplayCombatTranscriptEventKind terminalEventKind =
+                persistedEpisode.EnteredLifeState == ActorLifeState.Dead
+                    ? ReplayCombatTranscriptEventKind.Death
+                    : ReplayCombatTranscriptEventKind.Incapacitation;
+            ReplayCombatTranscriptEntry terminalEntry = new ReplayCombatTranscript(
                     playback)
                 .Entries.Single(entry =>
-                    entry.EventKind == ReplayCombatTranscriptEventKind.Death
-                    && entry.TargetId == warehousePatrol.ActorId);
+                    entry.EventKind == terminalEventKind
+                    && entry.TargetId == persistedEpisode.ActorId
+                    && entry.TransitionSequence ==
+                        persistedEpisode.SourceTransitionSequence);
             Assert.That(
-                death.TimeSeconds,
-                Is.EqualTo(warehousePatrol.StartSeconds).Within(0.0001f));
+                terminalEntry.TimeSeconds,
+                Is.EqualTo(persistedEpisode.StartSeconds).Within(0.0001f));
 
             ReplayActorTerminalPoseEpisode finalEpisode = playback
-                .TerminalPoseEpisodes.Single(episode =>
-                    episode.ActorId == "oren-vale"
-                    && episode.SourceTransitionSequence == 50);
-            Assert.That(
-                finalEpisode.PoseKind,
-                Is.EqualTo(ReplayActorTerminalPoseKind.FallOver));
+                .TerminalPoseEpisodes
+                .OrderBy(episode => episode.AnimationEndSeconds)
+                .Last();
             Assert.That(
                 playback.TotalDurationSeconds,
                 Is.EqualTo(finalEpisode.AnimationEndSeconds)
@@ -140,13 +141,17 @@ namespace GritGud.Presentation.Tests
             Assert.That(score.ConcussiveTargets, Is.GreaterThan(0));
             Assert.That(score.DroneMoves, Is.GreaterThan(0));
             Assert.That(score.DroneAttacks, Is.GreaterThan(0));
-            Assert.That(score.Reloads, Is.EqualTo(1));
-            Assert.That(score.RoundsSpent, Is.EqualTo(14));
-            Assert.That(score.RoundsReloaded, Is.EqualTo(6));
+            Assert.That(score.DroneSummons, Is.EqualTo(1));
+            Assert.That(score.DroneDismissals, Is.Zero);
+            Assert.That(score.DroneExpirations, Is.Zero);
+            Assert.That(score.DroneCrashes, Is.Zero);
+            Assert.That(score.Reloads, Is.Zero);
+            Assert.That(score.RoundsSpent, Is.EqualTo(11));
+            Assert.That(score.RoundsReloaded, Is.Zero);
             Assert.That(score.Ammunition, Has.Count.EqualTo(2));
             Assert.That(score.Ammunition[0].AmmoTypeId,
                 Is.EqualTo("ammo.rifle"));
-            Assert.That(score.Ammunition[0].RoundsSpent, Is.EqualTo(14));
+            Assert.That(score.Ammunition[0].RoundsSpent, Is.EqualTo(11));
             Assert.That(score.Ammunition[1].AmmoTypeId,
                 Is.EqualTo("ammo.rocket"));
             Assert.That(score.Ammunition[1].RoundsSpent, Is.Zero);

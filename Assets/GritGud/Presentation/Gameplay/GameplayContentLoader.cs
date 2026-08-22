@@ -321,14 +321,41 @@ namespace GritGud.Presentation.Gameplay
                 });
             }
 
+            foreach (ScenarioDroneArchetypeContentData archetype in
+                templateSource.droneArchetypes)
+            {
+                if (archetype != null)
+                    scenario.droneArchetypes.Add(Clone(archetype));
+            }
+
+            foreach (ScenarioDroneSummonAbilityContentData ability in
+                templateSource.droneSummonAbilities)
+            {
+                if (ability == null) continue;
+                List<LevelScenarioActorData> summoners = authored.actors
+                    .Where(actor => actor != null && string.Equals(
+                        actor.templateId,
+                        ability.summonerActorId,
+                        StringComparison.Ordinal))
+                    .ToList();
+                for (int index = 0; index < summoners.Count; index++)
+                {
+                    ScenarioDroneSummonAbilityContentData authoredAbility =
+                        Clone(ability);
+                    authoredAbility.summonerActorId = summoners[index].id;
+                    if (summoners.Count > 1)
+                        authoredAbility.abilityId += "." + summoners[index].id;
+                    scenario.droneSummonAbilities.Add(authoredAbility);
+                }
+            }
+
             scenario.Normalize();
             return scenario;
         }
 
-        private static ScenarioActorContentData Clone(ScenarioActorContentData source)
+        private static T Clone<T>(T source)
         {
-            return JsonUtility.FromJson<ScenarioActorContentData>(
-                JsonUtility.ToJson(source));
+            return JsonUtility.FromJson<T>(JsonUtility.ToJson(source));
         }
 
         private static GameplayContentPackage CreatePackage(

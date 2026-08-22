@@ -294,13 +294,17 @@ namespace GritGud.Domain.Tests.Gameplay
                 fireDeployments: 0,
                 droneMoves: 0,
                 droneAttacks: 0,
+                droneSummons: 0,
+                droneDismissals: 0,
+                droneExpirations: 0,
+                droneCrashes: 0,
                 reloads: 0,
                 roundsSpent: 0,
                 roundsReloaded: 0,
                 finalLoadedRounds: 0,
                 finalReserveRounds: 0,
-                Array.Empty<GameplayBattleActorScore>(),
-                Array.Empty<GameplayBattleAmmunitionScore>());
+                actors: Array.Empty<GameplayBattleActorScore>(),
+                ammunition: Array.Empty<GameplayBattleAmmunitionScore>());
 
         private static GameplayExecutionIdentity CreateExecutionIdentity() =>
             new GameplayExecutionIdentity(

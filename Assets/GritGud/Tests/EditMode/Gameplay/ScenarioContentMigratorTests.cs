@@ -58,7 +58,7 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
-        public void SchemaTwentyOneDroneControllerMigratesToSummonerPartner()
+        public void SchemaTwentyOneDroneControllerMigratesToSummonedDefinition()
         {
             var document = new ScenarioContentDocument
             {
@@ -77,9 +77,13 @@ namespace GritGud.Domain.Tests.Gameplay
 
             Assert.That(document.schemaVersion,
                 Is.EqualTo(ScenarioContentDocument.CurrentSchemaVersion));
-            Assert.That(document.drones[0].summonerActorId,
+            Assert.That(document.drones, Is.Empty);
+            Assert.That(document.droneArchetypes, Has.Count.EqualTo(1));
+            Assert.That(document.droneSummonAbilities, Has.Count.EqualTo(1));
+            Assert.That(document.droneSummonAbilities[0].summonerActorId,
                 Is.EqualTo("summoner"));
-            Assert.That(document.drones[0].controllerActorId, Is.Empty);
+            Assert.That(document.droneSummonAbilities[0].droneArchetypeId,
+                Is.EqualTo(document.droneArchetypes[0].archetypeId));
         }
 
         private static ScenarioActorContentData Actor(string id, int ap) =>
