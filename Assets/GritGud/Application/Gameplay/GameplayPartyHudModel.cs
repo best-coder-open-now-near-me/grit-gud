@@ -19,7 +19,9 @@ namespace GritGud.Application.Gameplay
             bool canSelect,
             TurnBudget turnBudget,
             int woundCount,
-            int maximumWounds)
+            int maximumWounds,
+            ActorLifeState lifeState = ActorLifeState.Active,
+            int conditionPercent = 100)
         {
             ActorId = actorId ?? throw new ArgumentNullException(nameof(actorId));
             DisplayName = displayName ?? throw new ArgumentNullException(
@@ -34,6 +36,12 @@ namespace GritGud.Application.Gameplay
             TurnBudget = turnBudget;
             WoundCount = woundCount;
             MaximumWounds = maximumWounds;
+            if (!Enum.IsDefined(typeof(ActorLifeState), lifeState))
+                throw new ArgumentOutOfRangeException(nameof(lifeState));
+            if (conditionPercent < 0 || conditionPercent > 100)
+                throw new ArgumentOutOfRangeException(nameof(conditionPercent));
+            LifeState = lifeState;
+            ConditionPercent = conditionPercent;
         }
 
         public string ActorId { get; }
@@ -59,6 +67,12 @@ namespace GritGud.Application.Gameplay
         public int WoundCount { get; }
 
         public int MaximumWounds { get; }
+
+        public ActorLifeState LifeState { get; }
+
+        public int ConditionPercent { get; }
+
+        public bool Dead => LifeState == ActorLifeState.Dead;
     }
 
     public sealed class GameplayPartyHudModel
@@ -141,7 +155,10 @@ namespace GritGud.Application.Gameplay
                         && !selected,
                     actor.TurnBudget,
                     actor.Wounds.WoundCount,
-                    actor.MaximumWounds));
+                    actor.MaximumWounds,
+                    actor.LifeState,
+                    GameplayInjuryCapabilityProjection
+                        .CalculateConditionPercent(actor.Injuries)));
             }
 
             return new GameplayPartyHudModel(

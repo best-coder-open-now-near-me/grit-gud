@@ -269,12 +269,14 @@ namespace GritGud.Presentation.Gameplay
                 : member.PartyMember
                     ? "PARTY  -  "
                     : "NEUTRAL  -  ";
-            string details = member.Incapacitated
-                ? "INCAPACITATED"
-                : affiliation
-                    + $"AP {member.TurnBudget.ActionPoints}  -  MOVE "
-                    + $"{member.TurnBudget.MovementOpportunity:0.#}  -  "
-                    + $"WOUNDS {member.WoundCount}/{member.MaximumWounds}";
+            string details = member.Dead
+                ? "DEAD"
+                : member.Incapacitated
+                    ? "INCAPACITATED"
+                    : affiliation
+                        + $"AP {member.TurnBudget.ActionPoints}  -  MOVE "
+                        + $"{member.TurnBudget.MovementOpportunity:0.#}  -  "
+                        + $"CONDITION {member.ConditionPercent}%";
             GUI.Label(
                 new Rect(
                     rectangle.x + 12f,

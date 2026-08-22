@@ -674,31 +674,84 @@ namespace GritGud.Application.Gameplay
                     new GameplayBodyRegionModel(
                         TargetRegionId.Head,
                         "HEAD",
-                        wounds.HeadWounds),
+                        wounds.HeadWounds,
+                        actor.Injuries.GetRegion(TargetRegionId.Head)
+                            .StructuralIntegrity,
+                        actor.Injuries.GetRegion(TargetRegionId.Head)
+                            .MotorFunction,
+                        actor.Injuries.GetRegion(TargetRegionId.Head)
+                            .SensoryFunction,
+                        actor.Injuries.GetRegion(TargetRegionId.Head)
+                            .BleedRate),
                     new GameplayBodyRegionModel(
                         TargetRegionId.LeftArm,
                         "L ARM",
-                        wounds.LeftArmWounds),
+                        wounds.LeftArmWounds,
+                        actor.Injuries.GetRegion(TargetRegionId.LeftArm)
+                            .StructuralIntegrity,
+                        actor.Injuries.GetRegion(TargetRegionId.LeftArm)
+                            .MotorFunction,
+                        actor.Injuries.GetRegion(TargetRegionId.LeftArm)
+                            .SensoryFunction,
+                        actor.Injuries.GetRegion(TargetRegionId.LeftArm)
+                            .BleedRate),
                     new GameplayBodyRegionModel(
                         TargetRegionId.Torso,
                         "TORSO",
-                        wounds.TorsoWounds),
+                        wounds.TorsoWounds,
+                        actor.Injuries.GetRegion(TargetRegionId.Torso)
+                            .StructuralIntegrity,
+                        actor.Injuries.GetRegion(TargetRegionId.Torso)
+                            .MotorFunction,
+                        actor.Injuries.GetRegion(TargetRegionId.Torso)
+                            .SensoryFunction,
+                        actor.Injuries.GetRegion(TargetRegionId.Torso)
+                            .BleedRate),
                     new GameplayBodyRegionModel(
                         TargetRegionId.RightArm,
                         "R ARM",
-                        wounds.RightArmWounds),
+                        wounds.RightArmWounds,
+                        actor.Injuries.GetRegion(TargetRegionId.RightArm)
+                            .StructuralIntegrity,
+                        actor.Injuries.GetRegion(TargetRegionId.RightArm)
+                            .MotorFunction,
+                        actor.Injuries.GetRegion(TargetRegionId.RightArm)
+                            .SensoryFunction,
+                        actor.Injuries.GetRegion(TargetRegionId.RightArm)
+                            .BleedRate),
                     new GameplayBodyRegionModel(
                         TargetRegionId.LeftLeg,
                         "L LEG",
-                        wounds.LeftLegWounds),
+                        wounds.LeftLegWounds,
+                        actor.Injuries.GetRegion(TargetRegionId.LeftLeg)
+                            .StructuralIntegrity,
+                        actor.Injuries.GetRegion(TargetRegionId.LeftLeg)
+                            .MotorFunction,
+                        actor.Injuries.GetRegion(TargetRegionId.LeftLeg)
+                            .SensoryFunction,
+                        actor.Injuries.GetRegion(TargetRegionId.LeftLeg)
+                            .BleedRate),
                     new GameplayBodyRegionModel(
                         TargetRegionId.RightLeg,
                         "R LEG",
-                        wounds.RightLegWounds),
+                        wounds.RightLegWounds,
+                        actor.Injuries.GetRegion(TargetRegionId.RightLeg)
+                            .StructuralIntegrity,
+                        actor.Injuries.GetRegion(TargetRegionId.RightLeg)
+                            .MotorFunction,
+                        actor.Injuries.GetRegion(TargetRegionId.RightLeg)
+                            .SensoryFunction,
+                        actor.Injuries.GetRegion(TargetRegionId.RightLeg)
+                            .BleedRate),
                 },
                 actor.MaximumWounds,
                 wounds.MovementPenalty,
-                wounds.UnlocalizedWounds);
+                wounds.UnlocalizedWounds,
+                actor.LifeState,
+                actor.Capabilities,
+                actor.Physiology,
+                GameplayInjuryCapabilityProjection
+                    .CalculateConditionPercent(actor.Injuries));
         }
 
         private static IReadOnlyList<GameplayHotbarSlotModel> BuildHotbar(

@@ -99,16 +99,16 @@ namespace GritGud.Application.Gameplay
         public static GameplayExecutionDeadlinePolicy Default { get; } =
             new GameplayExecutionDeadlinePolicy(
                 TimeSpan.FromSeconds(2),
-                // Permanent scenarios evaluate evidence for roughly two
-                // thousand candidates. Keep this stage above the profiled
-                // Depot peak while retaining the tighter limits elsewhere.
-                TimeSpan.FromSeconds(5),
+                // Localized injury state can keep functionally impaired actors
+                // active, increasing evidence work beyond the old wound-cap
+                // profile. Preserve a bounded guard above that production peak.
+                TimeSpan.FromSeconds(12),
                 TimeSpan.FromSeconds(2),
                 TimeSpan.FromSeconds(2),
                 TimeSpan.FromSeconds(2),
                 TimeSpan.FromSeconds(2),
-                TimeSpan.FromSeconds(8),
-                TimeSpan.FromSeconds(30),
+                TimeSpan.FromSeconds(16),
+                TimeSpan.FromSeconds(60),
                 TimeSpan.FromMinutes(5));
 
         private static TimeSpan RequirePositive(TimeSpan value, string name)

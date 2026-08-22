@@ -632,20 +632,21 @@ namespace GritGud.Presentation.Gameplay
             GameplayBodyStatusModel bodyStatus,
             GameplayBodyRegionModel region)
         {
-            string maximumWounds = bodyStatus.MaximumWounds == int.MaxValue
-                ? "-"
-                : bodyStatus.MaximumWounds.ToString();
             return FormatBodyRegionName(region.Region)
                 + "\nSTATE - "
-                + (region.IsWounded ? "WOUNDED" : "CLEAR")
-                + "\nREGION WOUNDS - "
-                + region.WoundCount
-                + "\nTOTAL WOUNDS - "
-                + bodyStatus.TotalWounds
-                + " / "
-                + maximumWounds
-                + "\nMOVE PENALTY - "
-                + bodyStatus.MovementPenalty.ToString("0.##");
+                + (region.IsWounded ? "INJURED" : "CLEAR")
+                + "\nCONDITION - " + region.ConditionPercent + "%"
+                + "\nSTRUCTURE - " + region.StructuralIntegrity + "%"
+                + "\nMOTOR - " + region.MotorFunction + "%"
+                + "\nSENSORY - " + region.SensoryFunction + "%"
+                + "\nBLEED - " + region.BleedRate
+                + "\nLIFE STATE - " + bodyStatus.LifeState
+                + "\nSYSTEMIC - BLOOD "
+                + bodyStatus.Physiology.BloodReserve + "% / SHOCK "
+                + bodyStatus.Physiology.Shock + "%"
+                + "\nCAPABILITY - MOVE "
+                + bodyStatus.Capabilities.MovementCapacity + "% / AIM "
+                + bodyStatus.Capabilities.AimStability + "%";
         }
 
         private static string FormatBodyRegionName(TargetRegionId region)

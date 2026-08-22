@@ -1,4 +1,6 @@
+using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
+using GritGud.Domain.Turns;
 using NUnit.Framework;
 
 namespace GritGud.Domain.Tests
@@ -54,6 +56,29 @@ namespace GritGud.Domain.Tests
             Assert.That(state.Capabilities.CanUseRightHand, Is.False);
             Assert.That(state.Capabilities.CanUseTwoHandedWeapon, Is.False);
             Assert.That(state.LifeState, Is.EqualTo(ActorLifeState.Active));
+        }
+
+        [Test]
+        public void ArmInjuriesGateRifleReloadAndThrowWithoutLegPenalty()
+        {
+            ActorInjuryState state = ActorInjuryState.CreateHealthy("target");
+            state = Apply(state, TargetRegionId.LeftArm, 75, 1).Resulting;
+            state = Apply(state, TargetRegionId.RightArm, 75, 2).Resulting;
+            var rifle = new AttackDefinition(
+                "weapon.rifle",
+                "Rifle",
+                new ActionCost(1, 0f, ActionMobility.Set),
+                woundMovementPenalty: 1f,
+                accuracyDecay: AccuracyDecayDefinition.None);
+
+            Assert.That(GameplayInjuryCapabilityProjection.CanUseAttack(
+                state.Capabilities,
+                rifle), Is.False);
+            Assert.That(state.Capabilities.ReloadCapacity, Is.LessThan(30));
+            Assert.That(state.Capabilities.ThrowCapacity, Is.LessThan(30));
+            Assert.That(GameplayInjuryCapabilityProjection
+                .CalculateMovementAllowance(8f, state.Capabilities),
+                Is.GreaterThan(7f));
         }
 
         [Test]

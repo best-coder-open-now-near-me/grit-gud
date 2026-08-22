@@ -57,6 +57,8 @@ namespace GritGud.Application.Gameplay
                     $"HIT CHANCE - {attack.GeometricHitChancePercent}% geometric"
                     + " x 100% contact accuracy"
                     + FormatContextAccuracy(attack.Context)
+                    + FormatCapabilityAccuracy(
+                        attack.CapabilityAccuracyDeltaPercent)
                     + $" = {attack.FinalHitChancePercent}%");
             }
             else
@@ -70,6 +72,8 @@ namespace GritGud.Application.Gameplay
                     $"HIT CHANCE - {attack.GeometricHitChancePercent}% geometric"
                     + $" x {Format(attack.AccuracyPercent)}% accuracy"
                     + FormatContextAccuracy(attack.Context)
+                    + FormatCapabilityAccuracy(
+                        attack.CapabilityAccuracyDeltaPercent)
                     + $" = {attack.FinalHitChancePercent}%");
             }
             lines.Add(
@@ -79,24 +83,38 @@ namespace GritGud.Application.Gameplay
             if (attack.Hit)
             {
                 ActorWoundRecord wound = attack.Wound;
+                ActorInjuryDelta injury = attack.Injury;
                 lines.Add(
                     $"REGION ROLL - d{attack.Exposure.VisibleSampleCount}"
                     + $" = {attack.RegionRoll} - {attack.HitRegion}");
+                lines.Add("IMPACT - " + injury.Impact.Mechanism
+                    + " - severity " + injury.Impact.Severity
+                    + " - source " + injury.Impact.SourceActorId
+                    + " - weapon " + injury.Impact.WeaponId);
+                lines.Add("INJURY - structural "
+                    + injury.Injury.StructuralDamage + " - motor "
+                    + injury.Injury.MotorLoss + " - sensory "
+                    + injury.Injury.SensoryLoss + " - bleed "
+                    + injury.Injury.BleedRate);
+                lines.Add("SYSTEMIC - blood "
+                    + injury.PreviousPhysiology.BloodReserve + " -> "
+                    + injury.ResultingPhysiology.BloodReserve + " - shock "
+                    + injury.PreviousPhysiology.Shock + " -> "
+                    + injury.ResultingPhysiology.Shock
+                    + " - consciousness "
+                    + injury.PreviousPhysiology.Consciousness + " -> "
+                    + injury.ResultingPhysiology.Consciousness);
+                lines.Add("LIFE STATE - " + injury.PreviousLifeState
+                    + " -> " + injury.ResultingLifeState);
                 lines.Add(
-                    $"WOUND - count {wound.Previous.WoundCount}"
-                    + $" + 1 = {wound.Resulting.WoundCount}"
-                    + $" - {wound.Region} count "
-                    + $"{wound.Previous.GetWoundCount(wound.Region)}"
-                    + $" + 1 = {wound.Resulting.GetWoundCount(wound.Region)}"
-                    + $" - movement penalty {Format(wound.Previous.MovementPenalty)}"
-                    + $" + {Format(wound.AppliedMovementPenalty)}"
-                    + $" = {Format(wound.Resulting.MovementPenalty)}");
-                lines.Add($"OUTCOME - HIT - {attack.HitRegion} WOUND APPLIED");
+                    $"COMPATIBILITY WOUND - count {wound.Previous.WoundCount}"
+                    + $" + 1 = {wound.Resulting.WoundCount}");
+                lines.Add($"OUTCOME - HIT - {attack.HitRegion} INJURY APPLIED");
             }
             else
             {
                 lines.Add("REGION ROLL - NOT ROLLED ON MISS");
-                lines.Add("OUTCOME - MISS - NO WOUND");
+                lines.Add("OUTCOME - MISS - NO INJURY");
             }
 
             return lines.ToArray();
@@ -157,6 +175,11 @@ namespace GritGud.Application.Gameplay
                 || context.AccuracyDeltaPercent == 0
                     ? string.Empty
                     : $" {context.AccuracyDeltaPercent:+#;-#}% context";
+
+        private static string FormatCapabilityAccuracy(int delta) =>
+            delta == 0
+                ? string.Empty
+                : $" {delta:+#;-#}% capability";
 
         public static string[] FormatDischarge(GameplayActionRecord action)
         {

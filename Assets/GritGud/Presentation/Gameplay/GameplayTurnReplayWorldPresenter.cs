@@ -583,7 +583,9 @@ namespace GritGud.Presentation.Gameplay
                 return;
             }
             if (presentationEvent.Kind ==
-                ReplayCombatPresentationEventKind.Incapacitation)
+                    ReplayCombatPresentationEventKind.Incapacitation
+                || presentationEvent.Kind ==
+                    ReplayCombatPresentationEventKind.Death)
             {
                 presentedIncapacitations.Add(presentationEvent.StableKey);
                 return;

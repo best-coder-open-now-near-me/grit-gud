@@ -10,9 +10,12 @@ namespace GritGud.Application.Gameplay
         ProjectileLaunch = 1,
         ProjectileImpact = 2,
         Reaction = 3,
-        WoundApplied = 4,
+        InjuryApplied = 4,
+        WoundApplied = InjuryApplied,
         Incapacitation = 5,
         ExplosiveThrow = 6,
+        SystemicChange = 7,
+        Death = 8,
     }
 
     public sealed class ReplayCombatTranscriptEntry
@@ -39,7 +42,14 @@ namespace GritGud.Application.Gameplay
             int woundsBefore,
             int woundsAfter,
             string displayTitle,
-            IEnumerable<string> lines)
+            IEnumerable<string> lines,
+            InjuryRecord injury = null,
+            ActorCapabilityState capabilitiesBefore = null,
+            ActorCapabilityState capabilitiesAfter = null,
+            ActorPhysiologyState physiologyBefore = null,
+            ActorPhysiologyState physiologyAfter = null,
+            ActorLifeState? lifeStateBefore = null,
+            ActorLifeState? lifeStateAfter = null)
         {
             if (sequence <= 0) throw new ArgumentOutOfRangeException(
                 nameof(sequence));
@@ -79,6 +89,24 @@ namespace GritGud.Application.Gameplay
                 || (woundsBefore >= 0 && woundsAfter < woundsBefore))
                 throw new ArgumentException(
                     "Replay wound deltas must be absent or monotonic.");
+            if ((capabilitiesBefore == null) != (capabilitiesAfter == null))
+                throw new ArgumentException(
+                    "Replay capability changes require before and after state.");
+            if ((physiologyBefore == null) != (physiologyAfter == null))
+                throw new ArgumentException(
+                    "Replay physiology changes require before and after state.");
+            if (lifeStateBefore.HasValue != lifeStateAfter.HasValue)
+                throw new ArgumentException(
+                    "Replay life-state changes require before and after state.");
+            if ((lifeStateBefore.HasValue
+                    && !Enum.IsDefined(
+                        typeof(ActorLifeState),
+                        lifeStateBefore.Value))
+                || (lifeStateAfter.HasValue
+                    && !Enum.IsDefined(
+                        typeof(ActorLifeState),
+                        lifeStateAfter.Value)))
+                throw new ArgumentOutOfRangeException(nameof(lifeStateBefore));
             if (string.IsNullOrWhiteSpace(displayTitle))
                 throw new ArgumentException(
                     "Replay transcript entries require display text.",
@@ -113,6 +141,13 @@ namespace GritGud.Application.Gameplay
             WoundsBefore = woundsBefore;
             WoundsAfter = woundsAfter;
             DisplayTitle = displayTitle.Trim();
+            Injury = injury;
+            CapabilitiesBefore = capabilitiesBefore;
+            CapabilitiesAfter = capabilitiesAfter;
+            PhysiologyBefore = physiologyBefore;
+            PhysiologyAfter = physiologyAfter;
+            LifeStateBefore = lifeStateBefore;
+            LifeStateAfter = lifeStateAfter;
             displayLines = copiedLines.AsReadOnly();
         }
 
@@ -136,6 +171,16 @@ namespace GritGud.Application.Gameplay
         public int WoundsAfter { get; }
         public string DisplayTitle { get; }
         public IReadOnlyList<string> DisplayLines => displayLines;
+        public InjuryRecord Injury { get; }
+        public string InjuryId => Injury?.InjuryId ?? string.Empty;
+        public string ImpactCombatEventId =>
+            Injury?.CombatEventId ?? string.Empty;
+        public ActorCapabilityState CapabilitiesBefore { get; }
+        public ActorCapabilityState CapabilitiesAfter { get; }
+        public ActorPhysiologyState PhysiologyBefore { get; }
+        public ActorPhysiologyState PhysiologyAfter { get; }
+        public ActorLifeState? LifeStateBefore { get; }
+        public ActorLifeState? LifeStateAfter { get; }
     }
 
     public sealed class ReplayCombatDiagnosticTotals
@@ -150,7 +195,9 @@ namespace GritGud.Application.Gameplay
             int blockedAttacks,
             int reactions,
             int woundsApplied,
-            int incapacitations)
+            int incapacitations,
+            int systemicChanges,
+            int deaths)
         {
             AttackExecutions = attackExecutions;
             WeaponDischarges = weaponDischarges;
@@ -162,6 +209,8 @@ namespace GritGud.Application.Gameplay
             Reactions = reactions;
             WoundsApplied = woundsApplied;
             Incapacitations = incapacitations;
+            SystemicChanges = systemicChanges;
+            Deaths = deaths;
         }
 
         public int AttackExecutions { get; }
@@ -173,7 +222,10 @@ namespace GritGud.Application.Gameplay
         public int BlockedAttacks { get; }
         public int Reactions { get; }
         public int WoundsApplied { get; }
+        public int InjuriesApplied => WoundsApplied;
         public int Incapacitations { get; }
+        public int SystemicChanges { get; }
+        public int Deaths { get; }
     }
 
     public sealed class ReplayCombatTranscript
@@ -197,6 +249,8 @@ namespace GritGud.Application.Gameplay
             int reactions = 0;
             int wounds = 0;
             int incapacitations = 0;
+            int systemicChanges = 0;
+            int deaths = 0;
 
             foreach (GameplaySemanticReplayPlaybackFrame playbackFrame in
                 playback.Frames)
@@ -254,6 +308,9 @@ namespace GritGud.Application.Gameplay
                         case ReplayCombatPresentationEventKind.Incapacitation:
                             incapacitations++;
                             break;
+                        case ReplayCombatPresentationEventKind.Death:
+                            deaths++;
+                            break;
                         case ReplayCombatPresentationEventKind
                                 .ThrownExplosiveRelease:
                             launches++;
@@ -303,14 +360,16 @@ namespace GritGud.Application.Gameplay
                         lines));
                 }
 
-                wounds += AppendWoundEntries(
+                wounds += AppendInjuryEntries(
                     frame,
                     playbackFrame,
                     playback.TotalDurationSeconds,
                     presentationEvents.Count,
                     attackExecutionId,
                     projected,
-                    identities);
+                    identities,
+                    out int frameSystemicChanges);
+                systemicChanges += frameSystemicChanges;
             }
 
             entries = projected.AsReadOnly();
@@ -324,7 +383,9 @@ namespace GritGud.Application.Gameplay
                 blocked,
                 reactions,
                 wounds,
-                incapacitations);
+                incapacitations,
+                systemicChanges,
+                deaths);
         }
 
         public GameplaySemanticReplayPlaybackTimeline Playback { get; }
@@ -376,6 +437,8 @@ namespace GritGud.Application.Gameplay
                     return ReplayCombatTranscriptEventKind.ExplosiveThrow;
                 case ReplayCombatPresentationEventKind.ThrownExplosiveImpact:
                     return ReplayCombatTranscriptEventKind.ProjectileImpact;
+                case ReplayCombatPresentationEventKind.Death:
+                    return ReplayCombatTranscriptEventKind.Death;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
             }
@@ -394,16 +457,21 @@ namespace GritGud.Application.Gameplay
             return null;
         }
 
-        private static int AppendWoundEntries(
+        private static int AppendInjuryEntries(
             GameplaySemanticReplayFrame frame,
             GameplaySemanticReplayPlaybackFrame playbackFrame,
             float totalDurationSeconds,
             int firstEventOrdinal,
             string attackExecutionId,
             ICollection<ReplayCombatTranscriptEntry> transcriptEntries,
-            ISet<string> identities)
+            ISet<string> identities,
+            out int systemicChanges)
         {
-            int count = 0;
+            int injuryCount = 0;
+            int eventOffset = 0;
+            systemicChanges = 0;
+            var actorsWithNewInjuries = new HashSet<string>(
+                StringComparer.Ordinal);
             foreach (GameplayActorSnapshot resulting in
                 frame.Resulting.Session.Actors)
             {
@@ -412,68 +480,87 @@ namespace GritGud.Application.Gameplay
                     resulting.ActorId,
                     out GameplayActorSnapshot previous))
                     continue;
-                int totalDelta = Math.Max(
-                    0,
-                    resulting.Wounds.WoundCount
-                        - previous.Wounds.WoundCount);
-                if (totalDelta == 0) continue;
-                int represented = 0;
-                foreach (TargetRegionId region in Enum.GetValues(
-                    typeof(TargetRegionId)))
+                var previousInjuries = new Dictionary<string, int>(
+                    StringComparer.Ordinal);
+                foreach (InjuryRecord injury in previous.Injuries.Injuries)
                 {
-                    int regionDelta = Math.Max(
-                        0,
-                        resulting.Wounds.GetWoundCount(region)
-                            - previous.Wounds.GetWoundCount(region));
-                    for (int index = 0; index < regionDelta; index++)
-                    {
-                        AppendWoundEntry(
-                            frame,
-                            playbackFrame,
-                            totalDurationSeconds,
-                            firstEventOrdinal + count,
-                            attackExecutionId,
-                            previous.Wounds.WoundCount + represented,
-                            previous.Wounds.WoundCount + represented + 1,
-                            region,
-                            resulting.ActorId,
-                            transcriptEntries,
-                            identities);
-                        represented++;
-                        count++;
-                    }
+                    string key = GetInjuryComparisonKey(injury);
+                    previousInjuries.TryGetValue(key, out int existing);
+                    previousInjuries[key] = existing + 1;
                 }
-                int unlocalizedDelta = Math.Max(
-                    0,
-                    resulting.Wounds.UnlocalizedWounds
-                        - previous.Wounds.UnlocalizedWounds);
-                for (int index = 0; index < unlocalizedDelta; index++)
+                int represented = 0;
+                foreach (InjuryRecord injury in resulting.Injuries.Injuries)
                 {
-                    AppendWoundEntry(
+                    string key = GetInjuryComparisonKey(injury);
+                    if (previousInjuries.TryGetValue(key, out int existing)
+                        && existing > 0)
+                    {
+                        previousInjuries[key] = existing - 1;
+                        continue;
+                    }
+                    AppendInjuryEntry(
                         frame,
                         playbackFrame,
                         totalDurationSeconds,
-                        firstEventOrdinal + count,
+                        firstEventOrdinal + eventOffset,
                         attackExecutionId,
                         previous.Wounds.WoundCount + represented,
-                        previous.Wounds.WoundCount + represented + 1,
-                        region: null,
-                        resulting.ActorId,
+                        Math.Min(
+                            resulting.Wounds.WoundCount,
+                            previous.Wounds.WoundCount + represented + 1),
+                        injury,
+                        previous,
+                        resulting,
                         transcriptEntries,
                         identities);
                     represented++;
-                    count++;
+                    injuryCount++;
+                    eventOffset++;
                 }
-                if (represented != totalDelta)
-                    throw new InvalidOperationException(
-                        $"Replay transition {frame.Transition.Identity.Sequence} "
-                        + $"cannot classify {totalDelta - represented} wound(s) "
-                        + $"for actor '{resulting.ActorId}'.");
+                if (represented > 0)
+                    actorsWithNewInjuries.Add(resulting.ActorId);
             }
-            return count;
+            foreach (GameplayActorSnapshot resulting in
+                frame.Resulting.Session.Actors)
+            {
+                if (actorsWithNewInjuries.Contains(resulting.ActorId)
+                    || !TryFindActor(
+                        frame.Previous.Session.Actors,
+                        resulting.ActorId,
+                        out GameplayActorSnapshot previous)
+                    || (PhysiologyMatches(
+                            previous.Physiology,
+                            resulting.Physiology)
+                        && previous.LifeState == resulting.LifeState))
+                    continue;
+                AppendSystemicEntry(
+                    frame,
+                    playbackFrame,
+                    totalDurationSeconds,
+                    firstEventOrdinal + eventOffset,
+                    previous,
+                    resulting,
+                    transcriptEntries,
+                    identities);
+                systemicChanges++;
+                eventOffset++;
+            }
+            return injuryCount;
         }
 
-        private static void AppendWoundEntry(
+        private static string GetInjuryComparisonKey(InjuryRecord injury)
+        {
+            if (!injury.InjuryId.StartsWith(
+                    "legacy-injury:",
+                    StringComparison.Ordinal))
+                return injury.InjuryId;
+            return "legacy:" + injury.Region + ":" + injury.Mechanism + ":"
+                + injury.Severity + ":" + injury.StructuralDamage + ":"
+                + injury.MotorLoss + ":" + injury.SensoryLoss + ":"
+                + injury.BleedRate + ":" + injury.VitalDamage;
+        }
+
+        private static void AppendInjuryEntry(
             GameplaySemanticReplayFrame frame,
             GameplaySemanticReplayPlaybackFrame playbackFrame,
             float totalDurationSeconds,
@@ -481,18 +568,22 @@ namespace GritGud.Application.Gameplay
             string attackExecutionId,
             int woundsBefore,
             int woundsAfter,
-            TargetRegionId? region,
-            string targetId,
+            InjuryRecord injury,
+            GameplayActorSnapshot previous,
+            GameplayActorSnapshot resulting,
             ICollection<ReplayCombatTranscriptEntry> transcriptEntries,
             ISet<string> identities)
         {
             long transitionSequence = frame.Transition.Identity.Sequence;
-            string shooterId = ResolveWoundSource(frame);
+            ResolveInjuryContext(
+                frame,
+                injury,
+                out string shooterId,
+                out string presentationId);
             ReplayCombatPresentationSubjectKind shooterKind =
                 ResolveSubjectKind(frame, shooterId);
-            string combatEventId = "replay-combat:" + transitionSequence + ":"
-                + eventOrdinal + ":WoundApplied:" + shooterKind + ":"
-                + shooterId + ":Actor:" + targetId + ":";
+            string combatEventId = "replay-injury:" + transitionSequence + ":"
+                + eventOrdinal + ":" + injury.InjuryId;
             if (!identities.Add(combatEventId))
                 throw new InvalidOperationException(
                     "Replay combat event identity collision: " + combatEventId);
@@ -510,25 +601,206 @@ namespace GritGud.Application.Gameplay
                 eventOrdinal,
                 eventSeconds,
                 normalizedReplayTime,
-                ReplayCombatTranscriptEventKind.WoundApplied,
+                ReplayCombatTranscriptEventKind.InjuryApplied,
                 shooterKind,
                 shooterId,
                 ReplayCombatPresentationSubjectKind.Actor,
-                targetId,
-                presentationId: string.Empty,
+                resulting.ActorId,
+                presentationId,
                 projectileId: string.Empty,
                 ReplayCombatPresentationOutcome.Hit,
-                region,
+                injury.Region,
                 woundsBefore,
                 woundsAfter,
-                targetId + " WOUNDED",
-                new[]
+                resulting.ActorId + " INJURED",
+                FormatInjuryLines(injury, previous, resulting),
+                injury,
+                previous.Capabilities,
+                resulting.Capabilities,
+                previous.Physiology,
+                resulting.Physiology,
+                previous.LifeState,
+                resulting.LifeState));
+        }
+
+        private static void AppendSystemicEntry(
+            GameplaySemanticReplayFrame frame,
+            GameplaySemanticReplayPlaybackFrame playbackFrame,
+            float totalDurationSeconds,
+            int eventOrdinal,
+            GameplayActorSnapshot previous,
+            GameplayActorSnapshot resulting,
+            ICollection<ReplayCombatTranscriptEntry> transcriptEntries,
+            ISet<string> identities)
+        {
+            long transitionSequence = frame.Transition.Identity.Sequence;
+            string combatEventId = "replay-systemic:" + transitionSequence
+                + ":" + eventOrdinal + ":" + resulting.ActorId;
+            if (!identities.Add(combatEventId))
+                throw new InvalidOperationException(
+                    "Replay combat event identity collision: " + combatEventId);
+            float eventSeconds = playbackFrame.StartSeconds
+                + playbackFrame.DurationSeconds;
+            float normalizedReplayTime = totalDurationSeconds <= 0f
+                ? 0f
+                : eventSeconds / totalDurationSeconds;
+            transcriptEntries.Add(new ReplayCombatTranscriptEntry(
+                transcriptEntries.Count + 1L,
+                combatEventId,
+                attackExecutionId: string.Empty,
+                transitionSequence,
+                eventOrdinal,
+                eventSeconds,
+                normalizedReplayTime,
+                ReplayCombatTranscriptEventKind.SystemicChange,
+                ReplayCombatPresentationSubjectKind.Actor,
+                resulting.ActorId,
+                ReplayCombatPresentationSubjectKind.Actor,
+                resulting.ActorId,
+                presentationId: string.Empty,
+                projectileId: string.Empty,
+                ReplayCombatPresentationOutcome.None,
+                hitRegion: null,
+                woundsBefore: previous.Wounds.WoundCount,
+                woundsAfter: resulting.Wounds.WoundCount,
+                resulting.ActorId + " SYSTEMIC CONDITION",
+                FormatSystemicLines(previous, resulting),
+                injury: null,
+                previous.Capabilities,
+                resulting.Capabilities,
+                previous.Physiology,
+                resulting.Physiology,
+                previous.LifeState,
+                resulting.LifeState));
+        }
+
+        private static IReadOnlyList<string> FormatInjuryLines(
+            InjuryRecord injury,
+            GameplayActorSnapshot previous,
+            GameplayActorSnapshot resulting)
+        {
+            var lines = new List<string>
+            {
+                "REGION - " + (injury.Region.HasValue
+                    ? injury.Region.Value.ToString()
+                    : "UNLOCALIZED"),
+                "INJURY - " + injury.Mechanism.ToString().ToUpperInvariant()
+                    + " - SEVERITY " + injury.Severity,
+                "TISSUE - STRUCTURAL " + injury.StructuralDamage
+                    + " - MOTOR " + injury.MotorLoss
+                    + " - SENSORY " + injury.SensoryLoss
+                    + " - BLEED " + injury.BleedRate,
+                FormatCapabilityChange(
+                    previous.Capabilities,
+                    resulting.Capabilities),
+                FormatPhysiologyChange(
+                    previous.Physiology,
+                    resulting.Physiology),
+            };
+            if (previous.LifeState != resulting.LifeState)
+                lines.Add("LIFE STATE - " + previous.LifeState + " -> "
+                    + resulting.LifeState);
+            lines.Add("COMPATIBILITY WOUNDS - "
+                + previous.Wounds.WoundCount + " -> "
+                + resulting.Wounds.WoundCount);
+            return lines.AsReadOnly();
+        }
+
+        private static IReadOnlyList<string> FormatSystemicLines(
+            GameplayActorSnapshot previous,
+            GameplayActorSnapshot resulting)
+        {
+            var lines = new List<string>
+            {
+                FormatPhysiologyChange(
+                    previous.Physiology,
+                    resulting.Physiology),
+                FormatCapabilityChange(
+                    previous.Capabilities,
+                    resulting.Capabilities),
+            };
+            if (previous.LifeState != resulting.LifeState)
+                lines.Add("LIFE STATE - " + previous.LifeState + " -> "
+                    + resulting.LifeState);
+            return lines.AsReadOnly();
+        }
+
+        private static string FormatCapabilityChange(
+            ActorCapabilityState previous,
+            ActorCapabilityState resulting) =>
+            "FUNCTION - MOVE " + previous.MovementCapacity + " -> "
+            + resulting.MovementCapacity + " - STAND "
+            + previous.StandingCapacity + " -> "
+            + resulting.StandingCapacity + " - AIM "
+            + previous.AimStability + " -> " + resulting.AimStability
+            + " - GRIP " + previous.GripCapacity + " -> "
+            + resulting.GripCapacity + " - RELOAD "
+            + previous.ReloadCapacity + " -> "
+            + resulting.ReloadCapacity + " - THROW "
+            + previous.ThrowCapacity + " -> "
+            + resulting.ThrowCapacity;
+
+        private static string FormatPhysiologyChange(
+            ActorPhysiologyState previous,
+            ActorPhysiologyState resulting) =>
+            "SYSTEMIC - BLOOD " + previous.BloodReserve + " -> "
+            + resulting.BloodReserve + " - SHOCK " + previous.Shock
+            + " -> " + resulting.Shock + " - CONSCIOUSNESS "
+            + previous.Consciousness + " -> " + resulting.Consciousness
+            + " - RESPIRATION " + previous.Respiration + " -> "
+            + resulting.Respiration;
+
+        private static bool PhysiologyMatches(
+            ActorPhysiologyState left,
+            ActorPhysiologyState right) =>
+            left.BloodReserve == right.BloodReserve
+            && left.Shock == right.Shock
+            && left.Consciousness == right.Consciousness
+            && left.Respiration == right.Respiration;
+
+        private static void ResolveInjuryContext(
+            GameplaySemanticReplayFrame frame,
+            InjuryRecord injury,
+            out string shooterId,
+            out string presentationId)
+        {
+            AttackResolutionRecord attack = ResolveActorAttack(
+                frame.SemanticRecord);
+            if (attack?.Injury?.Injury != null
+                && string.Equals(
+                    attack.Injury.Injury.InjuryId,
+                    injury.InjuryId,
+                    StringComparison.Ordinal))
+            {
+                shooterId = attack.Injury.Impact.SourceActorId;
+                presentationId = attack.Injury.Impact.WeaponId;
+                return;
+            }
+            if (frame.SemanticRecord is ProjectileAdvanceRecord projectile)
+            {
+                shooterId = projectile.Resulting.Launch.AttackerId;
+                presentationId = projectile.Resulting.Launch.ActionId;
+                return;
+            }
+            if (frame.SemanticRecord is GameplayActionRecord action)
+                foreach (GameplayActionOutcome outcome in action.Outcomes)
+                    if (outcome is ThrownExplosiveActionOutcome thrown)
+                    {
+                        shooterId = thrown.Record.ThrowerId;
+                        presentationId = thrown.Record.Definition.Id;
+                        return;
+                    }
+            foreach (FireFieldSnapshot fire in frame.Previous.FireFields)
+                if (injury.CombatEventId.IndexOf(
+                        ":" + fire.Field.Id + ":",
+                        StringComparison.Ordinal) >= 0)
                 {
-                    "REGION - " + (region.HasValue
-                        ? region.Value.ToString()
-                        : "UNLOCALIZED"),
-                    "WOUNDS - " + woundsBefore + " -> " + woundsAfter,
-                }));
+                    shooterId = fire.Field.SourceActorId;
+                    presentationId = fire.Field.SourceItemId;
+                    return;
+                }
+            shooterId = ResolveWoundSource(frame);
+            presentationId = string.Empty;
         }
 
         private static float ResolveWoundEventTime(
@@ -539,8 +811,14 @@ namespace GritGud.Application.Gameplay
                 return GameplaySemanticReplayPresentationTiming
                     .GetProjectileImpactProgress(advance);
             if (frame.SemanticRecord is GameplayActionRecord action)
+            {
+                foreach (GameplayActionOutcome outcome in action.Outcomes)
+                    if (outcome is ThrownExplosiveActionOutcome)
+                        return GameplayThrownExplosivePresentationTiming
+                            .ImpactNormalizedTime;
                 return GameplaySemanticReplayPresentationTiming
                     .GetActionResolutionProgress(action);
+            }
             return GameplaySemanticReplayPresentationTiming
                 .ActionResolutionProgress;
         }
@@ -619,6 +897,10 @@ namespace GritGud.Application.Gameplay
                 case ReplayCombatPresentationEventKind.Incapacitation:
                     title = presentationEvent.TargetId + " INCAPACITATED";
                     lines = new[] { "LIFE STATE - INCAPACITATED" };
+                    return;
+                case ReplayCombatPresentationEventKind.Death:
+                    title = presentationEvent.TargetId + " DEAD";
+                    lines = new[] { "LIFE STATE - DEAD" };
                     return;
                 case ReplayCombatPresentationEventKind.ProjectileImpact:
                     title = presentationEvent.ProjectileId + " IMPACTS";

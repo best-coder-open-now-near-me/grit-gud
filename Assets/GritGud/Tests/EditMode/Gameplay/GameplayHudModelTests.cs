@@ -171,6 +171,15 @@ namespace GritGud.Domain.Tests.Gameplay
                 Is.Zero);
             Assert.That(model.CommandBar.BodyStatus.MovementPenalty,
                 Is.EqualTo(2f));
+            GameplayBodyRegionModel leftArm = model.CommandBar.BodyStatus
+                .FindRegion(TargetRegionId.LeftArm);
+            Assert.That(leftArm.MotorFunction, Is.LessThan(100));
+            Assert.That(model.CommandBar.BodyStatus.ConditionPercent,
+                Is.LessThan(100));
+            Assert.That(model.CommandBar.BodyStatus.LifeState,
+                Is.EqualTo(ActorLifeState.Active));
+            Assert.That(model.CommandBar.BodyStatus.IsIncapacitated,
+                Is.False);
         }
 
         [Test]

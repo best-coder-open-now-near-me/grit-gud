@@ -338,7 +338,7 @@ namespace GritGud.Application.Gameplay
                     "attack.hit-probability",
                     attack.FinalHitChancePercent / 100f),
                 new GameplayCandidateOutcomeFeature(
-                    "attack.wounds-on-hit",
+                    "attack.injury-on-hit",
                     1f),
                 new GameplayCandidateOutcomeFeature(
                     "cost.action-points",
@@ -347,11 +347,11 @@ namespace GritGud.Application.Gameplay
                     "cost.movement-opportunity",
                     attack.Cost.MovementOpportunity),
                 new GameplayCandidateOutcomeFeature(
-                    "target.remaining-wound-capacity",
-                    Math.Max(
-                        0,
-                        attack.Target.MaximumWounds
-                            - attack.Target.Wounds.WoundCount)),
+                    "target.functional-reserve",
+                    (attack.Target.Capabilities.MovementCapacity
+                        + attack.Target.Capabilities.AimStability
+                        + attack.Target.Capabilities.GripCapacity)
+                        / 100f),
             });
             return new GameplayExecutableCandidateEvaluation(
                 Id,

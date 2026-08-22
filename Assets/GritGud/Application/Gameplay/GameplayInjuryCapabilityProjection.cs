@@ -53,5 +53,23 @@ namespace GritGud.Application.Gameplay
                 : capabilities.CanUseLeftHand
                     || capabilities.CanUseRightHand;
         }
+
+        public static int CalculateConditionPercent(ActorInjuryState injuries)
+        {
+            if (injuries == null) throw new ArgumentNullException(
+                nameof(injuries));
+            if (injuries.LifeState == ActorLifeState.Dead) return 0;
+            int structuralTotal = 0;
+            foreach (TargetRegionId region in Enum.GetValues(
+                typeof(TargetRegionId)))
+                structuralTotal += injuries.GetRegion(region)
+                    .StructuralIntegrity;
+            int structuralAverage = structuralTotal / 6;
+            return (injuries.Physiology.BloodReserve
+                + (100 - injuries.Physiology.Shock)
+                + injuries.Physiology.Consciousness
+                + injuries.Physiology.Respiration
+                + structuralAverage) / 5;
+        }
     }
 }

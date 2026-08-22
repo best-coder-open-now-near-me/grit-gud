@@ -92,7 +92,11 @@ namespace GritGud.Application.Gameplay
                 Append(text, "actor", actor.ActorId);
                 Append(text, "position", actor.Pose.Position);
                 Append(text, "stance", actor.Pose.Stance.ToString());
-                Append(text, "wounds", actor.Wounds.WoundCount.ToString());
+                Append(text, "life", actor.LifeState.ToString());
+                Append(text, "movement-capacity",
+                    actor.Capabilities.MovementCapacity.ToString());
+                Append(text, "standing-capacity",
+                    actor.Capabilities.StandingCapacity.ToString());
             }
             foreach (DestructiblePropSnapshot prop in state.Destructibles)
             {

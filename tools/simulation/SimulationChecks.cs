@@ -3337,6 +3337,21 @@ internal static class SimulationChecks
             + ", decisions=" + result.Decisions.Count
             + ", transitions=" + result.Transitions.Count
             + ", failure=" + result.Terminal.FailureKind);
+        if (!result.Terminal.IsSuccessful)
+        {
+            Console.WriteLine("Active actor at failure: "
+                + result.FinalState.Session.ActiveActorId);
+            foreach (GameplayActorSnapshot actor in
+                result.FinalState.Session.Actors)
+                Console.WriteLine("  " + actor.ActorId + " life="
+                    + actor.LifeState + " injuries="
+                    + actor.Injuries.Injuries.Count + " condition="
+                    + GameplayInjuryCapabilityProjection
+                        .CalculateConditionPercent(actor.Injuries)
+                    + " move=" + actor.Capabilities.MovementCapacity
+                    + " aim=" + actor.Capabilities.AimStability
+                    + " grip=" + actor.Capabilities.GripCapacity);
+        }
         Require(result.Terminal.IsSuccessful,
             "Permanent Depot battle failed: "
                 + result.Terminal.FailureKind + " "
@@ -3428,6 +3443,35 @@ internal static class SimulationChecks
             artifactJson);
         GameplaySemanticReplayTimeline verifiedArtifactReplay =
             GameplayBattleArtifactVerifier.VerifyRun(result, decoded);
+        var verifiedCombatTranscript = new ReplayCombatTranscript(
+            new GameplaySemanticReplayPlaybackTimeline(
+                verifiedArtifactReplay));
+        int verifiedSystemicChanges = 0;
+        foreach (ReplayCombatTranscriptEntry entry in
+            verifiedCombatTranscript.Entries)
+        {
+            if (entry.EventKind
+                != ReplayCombatTranscriptEventKind.SystemicChange)
+                continue;
+            verifiedSystemicChanges++;
+            Require(entry.Injury == null
+                && entry.PhysiologyBefore != null
+                && entry.PhysiologyAfter != null
+                && (entry.PhysiologyBefore.BloodReserve
+                        != entry.PhysiologyAfter.BloodReserve
+                    || entry.PhysiologyBefore.Shock
+                        != entry.PhysiologyAfter.Shock
+                    || entry.PhysiologyBefore.Consciousness
+                        != entry.PhysiologyAfter.Consciousness
+                    || entry.PhysiologyBefore.Respiration
+                        != entry.PhysiologyAfter.Respiration
+                    || entry.LifeStateBefore != entry.LifeStateAfter),
+                "Replay systemic entry did not preserve a stored state change.");
+        }
+        Require(verifiedSystemicChanges > 0
+            && verifiedSystemicChanges
+                == verifiedCombatTranscript.Totals.SystemicChanges,
+            "Permanent replay did not expose canonical physiology advances.");
         Stopwatch playbackClock = Stopwatch.StartNew();
         string embeddedArtifactJson = File.ReadAllText(Path.Combine(
             FindRepositoryRoot(),
@@ -3453,11 +3497,13 @@ internal static class SimulationChecks
             + combatTranscript.Totals.AttackExecutions
             + ", hits=" + combatTranscript.Totals.Hits
             + ", misses=" + combatTranscript.Totals.Misses
-            + ", wounds=" + combatTranscript.Totals.WoundsApplied
+            + ", injuries=" + combatTranscript.Totals.InjuriesApplied
             + ", discharges=" + combatTranscript.Totals.WeaponDischarges
             + ", reactions=" + combatTranscript.Totals.Reactions
             + ", incapacitations="
-            + combatTranscript.Totals.Incapacitations);
+            + combatTranscript.Totals.Incapacitations
+            + ", systemic=" + combatTranscript.Totals.SystemicChanges
+            + ", deaths=" + combatTranscript.Totals.Deaths);
         Require(string.Equals(
                 decoded.ToPortableJson(),
                 artifactJson,
@@ -3497,7 +3543,7 @@ internal static class SimulationChecks
         int lateOrenDischarges = 0;
         int lateOrenHits = 0;
         int lateOrenMisses = 0;
-        int transcriptWoundEntries = 0;
+        int transcriptInjuryEntries = 0;
         foreach (ReplayCombatTranscriptEntry entry in combatTranscript.Entries)
         {
             Require(transcriptEventIds.Add(entry.CombatEventId),
@@ -3505,8 +3551,20 @@ internal static class SimulationChecks
             Require(entry.TimeSeconds >= previousTranscriptTime,
                 "Replay combat transcript is not chronologically ordered.");
             previousTranscriptTime = entry.TimeSeconds;
-            if (entry.EventKind == ReplayCombatTranscriptEventKind.WoundApplied)
-                transcriptWoundEntries++;
+            if (entry.EventKind
+                == ReplayCombatTranscriptEventKind.InjuryApplied)
+            {
+                transcriptInjuryEntries++;
+                Require(entry.Injury != null
+                    && entry.Injury.Severity > 0
+                    && entry.CapabilitiesBefore != null
+                    && entry.CapabilitiesAfter != null
+                    && entry.PhysiologyBefore != null
+                    && entry.PhysiologyAfter != null
+                    && entry.LifeStateBefore.HasValue
+                    && entry.LifeStateAfter.HasValue,
+                    "Replay injury entry omitted stored localized consequences.");
+            }
             if (entry.EventKind
                     != ReplayCombatTranscriptEventKind.WeaponDischarge
                 || entry.TransitionSequence < 63
@@ -3525,8 +3583,8 @@ internal static class SimulationChecks
         Require(lateOrenDischarges == 6
             && lateOrenHits == 1
             && lateOrenMisses == 5
-            && transcriptWoundEntries
-                == combatTranscript.Totals.WoundsApplied,
+            && transcriptInjuryEntries
+                == combatTranscript.Totals.InjuriesApplied,
             "Depot replay volley classification changed unexpectedly.");
         float transcriptMidpoint = combatPlayback.TotalDurationSeconds * 0.5f;
         IReadOnlyList<ReplayCombatTranscriptEntry> midpointEntries =

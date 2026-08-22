@@ -438,8 +438,9 @@ namespace GritGud.Presentation.Gameplay
                         return;
                     }
                     progress = Mathf.InverseLerp(eventTime, 1f, progress);
-                    action = state.ResultingWoundCount >=
-                        snapshot.MaximumWounds
+                    action = (state.ResultingLifeState
+                            ?? snapshot.LifeState)
+                        != ActorLifeState.Active
                         ? ActorAnimationCoordinator
                             .SelectIncapacitationAction(state.HitRegion)
                         : ActorAnimationAction.HitReaction;

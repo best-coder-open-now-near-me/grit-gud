@@ -826,7 +826,32 @@ namespace GritGud.Presentation.Gameplay
                 .Append(" | attacks-this-turn=")
                 .Append(actor.AttacksCommittedThisTurn.ToString(
                     CultureInfo.InvariantCulture))
-                .Append(" | wounds=")
+                .Append(" | life=")
+                .Append(actor.LifeState)
+                .Append(" | condition=")
+                .Append(GameplayInjuryCapabilityProjection
+                    .CalculateConditionPercent(actor.Injuries)
+                    .ToString(CultureInfo.InvariantCulture))
+                .Append('%')
+                .Append(" | physiology=B:")
+                .Append(actor.Physiology.BloodReserve)
+                .Append(" S:")
+                .Append(actor.Physiology.Shock)
+                .Append(" C:")
+                .Append(actor.Physiology.Consciousness)
+                .Append(" R:")
+                .Append(actor.Physiology.Respiration)
+                .Append(" | capabilities=M:")
+                .Append(actor.Capabilities.MovementCapacity)
+                .Append(" A:")
+                .Append(actor.Capabilities.AimStability)
+                .Append(" G:")
+                .Append(actor.Capabilities.GripCapacity)
+                .Append(" RL:")
+                .Append(actor.Capabilities.ReloadCapacity)
+                .Append(" T:")
+                .Append(actor.Capabilities.ThrowCapacity)
+                .Append(" | compatibility-wounds=")
                 .Append(actor.Wounds.WoundCount.ToString(
                     CultureInfo.InvariantCulture))
                 .Append('/')
@@ -861,7 +886,7 @@ namespace GritGud.Presentation.Gameplay
                 .Append(FormatInventory(actor.Inventory))
                 .Append(" | ammunition=")
                 .Append(FormatAmmunition(actor.Ammunition))
-                .Append(" | wound-move-penalty=")
+                .Append(" | compatibility-wound-move-penalty=")
                 .AppendLine(FormatFloat(actor.Wounds.MovementPenalty));
         }
 

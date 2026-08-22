@@ -9,7 +9,11 @@ namespace GritGud.Application.Gameplay
         public GameplayBodyRegionModel(
             TargetRegionId region,
             string label,
-            int woundCount)
+            int woundCount,
+            int structuralIntegrity = 100,
+            int motorFunction = 100,
+            int sensoryFunction = 100,
+            int bleedRate = 0)
         {
             if (!Enum.IsDefined(typeof(TargetRegionId), region))
             {
@@ -27,10 +31,18 @@ namespace GritGud.Application.Gameplay
             {
                 throw new ArgumentOutOfRangeException(nameof(woundCount));
             }
+            RequirePercent(structuralIntegrity, nameof(structuralIntegrity));
+            RequirePercent(motorFunction, nameof(motorFunction));
+            RequirePercent(sensoryFunction, nameof(sensoryFunction));
+            RequirePercent(bleedRate, nameof(bleedRate));
 
             Region = region;
             Label = label;
             WoundCount = woundCount;
+            StructuralIntegrity = structuralIntegrity;
+            MotorFunction = motorFunction;
+            SensoryFunction = sensoryFunction;
+            BleedRate = bleedRate;
         }
 
         public TargetRegionId Region { get; }
@@ -40,6 +52,24 @@ namespace GritGud.Application.Gameplay
         public int WoundCount { get; }
 
         public bool IsWounded => WoundCount > 0;
+
+        public int StructuralIntegrity { get; }
+
+        public int MotorFunction { get; }
+
+        public int SensoryFunction { get; }
+
+        public int BleedRate { get; }
+
+        public int ConditionPercent => Math.Min(
+            StructuralIntegrity,
+            Math.Min(MotorFunction, SensoryFunction));
+
+        private static void RequirePercent(int value, string parameter)
+        {
+            if (value < 0 || value > 100)
+                throw new ArgumentOutOfRangeException(parameter);
+        }
     }
 
     public sealed class GameplayBodyStatusModel
@@ -51,7 +81,11 @@ namespace GritGud.Application.Gameplay
             IEnumerable<GameplayBodyRegionModel> regions,
             int maximumWounds,
             float movementPenalty,
-            int unlocalizedWounds = 0)
+            int unlocalizedWounds = 0,
+            ActorLifeState lifeState = ActorLifeState.Active,
+            ActorCapabilityState capabilities = null,
+            ActorPhysiologyState physiology = null,
+            int conditionPercent = 100)
         {
             if (string.IsNullOrWhiteSpace(actorId))
             {
@@ -82,6 +116,10 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentOutOfRangeException(
                     nameof(unlocalizedWounds));
             }
+            if (!Enum.IsDefined(typeof(ActorLifeState), lifeState))
+                throw new ArgumentOutOfRangeException(nameof(lifeState));
+            if (conditionPercent < 0 || conditionPercent > 100)
+                throw new ArgumentOutOfRangeException(nameof(conditionPercent));
 
             var copy = new List<GameplayBodyRegionModel>(RegionCount);
             var indexedRegions = new HashSet<TargetRegionId>();
@@ -119,6 +157,12 @@ namespace GritGud.Application.Gameplay
             MaximumWounds = maximumWounds;
             MovementPenalty = movementPenalty;
             UnlocalizedWounds = unlocalizedWounds;
+            LifeState = lifeState;
+            Capabilities = capabilities ?? new ActorCapabilityState(
+                100, 100, 100, 100, 100, 100,
+                true, true, true, true);
+            Physiology = physiology ?? ActorPhysiologyState.Healthy;
+            ConditionPercent = conditionPercent;
         }
 
         public string ActorId { get; }
@@ -133,7 +177,17 @@ namespace GritGud.Application.Gameplay
 
         public float MovementPenalty { get; }
 
-        public bool IsIncapacitated => TotalWounds >= MaximumWounds;
+        public ActorLifeState LifeState { get; }
+
+        public ActorCapabilityState Capabilities { get; }
+
+        public ActorPhysiologyState Physiology { get; }
+
+        public int ConditionPercent { get; }
+
+        public bool IsIncapacitated => LifeState != ActorLifeState.Active;
+
+        public bool IsDead => LifeState == ActorLifeState.Dead;
 
         public GameplayBodyRegionModel FindRegion(TargetRegionId region)
         {

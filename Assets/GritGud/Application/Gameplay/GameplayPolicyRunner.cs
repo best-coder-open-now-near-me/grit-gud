@@ -243,7 +243,7 @@ namespace GritGud.Application.Gameplay
                 new GameplayOutcomeFeatureWeight(
                     "attack.hit-probability", 30f),
                 new GameplayOutcomeFeatureWeight(
-                    "attack.wounds-on-hit", 10f),
+                    "attack.injury-on-hit", 10f),
                 new GameplayOutcomeFeatureWeight(
                     "drone.integrity-damage", 10f),
                 new GameplayOutcomeFeatureWeight(
@@ -291,7 +291,7 @@ namespace GritGud.Application.Gameplay
                 new GameplayOutcomeFeatureWeight(
                     "turn.saved-action-points", 0.5f),
                 new GameplayOutcomeFeatureWeight(
-                    "target.remaining-wound-capacity", -1f),
+                    "target.functional-reserve", -1f),
                 new GameplayOutcomeFeatureWeight(
                     "cost.action-points", -1.5f),
                 new GameplayOutcomeFeatureWeight(
