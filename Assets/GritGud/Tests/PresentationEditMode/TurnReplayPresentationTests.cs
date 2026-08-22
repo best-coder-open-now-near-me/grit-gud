@@ -103,7 +103,8 @@ namespace GritGud.Presentation.Tests
         public void BackwardScrubbingRebuildsTimedEventCursorWithoutDuplicates()
         {
             var cursor = new ReplayTimedPresentationEventCursor();
-            const string shot = "12:WeaponDischarge:party.scout:";
+            const string shot =
+                "replay-combat:12:0:WeaponDischarge:Actor:party.scout:Actor:target:";
 
             Assert.That(cursor.TryCross(shot, 0.65f, 0f, 1f), Is.True);
             Assert.That(cursor.TryCross(shot, 0.65f, 0f, 1f), Is.False);

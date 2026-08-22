@@ -40,7 +40,15 @@ namespace GritGud.Presentation.Gameplay
         public string Message { get; }
     }
 
-    public sealed class GameplayDialogueLog
+    public interface IGameplayDialogueEntrySource
+    {
+        IReadOnlyList<GameplayDialogueEntry> Entries { get; }
+        long LatestSequence { get; }
+        long HighlightedSequence { get; }
+        int CountVisible(GameplayDialogueChannel filters);
+    }
+
+    public sealed class GameplayDialogueLog : IGameplayDialogueEntrySource
     {
         private const int MaximumEntries = 256;
 
@@ -58,6 +66,8 @@ namespace GritGud.Presentation.Gameplay
 
         public long LatestSequence =>
             entries.Count == 0 ? 0 : entries[entries.Count - 1].Sequence;
+
+        public long HighlightedSequence => 0;
 
         public GameplayDialogueEntry Append(
             GameplayDialogueChannel channel,

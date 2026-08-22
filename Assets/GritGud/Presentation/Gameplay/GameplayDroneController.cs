@@ -184,7 +184,11 @@ namespace GritGud.Presentation.Gameplay
             visual.PresentReplayDischarge(
                 presentationEvent.PresentationId,
                 presentationEvent.Origin,
-                presentationEvent.Destination);
+                presentationEvent.Destination,
+                presentationEvent.Outcome !=
+                        ReplayCombatPresentationOutcome.Miss
+                    && presentationEvent.Outcome !=
+                        ReplayCombatPresentationOutcome.Blocked);
             replayPresentedDischargeCount++;
         }
 

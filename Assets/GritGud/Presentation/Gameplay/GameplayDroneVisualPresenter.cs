@@ -82,7 +82,8 @@ namespace GritGud.Presentation.Gameplay
         internal void PresentReplayDischarge(
             string presentationId,
             GameplayPosition origin,
-            GameplayPosition destination)
+            GameplayPosition destination,
+            bool drawTracer)
         {
             Vector3 from = ToVector3(origin);
             Vector3 to = ToVector3(destination);
@@ -102,6 +103,8 @@ namespace GritGud.Presentation.Gameplay
                 lightRoot,
                 ownedMaterial: null,
                 ReplayDischargeSeconds));
+
+            if (!drawTracer) return;
 
             var tracerRoot = new GameObject(effectName + " Replay Tracer");
             LineRenderer tracer = tracerRoot.AddComponent<LineRenderer>();

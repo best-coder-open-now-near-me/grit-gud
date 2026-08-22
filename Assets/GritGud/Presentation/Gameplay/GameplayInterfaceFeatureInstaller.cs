@@ -157,6 +157,10 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplayHud gameplayHud;
         private readonly GameplayTurnReplayHud replayHud;
         private readonly GameplayTurnReplayWorldPresenter replayWorld;
+        private readonly GameplayReplayTranscriptPresenter replayTranscript;
+        private readonly GameplayDialogueDrawer dialogueDrawer;
+        private readonly GameplayDialogueLog liveDialogue;
+        private readonly Action exportLiveDialogue;
         private readonly GameplayInputController input;
         private readonly GameplayPartyControlSession partyControl;
         private readonly GameplayDestructibleController destructibles;
@@ -181,6 +185,10 @@ namespace GritGud.Presentation.Gameplay
             GameplayHud gameplayHud,
             GameplayTurnReplayHud replayHud,
             GameplayTurnReplayWorldPresenter replayWorld,
+            GameplayReplayTranscriptPresenter replayTranscriptPresenter,
+            GameplayDialogueDrawer gameplayDialogueDrawer,
+            GameplayDialogueLog liveDialogueLog,
+            Action onExportLiveDialogue,
             GameplayInputController input,
             GameplayPartyControlSession partyControl,
             GameplayDestructibleController destructibles,
@@ -206,6 +214,15 @@ namespace GritGud.Presentation.Gameplay
             this.replayHud = replayHud ?? throw new ArgumentNullException(nameof(replayHud));
             this.replayWorld = replayWorld ?? throw new ArgumentNullException(
                 nameof(replayWorld));
+            replayTranscript = replayTranscriptPresenter
+                ?? throw new ArgumentNullException(
+                    nameof(replayTranscriptPresenter));
+            dialogueDrawer = gameplayDialogueDrawer
+                ?? throw new ArgumentNullException(
+                    nameof(gameplayDialogueDrawer));
+            liveDialogue = liveDialogueLog ?? throw new ArgumentNullException(
+                nameof(liveDialogueLog));
+            exportLiveDialogue = onExportLiveDialogue;
             this.input = input ?? throw new ArgumentNullException(nameof(input));
             this.partyControl = partyControl ?? throw new ArgumentNullException(
                 nameof(partyControl));
@@ -254,6 +271,11 @@ namespace GritGud.Presentation.Gameplay
                 simulationViewer
                     ? GameplayReplaySource.VerifiedSimulation
                     : GameplayReplaySource.LiveEncounter);
+            replayTranscript.Bind(
+                replayHud,
+                dialogueDrawer,
+                liveDialogue,
+                exportLiveDialogue);
             replayWorld.Bind(
                 worldRegistry,
                 input,

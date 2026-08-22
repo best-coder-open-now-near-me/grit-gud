@@ -45,7 +45,9 @@ namespace GritGud.Domain.Tests
                     .ActionResolutionProgress));
             Assert.That(
                 presentationEvent.StableKey,
-                Is.EqualTo("7:WeaponDischarge:attacker:"));
+                Is.EqualTo(
+                    "replay-combat:7:0:WeaponDischarge:Actor:attacker:Actor:target:"));
+            Assert.That(presentationEvent.EventOrdinal, Is.Zero);
         }
 
         [Test]
@@ -69,7 +71,8 @@ namespace GritGud.Domain.Tests
                 Is.EqualTo(progress));
             Assert.That(
                 presentationEvent.StableKey,
-                Is.EqualTo("9:ProjectileImpact:attacker:projectile.1"));
+                Is.EqualTo(
+                    "replay-combat:9:0:ProjectileImpact:Actor:attacker:Actor:target:projectile.1"));
             Assert.That(
                 GameplayProjectilePresentationSampler.Sample(
                     advance,

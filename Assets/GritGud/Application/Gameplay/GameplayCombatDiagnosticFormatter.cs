@@ -37,6 +37,29 @@ namespace GritGud.Application.Gameplay
 
     public static class GameplayCombatDiagnosticFormatter
     {
+        public static bool TryFormatSemanticRecord(
+            object semanticRecord,
+            out GameplayDiagnosticProjection projection)
+        {
+            switch (semanticRecord)
+            {
+                case GameplayActionRecord action:
+                    return TryFormatAction(action, out projection);
+                case ProjectileAdvanceRecord projectile:
+                    projection = FormatProjectileAdvance(projectile);
+                    return true;
+                case DroneAttackRecord droneAttack:
+                    projection = FormatDroneAttack(droneAttack);
+                    return true;
+                case ActorDroneAttackRecord actorDroneAttack:
+                    projection = FormatActorDroneAttack(actorDroneAttack);
+                    return true;
+                default:
+                    projection = null;
+                    return false;
+            }
+        }
+
         public static GameplayDiagnosticProjection FormatInitiative(
             GameplaySession session)
         {

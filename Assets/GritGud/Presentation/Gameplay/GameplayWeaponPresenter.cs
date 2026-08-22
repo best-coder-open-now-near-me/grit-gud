@@ -212,7 +212,7 @@ namespace GritGud.Presentation.Gameplay
             {
                 PresentFire(
                     ResolveAttackDestination(resolution),
-                    drawTracer: true);
+                    drawTracer: resolution.Hit);
             }
         }
 
@@ -383,7 +383,10 @@ namespace GritGud.Presentation.Gameplay
                     PresentReplayFire(
                         ToVector3(presentationEvent.Origin),
                         ToVector3(presentationEvent.Destination),
-                        drawTracer: true);
+                        drawTracer: presentationEvent.Outcome !=
+                                ReplayCombatPresentationOutcome.Miss
+                            && presentationEvent.Outcome !=
+                                ReplayCombatPresentationOutcome.Blocked);
                     break;
                 case ReplayCombatPresentationEventKind.ProjectileLaunch:
                     PresentReplayEventEquipment(presentationEvent);

@@ -21,7 +21,7 @@ namespace GritGud.Presentation.Gameplay
         private static readonly Color PrimaryTextColor = GameplayVisualPalette.TextPrimary;
         private static readonly Color SecondaryTextColor = GameplayVisualPalette.TextSecondary;
 
-        private GameplayDialogueLog log;
+        private IGameplayDialogueEntrySource source;
         private Action exportRequested;
         private string exportStatus = string.Empty;
         private GameplayFlyoutMotionProfile flyoutMotion;
@@ -40,7 +40,9 @@ namespace GritGud.Presentation.Gameplay
         private bool expanded;
         private float revealProgress;
 
-        public GameplayDialogueLog Log => log;
+        public GameplayDialogueLog Log => source as GameplayDialogueLog;
+
+        public IGameplayDialogueEntrySource Source => source;
 
         public bool IsVisible => enabled;
 
@@ -48,7 +50,7 @@ namespace GritGud.Presentation.Gameplay
 
         internal GameplayDialogueChannel ActiveFilters => filters;
 
-        internal int VisibleEntryCount => log?.CountVisible(filters) ?? 0;
+        internal int VisibleEntryCount => source?.CountVisible(filters) ?? 0;
 
         private void Awake()
         {
@@ -109,19 +111,20 @@ namespace GritGud.Presentation.Gameplay
         }
 
         public void Bind(
-            GameplayDialogueLog dialogueLog,
+            IGameplayDialogueEntrySource entrySource,
             Action onExportRequested = null)
         {
-            log = dialogueLog ?? throw new ArgumentNullException(nameof(dialogueLog));
+            source = entrySource ?? throw new ArgumentNullException(
+                nameof(entrySource));
             scrollPosition = Vector2.zero;
-            observedSequence = log.LatestSequence;
+            observedSequence = source.LatestSequence;
             exportRequested = onExportRequested;
             exportStatus = string.Empty;
         }
 
         public void Unbind()
         {
-            log = null;
+            source = null;
             expanded = false;
             revealProgress = 0f;
             scrollPosition = Vector2.zero;
@@ -233,7 +236,8 @@ namespace GritGud.Presentation.Gameplay
                 new Rect(contentX, y, contentWidth - 172f, 22f),
                 "DIALOGUE - TRANSCRIPT",
                 headerStyle);
-            if (GUI.Button(
+            if (exportRequested != null
+                && GUI.Button(
                     new Rect(contentX + contentWidth - 164f, y - 2f, 164f, 26f),
                     "EXPORT DIALOGUE",
                     buttonStyle))
@@ -312,9 +316,9 @@ namespace GritGud.Presentation.Gameplay
 
         private void DrawEntries(Rect viewport)
         {
-            if (log != null && log.LatestSequence != observedSequence)
+            if (source != null && source.LatestSequence != observedSequence)
             {
-                observedSequence = log.LatestSequence;
+                observedSequence = source.LatestSequence;
                 scrollPosition.y = float.MaxValue;
             }
 
@@ -332,9 +336,9 @@ namespace GritGud.Presentation.Gameplay
 
             float y = 4f;
             int visibleEntries = 0;
-            if (log != null)
+            if (source != null)
             {
-                foreach (GameplayDialogueEntry entry in log.Entries)
+                foreach (GameplayDialogueEntry entry in source.Entries)
                 {
                     if ((filters & entry.Channel) == 0)
                     {
@@ -349,8 +353,12 @@ namespace GritGud.Presentation.Gameplay
                     DrawRectangle(
                         new Rect(0f, y, viewWidth, entryHeight),
                         GameplayVisualPalette.WithAlpha(
-                            GameplayVisualPalette.ButtonNormal,
-                            0.3f));
+                            entry.Sequence == source.HighlightedSequence
+                                ? GameplayVisualPalette.SignalOrangeGlow
+                                : GameplayVisualPalette.ButtonNormal,
+                            entry.Sequence == source.HighlightedSequence
+                                ? 0.2f
+                                : 0.3f));
                     GUI.Label(
                         new Rect(10f, y + 6f, viewWidth - 20f, 18f),
                         $"#{entry.Sequence:0000}  {GetChannelLabel(entry.Channel)} - {entry.Title.ToUpperInvariant()}",
@@ -377,12 +385,12 @@ namespace GritGud.Presentation.Gameplay
         private float CalculateContentHeight(float width)
         {
             float height = 8f;
-            if (log == null)
+            if (source == null)
             {
                 return 48f;
             }
 
-            foreach (GameplayDialogueEntry entry in log.Entries)
+            foreach (GameplayDialogueEntry entry in source.Entries)
             {
                 if ((filters & entry.Channel) == 0)
                 {

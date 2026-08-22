@@ -3441,10 +3441,23 @@ internal static class SimulationChecks
             .Read(embeddedArtifactJson);
         GameplaySemanticReplayTimeline loadedArtifactReplay =
             GameplayBattleArtifactReplayLoader.Load(playbackArtifact);
+        var combatPlayback = new GameplaySemanticReplayPlaybackTimeline(
+            loadedArtifactReplay);
+        var combatTranscript = new ReplayCombatTranscript(combatPlayback);
         playbackClock.Stop();
         Console.WriteLine(
             "Artifact playback decode + load: "
             + playbackClock.Elapsed.TotalSeconds.ToString("0.000") + "s");
+        Console.WriteLine(
+            "Replay transcript: attacks="
+            + combatTranscript.Totals.AttackExecutions
+            + ", hits=" + combatTranscript.Totals.Hits
+            + ", misses=" + combatTranscript.Totals.Misses
+            + ", wounds=" + combatTranscript.Totals.WoundsApplied
+            + ", discharges=" + combatTranscript.Totals.WeaponDischarges
+            + ", reactions=" + combatTranscript.Totals.Reactions
+            + ", incapacitations="
+            + combatTranscript.Totals.Incapacitations);
         Require(string.Equals(
                 decoded.ToPortableJson(),
                 artifactJson,
@@ -3468,12 +3481,63 @@ internal static class SimulationChecks
                 StringComparison.Ordinal)
             && loadedArtifactReplay.Frames.Count
                 == decoded.Content.Transitions.Count
+            && combatTranscript.Totals.AttackExecutions
+                == playbackArtifact.Content.Scoreboard.Attacks
+            && combatTranscript.Totals.Hits
+                == playbackArtifact.Content.Scoreboard.Hits
+            && combatTranscript.Totals.Misses
+                == playbackArtifact.Content.Scoreboard.Attacks
+                    - playbackArtifact.Content.Scoreboard.Hits
+            && combatTranscript.Totals.WoundsApplied
+                >= playbackArtifact.Content.Scoreboard.Wounds
             && string.Equals(
                 playbackArtifact.Content.ExecutionIdentity.Gameplay
                     .DefinitionDigest,
                 decoded.Content.ExecutionIdentity.Gameplay.DefinitionDigest,
                 StringComparison.Ordinal),
             "Battle artifact was not byte-stable and scoreboard-complete.");
+        var transcriptEventIds = new HashSet<string>(StringComparer.Ordinal);
+        float previousTranscriptTime = 0f;
+        int lateOrenDischarges = 0;
+        int lateOrenHits = 0;
+        int lateOrenMisses = 0;
+        int transcriptWoundEntries = 0;
+        foreach (ReplayCombatTranscriptEntry entry in combatTranscript.Entries)
+        {
+            Require(transcriptEventIds.Add(entry.CombatEventId),
+                "Replay combat transcript contains duplicate event identity.");
+            Require(entry.TimeSeconds >= previousTranscriptTime,
+                "Replay combat transcript is not chronologically ordered.");
+            previousTranscriptTime = entry.TimeSeconds;
+            if (entry.EventKind == ReplayCombatTranscriptEventKind.WoundApplied)
+                transcriptWoundEntries++;
+            if (entry.EventKind
+                    != ReplayCombatTranscriptEventKind.WeaponDischarge
+                || entry.TransitionSequence < 63
+                || entry.TransitionSequence > 68
+                || !string.Equals(
+                    entry.ShooterId,
+                    "oren-vale",
+                    StringComparison.Ordinal))
+                continue;
+            lateOrenDischarges++;
+            if (entry.Outcome == ReplayCombatPresentationOutcome.Hit)
+                lateOrenHits++;
+            else if (entry.Outcome == ReplayCombatPresentationOutcome.Miss)
+                lateOrenMisses++;
+        }
+        Require(lateOrenDischarges == 6
+            && lateOrenHits == 1
+            && lateOrenMisses == 5
+            && transcriptWoundEntries
+                == combatTranscript.Totals.WoundsApplied,
+            "Depot replay volley classification changed unexpectedly.");
+        float transcriptMidpoint = combatPlayback.TotalDurationSeconds * 0.5f;
+        IReadOnlyList<ReplayCombatTranscriptEntry> midpointEntries =
+            combatTranscript.GetEntriesAtOrBefore(transcriptMidpoint);
+        foreach (ReplayCombatTranscriptEntry entry in midpointEntries)
+            Require(entry.TimeSeconds <= transcriptMidpoint,
+                "Replay transcript exposed a future entry at the playhead.");
         GameplayBattleArtifactFormatException unknownFailure = null;
         try
         {

@@ -13,6 +13,14 @@ namespace GritGud.Application.Gameplay
         Incapacitation = 4,
     }
 
+    public enum ReplayCombatPresentationOutcome
+    {
+        None = 0,
+        Hit = 1,
+        Miss = 2,
+        Blocked = 3,
+    }
+
     public enum ReplayCombatPresentationSubjectKind
     {
         Actor = 0,
@@ -36,7 +44,10 @@ namespace GritGud.Application.Gameplay
                 ReplayCombatPresentationSubjectKind.Actor,
             ReplayCombatPresentationSubjectKind targetKind =
                 ReplayCombatPresentationSubjectKind.Actor,
-            string presentationId = null)
+            string presentationId = null,
+            ReplayCombatPresentationOutcome outcome =
+                ReplayCombatPresentationOutcome.None,
+            int eventOrdinal = -1)
         {
             if (transitionSequence <= 0)
                 throw new ArgumentOutOfRangeException(
@@ -53,6 +64,12 @@ namespace GritGud.Application.Gameplay
                     typeof(ReplayCombatPresentationSubjectKind),
                     targetKind))
                 throw new ArgumentOutOfRangeException(nameof(targetKind));
+            if (!Enum.IsDefined(
+                    typeof(ReplayCombatPresentationOutcome),
+                    outcome))
+                throw new ArgumentOutOfRangeException(nameof(outcome));
+            if (eventOrdinal < -1)
+                throw new ArgumentOutOfRangeException(nameof(eventOrdinal));
             if (string.IsNullOrWhiteSpace(actorId)
                 && kind != ReplayCombatPresentationEventKind.ProjectileImpact)
                 throw new ArgumentException(
@@ -81,6 +98,8 @@ namespace GritGud.Application.Gameplay
             ShooterKind = shooterKind;
             TargetKind = targetKind;
             PresentationId = presentationId ?? string.Empty;
+            Outcome = outcome;
+            EventOrdinal = eventOrdinal;
         }
 
         public long TransitionSequence { get; }
@@ -95,9 +114,15 @@ namespace GritGud.Application.Gameplay
         public string ShooterId => ActorId;
         public ReplayCombatPresentationSubjectKind TargetKind { get; }
         public string PresentationId { get; }
+        public ReplayCombatPresentationOutcome Outcome { get; }
+        public int EventOrdinal { get; }
 
-        public string StableKey => TransitionSequence + ":"
-            + Kind + ":" + ActorId + ":" + ProjectileId;
+        public string CombatEventId => "replay-combat:"
+            + TransitionSequence + ":" + EventOrdinal + ":" + Kind + ":"
+            + ShooterKind + ":" + ActorId + ":" + TargetKind + ":"
+            + TargetId + ":" + ProjectileId;
+
+        public string StableKey => CombatEventId;
     }
 
     public enum TurnReplayActorActionKind
@@ -221,17 +246,40 @@ namespace GritGud.Application.Gameplay
                         AddHeight(attacker.Pose.Position, 1f),
                         AddHeight(target.Pose.Position, 1f),
                         GameplaySemanticReplayPresentationTiming
-                            .ActionResolutionProgress));
+                            .ActionResolutionProgress,
+                        outcome: resolved.Attack.Hit
+                            ? ReplayCombatPresentationOutcome.Hit
+                            : ReplayCombatPresentationOutcome.Miss));
                     break;
                 }
             }
             AppendReactionEvents(frame, events);
             for (int index = 0; index < events.Count; index++)
-                events[index] = CompleteEventIdentity(frame, events[index]);
+                events[index] = CompleteEventIdentity(
+                    frame,
+                    events[index],
+                    index);
             return events.Count == 0
                 ? Array.Empty<ReplayCombatPresentationEvent>()
                 : events.AsReadOnly();
         }
+
+        private static ReplayCombatPresentationEvent WithEventOrdinal(
+            ReplayCombatPresentationEvent presentationEvent,
+            int eventOrdinal) => new ReplayCombatPresentationEvent(
+                presentationEvent.TransitionSequence,
+                presentationEvent.Kind,
+                presentationEvent.ActorId,
+                presentationEvent.TargetId,
+                presentationEvent.Origin,
+                presentationEvent.Destination,
+                presentationEvent.NormalizedTime,
+                presentationEvent.ProjectileId,
+                presentationEvent.ShooterKind,
+                presentationEvent.TargetKind,
+                presentationEvent.PresentationId,
+                presentationEvent.Outcome,
+                eventOrdinal);
 
         private static void AppendSpecialSubjectDischarges(
             GameplaySemanticReplayFrame frame,
@@ -259,7 +307,10 @@ namespace GritGud.Application.Gameplay
                         shooterKind:
                             ReplayCombatPresentationSubjectKind.Actor,
                         targetKind:
-                            ReplayCombatPresentationSubjectKind.Drone));
+                            ReplayCombatPresentationSubjectKind.Drone,
+                        outcome: attack.Hit
+                            ? ReplayCombatPresentationOutcome.Hit
+                            : ReplayCombatPresentationOutcome.Miss));
                     break;
                 }
                 case DroneAttackRecord attack:
@@ -285,7 +336,8 @@ namespace GritGud.Application.Gameplay
                             ReplayCombatPresentationSubjectKind.Drone,
                         targetKind: targetKind,
                         presentationId:
-                            shooter.Definition.Attack.ActionId));
+                            shooter.Definition.Attack.ActionId,
+                        outcome: ResolveOutcome(attack.Consequence)));
                     break;
                 }
             }
@@ -293,7 +345,8 @@ namespace GritGud.Application.Gameplay
 
         private static ReplayCombatPresentationEvent CompleteEventIdentity(
             GameplaySemanticReplayFrame frame,
-            ReplayCombatPresentationEvent presentationEvent)
+            ReplayCombatPresentationEvent presentationEvent,
+            int eventOrdinal)
         {
             ReplayCombatPresentationSubjectKind shooterKind =
                 ResolveSubjectKind(frame, presentationEvent.ShooterId);
@@ -320,7 +373,21 @@ namespace GritGud.Application.Gameplay
                 presentationEvent.ProjectileId,
                 shooterKind,
                 targetKind,
-                presentationId);
+                presentationId,
+                presentationEvent.Outcome,
+                eventOrdinal);
+        }
+
+        private static ReplayCombatPresentationOutcome ResolveOutcome(
+            object consequence)
+        {
+            if (consequence is AttackResolutionRecord attack)
+                return attack.Hit
+                    ? ReplayCombatPresentationOutcome.Hit
+                    : ReplayCombatPresentationOutcome.Miss;
+            return consequence == null
+                ? ReplayCombatPresentationOutcome.None
+                : ReplayCombatPresentationOutcome.Hit;
         }
 
         private static ReplayCombatPresentationSubjectKind ResolveSubjectKind(
@@ -445,6 +512,8 @@ namespace GritGud.Application.Gameplay
                     advance.ProjectileId));
             }
 
+            for (int index = 0; index < events.Count; index++)
+                events[index] = WithEventOrdinal(events[index], index);
             return events.Count == 0
                 ? Array.Empty<ReplayCombatPresentationEvent>()
                 : events.AsReadOnly();
