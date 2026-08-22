@@ -36,19 +36,35 @@ namespace GritGud.PlayMode.Tests
                     GameplayCapabilityProfiles.EndTurn(emergency: false)),
                 new GameplayReachableInput(
                     GameplayReachableInputKind.MovementControl,
-                    "ai.move.enemy",
-                    "enemy",
+                    "ai.move.enemy-a",
+                    "enemy-a",
                     GameplayCapabilityProfiles.GroundedMove()),
                 new GameplayReachableInput(
                     GameplayReachableInputKind.EquippedAttack,
-                    "weapon.rifle.power->Actor",
-                    "enemy",
+                    "weapon.rifle.enemy-a.power->Actor",
+                    "enemy-a",
                     GameplayCapabilityProfiles.Attack(enemyAttack),
                     "player"),
                 new GameplayReachableInput(
                     GameplayReachableInputKind.EndTurnControl,
-                    "ai.end-turn.enemy",
-                    "enemy",
+                    "ai.end-turn.enemy-a",
+                    "enemy-a",
+                    GameplayCapabilityProfiles.EndTurn(emergency: false)),
+                new GameplayReachableInput(
+                    GameplayReachableInputKind.MovementControl,
+                    "ai.move.enemy-b",
+                    "enemy-b",
+                    GameplayCapabilityProfiles.GroundedMove()),
+                new GameplayReachableInput(
+                    GameplayReachableInputKind.EquippedAttack,
+                    "weapon.rifle.enemy-b.power->Actor",
+                    "enemy-b",
+                    GameplayCapabilityProfiles.Attack(enemyAttack),
+                    "player"),
+                new GameplayReachableInput(
+                    GameplayReachableInputKind.EndTurnControl,
+                    "ai.end-turn.enemy-b",
+                    "enemy-b",
                     GameplayCapabilityProfiles.EndTurn(emergency: false)),
             };
             GameplayCapabilityRegistry capabilities =
@@ -59,10 +75,12 @@ namespace GritGud.PlayMode.Tests
             GameplayWorldRegistry registry = null;
             GameplayTurnReplayWorldPresenter worldPresenter = null;
             GameplayReplayTranscriptPresenter transcriptPresenter = null;
-            GameplayWeaponPresenter enemyWeapon = null;
+            GameplayWeaponPresenter enemyAWeapon = null;
+            GameplayWeaponPresenter enemyBWeapon = null;
             GameObject host = null;
             GameObject playerActor = null;
-            GameObject enemyActor = null;
+            GameObject enemyAActor = null;
+            GameObject enemyBActor = null;
             float originalTimeScale = Time.timeScale;
             try
             {
@@ -77,26 +95,47 @@ namespace GritGud.PlayMode.Tests
                     "player",
                     out TurnEndFailure playerEndFailure), Is.True,
                     playerEndFailure.ToString());
-                GameplayActorPose enemyOrigin = gameplay.GetActor("enemy").Pose;
-                var route = new MovementRouteRecord(
-                    "enemy",
-                    enemyOrigin,
+                GameplayActorPose enemyAOrigin = gameplay.GetActor(
+                    "enemy-a").Pose;
+                var enemyARoute = new MovementRouteRecord(
+                    "enemy-a",
+                    enemyAOrigin,
                     new[] { new GameplayPosition(3f, 0f, 0f) });
-                gameplay.CommitMovementRoute(route);
+                gameplay.CommitMovementRoute(enemyARoute);
 
                 var attacks = new GameplayAttackSession(gameplay);
                 Assert.That(attacks.TryResolve(
-                    "enemy",
-                    CreateFullyExposedTarget("enemy", "player"),
-                    out GameplayActionRecord attackAction,
-                    out AttackResolutionFailure attackFailure), Is.True,
-                    attackFailure.ToString());
-                Assert.That(attackAction.Outcomes.Any(outcome =>
+                    "enemy-a",
+                    CreateFullyExposedTarget("enemy-a", "player"),
+                    out GameplayActionRecord enemyAAttack,
+                    out AttackResolutionFailure enemyAAttackFailure), Is.True,
+                    enemyAAttackFailure.ToString());
+                Assert.That(enemyAAttack.Outcomes.Any(outcome =>
                     outcome is AttackResolvedActionOutcome), Is.True);
                 Assert.That(gameplay.TryEndTurn(
-                    "enemy",
-                    out TurnEndFailure enemyEndFailure), Is.True,
-                    enemyEndFailure.ToString());
+                    "enemy-a",
+                    out TurnEndFailure enemyAEndFailure), Is.True,
+                    enemyAEndFailure.ToString());
+
+                GameplayActorPose enemyBOrigin = gameplay.GetActor(
+                    "enemy-b").Pose;
+                var enemyBRoute = new MovementRouteRecord(
+                    "enemy-b",
+                    enemyBOrigin,
+                    new[] { new GameplayPosition(-3f, 0f, 0f) });
+                gameplay.CommitMovementRoute(enemyBRoute);
+                Assert.That(attacks.TryResolve(
+                    "enemy-b",
+                    CreateFullyExposedTarget("enemy-b", "player"),
+                    out GameplayActionRecord enemyBAttack,
+                    out AttackResolutionFailure enemyBAttackFailure), Is.True,
+                    enemyBAttackFailure.ToString());
+                Assert.That(enemyBAttack.Outcomes.Any(outcome =>
+                    outcome is AttackResolvedActionOutcome), Is.True);
+                Assert.That(gameplay.TryEndTurn(
+                    "enemy-b",
+                    out TurnEndFailure enemyBEndFailure), Is.True,
+                    enemyBEndFailure.ToString());
 
                 Assert.That(live.TryCreateLastCompletedTurnReplay(
                     out GameplaySemanticReplayTimeline lastTurn), Is.True);
@@ -108,14 +147,33 @@ namespace GritGud.PlayMode.Tests
                         typeof(GameplayActionRecord),
                         typeof(TurnEndRecord),
                     }));
+                Assert.That(lastTurn.Frames.Select(frame =>
+                        frame.Transition.Identity.ActorId),
+                    Is.EqualTo(new[]
+                    {
+                        "enemy-b",
+                        "enemy-b",
+                        "enemy-b",
+                    }));
                 Assert.That(live.TryCreateReplaySinceActorLastTurn(
                     "player",
                     out GameplaySemanticReplayTimeline awayReplay,
                     out GameplayPlayerAwayReplayInterval interval), Is.True);
                 Assert.That(interval.Windows.Select(window => window.ActorId),
-                    Is.EqualTo(new[] { "enemy" }));
-                Assert.That(interval.TransitionCount, Is.EqualTo(3));
-                Assert.That(awayReplay.Frames, Has.Count.EqualTo(3));
+                    Is.EqualTo(new[] { "enemy-a", "enemy-b" }));
+                Assert.That(interval.TransitionCount, Is.EqualTo(6));
+                Assert.That(awayReplay.Frames, Has.Count.EqualTo(6));
+                Assert.That(awayReplay.Frames.Select(frame =>
+                        frame.Transition.Identity.ActorId),
+                    Is.EqualTo(new[]
+                    {
+                        "enemy-a",
+                        "enemy-a",
+                        "enemy-a",
+                        "enemy-b",
+                        "enemy-b",
+                        "enemy-b",
+                    }));
 
                 var transcript = new ReplayCombatTranscript(
                     new GameplaySemanticReplayPlaybackTimeline(awayReplay));
@@ -123,12 +181,15 @@ namespace GritGud.PlayMode.Tests
                     entry.EventKind ==
                         ReplayCombatTranscriptEventKind.WeaponDischarge),
                     Is.True);
+                Assert.That(transcript.Totals.WeaponDischarges,
+                    Is.EqualTo(2));
 
                 GameObject prefab = Resources.Load<GameObject>(
                     "Actors/DefaultPlayerActor");
                 Assert.That(prefab, Is.Not.Null);
                 playerActor = Object.Instantiate(prefab);
-                enemyActor = Object.Instantiate(prefab);
+                enemyAActor = Object.Instantiate(prefab);
+                enemyBActor = Object.Instantiate(prefab);
                 yield return null;
 
                 world = new LevelWorld(
@@ -142,25 +203,40 @@ namespace GritGud.PlayMode.Tests
                     targetable: true,
                     playerActor);
                 registry.RegisterActor(
-                    "enemy",
+                    "enemy-a",
                     ActorPresentationIds.DefaultPlayer,
                     targetable: true,
-                    enemyActor);
+                    enemyAActor);
+                registry.RegisterActor(
+                    "enemy-b",
+                    ActorPresentationIds.DefaultPlayer,
+                    targetable: true,
+                    enemyBActor);
 
                 host = new GameObject("Live Away Replay Presentation Host");
                 GameplayAttackController attackController =
                     host.AddComponent<GameplayAttackController>();
                 GameplayProjectileController projectileController =
                     host.AddComponent<GameplayProjectileController>();
-                enemyWeapon = enemyActor.AddComponent<
+                enemyAWeapon = enemyAActor.AddComponent<
                     GameplayWeaponPresenter>();
-                enemyWeapon.Bind(
+                enemyAWeapon.Bind(
                     gameplay,
                     registry,
                     attackController,
                     projectileController,
-                    enemyActor.GetComponent<ActorAnimationCoordinator>(),
-                    "enemy",
+                    enemyAActor.GetComponent<ActorAnimationCoordinator>(),
+                    "enemy-a",
+                    presentAsLocalPlayer: false);
+                enemyBWeapon = enemyBActor.AddComponent<
+                    GameplayWeaponPresenter>();
+                enemyBWeapon.Bind(
+                    gameplay,
+                    registry,
+                    attackController,
+                    projectileController,
+                    enemyBActor.GetComponent<ActorAnimationCoordinator>(),
+                    "enemy-b",
                     presentAsLocalPlayer: false);
 
                 GameplayInputController input =
@@ -213,29 +289,36 @@ namespace GritGud.PlayMode.Tests
                 hud.Toggle();
 
                 Assert.That(hud.IsOpen, Is.True, hud.LastOpenFailure);
-                Assert.That(hud.Replay.Frames, Has.Count.EqualTo(3));
+                Assert.That(hud.Replay.Frames, Has.Count.EqualTo(6));
                 Assert.That(hud.ContentSummary.IsReadyToOpen, Is.True,
                     hud.ContentSummary.ValidationMessage);
-                Assert.That(hud.ContentSummary.SemanticFrames, Is.EqualTo(3));
+                Assert.That(hud.ContentSummary.SemanticFrames, Is.EqualTo(6));
                 Assert.That(hud.ContentSummary.ActorPoseDeltaFrames,
-                    Is.GreaterThanOrEqualTo(1));
+                    Is.GreaterThanOrEqualTo(2));
                 StringAssert.Contains(
                     "LIVE SINCE PLAYER'S LAST TURN",
+                    hud.ContentSummary.SourceLabel);
+                StringAssert.Contains(
+                    "2 TURNS",
                     hud.ContentSummary.SourceLabel);
                 Assert.That(drawer.HeaderLabel,
                     Is.EqualTo("REPLAY COMBAT TRANSCRIPT"));
                 Assert.That(drawer.IsExpanded, Is.True);
                 Assert.That(drawer.Source,
                     Is.SameAs(transcriptPresenter.VisibleSource));
-                Assert.That(enemyActor.transform.position,
+                Assert.That(enemyAActor.transform.position,
                     Is.EqualTo(new Vector3(5f, 0f, 0f)));
+                Assert.That(enemyBActor.transform.position,
+                    Is.EqualTo(new Vector3(-5f, 0f, 0f)));
 
                 float movementDuration = hud.Playback.Frames[0]
                     .DurationSeconds;
                 hud.AdvancePlayback(movementDuration * 0.5f);
 
-                Assert.That(enemyActor.transform.position.x,
+                Assert.That(enemyAActor.transform.position.x,
                     Is.EqualTo(4f).Within(0.001f));
+                Assert.That(enemyBActor.transform.position,
+                    Is.EqualTo(new Vector3(-5f, 0f, 0f)));
 
                 hud.AdvancePlayback(hud.Playback.TotalDurationSeconds);
 
@@ -244,8 +327,10 @@ namespace GritGud.PlayMode.Tests
                     entry.EventKind ==
                         ReplayCombatTranscriptEventKind.WeaponDischarge),
                     Is.True);
-                Assert.That(enemyActor.transform.position,
+                Assert.That(enemyAActor.transform.position,
                     Is.EqualTo(new Vector3(3f, 0f, 0f)));
+                Assert.That(enemyBActor.transform.position,
+                    Is.EqualTo(new Vector3(-3f, 0f, 0f)));
 
                 hud.Toggle();
 
@@ -259,14 +344,16 @@ namespace GritGud.PlayMode.Tests
             {
                 transcriptPresenter?.Unbind();
                 worldPresenter?.Dispose();
-                enemyWeapon?.Unbind();
+                enemyAWeapon?.Unbind();
+                enemyBWeapon?.Unbind();
                 live?.Dispose();
                 registry?.Dispose();
                 world?.Dispose();
                 if (registry == null)
                 {
                     if (playerActor != null) Object.Destroy(playerActor);
-                    if (enemyActor != null) Object.Destroy(enemyActor);
+                    if (enemyAActor != null) Object.Destroy(enemyAActor);
+                    if (enemyBActor != null) Object.Destroy(enemyBActor);
                 }
                 if (host != null) Object.Destroy(host);
                 Time.timeScale = originalTimeScale;
@@ -753,12 +840,15 @@ namespace GritGud.PlayMode.Tests
                     "party",
                     new[] { "hostile" },
                     maximumWounds: 10));
-            var enemy = new ScenarioActorDefinition(
-                "enemy",
-                10,
+            ScenarioActorDefinition CreateEnemy(
+                string id,
+                int initiative,
+                float x) => new ScenarioActorDefinition(
+                id,
+                initiative,
                 new GameplayActorPose(
-                    new GameplayPosition(5f, 0f, 0f),
-                    180f),
+                    new GameplayPosition(x, 0f, 0f),
+                    x > 0f ? 180f : 0f),
                 new TurnBudget(4, 8f),
                 new[] { weapon },
                 weapon.Id,
@@ -770,7 +860,12 @@ namespace GritGud.PlayMode.Tests
                 new ScenarioDefinition(
                     "live-away-replay-playmode",
                     new ScenarioTimingDefinition(1f),
-                    new[] { player, enemy },
+                    new[]
+                    {
+                        player,
+                        CreateEnemy("enemy-a", 20, 5f),
+                        CreateEnemy("enemy-b", 10, -5f),
+                    },
                     Array.Empty<ScenarioObjectiveDefinition>()),
                 scenarioSeed: 29u);
         }
