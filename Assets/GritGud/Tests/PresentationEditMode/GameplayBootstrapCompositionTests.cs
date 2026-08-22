@@ -297,6 +297,49 @@ namespace GritGud.Presentation.Tests
         }
 
         [UnityTest]
+        public IEnumerator ReplayScrubberCapturePausesAndRestoresPlayState()
+        {
+            using var runtime = new GameplayRuntimeTestHarness();
+            yield return runtime.StartSimulation();
+
+            GameplayTurnReplayHud replayHud = runtime.Bootstrap
+                .GetComponent<GameplayTurnReplayHud>();
+            float total = replayHud.Playback.TotalDurationSeconds;
+
+            Assert.That(replayHud.IsOpen, Is.True);
+            Assert.That(replayHud.IsPlaying, Is.True);
+            replayHud.BeginScrubCapture();
+            Assert.That(replayHud.IsScrubCaptured, Is.True);
+            Assert.That(replayHud.IsPlaying, Is.False);
+            replayHud.SetScrubPlayhead(total * 0.75f);
+            float heldTime = replayHud.TimeSeconds;
+            replayHud.AdvancePlayback(1f);
+            Assert.That(replayHud.TimeSeconds, Is.EqualTo(heldTime));
+            replayHud.EndScrubCapture();
+            Assert.That(replayHud.IsScrubCaptured, Is.False);
+            Assert.That(replayHud.IsPlaying, Is.True);
+
+            replayHud.BeginScrubCapture();
+            replayHud.SetScrubPlayhead(total * 0.25f);
+            Assert.That(replayHud.TimeSeconds, Is.LessThan(heldTime));
+            replayHud.EndScrubCapture();
+            Assert.That(replayHud.IsPlaying, Is.True);
+
+            replayHud.BeginScrubCapture();
+            replayHud.SetScrubPlayhead(total);
+            replayHud.EndScrubCapture();
+            Assert.That(replayHud.IsPlaying, Is.False,
+                "Releasing at the replay end must not resume playback.");
+
+            replayHud.SetScrubPlayhead(total * 0.5f);
+            replayHud.BeginScrubCapture();
+            replayHud.SetScrubPlayhead(total * 0.4f);
+            replayHud.EndScrubCapture();
+            Assert.That(replayHud.IsPlaying, Is.False,
+                "A scrub that began paused must remain paused on release.");
+        }
+
+        [UnityTest]
         public IEnumerator WatchSimsLaunchesAnExclusiveSimulationViewer()
         {
             using var runtime = new GameplayRuntimeTestHarness();

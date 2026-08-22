@@ -50,6 +50,8 @@ namespace GritGud.Presentation.Gameplay
         private string lastOpenFailure = string.Empty;
         private bool isOpen;
         private bool isPlaying;
+        private bool scrubCaptured;
+        private bool resumeAfterScrub;
         private GameplayReplaySource source;
         private float playhead;
         private float speed = 1f;
@@ -66,6 +68,8 @@ namespace GritGud.Presentation.Gameplay
         internal float TimeSeconds => playhead;
 
         internal bool IsPlaying => isPlaying;
+
+        internal bool IsScrubCaptured => scrubCaptured;
 
         internal GameplayReplaySource Source => source;
 
@@ -123,6 +127,7 @@ namespace GritGud.Presentation.Gameplay
             lastOpenFailure = string.Empty;
             isOpen = false;
             isPlaying = false;
+            ResetScrubCapture();
             source = default;
             playhead = 0f;
             enabled = false;
@@ -162,6 +167,7 @@ namespace GritGud.Presentation.Gameplay
             playback = null;
             contentSummary = null;
             lastOpenFailure = string.Empty;
+            ResetScrubCapture();
             if (isOpen)
             {
                 RefreshPlayback();
@@ -179,6 +185,7 @@ namespace GritGud.Presentation.Gameplay
             {
                 isOpen = false;
                 isPlaying = false;
+                ResetScrubCapture();
                 TryNotifyOpenChanged(false);
                 replay = null;
                 playback = null;
@@ -194,6 +201,7 @@ namespace GritGud.Presentation.Gameplay
             // their initial state and advance immediately; a final-state view
             // belongs in a history inspector, not this control.
             isPlaying = true;
+            ResetScrubCapture();
             playhead = 0f;
             if (!TryNotifyOpenChanged(true)
                 || !TryNotifyPlayheadChanged(
@@ -390,20 +398,72 @@ namespace GritGud.Presentation.Gameplay
                 controlsY + 1f,
                 bar.width - 198f,
                 18f);
-            playhead = GUI.HorizontalSlider(
+            Event guiEvent = Event.current;
+            if (guiEvent.rawType == EventType.MouseDown
+                && guiEvent.button == 0
+                && scrubber.Contains(guiEvent.mousePosition))
+                BeginScrubCapture();
+            float scrubbedPlayhead = GUI.HorizontalSlider(
                 scrubber,
                 playhead,
                 0f,
                 playback.TotalDurationSeconds);
-            if (!Mathf.Approximately(previousPlayhead, playhead))
-            {
-                if (!TryNotifyPlayheadChanged(
-                        new GameplayReplayPlayheadChange(
-                            previousPlayhead,
-                            playhead,
-                            false)))
-                    AbortPlayback();
-            }
+            if (!Mathf.Approximately(previousPlayhead, scrubbedPlayhead))
+                ApplyPlayheadChange(previousPlayhead, scrubbedPlayhead);
+            // rawType survives IMGUI control consumption, so a drag released
+            // outside the slider still restores the captured play state.
+            if (scrubCaptured
+                && guiEvent.rawType == EventType.MouseUp
+                && guiEvent.button == 0)
+                EndScrubCapture();
+        }
+
+        internal void BeginScrubCapture()
+        {
+            if (!isOpen || playback == null || scrubCaptured)
+                return;
+            scrubCaptured = true;
+            resumeAfterScrub = isPlaying;
+            isPlaying = false;
+        }
+
+        internal void SetScrubPlayhead(float timeSeconds)
+        {
+            if (float.IsNaN(timeSeconds) || float.IsInfinity(timeSeconds))
+                throw new ArgumentOutOfRangeException(nameof(timeSeconds));
+            if (!isOpen || playback == null)
+                return;
+            ApplyPlayheadChange(playhead, timeSeconds);
+        }
+
+        private void ApplyPlayheadChange(
+            float previousPlayhead,
+            float timeSeconds)
+        {
+            playhead = Mathf.Clamp(
+                timeSeconds,
+                0f,
+                playback.TotalDurationSeconds);
+            if (Mathf.Approximately(previousPlayhead, playhead))
+                return;
+            if (!TryNotifyPlayheadChanged(
+                    new GameplayReplayPlayheadChange(
+                        previousPlayhead,
+                        playhead,
+                        false)))
+                AbortPlayback();
+        }
+
+        internal void EndScrubCapture()
+        {
+            if (!scrubCaptured)
+                return;
+            bool shouldResume = resumeAfterScrub;
+            ResetScrubCapture();
+            isPlaying = isOpen
+                && playback != null
+                && shouldResume
+                && playhead < playback.TotalDurationSeconds;
         }
 
         private Rect CalculateTimelineSegment(
@@ -573,11 +633,18 @@ namespace GritGud.Presentation.Gameplay
             bool wasOpen = isOpen;
             isOpen = false;
             isPlaying = false;
+            ResetScrubCapture();
             playhead = 0f;
             if (wasOpen)
                 TryNotifyOpenChanged(false);
             replay = null;
             playback = null;
+        }
+
+        private void ResetScrubCapture()
+        {
+            scrubCaptured = false;
+            resumeAfterScrub = false;
         }
 
         private static Rect CalculateBarRectangle(
