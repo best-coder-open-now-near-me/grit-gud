@@ -15,15 +15,29 @@ namespace GritGud.Application.Gameplay
     /// </summary>
     public static class GameplayBattleArtifactReplayLoader
     {
+        public const int OldestSupportedRulesSchemaVersion = 8;
+
+        public static bool CanLoadRulesSchemaVersion(int rulesSchemaVersion) =>
+            rulesSchemaVersion >= OldestSupportedRulesSchemaVersion
+            && rulesSchemaVersion
+                <= GameplayCombatStateSnapshot.CurrentSchemaVersion;
+
         public static GameplaySemanticReplayTimeline Load(
             GameplayBattleArtifact artifact)
         {
             if (artifact == null) throw new ArgumentNullException(
                 nameof(artifact));
             GameplayBattleArtifactContent content = artifact.Content;
-            bool migratesLegacyInjuries = content.ExecutionIdentity.Gameplay
-                .RulesSchemaVersion < GameplayCombatStateSnapshot
-                    .CurrentSchemaVersion;
+            int rulesSchemaVersion = content.ExecutionIdentity.Gameplay
+                .RulesSchemaVersion;
+            if (!CanLoadRulesSchemaVersion(rulesSchemaVersion))
+                throw new InvalidOperationException(
+                    "Battle artifact rules schema version "
+                    + rulesSchemaVersion + " is unsupported; expected "
+                    + OldestSupportedRulesSchemaVersion + " through "
+                    + GameplayCombatStateSnapshot.CurrentSchemaVersion + ".");
+            bool migratesLegacyInjuries = rulesSchemaVersion
+                < GameplayCombatStateSnapshot.CurrentSchemaVersion;
             GameplayCombatStateSnapshot initial = CanonicalReader.Read<
                 GameplayCombatStateSnapshot>(
                     content.InitialStateCanonical,

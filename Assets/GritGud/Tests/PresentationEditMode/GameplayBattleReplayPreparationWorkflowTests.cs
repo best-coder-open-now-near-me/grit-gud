@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using GritGud.Application.Gameplay;
 using GritGud.Presentation.Gameplay;
 using NUnit.Framework;
 using Object = UnityEngine.Object;
@@ -156,6 +157,38 @@ namespace GritGud.Presentation.Tests
             }
         }
 
+        [Test]
+        public void ViewerAcceptsSupportedLegacyArtifactAgainstCurrentRules()
+        {
+            GameplayExecutionIdentity artifact = CreateIdentity(
+                GameplayBattleArtifactReplayLoader
+                    .OldestSupportedRulesSchemaVersion);
+            GameplayExecutionIdentity viewer = CreateIdentity(
+                GameplayCombatStateSnapshot.CurrentSchemaVersion);
+
+            Assert.DoesNotThrow(() =>
+                GameplayFirstSimulationPreparationService
+                    .RequireViewerIdentityCompatibility(artifact, viewer));
+        }
+
+        [TestCase(7)]
+        [TestCase(10)]
+        public void ViewerRejectsUnsupportedArtifactRules(int rulesSchemaVersion)
+        {
+            GameplayExecutionIdentity artifact = CreateIdentity(
+                rulesSchemaVersion);
+            GameplayExecutionIdentity viewer = CreateIdentity(
+                GameplayCombatStateSnapshot.CurrentSchemaVersion);
+
+            InvalidOperationException failure = Assert.Throws<
+                InvalidOperationException>(() =>
+                GameplayFirstSimulationPreparationService
+                    .RequireViewerIdentityCompatibility(artifact, viewer));
+
+            Assert.That(failure.Message,
+                Does.Contain("gameplay identity mismatch"));
+        }
+
         private static Task<GameplayBattleReplayPreparationResult<
             object,
             object>> PrepareAsync(
@@ -168,6 +201,21 @@ namespace GritGud.Presentation.Tests
                 stages.RunSimulationAsync,
                 stages.Verify,
                 cancellationToken);
+
+        private static GameplayExecutionIdentity CreateIdentity(
+            int rulesSchemaVersion) =>
+            new GameplayExecutionIdentity(
+                new GameplayContentIdentity(
+                    "depot-yard",
+                    19,
+                    rulesSchemaVersion,
+                    new string('a', 64)),
+                new SpatialContentIdentity(
+                    "depot-yard",
+                    7,
+                    3,
+                    new string('b', 64)),
+                new ScenarioRunIdentity("depot-yard.run", 314159u));
 
         private static async Task AssertCanceledAsync(Task task)
         {

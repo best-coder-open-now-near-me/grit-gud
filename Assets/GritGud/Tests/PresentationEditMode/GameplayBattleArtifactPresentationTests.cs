@@ -1,3 +1,5 @@
+using System.Threading;
+using System.Threading.Tasks;
 using GritGud.Application.Gameplay;
 using GritGud.Presentation.Gameplay;
 using NUnit.Framework;
@@ -7,6 +9,24 @@ namespace GritGud.Presentation.Tests
 {
     public sealed class GameplayBattleArtifactPresentationTests
     {
+        [Test]
+        public async Task EmbeddedFirstSimulationPreparesAgainstCurrentContent()
+        {
+            GameplayContentPackage content = GameplayContentLoader.LoadDefault();
+
+            GameplayBattleReplayPreparationResult<
+                GameplayBattleArtifact,
+                GameplaySemanticReplayTimeline> result =
+                await GameplayFirstSimulationPreparationService.PrepareAsync(
+                    content.Assembly,
+                    content.SpatialContent,
+                    CancellationToken.None);
+
+            Assert.That(result.IsReady, Is.True);
+            Assert.That(result.Replay, Is.Not.Null);
+            Assert.That(result.Replay.Frames, Is.Not.Empty);
+        }
+
         [Test]
         public void EmbeddedFirstSimulationIsStrictAndExercisesIntendedSpace()
         {

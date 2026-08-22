@@ -224,7 +224,7 @@ namespace GritGud.Presentation.Gameplay
                 + ShortDigest(actual.Gameplay.DefinitionDigest) + ").";
         }
 
-        private static void RequireViewerIdentityCompatibility(
+        internal static void RequireViewerIdentityCompatibility(
             GameplayExecutionIdentity expected,
             GameplayExecutionIdentity actual)
         {
@@ -235,7 +235,10 @@ namespace GritGud.Presentation.Gameplay
                 || actual.Gameplay.ScenarioSchemaVersion
                     != expected.Gameplay.ScenarioSchemaVersion
                 || actual.Gameplay.RulesSchemaVersion
-                    != expected.Gameplay.RulesSchemaVersion
+                    != GameplayCombatStateSnapshot.CurrentSchemaVersion
+                || !GameplayBattleArtifactReplayLoader
+                    .CanLoadRulesSchemaVersion(
+                        expected.Gameplay.RulesSchemaVersion)
                 || !string.Equals(
                     actual.Gameplay.ScenarioId,
                     expected.Gameplay.ScenarioId,
