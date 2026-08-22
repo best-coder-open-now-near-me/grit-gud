@@ -116,6 +116,12 @@ namespace GritGud.Editor
                         ActorAnimationParameters.NoActionStateName)) &&
                 FindState(
                     actionLayer.stateMachine,
+                    ActorAnimationParameters.RifleFireStateName) != null &&
+                FindState(
+                    actionLayer.stateMachine,
+                    ActorAnimationParameters.LauncherFireStateName) != null &&
+                FindState(
+                    actionLayer.stateMachine,
                     ActorAnimationParameters.ThrowStateName) != null &&
                 FindState(
                     actionLayer.stateMachine,
@@ -519,6 +525,16 @@ namespace GritGud.Editor
                     actionLayer.stateMachine,
                     ActorAnimationParameters.ThrowStateName)
                 : null;
+            AnimatorState rifleFire = actionLayer != null
+                ? FindState(
+                    actionLayer.stateMachine,
+                    ActorAnimationParameters.RifleFireStateName)
+                : null;
+            AnimatorState launcherFire = actionLayer != null
+                ? FindState(
+                    actionLayer.stateMachine,
+                    ActorAnimationParameters.LauncherFireStateName)
+                : null;
             AnimatorState knifeStrike = actionLayer != null
                 ? FindState(
                     actionLayer.stateMachine,
@@ -530,10 +546,21 @@ namespace GritGud.Editor
                 actionLayer.blendingMode != AnimatorLayerBlendingMode.Override ||
                 actionLayer.iKPass ||
                 Mathf.Abs(actionLayer.defaultWeight) > 0.001f ||
-                idle == null || throwing == null || knifeStrike == null ||
+                idle == null || rifleFire == null || launcherFire == null ||
+                throwing == null || knifeStrike == null ||
                 actionLayer.stateMachine.defaultState != idle ||
                 idle.motion != null ||
+                rifleFire.motion != LoadAnimationClip(RifleFirePath) ||
+                launcherFire.motion != LoadAnimationClip(LauncherFirePath) ||
                 !HasActionLayerReleaseBehaviour(idle) ||
+                !HasActionReturnTransition(
+                    rifleFire,
+                    idle,
+                    ActionExitNormalizedTime) ||
+                !HasActionReturnTransition(
+                    launcherFire,
+                    idle,
+                    ActionExitNormalizedTime) ||
                 throwing.motion != LoadAnimationClip(ThrowPath) ||
                 !HasActionReturnTransition(
                     throwing,
@@ -551,7 +578,8 @@ namespace GritGud.Editor
             {
                 throw new InvalidOperationException(
                     "Actor actions require an upper-body override layer, "
-                    + "authored throw/knife motions and self-releasing returns.");
+                    + "authored fire/throw/knife motions and self-releasing "
+                    + "returns.");
             }
         }
 

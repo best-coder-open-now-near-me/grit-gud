@@ -126,7 +126,7 @@ namespace GritGud.Presentation.Actors.Animation
                     + $"'{ActorAnimationPoseIds.Empty}' set.");
             }
 
-            var actions = new HashSet<ActorAnimationAction>();
+            var actions = new HashSet<string>(StringComparer.Ordinal);
             foreach (ActorAnimationActionBinding binding in
                 profile.ActionBindings)
             {
@@ -138,11 +138,13 @@ namespace GritGud.Presentation.Actors.Animation
                         + "empty action binding.");
                 }
 
-                if (!actions.Add(binding.Action))
+                string bindingKey = $"{(int)binding.Action}:{binding.ContextId}";
+                if (!actions.Add(bindingKey))
                 {
                     throw new InvalidOperationException(
                         $"Animation profile '{profile.name}' duplicates "
-                        + $"action '{binding.Action}'.");
+                        + $"action '{binding.Action}' in context "
+                        + $"'{binding.ContextId}'.");
                 }
 
                 if (binding.UsesTrigger)
@@ -157,6 +159,27 @@ namespace GritGud.Presentation.Actors.Animation
                 {
                     int layer = RequireLayer(animator, binding.LayerName);
                     RequireState(animator, layer, binding.StateName);
+                }
+            }
+
+            foreach (ActorWeaponAnimationSet set in
+                profile.WeaponAnimationSets)
+            {
+                if (string.IsNullOrWhiteSpace(set.RecoilStateName))
+                    continue;
+                if (!profile.TryGetActionBinding(
+                        ActorAnimationAction.WeaponFire,
+                        set.Id,
+                        out ActorAnimationActionBinding binding) ||
+                    !binding.UsesState ||
+                    binding.ContextId != set.Id ||
+                    binding.LayerName !=
+                        ActorAnimationParameters.ActionLayerName)
+                {
+                    throw new InvalidOperationException(
+                        $"Firearm animation set '{set.Id}' in profile "
+                        + $"'{profile.name}' requires an explicit WeaponFire "
+                        + "state binding on the actor action layer.");
                 }
             }
         }

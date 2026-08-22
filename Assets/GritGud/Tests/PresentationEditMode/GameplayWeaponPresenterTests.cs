@@ -257,6 +257,47 @@ namespace GritGud.Presentation.Tests
                 noActionState.behaviours,
                 Has.Exactly(1).InstanceOf<
                     ActorActionLayerReleaseBehaviour>());
+            AnimatorState rifleFireState = actionLayer.stateMachine.states
+                .Single(child => child.state.name ==
+                    ActorAnimationParameters.RifleFireStateName)
+                .state;
+            AnimatorState launcherFireState = actionLayer.stateMachine.states
+                .Single(child => child.state.name ==
+                    ActorAnimationParameters.LauncherFireStateName)
+                .state;
+            Assert.That(
+                AssetDatabase.GetAssetPath(rifleFireState.motion),
+                Is.EqualTo("Assets/Basic Shooter Pack/firing rifle.fbx"));
+            Assert.That(
+                AssetDatabase.GetAssetPath(launcherFireState.motion),
+                Is.EqualTo(
+                    "Assets/Kevin Iglesias/Human Animations/Animations/"
+                    + "Male/Combat/Bazooka/"
+                    + "HumanM@Bazooka_Aim01_Shoot01.fbx"));
+            Assert.That(
+                profile.TryGetActionBinding(
+                    ActorAnimationAction.WeaponFire,
+                    ActorAnimationPoseIds.Rifle,
+                    out ActorAnimationActionBinding rifleFireBinding),
+                Is.True);
+            Assert.That(
+                rifleFireBinding.ContextId,
+                Is.EqualTo(ActorAnimationPoseIds.Rifle));
+            Assert.That(
+                rifleFireBinding.StateName,
+                Is.EqualTo(ActorAnimationParameters.RifleFireStateName));
+            Assert.That(
+                profile.TryGetActionBinding(
+                    ActorAnimationAction.WeaponFire,
+                    ActorAnimationPoseIds.Launcher,
+                    out ActorAnimationActionBinding launcherFireBinding),
+                Is.True);
+            Assert.That(
+                launcherFireBinding.ContextId,
+                Is.EqualTo(ActorAnimationPoseIds.Launcher));
+            Assert.That(
+                launcherFireBinding.StateName,
+                Is.EqualTo(ActorAnimationParameters.LauncherFireStateName));
             AnimatorState throwState = actionLayer.stateMachine.states
                 .Single(child => child.state.name ==
                     ActorAnimationParameters.ThrowStateName)
@@ -311,6 +352,7 @@ namespace GritGud.Presentation.Tests
         [TestCase(
             ActorAnimationPoseIds.Rifle,
             ActorAnimationParameters.RifleAimStateName,
+            ActorAnimationParameters.RifleFireStateName,
             ActorAnimationParameters.RifleRecoilStateName,
             0.8f,
             9f,
@@ -319,14 +361,16 @@ namespace GritGud.Presentation.Tests
         [TestCase(
             ActorAnimationPoseIds.Launcher,
             ActorAnimationParameters.LauncherAimStateName,
+            ActorAnimationParameters.LauncherFireStateName,
             ActorAnimationParameters.LauncherRecoilStateName,
             1f,
             14f,
             0.1f,
             0.6f)]
-        public void WeaponFirePulsesAdditiveRecoilWithoutReplacingPose(
+        public void WeaponFireComposesAuthoredActionAndAdditiveRecoil(
             string animationSetId,
             string poseState,
+            string fireState,
             string recoilState,
             float recoilWeight,
             float recoilKickDegrees,
@@ -351,12 +395,21 @@ namespace GritGud.Presentation.Tests
 
                 int poseLayer = animator.GetLayerIndex(
                     ActorAnimationParameters.WeaponLayerName);
+                int actionLayer = animator.GetLayerIndex(
+                    ActorAnimationParameters.ActionLayerName);
                 int recoilLayer = animator.GetLayerIndex(
                     ActorAnimationParameters.RecoilLayerName);
                 Assert.That(
                     animator.GetCurrentAnimatorStateInfo(poseLayer).IsName(
                         poseState),
                     Is.True);
+                Assert.That(
+                    animator.GetCurrentAnimatorStateInfo(actionLayer).IsName(
+                        fireState),
+                    Is.True);
+                Assert.That(
+                    animator.GetLayerWeight(actionLayer),
+                    Is.EqualTo(1f).Within(0.001f));
                 Assert.That(
                     animator.GetCurrentAnimatorStateInfo(recoilLayer).IsName(
                         recoilState),

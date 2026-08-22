@@ -87,39 +87,59 @@ MonoBehaviour:
     triggerParameterName: Interact
     layerName: 
     stateName: 
+    contextId: 
     transitionSeconds: 0.1
+  - action: 1
+    triggerParameterName: 
+    layerName: Actor Actions
+    stateName: Rifle Fire
+    contextId: pose.rifle
+    transitionSeconds: 0.08
+  - action: 1
+    triggerParameterName: 
+    layerName: Actor Actions
+    stateName: Launcher Fire
+    contextId: pose.launcher
+    transitionSeconds: 0.08
   - action: 3
     triggerParameterName: 
     layerName: Actor Actions
     stateName: Throw
+    contextId: 
     transitionSeconds: 0.08
   - action: 4
     triggerParameterName: 
     layerName: Actor Traversal
     stateName: Jump
+    contextId: 
     transitionSeconds: 0.08
   - action: 7
     triggerParameterName: 
     layerName: Actor Actions
     stateName: Knife Strike
+    contextId: 
     transitionSeconds: 0.08
   - action: 5
     triggerParameterName: 
     layerName: Actor Reactions
     stateName: Hit Reaction
+    contextId: 
     transitionSeconds: 0.08
   - action: 6
     triggerParameterName: 
     layerName: Actor Reactions
     stateName: Fall Over
+    contextId: 
     transitionSeconds: 0.08
   - action: 8
     triggerParameterName: 
     layerName: Actor Reactions
     stateName: Shoulder Hit And Fall
+    contextId: 
     transitionSeconds: 0.08
   - action: 9
     triggerParameterName: 
     layerName: Actor Displacement
     stateName: Push
+    contextId: 
     transitionSeconds: 0.08

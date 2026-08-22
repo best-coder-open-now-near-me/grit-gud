@@ -103,7 +103,7 @@ namespace GritGud.Editor
                 recoilHoldSeconds: 0f,
                 recoilReturnSeconds: 0.18f);
 
-            if (profile.ActionBindings.Count != 8 ||
+            if (profile.ActionBindings.Count != 10 ||
                 !profile.TryGetActionBinding(
                     ActorAnimationAction.Interact,
                     out ActorAnimationActionBinding interaction) ||
@@ -111,6 +111,18 @@ namespace GritGud.Editor
                     ActorAnimationParameters.InteractName ||
                 interaction.UsesState ||
                 Mathf.Abs(interaction.TransitionSeconds - 0.1f) > 0.001f ||
+                !IsContextualStateBinding(
+                    profile,
+                    ActorAnimationAction.WeaponFire,
+                    ActorAnimationPoseIds.Rifle,
+                    ActorAnimationParameters.ActionLayerName,
+                    ActorAnimationParameters.RifleFireStateName) ||
+                !IsContextualStateBinding(
+                    profile,
+                    ActorAnimationAction.WeaponFire,
+                    ActorAnimationPoseIds.Launcher,
+                    ActorAnimationParameters.ActionLayerName,
+                    ActorAnimationParameters.LauncherFireStateName) ||
                 !profile.TryGetActionBinding(
                     ActorAnimationAction.Throw,
                     out ActorAnimationActionBinding throwing) ||
@@ -162,8 +174,30 @@ namespace GritGud.Editor
             {
                 throw new InvalidOperationException(
                     "The default animation profile requires its authored "
-                    + "interaction, throw, jump, strike, and reaction bindings.");
+                    + "firearm, interaction, throw, jump, strike, and reaction "
+                    + "bindings.");
             }
+        }
+
+        private static bool IsContextualStateBinding(
+            ActorAnimationProfile profile,
+            ActorAnimationAction action,
+            string contextId,
+            string layerName,
+            string stateName)
+        {
+            return profile.TryGetActionBinding(
+                    action,
+                    contextId,
+                    out ActorAnimationActionBinding binding) &&
+                binding.ContextId == contextId &&
+                !binding.UsesTrigger &&
+                binding.UsesState &&
+                binding.LayerName == layerName &&
+                binding.StateName == stateName &&
+                Mathf.Abs(
+                    binding.TransitionSeconds -
+                    ActionTransitionSeconds) <= 0.001f;
         }
 
         private static bool IsStateBinding(

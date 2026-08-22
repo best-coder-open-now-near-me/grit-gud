@@ -94,6 +94,8 @@ namespace GritGud.Editor
                 upperBodyMask);
             AddActionLayer(
                 controller,
+                rifleFire,
+                launcherFire,
                 throwClip,
                 knifeStrikeClip,
                 upperBodyMask);
@@ -321,6 +323,8 @@ namespace GritGud.Editor
 
         private static void AddActionLayer(
             AnimatorController controller,
+            AnimationClip rifleFireClip,
+            AnimationClip launcherFireClip,
             AnimationClip throwClip,
             AnimationClip knifeStrikeClip,
             AvatarMask upperBodyMask)
@@ -344,20 +348,38 @@ namespace GritGud.Editor
             idle.writeDefaultValues = false;
             idle.AddStateMachineBehaviour<
                 ActorActionLayerReleaseBehaviour>();
+            AnimatorState rifleFire = machine.AddState(
+                ActorAnimationParameters.RifleFireStateName,
+                new Vector3(300f, 40f));
+            rifleFire.motion = rifleFireClip;
+            rifleFire.writeDefaultValues = false;
+            AnimatorState launcherFire = machine.AddState(
+                ActorAnimationParameters.LauncherFireStateName,
+                new Vector3(300f, 120f));
+            launcherFire.motion = launcherFireClip;
+            launcherFire.writeDefaultValues = false;
             AnimatorState throwing = machine.AddState(
                 ActorAnimationParameters.ThrowStateName,
-                new Vector3(300f, 120f));
+                new Vector3(300f, 200f));
             throwing.motion = throwClip;
             throwing.writeDefaultValues = false;
             AnimatorState knifeStrike = machine.AddState(
                 ActorAnimationParameters.KnifeStrikeStateName,
-                new Vector3(300f, 240f));
+                new Vector3(300f, 320f));
             knifeStrike.motion = knifeStrikeClip;
             knifeStrike.speed = Mathf.Max(
                 0.01f,
                 knifeStrikeClip.length / ContactStrikeSeconds);
             knifeStrike.writeDefaultValues = false;
 
+            AddActionReturnTransition(
+                rifleFire,
+                idle,
+                ActionExitNormalizedTime);
+            AddActionReturnTransition(
+                launcherFire,
+                idle,
+                ActionExitNormalizedTime);
             AddActionReturnTransition(
                 throwing,
                 idle,

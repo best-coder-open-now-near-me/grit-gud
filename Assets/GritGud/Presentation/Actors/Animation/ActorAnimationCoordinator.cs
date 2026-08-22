@@ -140,10 +140,7 @@ namespace GritGud.Presentation.Actors.Animation
             }
 
             bool presented = action == ActorAnimationAction.WeaponFire
-                ? recoilChannel.TryPresent(
-                    profile,
-                    animatorDriver,
-                    weaponChannel.CurrentAnimationSetId)
+                ? TryPresentWeaponFireComposition()
                 : TryPresentBoundAction(action);
             if (!presented)
             {
@@ -367,6 +364,12 @@ namespace GritGud.Presentation.Actors.Animation
                 return false;
             }
 
+            return TryPresentBoundAction(binding);
+        }
+
+        private bool TryPresentBoundAction(
+            ActorAnimationActionBinding binding)
+        {
             if (binding.UsesTrigger)
             {
                 animatorDriver.PulseTrigger(binding.TriggerParameterName);
@@ -382,6 +385,28 @@ namespace GritGud.Presentation.Actors.Animation
             }
 
             return binding.UsesTrigger || binding.UsesState;
+        }
+
+        private bool TryPresentWeaponFireComposition()
+        {
+            string animationSetId = weaponChannel.CurrentAnimationSetId;
+            ActorWeaponAnimationSet animationSet =
+                profile.GetWeaponAnimationSet(animationSetId);
+            if (string.IsNullOrWhiteSpace(animationSet.RecoilStateName) ||
+                !profile.TryGetActionBinding(
+                    ActorAnimationAction.WeaponFire,
+                    animationSetId,
+                    out ActorAnimationActionBinding fireBinding) ||
+                !fireBinding.UsesState)
+            {
+                return false;
+            }
+
+            TryPresentBoundAction(fireBinding);
+            return recoilChannel.TryPresent(
+                profile,
+                animatorDriver,
+                animationSetId);
         }
 
         private static string GetIdleStateName(string layerName)
@@ -490,11 +515,24 @@ namespace GritGud.Presentation.Actors.Animation
 
         private void PresentReplayWeaponFire(float normalizedProgress)
         {
+            string animationSetId = weaponChannel.CurrentAnimationSetId;
             ActorWeaponAnimationSet animationSet =
                 profile.GetWeaponAnimationSet(
-                    weaponChannel.CurrentAnimationSetId);
-            if (string.IsNullOrWhiteSpace(animationSet.RecoilStateName))
+                    animationSetId);
+            if (string.IsNullOrWhiteSpace(animationSet.RecoilStateName) ||
+                !profile.TryGetActionBinding(
+                    ActorAnimationAction.WeaponFire,
+                    animationSetId,
+                    out ActorAnimationActionBinding fireBinding) ||
+                !fireBinding.UsesState)
+            {
                 return;
+            }
+            animatorDriver.SetLayerWeight(fireBinding.LayerName, 1f);
+            animatorDriver.PlayState(
+                fireBinding.LayerName,
+                Animator.StringToHash(fireBinding.StateName),
+                normalizedProgress);
             string layer = ActorAnimationParameters.RecoilLayerName;
             animatorDriver.SetLayerWeight(
                 layer,

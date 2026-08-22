@@ -218,6 +218,9 @@ namespace GritGud.Presentation.Actors.Animation
         [SerializeField]
         private string stateName = string.Empty;
 
+        [SerializeField]
+        private string contextId = string.Empty;
+
         [SerializeField, Min(0f)]
         private float transitionSeconds = 0.1f;
 
@@ -226,12 +229,14 @@ namespace GritGud.Presentation.Actors.Animation
             string triggerParameter,
             string animatorLayerName = null,
             string animatorStateName = null,
-            float transitionDurationSeconds = 0.1f)
+            float transitionDurationSeconds = 0.1f,
+            string bindingContextId = null)
         {
             action = animationAction;
             triggerParameterName = triggerParameter?.Trim() ?? string.Empty;
             layerName = animatorLayerName?.Trim() ?? string.Empty;
             stateName = animatorStateName?.Trim() ?? string.Empty;
+            contextId = bindingContextId?.Trim() ?? string.Empty;
             transitionSeconds = Mathf.Max(0f, transitionDurationSeconds);
         }
 
@@ -242,6 +247,8 @@ namespace GritGud.Presentation.Actors.Animation
         public string LayerName => layerName;
 
         public string StateName => stateName;
+
+        public string ContextId => contextId?.Trim() ?? string.Empty;
 
         public float TransitionSeconds => Mathf.Max(0f, transitionSeconds);
 
@@ -385,7 +392,34 @@ namespace GritGud.Presentation.Actors.Animation
             ActorAnimationAction action,
             out ActorAnimationActionBinding binding)
         {
+            return TryGetActionBinding(
+                action,
+                string.Empty,
+                allowGenericFallback: false,
+                out binding);
+        }
+
+        public bool TryGetActionBinding(
+            ActorAnimationAction action,
+            string contextId,
+            out ActorAnimationActionBinding binding)
+        {
+            return TryGetActionBinding(
+                action,
+                contextId,
+                allowGenericFallback: true,
+                out binding);
+        }
+
+        private bool TryGetActionBinding(
+            ActorAnimationAction action,
+            string contextId,
+            bool allowGenericFallback,
+            out ActorAnimationActionBinding binding)
+        {
+            string requestedContext = contextId?.Trim() ?? string.Empty;
             binding = null;
+            ActorAnimationActionBinding genericBinding = null;
             foreach (ActorAnimationActionBinding candidate in ActionBindings)
             {
                 if (candidate == null || candidate.Action != action)
@@ -393,16 +427,36 @@ namespace GritGud.Presentation.Actors.Animation
                     continue;
                 }
 
-                if (binding != null)
+                if (string.Equals(
+                        candidate.ContextId,
+                        requestedContext,
+                        StringComparison.Ordinal))
                 {
-                    throw new InvalidOperationException(
-                        $"Actor animation action '{action}' is duplicated in "
-                        + $"profile '{name}'.");
-                }
+                    if (binding != null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Actor animation action '{action}' in context "
+                            + $"'{requestedContext}' is duplicated in profile "
+                            + $"'{name}'.");
+                    }
 
-                binding = candidate;
+                    binding = candidate;
+                }
+                else if (allowGenericFallback &&
+                    string.IsNullOrEmpty(candidate.ContextId))
+                {
+                    if (genericBinding != null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Actor animation action '{action}' has duplicate "
+                            + $"generic bindings in profile '{name}'.");
+                    }
+
+                    genericBinding = candidate;
+                }
             }
 
+            binding ??= genericBinding;
             return binding != null;
         }
 

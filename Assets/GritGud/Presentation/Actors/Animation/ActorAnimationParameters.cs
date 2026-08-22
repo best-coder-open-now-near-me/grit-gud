@@ -28,6 +28,8 @@ namespace GritGud.Presentation.Actors.Animation
         public const string RifleRecoilStateName = "Rifle Recoil";
         public const string LauncherRecoilStateName = "Launcher Recoil";
         public const string NoActionStateName = "No Action";
+        public const string RifleFireStateName = "Rifle Fire";
+        public const string LauncherFireStateName = "Launcher Fire";
         public const string ThrowStateName = "Throw";
         public const string KnifeStrikeStateName = "Knife Strike";
         public const string NoReactionStateName = "No Reaction";
@@ -65,6 +67,10 @@ namespace GritGud.Presentation.Actors.Animation
             Animator.StringToHash(LauncherRecoilStateName);
         public static readonly int NoActionState =
             Animator.StringToHash(NoActionStateName);
+        public static readonly int RifleFireState =
+            Animator.StringToHash(RifleFireStateName);
+        public static readonly int LauncherFireState =
+            Animator.StringToHash(LauncherFireStateName);
         public static readonly int ThrowState =
             Animator.StringToHash(ThrowStateName);
         public static readonly int KnifeStrikeState =

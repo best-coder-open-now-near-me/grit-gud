@@ -282,6 +282,61 @@ namespace GritGud.Presentation.Tests
             }
         }
 
+        [Test]
+        public void AnimatorReplaySeekSamplesFireActionAndRecoilTogether()
+        {
+            GameObject prefab = Resources.Load<GameObject>(
+                "Actors/DefaultPlayerActor");
+            GameObject actor = Object.Instantiate(prefab);
+            try
+            {
+                ActorAnimationCoordinator animation =
+                    actor.GetComponent<ActorAnimationCoordinator>();
+                Animator animator = animation.TargetAnimator;
+                animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                animator.Update(0f);
+                animation.PresentWeaponPose(ActorAnimationPoseIds.Rifle);
+
+                animation.BeginReplayPresentation();
+                animation.PresentReplayAction(
+                    ActorStance.Standing,
+                    ActorAnimationAction.WeaponFire,
+                    0.5f);
+
+                int actionLayer = animator.GetLayerIndex(
+                    ActorAnimationParameters.ActionLayerName);
+                int recoilLayer = animator.GetLayerIndex(
+                    ActorAnimationParameters.RecoilLayerName);
+                AnimatorStateInfo action =
+                    animator.GetCurrentAnimatorStateInfo(actionLayer);
+                AnimatorStateInfo recoil =
+                    animator.GetCurrentAnimatorStateInfo(recoilLayer);
+                Assert.That(
+                    action.IsName(ActorAnimationParameters.RifleFireStateName),
+                    Is.True);
+                Assert.That(
+                    recoil.IsName(
+                        ActorAnimationParameters.RifleRecoilStateName),
+                    Is.True);
+                Assert.That(action.normalizedTime, Is.EqualTo(0.5f)
+                    .Within(0.001f));
+                Assert.That(recoil.normalizedTime, Is.EqualTo(0.5f)
+                    .Within(0.001f));
+                Assert.That(
+                    animator.GetLayerWeight(actionLayer),
+                    Is.EqualTo(1f).Within(0.001f));
+                Assert.That(
+                    animator.GetLayerWeight(recoilLayer),
+                    Is.EqualTo(0.8f).Within(0.001f));
+
+                animation.EndReplayPresentation();
+            }
+            finally
+            {
+                Object.DestroyImmediate(actor);
+            }
+        }
+
         private static GameplayActorSnapshot CreateActorSnapshot(
             string actorId,
             int woundCount,
