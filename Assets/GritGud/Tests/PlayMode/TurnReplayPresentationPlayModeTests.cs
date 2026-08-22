@@ -236,11 +236,10 @@ namespace GritGud.PlayMode.Tests
                             contactReaction: true,
                             resultingWoundCount: 1,
                             hitRegion: TargetRegionId.Torso));
-                    Assert.That(
-                        animation.ReplayAction,
-                        Is.EqualTo(ActorAnimationAction.HitReaction));
-                    Assert.That(
-                        animation.ReplayActionProgress,
+                    Assert.That(animation.ReplayAction, Is.Null);
+                    Assert.That(view.InjuryOverlay.HitReactionActive,
+                        Is.True);
+                    Assert.That(view.InjuryOverlay.HitReactionProgress,
                         Is.EqualTo(0.5f).Within(0.001f));
 
                     GameplayActorSnapshot incapacitatedSnapshot =

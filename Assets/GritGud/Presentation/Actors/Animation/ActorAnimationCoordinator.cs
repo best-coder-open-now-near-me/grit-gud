@@ -306,14 +306,12 @@ namespace GritGud.Presentation.Actors.Animation
             bool incapacitated,
             bool pinned = false)
         {
-            if (pinned && !incapacitated)
+            // Recovering wound flinches are deterministic post-animation
+            // overlays. This channel owns only non-recovering falls.
+            if (!incapacitated)
                 return false;
-            if (incapacitated)
-                incapacitationPresentationDeferred = false;
-            ActorAnimationAction action = incapacitated
-                ? SelectIncapacitationAction(region)
-                : ActorAnimationAction.HitReaction;
-            return TryRequestAction(action);
+            incapacitationPresentationDeferred = false;
+            return TryRequestAction(SelectIncapacitationAction(region));
         }
 
         internal void DeferIncapacitationPresentation()

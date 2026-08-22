@@ -150,11 +150,13 @@ namespace GritGud.Presentation.Gameplay
             bool incapacitated = session.IsActorIncapacitated(
                 resolution.TargetId);
             bool pinned = session.GetActor(resolution.TargetId).IsPinned;
-            bool presented = animation != null &&
-                animation.PresentWoundReaction(
+            bool presented = incapacitated
+                ? animation != null && animation.PresentWoundReaction(
                     resolution.HitRegion.Value,
-                    incapacitated,
-                    pinned);
+                    incapacitated: true,
+                    pinned)
+                : !pinned && target.InjuryOverlay.PresentHitReaction(
+                    resolution.HitRegion.Value);
             if (presented && incapacitated)
             {
                 Vector3 impulseDirection = target.Transform.forward;

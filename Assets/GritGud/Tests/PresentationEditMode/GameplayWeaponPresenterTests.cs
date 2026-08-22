@@ -893,7 +893,12 @@ namespace GritGud.Presentation.Tests
                 reactions.Tick(0.02f);
                 Assert.That(
                     targetAnimation.LastRequestedAction,
-                    Is.EqualTo(ActorAnimationAction.HitReaction));
+                    Is.Null);
+                Assert.That(
+                    targetObject.GetComponent<
+                        ActorInjuryAnimationOverlayPresenter>()
+                        .HitReactionActive,
+                    Is.True);
                 Assert.That(reactions.PendingReactionCount, Is.Zero);
 
                 presenter.TickContactStrike(0.5f);

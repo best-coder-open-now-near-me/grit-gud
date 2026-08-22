@@ -179,6 +179,18 @@ namespace GritGud.Presentation.Gameplay
                     view.ReplayActions.Present(action);
                     view.ReplayActions.PresentPinState(snapshot.PinState);
                 });
+            ResolveAnimationProjection(
+                snapshot,
+                action,
+                out ActorAnimationAction? animationAction,
+                out float animationProgress,
+                out TargetRegionId? hitReactionRegion,
+                out float hitReactionProgress);
+            TryOptional(
+                "hit reaction overlay",
+                () => view.InjuryOverlay.PresentReplayHitReaction(
+                    hitReactionRegion,
+                    hitReactionProgress));
             bool requiresAnimation = action != null
                 || replayVelocity.GetValueOrDefault().sqrMagnitude > 0.000001f
                 || snapshot.IsIncapacitated;
@@ -195,11 +207,6 @@ namespace GritGud.Presentation.Gameplay
                     replayRecord,
                     () =>
                     {
-                    ResolveAnimationProjection(
-                        snapshot,
-                        action,
-                        out ActorAnimationAction? animationAction,
-                        out float animationProgress);
                     animation.PresentReplayLocomotion(
                         pose.Stance,
                         replayVelocity ?? Vector3.zero,
@@ -408,8 +415,12 @@ namespace GritGud.Presentation.Gameplay
             GameplayActorSnapshot snapshot,
             TurnReplayActorActionState state,
             out ActorAnimationAction? action,
-            out float progress)
+            out float progress,
+            out TargetRegionId? hitReactionRegion,
+            out float hitReactionProgress)
         {
+            hitReactionRegion = null;
+            hitReactionProgress = 0f;
             progress = state?.NormalizedProgress ??
                 (snapshot.IsIncapacitated ? 1f : 0f);
             if (state?.TargetFacingPhase != null)
@@ -451,12 +462,19 @@ namespace GritGud.Presentation.Gameplay
                         return;
                     }
                     progress = Mathf.InverseLerp(eventTime, 1f, progress);
-                    action = (state.ResultingLifeState
-                            ?? snapshot.LifeState)
-                        != ActorLifeState.Active
-                        ? ActorAnimationCoordinator
-                            .SelectIncapacitationAction(state.HitRegion)
-                        : ActorAnimationAction.HitReaction;
+                    if ((state.ResultingLifeState ?? snapshot.LifeState)
+                        != ActorLifeState.Active)
+                    {
+                        action = ActorAnimationCoordinator
+                            .SelectIncapacitationAction(state.HitRegion);
+                    }
+                    else
+                    {
+                        action = null;
+                        hitReactionRegion = state.HitRegion
+                            ?? TargetRegionId.Torso;
+                        hitReactionProgress = progress;
+                    }
                     return;
                 case TurnReplayActorActionKind.Pinned:
                     action = ActorAnimationAction.Incapacitate;

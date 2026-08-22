@@ -45,6 +45,42 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void HitReactionEnvelopeReturnsToTheAuthoredPoseWithoutSnap()
+        {
+            ActorHitReactionOverlay start =
+                ActorInjuryAnimationOverlayProjector.ProjectHitReaction(
+                    TargetRegionId.LeftArm,
+                    0f);
+            ActorHitReactionOverlay impact =
+                ActorInjuryAnimationOverlayProjector.ProjectHitReaction(
+                    TargetRegionId.LeftArm,
+                    0.22f);
+            ActorHitReactionOverlay recovery =
+                ActorInjuryAnimationOverlayProjector.ProjectHitReaction(
+                    TargetRegionId.LeftArm,
+                    0.75f);
+            ActorHitReactionOverlay complete =
+                ActorInjuryAnimationOverlayProjector.ProjectHitReaction(
+                    TargetRegionId.LeftArm,
+                    1f);
+            ActorHitReactionOverlay opposite =
+                ActorInjuryAnimationOverlayProjector.ProjectHitReaction(
+                    TargetRegionId.RightArm,
+                    0.22f);
+
+            Assert.That(start.MaximumAbsoluteDegrees, Is.Zero);
+            Assert.That(impact.MaximumAbsoluteDegrees,
+                Is.GreaterThan(15f));
+            Assert.That(recovery.MaximumAbsoluteDegrees,
+                Is.LessThan(impact.MaximumAbsoluteDegrees));
+            Assert.That(complete.MaximumAbsoluteDegrees, Is.Zero);
+            Assert.That(impact.LeftArmPitchDegrees, Is.LessThan(0f));
+            Assert.That(opposite.RightArmPitchDegrees, Is.LessThan(0f));
+            Assert.That(impact.BodyRollDegrees,
+                Is.EqualTo(-opposite.BodyRollDegrees).Within(0.001f));
+        }
+
+        [Test]
         public void AnimationChannelPlanDeclaresStableOwnershipAndOrder()
         {
             Assert.That(
