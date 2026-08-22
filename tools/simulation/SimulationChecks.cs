@@ -3476,7 +3476,7 @@ internal static class SimulationChecks
                 result.FinalState.CanonicalHash,
                 StringComparison.Ordinal)
             && loadedArtifactReplay.Frames.Count
-                == decoded.Content.Transitions.Count
+                == playbackArtifact.Content.Transitions.Count
             && combatTranscript.Totals.AttackExecutions
                 == playbackArtifact.Content.Scoreboard.Attacks
             && combatTranscript.Totals.Hits

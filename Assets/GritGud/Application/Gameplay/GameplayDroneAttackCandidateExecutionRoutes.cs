@@ -91,6 +91,13 @@ namespace GritGud.Application.Gameplay
                 return Illegal(context, candidate, "actor-incapacitated");
             if (attacker.IsPinned)
                 return Illegal(context, candidate, "actor-pinned");
+            if (!GameplayInjuryCapabilityProjection.CanUseAttack(
+                    attacker.Capabilities,
+                    attack))
+                return Illegal(
+                    context,
+                    candidate,
+                    "weapon-capability-impaired");
             if (attacker.TurnBudget.ActionPoints
                     < attack.TurnCost.ActionPoints
                 || attacker.TurnBudget.MovementOpportunity
@@ -141,7 +148,9 @@ namespace GritGud.Application.Gameplay
                 attacker.TurnBudget,
                 exposure,
                 attacker.Pose.Position.DistanceTo(target.Position),
-                target);
+                target,
+                GameplayInjuryCapabilityProjection
+                    .CalculateAccuracyDeltaPercent(attacker.Capabilities));
             return new GameplayExecutableCandidateEvaluation(
                 Id,
                 candidate,

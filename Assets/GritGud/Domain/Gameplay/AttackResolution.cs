@@ -286,7 +286,8 @@ namespace GritGud.Domain.Gameplay
             float? maximumReach = null,
             IGameplayActionContext context = null,
             ActorInjuryState targetInjuryStateBefore = null,
-            ActorInjuryDelta injury = null)
+            ActorInjuryDelta injury = null,
+            int capabilityAccuracyDeltaPercent = 0)
         {
             if (sequence <= 0)
             {
@@ -344,12 +345,17 @@ namespace GritGud.Domain.Gameplay
             {
                 throw new ArgumentOutOfRangeException(nameof(hitRoll));
             }
+            if (capabilityAccuracyDeltaPercent < -100
+                || capabilityAccuracyDeltaPercent > 100)
+                throw new ArgumentOutOfRangeException(
+                    nameof(capabilityAccuracyDeltaPercent));
 
             int hitChance = AttackHitChanceRules.CalculateFinalHitChancePercent(
                 exposure,
                 accuracyDecay,
                 distance,
-                context?.AccuracyDeltaPercent ?? 0);
+                (context?.AccuracyDeltaPercent ?? 0)
+                    + capabilityAccuracyDeltaPercent);
             bool hit = hitRoll <= hitChance;
             ActorInjuryState resolvedInjuryStateBefore =
                 targetInjuryStateBefore
@@ -454,6 +460,8 @@ namespace GritGud.Domain.Gameplay
             Wound = wound;
             Context = context;
             Injury = resolvedInjury;
+            CapabilityAccuracyDeltaPercent =
+                capabilityAccuracyDeltaPercent;
         }
 
         public long Sequence { get; }
@@ -498,7 +506,10 @@ namespace GritGud.Domain.Gameplay
                 Exposure,
                 AccuracyDecay,
                 Distance,
-                Context?.AccuracyDeltaPercent ?? 0);
+                (Context?.AccuracyDeltaPercent ?? 0)
+                    + CapabilityAccuracyDeltaPercent);
+
+        public int CapabilityAccuracyDeltaPercent { get; }
 
         public int HitRoll { get; }
 
@@ -568,7 +579,8 @@ namespace GritGud.Domain.Gameplay
             IGameplayActionContext context = null,
             ActorInjuryState targetInjuryStateBefore = null,
             string weaponId = null,
-            DamageMechanism? damageMechanism = null)
+            DamageMechanism? damageMechanism = null,
+            int capabilityAccuracyDeltaPercent = 0)
         {
             if (exposure == null)
             {
@@ -595,7 +607,8 @@ namespace GritGud.Domain.Gameplay
                 exposure,
                 accuracyDecay,
                 distance,
-                context?.AccuracyDeltaPercent ?? 0);
+                (context?.AccuracyDeltaPercent ?? 0)
+                    + capabilityAccuracyDeltaPercent);
             if (hitRoll > hitChance)
             {
                 return new AttackResolutionRecord(
@@ -611,7 +624,9 @@ namespace GritGud.Domain.Gameplay
                     wound: null,
                     maximumReach: contact?.MaximumReach,
                     context: context,
-                    targetInjuryStateBefore: targetInjuryStateBefore);
+                    targetInjuryStateBefore: targetInjuryStateBefore,
+                    capabilityAccuracyDeltaPercent:
+                        capabilityAccuracyDeltaPercent);
             }
 
             int regionRoll = rolls.Roll(exposure.VisibleSampleCount);
@@ -667,7 +682,8 @@ namespace GritGud.Domain.Gameplay
                 contact?.MaximumReach,
                 context,
                 resolvedInjuries,
-                injury.Delta);
+                injury.Delta,
+                capabilityAccuracyDeltaPercent);
         }
 
         private sealed class SeededAttackRolls

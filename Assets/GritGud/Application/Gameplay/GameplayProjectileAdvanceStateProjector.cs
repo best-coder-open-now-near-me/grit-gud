@@ -151,14 +151,11 @@ namespace GritGud.Application.Gameplay
                 impact,
                 appliedPenalty).Resulting;
             ActorWoundSnapshot wounds = LegacyWoundProjection.From(injuries);
-            float woundedAllowance = Math.Max(
-                0f,
-                actor.TurnMovementAllowance - wounds.MovementPenalty);
-            var budget = new TurnBudget(
-                actor.TurnBudget.ActionPoints,
-                Math.Min(
-                    actor.TurnBudget.MovementOpportunity,
-                    woundedAllowance));
+            TurnBudget budget = GameplayInjuryCapabilityProjection
+                .LimitMovement(
+                    actor.TurnBudget,
+                    actor.TurnMovementAllowance,
+                    injuries.Capabilities);
             actors[index] = CopyActor(actor, budget, wounds, injuries);
         }
 

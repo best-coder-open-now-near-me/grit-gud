@@ -34,13 +34,21 @@ namespace GritGud.Application.Gameplay
                 nameof(exposure));
             Context = context;
             Distance = attacker.Pose.Position.DistanceTo(target.Pose.Position);
+            CapabilityAccuracyDeltaPercent =
+                GameplayInjuryCapabilityProjection
+                    .CalculateAccuracyDeltaPercent(attacker.Capabilities);
             FinalHitChancePercent =
                 AttackHitChanceRules.CalculateFinalHitChancePercent(
                     exposure,
                     attack.AccuracyDecay,
                     Distance,
-                    context?.AccuracyDeltaPercent ?? 0);
-            Evidence = CreateEvidence(state, exposure, context);
+                    (context?.AccuracyDeltaPercent ?? 0)
+                        + CapabilityAccuracyDeltaPercent);
+            Evidence = CreateEvidence(
+                state,
+                exposure,
+                context,
+                attacker.Capabilities);
         }
 
         public GameplayCombatStateSnapshot State { get; }
@@ -54,12 +62,14 @@ namespace GritGud.Application.Gameplay
         public ResolvedTacticalContext Context { get; }
         public float Distance { get; }
         public int FinalHitChancePercent { get; }
+        public int CapabilityAccuracyDeltaPercent { get; }
         public IReadOnlyList<GameplayEvidenceRecord> Evidence { get; }
 
         private static IReadOnlyList<GameplayEvidenceRecord> CreateEvidence(
             GameplayCombatStateSnapshot state,
             TargetExposureSnapshot exposure,
-            ResolvedTacticalContext context)
+            ResolvedTacticalContext context,
+            ActorCapabilityState capabilities)
         {
             var result = new List<GameplayEvidenceRecord>
             {
@@ -73,6 +83,10 @@ namespace GritGud.Application.Gameplay
                     "tactical-context",
                     state.Session.Revision,
                     GameplayCanonicalValueDigest.Calculate(context)));
+            result.Add(new GameplayEvidenceRecord(
+                "actor-capability",
+                state.Session.Revision,
+                GameplayCanonicalValueDigest.Calculate(capabilities)));
             return result.AsReadOnly();
         }
     }
@@ -177,6 +191,13 @@ namespace GritGud.Application.Gameplay
                 && response.StartsEncounter;
             AttackDefinition attack = GetEquippedAttack(actor);
             if (attack == null || attack.Projectile != null)
+            {
+                failure = AttackResolutionFailure.AttackUnavailable;
+                return false;
+            }
+            if (!GameplayInjuryCapabilityProjection.CanUseAttack(
+                    actor.Capabilities,
+                    attack))
             {
                 failure = AttackResolutionFailure.AttackUnavailable;
                 return false;
@@ -299,7 +320,8 @@ namespace GritGud.Application.Gameplay
                 evaluation.Attack.ActionId,
                 evaluation.Attack.Contact == null
                     ? DamageMechanism.Ballistic
-                    : DamageMechanism.Blunt);
+                    : DamageMechanism.Blunt,
+                evaluation.CapabilityAccuracyDeltaPercent);
             TurnBudget resultingBudget = evaluation.Attacker.TurnBudget
                 .SpendAction(evaluation.Cost);
             var outcomes = new List<GameplayActionOutcome>

@@ -409,6 +409,13 @@ namespace GritGud.Application.Gameplay
                     context,
                     candidate,
                     "equipped-profile-mismatch");
+            if (!GameplayInjuryCapabilityProjection.CanUseAttack(
+                    actor.Capabilities,
+                    attack))
+                return Illegal(
+                    context,
+                    candidate,
+                    "weapon-capability-impaired");
             GameplayPosition origin = attack.Projectile.GetLaunchOrigin(
                 actor.Pose);
             if (!TryResolveAim(

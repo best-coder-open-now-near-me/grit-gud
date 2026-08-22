@@ -151,8 +151,7 @@ namespace GritGud.Application.Gameplay
 
         public bool IsPinned => PinState != null;
 
-        public bool IsIncapacitated => LifeState != ActorLifeState.Active
-            || Wounds.WoundCount >= MaximumWounds;
+        public bool IsIncapacitated => LifeState != ActorLifeState.Active;
 
         public bool IsDead => LifeState == ActorLifeState.Dead;
     }

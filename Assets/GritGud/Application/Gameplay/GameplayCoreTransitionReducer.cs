@@ -200,6 +200,10 @@ namespace GritGud.Application.Gameplay
             if (!PosesMatch(actor.Pose, payload.Stance.PreviousPose))
                 throw new InvalidOperationException(
                     "Stance change no longer starts at the canonical pose.");
+            if (payload.Stance.ResultingPose.Stance == ActorStance.Standing
+                && !actor.Capabilities.CanStand)
+                throw new InvalidOperationException(
+                    "Actor injuries prevent transitioning to a standing stance.");
             IReadOnlyList<GameplayActorSnapshot> actors = ReplaceActor(
                 session.Actors,
                 CopyActor(
@@ -268,23 +272,25 @@ namespace GritGud.Application.Gameplay
             string nextActorId = FindNextCapableActor(session, activeIndex)
                 ?? payload.ActorId;
             GameplayActorSnapshot nextActor = session.GetActor(nextActorId);
+            ActorInjuryState advanced = ActorInjuryRules.AdvanceSystemic(
+                nextActor.Injuries);
             PersonalTurnActionPointGrant grant =
                 PersonalTurnActionPointRules.Grant(
                     nextActor.TurnBudget.ActionPoints,
                     nextActor.ActionPointEconomy);
             TurnBudget refreshed = new TurnBudget(
                 grant.ResultingActionPoints,
-                Math.Max(
-                    0f,
-                    nextActor.TurnMovementAllowance
-                        - nextActor.Wounds.MovementPenalty));
+                GameplayInjuryCapabilityProjection.CalculateMovementAllowance(
+                    nextActor.TurnMovementAllowance,
+                    advanced.Capabilities));
             IReadOnlyList<GameplayActorSnapshot> actors = ReplaceActor(
                 session.Actors,
                 CopyActor(
                     nextActor,
                     nextActor.Pose,
                     refreshed,
-                    attacksCommittedThisTurn: 0));
+                    attacksCommittedThisTurn: 0,
+                    injuries: advanced));
             long turnSequence = checked(session.LastTurnSequence + 1L);
             var record = new TurnEndRecord(
                 turnSequence,
@@ -293,7 +299,10 @@ namespace GritGud.Application.Gameplay
                 personalTurnStart: new PersonalTurnStartRecord(
                     nextActorId,
                     grant,
-                    refreshed.MovementOpportunity));
+                    refreshed.MovementOpportunity,
+                    ActorPhysiologyAdvanceRecord.From(
+                        nextActor.Injuries,
+                        advanced)));
             GameplaySessionStateSnapshot resultingSession = CopySession(
                 session,
                 actors,
@@ -447,7 +456,8 @@ namespace GritGud.Application.Gameplay
             GameplayActorSnapshot actor,
             GameplayActorPose pose,
             TurnBudget budget,
-            int? attacksCommittedThisTurn = null) => new GameplayActorSnapshot(
+            int? attacksCommittedThisTurn = null,
+            ActorInjuryState injuries = null) => new GameplayActorSnapshot(
                 actor.ActorId,
                 pose,
                 budget,
@@ -464,7 +474,7 @@ namespace GritGud.Application.Gameplay
                 attacksCommittedThisTurn
                     ?? actor.AttacksCommittedThisTurn,
                 actor.Ammunition,
-                actor.Injuries);
+                injuries ?? actor.Injuries);
 
         private static IReadOnlyList<GameplayActorSnapshot> ReplaceActor(
             IReadOnlyList<GameplayActorSnapshot> actors,

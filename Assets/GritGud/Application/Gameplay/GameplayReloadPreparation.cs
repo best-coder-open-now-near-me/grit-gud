@@ -21,6 +21,7 @@ namespace GritGud.Application.Gameplay
         ReserveEmpty,
         InsufficientActionPoints,
         InsufficientMovementOpportunity,
+        InsufficientCapability,
     }
 
     internal readonly struct GameplayReloadProfileSemantics
@@ -94,6 +95,10 @@ namespace GritGud.Application.Gameplay
                     out int reserve))
                 return Fail(
                     GameplayReloadFailure.AmmunitionUnavailable,
+                    out failure);
+            if (actor.Capabilities.ReloadCapacity < 30)
+                return Fail(
+                    GameplayReloadFailure.InsufficientCapability,
                     out failure);
             if (magazine.LoadedRounds >= ammunition.MagazineCapacity)
                 return Fail(GameplayReloadFailure.MagazineFull, out failure);
@@ -267,6 +272,8 @@ namespace GritGud.Application.Gameplay
                     return "insufficient-action-points";
                 case GameplayReloadFailure.InsufficientMovementOpportunity:
                     return "insufficient-movement-opportunity";
+                case GameplayReloadFailure.InsufficientCapability:
+                    return "insufficient-reload-capability";
                 case GameplayReloadFailure.None:
                     return string.Empty;
                 default:

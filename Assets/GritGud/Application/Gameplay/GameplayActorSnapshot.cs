@@ -147,7 +147,7 @@ namespace GritGud.Application.Gameplay
                 || ActionPointEconomy.MaximumHeldActionPoints
                     < turnBudget.ActionPoints
                 || TurnMovementAllowance + 0.0001f
-                    < turnBudget.MovementOpportunity + wounds.MovementPenalty)
+                    < turnBudget.MovementOpportunity)
                 throw new ArgumentException(
                     "Actor allowances cannot be below the represented state.");
         }
@@ -192,8 +192,7 @@ namespace GritGud.Application.Gameplay
 
         public bool IsPinned => PinState != null;
 
-        public bool IsIncapacitated => LifeState != ActorLifeState.Active
-            || Wounds.WoundCount >= MaximumWounds;
+        public bool IsIncapacitated => LifeState != ActorLifeState.Active;
 
         public bool IsDead => LifeState == ActorLifeState.Dead;
     }

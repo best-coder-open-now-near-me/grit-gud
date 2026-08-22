@@ -44,13 +44,22 @@ namespace GritGud.Application.Gameplay
                     == ActorStance.Standing
                         ? ActorStance.Crouched
                         : ActorStance.Standing;
-                stance = new StanceChangeRecord(
-                    actor.ActorId,
-                    actor.Pose,
-                    new GameplayActorPose(
-                        actor.Pose.Position,
-                        actor.Pose.FacingDegrees,
-                        resulting));
+                if (resulting == ActorStance.Standing
+                    && !actor.Capabilities.CanStand)
+                {
+                    legal = false;
+                    failure = "standing-capability-impaired";
+                }
+                else
+                {
+                    stance = new StanceChangeRecord(
+                        actor.ActorId,
+                        actor.Pose,
+                        new GameplayActorPose(
+                            actor.Pose.Position,
+                            actor.Pose.FacingDegrees,
+                            resulting));
+                }
             }
             return Result(
                 Id,

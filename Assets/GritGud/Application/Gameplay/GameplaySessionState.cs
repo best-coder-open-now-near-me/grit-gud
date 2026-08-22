@@ -139,8 +139,7 @@ namespace GritGud.Application.Gameplay
 
         public int MaximumWounds { get; }
 
-        public bool IsIncapacitated => LifeState != ActorLifeState.Active
-            || Wounds.WoundCount >= MaximumWounds;
+        public bool IsIncapacitated => LifeState != ActorLifeState.Active;
 
         public bool IsDead => LifeState == ActorLifeState.Dead;
 
@@ -224,6 +223,8 @@ namespace GritGud.Application.Gameplay
         {
             attacksCommittedThisTurn = 0;
             actorSnapshotDirty = true;
+            ActorInjuryState previousInjuries = injuries;
+            injuries = ActorInjuryRules.AdvanceSystemic(injuries);
             PersonalTurnActionPointGrant grant =
                 PersonalTurnActionPointRules.Grant(
                     TurnBudget.ActionPoints,
@@ -234,7 +235,10 @@ namespace GritGud.Application.Gameplay
             return new PersonalTurnStartRecord(
                 ActorId,
                 grant,
-                WoundedMovementAllowance);
+                WoundedMovementAllowance,
+                ActorPhysiologyAdvanceRecord.From(
+                    previousInjuries,
+                    injuries));
         }
 
         public void BeginEmergencyTurn(int actionPoints)
@@ -501,10 +505,10 @@ namespace GritGud.Application.Gameplay
                 attacksCommittedThisTurn,
                 injuries);
 
-        private float WoundedMovementAllowance => Math.Max(
-            0f,
-            turnBudgetAllowance.MovementOpportunity
-                - Wounds.MovementPenalty);
+        private float WoundedMovementAllowance =>
+            GameplayInjuryCapabilityProjection.CalculateMovementAllowance(
+                turnBudgetAllowance.MovementOpportunity,
+                Capabilities);
 
         private void ValidateAmmunitionShape(
             ActorAmmunitionSnapshot ammunition)

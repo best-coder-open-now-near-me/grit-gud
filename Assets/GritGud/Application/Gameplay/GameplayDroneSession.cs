@@ -278,15 +278,23 @@ namespace GritGud.Application.Gameplay
             AttackDefinition attack = gameplay.GetEquippedAttack(attackerId)
                 ?? throw new InvalidOperationException(
                     "Actor has no equipped attack.");
+            GameplayActorSnapshot attacker = gameplay.GetActor(attackerId);
+            if (!GameplayInjuryCapabilityProjection.CanUseAttack(
+                    attacker.Capabilities,
+                    attack))
+                throw new InvalidOperationException(
+                    "Actor injuries prevent use of the equipped weapon.");
             return DroneDirectAttackRules.Resolve(
                 gameplay.LastActionSequence + 1L,
                 resolutionSeed,
                 attackerId,
                 attack,
-                gameplay.GetActor(attackerId).TurnBudget,
+                attacker.TurnBudget,
                 exposure,
                 distance,
-                drone);
+                drone,
+                GameplayInjuryCapabilityProjection
+                    .CalculateAccuracyDeltaPercent(attacker.Capabilities));
         }
 
         public void CommitActorAttack(ActorDroneAttackRecord record)

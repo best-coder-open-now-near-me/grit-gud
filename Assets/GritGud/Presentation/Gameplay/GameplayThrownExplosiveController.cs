@@ -505,6 +505,8 @@ namespace GritGud.Presentation.Gameplay
                     return "THROW UNAVAILABLE - INSUFFICIENT AP";
                 case ThrownExplosiveFailure.InsufficientMovementOpportunity:
                     return "THROW UNAVAILABLE - INSUFFICIENT MOVEMENT";
+                case ThrownExplosiveFailure.InsufficientCapability:
+                    return "THROW UNAVAILABLE - THROWING ARM IMPAIRED";
                 case ThrownExplosiveFailure.TurnModeRequired:
                     return "THROW UNAVAILABLE - ENTER TURN MODE";
                 case ThrownExplosiveFailure.None:

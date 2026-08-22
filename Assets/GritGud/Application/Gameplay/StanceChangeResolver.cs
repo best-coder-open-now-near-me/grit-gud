@@ -11,6 +11,7 @@ namespace GritGud.Application.Gameplay
         OperationInProgress,
         SpatiallyBlocked,
         ActorPinned,
+        InsufficientCapability,
     }
 
     public readonly struct StanceTransitionValidation
@@ -106,6 +107,13 @@ namespace GritGud.Application.Gameplay
             if (actor.Pose.Stance == requestedStance)
             {
                 failure = StanceChangeFailure.AlreadyInStance;
+                return false;
+            }
+            if (requestedStance == ActorStance.Standing
+                && !actor.Capabilities.CanStand)
+            {
+                failure = StanceChangeFailure.InsufficientCapability;
+                failureCode = "actor.standing-capability-impaired";
                 return false;
             }
 

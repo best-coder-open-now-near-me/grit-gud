@@ -250,8 +250,15 @@ namespace GritGud.Presentation.Gameplay
                 attackingActorId);
             if (attack == null || attack.DirectVehicleIntegrityDamage <= 0f)
                 return false;
-            GameplayPosition origin = gameplay.GetActor(attackingActorId)
-                .Pose.Position;
+            GameplayActorSnapshot attackingActor = gameplay.GetActor(
+                attackingActorId);
+            if (!GameplayInjuryCapabilityProjection.CanUseAttack(
+                    attackingActor.Capabilities,
+                    attack))
+                return false;
+            GameplayPosition origin = attackingActor.Pose.Position;
+            int accuracyDelta = GameplayInjuryCapabilityProjection
+                .CalculateAccuracyDeltaPercent(attackingActor.Capabilities);
             float bestDistance = float.PositiveInfinity;
             foreach (DroneSnapshot drone in drones.CaptureDrones())
             {
@@ -265,7 +272,11 @@ namespace GritGud.Presentation.Gameplay
                     drone);
                 float distance = origin.DistanceTo(drone.Position);
                 int hitChance = DroneDirectAttackRules
-                    .CalculateHitChancePercent(attack, exposure, distance);
+                    .CalculateHitChancePercent(
+                        attack,
+                        exposure,
+                        distance,
+                        accuracyDelta);
                 if (selectedExposure == null
                     || hitChance > selectedHitChance
                     || (hitChance == selectedHitChance

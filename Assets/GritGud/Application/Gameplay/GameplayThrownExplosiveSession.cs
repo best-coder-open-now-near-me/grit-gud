@@ -18,6 +18,7 @@ namespace GritGud.Application.Gameplay
         OutOfRange,
         InsufficientActionPoints,
         InsufficientMovementOpportunity,
+        InsufficientCapability,
     }
 
     public sealed class GameplayThrownExplosiveSession
@@ -467,6 +468,11 @@ namespace GritGud.Application.Gameplay
             {
                 return Fail(ThrownExplosiveFailure.Depleted, out failure);
             }
+            if (actor.Capabilities.ThrowCapacity < 30
+                || !actor.Capabilities.CanUseRightHand)
+                return Fail(
+                    ThrownExplosiveFailure.InsufficientCapability,
+                    out failure);
 
             return TryValidateRangeAndCost(
                 definition,

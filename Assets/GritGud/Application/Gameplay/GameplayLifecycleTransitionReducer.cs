@@ -532,10 +532,10 @@ namespace GritGud.Application.Gameplay
                 GameplayActorSnapshot actor = mutation.GetActor(first);
                 var budget = new TurnBudget(
                     payload.ActionPointAllowance,
-                    Math.Max(
-                        0f,
-                        actor.TurnMovementAllowance
-                            - actor.Wounds.MovementPenalty));
+                    GameplayInjuryCapabilityProjection
+                        .CalculateMovementAllowance(
+                            actor.TurnMovementAllowance,
+                            actor.Capabilities));
                 mutation.ReplaceActor(
                     GameplayCanonicalStateMutation.CopyActor(
                         actor,
@@ -584,24 +584,30 @@ namespace GritGud.Application.Gameplay
             GameplayCanonicalStateMutation mutation,
             GameplayActorSnapshot actor)
         {
+            ActorInjuryState advanced = ActorInjuryRules.AdvanceSystemic(
+                actor.Injuries);
             PersonalTurnActionPointGrant grant =
                 PersonalTurnActionPointRules.Grant(
                     actor.TurnBudget.ActionPoints,
                     actor.ActionPointEconomy);
-            float movement = Math.Max(
-                0f,
-                actor.TurnMovementAllowance
-                    - actor.Wounds.MovementPenalty);
+            float movement = GameplayInjuryCapabilityProjection
+                .CalculateMovementAllowance(
+                    actor.TurnMovementAllowance,
+                    advanced.Capabilities);
             mutation.ReplaceActor(GameplayCanonicalStateMutation.CopyActor(
                 actor,
                 budget: new TurnBudget(
                     grant.ResultingActionPoints,
                     movement),
-                attacksCommittedThisTurn: 0));
+                attacksCommittedThisTurn: 0,
+                injuries: advanced));
             return new PersonalTurnStartRecord(
                 actor.ActorId,
                 grant,
-                movement);
+                movement,
+                ActorPhysiologyAdvanceRecord.From(
+                    actor.Injuries,
+                    advanced));
         }
 
         private static IReadOnlyList<string> ResolveScope(

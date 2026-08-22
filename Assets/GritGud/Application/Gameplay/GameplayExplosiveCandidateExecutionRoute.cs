@@ -107,6 +107,11 @@ namespace GritGud.Application.Gameplay
                     out failure);
             if (actor.IsPinned)
                 return Fail(ThrownExplosiveFailure.ActorPinned, out failure);
+            if (actor.Capabilities.ThrowCapacity < 30
+                || !actor.Capabilities.CanUseRightHand)
+                return Fail(
+                    ThrownExplosiveFailure.InsufficientCapability,
+                    out failure);
             if (actor.Pose.Position.DistanceTo(intendedLanding)
                 > definition.MaximumRange + 0.0001f)
                 return Fail(ThrownExplosiveFailure.OutOfRange, out failure);

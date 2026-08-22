@@ -285,12 +285,10 @@ namespace GritGud.Application.Gameplay
                     injuries = ActorInjuryRules.ApplyDelta(
                         actor.Injuries,
                         resolved.Attack.Injury);
-                float woundedAllowance = Math.Max(
-                    0f,
-                    actor.TurnMovementAllowance - wounds.MovementPenalty);
-                budget = new TurnBudget(
-                    budget.ActionPoints,
-                    Math.Min(budget.MovementOpportunity, woundedAllowance));
+                budget = GameplayInjuryCapabilityProjection.LimitMovement(
+                    budget,
+                    actor.TurnMovementAllowance,
+                    injuries.Capabilities);
             }
 
             return new GameplayActorSnapshot(

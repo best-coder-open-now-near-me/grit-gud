@@ -291,7 +291,8 @@ namespace GritGud.Domain.Gameplay
             float distance,
             int hitChancePercent,
             int hitRoll,
-            DroneIntegrityDamageRecord damage)
+            DroneIntegrityDamageRecord damage,
+            int capabilityAccuracyDeltaPercent = 0)
         {
             if (sequence <= 0) throw new ArgumentOutOfRangeException(
                 nameof(sequence));
@@ -309,6 +310,8 @@ namespace GritGud.Domain.Gameplay
                 || distance < 0f)
                 throw new ArgumentOutOfRangeException(nameof(distance));
             if (hitChancePercent < 0 || hitChancePercent > 100
+                || capabilityAccuracyDeltaPercent < -100
+                || capabilityAccuracyDeltaPercent > 100
                 || hitRoll < 1 || hitRoll > 100
                 || (damage != null) != (hitRoll <= hitChancePercent)
                 || (damage != null && !string.Equals(
@@ -333,6 +336,7 @@ namespace GritGud.Domain.Gameplay
             HitChancePercent = hitChancePercent;
             HitRoll = hitRoll;
             Damage = damage;
+            CapabilityAccuracyDeltaPercent = capabilityAccuracyDeltaPercent;
         }
 
         public long Sequence { get; }
@@ -347,6 +351,7 @@ namespace GritGud.Domain.Gameplay
         public float Distance { get; }
         public int HitChancePercent { get; }
         public int HitRoll { get; }
+        public int CapabilityAccuracyDeltaPercent { get; }
         public bool Hit => Damage != null;
         public DroneIntegrityDamageRecord Damage { get; }
     }
@@ -356,7 +361,8 @@ namespace GritGud.Domain.Gameplay
         public static int CalculateHitChancePercent(
             AttackDefinition attack,
             DroneExposureSnapshot exposure,
-            float distance)
+            float distance,
+            int capabilityAccuracyDeltaPercent = 0)
         {
             if (attack == null) throw new ArgumentNullException(nameof(attack));
             if (exposure == null) throw new ArgumentNullException(nameof(exposure));
@@ -364,9 +370,14 @@ namespace GritGud.Domain.Gameplay
                 || distance < 0f)
                 throw new ArgumentOutOfRangeException(nameof(distance));
             float accuracy = attack.AccuracyDecay.EvaluatePercent(distance);
-            return Math.Max(0, Math.Min(100, (int)Math.Round(
+            if (capabilityAccuracyDeltaPercent < -100
+                || capabilityAccuracyDeltaPercent > 100)
+                throw new ArgumentOutOfRangeException(
+                    nameof(capabilityAccuracyDeltaPercent));
+            return Math.Max(0, Math.Min(100, checked((int)Math.Round(
                 accuracy * exposure.VisibleFraction,
-                MidpointRounding.AwayFromZero)));
+                MidpointRounding.AwayFromZero)
+                + capabilityAccuracyDeltaPercent)));
         }
 
         public static ActorDroneAttackRecord Resolve(
@@ -377,7 +388,8 @@ namespace GritGud.Domain.Gameplay
             TurnBudget previousBudget,
             DroneExposureSnapshot exposure,
             float distance,
-            DroneSnapshot target)
+            DroneSnapshot target,
+            int capabilityAccuracyDeltaPercent = 0)
         {
             if (attack == null) throw new ArgumentNullException(nameof(attack));
             if (attack.DirectVehicleIntegrityDamage <= 0f)
@@ -388,7 +400,11 @@ namespace GritGud.Domain.Gameplay
                 throw new ArgumentException(
                     "Exposure does not describe the target drone.",
                     nameof(exposure));
-            int chance = CalculateHitChancePercent(attack, exposure, distance);
+            int chance = CalculateHitChancePercent(
+                attack,
+                exposure,
+                distance,
+                capabilityAccuracyDeltaPercent);
             int roll = Roll100(resolutionSeed);
             DroneIntegrityDamageRecord damage = roll <= chance
                 ? new DroneIntegrityDamageRecord(
@@ -415,7 +431,8 @@ namespace GritGud.Domain.Gameplay
                 distance,
                 chance,
                 roll,
-                damage);
+                damage,
+                capabilityAccuracyDeltaPercent);
         }
 
         private static int Roll100(uint seed)

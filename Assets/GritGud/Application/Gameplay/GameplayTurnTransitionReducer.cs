@@ -169,10 +169,10 @@ namespace GritGud.Application.Gameplay
                 int allowance = ending.EmergencyActionPointAllowance;
                 var budget = new TurnBudget(
                     allowance,
-                    Math.Max(
-                        0f,
-                        next.TurnMovementAllowance
-                            - next.Wounds.MovementPenalty));
+                    GameplayInjuryCapabilityProjection
+                        .CalculateMovementAllowance(
+                            next.TurnMovementAllowance,
+                            next.Capabilities));
                 mutation.ReplaceActor(
                     GameplayCanonicalStateMutation.CopyActor(
                         next,
@@ -252,24 +252,29 @@ namespace GritGud.Application.Gameplay
             GameplayCanonicalStateMutation mutation,
             GameplayActorSnapshot actor)
         {
+            ActorInjuryState advanced = ActorInjuryRules.AdvanceSystemic(
+                actor.Injuries);
             PersonalTurnActionPointGrant grant =
                 PersonalTurnActionPointRules.Grant(
                     actor.TurnBudget.ActionPoints,
                     actor.ActionPointEconomy);
             var budget = new TurnBudget(
                 grant.ResultingActionPoints,
-                Math.Max(
-                    0f,
-                    actor.TurnMovementAllowance
-                        - actor.Wounds.MovementPenalty));
+                GameplayInjuryCapabilityProjection.CalculateMovementAllowance(
+                    actor.TurnMovementAllowance,
+                    advanced.Capabilities));
             mutation.ReplaceActor(GameplayCanonicalStateMutation.CopyActor(
                 actor,
                 budget: budget,
-                attacksCommittedThisTurn: 0));
+                attacksCommittedThisTurn: 0,
+                injuries: advanced));
             return new PersonalTurnStartRecord(
                 actor.ActorId,
                 grant,
-                budget.MovementOpportunity);
+                budget.MovementOpportunity,
+                ActorPhysiologyAdvanceRecord.From(
+                    actor.Injuries,
+                    advanced));
         }
 
         private static int IndexOf(

@@ -161,6 +161,10 @@ namespace GritGud.Application.Gameplay
                             "Drone attack actor consequence is stale.");
                     if (!resolution.Hit) return;
                     ActorWoundRecord wound = resolution.Wound;
+                    ActorInjuryState resultingInjuries =
+                        ActorInjuryRules.ApplyDelta(
+                            target.Injuries,
+                            resolution.Injury);
                     mutation.ReplaceActor(
                         GameplayCanonicalStateMutation.CopyActor(
                             target,
@@ -168,14 +172,12 @@ namespace GritGud.Application.Gameplay
                                 target.TurnBudget.ActionPoints,
                                 Math.Min(
                                     target.TurnBudget.MovementOpportunity,
-                                    Math.Max(
-                                        0f,
-                                        target.TurnMovementAllowance
-                                            - wound.Resulting.MovementPenalty))),
+                                    GameplayInjuryCapabilityProjection
+                                        .CalculateMovementAllowance(
+                                            target.TurnMovementAllowance,
+                                            resultingInjuries.Capabilities))),
                             wounds: wound.Resulting,
-                            injuries: ActorInjuryRules.ApplyDelta(
-                                target.Injuries,
-                                resolution.Injury)));
+                            injuries: resultingInjuries));
                     return;
                 case GameplaySemanticSubjectKind.DestructibleProp
                     when action.Consequence is DestructibleDamageRecord damage:

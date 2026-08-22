@@ -516,6 +516,8 @@ namespace GritGud.Presentation.Gameplay
                     return "Not enough AP remains to reload.";
                 case GameplayReloadFailure.InsufficientMovementOpportunity:
                     return "Not enough movement remains to reload.";
+                case GameplayReloadFailure.InsufficientCapability:
+                    return "Arm injuries prevent reloading this weapon.";
                 case GameplayReloadFailure.None:
                     return string.Empty;
                 default:
