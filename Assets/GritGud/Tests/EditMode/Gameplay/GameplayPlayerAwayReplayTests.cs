@@ -104,6 +104,73 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(summary.Transcript.Entries, Is.Empty);
             Assert.That(summary.IsReadyToOpen, Is.True);
             StringAssert.Contains("3/3 actors matched", summary.ToDisplayText());
+
+            summary.SetPresentationCompatibility(
+                new GameplayReplayPresentationCompatibility(
+                    new[] { "player", "enemy-a" },
+                    new[] { "enemy-b" }));
+
+            Assert.That(summary.IsReadyToOpen, Is.False);
+            Assert.That(summary.ValidationMessage, Is.EqualTo(
+                "REPLAY ACTOR IDENTITIES DO NOT MATCH THE SCENE: enemy-b"));
+        }
+
+        [Test]
+        public void EndTurnOnlyAwayIntervalIsRejectedWithExplicitDiagnostic()
+        {
+            GameplaySession gameplay = CreateGameplay();
+            gameplay.BeginEncounter();
+            GameplayCombatStateSnapshot initial =
+                GameplayCombatStateCapture.Capture(gameplay);
+            GameplayReachableInput[] inputs =
+            {
+                new GameplayReachableInput(
+                    GameplayReachableInputKind.EndTurnControl,
+                    "control.end-turn.player",
+                    "player",
+                    GameplayCapabilityProfiles.EndTurn(emergency: false)),
+                new GameplayReachableInput(
+                    GameplayReachableInputKind.EndTurnControl,
+                    "control.end-turn.enemy-a",
+                    "enemy-a",
+                    GameplayCapabilityProfiles.EndTurn(emergency: false)),
+            };
+            GameplayTransitionReducerRegistry reducers =
+                GameplaySimulationReducers.CreateCurrent();
+            GameplayCapabilityRegistry capabilities =
+                GameplayCurrentCapabilityCatalog.Create(reducers, inputs);
+            var routes = new GameplayCandidateExecutionRouteRegistry(
+                capabilities);
+            routes.Register(new GameplayEndTurnCandidateExecutionRoute(
+                gameplay.Scenario));
+            var candidates = new GameplayReachableCandidateBuilder(
+                capabilities);
+            var runtime = new GameplaySimulationRuntime(
+                CreateExecutionIdentity(gameplay),
+                initial,
+                reducers,
+                capabilities);
+
+            Execute(runtime, routes, candidates.Build(inputs[0]));
+            Execute(runtime, routes, candidates.Build(inputs[1]));
+
+            Assert.That(runtime.TryCreateReplaySinceActorLastTurn(
+                "player",
+                out GameplaySemanticReplayTimeline replay,
+                out GameplayPlayerAwayReplayInterval interval), Is.True);
+            Assert.That(interval.Windows.Select(window => window.ActorId),
+                Is.EqualTo(new[] { "enemy-a" }));
+
+            var summary = new GameplayReplayContentSummary(
+                "Replay source: live since player's last turn",
+                new GameplaySemanticReplayPlaybackTimeline(replay));
+
+            Assert.That(summary.SemanticFrames, Is.EqualTo(1));
+            Assert.That(summary.EndTurnFrames, Is.EqualTo(1));
+            Assert.That(summary.ReplayableSemanticFrames, Is.Zero);
+            Assert.That(summary.IsReadyToOpen, Is.False);
+            Assert.That(summary.ValidationMessage, Is.EqualTo(
+                "LATEST PLAYER-AWAY INTERVAL CONTAINS NO REPLAYABLE ACTIONS"));
         }
 
         private static GameplaySession CreateGameplay()
