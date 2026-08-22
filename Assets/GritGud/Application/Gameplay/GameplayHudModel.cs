@@ -751,7 +751,8 @@ namespace GritGud.Application.Gameplay
                 actor.Capabilities,
                 actor.Physiology,
                 GameplayInjuryCapabilityProjection
-                    .CalculateConditionPercent(actor.Injuries));
+                    .CalculateConditionPercent(actor.Injuries),
+                actor.Injuries.SystemicTrauma);
         }
 
         private static IReadOnlyList<GameplayHotbarSlotModel> BuildHotbar(

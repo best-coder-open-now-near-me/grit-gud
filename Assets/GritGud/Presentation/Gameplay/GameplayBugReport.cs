@@ -833,6 +833,9 @@ namespace GritGud.Presentation.Gameplay
                     .CalculateConditionPercent(actor.Injuries)
                     .ToString(CultureInfo.InvariantCulture))
                 .Append('%')
+                .Append(" | systemic-trauma=")
+                .Append(actor.Injuries.SystemicTrauma.ToString(
+                    CultureInfo.InvariantCulture))
                 .Append(" | physiology=B:")
                 .Append(actor.Physiology.BloodReserve)
                 .Append(" S:")

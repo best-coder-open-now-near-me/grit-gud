@@ -454,6 +454,7 @@ namespace GritGud.Domain.Gameplay
             Distance = distance;
             MaximumReach = maximumReach;
             TargetWoundsBefore = targetWoundsBefore;
+            TargetInjuryStateBefore = resolvedInjuryStateBefore;
             HitRoll = hitRoll;
             RegionRoll = regionRoll;
             HitRegion = hitRegion;
@@ -483,6 +484,8 @@ namespace GritGud.Domain.Gameplay
         public bool IsContactAttack => MaximumReach.HasValue;
 
         public ActorWoundSnapshot TargetWoundsBefore { get; }
+
+        public ActorInjuryState TargetInjuryStateBefore { get; }
 
         public ActorWoundSnapshot TargetWoundsAfter =>
             Wound == null ? TargetWoundsBefore : Wound.Resulting;
@@ -582,6 +585,114 @@ namespace GritGud.Domain.Gameplay
             DamageMechanism? damageMechanism = null,
             int capabilityAccuracyDeltaPercent = 0)
         {
+            return ResolveInternal(
+                sequence,
+                resolutionSeed,
+                exposure,
+                accuracyDecay,
+                distance,
+                targetWoundsBefore,
+                woundMovementPenalty,
+                damageProfile: null,
+                contact,
+                context,
+                targetInjuryStateBefore,
+                weaponId,
+                damageMechanism,
+                capabilityAccuracyDeltaPercent);
+        }
+
+        public static AttackResolutionRecord Resolve(
+            long sequence,
+            uint resolutionSeed,
+            TargetExposureSnapshot exposure,
+            float distance,
+            ActorWoundSnapshot targetWoundsBefore,
+            AttackDefinition attack,
+            IGameplayActionContext context = null,
+            ActorInjuryState targetInjuryStateBefore = null,
+            int capabilityAccuracyDeltaPercent = 0)
+        {
+            if (attack == null) throw new ArgumentNullException(nameof(attack));
+            return attack.UsesLegacyWoundPayload
+                ? Resolve(
+                    sequence,
+                    resolutionSeed,
+                    exposure,
+                    attack.AccuracyDecay,
+                    distance,
+                    targetWoundsBefore,
+                    attack.WoundMovementPenalty,
+                    attack.Contact,
+                    context,
+                    targetInjuryStateBefore,
+                    attack.ActionId,
+                    attack.DamageProfile.Mechanism,
+                    capabilityAccuracyDeltaPercent)
+                : Resolve(
+                    sequence,
+                    resolutionSeed,
+                    exposure,
+                    attack.AccuracyDecay,
+                    distance,
+                    targetWoundsBefore,
+                    attack.DamageProfile,
+                    attack.Contact,
+                    context,
+                    targetInjuryStateBefore,
+                    attack.ActionId,
+                    capabilityAccuracyDeltaPercent);
+        }
+
+        public static AttackResolutionRecord Resolve(
+            long sequence,
+            uint resolutionSeed,
+            TargetExposureSnapshot exposure,
+            AccuracyDecayDefinition accuracyDecay,
+            float distance,
+            ActorWoundSnapshot targetWoundsBefore,
+            WeaponDamageProfileDefinition damageProfile,
+            ContactAttackDefinition contact = null,
+            IGameplayActionContext context = null,
+            ActorInjuryState targetInjuryStateBefore = null,
+            string weaponId = null,
+            int capabilityAccuracyDeltaPercent = 0)
+        {
+            if (damageProfile == null) throw new ArgumentNullException(
+                nameof(damageProfile));
+            return ResolveInternal(
+                sequence,
+                resolutionSeed,
+                exposure,
+                accuracyDecay,
+                distance,
+                targetWoundsBefore,
+                woundMovementPenalty: 0.01f,
+                damageProfile,
+                contact,
+                context,
+                targetInjuryStateBefore,
+                weaponId,
+                damageProfile.Mechanism,
+                capabilityAccuracyDeltaPercent);
+        }
+
+        private static AttackResolutionRecord ResolveInternal(
+            long sequence,
+            uint resolutionSeed,
+            TargetExposureSnapshot exposure,
+            AccuracyDecayDefinition accuracyDecay,
+            float distance,
+            ActorWoundSnapshot targetWoundsBefore,
+            float woundMovementPenalty,
+            WeaponDamageProfileDefinition damageProfile,
+            ContactAttackDefinition contact,
+            IGameplayActionContext context,
+            ActorInjuryState targetInjuryStateBefore,
+            string weaponId,
+            DamageMechanism? damageMechanism,
+            int capabilityAccuracyDeltaPercent)
+        {
             if (exposure == null)
             {
                 throw new ArgumentNullException(nameof(exposure));
@@ -637,12 +748,14 @@ namespace GritGud.Domain.Gameplay
                 ?? LegacyWoundProjection.ToInjuryState(
                     targetWoundsBefore,
                     int.MaxValue);
-            int severity = ActorInjuryRules.CalculateImpactSeverity(
-                woundMovementPenalty,
-                accuracyDecay.EvaluatePercent(distance),
-                hitChance,
-                hitRoll,
-                TargetExposureRules.CalculateHitChancePercent(exposure));
+            int severity = damageProfile == null
+                ? ActorInjuryRules.CalculateImpactSeverity(
+                    woundMovementPenalty,
+                    accuracyDecay.EvaluatePercent(distance),
+                    hitChance,
+                    hitRoll,
+                    TargetExposureRules.CalculateHitChancePercent(exposure))
+                : damageProfile.ResolveTransferredImpact(distance);
             var impact = new LocalizedImpact(
                 "impact:" + sequence + ":" + exposure.ObserverId
                     + ":" + exposure.TargetId,
@@ -652,20 +765,25 @@ namespace GritGud.Domain.Gameplay
                     ? "attack.legacy"
                     : weaponId,
                 hitRegion,
-                damageMechanism ?? (contact == null
+                damageProfile?.Mechanism ?? damageMechanism ?? (contact == null
                     ? DamageMechanism.Ballistic
                     : DamageMechanism.Blunt),
                 severity,
                 sequence);
-            ActorInjuryResolution injury = ActorInjuryRules.ApplyImpact(
-                resolvedInjuries,
-                impact,
-                woundMovementPenalty);
+            ActorInjuryResolution injury = damageProfile == null
+                ? ActorInjuryRules.ApplyImpact(
+                    resolvedInjuries,
+                    impact,
+                    woundMovementPenalty)
+                : ActorInjuryRules.ApplyImpact(
+                    resolvedInjuries,
+                    impact,
+                    damageProfile);
             ActorWoundSnapshot resultingWounds =
                 LegacyWoundProjection.From(injury.Resulting);
             var wound = new ActorWoundRecord(
                 hitRegion,
-                woundMovementPenalty,
+                injury.Injury.CompatibilityMovementPenalty,
                 targetWoundsBefore,
                 resultingWounds);
             return new AttackResolutionRecord(

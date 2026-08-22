@@ -253,9 +253,21 @@ namespace GritGud.Application.Gameplay
             GameplayScenarioAssemblyValidation.Require(
                 attack.turnCost != null,
                 $"Actor '{actorId}' attack requires a turn cost.");
-            GameplayScenarioAssemblyValidation.RequireFinitePositive(
-                attack.woundMovementPenalty,
-                $"Actor '{actorId}' wound movement penalty");
+            bool hasDamageProfile = HasAuthoredDamageProfile(
+                attack.damageProfile);
+            GameplayScenarioAssemblyValidation.Require(
+                hasDamageProfile || attack.woundMovementPenalty > 0f,
+                $"Actor '{actorId}' attack requires a weapon damage profile.");
+            if (!hasDamageProfile)
+                GameplayScenarioAssemblyValidation.RequireFinitePositive(
+                    attack.woundMovementPenalty,
+                    $"Actor '{actorId}' legacy wound movement penalty");
+            else
+                ValidateDamageProfile(actorId, attack.damageProfile);
+            GameplayScenarioAssemblyValidation.Require(
+                !hasDamageProfile || !HasAuthoredDirectFireDamage(
+                    attack.directFireDamage),
+                $"Actor '{actorId}' attack cannot author both damageProfile and legacy directFireDamage.");
             GameplayScenarioAssemblyValidation.Require(
                 !float.IsNaN(attack.soundSignature)
                     && !float.IsInfinity(attack.soundSignature)
@@ -271,8 +283,10 @@ namespace GritGud.Application.Gameplay
             ScenarioProjectileCapabilityData projectile = attack.projectile;
             ScenarioContactAttackData contact = attack.contact;
             ScenarioDirectFireDamageData directFireDamage =
-                HasAuthoredDirectFireDamage(attack.directFireDamage)
-                    ? attack.directFireDamage
+                hasDamageProfile
+                    ? attack.damageProfile.directFireDamage
+                    : HasAuthoredDirectFireDamage(attack.directFireDamage)
+                        ? attack.directFireDamage
                     : null;
             bool contactEnabled = contact != null && contact.enabled;
             GameplayScenarioAssemblyValidation.Require(
@@ -394,21 +408,31 @@ namespace GritGud.Application.Gameplay
                 || !attack.contact.enabled
                 ? null
                 : new ContactAttackDefinition(attack.contact.maximumReach);
-            DirectFireDamageDefinition directFireDamageDefinition =
-                CreateDirectFireDamageDefinition(attack.directFireDamage);
+            var turnCost = new ActionCost(
+                cost.actionPoints,
+                cost.movementOpportunity,
+                GameplayScenarioAssemblyValidation.ParseMobility(
+                    cost.mobility));
+            if (HasAuthoredDamageProfile(attack.damageProfile))
+                return new AttackDefinition(
+                    attack.actionId,
+                    attack.displayName,
+                    turnCost,
+                    CreateWeaponDamageProfile(attack.damageProfile),
+                    projectileDefinition,
+                    accuracyDecayDefinition,
+                    contactDefinition,
+                    attack.soundSignature,
+                    attack.directVehicleIntegrityDamage);
             return new AttackDefinition(
                 attack.actionId,
                 attack.displayName,
-                new ActionCost(
-                    cost.actionPoints,
-                    cost.movementOpportunity,
-                    GameplayScenarioAssemblyValidation.ParseMobility(
-                        cost.mobility)),
+                turnCost,
                 attack.woundMovementPenalty,
                 projectileDefinition,
                 accuracyDecayDefinition,
                 contactDefinition,
-                directFireDamageDefinition,
+                CreateDirectFireDamageDefinition(attack.directFireDamage),
                 attack.soundSignature,
                 attack.directVehicleIntegrityDamage);
         }
@@ -503,5 +527,150 @@ namespace GritGud.Application.Gameplay
             && (!string.IsNullOrWhiteSpace(data.damageTypeId)
                 || data.baseIntegrityDamage != 0f
                 || (data.surfaceModifiers?.Count ?? 0) > 0);
+
+        private static void ValidateDamageProfile(
+            string actorId,
+            ScenarioWeaponDamageProfileData data)
+        {
+            GameplayScenarioAssemblyValidation.Require(
+                data.schemaVersion
+                    == WeaponDamageProfileDefinition.CurrentSchemaVersion,
+                $"Actor '{actorId}' weapon damage profile schema is unsupported.");
+            GameplayScenarioAssemblyValidation.RequireText(
+                data.damageProfileId,
+                $"Actor '{actorId}' weapon damage profile ID");
+            ParseDamageMechanism(data.mechanism);
+            RequireBounded(
+                data.baseImpact,
+                1,
+                100,
+                $"Actor '{actorId}' weapon base impact");
+            RequireBounded(
+                data.penetration,
+                0,
+                100,
+                $"Actor '{actorId}' weapon penetration");
+            GameplayScenarioAssemblyValidation.Require(
+                data.range != null,
+                $"Actor '{actorId}' weapon damage profile requires range data.");
+            GameplayScenarioAssemblyValidation.RequireFiniteNonNegative(
+                data.range.halfLifeDistance,
+                $"Actor '{actorId}' damage half-life distance");
+            RequireBounded(
+                data.range.minimumTransferPercent,
+                1,
+                100,
+                $"Actor '{actorId}' minimum damage transfer");
+            GameplayScenarioAssemblyValidation.Require(
+                data.range.halfLifeDistance > 0f
+                    || data.range.minimumTransferPercent == 100,
+                $"Actor '{actorId}' non-decaying damage must transfer 100 percent.");
+            var regions = new HashSet<TargetRegionId>();
+            foreach (ScenarioRegionConsequenceData region in data.regions
+                ?? new List<ScenarioRegionConsequenceData>())
+            {
+                GameplayScenarioAssemblyValidation.Require(
+                    region != null,
+                    $"Actor '{actorId}' damage regions cannot contain null entries.");
+                TargetRegionId regionId = ParseTargetRegion(region.region);
+                GameplayScenarioAssemblyValidation.Require(
+                    regions.Add(regionId),
+                    $"Actor '{actorId}' damage region '{regionId}' is duplicated.");
+                RequireBounded(region.systemicPerHundred, 0, 200,
+                    $"Actor '{actorId}' {regionId} systemic consequence");
+                RequireBounded(region.structuralPerHundred, 0, 200,
+                    $"Actor '{actorId}' {regionId} structural consequence");
+                RequireBounded(region.motorPerHundred, 0, 200,
+                    $"Actor '{actorId}' {regionId} motor consequence");
+                RequireBounded(region.sensoryPerHundred, 0, 200,
+                    $"Actor '{actorId}' {regionId} sensory consequence");
+                RequireBounded(region.bleedPerHundred, 0, 200,
+                    $"Actor '{actorId}' {regionId} bleed consequence");
+                RequireBounded(region.consciousnessPerHundred, 0, 200,
+                    $"Actor '{actorId}' {regionId} consciousness consequence");
+                RequireBounded(region.respirationPerHundred, 0, 200,
+                    $"Actor '{actorId}' {regionId} respiration consequence");
+                RequireBounded(region.criticalIncapacitationImpact, 0, 100,
+                    $"Actor '{actorId}' {regionId} critical threshold");
+                RequireBounded(region.vitalImpact, 0, 100,
+                    $"Actor '{actorId}' {regionId} vital threshold");
+            }
+            GameplayScenarioAssemblyValidation.Require(
+                regions.Count == Enum.GetValues(typeof(TargetRegionId)).Length,
+                $"Actor '{actorId}' weapon damage profile must author every body region.");
+            ValidateDirectFireDamage(actorId, data.directFireDamage);
+        }
+
+        private static WeaponDamageProfileDefinition CreateWeaponDamageProfile(
+            ScenarioWeaponDamageProfileData data)
+        {
+            var regions = new List<RegionConsequenceProfile>();
+            foreach (ScenarioRegionConsequenceData region in data.regions)
+            {
+                regions.Add(new RegionConsequenceProfile(
+                    ParseTargetRegion(region.region),
+                    region.systemicPerHundred,
+                    region.structuralPerHundred,
+                    region.motorPerHundred,
+                    region.sensoryPerHundred,
+                    region.bleedPerHundred,
+                    region.consciousnessPerHundred,
+                    region.respirationPerHundred,
+                    region.criticalIncapacitationImpact,
+                    region.vitalImpact));
+            }
+            return new WeaponDamageProfileDefinition(
+                data.schemaVersion,
+                data.damageProfileId,
+                ParseDamageMechanism(data.mechanism),
+                data.baseImpact,
+                data.penetration,
+                new WeaponDamageRangeProfile(
+                    data.range.halfLifeDistance,
+                    data.range.minimumTransferPercent),
+                regions,
+                CreateDirectFireDamageDefinition(data.directFireDamage));
+        }
+
+        private static bool HasAuthoredDamageProfile(
+            ScenarioWeaponDamageProfileData data) => data != null
+            && (!string.IsNullOrWhiteSpace(data.damageProfileId)
+                || !string.IsNullOrWhiteSpace(data.mechanism)
+                || data.baseImpact != 0
+                || data.penetration != 0
+                || (data.regions?.Count ?? 0) > 0
+                || HasAuthoredDirectFireDamage(data.directFireDamage));
+
+        private static DamageMechanism ParseDamageMechanism(string value)
+        {
+            if (!Enum.TryParse(
+                value,
+                ignoreCase: true,
+                out DamageMechanism mechanism)
+                || !Enum.IsDefined(typeof(DamageMechanism), mechanism))
+                throw new InvalidOperationException(
+                    $"Unknown weapon damage mechanism '{value}'.");
+            return mechanism;
+        }
+
+        private static TargetRegionId ParseTargetRegion(string value)
+        {
+            if (!Enum.TryParse(
+                value,
+                ignoreCase: true,
+                out TargetRegionId region)
+                || !Enum.IsDefined(typeof(TargetRegionId), region))
+                throw new InvalidOperationException(
+                    $"Unknown weapon damage region '{value}'.");
+            return region;
+        }
+
+        private static void RequireBounded(
+            int value,
+            int minimum,
+            int maximum,
+            string label) => GameplayScenarioAssemblyValidation.Require(
+                value >= minimum && value <= maximum,
+                $"{label} must be between {minimum} and {maximum}.");
     }
 }

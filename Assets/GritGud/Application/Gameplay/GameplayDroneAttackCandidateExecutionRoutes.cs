@@ -377,13 +377,10 @@ namespace GritGud.Application.Gameplay
                                 identity,
                                 "resolution"),
                             exposure,
-                            drone.Definition.Attack.AccuracyDecay,
                             drone.Position.DistanceTo(target.Pose.Position),
                             target.Wounds,
-                            drone.Definition.Attack.WoundMovementPenalty,
-                            targetInjuryStateBefore: target.Injuries,
-                            weaponId: drone.Definition.Attack.ActionId,
-                            damageMechanism: DamageMechanism.Ballistic);
+                            drone.Definition.Attack,
+                            targetInjuryStateBefore: target.Injuries);
                     consequence = resolution;
                     targetPosition = target.Pose.Position;
                     hitProbability = resolution.FinalHitChancePercent / 100f;

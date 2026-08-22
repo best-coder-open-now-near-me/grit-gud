@@ -774,7 +774,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplayBattleArtifact
     {
-        public const int CurrentSchemaVersion = 3;
+        public const int CurrentSchemaVersion = 4;
         public const string FormatId = "grit-gud-battle-artifact";
 
         public GameplayBattleArtifact(

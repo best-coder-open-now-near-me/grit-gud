@@ -82,7 +82,8 @@ namespace GritGud.Domain.Gameplay
             int sensoryLoss,
             int bleedRate,
             bool vitalDamage,
-            float compatibilityMovementPenalty)
+            float compatibilityMovementPenalty,
+            int systemicTraumaContribution = 0)
         {
             InjuryId = RequireText(injuryId, nameof(injuryId));
             CombatEventId = RequireText(combatEventId, nameof(combatEventId));
@@ -102,6 +103,10 @@ namespace GritGud.Domain.Gameplay
                 || compatibilityMovementPenalty < 0f)
                 throw new ArgumentOutOfRangeException(
                     nameof(compatibilityMovementPenalty));
+            if (systemicTraumaContribution < 0
+                || systemicTraumaContribution > 100)
+                throw new ArgumentOutOfRangeException(
+                    nameof(systemicTraumaContribution));
             Region = region;
             Mechanism = mechanism;
             Severity = severity;
@@ -111,6 +116,7 @@ namespace GritGud.Domain.Gameplay
             BleedRate = bleedRate;
             VitalDamage = vitalDamage;
             CompatibilityMovementPenalty = compatibilityMovementPenalty;
+            SystemicTraumaContribution = systemicTraumaContribution;
         }
 
         public string InjuryId { get; }
@@ -123,6 +129,8 @@ namespace GritGud.Domain.Gameplay
         public int SensoryLoss { get; }
         public int BleedRate { get; }
         public bool VitalDamage { get; }
+
+        public int SystemicTraumaContribution { get; }
 
         // Transitional metadata used only to reproduce the old UI counters.
         // Capability and life-state rules never consume this value.
@@ -311,6 +319,11 @@ namespace GritGud.Domain.Gameplay
                 copied.Add(injury);
             }
             this.injuries = copied.AsReadOnly();
+            int systemicTrauma = 0;
+            foreach (InjuryRecord injury in copied)
+                systemicTrauma = checked(
+                    systemicTrauma + injury.SystemicTraumaContribution);
+            SystemicTrauma = systemicTrauma;
             var indexed = new Dictionary<TargetRegionId, BodyRegionCondition>();
             foreach (TargetRegionId region in Enum.GetValues(
                 typeof(TargetRegionId)))
@@ -330,6 +343,7 @@ namespace GritGud.Domain.Gameplay
         public ActorPhysiologyState Physiology { get; }
         public ActorLifeState LifeState { get; }
         public ActorCapabilityState Capabilities { get; }
+        public int SystemicTrauma { get; }
 
         public BodyRegionCondition GetRegion(TargetRegionId region)
         {
@@ -366,6 +380,8 @@ namespace GritGud.Domain.Gameplay
                     || left.SensoryLoss != right.SensoryLoss
                     || left.BleedRate != right.BleedRate
                     || left.VitalDamage != right.VitalDamage
+                    || left.SystemicTraumaContribution
+                        != right.SystemicTraumaContribution
                     || left.CompatibilityMovementPenalty
                         != right.CompatibilityMovementPenalty)
                     return false;
@@ -389,7 +405,9 @@ namespace GritGud.Domain.Gameplay
             ActorPhysiologyState previousPhysiology,
             ActorPhysiologyState resultingPhysiology,
             ActorLifeState previousLifeState,
-            ActorLifeState resultingLifeState)
+            ActorLifeState resultingLifeState,
+            int previousSystemicTrauma = 0,
+            int resultingSystemicTrauma = 0)
         {
             Impact = impact ?? throw new ArgumentNullException(nameof(impact));
             Injury = injury ?? throw new ArgumentNullException(nameof(injury));
@@ -401,6 +419,12 @@ namespace GritGud.Domain.Gameplay
                 throw new ArgumentOutOfRangeException(nameof(previousLifeState));
             if (!Enum.IsDefined(typeof(ActorLifeState), resultingLifeState))
                 throw new ArgumentOutOfRangeException(nameof(resultingLifeState));
+            if (previousSystemicTrauma < 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(previousSystemicTrauma));
+            if (resultingSystemicTrauma < previousSystemicTrauma)
+                throw new ArgumentOutOfRangeException(
+                    nameof(resultingSystemicTrauma));
             if (!string.Equals(
                     impact.CombatEventId,
                     injury.CombatEventId,
@@ -410,6 +434,8 @@ namespace GritGud.Domain.Gameplay
                     "Injury deltas must preserve impact identity.");
             PreviousLifeState = previousLifeState;
             ResultingLifeState = resultingLifeState;
+            PreviousSystemicTrauma = previousSystemicTrauma;
+            ResultingSystemicTrauma = resultingSystemicTrauma;
         }
 
         public LocalizedImpact Impact { get; }
@@ -418,6 +444,8 @@ namespace GritGud.Domain.Gameplay
         public ActorPhysiologyState ResultingPhysiology { get; }
         public ActorLifeState PreviousLifeState { get; }
         public ActorLifeState ResultingLifeState { get; }
+        public int PreviousSystemicTrauma { get; }
+        public int ResultingSystemicTrauma { get; }
     }
 
     public sealed class ActorInjuryResolution
@@ -605,7 +633,127 @@ namespace GritGud.Domain.Gameplay
                 previous.Physiology,
                 physiology,
                 previous.LifeState,
+                life,
+                previous.SystemicTrauma,
+                resulting.SystemicTrauma);
+            return new ActorInjuryResolution(delta, resulting);
+        }
+
+        public static ActorInjuryResolution ApplyImpact(
+            ActorInjuryState previous,
+            LocalizedImpact impact,
+            WeaponDamageProfileDefinition damageProfile)
+        {
+            if (previous == null) throw new ArgumentNullException(nameof(previous));
+            if (impact == null) throw new ArgumentNullException(nameof(impact));
+            if (damageProfile == null) throw new ArgumentNullException(
+                nameof(damageProfile));
+            if (!string.Equals(
+                    previous.ActorId,
+                    impact.TargetActorId,
+                    StringComparison.Ordinal))
+                throw new ArgumentException(
+                    "Impact target does not match injury state.",
+                    nameof(impact));
+            if (!impact.Region.HasValue)
+                throw new ArgumentException(
+                    "Weapon damage profiles require a localized impact region.",
+                    nameof(impact));
+            if (impact.Mechanism != damageProfile.Mechanism)
+                throw new ArgumentException(
+                    "Impact mechanism does not match its weapon damage profile.",
+                    nameof(impact));
+
+            RegionConsequenceProfile consequences = damageProfile.GetRegion(
+                impact.Region.Value);
+            int transferredImpact = impact.Severity;
+            int systemic = consequences.Project(
+                consequences.SystemicPerHundred,
+                transferredImpact);
+            int structural = consequences.Project(
+                consequences.StructuralPerHundred,
+                transferredImpact);
+            int motor = consequences.Project(
+                consequences.MotorPerHundred,
+                transferredImpact);
+            int sensory = consequences.Project(
+                consequences.SensoryPerHundred,
+                transferredImpact);
+            int bleed = consequences.Project(
+                consequences.BleedPerHundred,
+                transferredImpact);
+            int consciousnessLoss = consequences.Project(
+                consequences.ConsciousnessPerHundred,
+                transferredImpact);
+            int respirationLoss = consequences.Project(
+                consequences.RespirationPerHundred,
+                transferredImpact);
+            bool vital = consequences.CausesVitalDamage(transferredImpact);
+            // The legacy wound scalar is a count-compatible projection only.
+            // Canonical movement comes from leg function, never this value.
+            const float compatibilityMovementPenalty = 1f;
+            var injury = new InjuryRecord(
+                impact.CombatEventId + ":injury",
+                impact.CombatEventId,
+                impact.Region,
+                impact.Mechanism,
+                transferredImpact,
+                structural,
+                motor,
+                sensory,
+                bleed,
+                vital,
+                compatibilityMovementPenalty,
+                systemic);
+            var injuries = new List<InjuryRecord>(previous.Injuries)
+            {
+                injury,
+            };
+            int blood = Clamp(
+                previous.Physiology.BloodReserve - bleed / 3,
+                0,
+                100);
+            int shock = Clamp(
+                previous.Physiology.Shock + systemic / 2 + (vital ? 10 : 0),
+                0,
+                100);
+            int consciousness = Clamp(
+                previous.Physiology.Consciousness - consciousnessLoss,
+                0,
+                100);
+            int respiration = Clamp(
+                previous.Physiology.Respiration - respirationLoss,
+                0,
+                100);
+            var physiology = new ActorPhysiologyState(
+                blood,
+                shock,
+                consciousness,
+                respiration);
+            var provisional = new ActorInjuryState(
+                previous.ActorId,
+                injuries,
+                physiology,
+                ActorLifeState.Active);
+            ActorLifeState life = DeriveProfileLifeState(
+                previous.LifeState,
+                provisional,
+                consequences.CausesCriticalIncapacitation(
+                    transferredImpact));
+            var resulting = new ActorInjuryState(
+                previous.ActorId,
+                injuries,
+                physiology,
                 life);
+            var delta = new ActorInjuryDelta(
+                impact,
+                injury,
+                previous.Physiology,
+                physiology,
+                previous.LifeState,
+                life,
+                previous.SystemicTrauma,
+                resulting.SystemicTrauma);
             return new ActorInjuryResolution(delta, resulting);
         }
 
@@ -692,6 +840,25 @@ namespace GritGud.Domain.Gameplay
                 return ActorLifeState.Dead;
             if ((region == TargetRegionId.Head && severity >= 70)
                 || (region == TargetRegionId.Torso && severity >= 85)
+                || state.Physiology.Consciousness <= 25
+                || state.Physiology.Shock >= 90)
+                return ActorLifeState.Incapacitated;
+            return ActorLifeState.Active;
+        }
+
+        private static ActorLifeState DeriveProfileLifeState(
+            ActorLifeState previousLifeState,
+            ActorInjuryState state,
+            bool criticalIncapacitation)
+        {
+            if (previousLifeState == ActorLifeState.Dead
+                || state.SystemicTrauma >= 100
+                || state.Physiology.BloodReserve == 0
+                || state.Physiology.Respiration == 0)
+                return ActorLifeState.Dead;
+            if (previousLifeState == ActorLifeState.Incapacitated
+                || state.SystemicTrauma >= 80
+                || criticalIncapacitation
                 || state.Physiology.Consciousness <= 25
                 || state.Physiology.Shock >= 90)
                 return ActorLifeState.Incapacitated;

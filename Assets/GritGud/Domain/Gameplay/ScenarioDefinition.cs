@@ -360,6 +360,64 @@ namespace GritGud.Domain.Gameplay
             DirectFireDamageDefinition directFireDamage = null,
             float soundSignature = 1f,
             float directVehicleIntegrityDamage = 0f)
+            : this(
+                actionId,
+                displayName,
+                turnCost,
+                woundMovementPenalty,
+                WeaponDamageProfileDefinition.CreateLegacy(
+                    actionId + ".legacy-damage",
+                    contact == null
+                        ? DamageMechanism.Ballistic
+                        : DamageMechanism.Blunt,
+                    woundMovementPenalty,
+                    directFireDamage),
+                true,
+                projectile,
+                accuracyDecay,
+                contact,
+                soundSignature,
+                directVehicleIntegrityDamage)
+        {
+        }
+
+        public AttackDefinition(
+            string actionId,
+            string displayName,
+            ActionCost turnCost,
+            WeaponDamageProfileDefinition damageProfile,
+            ProjectileFlightDefinition projectile = null,
+            AccuracyDecayDefinition accuracyDecay = null,
+            ContactAttackDefinition contact = null,
+            float soundSignature = 1f,
+            float directVehicleIntegrityDamage = 0f)
+            : this(
+                actionId,
+                displayName,
+                turnCost,
+                0.01f,
+                damageProfile,
+                false,
+                projectile,
+                accuracyDecay,
+                contact,
+                soundSignature,
+                directVehicleIntegrityDamage)
+        {
+        }
+
+        private AttackDefinition(
+            string actionId,
+            string displayName,
+            ActionCost turnCost,
+            float legacyWoundMovementPenalty,
+            WeaponDamageProfileDefinition damageProfile,
+            bool usesLegacyWoundPayload,
+            ProjectileFlightDefinition projectile,
+            AccuracyDecayDefinition accuracyDecay,
+            ContactAttackDefinition contact,
+            float soundSignature,
+            float directVehicleIntegrityDamage)
         {
             if (string.IsNullOrWhiteSpace(actionId))
             {
@@ -375,13 +433,16 @@ namespace GritGud.Domain.Gameplay
                     nameof(displayName));
             }
 
-            if (float.IsNaN(woundMovementPenalty)
-                || float.IsInfinity(woundMovementPenalty)
-                || woundMovementPenalty <= 0f)
+            if (float.IsNaN(legacyWoundMovementPenalty)
+                || float.IsInfinity(legacyWoundMovementPenalty)
+                || legacyWoundMovementPenalty <= 0f)
             {
                 throw new ArgumentOutOfRangeException(
-                    nameof(woundMovementPenalty));
+                    nameof(legacyWoundMovementPenalty));
             }
+            DamageProfile = damageProfile ?? throw new ArgumentNullException(
+                nameof(damageProfile));
+            UsesLegacyWoundPayload = usesLegacyWoundPayload;
             if (float.IsNaN(soundSignature)
                 || float.IsInfinity(soundSignature)
                 || soundSignature < 0f
@@ -402,12 +463,12 @@ namespace GritGud.Domain.Gameplay
                     nameof(contact));
             }
 
-            if (directFireDamage != null
+            if (DamageProfile.DirectFireDamage != null
                 && (projectile != null || contact != null))
             {
                 throw new ArgumentException(
                     "Only ranged immediate attacks can author direct-fire prop damage.",
-                    nameof(directFireDamage));
+                    nameof(damageProfile));
             }
             if (directVehicleIntegrityDamage > 0f
                 && (projectile != null || contact != null))
@@ -432,10 +493,9 @@ namespace GritGud.Domain.Gameplay
             ActionId = actionId;
             DisplayName = displayName;
             TurnCost = turnCost;
-            WoundMovementPenalty = woundMovementPenalty;
+            WoundMovementPenalty = legacyWoundMovementPenalty;
             Projectile = projectile;
             Contact = contact;
-            DirectFireDamage = directFireDamage;
             SoundSignature = soundSignature;
             DirectVehicleIntegrityDamage = directVehicleIntegrityDamage;
             AccuracyDecay = contact == null
@@ -451,13 +511,18 @@ namespace GritGud.Domain.Gameplay
 
         public float WoundMovementPenalty { get; }
 
+        public WeaponDamageProfileDefinition DamageProfile { get; }
+
+        public bool UsesLegacyWoundPayload { get; }
+
         public ProjectileFlightDefinition Projectile { get; }
 
         public AccuracyDecayDefinition AccuracyDecay { get; }
 
         public ContactAttackDefinition Contact { get; }
 
-        public DirectFireDamageDefinition DirectFireDamage { get; }
+        public DirectFireDamageDefinition DirectFireDamage =>
+            DamageProfile.DirectFireDamage;
 
         public float SoundSignature { get; }
 

@@ -556,6 +556,7 @@ namespace GritGud.Application.Gameplay
                 return injury.InjuryId;
             return "legacy:" + injury.Region + ":" + injury.Mechanism + ":"
                 + injury.Severity + ":" + injury.StructuralDamage + ":"
+                + injury.SystemicTraumaContribution + ":"
                 + injury.MotorLoss + ":" + injury.SensoryLoss + ":"
                 + injury.BleedRate + ":" + injury.VitalDamage;
         }
@@ -690,6 +691,9 @@ namespace GritGud.Application.Gameplay
                     + " - MOTOR " + injury.MotorLoss
                     + " - SENSORY " + injury.SensoryLoss
                     + " - BLEED " + injury.BleedRate,
+                "SYSTEMIC TRAUMA - " + previous.Injuries.SystemicTrauma
+                    + " + " + injury.SystemicTraumaContribution + " -> "
+                    + resulting.Injuries.SystemicTrauma,
                 FormatCapabilityChange(
                     previous.Capabilities,
                     resulting.Capabilities),
@@ -712,6 +716,8 @@ namespace GritGud.Application.Gameplay
         {
             var lines = new List<string>
             {
+                "SYSTEMIC TRAUMA - " + previous.Injuries.SystemicTrauma
+                    + " -> " + resulting.Injuries.SystemicTrauma,
                 FormatPhysiologyChange(
                     previous.Physiology,
                     resulting.Physiology),

@@ -111,6 +111,43 @@ namespace GritGud.Domain.Gameplay
     }
 
     [Serializable]
+    public sealed class ScenarioWeaponDamageRangeData
+    {
+        public float halfLifeDistance;
+        public int minimumTransferPercent = 100;
+    }
+
+    [Serializable]
+    public sealed class ScenarioRegionConsequenceData
+    {
+        public string region = string.Empty;
+        public int systemicPerHundred;
+        public int structuralPerHundred;
+        public int motorPerHundred;
+        public int sensoryPerHundred;
+        public int bleedPerHundred;
+        public int consciousnessPerHundred;
+        public int respirationPerHundred;
+        public int criticalIncapacitationImpact;
+        public int vitalImpact;
+    }
+
+    [Serializable]
+    public sealed class ScenarioWeaponDamageProfileData
+    {
+        public int schemaVersion = 1;
+        public string damageProfileId = string.Empty;
+        public string mechanism = string.Empty;
+        public int baseImpact;
+        public int penetration;
+        public ScenarioWeaponDamageRangeData range =
+            new ScenarioWeaponDamageRangeData();
+        public List<ScenarioRegionConsequenceData> regions =
+            new List<ScenarioRegionConsequenceData>();
+        public ScenarioDirectFireDamageData directFireDamage;
+    }
+
+    [Serializable]
     public sealed class ScenarioAttackCapabilityData
     {
         public bool enabled;
@@ -122,6 +159,7 @@ namespace GritGud.Domain.Gameplay
         public ScenarioProjectileCapabilityData projectile;
         public ScenarioContactAttackData contact;
         public ScenarioDirectFireDamageData directFireDamage;
+        public ScenarioWeaponDamageProfileData damageProfile;
         public float soundSignature = 1f;
         public float directVehicleIntegrityDamage;
     }
@@ -446,7 +484,7 @@ namespace GritGud.Domain.Gameplay
     [Serializable]
     public sealed class ScenarioContentDocument
     {
-        public const int CurrentSchemaVersion = 19;
+        public const int CurrentSchemaVersion = 20;
 
         public int schemaVersion = CurrentSchemaVersion;
         public string scenarioId = string.Empty;

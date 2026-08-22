@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 19,
+  "schemaVersion": 20,
   "scenarioId": "depot-yard",
   "displayName": "Depot Yard",
   "levelId": "main-depot-yard-v1",
@@ -164,21 +164,105 @@
               "movementOpportunity": 0.0,
               "mobility": "set"
             },
-            "woundMovementPenalty": 2.0,
+            "damageProfile": {
+              "schemaVersion": 1,
+              "damageProfileId": "damage.ballistic.rifle.standard",
+              "mechanism": "ballistic",
+              "baseImpact": 100,
+              "penetration": 60,
+              "range": {
+                "halfLifeDistance": 0.0,
+                "minimumTransferPercent": 100
+              },
+              "regions": [
+                {
+                  "region": "head",
+                  "systemicPerHundred": 50,
+                  "structuralPerHundred": 45,
+                  "motorPerHundred": 5,
+                  "sensoryPerHundred": 60,
+                  "bleedPerHundred": 20,
+                  "consciousnessPerHundred": 60,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 100,
+                  "vitalImpact": 100
+                },
+                {
+                  "region": "torso",
+                  "systemicPerHundred": 40,
+                  "structuralPerHundred": 40,
+                  "motorPerHundred": 10,
+                  "sensoryPerHundred": 5,
+                  "bleedPerHundred": 40,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 35,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "leftArm",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 40,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 10,
+                  "bleedPerHundred": 20,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "rightArm",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 40,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 10,
+                  "bleedPerHundred": 20,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "leftLeg",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 45,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 5,
+                  "bleedPerHundred": 25,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "rightLeg",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 45,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 5,
+                  "bleedPerHundred": 25,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                }
+              ],
+              "directFireDamage": {
+                "damageTypeId": "damage.ballistic.rifle",
+                "baseIntegrityDamage": 2.0,
+                "surfaceModifiers": [
+                  { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                  { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                  { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+                ]
+              }
+            },
             "soundSignature": 1.0,
             "directVehicleIntegrityDamage": 1.0,
             "accuracyDecay": {
               "halfLifeDistance": 60.0,
               "minimumAccuracyPercent": 5.0
-            },
-            "directFireDamage": {
-              "damageTypeId": "damage.ballistic.rifle",
-              "baseIntegrityDamage": 2.0,
-              "surfaceModifiers": [
-                { "surfaceId": "surface.wood", "multiplier": 2.0 },
-                { "surfaceId": "surface.metal", "multiplier": 1.0 },
-                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
-              ]
             }
           },
           "ammunition": {
@@ -520,21 +604,105 @@
               "movementOpportunity": 0.0,
               "mobility": "set"
             },
-            "woundMovementPenalty": 2.0,
+            "damageProfile": {
+              "schemaVersion": 1,
+              "damageProfileId": "damage.ballistic.rifle.standard",
+              "mechanism": "ballistic",
+              "baseImpact": 100,
+              "penetration": 60,
+              "range": {
+                "halfLifeDistance": 0.0,
+                "minimumTransferPercent": 100
+              },
+              "regions": [
+                {
+                  "region": "head",
+                  "systemicPerHundred": 50,
+                  "structuralPerHundred": 45,
+                  "motorPerHundred": 5,
+                  "sensoryPerHundred": 60,
+                  "bleedPerHundred": 20,
+                  "consciousnessPerHundred": 60,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 100,
+                  "vitalImpact": 100
+                },
+                {
+                  "region": "torso",
+                  "systemicPerHundred": 40,
+                  "structuralPerHundred": 40,
+                  "motorPerHundred": 10,
+                  "sensoryPerHundred": 5,
+                  "bleedPerHundred": 40,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 35,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "leftArm",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 40,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 10,
+                  "bleedPerHundred": 20,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "rightArm",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 40,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 10,
+                  "bleedPerHundred": 20,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "leftLeg",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 45,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 5,
+                  "bleedPerHundred": 25,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "rightLeg",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 45,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 5,
+                  "bleedPerHundred": 25,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                }
+              ],
+              "directFireDamage": {
+                "damageTypeId": "damage.ballistic.rifle",
+                "baseIntegrityDamage": 2.0,
+                "surfaceModifiers": [
+                  { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                  { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                  { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+                ]
+              }
+            },
             "soundSignature": 1.0,
             "directVehicleIntegrityDamage": 1.0,
             "accuracyDecay": {
               "halfLifeDistance": 60.0,
               "minimumAccuracyPercent": 5.0
-            },
-            "directFireDamage": {
-              "damageTypeId": "damage.ballistic.rifle",
-              "baseIntegrityDamage": 2.0,
-              "surfaceModifiers": [
-                { "surfaceId": "surface.wood", "multiplier": 2.0 },
-                { "surfaceId": "surface.metal", "multiplier": 1.0 },
-                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
-              ]
             }
           },
           "ammunition": {
@@ -765,21 +933,105 @@
               "movementOpportunity": 0.0,
               "mobility": "set"
             },
-            "woundMovementPenalty": 2.0,
+            "damageProfile": {
+              "schemaVersion": 1,
+              "damageProfileId": "damage.ballistic.rifle.standard",
+              "mechanism": "ballistic",
+              "baseImpact": 100,
+              "penetration": 60,
+              "range": {
+                "halfLifeDistance": 0.0,
+                "minimumTransferPercent": 100
+              },
+              "regions": [
+                {
+                  "region": "head",
+                  "systemicPerHundred": 50,
+                  "structuralPerHundred": 45,
+                  "motorPerHundred": 5,
+                  "sensoryPerHundred": 60,
+                  "bleedPerHundred": 20,
+                  "consciousnessPerHundred": 60,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 100,
+                  "vitalImpact": 100
+                },
+                {
+                  "region": "torso",
+                  "systemicPerHundred": 40,
+                  "structuralPerHundred": 40,
+                  "motorPerHundred": 10,
+                  "sensoryPerHundred": 5,
+                  "bleedPerHundred": 40,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 35,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "leftArm",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 40,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 10,
+                  "bleedPerHundred": 20,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "rightArm",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 40,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 10,
+                  "bleedPerHundred": 20,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "leftLeg",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 45,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 5,
+                  "bleedPerHundred": 25,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "rightLeg",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 45,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 5,
+                  "bleedPerHundred": 25,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                }
+              ],
+              "directFireDamage": {
+                "damageTypeId": "damage.ballistic.rifle",
+                "baseIntegrityDamage": 2.0,
+                "surfaceModifiers": [
+                  { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                  { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                  { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+                ]
+              }
+            },
             "soundSignature": 1.0,
             "directVehicleIntegrityDamage": 1.0,
             "accuracyDecay": {
               "halfLifeDistance": 45.0,
               "minimumAccuracyPercent": 5.0
-            },
-            "directFireDamage": {
-              "damageTypeId": "damage.ballistic.rifle",
-              "baseIntegrityDamage": 2.0,
-              "surfaceModifiers": [
-                { "surfaceId": "surface.wood", "multiplier": 2.0 },
-                { "surfaceId": "surface.metal", "multiplier": 1.0 },
-                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
-              ]
             }
           },
           "ammunition": {
@@ -861,21 +1113,105 @@
               "movementOpportunity": 0.0,
               "mobility": "set"
             },
-            "woundMovementPenalty": 2.0,
+            "damageProfile": {
+              "schemaVersion": 1,
+              "damageProfileId": "damage.ballistic.rifle.standard",
+              "mechanism": "ballistic",
+              "baseImpact": 100,
+              "penetration": 60,
+              "range": {
+                "halfLifeDistance": 0.0,
+                "minimumTransferPercent": 100
+              },
+              "regions": [
+                {
+                  "region": "head",
+                  "systemicPerHundred": 50,
+                  "structuralPerHundred": 45,
+                  "motorPerHundred": 5,
+                  "sensoryPerHundred": 60,
+                  "bleedPerHundred": 20,
+                  "consciousnessPerHundred": 60,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 100,
+                  "vitalImpact": 100
+                },
+                {
+                  "region": "torso",
+                  "systemicPerHundred": 40,
+                  "structuralPerHundred": 40,
+                  "motorPerHundred": 10,
+                  "sensoryPerHundred": 5,
+                  "bleedPerHundred": 40,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 35,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "leftArm",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 40,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 10,
+                  "bleedPerHundred": 20,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "rightArm",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 40,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 10,
+                  "bleedPerHundred": 20,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "leftLeg",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 45,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 5,
+                  "bleedPerHundred": 25,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "rightLeg",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 45,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 5,
+                  "bleedPerHundred": 25,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                }
+              ],
+              "directFireDamage": {
+                "damageTypeId": "damage.ballistic.rifle",
+                "baseIntegrityDamage": 2.0,
+                "surfaceModifiers": [
+                  { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                  { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                  { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+                ]
+              }
+            },
             "soundSignature": 1.0,
             "directVehicleIntegrityDamage": 1.0,
             "accuracyDecay": {
               "halfLifeDistance": 45.0,
               "minimumAccuracyPercent": 5.0
-            },
-            "directFireDamage": {
-              "damageTypeId": "damage.ballistic.rifle",
-              "baseIntegrityDamage": 2.0,
-              "surfaceModifiers": [
-                { "surfaceId": "surface.wood", "multiplier": 2.0 },
-                { "surfaceId": "surface.metal", "multiplier": 1.0 },
-                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
-              ]
             }
           },
           "ammunition": {
@@ -982,21 +1318,105 @@
               "movementOpportunity": 0.0,
               "mobility": "set"
             },
-            "woundMovementPenalty": 2.0,
+            "damageProfile": {
+              "schemaVersion": 1,
+              "damageProfileId": "damage.ballistic.rifle.standard",
+              "mechanism": "ballistic",
+              "baseImpact": 100,
+              "penetration": 60,
+              "range": {
+                "halfLifeDistance": 0.0,
+                "minimumTransferPercent": 100
+              },
+              "regions": [
+                {
+                  "region": "head",
+                  "systemicPerHundred": 50,
+                  "structuralPerHundred": 45,
+                  "motorPerHundred": 5,
+                  "sensoryPerHundred": 60,
+                  "bleedPerHundred": 20,
+                  "consciousnessPerHundred": 60,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 100,
+                  "vitalImpact": 100
+                },
+                {
+                  "region": "torso",
+                  "systemicPerHundred": 40,
+                  "structuralPerHundred": 40,
+                  "motorPerHundred": 10,
+                  "sensoryPerHundred": 5,
+                  "bleedPerHundred": 40,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 35,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "leftArm",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 40,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 10,
+                  "bleedPerHundred": 20,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "rightArm",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 40,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 10,
+                  "bleedPerHundred": 20,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "leftLeg",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 45,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 5,
+                  "bleedPerHundred": 25,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "rightLeg",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 45,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 5,
+                  "bleedPerHundred": 25,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                }
+              ],
+              "directFireDamage": {
+                "damageTypeId": "damage.ballistic.rifle",
+                "baseIntegrityDamage": 2.0,
+                "surfaceModifiers": [
+                  { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                  { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                  { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+                ]
+              }
+            },
             "soundSignature": 1.0,
             "directVehicleIntegrityDamage": 1.0,
             "accuracyDecay": {
               "halfLifeDistance": 42.0,
               "minimumAccuracyPercent": 5.0
-            },
-            "directFireDamage": {
-              "damageTypeId": "damage.ballistic.rifle",
-              "baseIntegrityDamage": 2.0,
-              "surfaceModifiers": [
-                { "surfaceId": "surface.wood", "multiplier": 2.0 },
-                { "surfaceId": "surface.metal", "multiplier": 1.0 },
-                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
-              ]
             }
           },
           "ammunition": {
@@ -1094,21 +1514,105 @@
               "movementOpportunity": 0.0,
               "mobility": "set"
             },
-            "woundMovementPenalty": 2.0,
+            "damageProfile": {
+              "schemaVersion": 1,
+              "damageProfileId": "damage.ballistic.rifle.standard",
+              "mechanism": "ballistic",
+              "baseImpact": 100,
+              "penetration": 60,
+              "range": {
+                "halfLifeDistance": 0.0,
+                "minimumTransferPercent": 100
+              },
+              "regions": [
+                {
+                  "region": "head",
+                  "systemicPerHundred": 50,
+                  "structuralPerHundred": 45,
+                  "motorPerHundred": 5,
+                  "sensoryPerHundred": 60,
+                  "bleedPerHundred": 20,
+                  "consciousnessPerHundred": 60,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 100,
+                  "vitalImpact": 100
+                },
+                {
+                  "region": "torso",
+                  "systemicPerHundred": 40,
+                  "structuralPerHundred": 40,
+                  "motorPerHundred": 10,
+                  "sensoryPerHundred": 5,
+                  "bleedPerHundred": 40,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 35,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "leftArm",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 40,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 10,
+                  "bleedPerHundred": 20,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "rightArm",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 40,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 10,
+                  "bleedPerHundred": 20,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "leftLeg",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 45,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 5,
+                  "bleedPerHundred": 25,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                },
+                {
+                  "region": "rightLeg",
+                  "systemicPerHundred": 30,
+                  "structuralPerHundred": 45,
+                  "motorPerHundred": 55,
+                  "sensoryPerHundred": 5,
+                  "bleedPerHundred": 25,
+                  "consciousnessPerHundred": 0,
+                  "respirationPerHundred": 0,
+                  "criticalIncapacitationImpact": 0,
+                  "vitalImpact": 0
+                }
+              ],
+              "directFireDamage": {
+                "damageTypeId": "damage.ballistic.rifle",
+                "baseIntegrityDamage": 2.0,
+                "surfaceModifiers": [
+                  { "surfaceId": "surface.wood", "multiplier": 2.0 },
+                  { "surfaceId": "surface.metal", "multiplier": 1.0 },
+                  { "surfaceId": "surface.concrete", "multiplier": 0.0 }
+                ]
+              }
+            },
             "soundSignature": 1.0,
             "directVehicleIntegrityDamage": 1.0,
             "accuracyDecay": {
               "halfLifeDistance": 48.0,
               "minimumAccuracyPercent": 5.0
-            },
-            "directFireDamage": {
-              "damageTypeId": "damage.ballistic.rifle",
-              "baseIntegrityDamage": 2.0,
-              "surfaceModifiers": [
-                { "surfaceId": "surface.wood", "multiplier": 2.0 },
-                { "surfaceId": "surface.metal", "multiplier": 1.0 },
-                { "surfaceId": "surface.concrete", "multiplier": 0.0 }
-              ]
             }
           },
           "ammunition": {

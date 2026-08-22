@@ -22,7 +22,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplaySessionStateSnapshot
     {
-        public const int CurrentSchemaVersion = 9;
+        public const int CurrentSchemaVersion = 10;
 
         public GameplaySessionStateSnapshot(
             string scenarioId,
@@ -207,7 +207,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplayCombatStateSnapshot
     {
-        public const int CurrentSchemaVersion = 9;
+        public const int CurrentSchemaVersion = 10;
 
         public GameplayCombatStateSnapshot(
             GameplaySessionStateSnapshot session,
@@ -512,6 +512,10 @@ namespace GritGud.Application.Gameplay
                 Append(text, root + ".attack.cost.movement", attack.TurnCost.MovementOpportunity);
                 Append(text, root + ".attack.cost.mobility", (int)attack.TurnCost.Mobility);
                 Append(text, root + ".attack.woundPenalty", attack.WoundMovementPenalty);
+                Append(text, root + ".attack.legacyWoundPayload",
+                    attack.UsesLegacyWoundPayload);
+                AppendDamageProfile(text, root + ".attack.damageProfile",
+                    attack.DamageProfile);
                 Append(text, root + ".attack.sound", attack.SoundSignature);
                 Append(text, root + ".attack.accuracy.halfLife",
                     attack.AccuracyDecay.HalfLifeDistance);
@@ -722,6 +726,8 @@ namespace GritGud.Application.Gameplay
             Append(text, root + ".penalty", actor.Wounds.MovementPenalty);
             Append(text, root + ".maximumWounds", actor.MaximumWounds);
             Append(text, root + ".lifeState", (int)actor.LifeState);
+            Append(text, root + ".systemicTrauma",
+                actor.Injuries.SystemicTrauma);
             Append(text, root + ".physiology.blood",
                 actor.Physiology.BloodReserve);
             Append(text, root + ".physiology.shock", actor.Physiology.Shock);
@@ -748,6 +754,8 @@ namespace GritGud.Application.Gameplay
                 Append(text, injuryRoot + ".sensory", injury.SensoryLoss);
                 Append(text, injuryRoot + ".bleed", injury.BleedRate);
                 Append(text, injuryRoot + ".vital", injury.VitalDamage);
+                Append(text, injuryRoot + ".systemicTrauma",
+                    injury.SystemicTraumaContribution);
                 Append(text, injuryRoot + ".legacyPenalty",
                     injury.CompatibilityMovementPenalty);
             }
@@ -824,6 +832,55 @@ namespace GritGud.Application.Gameplay
             }
             text.Append(key.Length).Append(':').Append(key)
                 .Append(formatted.Length).Append(':').Append(formatted);
+        }
+
+        private static void AppendDamageProfile(
+            StringBuilder text,
+            string root,
+            WeaponDamageProfileDefinition profile)
+        {
+            Append(text, root + ".schema", profile.SchemaVersion);
+            Append(text, root + ".id", profile.DamageProfileId);
+            Append(text, root + ".mechanism", (int)profile.Mechanism);
+            Append(text, root + ".baseImpact", profile.BaseImpact);
+            Append(text, root + ".penetration", profile.Penetration);
+            Append(text, root + ".range.halfLife",
+                profile.Range.HalfLifeDistance);
+            Append(text, root + ".range.minimumTransfer",
+                profile.Range.MinimumTransferPercent);
+            foreach (TargetRegionId region in Enum.GetValues(
+                typeof(TargetRegionId)))
+            {
+                RegionConsequenceProfile consequence = profile.GetRegion(region);
+                string regionRoot = root + ".region." + (int)region;
+                Append(text, regionRoot + ".systemic",
+                    consequence.SystemicPerHundred);
+                Append(text, regionRoot + ".structural",
+                    consequence.StructuralPerHundred);
+                Append(text, regionRoot + ".motor",
+                    consequence.MotorPerHundred);
+                Append(text, regionRoot + ".sensory",
+                    consequence.SensoryPerHundred);
+                Append(text, regionRoot + ".bleed",
+                    consequence.BleedPerHundred);
+                Append(text, regionRoot + ".consciousness",
+                    consequence.ConsciousnessPerHundred);
+                Append(text, regionRoot + ".respiration",
+                    consequence.RespirationPerHundred);
+                Append(text, regionRoot + ".critical",
+                    consequence.CriticalIncapacitationImpact);
+                Append(text, regionRoot + ".vital",
+                    consequence.VitalImpact);
+            }
+            DirectFireDamageDefinition direct = profile.DirectFireDamage;
+            Append(text, root + ".direct.type",
+                direct?.DamageTypeId ?? string.Empty);
+            Append(text, root + ".direct.base",
+                direct?.BaseIntegrityDamage ?? 0f);
+            if (direct == null) return;
+            foreach (SurfaceIntegrityDamageModifier modifier in direct.Modifiers)
+                Append(text, root + ".direct.surface." + modifier.SurfaceId,
+                    modifier.Multiplier);
         }
 
         private static string Normalize(float value) =>

@@ -95,7 +95,11 @@ namespace GritGud.Application.Gameplay
                     + injury.Injury.StructuralDamage + " - motor "
                     + injury.Injury.MotorLoss + " - sensory "
                     + injury.Injury.SensoryLoss + " - bleed "
-                    + injury.Injury.BleedRate);
+                    + injury.Injury.BleedRate + " - systemic trauma +"
+                    + injury.Injury.SystemicTraumaContribution);
+                lines.Add("SYSTEMIC TRAUMA - "
+                    + injury.PreviousSystemicTrauma + " -> "
+                    + injury.ResultingSystemicTrauma);
                 lines.Add("SYSTEMIC - blood "
                     + injury.PreviousPhysiology.BloodReserve + " -> "
                     + injury.ResultingPhysiology.BloodReserve + " - shock "

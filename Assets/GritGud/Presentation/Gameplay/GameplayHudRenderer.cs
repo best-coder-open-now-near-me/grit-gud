@@ -641,7 +641,8 @@ namespace GritGud.Presentation.Gameplay
                 + "\nSENSORY - " + region.SensoryFunction + "%"
                 + "\nBLEED - " + region.BleedRate
                 + "\nLIFE STATE - " + bodyStatus.LifeState
-                + "\nSYSTEMIC - BLOOD "
+                + "\nSYSTEMIC TRAUMA - " + bodyStatus.SystemicTrauma
+                + "\nPHYSIOLOGY - BLOOD "
                 + bodyStatus.Physiology.BloodReserve + "% / SHOCK "
                 + bodyStatus.Physiology.Shock + "%"
                 + "\nCAPABILITY - MOVE "

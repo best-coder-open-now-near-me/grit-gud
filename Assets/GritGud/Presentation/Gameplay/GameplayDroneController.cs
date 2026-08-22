@@ -515,10 +515,10 @@ namespace GritGud.Presentation.Gameplay
                     transitionIdentity,
                     "resolution"),
                 exposure,
-                drone.Definition.Attack.AccuracyDecay,
                 drone.Position.DistanceTo(targetState.Pose.Position),
                 targetState.Wounds,
-                drone.Definition.Attack.WoundMovementPenalty);
+                drone.Definition.Attack,
+                targetInjuryStateBefore: targetState.Injuries);
             try
             {
                 DroneAttackRecord record = drones.PrepareActorAttack(

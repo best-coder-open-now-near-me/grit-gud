@@ -85,7 +85,8 @@ namespace GritGud.Application.Gameplay
             ActorLifeState lifeState = ActorLifeState.Active,
             ActorCapabilityState capabilities = null,
             ActorPhysiologyState physiology = null,
-            int conditionPercent = 100)
+            int conditionPercent = 100,
+            int systemicTrauma = 0)
         {
             if (string.IsNullOrWhiteSpace(actorId))
             {
@@ -120,6 +121,8 @@ namespace GritGud.Application.Gameplay
                 throw new ArgumentOutOfRangeException(nameof(lifeState));
             if (conditionPercent < 0 || conditionPercent > 100)
                 throw new ArgumentOutOfRangeException(nameof(conditionPercent));
+            if (systemicTrauma < 0)
+                throw new ArgumentOutOfRangeException(nameof(systemicTrauma));
 
             var copy = new List<GameplayBodyRegionModel>(RegionCount);
             var indexedRegions = new HashSet<TargetRegionId>();
@@ -163,6 +166,7 @@ namespace GritGud.Application.Gameplay
                 true, true, true, true);
             Physiology = physiology ?? ActorPhysiologyState.Healthy;
             ConditionPercent = conditionPercent;
+            SystemicTrauma = systemicTrauma;
         }
 
         public string ActorId { get; }
@@ -184,6 +188,8 @@ namespace GritGud.Application.Gameplay
         public ActorPhysiologyState Physiology { get; }
 
         public int ConditionPercent { get; }
+
+        public int SystemicTrauma { get; }
 
         public bool IsIncapacitated => LifeState != ActorLifeState.Active;
 

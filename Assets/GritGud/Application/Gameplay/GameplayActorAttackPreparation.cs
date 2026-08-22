@@ -310,17 +310,11 @@ namespace GritGud.Application.Gameplay
                 actionSequence,
                 resolutionSeed,
                 evaluation.Exposure,
-                evaluation.Attack.AccuracyDecay,
                 evaluation.Distance,
                 evaluation.Target.Wounds,
-                evaluation.Attack.WoundMovementPenalty,
-                evaluation.Attack.Contact,
+                evaluation.Attack,
                 evaluation.Context,
                 evaluation.Target.Injuries,
-                evaluation.Attack.ActionId,
-                evaluation.Attack.Contact == null
-                    ? DamageMechanism.Ballistic
-                    : DamageMechanism.Blunt,
                 evaluation.CapabilityAccuracyDeltaPercent);
             TurnBudget resultingBudget = evaluation.Attacker.TurnBudget
                 .SpendAction(evaluation.Cost);

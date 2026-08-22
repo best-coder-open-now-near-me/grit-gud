@@ -3408,19 +3408,14 @@ internal static class SimulationChecks
             + ", concussive=" + concussiveThrows
             + ", drone-moves=" + droneMoves
             + ", drone-attacks=" + droneAttacks);
-        bool detachedFracture = false;
-        foreach (DestructiblePropSnapshot prop in
-            result.FinalState.Destructibles)
-            if (prop.DetachedFractureChunks != 0UL)
-            {
-                detachedFracture = true;
-                break;
-            }
+        // The calibrated rifle can now end this seeded battle before policy
+        // selects the optional prop shot. DirectFireDestructibleTests owns the
+        // deterministic impact-to-fracture vertical slice; this permanent run
+        // continues to prove the four policy-driven first-sim mechanics.
         Require(fireDeployments > 0
             && concussiveThrows > 0
             && droneMoves > 0
-            && droneAttacks > 0
-            && detachedFracture,
+            && droneAttacks > 0,
             "Permanent battle did not exercise every first-sim mechanic.");
         GameplayExactReplayResult replay = GameplayExactReplay.Verify(
             initial,
@@ -3567,8 +3562,8 @@ internal static class SimulationChecks
             }
             if (entry.EventKind
                     != ReplayCombatTranscriptEventKind.WeaponDischarge
-                || entry.TransitionSequence < 63
-                || entry.TransitionSequence > 68
+                || entry.TransitionSequence < 44
+                || entry.TransitionSequence > 48
                 || !string.Equals(
                     entry.ShooterId,
                     "oren-vale",
@@ -3580,9 +3575,9 @@ internal static class SimulationChecks
             else if (entry.Outcome == ReplayCombatPresentationOutcome.Miss)
                 lateOrenMisses++;
         }
-        Require(lateOrenDischarges == 6
+        Require(lateOrenDischarges == 4
             && lateOrenHits == 1
-            && lateOrenMisses == 5
+            && lateOrenMisses == 3
             && transcriptInjuryEntries
                 == combatTranscript.Totals.InjuriesApplied,
             "Depot replay volley classification changed unexpectedly.");
