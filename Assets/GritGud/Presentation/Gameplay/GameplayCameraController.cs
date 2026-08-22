@@ -10,6 +10,52 @@ namespace GritGud.Presentation.Gameplay
         FirstPerson = 1,
     }
 
+    internal sealed class GameplayReplayCameraSnapshot
+    {
+        public GameplayReplayCameraSnapshot(
+            Transform target,
+            GameplayCameraView view,
+            Vector3 position,
+            Quaternion rotation,
+            float yaw,
+            float pitch,
+            float thirdPersonZoom,
+            bool targetRenderersHidden)
+        {
+            Target = target != null
+                ? target
+                : throw new ArgumentNullException(nameof(target));
+            if (!Enum.IsDefined(typeof(GameplayCameraView), view))
+                throw new ArgumentOutOfRangeException(nameof(view));
+            if (float.IsNaN(yaw) || float.IsInfinity(yaw))
+                throw new ArgumentOutOfRangeException(nameof(yaw));
+            if (float.IsNaN(pitch) || float.IsInfinity(pitch))
+                throw new ArgumentOutOfRangeException(nameof(pitch));
+            if (float.IsNaN(thirdPersonZoom)
+                || float.IsInfinity(thirdPersonZoom)
+                || thirdPersonZoom < 0f
+                || thirdPersonZoom > 1f)
+                throw new ArgumentOutOfRangeException(
+                    nameof(thirdPersonZoom));
+            View = view;
+            Position = position;
+            Rotation = rotation;
+            Yaw = yaw;
+            Pitch = pitch;
+            ThirdPersonZoom = thirdPersonZoom;
+            TargetRenderersHidden = targetRenderersHidden;
+        }
+
+        public Transform Target { get; }
+        public GameplayCameraView View { get; }
+        public Vector3 Position { get; }
+        public Quaternion Rotation { get; }
+        public float Yaw { get; }
+        public float Pitch { get; }
+        public float ThirdPersonZoom { get; }
+        public bool TargetRenderersHidden { get; }
+    }
+
     [RequireComponent(typeof(Camera))]
     public sealed class GameplayCameraController : MonoBehaviour
     {
@@ -44,6 +90,10 @@ namespace GritGud.Presentation.Gameplay
         public Transform Target => target;
 
         internal float ThirdPersonZoom => thirdPersonZoom;
+
+        internal float Yaw => yaw;
+
+        internal float Pitch => pitch;
 
         public void Bind(
             Transform followTarget,
@@ -97,6 +147,47 @@ namespace GritGud.Presentation.Gameplay
                 View == GameplayCameraView.ThirdPerson);
             previousVisibility?.Dispose();
             RefreshNow();
+        }
+
+        internal GameplayReplayCameraSnapshot CaptureReplaySnapshot()
+        {
+            if (target == null || inputSource == null)
+                throw new InvalidOperationException(
+                    "Bind the gameplay camera before replay capture.");
+            return new GameplayReplayCameraSnapshot(
+                target,
+                View,
+                transform.position,
+                transform.rotation,
+                yaw,
+                pitch,
+                thirdPersonZoom,
+                playerVisibility?.Visible == false);
+        }
+
+        internal void RestoreReplaySnapshot(
+            GameplayReplayCameraSnapshot snapshot)
+        {
+            if (snapshot == null) throw new ArgumentNullException(
+                nameof(snapshot));
+            if (inputSource == null)
+                throw new InvalidOperationException(
+                    "Bind the gameplay camera before replay restoration.");
+            ActorStancePresenter restoredStance = snapshot.Target
+                .GetComponent<ActorStancePresenter>();
+            SetTarget(snapshot.Target, restoredStance);
+            bool viewChanged = View != snapshot.View;
+            View = snapshot.View;
+            yaw = snapshot.Yaw;
+            pitch = snapshot.Pitch;
+            thirdPersonZoom = snapshot.ThirdPersonZoom;
+            playerVisibility?.SetVisible(
+                !snapshot.TargetRenderersHidden);
+            transform.SetPositionAndRotation(
+                snapshot.Position,
+                snapshot.Rotation);
+            if (viewChanged)
+                ViewChanged?.Invoke(View);
         }
 
         public void Unbind()
@@ -331,6 +422,8 @@ namespace GritGud.Presentation.Gameplay
                 : throw new ArgumentNullException(nameof(playerTransform));
             Refresh();
         }
+
+        public bool Visible => visible;
 
         public void SetVisible(bool visible)
         {

@@ -61,6 +61,30 @@ namespace GritGud.Presentation.Gameplay
             public int Order { get; }
         }
 
+        private sealed class ReplayCameraSubject
+        {
+            public ReplayCameraSubject(
+                ReplayCombatPresentationSubjectKind kind,
+                string id,
+                Transform target)
+            {
+                Kind = kind;
+                Id = string.IsNullOrWhiteSpace(id)
+                    ? throw new ArgumentException(
+                        "Replay camera subjects require an identifier.",
+                        nameof(id))
+                    : id;
+                Target = target != null
+                    ? target
+                    : throw new ArgumentNullException(nameof(target));
+            }
+
+            public ReplayCombatPresentationSubjectKind Kind { get; }
+            public string Id { get; }
+            public Transform Target { get; }
+            public string Key => Kind + ":" + Id;
+        }
+
         private sealed class OptionalWorldProjection
         {
             private readonly string name;
@@ -220,6 +244,13 @@ namespace GritGud.Presentation.Gameplay
         private GameplayHud gameplayHud;
         private GameplayPartyHud partyHud;
         private GameplayEnemyController enemies;
+        private GameplayCameraRig camera;
+        private GameplayReplayCameraSnapshot cameraSnapshot;
+        private GameplayPresentationWorldStateSample replayCameraSample;
+        private GameplaySemanticReplayPlaybackPosition replayCameraPosition;
+        private bool hasReplayCameraPosition;
+        private bool replayCameraAuto = true;
+        private string manualReplayCameraSubjectKey;
         private bool gameplayHudWasVisible;
         private bool partyHudWasSuppressed;
         private bool enemiesWerePaused;
@@ -247,7 +278,8 @@ namespace GritGud.Presentation.Gameplay
             GameplayHud liveGameplayHud,
             GameplayPartyHud livePartyHud,
             GameplayEnemyController enemyController,
-            IEnumerable<Behaviour> behavioursToSuspend)
+            IEnumerable<Behaviour> behavioursToSuspend,
+            GameplayCameraRig replayCamera = null)
         {
             Dispose();
             world = registry ?? throw new ArgumentNullException(nameof(registry));
@@ -263,6 +295,7 @@ namespace GritGud.Presentation.Gameplay
                 nameof(livePartyHud));
             enemies = enemyController ?? throw new ArgumentNullException(
                 nameof(enemyController));
+            camera = replayCamera;
             foreach (Behaviour behaviour in behavioursToSuspend
                 ?? throw new ArgumentNullException(nameof(behavioursToSuspend)))
             {
@@ -283,6 +316,7 @@ namespace GritGud.Presentation.Gameplay
                 fireController);
             hud.OpenChanged += HandleOpenChanged;
             hud.PlayheadChanged += HandlePlayheadChanged;
+            hud.CameraCommandRequested += HandleCameraCommand;
             hud.BindPresentationPreflight(RequireReplayDependencies);
         }
 
@@ -294,6 +328,7 @@ namespace GritGud.Presentation.Gameplay
                 hud.ClearPresentationPreflight(RequireReplayDependencies);
                 hud.OpenChanged -= HandleOpenChanged;
                 hud.PlayheadChanged -= HandlePlayheadChanged;
+                hud.CameraCommandRequested -= HandleCameraCommand;
             }
             world = null;
             projectiles = null;
@@ -304,6 +339,12 @@ namespace GritGud.Presentation.Gameplay
             gameplayHud = null;
             partyHud = null;
             enemies = null;
+            camera = null;
+            cameraSnapshot = null;
+            replayCameraSample = null;
+            hasReplayCameraPosition = false;
+            replayCameraAuto = true;
+            manualReplayCameraSubjectKey = null;
             optionalProjections.Clear();
             liveBehaviours.Clear();
             liveBehaviourEnabled.Clear();
@@ -337,6 +378,14 @@ namespace GritGud.Presentation.Gameplay
                 partyHudWasSuppressed = partyHud.IsPresentationSuppressed;
                 enemiesWerePaused = enemies.ReplayPaused;
                 priorTimeScale = Time.timeScale;
+                cameraSnapshot = camera?.CaptureReplaySnapshot();
+                replayCameraAuto = true;
+                manualReplayCameraSubjectKey = null;
+                replayCameraSample = null;
+                hasReplayCameraPosition = false;
+                hud.SetReplayCameraState(
+                    GameplayReplayCameraMode.Auto,
+                    "AUTO");
                 Time.timeScale = 0f;
                 gameplayHud.Hide();
                 partyHud.SetPresentationSuppressed(true);
@@ -461,6 +510,137 @@ namespace GritGud.Presentation.Gameplay
             PresentActors(sample, position, timeSeconds);
             foreach (OptionalWorldProjection projection in optionalProjections)
                 projection.Present(sample);
+            PresentReplayCamera(sample, position);
+        }
+
+        private void PresentReplayCamera(
+            GameplayPresentationWorldStateSample sample,
+            GameplaySemanticReplayPlaybackPosition position)
+        {
+            replayCameraSample = sample;
+            replayCameraPosition = position;
+            hasReplayCameraPosition = true;
+            if (camera == null)
+                return;
+            IReadOnlyList<ReplayCameraSubject> subjects =
+                BuildReplayCameraSubjects(sample);
+            if (subjects.Count == 0)
+                return;
+            ReplayCameraSubject selected = null;
+            if (replayCameraAuto)
+            {
+                string actorId = position.Frame.Transition.Identity.ActorId;
+                foreach (ReplayCameraSubject subject in subjects)
+                    if (subject.Kind ==
+                            ReplayCombatPresentationSubjectKind.Actor
+                        && string.Equals(
+                            subject.Id,
+                            actorId,
+                            StringComparison.Ordinal))
+                    {
+                        selected = subject;
+                        break;
+                    }
+            }
+            else
+            {
+                foreach (ReplayCameraSubject subject in subjects)
+                    if (string.Equals(
+                            subject.Key,
+                            manualReplayCameraSubjectKey,
+                            StringComparison.Ordinal))
+                    {
+                        selected = subject;
+                        break;
+                    }
+            }
+            selected ??= subjects[0];
+            if (!replayCameraAuto)
+                manualReplayCameraSubjectKey = selected.Key;
+            camera.SetReplayTarget(selected.Target);
+            hud.SetReplayCameraState(
+                replayCameraAuto
+                    ? GameplayReplayCameraMode.Auto
+                    : GameplayReplayCameraMode.Subject,
+                replayCameraAuto ? "AUTO" : selected.Id);
+        }
+
+        private IReadOnlyList<ReplayCameraSubject> BuildReplayCameraSubjects(
+            GameplayPresentationWorldStateSample sample)
+        {
+            var subjects = new List<ReplayCameraSubject>();
+            foreach (GameplayActorSnapshot actor in
+                hud.Replay.InitialState.Session.Actors)
+            {
+                if (!sample.Actors.ContainsKey(actor.ActorId)
+                    || !world.TryGetActor(
+                        actor.ActorId,
+                        out GameplayActorView view))
+                    continue;
+                subjects.Add(new ReplayCameraSubject(
+                    ReplayCombatPresentationSubjectKind.Actor,
+                    actor.ActorId,
+                    view.Transform));
+            }
+            if (drones != null)
+                foreach (DroneSnapshot drone in sample.Drones)
+                    subjects.Add(new ReplayCameraSubject(
+                        ReplayCombatPresentationSubjectKind.Drone,
+                        drone.DroneId,
+                        drones.GetPresentationTransform(drone.DroneId)));
+            return subjects.AsReadOnly();
+        }
+
+        private void HandleCameraCommand(
+            GameplayReplayCameraCommand command)
+        {
+            if (!presenting || camera == null || replayCameraSample == null
+                || !hasReplayCameraPosition)
+                return;
+            if (command == GameplayReplayCameraCommand.Auto)
+            {
+                replayCameraAuto = true;
+                manualReplayCameraSubjectKey = null;
+                PresentReplayCamera(
+                    replayCameraSample,
+                    replayCameraPosition);
+                return;
+            }
+            if (command != GameplayReplayCameraCommand.PreviousSubject
+                && command != GameplayReplayCameraCommand.NextSubject)
+                return;
+            IReadOnlyList<ReplayCameraSubject> subjects =
+                BuildReplayCameraSubjects(replayCameraSample);
+            if (subjects.Count == 0)
+                return;
+            int currentIndex = -1;
+            for (int index = 0; index < subjects.Count; index++)
+            {
+                if ((!string.IsNullOrWhiteSpace(
+                            manualReplayCameraSubjectKey)
+                        && string.Equals(
+                            subjects[index].Key,
+                            manualReplayCameraSubjectKey,
+                            StringComparison.Ordinal))
+                    || (string.IsNullOrWhiteSpace(
+                            manualReplayCameraSubjectKey)
+                        && camera.Target == subjects[index].Target))
+                {
+                    currentIndex = index;
+                    break;
+                }
+            }
+            int direction = command ==
+                    GameplayReplayCameraCommand.NextSubject
+                ? 1
+                : -1;
+            int selectedIndex = currentIndex < 0
+                ? direction > 0 ? 0 : subjects.Count - 1
+                : (currentIndex + direction + subjects.Count)
+                    % subjects.Count;
+            replayCameraAuto = false;
+            manualReplayCameraSubjectKey = subjects[selectedIndex].Key;
+            PresentReplayCamera(replayCameraSample, replayCameraPosition);
         }
 
         private void PresentActors(
@@ -707,6 +887,18 @@ namespace GritGud.Presentation.Gameplay
             {
                 optionalProjections[index].End();
             }
+            if (cameraSnapshot != null)
+            {
+                GameplayReplayCameraSnapshot captured = cameraSnapshot;
+                TryRestore(
+                    () => camera?.RestoreReplaySnapshot(captured),
+                    ref failure);
+            }
+            cameraSnapshot = null;
+            replayCameraSample = null;
+            hasReplayCameraPosition = false;
+            replayCameraAuto = true;
+            manualReplayCameraSubjectKey = null;
             TryRestore(() => input?.SetCameraOnly(false), ref failure);
             TryRestore(() => Time.timeScale = priorTimeScale, ref failure);
             TryRestore(

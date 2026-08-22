@@ -433,6 +433,10 @@ namespace GritGud.Presentation.Tests
                 Is.EqualTo("DIALOGUE - TRANSCRIPT"));
             Assert.That(drones.Session, Is.Not.Null);
             Transform cameraTarget = camera.Target;
+            GameplayCameraView cameraView = camera.View;
+            Vector3 cameraPosition = camera.transform.position;
+            Quaternion cameraRotation = camera.transform.rotation;
+            float cameraZoom = camera.ThirdPersonZoom;
             Transform replayedActor = gameplay.WorldRegistry
                 .GetActor(movement.ActorId).Transform;
             Transform replayedDrone = drones.GetPresentationTransform(
@@ -463,6 +467,17 @@ namespace GritGud.Presentation.Tests
                 gameplay.transform.Find("Replay Flying Thrown Explosive"),
                 Is.Null,
                 "Closing replay must clear the projected grenade.");
+            Assert.That(camera.Target, Is.SameAs(cameraTarget));
+            Assert.That(camera.View, Is.EqualTo(cameraView));
+            Assert.That(camera.ThirdPersonZoom, Is.EqualTo(cameraZoom));
+            Assert.That(
+                camera.transform.position,
+                Is.EqualTo(cameraPosition)
+                    .Using(UnityEngine.TestTools.Utils
+                        .Vector3ComparerWithEqualsOperator.Instance));
+            Assert.That(
+                Quaternion.Angle(camera.transform.rotation, cameraRotation),
+                Is.LessThan(0.001f));
             replayHud.OpenVerifiedExternalReplay();
 
             Vector3 replayStart = replayedActor.position;
@@ -479,7 +494,27 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 Vector3.Distance(replayedActor.position, replayStart),
                 Is.GreaterThan(0.01f));
-            Assert.That(camera.Target, Is.SameAs(cameraTarget));
+            Assert.That(camera.Target, Is.SameAs(replayedActor));
+            Assert.That(
+                replayHud.ReplayCameraMode,
+                Is.EqualTo(GameplayReplayCameraMode.Auto));
+
+            Transform automaticTarget = camera.Target;
+            replayHud.RequestCameraCommand(
+                GameplayReplayCameraCommand.NextSubject);
+            Assert.That(
+                replayHud.ReplayCameraMode,
+                Is.EqualTo(GameplayReplayCameraMode.Subject));
+            Assert.That(camera.Target, Is.Not.SameAs(automaticTarget));
+            Assert.That(replayHud.ReplayCameraLabel, Is.Not.EqualTo("AUTO"));
+            replayHud.RequestCameraCommand(
+                GameplayReplayCameraCommand.PreviousSubject);
+            Assert.That(camera.Target, Is.SameAs(automaticTarget));
+            replayHud.RequestCameraCommand(GameplayReplayCameraCommand.Auto);
+            Assert.That(
+                replayHud.ReplayCameraMode,
+                Is.EqualTo(GameplayReplayCameraMode.Auto));
+            Assert.That(camera.Target, Is.SameAs(replayedActor));
 
             float droneMovementTime = droneMovementFrame.StartSeconds
                 + (droneMovementFrame.DurationSeconds * movementProgress);
@@ -491,6 +526,23 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 Vector3.Distance(replayedDrone.position, droneReplayStart),
                 Is.GreaterThan(0.01f));
+            bool focusedDrone = false;
+            int maximumSubjectCycles = replayHud.Replay.InitialState.Session
+                .Actors.Count + 1;
+            for (int index = 0; index < maximumSubjectCycles; index++)
+            {
+                replayHud.RequestCameraCommand(
+                    GameplayReplayCameraCommand.NextSubject);
+                if (camera.Target != replayedDrone) continue;
+                focusedDrone = true;
+                break;
+            }
+            Assert.That(focusedDrone, Is.True,
+                "Manual replay-subject cycling must include active drones.");
+            Assert.That(
+                replayHud.ReplayCameraLabel,
+                Is.EqualTo(droneMovement.DroneId.ToUpperInvariant()));
+            replayHud.RequestCameraCommand(GameplayReplayCameraCommand.Auto);
 
             int expectedDischarges = replayHud.Playback.Frames.Sum(frame =>
                 ReplayCombatPresentationEventProjector.Project(frame.Frame)

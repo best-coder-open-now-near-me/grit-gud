@@ -10,6 +10,21 @@ namespace GritGud.Presentation.Gameplay
         VerifiedSimulation,
     }
 
+    internal enum GameplayReplayCameraMode
+    {
+        Auto = 0,
+        Subject = 1,
+        Free = 2,
+    }
+
+    internal enum GameplayReplayCameraCommand
+    {
+        Auto = 0,
+        PreviousSubject = 1,
+        NextSubject = 2,
+        Free = 3,
+    }
+
     internal readonly struct GameplayReplayPlayheadChange
     {
         public GameplayReplayPlayheadChange(
@@ -55,6 +70,8 @@ namespace GritGud.Presentation.Gameplay
         private GameplayReplaySource source;
         private float playhead;
         private float speed = 1f;
+        private GameplayReplayCameraMode replayCameraMode;
+        private string replayCameraLabel = "AUTO";
         private GUIStyle titleStyle;
         private GUIStyle segmentStyle;
         private GUIStyle activeSegmentStyle;
@@ -73,6 +90,11 @@ namespace GritGud.Presentation.Gameplay
 
         internal GameplayReplaySource Source => source;
 
+        internal GameplayReplayCameraMode ReplayCameraMode =>
+            replayCameraMode;
+
+        internal string ReplayCameraLabel => replayCameraLabel;
+
         internal GameplayReplayContentSummary ContentSummary => contentSummary;
 
         internal string LastOpenFailure => lastOpenFailure;
@@ -82,6 +104,9 @@ namespace GritGud.Presentation.Gameplay
         internal event Action<bool> OpenChanged;
 
         internal event Action<GameplayReplayPlayheadChange> PlayheadChanged;
+
+        internal event Action<GameplayReplayCameraCommand>
+            CameraCommandRequested;
 
         public bool IsAvailable => runtime != null
             && (externalReplay != null
@@ -128,6 +153,7 @@ namespace GritGud.Presentation.Gameplay
             isOpen = false;
             isPlaying = false;
             ResetScrubCapture();
+            ResetReplayCameraState();
             source = default;
             playhead = 0f;
             enabled = false;
@@ -168,6 +194,7 @@ namespace GritGud.Presentation.Gameplay
             contentSummary = null;
             lastOpenFailure = string.Empty;
             ResetScrubCapture();
+            ResetReplayCameraState();
             if (isOpen)
             {
                 RefreshPlayback();
@@ -186,6 +213,7 @@ namespace GritGud.Presentation.Gameplay
                 isOpen = false;
                 isPlaying = false;
                 ResetScrubCapture();
+                ResetReplayCameraState();
                 TryNotifyOpenChanged(false);
                 replay = null;
                 playback = null;
@@ -202,6 +230,7 @@ namespace GritGud.Presentation.Gameplay
             // belongs in a history inspector, not this control.
             isPlaying = true;
             ResetScrubCapture();
+            ResetReplayCameraState();
             playhead = 0f;
             if (!TryNotifyOpenChanged(true)
                 || !TryNotifyPlayheadChanged(
@@ -392,11 +421,29 @@ namespace GritGud.Presentation.Gameplay
             {
                 speed = speed >= 2f ? 0.5f : speed * 2f;
             }
+            if (GUI.Button(
+                new Rect(bar.x + 184f, controlsY, 46f, 20f),
+                "AUTO"))
+                RequestCameraCommand(GameplayReplayCameraCommand.Auto);
+            if (GUI.Button(
+                new Rect(bar.x + 234f, controlsY, 24f, 20f),
+                "<"))
+                RequestCameraCommand(
+                    GameplayReplayCameraCommand.PreviousSubject);
+            GUI.Label(
+                new Rect(bar.x + 262f, controlsY, 100f, 20f),
+                replayCameraLabel,
+                titleStyle);
+            if (GUI.Button(
+                new Rect(bar.x + 366f, controlsY, 24f, 20f),
+                ">"))
+                RequestCameraCommand(
+                    GameplayReplayCameraCommand.NextSubject);
 
             Rect scrubber = new Rect(
-                bar.x + 188f,
+                bar.x + 398f,
                 controlsY + 1f,
-                bar.width - 198f,
+                Mathf.Max(40f, bar.width - 408f),
                 18f);
             Event guiEvent = Event.current;
             if (guiEvent.rawType == EventType.MouseDown
@@ -464,6 +511,28 @@ namespace GritGud.Presentation.Gameplay
                 && playback != null
                 && shouldResume
                 && playhead < playback.TotalDurationSeconds;
+        }
+
+        internal void SetReplayCameraState(
+            GameplayReplayCameraMode mode,
+            string label)
+        {
+            if (!Enum.IsDefined(typeof(GameplayReplayCameraMode), mode))
+                throw new ArgumentOutOfRangeException(nameof(mode));
+            replayCameraMode = mode;
+            replayCameraLabel = string.IsNullOrWhiteSpace(label)
+                ? mode.ToString().ToUpperInvariant()
+                : label.Trim().ToUpperInvariant();
+        }
+
+        internal void RequestCameraCommand(GameplayReplayCameraCommand command)
+        {
+            if (!Enum.IsDefined(typeof(GameplayReplayCameraCommand), command))
+                throw new ArgumentOutOfRangeException(nameof(command));
+            if (!isOpen || playback == null)
+                return;
+            if (!TryNotifyCameraCommand(command))
+                AbortPlayback();
         }
 
         private Rect CalculateTimelineSegment(
@@ -628,12 +697,38 @@ namespace GritGud.Presentation.Gameplay
             return succeeded;
         }
 
+        private bool TryNotifyCameraCommand(
+            GameplayReplayCameraCommand command)
+        {
+            bool succeeded = true;
+            Delegate[] subscribers = CameraCommandRequested
+                ?.GetInvocationList();
+            if (subscribers == null) return true;
+            foreach (Delegate subscriber in subscribers)
+            {
+                try
+                {
+                    ((Action<GameplayReplayCameraCommand>)subscriber)(command);
+                }
+                catch (Exception exception)
+                {
+                    succeeded = false;
+                    Debug.LogError(
+                        "Replay camera could not apply " + command + ": "
+                        + exception.Message,
+                        this);
+                }
+            }
+            return succeeded;
+        }
+
         private void AbortPlayback()
         {
             bool wasOpen = isOpen;
             isOpen = false;
             isPlaying = false;
             ResetScrubCapture();
+            ResetReplayCameraState();
             playhead = 0f;
             if (wasOpen)
                 TryNotifyOpenChanged(false);
@@ -645,6 +740,12 @@ namespace GritGud.Presentation.Gameplay
         {
             scrubCaptured = false;
             resumeAfterScrub = false;
+        }
+
+        private void ResetReplayCameraState()
+        {
+            replayCameraMode = GameplayReplayCameraMode.Auto;
+            replayCameraLabel = "AUTO";
         }
 
         private static Rect CalculateBarRectangle(

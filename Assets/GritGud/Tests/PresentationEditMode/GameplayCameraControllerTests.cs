@@ -262,6 +262,102 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void ReplaySnapshotRestoresExactOrbitAndVisibilityOwnership()
+        {
+            var firstActor = new GameObject("Replay Snapshot First Actor");
+            var secondActor = new GameObject("Replay Snapshot Second Actor");
+            GameObject firstVisual = GameObject.CreatePrimitive(
+                PrimitiveType.Cube);
+            GameObject secondVisual = GameObject.CreatePrimitive(
+                PrimitiveType.Cube);
+            var cameraObject = new GameObject("Replay Snapshot Camera");
+            try
+            {
+                firstActor.AddComponent<CharacterController>();
+                secondActor.AddComponent<CharacterController>();
+                var firstStance = firstActor.AddComponent<
+                    ActorStancePresenter>();
+                var secondStance = secondActor.AddComponent<
+                    ActorStancePresenter>();
+                firstVisual.transform.SetParent(firstActor.transform, false);
+                secondVisual.transform.SetParent(secondActor.transform, false);
+                firstActor.transform.SetPositionAndRotation(
+                    new Vector3(2f, 0f, 3f),
+                    Quaternion.Euler(0f, 37f, 0f));
+                secondActor.transform.SetPositionAndRotation(
+                    new Vector3(-4f, 0f, 8f),
+                    Quaternion.Euler(0f, 142f, 0f));
+                cameraObject.AddComponent<Camera>();
+                GameplayCameraController controller = cameraObject
+                    .AddComponent<GameplayCameraController>();
+                controller.Bind(
+                    firstActor.transform,
+                    new EmptyInputSource(),
+                    firstStance);
+                controller.ApplyZoomInput(1f);
+                GameplayReplayCameraSnapshot snapshot = controller
+                    .CaptureReplaySnapshot();
+
+                controller.SetTarget(secondActor.transform, secondStance);
+                controller.SetView(GameplayCameraView.FirstPerson);
+
+                Assert.That(
+                    secondVisual.GetComponent<Renderer>().forceRenderingOff,
+                    Is.True);
+                controller.RestoreReplaySnapshot(snapshot);
+
+                Assert.That(controller.Target, Is.SameAs(firstActor.transform));
+                Assert.That(
+                    controller.View,
+                    Is.EqualTo(GameplayCameraView.ThirdPerson));
+                Assert.That(controller.Yaw, Is.EqualTo(snapshot.Yaw));
+                Assert.That(controller.Pitch, Is.EqualTo(snapshot.Pitch));
+                Assert.That(
+                    controller.ThirdPersonZoom,
+                    Is.EqualTo(snapshot.ThirdPersonZoom));
+                Assert.That(
+                    cameraObject.transform.position,
+                    Is.EqualTo(snapshot.Position)
+                        .Using(Vector3ComparerWithEqualsOperator.Instance));
+                Assert.That(
+                    Quaternion.Angle(
+                        cameraObject.transform.rotation,
+                        snapshot.Rotation),
+                    Is.LessThan(0.001f));
+                Assert.That(
+                    firstVisual.GetComponent<Renderer>().forceRenderingOff,
+                    Is.False);
+                Assert.That(
+                    secondVisual.GetComponent<Renderer>().forceRenderingOff,
+                    Is.False);
+
+                controller.SetView(GameplayCameraView.FirstPerson);
+                GameplayReplayCameraSnapshot hiddenSnapshot = controller
+                    .CaptureReplaySnapshot();
+                controller.SetTarget(secondActor.transform, secondStance);
+                controller.SetView(GameplayCameraView.ThirdPerson);
+                controller.RestoreReplaySnapshot(hiddenSnapshot);
+
+                Assert.That(
+                    firstVisual.GetComponent<Renderer>().forceRenderingOff,
+                    Is.True);
+                Assert.That(
+                    secondVisual.GetComponent<Renderer>().forceRenderingOff,
+                    Is.False);
+                controller.Unbind();
+                Assert.That(
+                    firstVisual.GetComponent<Renderer>().forceRenderingOff,
+                    Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(cameraObject);
+                Object.DestroyImmediate(firstActor);
+                Object.DestroyImmediate(secondActor);
+            }
+        }
+
+        [Test]
         public void MultipleCameraOwnersRestoreRendererVisibilityOutOfOrder()
         {
             var actor = new GameObject("Shared Camera Actor");

@@ -110,6 +110,48 @@ namespace GritGud.Presentation.Gameplay
                 : GameplayCameraView.ThirdPerson;
         }
 
+        internal Transform Target => cameraController?.Target;
+
+        internal GameplayReplayCameraSnapshot CaptureReplaySnapshot()
+        {
+            RequireReplayCamera();
+            if (playerCutout.Target != cameraController.Target)
+                throw new InvalidOperationException(
+                    "Gameplay camera and cutout targets diverged before replay.");
+            return cameraController.CaptureReplaySnapshot();
+        }
+
+        internal void SetReplayTarget(Transform target)
+        {
+            if (target == null) throw new ArgumentNullException(nameof(target));
+            RequireReplayCamera();
+            if (cameraController.Target == target
+                && playerCutout.Target == target)
+            {
+                cameraController.RefreshNow();
+                playerCutout.RefreshNow();
+                return;
+            }
+            ActorStancePresenter stance = target.GetComponent<
+                ActorStancePresenter>();
+            cameraController.SetTarget(target, stance);
+            playerCutout.SetTarget(target, stance);
+            OnViewChanged(cameraController.View);
+        }
+
+        internal void RestoreReplaySnapshot(
+            GameplayReplayCameraSnapshot snapshot)
+        {
+            if (snapshot == null) throw new ArgumentNullException(
+                nameof(snapshot));
+            RequireReplayCamera();
+            ActorStancePresenter stance = snapshot.Target.GetComponent<
+                ActorStancePresenter>();
+            playerCutout.SetTarget(snapshot.Target, stance);
+            cameraController.RestoreReplaySnapshot(snapshot);
+            OnViewChanged(cameraController.View);
+        }
+
         public void SetTarget(
             Transform target,
             ExplorationMovementInput input)
@@ -171,6 +213,14 @@ namespace GritGud.Presentation.Gameplay
                 sceneCamera.gameObject.SetActive(sceneCameraWasActive);
                 sceneCamera = null;
             }
+        }
+
+        private void RequireReplayCamera()
+        {
+            if (gameplayCamera == null
+                || cameraController == null
+                || playerCutout == null)
+                throw new ObjectDisposedException(nameof(GameplayCameraRig));
         }
 
         private void OnViewChanged(GameplayCameraView view)

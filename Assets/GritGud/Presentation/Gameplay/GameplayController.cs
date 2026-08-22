@@ -589,6 +589,7 @@ namespace GritGud.Presentation.Gameplay
                     dialogueLog,
                     ExportDialogue,
                     inputController,
+                    cameraRig,
                     partyControl,
                     destructibleController,
                     projectileController,

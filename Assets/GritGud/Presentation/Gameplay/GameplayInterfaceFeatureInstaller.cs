@@ -162,6 +162,7 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplayDialogueLog liveDialogue;
         private readonly Action exportLiveDialogue;
         private readonly GameplayInputController input;
+        private readonly GameplayCameraRig camera;
         private readonly GameplayPartyControlSession partyControl;
         private readonly GameplayDestructibleController destructibles;
         private readonly GameplayProjectileController projectiles;
@@ -191,6 +192,7 @@ namespace GritGud.Presentation.Gameplay
             GameplayDialogueLog liveDialogueLog,
             Action onExportLiveDialogue,
             GameplayInputController input,
+            GameplayCameraRig camera,
             GameplayPartyControlSession partyControl,
             GameplayDestructibleController destructibles,
             GameplayProjectileController projectiles,
@@ -226,6 +228,8 @@ namespace GritGud.Presentation.Gameplay
                 nameof(liveDialogueLog));
             exportLiveDialogue = onExportLiveDialogue;
             this.input = input ?? throw new ArgumentNullException(nameof(input));
+            this.camera = camera ?? throw new ArgumentNullException(
+                nameof(camera));
             this.partyControl = partyControl ?? throw new ArgumentNullException(
                 nameof(partyControl));
             this.destructibles = destructibles;
@@ -294,7 +298,8 @@ namespace GritGud.Presentation.Gameplay
                 gameplayHud,
                 partyHud,
                 enemies,
-                liveBehaviours);
+                liveBehaviours,
+                camera);
             if (simulationViewer)
             {
                 partyHud.Bind(session, partyControl, input);
