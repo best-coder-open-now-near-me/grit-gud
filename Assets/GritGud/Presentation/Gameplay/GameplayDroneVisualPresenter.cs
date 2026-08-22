@@ -30,6 +30,7 @@ namespace GritGud.Presentation.Gameplay
             new List<TransientVisual>();
         private Transform[] rotors;
         private Material material;
+        private bool operational = true;
 
         internal int ReplayTransientVisualCount => replayTransients.Count;
 
@@ -73,6 +74,7 @@ namespace GritGud.Presentation.Gameplay
 
         internal void SetOperational(bool operational)
         {
+            this.operational = operational;
             if (material != null)
                 material.color = operational
                     ? new Color(0.12f, 0.18f, 0.2f, 1f)
@@ -140,7 +142,7 @@ namespace GritGud.Presentation.Gameplay
 
         private void Update()
         {
-            if (rotors != null)
+            if (operational && rotors != null)
             {
                 float rotation = 720f * Time.unscaledDeltaTime;
                 foreach (Transform rotor in rotors)
