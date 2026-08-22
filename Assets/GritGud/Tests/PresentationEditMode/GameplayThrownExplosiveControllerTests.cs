@@ -99,6 +99,18 @@ namespace GritGud.Presentation.Tests
                 presentation.ImpactDelaySeconds,
                 Is.EqualTo(1f).Within(0.001f));
             Assert.That(presentation.ImpactEffectSeconds, Is.EqualTo(0.65f));
+            Assert.That(
+                presentation.FlightSeconds,
+                Is.EqualTo(GameplayThrownExplosivePresentationTiming
+                    .FlightSeconds));
+            Assert.That(
+                presentation.ReleaseDelaySeconds,
+                Is.EqualTo(GameplayThrownExplosivePresentationTiming
+                    .ReleaseSeconds));
+            Assert.That(
+                presentation.ImpactEffectSeconds,
+                Is.EqualTo(GameplayThrownExplosivePresentationTiming
+                    .DefaultImpactEffectSeconds));
         }
 
         [Test]
@@ -240,18 +252,33 @@ namespace GritGud.Presentation.Tests
                 Assert.That(
                     controller.TryToggleAim("item.grenade"),
                     Is.True);
-                acquisition.RefreshNow(new Ray(
-                    new Vector3(0f, 5f, -5f),
-                    new Vector3(0f, -1f, 1f)));
-                Assert.That(controller.TryConfirmThrow(), Is.True);
+                Assert.That(
+                    controller.TryConfirmThrow(
+                        new GameplayPosition(5f, 0f, 0f)),
+                    Is.True);
                 Assert.That(controller.IsAiming, Is.False);
                 Assert.That(input.IsMovementCaptured, Is.False);
                 Assert.That(
                     controller.LastThrow.IntendedLanding.X,
-                    Is.Zero.Within(0.001f));
+                    Is.EqualTo(5f).Within(0.001f));
                 Assert.That(
                     controller.LastThrow.IntendedLanding.Z,
-                    Is.EqualTo(5f).Within(0.001f));
+                    Is.Zero.Within(0.001f));
+                Assert.That(
+                    session.GetActor("player").Pose.FacingDegrees,
+                    Is.EqualTo(90f).Within(0.001f),
+                    "The committed action owns the authoritative facing.");
+                Assert.That(
+                    actorRoot.transform.eulerAngles.y,
+                    Is.Zero.Within(0.001f),
+                    "Presentation must begin at the visual facing instead of "
+                    + "snapping to the committed result.");
+                Assert.That(
+                    FindDescendant(
+                        actorRoot.transform,
+                        "Armed Thrown Explosive"),
+                    Is.Not.Null,
+                    "The held visual remains attached throughout wind-up.");
                 Assert.That(encounterStartRequests, Is.Zero);
                 Assert.That(session.EncounterActive, Is.False);
                 Assert.That(session.Mode,

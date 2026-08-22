@@ -38,6 +38,11 @@ namespace GritGud.Presentation.Gameplay
         private GameObject armedProjectileRoot;
         private GameObject playbackRoot;
         private GameObject impactRoot;
+        private GameObject replayHeldProjectileRoot;
+        private GameObject replayFlightProjectileRoot;
+        private GameObject replayImpactRoot;
+        private string replayPresentationKey;
+        private bool replayPresenting;
 
         public GameplaySession Session { get; private set; }
         public ThrownExplosiveFailure LastFailure { get; private set; }
@@ -135,6 +140,9 @@ namespace GritGud.Presentation.Gameplay
         {
             StopAllCoroutines();
             ClearPlayback();
+            ClearReplayPresentation();
+            GameplayObjectLifecycle.Destroy(armedProjectileRoot);
+            armedProjectileRoot = null;
             CancelAim();
             ClearAimFeedback();
             Session = null;
@@ -210,6 +218,9 @@ namespace GritGud.Presentation.Gameplay
             string itemId,
             GameplayPosition aimPoint)
         {
+            float visualStartingFacing = actorTransform != null
+                ? actorTransform.eulerAngles.y
+                : Session.GetActor(actorId).Pose.FacingDegrees;
             if (!throws.TryPrepareThrowItem(
                     actorId,
                     itemId,
@@ -258,13 +269,22 @@ namespace GritGud.Presentation.Gameplay
 
             LastFailure = ThrownExplosiveFailure.None;
             LastThrow = ((ThrownExplosiveActionOutcome)action.Outcomes[0]).Record;
-            SynchronizeAuthoritativeFacing();
+            float authoritativeTargetFacing =
+                Session.GetActor(actorId).Pose.FacingDegrees;
+            ActorTargetFacingActionPhase facingPhase =
+                GameplayThrownExplosivePresentationTiming.CreateFacingPhase(
+                    visualStartingFacing,
+                    authoritativeTargetFacing);
+            if (actorTransform != null)
+            {
+                actorTransform.rotation = Quaternion.Euler(
+                    0f,
+                    facingPhase.StartingFacingDegrees,
+                    0f);
+            }
             animationCoordinator?.TryPresentThrow();
-            Vector3 visualLaunchOrigin = armedProjectileRoot != null
-                ? armedProjectileRoot.transform.position
-                : ToVector3(LastThrow.LaunchOrigin);
-            PresentThrow(LastThrow, visualLaunchOrigin);
-            HideAimPreview();
+            PresentThrow(LastThrow, facingPhase);
+            HideAimPreview(clearArmedProjectile: false);
             ClearAimingState();
             ClearAimFeedback();
             int exposedTargetCount = CountExposedTargets(
@@ -623,6 +643,9 @@ namespace GritGud.Presentation.Gameplay
         {
             gameplayInput?.SetMovementCaptured(this, false);
             ClearPlayback();
+            ClearReplayPresentation();
+            GameplayObjectLifecycle.Destroy(armedProjectileRoot);
+            armedProjectileRoot = null;
             GameplayObjectLifecycle.Destroy(uncertaintyMaterial);
             GameplayObjectLifecycle.Destroy(blastMaterial);
             GameplayObjectLifecycle.Destroy(trajectoryMaterial);
@@ -663,7 +686,7 @@ namespace GritGud.Presentation.Gameplay
 
         private void PresentThrow(
             ThrownExplosiveRecord record,
-            Vector3 visualLaunchOrigin)
+            ActorTargetFacingActionPhase facingPhase)
         {
             StopAllCoroutines();
             ClearPlayback();
@@ -672,25 +695,47 @@ namespace GritGud.Presentation.Gameplay
             StartCoroutine(PlayCommittedThrow(
                 record,
                 presentation,
-                visualLaunchOrigin));
+                facingPhase));
         }
 
         private IEnumerator PlayCommittedThrow(
             ThrownExplosiveRecord record,
             ThrownExplosivePresentationDefinition presentation,
-            Vector3 visualLaunchOrigin)
+            ActorTargetFacingActionPhase facingPhase)
         {
-            if (presentation.ReleaseDelaySeconds > 0f)
+            float elapsedSequence = 0f;
+            while (elapsedSequence < presentation.ReleaseDelaySeconds)
             {
-                yield return new WaitForSecondsRealtime(
-                    presentation.ReleaseDelaySeconds);
+                elapsedSequence = Mathf.Min(
+                    presentation.ReleaseDelaySeconds,
+                    elapsedSequence + Time.unscaledDeltaTime);
+                PresentFacing(
+                    facingPhase.SampleFacingDegrees(
+                        elapsedSequence /
+                        GameplayThrownExplosivePresentationTiming
+                            .TotalSequenceSeconds));
+                yield return null;
             }
+            PresentFacing(facingPhase.TargetFacingDegrees);
 
-            playbackRoot = Instantiate(
-                presentation.ProjectilePrefab,
-                visualLaunchOrigin,
-                presentation.VisualRotation,
-                transform);
+            Vector3 visualLaunchOrigin;
+            if (armedProjectileRoot != null)
+            {
+                playbackRoot = armedProjectileRoot;
+                armedProjectileRoot = null;
+                visualLaunchOrigin = playbackRoot.transform.position;
+                playbackRoot.transform.SetParent(transform, true);
+                playbackRoot.transform.rotation = presentation.VisualRotation;
+            }
+            else
+            {
+                visualLaunchOrigin = ToVector3(record.LaunchOrigin);
+                playbackRoot = Instantiate(
+                    presentation.ProjectilePrefab,
+                    visualLaunchOrigin,
+                    presentation.VisualRotation,
+                    transform);
+            }
             playbackRoot.name = "Committed Thrown Explosive";
             playbackRoot.transform.localScale = Vector3.Scale(
                 presentation.ProjectilePrefab.transform.localScale,
@@ -749,6 +794,239 @@ namespace GritGud.Presentation.Gameplay
             ClearPlayback();
         }
 
+        internal void BeginReplayPresentation()
+        {
+            if (replayPresenting)
+                throw new InvalidOperationException(
+                    "Thrown-explosive replay presentation is already active.");
+            if (Session == null || registry == null ||
+                presentationCatalog == null)
+            {
+                throw new InvalidOperationException(
+                    "Bind thrown-explosive presentation before replay.");
+            }
+            ClearReplayPresentation();
+            replayPresenting = true;
+        }
+
+        internal void PresentReplay(
+            GameplayPresentationWorldStateSample sample)
+        {
+            if (!replayPresenting)
+                throw new InvalidOperationException(
+                    "Begin thrown-explosive replay before presenting it.");
+            if (sample == null) throw new ArgumentNullException(nameof(sample));
+            if (!(sample.Frame.SemanticRecord is GameplayActionRecord action)
+                || !TryGetThrownRecord(action, out ThrownExplosiveRecord record))
+            {
+                ClearReplayTransients();
+                return;
+            }
+
+            string key = record.ThrowerId + ":" + record.Sequence;
+            if (!string.Equals(
+                    replayPresentationKey,
+                    key,
+                    StringComparison.Ordinal))
+            {
+                ClearReplayTransients();
+                replayPresentationKey = key;
+            }
+            ThrownExplosivePresentationDefinition presentation =
+                presentationCatalog.GetThrownExplosive(record.Definition.Id);
+            float progress = Mathf.Clamp01(sample.Progress);
+            if (progress <= GameplayThrownExplosivePresentationTiming
+                    .ReleaseNormalizedTime)
+            {
+                GameplayObjectLifecycle.Destroy(replayFlightProjectileRoot);
+                GameplayObjectLifecycle.Destroy(replayImpactRoot);
+                replayFlightProjectileRoot = null;
+                replayImpactRoot = null;
+                EnsureReplayHeldProjectile(record, presentation);
+                return;
+            }
+
+            GameplayObjectLifecycle.Destroy(replayHeldProjectileRoot);
+            replayHeldProjectileRoot = null;
+            if (progress < GameplayThrownExplosivePresentationTiming
+                    .ImpactNormalizedTime)
+            {
+                GameplayObjectLifecycle.Destroy(replayImpactRoot);
+                replayImpactRoot = null;
+                EnsureReplayFlightProjectile(record, presentation);
+                float flightProgress = Mathf.InverseLerp(
+                    GameplayThrownExplosivePresentationTiming
+                        .ReleaseNormalizedTime,
+                    GameplayThrownExplosivePresentationTiming
+                        .ImpactNormalizedTime,
+                    progress);
+                replayFlightProjectileRoot.transform.position =
+                    EvaluateThrowPosition(
+                        ToVector3(record.LaunchOrigin),
+                        ToVector3(record.ResolvedLanding),
+                        flightProgress,
+                        presentation);
+                float flightSeconds = flightProgress
+                    * presentation.FlightSeconds;
+                replayFlightProjectileRoot.transform.rotation =
+                    presentation.VisualRotation
+                    * Quaternion.Euler(
+                        presentation.SpinDegreesPerSecond * flightSeconds);
+                return;
+            }
+
+            GameplayObjectLifecycle.Destroy(replayFlightProjectileRoot);
+            replayFlightProjectileRoot = null;
+            EnsureReplayImpact(record, presentation, progress);
+        }
+
+        internal void ClearReplayTransients()
+        {
+            GameplayObjectLifecycle.Destroy(replayHeldProjectileRoot);
+            GameplayObjectLifecycle.Destroy(replayFlightProjectileRoot);
+            GameplayObjectLifecycle.Destroy(replayImpactRoot);
+            replayHeldProjectileRoot = null;
+            replayFlightProjectileRoot = null;
+            replayImpactRoot = null;
+            replayPresentationKey = null;
+        }
+
+        internal void EndReplayPresentation()
+        {
+            if (!replayPresenting) return;
+            ClearReplayTransients();
+            replayPresenting = false;
+        }
+
+        private void ClearReplayPresentation()
+        {
+            ClearReplayTransients();
+            replayPresenting = false;
+        }
+
+        private void EnsureReplayHeldProjectile(
+            ThrownExplosiveRecord record,
+            ThrownExplosivePresentationDefinition presentation)
+        {
+            if (replayHeldProjectileRoot != null) return;
+            GameplayActorView actor = registry.GetActor(record.ThrowerId);
+            ActorAnimationCoordinator replayAnimation = actor.Root
+                .GetComponent<ActorAnimationCoordinator>();
+            Transform hand = replayAnimation?.TargetAnimator != null
+                ? replayAnimation.TargetAnimator.GetBoneTransform(
+                    HumanBodyBones.RightHand)
+                : null;
+            Transform parent = hand != null ? hand : actor.Transform;
+            replayHeldProjectileRoot = Instantiate(
+                presentation.ProjectilePrefab,
+                parent);
+            replayHeldProjectileRoot.name =
+                "Replay Held Thrown Explosive";
+            replayHeldProjectileRoot.transform.localPosition = hand != null
+                ? new Vector3(0.02f, 0.08f, 0.04f)
+                : new Vector3(0.32f, 1.35f, -0.18f);
+            replayHeldProjectileRoot.transform.localRotation =
+                presentation.VisualRotation * Quaternion.Euler(0f, 0f, -35f);
+            ConfigureReplayProjectile(
+                replayHeldProjectileRoot,
+                presentation);
+        }
+
+        private void EnsureReplayFlightProjectile(
+            ThrownExplosiveRecord record,
+            ThrownExplosivePresentationDefinition presentation)
+        {
+            if (replayFlightProjectileRoot != null) return;
+            replayFlightProjectileRoot = Instantiate(
+                presentation.ProjectilePrefab,
+                ToVector3(record.LaunchOrigin),
+                presentation.VisualRotation,
+                transform);
+            replayFlightProjectileRoot.name =
+                "Replay Flying Thrown Explosive";
+            ConfigureReplayProjectile(
+                replayFlightProjectileRoot,
+                presentation);
+        }
+
+        private static void ConfigureReplayProjectile(
+            GameObject projectile,
+            ThrownExplosivePresentationDefinition presentation)
+        {
+            projectile.transform.localScale = Vector3.Scale(
+                presentation.ProjectilePrefab.transform.localScale,
+                Vector3.one * presentation.VisualScale);
+            foreach (Collider collider in
+                projectile.GetComponentsInChildren<Collider>(true))
+            {
+                collider.enabled = false;
+            }
+        }
+
+        private void EnsureReplayImpact(
+            ThrownExplosiveRecord record,
+            ThrownExplosivePresentationDefinition presentation,
+            float normalizedProgress)
+        {
+            if (presentation.ImpactEffectPrefab == null) return;
+            if (replayImpactRoot == null)
+            {
+                replayImpactRoot = Instantiate(
+                    presentation.ImpactEffectPrefab,
+                    ToVector3(record.ResolvedLanding),
+                    presentation.ImpactRotation,
+                    transform);
+                replayImpactRoot.name =
+                    "Replay Thrown Explosive Impact";
+                float impactScale = Mathf.Max(
+                    0.01f,
+                    record.Definition.AreaRadius
+                        * presentation.ImpactScalePerBlastRadius);
+                replayImpactRoot.transform.localScale = Vector3.Scale(
+                    presentation.ImpactEffectPrefab.transform.localScale,
+                    Vector3.one * impactScale);
+            }
+            float impactProgress = Mathf.InverseLerp(
+                GameplayThrownExplosivePresentationTiming
+                    .ImpactNormalizedTime,
+                1f,
+                normalizedProgress);
+            foreach (ParticleSystem particles in
+                replayImpactRoot.GetComponentsInChildren<ParticleSystem>(true))
+            {
+                particles.Simulate(
+                    impactProgress * presentation.ImpactEffectSeconds,
+                    withChildren: false,
+                    restart: true,
+                    fixedTimeStep: true);
+                particles.Pause(withChildren: false);
+            }
+        }
+
+        private static bool TryGetThrownRecord(
+            GameplayActionRecord action,
+            out ThrownExplosiveRecord record)
+        {
+            foreach (GameplayActionOutcome outcome in action.Outcomes)
+            {
+                if (!(outcome is ThrownExplosiveActionOutcome thrown))
+                    continue;
+                record = thrown.Record;
+                return true;
+            }
+            record = null;
+            return false;
+        }
+
+        private void PresentFacing(float facingDegrees)
+        {
+            if (actorTransform == null) return;
+            actorTransform.rotation = Quaternion.Euler(
+                0f,
+                facingDegrees,
+                0f);
+        }
+
         internal static Vector3 EvaluateThrowPosition(
             Vector3 origin,
             Vector3 landing,
@@ -777,20 +1055,6 @@ namespace GritGud.Presentation.Gameplay
             GameplayObjectLifecycle.Destroy(impactRoot);
             playbackRoot = null;
             impactRoot = null;
-        }
-
-        private void SynchronizeAuthoritativeFacing()
-        {
-            if (Session == null || actorTransform == null || actorId == null)
-            {
-                return;
-            }
-
-            GameplayActorPose pose = Session.GetActor(actorId).Pose;
-            actorTransform.rotation = Quaternion.Euler(
-                0f,
-                pose.FacingDegrees,
-                0f);
         }
 
         private static Vector3 ToVector3(GameplayPosition position) =>

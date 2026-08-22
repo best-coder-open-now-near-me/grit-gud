@@ -382,6 +382,33 @@ namespace GritGud.Presentation.Tests
             Transform replayedDrone = drones.GetPresentationTransform(
                 droneMovement.DroneId);
             replayHud.OpenVerifiedExternalReplay();
+
+            GameplaySemanticReplayPlaybackFrame thrownFrame = replayHud
+                .Playback.Frames.First(frame =>
+                    frame.Frame.SemanticRecord is GameplayActionRecord action
+                    && action.Outcomes.Any(outcome =>
+                        outcome is ThrownExplosiveActionOutcome));
+            float thrownFlightProgress =
+                (GameplayThrownExplosivePresentationTiming
+                    .ReleaseNormalizedTime
+                + GameplayThrownExplosivePresentationTiming
+                    .ImpactNormalizedTime) * 0.5f;
+            replayHud.AdvancePlayback(
+                thrownFrame.StartSeconds
+                + (thrownFrame.DurationSeconds * thrownFlightProgress));
+            Transform replayGrenade = gameplay.transform.Find(
+                "Replay Flying Thrown Explosive");
+            Assert.That(
+                replayGrenade,
+                Is.Not.Null,
+                "Replay must project the grenade between release and impact.");
+            replayHud.Toggle();
+            Assert.That(
+                gameplay.transform.Find("Replay Flying Thrown Explosive"),
+                Is.Null,
+                "Closing replay must clear the projected grenade.");
+            replayHud.OpenVerifiedExternalReplay();
+
             Vector3 replayStart = replayedActor.position;
             Vector3 droneReplayStart = replayedDrone.position;
             replayHud.AdvancePlayback(
@@ -414,11 +441,17 @@ namespace GritGud.Presentation.Tests
                     .Count(presentationEvent => presentationEvent.Kind ==
                             ReplayCombatPresentationEventKind.WeaponDischarge
                         || presentationEvent.Kind ==
-                            ReplayCombatPresentationEventKind.ProjectileLaunch));
+                            ReplayCombatPresentationEventKind.ProjectileLaunch
+                        || presentationEvent.Kind ==
+                            ReplayCombatPresentationEventKind
+                                .ThrownExplosiveRelease));
             int expectedImpacts = replayHud.Playback.Frames.Sum(frame =>
                 ReplayCombatPresentationEventProjector.Project(frame.Frame)
                     .Count(presentationEvent => presentationEvent.Kind ==
-                        ReplayCombatPresentationEventKind.ProjectileImpact));
+                            ReplayCombatPresentationEventKind.ProjectileImpact
+                        || presentationEvent.Kind ==
+                            ReplayCombatPresentationEventKind
+                                .ThrownExplosiveImpact));
             int expectedReactions = replayHud.Playback.Frames.Sum(frame =>
                 ReplayCombatPresentationEventProjector.Project(frame.Frame)
                     .Count(presentationEvent => presentationEvent.Kind ==

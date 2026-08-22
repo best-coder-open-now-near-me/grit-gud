@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using GritGud.Application.Gameplay;
 using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
@@ -20,10 +21,12 @@ namespace GritGud.Presentation.Gameplay
         private float visualScale = 1f;
 
         [SerializeField, Min(0.01f)]
-        private float flightSeconds = 0.55f;
+        private float flightSeconds =
+            GameplayThrownExplosivePresentationTiming.FlightSeconds;
 
         [SerializeField, Min(0f)]
-        private float releaseDelaySeconds = 0.45f;
+        private float releaseDelaySeconds =
+            GameplayThrownExplosivePresentationTiming.ReleaseSeconds;
 
         [SerializeField]
         private Vector3 spinDegreesPerSecond = new Vector3(310f, 190f, 240f);
@@ -62,7 +65,9 @@ namespace GritGud.Presentation.Gameplay
         private float impactScalePerBlastRadius = 0.2f;
 
         [SerializeField, Min(0.01f)]
-        private float impactEffectSeconds = 0.65f;
+        private float impactEffectSeconds =
+            GameplayThrownExplosivePresentationTiming
+                .DefaultImpactEffectSeconds;
 
         [SerializeField]
         private GameObject persistentAreaEffectPrefab;
@@ -325,6 +330,20 @@ namespace GritGud.Presentation.Gameplay
                     && entry.PersistentEffectScalePerRadius <= 0f)
                     throw new InvalidOperationException(
                         $"Thrown-explosive presentation '{entry.ItemId}' persistent effect requires a positive radius scale.");
+                if (Mathf.Abs(
+                        entry.ReleaseDelaySeconds -
+                        GameplayThrownExplosivePresentationTiming
+                            .ReleaseSeconds) > 0.001f
+                    || Mathf.Abs(
+                        entry.FlightSeconds -
+                        GameplayThrownExplosivePresentationTiming
+                            .FlightSeconds) > 0.001f)
+                {
+                    throw new InvalidOperationException(
+                        $"Thrown-explosive presentation '{entry.ItemId}' "
+                        + "must use the shared deterministic release and "
+                        + "flight timing contract.");
+                }
 
                 if (!thrownExplosiveIndex.TryAdd(entry.ItemId, entry))
                 {

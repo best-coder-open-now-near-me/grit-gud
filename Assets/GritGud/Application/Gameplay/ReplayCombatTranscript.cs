@@ -254,6 +254,14 @@ namespace GritGud.Application.Gameplay
                         case ReplayCombatPresentationEventKind.Incapacitation:
                             incapacitations++;
                             break;
+                        case ReplayCombatPresentationEventKind
+                                .ThrownExplosiveRelease:
+                            launches++;
+                            break;
+                        case ReplayCombatPresentationEventKind
+                                .ThrownExplosiveImpact:
+                            impacts++;
+                            break;
                     }
                     if (presentationEvent.Outcome ==
                         ReplayCombatPresentationOutcome.Blocked)
@@ -364,6 +372,10 @@ namespace GritGud.Application.Gameplay
                     return ReplayCombatTranscriptEventKind.Reaction;
                 case ReplayCombatPresentationEventKind.Incapacitation:
                     return ReplayCombatTranscriptEventKind.Incapacitation;
+                case ReplayCombatPresentationEventKind.ThrownExplosiveRelease:
+                    return ReplayCombatTranscriptEventKind.ExplosiveThrow;
+                case ReplayCombatPresentationEventKind.ThrownExplosiveImpact:
+                    return ReplayCombatTranscriptEventKind.ProjectileImpact;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
             }
@@ -586,7 +598,11 @@ namespace GritGud.Application.Gameplay
                 || presentationEvent.Kind ==
                     ReplayCombatPresentationEventKind.ProjectileLaunch
                 || presentationEvent.Kind ==
-                    ReplayCombatPresentationEventKind.ProjectileImpact)
+                    ReplayCombatPresentationEventKind.ProjectileImpact
+                || presentationEvent.Kind == ReplayCombatPresentationEventKind
+                    .ThrownExplosiveRelease
+                || presentationEvent.Kind == ReplayCombatPresentationEventKind
+                    .ThrownExplosiveImpact)
                 && diagnostic != null)
             {
                 title = diagnostic.Title;
@@ -607,6 +623,21 @@ namespace GritGud.Application.Gameplay
                 case ReplayCombatPresentationEventKind.ProjectileImpact:
                     title = presentationEvent.ProjectileId + " IMPACTS";
                     lines = new[] { "TARGET - " + presentationEvent.TargetId };
+                    return;
+                case ReplayCombatPresentationEventKind.ThrownExplosiveRelease:
+                    title = presentationEvent.ShooterId + " THROWS "
+                        + presentationEvent.PresentationId;
+                    lines = new[]
+                    {
+                        "PROJECTILE - " + presentationEvent.ProjectileId,
+                    };
+                    return;
+                case ReplayCombatPresentationEventKind.ThrownExplosiveImpact:
+                    title = presentationEvent.PresentationId + " IMPACTS";
+                    lines = new[]
+                    {
+                        "LANDING - " + presentationEvent.Destination,
+                    };
                     return;
                 default:
                     title = presentationEvent.ShooterId + " "

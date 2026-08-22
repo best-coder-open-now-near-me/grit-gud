@@ -165,6 +165,7 @@ namespace GritGud.Presentation.Gameplay
         private readonly GameplayPartyControlSession partyControl;
         private readonly GameplayDestructibleController destructibles;
         private readonly GameplayProjectileController projectiles;
+        private readonly GameplayThrownExplosiveController thrownExplosives;
         private readonly GameplayWorldRegistry worldRegistry;
         private readonly GameplayVehicleController vehicles;
         private readonly GameplayDroneController drones;
@@ -193,6 +194,7 @@ namespace GritGud.Presentation.Gameplay
             GameplayPartyControlSession partyControl,
             GameplayDestructibleController destructibles,
             GameplayProjectileController projectiles,
+            GameplayThrownExplosiveController thrownExplosives,
             GameplayWorldRegistry worldRegistry,
             GameplayVehicleController vehicles,
             GameplayDroneController drones,
@@ -228,6 +230,7 @@ namespace GritGud.Presentation.Gameplay
                 nameof(partyControl));
             this.destructibles = destructibles;
             this.projectiles = projectiles;
+            this.thrownExplosives = thrownExplosives;
             this.worldRegistry = worldRegistry ?? throw new ArgumentNullException(
                 nameof(worldRegistry));
             this.vehicles = vehicles;
@@ -281,6 +284,7 @@ namespace GritGud.Presentation.Gameplay
                 input,
                 replayHud,
                 projectiles,
+                thrownExplosives,
                 destructibles,
                 vehicles,
                 drones,

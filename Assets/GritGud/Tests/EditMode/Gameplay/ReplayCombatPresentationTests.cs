@@ -136,6 +136,119 @@ namespace GritGud.Domain.Tests
                     .ActionResolutionProgress));
         }
 
+        [Test]
+        public void TargetFacingPhaseTurnsOnTheShortestArcByRelease()
+        {
+            ActorTargetFacingActionPhase phase =
+                GameplayThrownExplosivePresentationTiming.CreateFacingPhase(
+                    startingFacingDegrees: 350f,
+                    targetFacingDegrees: 90f);
+
+            Assert.That(
+                phase.SampleFacingDegrees(0f),
+                Is.EqualTo(350f).Within(0.001f));
+            Assert.That(
+                phase.SampleFacingDegrees(
+                    phase.ReleaseNormalizedTime * 0.5f),
+                Is.EqualTo(40f).Within(0.001f));
+            Assert.That(
+                phase.SampleFacingDegrees(phase.ReleaseNormalizedTime),
+                Is.EqualTo(90f).Within(0.001f));
+            Assert.That(
+                phase.SampleFacingDegrees(1f),
+                Is.EqualTo(90f).Within(0.001f));
+            Assert.That(
+                phase.GetPhase(phase.ReleaseNormalizedTime * 0.5f),
+                Is.EqualTo(ActorActionPresentationPhase.WindUp));
+            Assert.That(
+                phase.GetPhase(
+                    (phase.ReleaseNormalizedTime
+                        + phase.RecoveryEndNormalizedTime) * 0.5f),
+                Is.EqualTo(ActorActionPresentationPhase.Recovery));
+            Assert.That(
+                phase.SampleActionProgress(
+                    phase.RecoveryEndNormalizedTime),
+                Is.EqualTo(1f).Within(0.001f));
+        }
+
+        [Test]
+        public void ThrownExplosiveProjectsDeterministicReleaseAndImpact()
+        {
+            GameplayActionRecord action = CreateThrownAction();
+
+            var events = ReplayCombatPresentationEventProjector.Project(
+                transitionSequence: 12,
+                action);
+
+            Assert.That(events, Has.Count.EqualTo(2));
+            Assert.That(
+                events[0].Kind,
+                Is.EqualTo(ReplayCombatPresentationEventKind
+                    .ThrownExplosiveRelease));
+            Assert.That(
+                events[0].NormalizedTime,
+                Is.EqualTo(GameplayThrownExplosivePresentationTiming
+                    .ReleaseNormalizedTime).Within(0.0001f));
+            Assert.That(
+                events[1].Kind,
+                Is.EqualTo(ReplayCombatPresentationEventKind
+                    .ThrownExplosiveImpact));
+            Assert.That(
+                events[1].NormalizedTime,
+                Is.EqualTo(GameplayThrownExplosivePresentationTiming
+                    .ImpactNormalizedTime).Within(0.0001f));
+            Assert.That(events[0].ProjectileId, Is.EqualTo(
+                "thrown-explosive:thrower:4"));
+            Assert.That(events[1].ProjectileId,
+                Is.EqualTo(events[0].ProjectileId));
+            Assert.That(events[0].StableKey,
+                Is.Not.EqualTo(events[1].StableKey));
+            Assert.That(
+                GameplaySemanticReplayPresentationTiming
+                    .GetActionResolutionProgress(action),
+                Is.EqualTo(GameplayThrownExplosivePresentationTiming
+                    .ImpactNormalizedTime).Within(0.0001f));
+        }
+
+        private static GameplayActionRecord CreateThrownAction()
+        {
+            var cost = new ActionCost(1, 0f, ActionMobility.Mobile);
+            var definition = new ThrownExplosiveDefinition(
+                "item.test-grenade",
+                cost,
+                maximumRange: 10f,
+                standingLaunchHeight: 1.2f,
+                crouchedLaunchHeight: 0.8f,
+                baseUncertaintyRadius: 0.5f,
+                uncertaintyPerMeter: 0.1f,
+                blastRadius: 3f);
+            var record = new ThrownExplosiveRecord(
+                sequence: 4,
+                throwerId: "thrower",
+                definition: definition,
+                origin: new GameplayPosition(0f, 0f, 0f),
+                launchOrigin: new GameplayPosition(0f, 1.2f, 0f),
+                intendedLanding: new GameplayPosition(5f, 0f, 0f),
+                sampledLanding: new GameplayPosition(5f, 0f, 0f),
+                resolvedLanding: new GameplayPosition(5f, 0f, 0f),
+                uncertaintyRadius: 1f,
+                worldStateRevision: 3,
+                blastEffects: new BlastEffectRecord[0]);
+            return new GameplayActionRecord(
+                sequence: 4,
+                request: new GameplayActionRequest(
+                    "thrower",
+                    definition.Id,
+                    GameplayTargetIds.WorldAimPoint),
+                cost: cost,
+                previousBudget: new TurnBudget(2, 0f),
+                resultingBudget: new TurnBudget(1, 0f),
+                outcomes: new GameplayActionOutcome[]
+                {
+                    new ThrownExplosiveActionOutcome(record),
+                });
+        }
+
         private static ProjectileAdvanceRecord CreateImpactAdvance()
         {
             var definition = new ProjectileFlightDefinition(

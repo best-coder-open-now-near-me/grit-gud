@@ -125,12 +125,15 @@ namespace GritGud.Presentation.Gameplay
                     ?.GetType().Name
                 ?? action?.Kind.ToString()
                 ?? "state sample";
+            float presentedFacing = action?.TargetFacingPhase
+                ?.SampleFacingDegrees(action.NormalizedProgress)
+                ?? pose.FacingDegrees;
             view.Transform.SetPositionAndRotation(
                 new Vector3(
                     pose.Position.X,
                     pose.Position.Y,
                     pose.Position.Z),
-                Quaternion.Euler(0f, pose.FacingDegrees, 0f));
+                Quaternion.Euler(0f, presentedFacing, 0f));
             if (view.Stance.Stance != pose.Stance)
                 view.Stance.ApplyResolved(pose.Stance);
             TryOptional(
@@ -396,6 +399,11 @@ namespace GritGud.Presentation.Gameplay
         {
             progress = state?.NormalizedProgress ??
                 (snapshot.IsIncapacitated ? 1f : 0f);
+            if (state?.TargetFacingPhase != null)
+            {
+                progress = state.TargetFacingPhase.SampleActionProgress(
+                    progress);
+            }
             if (state == null)
             {
                 action = snapshot.IsIncapacitated

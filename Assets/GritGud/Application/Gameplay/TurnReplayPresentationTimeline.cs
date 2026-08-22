@@ -11,6 +11,8 @@ namespace GritGud.Application.Gameplay
         ProjectileImpact = 2,
         Reaction = 3,
         Incapacitation = 4,
+        ThrownExplosiveRelease = 5,
+        ThrownExplosiveImpact = 6,
     }
 
     public enum ReplayCombatPresentationOutcome
@@ -81,7 +83,11 @@ namespace GritGud.Application.Gameplay
                 || normalizedTime > 1f)
                 throw new ArgumentOutOfRangeException(nameof(normalizedTime));
             if ((kind == ReplayCombatPresentationEventKind.ProjectileLaunch
-                    || kind == ReplayCombatPresentationEventKind.ProjectileImpact)
+                    || kind == ReplayCombatPresentationEventKind.ProjectileImpact
+                    || kind == ReplayCombatPresentationEventKind
+                        .ThrownExplosiveRelease
+                    || kind == ReplayCombatPresentationEventKind
+                        .ThrownExplosiveImpact)
                 && string.IsNullOrWhiteSpace(projectileId))
                 throw new ArgumentException(
                     "Projectile replay events require a projectile identifier.",
@@ -154,7 +160,8 @@ namespace GritGud.Application.Gameplay
             GameplayPosition? origin = null,
             GameplayPosition? destination = null,
             string projectileId = null,
-            bool contactAttack = false)
+            bool contactAttack = false,
+            ActorTargetFacingActionPhase targetFacingPhase = null)
         {
             ActorId = string.IsNullOrWhiteSpace(actorId)
                 ? throw new ArgumentException(
@@ -200,6 +207,7 @@ namespace GritGud.Application.Gameplay
             Destination = destination;
             ProjectileId = projectileId ?? string.Empty;
             IsContactAttack = contactAttack;
+            TargetFacingPhase = targetFacingPhase;
         }
 
         public string ActorId { get; }
@@ -214,6 +222,7 @@ namespace GritGud.Application.Gameplay
         public GameplayPosition? Destination { get; }
         public string ProjectileId { get; }
         public bool IsContactAttack { get; }
+        public ActorTargetFacingActionPhase TargetFacingPhase { get; }
     }
 
     public static class ReplayCombatPresentationEventProjector
@@ -494,6 +503,39 @@ namespace GritGud.Application.Gameplay
                                 .ActionResolutionProgress,
                             value.ProjectileId));
                     }
+                    else if (outcome is ThrownExplosiveActionOutcome thrown)
+                    {
+                        ThrownExplosiveRecord value = thrown.Record;
+                        string projectileId =
+                            GameplayThrownExplosivePresentationTiming
+                                .GetProjectileId(
+                                    value.ThrowerId,
+                                    value.Sequence);
+                        events.Add(new ReplayCombatPresentationEvent(
+                            sequence,
+                            ReplayCombatPresentationEventKind
+                                .ThrownExplosiveRelease,
+                            value.ThrowerId,
+                            GameplayTargetIds.WorldAimPoint,
+                            value.LaunchOrigin,
+                            value.ResolvedLanding,
+                            GameplayThrownExplosivePresentationTiming
+                                .ReleaseNormalizedTime,
+                            projectileId,
+                            presentationId: value.Definition.Id));
+                        events.Add(new ReplayCombatPresentationEvent(
+                            sequence,
+                            ReplayCombatPresentationEventKind
+                                .ThrownExplosiveImpact,
+                            value.ThrowerId,
+                            GameplayTargetIds.WorldAimPoint,
+                            value.LaunchOrigin,
+                            value.ResolvedLanding,
+                            GameplayThrownExplosivePresentationTiming
+                                .ImpactNormalizedTime,
+                            projectileId,
+                            presentationId: value.Definition.Id));
+                    }
                 }
             }
             else if (semanticRecord is ProjectileAdvanceRecord advance
@@ -763,14 +805,35 @@ namespace GritGud.Application.Gameplay
             GameplayPosition? primaryDestination = null;
             string primaryProjectileId = null;
             bool primaryContactAttack = false;
+            ActorTargetFacingActionPhase primaryTargetFacingPhase = null;
             var reactions = new Dictionary<
                 string,
                 ReactionProjection>(StringComparer.Ordinal);
             foreach (GameplayActionOutcome outcome in action.Outcomes)
             {
-                if (outcome is ThrownExplosiveActionOutcome)
+                if (outcome is ThrownExplosiveActionOutcome thrown)
                 {
                     primary = TurnReplayActorActionKind.Throw;
+                    ThrownExplosiveRecord record = thrown.Record;
+                    GameplayActorSnapshot previous = frame.Previous.Session
+                        .GetActor(record.ThrowerId);
+                    GameplayActorSnapshot resulting = frame.Resulting.Session
+                        .GetActor(record.ThrowerId);
+                    primaryEventTime =
+                        GameplayThrownExplosivePresentationTiming
+                            .ReleaseNormalizedTime;
+                    primaryOrigin = record.LaunchOrigin;
+                    primaryDestination = record.ResolvedLanding;
+                    primaryProjectileId =
+                        GameplayThrownExplosivePresentationTiming
+                            .GetProjectileId(
+                                record.ThrowerId,
+                                record.Sequence);
+                    primaryTargetFacingPhase =
+                        GameplayThrownExplosivePresentationTiming
+                            .CreateFacingPhase(
+                                previous.Pose.FacingDegrees,
+                                resulting.Pose.FacingDegrees);
                 }
                 else if (outcome is DisplacementActionOutcome displacement)
                 {
@@ -861,7 +924,8 @@ namespace GritGud.Application.Gameplay
                     origin: primaryOrigin,
                     destination: primaryDestination,
                     projectileId: primaryProjectileId,
-                    contactAttack: primaryContactAttack));
+                    contactAttack: primaryContactAttack,
+                    targetFacingPhase: primaryTargetFacingPhase));
             }
             foreach (KeyValuePair<string, ReactionProjection> reaction
                 in reactions)

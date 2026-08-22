@@ -213,6 +213,7 @@ namespace GritGud.Presentation.Gameplay
             new HashSet<string>(StringComparer.Ordinal);
         private GameplayWorldRegistry world;
         private GameplayProjectileController projectiles;
+        private GameplayThrownExplosiveController thrownExplosives;
         private GameplayDroneController drones;
         private GameplayInputController input;
         private GameplayTurnReplayHud hud;
@@ -237,6 +238,7 @@ namespace GritGud.Presentation.Gameplay
             GameplayInputController inputController,
             GameplayTurnReplayHud replayHud,
             GameplayProjectileController projectileController,
+            GameplayThrownExplosiveController thrownExplosiveController,
             GameplayDestructibleController destructibleController,
             GameplayVehicleController vehicleController,
             GameplayDroneController droneController,
@@ -250,6 +252,7 @@ namespace GritGud.Presentation.Gameplay
             Dispose();
             world = registry ?? throw new ArgumentNullException(nameof(registry));
             projectiles = projectileController;
+            thrownExplosives = thrownExplosiveController;
             drones = droneController;
             input = inputController ?? throw new ArgumentNullException(
                 nameof(inputController));
@@ -272,6 +275,7 @@ namespace GritGud.Presentation.Gameplay
             }
             RegisterOptionalProjections(
                 projectileController,
+                thrownExplosiveController,
                 destructibleController,
                 vehicleController,
                 droneController,
@@ -291,6 +295,7 @@ namespace GritGud.Presentation.Gameplay
             }
             world = null;
             projectiles = null;
+            thrownExplosives = null;
             drones = null;
             input = null;
             hud = null;
@@ -378,17 +383,29 @@ namespace GritGud.Presentation.Gameplay
                         + "no GameplayTurnReplayActorPresenter source view.");
             }
             bool containsProjectiles = replay.InitialState.Projectiles.Count > 0;
+            bool containsThrownExplosives = false;
             foreach (GameplaySemanticReplayFrame frame in replay.Frames)
             {
                 containsProjectiles |= frame.SemanticRecord
                     is ProjectileAdvanceRecord
                     || frame.Resulting.Projectiles.Count > 0;
+                containsThrownExplosives |= ContainsThrownExplosive(
+                    frame.SemanticRecord);
             }
             if (containsProjectiles && projectiles == null)
                 throw new InvalidOperationException(
                     "Replay cannot open: the verified timeline contains "
                     + "projectile records but no GameplayProjectileController "
                     + "is bound for required projection.");
+            if (containsThrownExplosives &&
+                thrownExplosives?.Session == null)
+            {
+                throw new InvalidOperationException(
+                    "Replay cannot open: the verified timeline contains "
+                    + "thrown-explosive records but no bound "
+                    + "GameplayThrownExplosiveController exists for required "
+                    + "held, flight, and impact projection.");
+            }
             bool containsDrones = replay.InitialState.Drones.Count > 0;
             foreach (GameplaySemanticReplayFrame frame in replay.Frames)
                 containsDrones |= frame.Resulting.Drones.Count > 0;
@@ -533,6 +550,19 @@ namespace GritGud.Presentation.Gameplay
         private void PresentTimedEvent(
             ReplayCombatPresentationEvent presentationEvent)
         {
+            if (presentationEvent.Kind == ReplayCombatPresentationEventKind
+                    .ThrownExplosiveRelease)
+            {
+                presentedDischargeEvents.Add(presentationEvent.StableKey);
+                return;
+            }
+            if (presentationEvent.Kind == ReplayCombatPresentationEventKind
+                    .ThrownExplosiveImpact)
+            {
+                presentedProjectileImpactEvents.Add(
+                    presentationEvent.StableKey);
+                return;
+            }
             if (presentationEvent.Kind ==
                 ReplayCombatPresentationEventKind.ProjectileImpact)
             {
@@ -712,6 +742,7 @@ namespace GritGud.Presentation.Gameplay
 
         private void RegisterOptionalProjections(
             GameplayProjectileController projectileController,
+            GameplayThrownExplosiveController thrownExplosiveController,
             GameplayDestructibleController destructibleController,
             GameplayVehicleController vehicleController,
             GameplayDroneController droneController,
@@ -728,6 +759,16 @@ namespace GritGud.Presentation.Gameplay
                         sample.Projectiles),
                     projectileController.ClearReplayTransients,
                     projectileController.EndReplayPresentation,
+                    isRequired: true));
+            }
+            if (thrownExplosiveController != null)
+            {
+                optionalProjections.Add(new OptionalWorldProjection(
+                    "thrown-explosive",
+                    thrownExplosiveController.BeginReplayPresentation,
+                    thrownExplosiveController.PresentReplay,
+                    thrownExplosiveController.ClearReplayTransients,
+                    thrownExplosiveController.EndReplayPresentation,
                     isRequired: true));
             }
             if (destructibleController != null)
@@ -777,6 +818,15 @@ namespace GritGud.Presentation.Gameplay
                     () => { },
                     fireController.EndReplayPresentation));
             }
+        }
+
+        private static bool ContainsThrownExplosive(object semanticRecord)
+        {
+            if (!(semanticRecord is GameplayActionRecord action)) return false;
+            foreach (GameplayActionOutcome outcome in action.Outcomes)
+                if (outcome is ThrownExplosiveActionOutcome)
+                    return true;
+            return false;
         }
     }
 }

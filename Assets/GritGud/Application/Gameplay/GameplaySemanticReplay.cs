@@ -517,6 +517,10 @@ namespace GritGud.Application.Gameplay
         {
             if (action == null) throw new ArgumentNullException(nameof(action));
             foreach (GameplayActionOutcome outcome in action.Outcomes)
+                if (outcome is ThrownExplosiveActionOutcome)
+                    return GameplayThrownExplosivePresentationTiming
+                        .ImpactNormalizedTime;
+            foreach (GameplayActionOutcome outcome in action.Outcomes)
                 if (outcome is AttackResolvedActionOutcome resolved
                     && resolved.Attack.IsContactAttack)
                     return ContactResolutionProgress;
@@ -586,7 +590,9 @@ namespace GritGud.Application.Gameplay
                 if (outcome is ProjectileLaunchedActionOutcome) return 0.65f;
                 if (outcome is WeaponDischargedActionOutcome) return 0.65f;
                 if (outcome is AttackResolvedActionOutcome) return 0.8f;
-                if (outcome is ThrownExplosiveActionOutcome) return 0.8f;
+                if (outcome is ThrownExplosiveActionOutcome)
+                    return GameplayThrownExplosivePresentationTiming
+                        .TotalSequenceSeconds;
                 if (outcome is EquipmentChangedActionOutcome) return 0.4f;
             }
             return 0.35f;
@@ -760,6 +766,30 @@ namespace GritGud.Application.Gameplay
                         destructibles,
                         SampleDisplacedProp(frame, record, progress));
                 }
+            }
+
+            foreach (GameplayActionOutcome outcome in action.Outcomes)
+            {
+                if (!(outcome is ThrownExplosiveActionOutcome thrown))
+                    continue;
+                ThrownExplosiveRecord record = thrown.Record;
+                GameplayActorSnapshot previous = frame.Previous.Session
+                    .GetActor(record.ThrowerId);
+                GameplayActorSnapshot resulting = frame.Resulting.Session
+                    .GetActor(record.ThrowerId);
+                ActorTargetFacingActionPhase phase =
+                    GameplayThrownExplosivePresentationTiming
+                        .CreateFacingPhase(
+                            previous.Pose.FacingDegrees,
+                            resulting.Pose.FacingDegrees);
+                GameplayActorSnapshot actor = actors[record.ThrowerId];
+                actors[record.ThrowerId] = CopyActor(
+                    actor,
+                    new GameplayActorPose(
+                        actor.Pose.Position,
+                        phase.SampleFacingDegrees(progress),
+                        actor.Pose.Stance));
+                break;
             }
         }
 
