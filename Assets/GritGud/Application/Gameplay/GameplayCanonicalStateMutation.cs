@@ -229,6 +229,7 @@ namespace GritGud.Application.Gameplay
             GameplayActorPose? pose = null,
             GritGud.Domain.Turns.TurnBudget? budget = null,
             ActorWoundSnapshot? wounds = null,
+            ActorInjuryState injuries = null,
             string equippedItemId = null,
             EquipmentEffectSet? equipmentEffects = null,
             ActorInventorySnapshot inventory = null,
@@ -261,7 +262,12 @@ namespace GritGud.Application.Gameplay
                     : actor.SuspendedTurnBudget,
                 attacksCommittedThisTurn
                     ?? actor.AttacksCommittedThisTurn,
-                ammunition ?? actor.Ammunition);
+                ammunition ?? actor.Ammunition,
+                injuries ?? (wounds.HasValue
+                    ? LegacyWoundProjection.ToInjuryState(
+                        wounds.Value,
+                        actor.MaximumWounds)
+                    : actor.Injuries));
 
         private static T Find<T>(
             IList<T> values,

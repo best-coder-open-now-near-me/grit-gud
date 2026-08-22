@@ -172,7 +172,10 @@ namespace GritGud.Application.Gameplay
                                         0f,
                                         target.TurnMovementAllowance
                                             - wound.Resulting.MovementPenalty))),
-                            wounds: wound.Resulting));
+                            wounds: wound.Resulting,
+                            injuries: ActorInjuryRules.ApplyDelta(
+                                target.Injuries,
+                                resolution.Injury)));
                     return;
                 case GameplaySemanticSubjectKind.DestructibleProp
                     when action.Consequence is DestructibleDamageRecord damage:

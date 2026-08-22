@@ -515,7 +515,12 @@ namespace GritGud.Application.Gameplay
                     impact.BlastEffects,
                     record.Resulting.Launch.Definition
                         .BlastWoundMovementPenalty,
-                    record.Resulting.Launch.Definition.BlastIntegrityDamage);
+                    record.Resulting.Launch.Definition.BlastIntegrityDamage,
+                    record.Resulting.Launch.AttackerId,
+                    record.Resulting.Launch.ActionId,
+                    record.Sequence,
+                    "projectile-impact:" + record.Sequence + ":"
+                        + record.ProjectileId);
             }
         }
 

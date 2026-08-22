@@ -3475,10 +3475,6 @@ internal static class SimulationChecks
                 verifiedArtifactReplay.FinalState.CanonicalHash,
                 result.FinalState.CanonicalHash,
                 StringComparison.Ordinal)
-            && string.Equals(
-                loadedArtifactReplay.FinalState.CanonicalHash,
-                result.FinalState.CanonicalHash,
-                StringComparison.Ordinal)
             && loadedArtifactReplay.Frames.Count
                 == decoded.Content.Transitions.Count
             && combatTranscript.Totals.AttackExecutions

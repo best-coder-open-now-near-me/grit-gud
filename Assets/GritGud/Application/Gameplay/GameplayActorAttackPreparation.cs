@@ -294,7 +294,12 @@ namespace GritGud.Application.Gameplay
                 evaluation.Target.Wounds,
                 evaluation.Attack.WoundMovementPenalty,
                 evaluation.Attack.Contact,
-                evaluation.Context);
+                evaluation.Context,
+                evaluation.Target.Injuries,
+                evaluation.Attack.ActionId,
+                evaluation.Attack.Contact == null
+                    ? DamageMechanism.Ballistic
+                    : DamageMechanism.Blunt);
             TurnBudget resultingBudget = evaluation.Attacker.TurnBudget
                 .SpendAction(evaluation.Cost);
             var outcomes = new List<GameplayActionOutcome>

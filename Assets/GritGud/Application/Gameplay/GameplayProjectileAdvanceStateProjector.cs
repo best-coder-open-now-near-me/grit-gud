@@ -42,7 +42,11 @@ namespace GritGud.Application.Gameplay
                     case BlastSubjectKind.Actor:
                         if (woundPenalty > 0f)
                         {
-                            ApplyActorEffect(actors, effect, woundPenalty);
+                            ApplyActorEffect(
+                                actors,
+                                effect,
+                                woundPenalty,
+                                advance);
                             gameplayRevisionIncrement++;
                         }
                         break;
@@ -119,16 +123,34 @@ namespace GritGud.Application.Gameplay
         private static void ApplyActorEffect(
             IList<GameplayActorSnapshot> actors,
             BlastEffectRecord effect,
-            float woundPenalty)
+            float woundPenalty,
+            ProjectileAdvanceRecord advance)
         {
             int index = FindActorIndex(actors, effect.EntityId);
             GameplayActorSnapshot actor = actors[index];
             float appliedPenalty = woundPenalty * effect.Exposure;
-            ActorWoundSnapshot wounds = effect.InjuryRegion.HasValue
-                ? actor.Wounds.AddWound(
-                    effect.InjuryRegion.Value,
-                    appliedPenalty)
-                : actor.Wounds.AddUnlocalizedWound(appliedPenalty);
+            int severity = ActorInjuryRules.CalculateImpactSeverity(
+                appliedPenalty,
+                100f,
+                100,
+                1,
+                100);
+            ProjectileLaunchRecord launch = advance.Resulting.Launch;
+            var impact = new LocalizedImpact(
+                "projectile-impact:" + advance.Sequence + ":"
+                    + launch.ProjectileId + ":" + actor.ActorId,
+                launch.AttackerId,
+                actor.ActorId,
+                launch.ActionId,
+                effect.InjuryRegion,
+                DamageMechanism.Blast,
+                severity,
+                advance.Sequence);
+            ActorInjuryState injuries = ActorInjuryRules.ApplyImpact(
+                actor.Injuries,
+                impact,
+                appliedPenalty).Resulting;
+            ActorWoundSnapshot wounds = LegacyWoundProjection.From(injuries);
             float woundedAllowance = Math.Max(
                 0f,
                 actor.TurnMovementAllowance - wounds.MovementPenalty);
@@ -137,7 +159,7 @@ namespace GritGud.Application.Gameplay
                 Math.Min(
                     actor.TurnBudget.MovementOpportunity,
                     woundedAllowance));
-            actors[index] = CopyActor(actor, budget, wounds);
+            actors[index] = CopyActor(actor, budget, wounds, injuries);
         }
 
         private static bool ApplyDestructibleEffect(
@@ -175,7 +197,8 @@ namespace GritGud.Application.Gameplay
         private static GameplayActorSnapshot CopyActor(
             GameplayActorSnapshot actor,
             TurnBudget budget,
-            ActorWoundSnapshot wounds) =>
+            ActorWoundSnapshot wounds,
+            ActorInjuryState injuries) =>
             new GameplayActorSnapshot(
                 actor.ActorId,
                 actor.Pose,
@@ -191,7 +214,8 @@ namespace GritGud.Application.Gameplay
                 actor.EmergencyActionPointAllowance,
                 actor.SuspendedTurnBudget,
                 actor.AttacksCommittedThisTurn,
-                actor.Ammunition);
+                actor.Ammunition,
+                injuries);
 
         private static int FindActorIndex(
             IList<GameplayActorSnapshot> actors,

@@ -55,9 +55,7 @@ namespace GritGud.Application.Gameplay
                     "Drone actor attack starts from stale target state.");
             controller.TurnBudget = record.ResultingBudget;
             if (resolution.Hit)
-                target.ApplyBlast(
-                    resolution.Wound.Region,
-                    resolution.Wound.AppliedMovementPenalty);
+                target.ApplyAttack(resolution);
             Journal.RecordDroneAttackResolved(record);
             var notifications = new GameplayNotificationBatch();
             if (resolution.Hit)

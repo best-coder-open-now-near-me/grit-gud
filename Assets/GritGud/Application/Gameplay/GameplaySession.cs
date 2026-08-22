@@ -103,7 +103,8 @@ namespace GritGud.Application.Gameplay
             TurnActionPointEconomy actionPointEconomy,
             float turnMovementAllowance,
             ActorPinState pinState,
-            int attacksCommittedThisTurn)
+            int attacksCommittedThisTurn,
+            ActorInjuryState injuries)
         {
             ActorId = actorId;
             Pose = pose;
@@ -116,6 +117,8 @@ namespace GritGud.Application.Gameplay
             TurnMovementAllowance = turnMovementAllowance;
             PinState = pinState;
             AttacksCommittedThisTurn = attacksCommittedThisTurn;
+            Injuries = injuries ?? throw new ArgumentNullException(
+                nameof(injuries));
         }
 
         public string ActorId { get; }
@@ -140,9 +143,18 @@ namespace GritGud.Application.Gameplay
 
         public int AttacksCommittedThisTurn { get; }
 
+        public ActorInjuryState Injuries { get; }
+
+        public ActorCapabilityState Capabilities => Injuries.Capabilities;
+
+        public ActorLifeState LifeState => Injuries.LifeState;
+
         public bool IsPinned => PinState != null;
 
-        public bool IsIncapacitated => Wounds.WoundCount >= MaximumWounds;
+        public bool IsIncapacitated => LifeState != ActorLifeState.Active
+            || Wounds.WoundCount >= MaximumWounds;
+
+        public bool IsDead => LifeState == ActorLifeState.Dead;
     }
 
     public readonly struct GameplayObjectiveSnapshot
@@ -1078,13 +1090,43 @@ namespace GritGud.Application.Gameplay
             float woundMovementPenalty,
             GameplayNotificationBatch notifications)
         {
+            long sequence = RequireActor(actorId).Wounds.WoundCount + 1L;
+            ApplyBlastInjury(
+                actorId,
+                region,
+                woundMovementPenalty,
+                "environment",
+                "blast.legacy",
+                sequence,
+                "legacy-blast:" + actorId + ":" + sequence,
+                notifications);
+        }
+
+        internal void ApplyBlastInjury(
+            string actorId,
+            TargetRegionId? region,
+            float woundMovementPenalty,
+            string sourceActorId,
+            string weaponId,
+            long sequence,
+            string combatEventId,
+            GameplayNotificationBatch notifications,
+            DamageMechanism mechanism = DamageMechanism.Blast)
+        {
             RequireLegacyMutationAllowed(nameof(ApplyBlastInjury));
             if (notifications == null)
             {
                 throw new ArgumentNullException(nameof(notifications));
             }
 
-            RequireActor(actorId).ApplyBlast(region, woundMovementPenalty);
+            RequireActor(actorId).ApplyBlast(
+                region,
+                woundMovementPenalty,
+                sourceActorId,
+                weaponId,
+                sequence,
+                combatEventId,
+                mechanism);
             notifications.Add(ActorCapabilityChanged, actorId);
             MarkStateChanged();
         }
@@ -1095,12 +1137,41 @@ namespace GritGud.Application.Gameplay
             float woundMovementPenalty,
             GameplayNotificationBatch notifications)
         {
+            long sequence = RequireActor(actorId).Wounds.WoundCount + 1L;
+            ApplyEnvironmentalInjury(
+                actorId,
+                region,
+                woundMovementPenalty,
+                "environment",
+                "environment.legacy",
+                sequence,
+                "legacy-environment:" + actorId + ":" + sequence,
+                notifications);
+        }
+
+        internal void ApplyEnvironmentalInjury(
+            string actorId,
+            TargetRegionId region,
+            float woundMovementPenalty,
+            string sourceActorId,
+            string weaponId,
+            long sequence,
+            string combatEventId,
+            GameplayNotificationBatch notifications)
+        {
             RequireLegacyMutationAllowed(nameof(ApplyEnvironmentalInjury));
             if (notifications == null)
                 throw new ArgumentNullException(nameof(notifications));
             GameplayActorState actor = RequireActor(actorId);
             if (actor.IsIncapacitated) return;
-            actor.ApplyBlast(region, woundMovementPenalty);
+            actor.ApplyBlast(
+                region,
+                woundMovementPenalty,
+                sourceActorId,
+                weaponId,
+                sequence,
+                combatEventId,
+                DamageMechanism.Thermal);
             notifications.Add(ActorCapabilityChanged, actorId);
             MarkStateChanged();
         }

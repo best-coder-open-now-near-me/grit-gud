@@ -266,11 +266,13 @@ namespace GritGud.Application.Gameplay
                 advances.Add(evolve(state, active[id]));
 
             var notifications = new GameplayNotificationBatch();
+            long sequence = gameplay.LastTransitionSequence + 1L;
             foreach (GameplayFireFieldAdvanceRecord advance in advances)
             {
                 ApplyConsequences(
-                    advance.Previous.Field.Definition,
+                    advance.Previous.Field,
                     advance.Pulses,
+                    sequence,
                     notifications);
                 if (advance.Resulting.HasValue)
                 {
@@ -291,11 +293,15 @@ namespace GritGud.Application.Gameplay
         }
 
         private void ApplyConsequences(
-            FireFieldDefinition definition,
+            FireFieldRecord field,
             IEnumerable<FireFieldPulseRecord> pulses,
+            long sequence,
             GameplayNotificationBatch notifications)
         {
+            FireFieldDefinition definition = field.Definition;
+            int pulseIndex = 0;
             foreach (FireFieldPulseRecord pulse in pulses)
+            {
                 foreach (FireFieldEffectRecord effect in pulse.Effects)
                     switch (effect.SubjectKind)
                     {
@@ -305,6 +311,12 @@ namespace GritGud.Application.Gameplay
                                     effect.EntityId,
                                     TargetRegionId.Torso,
                                     definition.ActorWoundMovementPenalty,
+                                    field.SourceActorId,
+                                    field.SourceItemId,
+                                    sequence,
+                                    "fire-impact:" + sequence + ":" + field.Id
+                                        + ":" + pulseIndex + ":"
+                                        + effect.EntityId,
                                     notifications);
                             break;
                         case FireFieldSubjectKind.DestructibleProp:
@@ -318,6 +330,8 @@ namespace GritGud.Application.Gameplay
                         default:
                             throw new ArgumentOutOfRangeException();
                     }
+                pulseIndex++;
+            }
         }
 
         private void ThrowIfDisposed()

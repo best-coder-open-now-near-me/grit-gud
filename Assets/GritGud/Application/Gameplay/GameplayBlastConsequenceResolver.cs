@@ -87,6 +87,28 @@ namespace GritGud.Application.Gameplay
             notifications.Publish();
         }
 
+        public void Apply(
+            IReadOnlyList<BlastEffectRecord> effects,
+            float woundMovementPenalty,
+            float integrityDamage,
+            string sourceActorId,
+            string weaponId,
+            long sequence,
+            string combatEventPrefix)
+        {
+            var notifications = new GameplayNotificationBatch();
+            Apply(
+                effects,
+                woundMovementPenalty,
+                integrityDamage,
+                notifications,
+                sourceActorId,
+                weaponId,
+                sequence,
+                combatEventPrefix);
+            notifications.Publish();
+        }
+
         public IReadOnlyList<ConcussiveActionPointEffectRecord>
             ResolveConcussiveEffects(
                 IReadOnlyList<BlastEffectRecord> effects,
@@ -142,7 +164,11 @@ namespace GritGud.Application.Gameplay
             IReadOnlyList<BlastEffectRecord> effects,
             float woundMovementPenalty,
             float integrityDamage,
-            GameplayNotificationBatch notifications)
+            GameplayNotificationBatch notifications,
+            string sourceActorId = null,
+            string weaponId = null,
+            long sequence = 0L,
+            string combatEventPrefix = null)
         {
             if (notifications == null)
             {
@@ -162,11 +188,26 @@ namespace GritGud.Application.Gameplay
                     case BlastSubjectKind.Actor:
                         if (woundMovementPenalty > 0f)
                         {
-                            gameplay.ApplyBlastInjury(
-                                effect.EntityId,
-                                effect.InjuryRegion,
-                                woundMovementPenalty * effect.Exposure,
-                                notifications);
+                            if (sourceActorId == null)
+                            {
+                                gameplay.ApplyBlastInjury(
+                                    effect.EntityId,
+                                    effect.InjuryRegion,
+                                    woundMovementPenalty * effect.Exposure,
+                                    notifications);
+                            }
+                            else
+                            {
+                                gameplay.ApplyBlastInjury(
+                                    effect.EntityId,
+                                    effect.InjuryRegion,
+                                    woundMovementPenalty * effect.Exposure,
+                                    sourceActorId,
+                                    weaponId,
+                                    sequence,
+                                    combatEventPrefix + ":" + effect.EntityId,
+                                    notifications);
+                            }
                         }
                         break;
 

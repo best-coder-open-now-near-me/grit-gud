@@ -22,7 +22,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplaySessionStateSnapshot
     {
-        public const int CurrentSchemaVersion = 8;
+        public const int CurrentSchemaVersion = 9;
 
         public GameplaySessionStateSnapshot(
             string scenarioId,
@@ -207,7 +207,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplayCombatStateSnapshot
     {
-        public const int CurrentSchemaVersion = 8;
+        public const int CurrentSchemaVersion = 9;
 
         public GameplayCombatStateSnapshot(
             GameplaySessionStateSnapshot session,
@@ -721,6 +721,36 @@ namespace GritGud.Application.Gameplay
                 actor.Wounds.UnlocalizedWounds);
             Append(text, root + ".penalty", actor.Wounds.MovementPenalty);
             Append(text, root + ".maximumWounds", actor.MaximumWounds);
+            Append(text, root + ".lifeState", (int)actor.LifeState);
+            Append(text, root + ".physiology.blood",
+                actor.Physiology.BloodReserve);
+            Append(text, root + ".physiology.shock", actor.Physiology.Shock);
+            Append(text, root + ".physiology.consciousness",
+                actor.Physiology.Consciousness);
+            Append(text, root + ".physiology.respiration",
+                actor.Physiology.Respiration);
+            for (int injuryIndex = 0;
+                injuryIndex < actor.Injuries.Injuries.Count;
+                injuryIndex++)
+            {
+                InjuryRecord injury = actor.Injuries.Injuries[injuryIndex];
+                string injuryRoot = root + ".injury." + injuryIndex;
+                Append(text, injuryRoot + ".id", injury.InjuryId);
+                Append(text, injuryRoot + ".event", injury.CombatEventId);
+                Append(text, injuryRoot + ".region",
+                    injury.Region.HasValue ? (int)injury.Region.Value : -1);
+                Append(text, injuryRoot + ".mechanism",
+                    (int)injury.Mechanism);
+                Append(text, injuryRoot + ".severity", injury.Severity);
+                Append(text, injuryRoot + ".structural",
+                    injury.StructuralDamage);
+                Append(text, injuryRoot + ".motor", injury.MotorLoss);
+                Append(text, injuryRoot + ".sensory", injury.SensoryLoss);
+                Append(text, injuryRoot + ".bleed", injury.BleedRate);
+                Append(text, injuryRoot + ".vital", injury.VitalDamage);
+                Append(text, injuryRoot + ".legacyPenalty",
+                    injury.CompatibilityMovementPenalty);
+            }
             Append(text, root + ".pin.active", actor.IsPinned);
             if (actor.PinState != null)
             {

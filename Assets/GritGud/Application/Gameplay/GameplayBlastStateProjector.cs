@@ -25,7 +25,10 @@ namespace GritGud.Application.Gameplay
             GameplayCanonicalStateMutation mutation,
             IEnumerable<BlastEffectRecord> effects,
             float woundMovementPenalty,
-            float integrityDamage)
+            float integrityDamage,
+            string sourceActorId,
+            string weaponId,
+            long sequence)
         {
             if (mutation == null) throw new ArgumentNullException(nameof(mutation));
             if (effects == null) throw new ArgumentNullException(nameof(effects));
@@ -37,6 +40,12 @@ namespace GritGud.Application.Gameplay
                 nameof(integrityDamage));
             if (woundMovementPenalty < 0f || integrityDamage < 0f)
                 throw new ArgumentOutOfRangeException(nameof(woundMovementPenalty));
+            if (string.IsNullOrWhiteSpace(sourceActorId)
+                || string.IsNullOrWhiteSpace(weaponId))
+                throw new ArgumentException(
+                    "Blast injury projection requires action provenance.");
+            if (sequence <= 0L)
+                throw new ArgumentOutOfRangeException(nameof(sequence));
 
             int actorInjuries = 0;
             int destructibleDamages = 0;
@@ -55,7 +64,10 @@ namespace GritGud.Application.Gameplay
                             ApplyActor(
                                 mutation,
                                 effect,
-                                woundMovementPenalty * effect.Exposure);
+                                woundMovementPenalty * effect.Exposure,
+                                sourceActorId,
+                                weaponId,
+                                sequence);
                             actorInjuries++;
                         }
                         break;
@@ -110,14 +122,33 @@ namespace GritGud.Application.Gameplay
         private static void ApplyActor(
             GameplayCanonicalStateMutation mutation,
             BlastEffectRecord effect,
-            float movementPenalty)
+            float movementPenalty,
+            string sourceActorId,
+            string weaponId,
+            long sequence)
         {
             GameplayActorSnapshot actor = mutation.GetActor(effect.EntityId);
-            ActorWoundSnapshot wounds = effect.InjuryRegion.HasValue
-                ? actor.Wounds.AddWound(
-                    effect.InjuryRegion.Value,
-                    movementPenalty)
-                : actor.Wounds.AddUnlocalizedWound(movementPenalty);
+            int severity = ActorInjuryRules.CalculateImpactSeverity(
+                movementPenalty,
+                100f,
+                100,
+                1,
+                100);
+            var impact = new LocalizedImpact(
+                "blast-impact:" + sequence + ":" + sourceActorId + ":"
+                    + effect.EntityId,
+                sourceActorId,
+                effect.EntityId,
+                weaponId,
+                effect.InjuryRegion,
+                DamageMechanism.Blast,
+                severity,
+                sequence);
+            ActorInjuryState injuries = ActorInjuryRules.ApplyImpact(
+                actor.Injuries,
+                impact,
+                movementPenalty).Resulting;
+            ActorWoundSnapshot wounds = LegacyWoundProjection.From(injuries);
             float allowance = Math.Max(
                 0f,
                 actor.TurnMovementAllowance - wounds.MovementPenalty);
@@ -127,7 +158,8 @@ namespace GritGud.Application.Gameplay
             mutation.ReplaceActor(GameplayCanonicalStateMutation.CopyActor(
                 actor,
                 budget: budget,
-                wounds: wounds));
+                wounds: wounds,
+                injuries: injuries));
         }
 
         private static bool ApplyDestructible(

@@ -892,7 +892,8 @@ namespace GritGud.Application.Gameplay
                 actor.EmergencyActionPointAllowance,
                 actor.SuspendedTurnBudget,
                 actor.AttacksCommittedThisTurn,
-                actor.Ammunition);
+                actor.Ammunition,
+                actor.Injuries);
 
         private static DestructiblePropSnapshot FindDestructible(
             IEnumerable<DestructiblePropSnapshot> values,

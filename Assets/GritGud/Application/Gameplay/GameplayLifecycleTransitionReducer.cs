@@ -216,6 +216,7 @@ namespace GritGud.Application.Gameplay
                     state,
                     mutation,
                     world,
+                    transition.Identity.Sequence,
                     out fireAdvances);
             }
             else if (transition.Payload
@@ -371,6 +372,7 @@ namespace GritGud.Application.Gameplay
             GameplayCombatStateSnapshot state,
             GameplayCanonicalStateMutation mutation,
             GameplayWorldAdvanceTransitionPayload payload,
+            long sequence,
             out IReadOnlyList<GameplayFireFieldAdvanceRecord> fireAdvances)
         {
             fireAdvances = Array.Empty<GameplayFireFieldAdvanceRecord>();
@@ -462,8 +464,9 @@ namespace GritGud.Application.Gameplay
                     GameplayFireProjectionCounts counts =
                         GameplayFireStateProjector.Apply(
                             mutation,
-                            fire.Field.Definition,
-                            advance.Pulses);
+                            fire.Field,
+                            advance.Pulses,
+                            sequence);
                     actorInjuries += counts.ActorInjuries;
                     destructibleDamages += counts.DestructibleDamages;
                     if (advance.Resulting.HasValue)

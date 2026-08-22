@@ -368,7 +368,12 @@ namespace GritGud.Application.Gameplay
                 outcome.Record.BlastEffects,
                 outcome.Record.Definition.BlastWoundMovementPenalty,
                 outcome.Record.Definition.BlastIntegrityDamage,
-                notifications);
+                notifications,
+                outcome.Record.ThrowerId,
+                outcome.Record.Definition.Id,
+                action.Sequence,
+                "blast-impact:" + action.Sequence + ":"
+                    + outcome.Record.ThrowerId);
             consequences.ApplyConcussiveEffects(
                 outcome.Record.ConcussiveEffects,
                 notifications);

@@ -44,7 +44,10 @@ namespace GritGud.Application.Gameplay
                 : ReduceNormal(session, mutation, payload);
             AdvanceSmokeFields(state, mutation);
             IReadOnlyList<GameplayFireFieldAdvanceRecord> fireAdvances =
-                AdvanceFireFields(state, mutation);
+                AdvanceFireFields(
+                    state,
+                    mutation,
+                    transition.Identity.Sequence);
             mutation.LastTurnSequence = record.Sequence;
             mutation.LastTransitionSequence = transition.Identity.Sequence;
             GameplayCombatStateSnapshot resulting = mutation.Build();
@@ -212,7 +215,8 @@ namespace GritGud.Application.Gameplay
         private static IReadOnlyList<GameplayFireFieldAdvanceRecord>
             AdvanceFireFields(
                 GameplayCombatStateSnapshot state,
-                GameplayCanonicalStateMutation mutation)
+                GameplayCanonicalStateMutation mutation,
+                long sequence)
         {
             if (!state.Covers(GameplayCombatStateCoverage.FireFields))
                 return Array.Empty<GameplayFireFieldAdvanceRecord>();
@@ -227,8 +231,9 @@ namespace GritGud.Application.Gameplay
                 GameplayFireProjectionCounts counts =
                     GameplayFireStateProjector.Apply(
                         mutation,
-                        fire.Field.Definition,
-                        advance.Pulses);
+                        fire.Field,
+                        advance.Pulses,
+                        sequence);
                 actorInjuries += counts.ActorInjuries;
                 destructibleDamages += counts.DestructibleDamages;
                 if (advance.Resulting.HasValue)

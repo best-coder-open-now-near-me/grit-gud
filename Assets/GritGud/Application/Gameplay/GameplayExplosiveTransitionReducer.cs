@@ -85,7 +85,10 @@ namespace GritGud.Application.Gameplay
                     mutation,
                     record.BlastEffects,
                     record.Definition.BlastWoundMovementPenalty,
-                    record.Definition.BlastIntegrityDamage);
+                    record.Definition.BlastIntegrityDamage,
+                    record.ThrowerId,
+                    record.Definition.Id,
+                    action.Sequence);
             int concussedActors = GameplayBlastStateProjector
                 .ApplyConcussiveEffects(
                     mutation,

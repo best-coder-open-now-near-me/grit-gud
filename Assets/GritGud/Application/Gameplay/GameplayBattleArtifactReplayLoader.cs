@@ -21,12 +21,18 @@ namespace GritGud.Application.Gameplay
             if (artifact == null) throw new ArgumentNullException(
                 nameof(artifact));
             GameplayBattleArtifactContent content = artifact.Content;
+            bool migratesLegacyInjuries = content.ExecutionIdentity.Gameplay
+                .RulesSchemaVersion < GameplayCombatStateSnapshot
+                    .CurrentSchemaVersion;
             GameplayCombatStateSnapshot initial = CanonicalReader.Read<
-                GameplayCombatStateSnapshot>(content.InitialStateCanonical);
-            RequireEqual(
-                "initial state hash",
-                content.InitialStateHash,
-                initial.CanonicalHash);
+                GameplayCombatStateSnapshot>(
+                    content.InitialStateCanonical,
+                    requireCanonicalRoundTrip: !migratesLegacyInjuries);
+            if (!migratesLegacyInjuries)
+                RequireEqual(
+                    "initial state hash",
+                    content.InitialStateHash,
+                    initial.CanonicalHash);
 
             var trajectory = new List<GameplayTrajectoryStep>(
                 content.Transitions.Count);
@@ -42,18 +48,23 @@ namespace GritGud.Application.Gameplay
                     GameplaySemanticTransition>(
                         recorded.TransitionCanonical,
                         requireCanonicalRoundTrip: false);
-                trajectory.Add(new GameplayTrajectoryStep(
-                    transition,
-                    recorded.ResultingStateHash,
-                    recorded.DomainEventTypes,
-                    recorded.TransitionPayloadDigest));
                 GameplayCombatStateSnapshot resulting = CanonicalReader.Read<
                     GameplayCombatStateSnapshot>(
-                        recorded.ResultingStateCanonical);
-                RequireEqual(
-                    "transition[" + resultingStates.Count + "].state hash",
-                    recorded.ResultingStateHash,
-                    resulting.CanonicalHash);
+                        recorded.ResultingStateCanonical,
+                        requireCanonicalRoundTrip: !migratesLegacyInjuries);
+                if (!migratesLegacyInjuries)
+                    RequireEqual(
+                        "transition[" + resultingStates.Count
+                            + "].state hash",
+                        recorded.ResultingStateHash,
+                        resulting.CanonicalHash);
+                trajectory.Add(new GameplayTrajectoryStep(
+                    transition,
+                    migratesLegacyInjuries
+                        ? resulting.CanonicalHash
+                        : recorded.ResultingStateHash,
+                    recorded.DomainEventTypes,
+                    recorded.TransitionPayloadDigest));
                 resultingStates.Add(resulting);
 
                 var transitionEvents = new List<GameplayDomainEvent>(
@@ -82,10 +93,11 @@ namespace GritGud.Application.Gameplay
                 trajectory,
                 resultingStates,
                 domainEvents);
-            RequireEqual(
-                "terminal state hash",
-                content.Terminal.FinalStateHash,
-                replay.FinalState.CanonicalHash);
+            if (!migratesLegacyInjuries)
+                RequireEqual(
+                    "terminal state hash",
+                    content.Terminal.FinalStateHash,
+                    replay.FinalState.CanonicalHash);
             return replay;
         }
 

@@ -71,8 +71,10 @@ namespace GritGud.Application.Gameplay
             if (!target.Wounds.HasSameState(attack.TargetWoundsBefore))
             {
                 throw new InvalidOperationException(
-                    "The attack no longer begins at the target's authoritative wound state.");
+                    "The attack no longer begins at the target's authoritative injury state.");
             }
+            if (attack.Hit)
+                ActorInjuryRules.ApplyDelta(target.Injuries, attack.Injury);
         }
     }
 

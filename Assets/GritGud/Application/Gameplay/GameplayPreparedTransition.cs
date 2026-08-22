@@ -244,6 +244,7 @@ namespace GritGud.Application.Gameplay
             GameplayActorPose pose = actor.Pose;
             TurnBudget budget = actor.TurnBudget;
             ActorWoundSnapshot wounds = actor.Wounds;
+            ActorInjuryState injuries = actor.Injuries;
             ActorAmmunitionSnapshot ammunition = actor.Ammunition;
             int attacksCommittedThisTurn = actor.AttacksCommittedThisTurn;
             if (string.Equals(
@@ -280,6 +281,10 @@ namespace GritGud.Application.Gameplay
                     StringComparison.Ordinal))
             {
                 wounds = resolved.Attack.TargetWoundsAfter;
+                if (resolved.Attack.Hit)
+                    injuries = ActorInjuryRules.ApplyDelta(
+                        actor.Injuries,
+                        resolved.Attack.Injury);
                 float woundedAllowance = Math.Max(
                     0f,
                     actor.TurnMovementAllowance - wounds.MovementPenalty);
@@ -303,7 +308,8 @@ namespace GritGud.Application.Gameplay
                 actor.EmergencyActionPointAllowance,
                 actor.SuspendedTurnBudget,
                 attacksCommittedThisTurn,
-                ammunition);
+                ammunition,
+                injuries);
         }
 
         private static GameplayActorPose FaceToward(

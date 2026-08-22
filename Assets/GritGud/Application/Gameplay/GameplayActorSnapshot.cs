@@ -48,7 +48,8 @@ namespace GritGud.Application.Gameplay
             int emergencyActionPointAllowance = 0,
             TurnBudget? suspendedTurnBudget = null,
             int attacksCommittedThisTurn = 0,
-            ActorAmmunitionSnapshot ammunition = null)
+            ActorAmmunitionSnapshot ammunition = null,
+            ActorInjuryState injuries = null)
         {
             if (!string.Equals(actorId, wounds.ActorId, StringComparison.Ordinal))
             {
@@ -101,6 +102,23 @@ namespace GritGud.Application.Gameplay
                     "Actor snapshots and pin state must share an identifier.",
                     nameof(pinState));
             }
+            ActorInjuryState resolvedInjuries = injuries
+                ?? LegacyWoundProjection.ToInjuryState(
+                    wounds,
+                    maximumWounds);
+            if (!string.Equals(
+                    actorId,
+                    resolvedInjuries.ActorId,
+                    StringComparison.Ordinal))
+                throw new ArgumentException(
+                    "Actor snapshots and injury state must share an identifier.",
+                    nameof(injuries));
+            ActorWoundSnapshot projectedWounds =
+                LegacyWoundProjection.From(resolvedInjuries);
+            if (!projectedWounds.HasSameState(wounds))
+                throw new ArgumentException(
+                    "Compatibility wounds must be projected from injury state.",
+                    nameof(wounds));
 
             ActorId = actorId;
             Pose = pose;
@@ -123,6 +141,7 @@ namespace GritGud.Application.Gameplay
             SuspendedTurnBudget = suspendedTurnBudget;
             AttacksCommittedThisTurn = attacksCommittedThisTurn;
             Ammunition = resolvedAmmunition;
+            Injuries = resolvedInjuries;
             if (float.IsNaN(TurnMovementAllowance)
                 || float.IsInfinity(TurnMovementAllowance)
                 || ActionPointEconomy.MaximumHeldActionPoints
@@ -163,8 +182,19 @@ namespace GritGud.Application.Gameplay
 
         public ActorAmmunitionSnapshot Ammunition { get; }
 
+        public ActorInjuryState Injuries { get; }
+
+        public ActorCapabilityState Capabilities => Injuries.Capabilities;
+
+        public ActorPhysiologyState Physiology => Injuries.Physiology;
+
+        public ActorLifeState LifeState => Injuries.LifeState;
+
         public bool IsPinned => PinState != null;
 
-        public bool IsIncapacitated => Wounds.WoundCount >= MaximumWounds;
+        public bool IsIncapacitated => LifeState != ActorLifeState.Active
+            || Wounds.WoundCount >= MaximumWounds;
+
+        public bool IsDead => LifeState == ActorLifeState.Dead;
     }
 }

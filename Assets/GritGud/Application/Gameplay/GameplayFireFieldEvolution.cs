@@ -219,12 +219,19 @@ namespace GritGud.Application.Gameplay
     {
         public static GameplayFireProjectionCounts Apply(
             GameplayCanonicalStateMutation mutation,
-            FireFieldDefinition definition,
-            IEnumerable<FireFieldPulseRecord> pulses)
+            FireFieldRecord field,
+            IEnumerable<FireFieldPulseRecord> pulses,
+            long sequence)
         {
+            if (field == null) throw new ArgumentNullException(nameof(field));
+            if (sequence <= 0L)
+                throw new ArgumentOutOfRangeException(nameof(sequence));
+            FireFieldDefinition definition = field.Definition;
             int actorInjuries = 0;
             int destructibleDamages = 0;
+            int pulseIndex = 0;
             foreach (FireFieldPulseRecord pulse in pulses)
+            {
                 foreach (FireFieldEffectRecord effect in pulse.Effects)
                     switch (effect.SubjectKind)
                     {
@@ -233,7 +240,10 @@ namespace GritGud.Application.Gameplay
                                 && ApplyActor(
                                     mutation,
                                     effect.EntityId,
-                                    definition.ActorWoundMovementPenalty))
+                                    definition.ActorWoundMovementPenalty,
+                                    field,
+                                    sequence,
+                                    pulseIndex))
                                 actorInjuries++;
                             break;
                         case FireFieldSubjectKind.DestructibleProp:
@@ -247,6 +257,8 @@ namespace GritGud.Application.Gameplay
                         default:
                             throw new ArgumentOutOfRangeException();
                     }
+                pulseIndex++;
+            }
             return new GameplayFireProjectionCounts(
                 actorInjuries,
                 destructibleDamages);
@@ -255,13 +267,34 @@ namespace GritGud.Application.Gameplay
         private static bool ApplyActor(
             GameplayCanonicalStateMutation mutation,
             string actorId,
-            float movementPenalty)
+            float movementPenalty,
+            FireFieldRecord field,
+            long sequence,
+            int pulseIndex)
         {
             GameplayActorSnapshot actor = mutation.GetActor(actorId);
-            if (actor.Wounds.WoundCount >= actor.MaximumWounds) return false;
-            ActorWoundSnapshot wounds = actor.Wounds.AddWound(
+            if (actor.IsIncapacitated) return false;
+            int severity = ActorInjuryRules.CalculateImpactSeverity(
+                movementPenalty,
+                100f,
+                100,
+                1,
+                100);
+            var impact = new LocalizedImpact(
+                "fire-impact:" + sequence + ":" + field.Id + ":"
+                    + pulseIndex + ":" + actorId,
+                field.SourceActorId,
+                actorId,
+                field.SourceItemId,
                 TargetRegionId.Torso,
-                movementPenalty);
+                DamageMechanism.Thermal,
+                severity,
+                sequence);
+            ActorInjuryState injuries = ActorInjuryRules.ApplyImpact(
+                actor.Injuries,
+                impact,
+                movementPenalty).Resulting;
+            ActorWoundSnapshot wounds = LegacyWoundProjection.From(injuries);
             float allowance = Math.Max(
                 0f,
                 actor.TurnMovementAllowance - wounds.MovementPenalty);
@@ -272,7 +305,8 @@ namespace GritGud.Application.Gameplay
                     Math.Min(
                         actor.TurnBudget.MovementOpportunity,
                         allowance)),
-                wounds: wounds));
+                wounds: wounds,
+                injuries: injuries));
             return true;
         }
 

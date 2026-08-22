@@ -284,7 +284,9 @@ namespace GritGud.Domain.Gameplay
             TargetRegionId? hitRegion,
             ActorWoundRecord wound,
             float? maximumReach = null,
-            IGameplayActionContext context = null)
+            IGameplayActionContext context = null,
+            ActorInjuryState targetInjuryStateBefore = null,
+            ActorInjuryDelta injury = null)
         {
             if (sequence <= 0)
             {
@@ -349,6 +351,21 @@ namespace GritGud.Domain.Gameplay
                 distance,
                 context?.AccuracyDeltaPercent ?? 0);
             bool hit = hitRoll <= hitChance;
+            ActorInjuryState resolvedInjuryStateBefore =
+                targetInjuryStateBefore
+                ?? LegacyWoundProjection.ToInjuryState(
+                    targetWoundsBefore,
+                    int.MaxValue);
+            if (!string.Equals(
+                    resolvedInjuryStateBefore.ActorId,
+                    targetWoundsBefore.ActorId,
+                    StringComparison.Ordinal)
+                || !LegacyWoundProjection.From(resolvedInjuryStateBefore)
+                    .HasSameState(targetWoundsBefore))
+                throw new ArgumentException(
+                    "Attack injury state must project the recorded prior wounds.",
+                    nameof(targetInjuryStateBefore));
+            ActorInjuryDelta resolvedInjury = injury;
             if (hit)
             {
                 if (!hitRegion.HasValue || wound == null)
@@ -374,8 +391,45 @@ namespace GritGud.Domain.Gameplay
                         "The wound does not match the recorded region roll.",
                         nameof(wound));
                 }
+                if (resolvedInjury == null)
+                {
+                    int legacySeverity = Math.Max(
+                        1,
+                        Math.Min(
+                            100,
+                            (int)Math.Round(
+                                wound.AppliedMovementPenalty * 25f,
+                                MidpointRounding.AwayFromZero)));
+                    var legacyImpact = new LocalizedImpact(
+                        "impact:" + sequence + ":" + exposure.ObserverId
+                            + ":" + exposure.TargetId,
+                        exposure.ObserverId,
+                        exposure.TargetId,
+                        "attack.legacy",
+                        hitRegion,
+                        maximumReach.HasValue
+                            ? DamageMechanism.Blunt
+                            : DamageMechanism.Ballistic,
+                        legacySeverity,
+                        sequence);
+                    resolvedInjury = ActorInjuryRules.ApplyImpact(
+                        resolvedInjuryStateBefore,
+                        legacyImpact,
+                        wound.AppliedMovementPenalty).Delta;
+                }
+                ActorInjuryState resolvedInjuryStateAfter =
+                    ActorInjuryRules.ApplyDelta(
+                        resolvedInjuryStateBefore,
+                        resolvedInjury);
+                if (resolvedInjury.Injury.Region != hitRegion
+                    || !LegacyWoundProjection.From(resolvedInjuryStateAfter)
+                        .HasSameState(wound.Resulting))
+                    throw new ArgumentException(
+                        "Localized injury does not match the recorded wound.",
+                        nameof(injury));
             }
-            else if (regionRoll != 0 || hitRegion.HasValue || wound != null)
+            else if (regionRoll != 0 || hitRegion.HasValue || wound != null
+                || resolvedInjury != null)
             {
                 throw new ArgumentException(
                     "Misses cannot contain a region or wound outcome.",
@@ -399,6 +453,7 @@ namespace GritGud.Domain.Gameplay
             HitRegion = hitRegion;
             Wound = wound;
             Context = context;
+            Injury = resolvedInjury;
         }
 
         public long Sequence { get; }
@@ -455,6 +510,8 @@ namespace GritGud.Domain.Gameplay
 
         public ActorWoundRecord Wound { get; }
 
+        public ActorInjuryDelta Injury { get; }
+
         public IGameplayActionContext Context { get; }
 
         private static bool WoundsMatch(
@@ -508,7 +565,10 @@ namespace GritGud.Domain.Gameplay
             ActorWoundSnapshot targetWoundsBefore,
             float woundMovementPenalty,
             ContactAttackDefinition contact = null,
-            IGameplayActionContext context = null)
+            IGameplayActionContext context = null,
+            ActorInjuryState targetInjuryStateBefore = null,
+            string weaponId = null,
+            DamageMechanism? damageMechanism = null)
         {
             if (exposure == null)
             {
@@ -550,17 +610,44 @@ namespace GritGud.Domain.Gameplay
                     hitRegion: null,
                     wound: null,
                     maximumReach: contact?.MaximumReach,
-                    context: context);
+                    context: context,
+                    targetInjuryStateBefore: targetInjuryStateBefore);
             }
 
             int regionRoll = rolls.Roll(exposure.VisibleSampleCount);
             TargetRegionId hitRegion = TargetExposureRules.SelectVisibleRegion(
                 exposure,
                 regionRoll);
+            ActorInjuryState resolvedInjuries = targetInjuryStateBefore
+                ?? LegacyWoundProjection.ToInjuryState(
+                    targetWoundsBefore,
+                    int.MaxValue);
+            int severity = ActorInjuryRules.CalculateImpactSeverity(
+                woundMovementPenalty,
+                accuracyDecay.EvaluatePercent(distance),
+                hitChance,
+                hitRoll,
+                TargetExposureRules.CalculateHitChancePercent(exposure));
+            var impact = new LocalizedImpact(
+                "impact:" + sequence + ":" + exposure.ObserverId
+                    + ":" + exposure.TargetId,
+                exposure.ObserverId,
+                exposure.TargetId,
+                string.IsNullOrWhiteSpace(weaponId)
+                    ? "attack.legacy"
+                    : weaponId,
+                hitRegion,
+                damageMechanism ?? (contact == null
+                    ? DamageMechanism.Ballistic
+                    : DamageMechanism.Blunt),
+                severity,
+                sequence);
+            ActorInjuryResolution injury = ActorInjuryRules.ApplyImpact(
+                resolvedInjuries,
+                impact,
+                woundMovementPenalty);
             ActorWoundSnapshot resultingWounds =
-                targetWoundsBefore.AddWound(
-                    hitRegion,
-                    woundMovementPenalty);
+                LegacyWoundProjection.From(injury.Resulting);
             var wound = new ActorWoundRecord(
                 hitRegion,
                 woundMovementPenalty,
@@ -578,7 +665,9 @@ namespace GritGud.Domain.Gameplay
                 hitRegion,
                 wound,
                 contact?.MaximumReach,
-                context);
+                context,
+                resolvedInjuries,
+                injury.Delta);
         }
 
         private sealed class SeededAttackRolls

@@ -21,6 +21,7 @@ namespace GritGud.Application.Gameplay
         private GameplayActorPose pose;
         private TurnBudget turnBudget;
         private ActorWoundSnapshot wounds;
+        private ActorInjuryState injuries;
         private ActorPinState pinState;
         private TurnBudget? suspendedTurnBudget;
         private int attacksCommittedThisTurn;
@@ -42,6 +43,7 @@ namespace GritGud.Application.Gameplay
             pose = definition.StartingPose;
             MaximumWounds = definition.Combat.MaximumWounds;
             wounds = new ActorWoundSnapshot(definition.Id, 0, 0f);
+            injuries = ActorInjuryState.CreateHealthy(definition.Id);
             turnBudget = new TurnBudget(
                 definition.StartingTurnBudget.ActionPoints,
                 definition.StartingTurnBudget.MovementOpportunity);
@@ -129,9 +131,18 @@ namespace GritGud.Application.Gameplay
 
         public ActorWoundSnapshot Wounds => wounds;
 
+        public ActorInjuryState Injuries => injuries;
+
+        public ActorCapabilityState Capabilities => injuries.Capabilities;
+
+        public ActorLifeState LifeState => injuries.LifeState;
+
         public int MaximumWounds { get; }
 
-        public bool IsIncapacitated => Wounds.WoundCount >= MaximumWounds;
+        public bool IsIncapacitated => LifeState != ActorLifeState.Active
+            || Wounds.WoundCount >= MaximumWounds;
+
+        public bool IsDead => LifeState == ActorLifeState.Dead;
 
         public string EquippedItemId { get; private set; }
 
@@ -254,6 +265,9 @@ namespace GritGud.Application.Gameplay
                 return;
 
             wounds = attack.TargetWoundsAfter;
+            injuries = ActorInjuryRules.ApplyDelta(
+                injuries,
+                attack.Injury);
             TurnBudget = new TurnBudget(
                 TurnBudget.ActionPoints,
                 Math.Min(
@@ -265,11 +279,47 @@ namespace GritGud.Application.Gameplay
             TargetRegionId? region,
             float movementPenalty)
         {
+            long sequence = wounds.WoundCount + 1L;
+            ApplyBlast(
+                region,
+                movementPenalty,
+                "environment",
+                "blast.legacy",
+                sequence,
+                "legacy-blast:" + ActorId + ":" + sequence);
+        }
+
+        public void ApplyBlast(
+            TargetRegionId? region,
+            float movementPenalty,
+            string sourceActorId,
+            string weaponId,
+            long sequence,
+            string combatEventId,
+            DamageMechanism mechanism = DamageMechanism.Blast)
+        {
             if (movementPenalty <= 0f)
                 return;
-            wounds = region.HasValue
-                ? wounds.AddWound(region.Value, movementPenalty)
-                : wounds.AddUnlocalizedWound(movementPenalty);
+            int severity = ActorInjuryRules.CalculateImpactSeverity(
+                movementPenalty,
+                100f,
+                100,
+                1,
+                100);
+            var impact = new LocalizedImpact(
+                combatEventId,
+                sourceActorId,
+                ActorId,
+                weaponId,
+                region,
+                mechanism,
+                severity,
+                sequence);
+            injuries = ActorInjuryRules.ApplyImpact(
+                injuries,
+                impact,
+                movementPenalty).Resulting;
+            wounds = LegacyWoundProjection.From(injuries);
             TurnBudget = new TurnBudget(
                 TurnBudget.ActionPoints,
                 Math.Min(
@@ -326,6 +376,7 @@ namespace GritGud.Application.Gameplay
             pose = snapshot.Pose;
             turnBudget = snapshot.TurnBudget;
             wounds = snapshot.Wounds;
+            injuries = snapshot.Injuries;
             EquippedItemId = snapshot.EquippedItemId;
             EquipmentEffects = snapshot.EquipmentEffects;
             pinState = snapshot.PinState;
@@ -429,7 +480,8 @@ namespace GritGud.Application.Gameplay
                 EmergencyActionPointAllowance,
                 suspendedTurnBudget,
                 attacksCommittedThisTurn,
-                cachedAmmunition);
+                cachedAmmunition,
+                injuries);
             actorSnapshotDirty = false;
             return cachedSnapshot;
         }
@@ -446,7 +498,8 @@ namespace GritGud.Application.Gameplay
                 actionPointEconomy,
                 turnBudgetAllowance.MovementOpportunity,
                 PinState,
-                attacksCommittedThisTurn);
+                attacksCommittedThisTurn,
+                injuries);
 
         private float WoundedMovementAllowance => Math.Max(
             0f,
