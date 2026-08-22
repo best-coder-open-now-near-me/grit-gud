@@ -854,6 +854,12 @@ namespace GritGud.Presentation.Gameplay
                 .Append(actor.Capabilities.ReloadCapacity)
                 .Append(" T:")
                 .Append(actor.Capabilities.ThrowCapacity)
+                .Append(" | gait=")
+                .Append(actor.Capabilities.Mobility.Gait)
+                .Append(" impaired-side=")
+                .Append(actor.Capabilities.Mobility.ImpairedSide)
+                .Append(" sprint=")
+                .Append(FormatBool(actor.Capabilities.Mobility.CanSprint))
                 .Append(" | compatibility-wounds=")
                 .Append(actor.Wounds.WoundCount.ToString(
                     CultureInfo.InvariantCulture))

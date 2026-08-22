@@ -264,6 +264,8 @@ namespace GritGud.Application.Gameplay
                     $"Actor '{actorId}' legacy wound movement penalty");
             else
                 ValidateDamageProfile(actorId, attack.damageProfile);
+            if (attack.handlingProfile != null)
+                ValidateHandlingProfile(actorId, attack.handlingProfile);
             GameplayScenarioAssemblyValidation.Require(
                 !hasDamageProfile || !HasAuthoredDirectFireDamage(
                     attack.directFireDamage),
@@ -423,7 +425,8 @@ namespace GritGud.Application.Gameplay
                     accuracyDecayDefinition,
                     contactDefinition,
                     attack.soundSignature,
-                    attack.directVehicleIntegrityDamage);
+                    attack.directVehicleIntegrityDamage,
+                    CreateWeaponHandlingProfile(attack.handlingProfile));
             return new AttackDefinition(
                 attack.actionId,
                 attack.displayName,
@@ -434,8 +437,68 @@ namespace GritGud.Application.Gameplay
                 contactDefinition,
                 CreateDirectFireDamageDefinition(attack.directFireDamage),
                 attack.soundSignature,
-                attack.directVehicleIntegrityDamage);
+                attack.directVehicleIntegrityDamage,
+                CreateWeaponHandlingProfile(attack.handlingProfile));
         }
+
+        private static void ValidateHandlingProfile(
+            string actorId,
+            ScenarioWeaponHandlingProfileData data)
+        {
+            GameplayScenarioAssemblyValidation.Require(
+                data.schemaVersion
+                    == WeaponHandlingProfileDefinition.CurrentSchemaVersion,
+                $"Actor '{actorId}' weapon handling profile schema must be "
+                + $"{WeaponHandlingProfileDefinition.CurrentSchemaVersion}.");
+            GameplayScenarioAssemblyValidation.Require(
+                data.requiredHands >= 1 && data.requiredHands <= 2,
+                $"Actor '{actorId}' weapon handling profile must require one or two hands.");
+            GameplayScenarioAssemblyValidation.Require(
+                string.Equals(data.primaryHand, "left",
+                    StringComparison.OrdinalIgnoreCase)
+                || string.Equals(data.primaryHand, "right",
+                    StringComparison.OrdinalIgnoreCase),
+                $"Actor '{actorId}' weapon handling primary hand must be left or right.");
+            RequirePercent(actorId, data.minimumPrimaryGrip,
+                "minimum primary grip");
+            RequirePercent(actorId, data.minimumSupportGrip,
+                "minimum support grip");
+            RequirePercent(actorId, data.minimumAimStability,
+                "minimum aim stability");
+            RequirePercent(actorId, data.minimumReloadCapacity,
+                "minimum reload capacity");
+            GameplayScenarioAssemblyValidation.Require(
+                data.requiredHands == 2 || data.minimumSupportGrip == 0,
+                $"Actor '{actorId}' one-handed weapon profile cannot require support grip.");
+        }
+
+        private static WeaponHandlingProfileDefinition
+            CreateWeaponHandlingProfile(
+                ScenarioWeaponHandlingProfileData data)
+        {
+            if (data == null)
+                return null;
+            return new WeaponHandlingProfileDefinition(
+                data.schemaVersion,
+                data.requiredHands,
+                string.Equals(data.primaryHand, "left",
+                    StringComparison.OrdinalIgnoreCase)
+                    ? WeaponPrimaryHand.Left
+                    : WeaponPrimaryHand.Right,
+                data.minimumPrimaryGrip,
+                data.minimumSupportGrip,
+                data.minimumAimStability,
+                data.minimumReloadCapacity,
+                data.canBraceWithOneHand,
+                data.canFireProne);
+        }
+
+        private static void RequirePercent(
+            string actorId,
+            int value,
+            string label) => GameplayScenarioAssemblyValidation.Require(
+                value >= 0 && value <= 100,
+                $"Actor '{actorId}' weapon handling {label} must be between zero and 100.");
 
         private static bool HasImmediateEnemyAttack(
             ScenarioActorContentData actor)

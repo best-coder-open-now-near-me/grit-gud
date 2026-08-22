@@ -148,6 +148,20 @@ namespace GritGud.Domain.Gameplay
     }
 
     [Serializable]
+    public sealed class ScenarioWeaponHandlingProfileData
+    {
+        public int schemaVersion;
+        public int requiredHands;
+        public string primaryHand = "right";
+        public int minimumPrimaryGrip;
+        public int minimumSupportGrip;
+        public int minimumAimStability;
+        public int minimumReloadCapacity;
+        public bool canBraceWithOneHand;
+        public bool canFireProne = true;
+    }
+
+    [Serializable]
     public sealed class ScenarioAttackCapabilityData
     {
         public bool enabled;
@@ -160,6 +174,7 @@ namespace GritGud.Domain.Gameplay
         public ScenarioContactAttackData contact;
         public ScenarioDirectFireDamageData directFireDamage;
         public ScenarioWeaponDamageProfileData damageProfile;
+        public ScenarioWeaponHandlingProfileData handlingProfile;
         public float soundSignature = 1f;
         public float directVehicleIntegrityDamage;
     }
@@ -484,7 +499,7 @@ namespace GritGud.Domain.Gameplay
     [Serializable]
     public sealed class ScenarioContentDocument
     {
-        public const int CurrentSchemaVersion = 20;
+        public const int CurrentSchemaVersion = 21;
 
         public int schemaVersion = CurrentSchemaVersion;
         public string scenarioId = string.Empty;

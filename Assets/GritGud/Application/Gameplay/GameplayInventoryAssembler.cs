@@ -109,6 +109,11 @@ namespace GritGud.Application.Gameplay
                     GameplayActorCombatAssembler.ValidateAttack(
                         actor.id,
                         item.attackCapability);
+                    Require(
+                        item.attackCapability.handlingProfile == null
+                        || item.attackCapability.handlingProfile.requiredHands
+                            == occupiedHands,
+                        $"Actor '{actor.id}' weapon '{item.id}' occupied hands must match its handling profile.");
                     ValidateAmmunition(actor.id, item);
                 }
                 else

@@ -744,7 +744,10 @@ namespace GritGud.Application.Gameplay
             + previous.ReloadCapacity + " -> "
             + resulting.ReloadCapacity + " - THROW "
             + previous.ThrowCapacity + " -> "
-            + resulting.ThrowCapacity;
+            + resulting.ThrowCapacity + " - GAIT "
+            + previous.Mobility.Gait + " -> "
+            + resulting.Mobility.Gait + " ("
+            + resulting.Mobility.ImpairedSide + ")";
 
         private static string FormatPhysiologyChange(
             ActorPhysiologyState previous,

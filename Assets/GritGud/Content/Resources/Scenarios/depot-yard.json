@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 20,
+  "schemaVersion": 21,
   "scenarioId": "depot-yard",
   "displayName": "Depot Yard",
   "levelId": "main-depot-yard-v1",
@@ -159,6 +159,17 @@
             "enabled": true,
             "actionId": "attack.rifle",
             "displayName": "Fire rifle",
+            "handlingProfile": {
+              "schemaVersion": 1,
+              "requiredHands": 2,
+              "primaryHand": "right",
+              "minimumPrimaryGrip": 35,
+              "minimumSupportGrip": 35,
+              "minimumAimStability": 25,
+              "minimumReloadCapacity": 25,
+              "canBraceWithOneHand": false,
+              "canFireProne": true
+            },
             "turnCost": {
               "actionPoints": 1,
               "movementOpportunity": 0.0,
@@ -296,6 +307,17 @@
             "enabled": true,
             "actionId": "attack.rocket",
             "displayName": "Launch rocket",
+            "handlingProfile": {
+              "schemaVersion": 1,
+              "requiredHands": 2,
+              "primaryHand": "right",
+              "minimumPrimaryGrip": 50,
+              "minimumSupportGrip": 50,
+              "minimumAimStability": 35,
+              "minimumReloadCapacity": 40,
+              "canBraceWithOneHand": false,
+              "canFireProne": true
+            },
             "turnCost": {
               "actionPoints": 2,
               "movementOpportunity": 0.0,
@@ -462,6 +484,17 @@
             "enabled": true,
             "actionId": "attack.combat-knife",
             "displayName": "Knife strike",
+            "handlingProfile": {
+              "schemaVersion": 1,
+              "requiredHands": 1,
+              "primaryHand": "right",
+              "minimumPrimaryGrip": 30,
+              "minimumSupportGrip": 0,
+              "minimumAimStability": 0,
+              "minimumReloadCapacity": 0,
+              "canBraceWithOneHand": true,
+              "canFireProne": true
+            },
             "turnCost": {
               "actionPoints": 1,
               "movementOpportunity": 0.0,
@@ -599,6 +632,17 @@
             "enabled": true,
             "actionId": "attack.rifle",
             "displayName": "Fire rifle",
+            "handlingProfile": {
+              "schemaVersion": 1,
+              "requiredHands": 2,
+              "primaryHand": "right",
+              "minimumPrimaryGrip": 35,
+              "minimumSupportGrip": 35,
+              "minimumAimStability": 25,
+              "minimumReloadCapacity": 25,
+              "canBraceWithOneHand": false,
+              "canFireProne": true
+            },
             "turnCost": {
               "actionPoints": 1,
               "movementOpportunity": 0.0,
@@ -808,6 +852,17 @@
             "enabled": true,
             "actionId": "attack.combat-knife",
             "displayName": "Knife strike",
+            "handlingProfile": {
+              "schemaVersion": 1,
+              "requiredHands": 1,
+              "primaryHand": "right",
+              "minimumPrimaryGrip": 30,
+              "minimumSupportGrip": 0,
+              "minimumAimStability": 0,
+              "minimumReloadCapacity": 0,
+              "canBraceWithOneHand": true,
+              "canFireProne": true
+            },
             "turnCost": {
               "actionPoints": 1,
               "movementOpportunity": 0.0,
@@ -928,6 +983,17 @@
             "enabled": true,
             "actionId": "attack.rifle",
             "displayName": "Fire rifle",
+            "handlingProfile": {
+              "schemaVersion": 1,
+              "requiredHands": 2,
+              "primaryHand": "right",
+              "minimumPrimaryGrip": 35,
+              "minimumSupportGrip": 35,
+              "minimumAimStability": 25,
+              "minimumReloadCapacity": 25,
+              "canBraceWithOneHand": false,
+              "canFireProne": true
+            },
             "turnCost": {
               "actionPoints": 1,
               "movementOpportunity": 0.0,
@@ -1108,6 +1174,17 @@
             "enabled": true,
             "actionId": "attack.rifle",
             "displayName": "Fire rifle",
+            "handlingProfile": {
+              "schemaVersion": 1,
+              "requiredHands": 2,
+              "primaryHand": "right",
+              "minimumPrimaryGrip": 35,
+              "minimumSupportGrip": 35,
+              "minimumAimStability": 25,
+              "minimumReloadCapacity": 25,
+              "canBraceWithOneHand": false,
+              "canFireProne": true
+            },
             "turnCost": {
               "actionPoints": 1,
               "movementOpportunity": 0.0,
@@ -1313,6 +1390,17 @@
             "enabled": true,
             "actionId": "attack.rifle",
             "displayName": "Fire rifle",
+            "handlingProfile": {
+              "schemaVersion": 1,
+              "requiredHands": 2,
+              "primaryHand": "right",
+              "minimumPrimaryGrip": 35,
+              "minimumSupportGrip": 35,
+              "minimumAimStability": 25,
+              "minimumReloadCapacity": 25,
+              "canBraceWithOneHand": false,
+              "canFireProne": true
+            },
             "turnCost": {
               "actionPoints": 1,
               "movementOpportunity": 0.0,
@@ -1509,6 +1597,17 @@
             "enabled": true,
             "actionId": "attack.rifle",
             "displayName": "Fire rifle",
+            "handlingProfile": {
+              "schemaVersion": 1,
+              "requiredHands": 2,
+              "primaryHand": "right",
+              "minimumPrimaryGrip": 35,
+              "minimumSupportGrip": 35,
+              "minimumAimStability": 25,
+              "minimumReloadCapacity": 25,
+              "canBraceWithOneHand": false,
+              "canFireProne": true
+            },
             "turnCost": {
               "actionPoints": 1,
               "movementOpportunity": 0.0,
@@ -1778,6 +1877,17 @@
         "enabled": true,
         "actionId": "attack.drone-light-rifle",
         "displayName": "Drone Light Rifle",
+        "handlingProfile": {
+          "schemaVersion": 1,
+          "requiredHands": 2,
+          "primaryHand": "right",
+          "minimumPrimaryGrip": 35,
+          "minimumSupportGrip": 35,
+          "minimumAimStability": 25,
+          "minimumReloadCapacity": 25,
+          "canBraceWithOneHand": false,
+          "canFireProne": true
+        },
         "turnCost": {
           "actionPoints": 1,
           "movementOpportunity": 0.0,

@@ -36,13 +36,13 @@ namespace GritGud.Application.Gameplay
                     + rulesSchemaVersion + " is unsupported; expected "
                     + OldestSupportedRulesSchemaVersion + " through "
                     + GameplayCombatStateSnapshot.CurrentSchemaVersion + ".");
-            bool migratesLegacyInjuries = rulesSchemaVersion
+            bool migratesLegacyState = rulesSchemaVersion
                 < GameplayCombatStateSnapshot.CurrentSchemaVersion;
             GameplayCombatStateSnapshot initial = CanonicalReader.Read<
                 GameplayCombatStateSnapshot>(
                     content.InitialStateCanonical,
-                    requireCanonicalRoundTrip: !migratesLegacyInjuries);
-            if (!migratesLegacyInjuries)
+                    requireCanonicalRoundTrip: !migratesLegacyState);
+            if (!migratesLegacyState)
                 RequireEqual(
                     "initial state hash",
                     content.InitialStateHash,
@@ -65,8 +65,8 @@ namespace GritGud.Application.Gameplay
                 GameplayCombatStateSnapshot resulting = CanonicalReader.Read<
                     GameplayCombatStateSnapshot>(
                         recorded.ResultingStateCanonical,
-                        requireCanonicalRoundTrip: !migratesLegacyInjuries);
-                if (!migratesLegacyInjuries)
+                        requireCanonicalRoundTrip: !migratesLegacyState);
+                if (!migratesLegacyState)
                     RequireEqual(
                         "transition[" + resultingStates.Count
                             + "].state hash",
@@ -74,7 +74,7 @@ namespace GritGud.Application.Gameplay
                         resulting.CanonicalHash);
                 trajectory.Add(new GameplayTrajectoryStep(
                     transition,
-                    migratesLegacyInjuries
+                    migratesLegacyState
                         ? resulting.CanonicalHash
                         : recorded.ResultingStateHash,
                     recorded.DomainEventTypes,
@@ -107,7 +107,7 @@ namespace GritGud.Application.Gameplay
                 trajectory,
                 resultingStates,
                 domainEvents);
-            if (!migratesLegacyInjuries)
+            if (!migratesLegacyState)
                 RequireEqual(
                     "terminal state hash",
                     content.Terminal.FinalStateHash,
@@ -501,7 +501,25 @@ namespace GritGud.Application.Gameplay
                 }
                 return selected ?? throw new GameplayBattleArtifactFormatException(
                     "Canonical replay type " + type.Name
-                    + " has no matching constructor.");
+                    + " has no matching constructor. Available properties: "
+                    + string.Join(", ", properties.Keys.OrderBy(
+                        value => value, StringComparer.Ordinal))
+                    + ". Constructor parameters: "
+                    + string.Join(" | ", type.GetConstructors(
+                            BindingFlags.Public
+                            | BindingFlags.NonPublic
+                            | BindingFlags.Instance)
+                        .Select(value => "[all=" + string.Join(", ", value
+                            .GetParameters()
+                            .Select(parameter => parameter.Name))
+                            + "; unresolved=" + string.Join(", ", value
+                                .GetParameters()
+                                .Where(parameter => !CanResolveParameter(
+                                    properties,
+                                    parameter))
+                                .Select(parameter => parameter.Name))
+                            + "]"))
+                    + ".");
             }
 
             private static bool CanResolveParameter(
@@ -648,7 +666,6 @@ namespace GritGud.Application.Gameplay
                 string parameterName,
                 out GameplayBattleArtifactCodec.JsonNode node)
             {
-                GameplayBattleArtifactCodec.JsonNode suffixMatch = null;
                 foreach (KeyValuePair<
                     string,
                     GameplayBattleArtifactCodec.JsonNode> property in
@@ -662,6 +679,14 @@ namespace GritGud.Application.Gameplay
                         node = property.Value;
                         return true;
                     }
+                }
+
+                GameplayBattleArtifactCodec.JsonNode suffixMatch = null;
+                foreach (KeyValuePair<
+                    string,
+                    GameplayBattleArtifactCodec.JsonNode> property in
+                    properties)
+                {
                     if (parameterName.EndsWith(
                             property.Key,
                             StringComparison.OrdinalIgnoreCase)

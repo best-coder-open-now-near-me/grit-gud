@@ -468,8 +468,8 @@ namespace GritGud.Application.Gameplay
             {
                 return Fail(ThrownExplosiveFailure.Depleted, out failure);
             }
-            if (actor.Capabilities.ThrowCapacity < 30
-                || !actor.Capabilities.CanUseRightHand)
+            if (!GameplayInjuryCapabilityProjection.CanThrowExplosive(
+                    actor.Capabilities))
                 return Fail(
                     ThrownExplosiveFailure.InsufficientCapability,
                     out failure);

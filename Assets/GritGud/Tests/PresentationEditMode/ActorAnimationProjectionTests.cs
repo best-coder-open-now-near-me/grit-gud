@@ -10,6 +10,41 @@ namespace GritGud.Presentation.Tests
     public sealed class ActorAnimationProjectionTests
     {
         [Test]
+        public void InjuryOverlayProjectsGaitAndImpairedSideDeterministically()
+        {
+            var mobility = new ActorMobilityCapability(
+                ActorGait.SevereLimp,
+                ActorImpairedSide.Left,
+                35,
+                40,
+                canSprint: false,
+                canStand: true);
+            var capabilities = new ActorCapabilityState(
+                35, 40, 80, 60, 60, 70,
+                true, true, true, true,
+                mobility,
+                leftGripCapacity: 40,
+                rightGripCapacity: 80,
+                leftThrowCapacity: 40,
+                rightThrowCapacity: 80,
+                isActive: true);
+
+            ActorInjuryAnimationOverlay first =
+                ActorInjuryAnimationOverlayProjector.Project(capabilities);
+            ActorInjuryAnimationOverlay repeated =
+                ActorInjuryAnimationOverlayProjector.Project(capabilities);
+
+            Assert.That(first.BodyRollDegrees, Is.LessThan(0f));
+            Assert.That(first.ImpairedLegPitchDegrees,
+                Is.GreaterThan(10f));
+            Assert.That(first.LeftArmSagDegrees, Is.LessThan(0f));
+            Assert.That(first.BodyPitchDegrees,
+                Is.EqualTo(repeated.BodyPitchDegrees));
+            Assert.That(first.BodyRollDegrees,
+                Is.EqualTo(repeated.BodyRollDegrees));
+        }
+
+        [Test]
         public void AnimationChannelPlanDeclaresStableOwnershipAndOrder()
         {
             Assert.That(

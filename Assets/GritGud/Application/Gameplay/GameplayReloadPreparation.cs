@@ -96,7 +96,10 @@ namespace GritGud.Application.Gameplay
                 return Fail(
                     GameplayReloadFailure.AmmunitionUnavailable,
                     out failure);
-            if (actor.Capabilities.ReloadCapacity < 30)
+            int minimumReloadCapacity = weapon.Attack?.HandlingProfile
+                    ?.MinimumReloadCapacity
+                ?? 30;
+            if (actor.Capabilities.ReloadCapacity < minimumReloadCapacity)
                 return Fail(
                     GameplayReloadFailure.InsufficientCapability,
                     out failure);

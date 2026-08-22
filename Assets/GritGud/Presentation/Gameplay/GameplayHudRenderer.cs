@@ -647,7 +647,9 @@ namespace GritGud.Presentation.Gameplay
                 + bodyStatus.Physiology.Shock + "%"
                 + "\nCAPABILITY - MOVE "
                 + bodyStatus.Capabilities.MovementCapacity + "% / AIM "
-                + bodyStatus.Capabilities.AimStability + "%";
+                + bodyStatus.Capabilities.AimStability + "%"
+                + "\nGAIT - " + bodyStatus.Capabilities.Mobility.Gait
+                + " / " + bodyStatus.Capabilities.Mobility.ImpairedSide;
         }
 
         private static string FormatBodyRegionName(TargetRegionId region)

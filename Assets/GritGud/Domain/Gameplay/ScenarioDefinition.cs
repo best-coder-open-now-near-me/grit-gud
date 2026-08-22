@@ -347,6 +347,112 @@ namespace GritGud.Domain.Gameplay
         public float MaximumReach { get; }
     }
 
+    public enum WeaponPrimaryHand
+    {
+        Left = 0,
+        Right = 1,
+    }
+
+    public sealed class WeaponHandlingProfileDefinition
+    {
+        public const int CurrentSchemaVersion = 1;
+
+        public WeaponHandlingProfileDefinition(
+            int schemaVersion,
+            int requiredHands,
+            WeaponPrimaryHand primaryHand,
+            int minimumPrimaryGrip,
+            int minimumSupportGrip,
+            int minimumAimStability,
+            int minimumReloadCapacity,
+            bool canBraceWithOneHand,
+            bool canFireProne)
+        {
+            if (schemaVersion != CurrentSchemaVersion)
+                throw new ArgumentOutOfRangeException(nameof(schemaVersion));
+            if (requiredHands < 1 || requiredHands > 2)
+                throw new ArgumentOutOfRangeException(nameof(requiredHands));
+            if (!Enum.IsDefined(typeof(WeaponPrimaryHand), primaryHand))
+                throw new ArgumentOutOfRangeException(nameof(primaryHand));
+            SchemaVersion = schemaVersion;
+            RequiredHands = requiredHands;
+            PrimaryHand = primaryHand;
+            MinimumPrimaryGrip = RequirePercent(
+                minimumPrimaryGrip,
+                nameof(minimumPrimaryGrip));
+            MinimumSupportGrip = RequirePercent(
+                minimumSupportGrip,
+                nameof(minimumSupportGrip));
+            MinimumAimStability = RequirePercent(
+                minimumAimStability,
+                nameof(minimumAimStability));
+            MinimumReloadCapacity = RequirePercent(
+                minimumReloadCapacity,
+                nameof(minimumReloadCapacity));
+            if (requiredHands == 1 && minimumSupportGrip != 0)
+                throw new ArgumentException(
+                    "One-handed weapon profiles cannot require support grip.",
+                    nameof(minimumSupportGrip));
+            CanBraceWithOneHand = canBraceWithOneHand;
+            CanFireProne = canFireProne;
+        }
+
+        public int SchemaVersion { get; }
+        public int RequiredHands { get; }
+        public WeaponPrimaryHand PrimaryHand { get; }
+        public int MinimumPrimaryGrip { get; }
+        public int MinimumSupportGrip { get; }
+        public int MinimumAimStability { get; }
+        public int MinimumReloadCapacity { get; }
+        public bool CanBraceWithOneHand { get; }
+        public bool CanFireProne { get; }
+
+        internal static WeaponHandlingProfileDefinition CreateDefault(
+            ProjectileFlightDefinition projectile,
+            ContactAttackDefinition contact)
+        {
+            if (contact != null)
+                return new WeaponHandlingProfileDefinition(
+                    CurrentSchemaVersion,
+                    1,
+                    WeaponPrimaryHand.Right,
+                    30,
+                    0,
+                    0,
+                    0,
+                    canBraceWithOneHand: true,
+                    canFireProne: true);
+            if (projectile != null)
+                return new WeaponHandlingProfileDefinition(
+                    CurrentSchemaVersion,
+                    2,
+                    WeaponPrimaryHand.Right,
+                    50,
+                    50,
+                    35,
+                    40,
+                    canBraceWithOneHand: false,
+                    canFireProne: true);
+            return new WeaponHandlingProfileDefinition(
+                CurrentSchemaVersion,
+                2,
+                WeaponPrimaryHand.Right,
+                35,
+                35,
+                25,
+                25,
+                canBraceWithOneHand: false,
+                canFireProne: true);
+        }
+
+        private static int RequirePercent(int value, string parameter)
+        {
+            if (value < 0 || value > 100)
+                throw new ArgumentOutOfRangeException(parameter);
+            return value;
+        }
+    }
+
     public sealed class AttackDefinition
     {
         public AttackDefinition(
@@ -359,7 +465,8 @@ namespace GritGud.Domain.Gameplay
             ContactAttackDefinition contact = null,
             DirectFireDamageDefinition directFireDamage = null,
             float soundSignature = 1f,
-            float directVehicleIntegrityDamage = 0f)
+            float directVehicleIntegrityDamage = 0f,
+            WeaponHandlingProfileDefinition handlingProfile = null)
             : this(
                 actionId,
                 displayName,
@@ -377,7 +484,8 @@ namespace GritGud.Domain.Gameplay
                 accuracyDecay,
                 contact,
                 soundSignature,
-                directVehicleIntegrityDamage)
+                directVehicleIntegrityDamage,
+                handlingProfile)
         {
         }
 
@@ -390,7 +498,8 @@ namespace GritGud.Domain.Gameplay
             AccuracyDecayDefinition accuracyDecay = null,
             ContactAttackDefinition contact = null,
             float soundSignature = 1f,
-            float directVehicleIntegrityDamage = 0f)
+            float directVehicleIntegrityDamage = 0f,
+            WeaponHandlingProfileDefinition handlingProfile = null)
             : this(
                 actionId,
                 displayName,
@@ -402,7 +511,8 @@ namespace GritGud.Domain.Gameplay
                 accuracyDecay,
                 contact,
                 soundSignature,
-                directVehicleIntegrityDamage)
+                directVehicleIntegrityDamage,
+                handlingProfile)
         {
         }
 
@@ -417,7 +527,8 @@ namespace GritGud.Domain.Gameplay
             AccuracyDecayDefinition accuracyDecay,
             ContactAttackDefinition contact,
             float soundSignature,
-            float directVehicleIntegrityDamage)
+            float directVehicleIntegrityDamage,
+            WeaponHandlingProfileDefinition handlingProfile)
         {
             if (string.IsNullOrWhiteSpace(actionId))
             {
@@ -442,6 +553,10 @@ namespace GritGud.Domain.Gameplay
             }
             DamageProfile = damageProfile ?? throw new ArgumentNullException(
                 nameof(damageProfile));
+            HandlingProfile = handlingProfile
+                ?? WeaponHandlingProfileDefinition.CreateDefault(
+                    projectile,
+                    contact);
             UsesLegacyWoundPayload = usesLegacyWoundPayload;
             if (float.IsNaN(soundSignature)
                 || float.IsInfinity(soundSignature)
@@ -514,6 +629,8 @@ namespace GritGud.Domain.Gameplay
         public WeaponDamageProfileDefinition DamageProfile { get; }
 
         public bool UsesLegacyWoundPayload { get; }
+
+        public WeaponHandlingProfileDefinition HandlingProfile { get; }
 
         public ProjectileFlightDefinition Projectile { get; }
 

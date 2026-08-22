@@ -52,6 +52,7 @@ namespace GritGud.Presentation.Gameplay
                     ?? animator.gameObject.AddComponent<WeaponAimRig>();
             }
 
+            session.ActorCapabilityChanged += HandleActorCapabilityChanged;
             enabled = true;
         }
 
@@ -97,6 +98,7 @@ namespace GritGud.Presentation.Gameplay
                 animationProfile.MaximumBodyAimCorrectionDegrees,
                 animationProfile.BodyAimDegreesPerSecond,
                 animationProfile.WeaponAimDegreesPerSecond);
+            PresentHandAvailability();
         }
 
         internal void ClearWeapon()
@@ -207,6 +209,9 @@ namespace GritGud.Presentation.Gameplay
 
         internal void Unbind()
         {
+            if (session != null)
+                session.ActorCapabilityChanged -=
+                    HandleActorCapabilityChanged;
             ClearWeapon();
             session = null;
             acquisition = null;
@@ -216,6 +221,24 @@ namespace GritGud.Presentation.Gameplay
             animationProfile = null;
             replayPresentation = false;
             enabled = false;
+        }
+
+        private void HandleActorCapabilityChanged(string changedActorId)
+        {
+            if (string.Equals(changedActorId, actorId,
+                StringComparison.Ordinal))
+                PresentHandAvailability();
+        }
+
+        private void PresentHandAvailability()
+        {
+            if (session == null || actorId == null || rig == null)
+                return;
+            ActorCapabilityState capabilities = session.GetActor(actorId)
+                .Capabilities;
+            rig.SetHandAvailability(
+                capabilities.CanUseRightHand,
+                capabilities.CanUseLeftHand);
         }
 
         private void Update() => Tick(Time.deltaTime);

@@ -107,7 +107,10 @@ namespace GritGud.Presentation.Gameplay
             if (explorationInput != null)
                 explorationInput.SetInputEnabled(false);
             if (motor != null)
+            {
                 motor.SetMovementSpeedMultiplier(1f);
+                motor.SetMobilityCapability(CreateHealthyMobility());
+            }
 
             explorationInput = movementInput;
             motor = nextMotor;
@@ -116,7 +119,7 @@ namespace GritGud.Presentation.Gameplay
 
             actorTransform = authoritativeActorTransform;
             actorId = authoritativeActorId;
-            ApplyEquipmentEffects();
+            ApplyMovementEffects();
             LastStanceFailure = StanceChangeFailure.None;
             LastStanceFailureCode = string.Empty;
             ApplyMode();
@@ -275,6 +278,7 @@ namespace GritGud.Presentation.Gameplay
             if (motor != null)
             {
                 motor.SetMovementSpeedMultiplier(1f);
+                motor.SetMobilityCapability(CreateHealthyMobility());
             }
 
             explorationInput = null;
@@ -358,7 +362,7 @@ namespace GritGud.Presentation.Gameplay
 
         private void HandleEquipmentChanged(EquipmentChangeRecord _)
         {
-            ApplyEquipmentEffects();
+            ApplyMovementEffects();
         }
 
         private void HandleActorCapabilityChanged(string changedActorId)
@@ -378,11 +382,12 @@ namespace GritGud.Presentation.Gameplay
                 {
                     motor?.StopPlanarMovement();
                 }
+                ApplyMovementEffects();
                 ApplyMode();
             }
         }
 
-        private void ApplyEquipmentEffects()
+        private void ApplyMovementEffects()
         {
             if (Session == null || motor == null || actorId == null)
             {
@@ -391,6 +396,8 @@ namespace GritGud.Presentation.Gameplay
 
             motor.SetMovementSpeedMultiplier(
                 Session.GetEquipmentEffects(actorId).MovementSpeedMultiplier);
+            motor.SetMobilityCapability(
+                Session.GetActor(actorId).Capabilities.Mobility);
         }
 
         private void SynchronizeExplorationPose()
@@ -411,5 +418,14 @@ namespace GritGud.Presentation.Gameplay
                     Session.GetActor(actorId).Pose.Stance),
                 elapsed);
         }
+
+        private static ActorMobilityCapability CreateHealthyMobility() =>
+            new ActorMobilityCapability(
+                ActorGait.Normal,
+                ActorImpairedSide.None,
+                100,
+                100,
+                canSprint: true,
+                canStand: true);
     }
 }

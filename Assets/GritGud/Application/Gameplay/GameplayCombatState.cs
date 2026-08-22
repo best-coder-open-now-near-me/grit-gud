@@ -22,7 +22,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplaySessionStateSnapshot
     {
-        public const int CurrentSchemaVersion = 10;
+        public const int CurrentSchemaVersion = 11;
 
         public GameplaySessionStateSnapshot(
             string scenarioId,
@@ -207,7 +207,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplayCombatStateSnapshot
     {
-        public const int CurrentSchemaVersion = 10;
+        public const int CurrentSchemaVersion = 11;
 
         public GameplayCombatStateSnapshot(
             GameplaySessionStateSnapshot session,
@@ -516,6 +516,8 @@ namespace GritGud.Application.Gameplay
                     attack.UsesLegacyWoundPayload);
                 AppendDamageProfile(text, root + ".attack.damageProfile",
                     attack.DamageProfile);
+                AppendHandlingProfile(text, root + ".attack.handlingProfile",
+                    attack.HandlingProfile);
                 Append(text, root + ".attack.sound", attack.SoundSignature);
                 Append(text, root + ".attack.accuracy.halfLife",
                     attack.AccuracyDecay.HalfLifeDistance);
@@ -735,6 +737,30 @@ namespace GritGud.Application.Gameplay
                 actor.Physiology.Consciousness);
             Append(text, root + ".physiology.respiration",
                 actor.Physiology.Respiration);
+            Append(text, root + ".capability.movement",
+                actor.Capabilities.MovementCapacity);
+            Append(text, root + ".capability.standing",
+                actor.Capabilities.StandingCapacity);
+            Append(text, root + ".capability.aim",
+                actor.Capabilities.AimStability);
+            Append(text, root + ".capability.leftGrip",
+                actor.Capabilities.LeftGripCapacity);
+            Append(text, root + ".capability.rightGrip",
+                actor.Capabilities.RightGripCapacity);
+            Append(text, root + ".capability.leftThrow",
+                actor.Capabilities.LeftThrowCapacity);
+            Append(text, root + ".capability.rightThrow",
+                actor.Capabilities.RightThrowCapacity);
+            Append(text, root + ".capability.active",
+                actor.Capabilities.IsActive);
+            Append(text, root + ".mobility.gait",
+                (int)actor.Capabilities.Mobility.Gait);
+            Append(text, root + ".mobility.impairedSide",
+                (int)actor.Capabilities.Mobility.ImpairedSide);
+            Append(text, root + ".mobility.canSprint",
+                actor.Capabilities.Mobility.CanSprint);
+            Append(text, root + ".mobility.canStand",
+                actor.Capabilities.Mobility.CanStand);
             for (int injuryIndex = 0;
                 injuryIndex < actor.Injuries.Injuries.Count;
                 injuryIndex++)
@@ -885,6 +911,27 @@ namespace GritGud.Application.Gameplay
 
         private static string Normalize(float value) =>
             GameplayNumericPolicy.FormatCanonical(value);
+
+        private static void AppendHandlingProfile(
+            StringBuilder text,
+            string root,
+            WeaponHandlingProfileDefinition profile)
+        {
+            Append(text, root + ".schema", profile.SchemaVersion);
+            Append(text, root + ".requiredHands", profile.RequiredHands);
+            Append(text, root + ".primaryHand", (int)profile.PrimaryHand);
+            Append(text, root + ".minimumPrimaryGrip",
+                profile.MinimumPrimaryGrip);
+            Append(text, root + ".minimumSupportGrip",
+                profile.MinimumSupportGrip);
+            Append(text, root + ".minimumAimStability",
+                profile.MinimumAimStability);
+            Append(text, root + ".minimumReloadCapacity",
+                profile.MinimumReloadCapacity);
+            Append(text, root + ".canBraceWithOneHand",
+                profile.CanBraceWithOneHand);
+            Append(text, root + ".canFireProne", profile.CanFireProne);
+        }
 
         private static int CompareBlastEffects(
             BlastEffectRecord left,

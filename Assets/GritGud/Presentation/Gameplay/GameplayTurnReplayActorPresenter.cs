@@ -80,6 +80,9 @@ namespace GritGud.Presentation.Gameplay
             TryOptional(
                 "wounds",
                 view.Wounds.BeginReplayPresentation);
+            TryOptional(
+                "injury overlay",
+                view.InjuryOverlay.BeginReplayPresentation);
             if (locomotion != null)
                 locomotion.enabled = false;
             if (aim != null)
@@ -139,6 +142,10 @@ namespace GritGud.Presentation.Gameplay
             TryOptional(
                 "wounds",
                 () => view.Wounds.PresentReplay(snapshot.Wounds));
+            TryOptional(
+                "injury overlay",
+                () => view.InjuryOverlay.PresentReplay(
+                    snapshot.Capabilities));
             if (!string.IsNullOrWhiteSpace(snapshot.EquippedItemId)
                 && weapon == null)
                 throw RequiredFailure(
@@ -209,6 +216,9 @@ namespace GritGud.Presentation.Gameplay
                     replayRecord,
                     () =>
                     {
+                    aimRig.SetHandAvailability(
+                        snapshot.Capabilities.CanUseRightHand,
+                        snapshot.Capabilities.CanUseLeftHand);
                     aimRig.SetReplaySupportWeightImmediate();
                     aimRig.SynchronizeAfterAnimation(0f);
                     });
@@ -258,6 +268,9 @@ namespace GritGud.Presentation.Gameplay
                 () => view.ReplayActions.PresentPinState(originalPinState),
                 ref failure);
             TryRestore(view.Wounds.EndReplayPresentation, ref failure);
+            TryRestore(
+                view.InjuryOverlay.EndReplayPresentation,
+                ref failure);
             TryRestore(() => weapon?.EndReplayPresentation(), ref failure);
             TryRestore(() => aimRig?.EndReplayPresentation(), ref failure);
             TryRestore(() => aim?.EndReplayPresentation(), ref failure);

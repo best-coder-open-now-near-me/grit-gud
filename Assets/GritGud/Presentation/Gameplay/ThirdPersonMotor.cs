@@ -22,6 +22,14 @@ namespace GritGud.Presentation.Gameplay
         private float verticalVelocity;
         private float turnDegreesPerSecond;
         private float movementSpeedMultiplier = 1f;
+        private ActorMobilityCapability mobilityCapability =
+            new ActorMobilityCapability(
+                ActorGait.Normal,
+                ActorImpairedSide.None,
+                100,
+                100,
+                canSprint: true,
+                canStand: true);
         private Vector3 respawnPoint;
 
         public Vector3 Velocity => horizontalVelocity + (Vector3.up * verticalVelocity);
@@ -36,6 +44,13 @@ namespace GritGud.Presentation.Gameplay
         public ActorLocomotionSnapshot CurrentSnapshot { get; private set; }
 
         public float MovementSpeedMultiplier => movementSpeedMultiplier;
+
+        public ActorMobilityCapability MobilityCapability =>
+            mobilityCapability;
+
+        public float EffectiveMovementSpeedMultiplier =>
+            movementSpeedMultiplier
+            * mobilityCapability.MovementPercent / 100f;
 
         public ActorMotionProfile MotionProfile => motionProfile;
 
@@ -83,6 +98,15 @@ namespace GritGud.Presentation.Gameplay
             movementSpeedMultiplier = multiplier;
         }
 
+        public void SetMobilityCapability(
+            ActorMobilityCapability capability)
+        {
+            mobilityCapability = capability
+                ?? throw new System.ArgumentNullException(nameof(capability));
+            if (mobilityCapability.MovementPercent == 0)
+                StopPlanarMovement();
+        }
+
         private void Update()
         {
             ActorMotionProfile motion = RequireMotionProfile();
@@ -110,9 +134,9 @@ namespace GritGud.Presentation.Gameplay
                 ? stancePresenter.Stance
                 : ActorStance.Standing;
             float speed = motion.ResolveMovementSpeed(
-                command.Sprint,
+                command.Sprint && mobilityCapability.CanSprint,
                 stance,
-                movementSpeedMultiplier);
+                EffectiveMovementSpeedMultiplier);
             Vector3 desiredVelocity = desiredDirection * speed;
             horizontalVelocity = Vector3.MoveTowards(
                 horizontalVelocity,

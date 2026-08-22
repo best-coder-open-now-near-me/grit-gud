@@ -107,8 +107,8 @@ namespace GritGud.Application.Gameplay
                     out failure);
             if (actor.IsPinned)
                 return Fail(ThrownExplosiveFailure.ActorPinned, out failure);
-            if (actor.Capabilities.ThrowCapacity < 30
-                || !actor.Capabilities.CanUseRightHand)
+            if (!GameplayInjuryCapabilityProjection.CanThrowExplosive(
+                    actor.Capabilities))
                 return Fail(
                     ThrownExplosiveFailure.InsufficientCapability,
                     out failure);

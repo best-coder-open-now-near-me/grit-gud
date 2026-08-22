@@ -30,6 +30,8 @@ namespace GritGud.Presentation.Gameplay
                 RecoilElapsed = rig.recoilElapsed;
                 AimErrorDegrees = rig.AimErrorDegrees;
                 RecoilWeight = rig.RecoilWeight;
+                PrimaryHandUsable = rig.primaryHandUsable;
+                SupportHandUsable = rig.supportHandUsable;
                 Enabled = rig.enabled;
             }
 
@@ -44,6 +46,8 @@ namespace GritGud.Presentation.Gameplay
             public float RecoilElapsed { get; }
             public float AimErrorDegrees { get; }
             public float RecoilWeight { get; }
+            public bool PrimaryHandUsable { get; }
+            public bool SupportHandUsable { get; }
             public bool Enabled { get; }
         }
 
@@ -83,6 +87,8 @@ namespace GritGud.Presentation.Gameplay
         private float recoilReturnSeconds = 0.01f;
         private float recoilElapsed = -1f;
         private bool replayPresentation;
+        private bool primaryHandUsable = true;
+        private bool supportHandUsable = true;
         private ReplayTransientSnapshot? replayTransientSnapshot;
 
         internal float SupportBlendWeight => blendWeight;
@@ -96,6 +102,8 @@ namespace GritGud.Presentation.Gameplay
         internal float RecoilElapsed => recoilElapsed;
         internal float AimErrorDegrees { get; private set; }
         internal float RecoilWeight { get; private set; }
+        internal bool PrimaryHandUsable => primaryHandUsable;
+        internal bool SupportHandUsable => supportHandUsable;
 
         private void Awake() => InitializeRig();
 
@@ -157,7 +165,7 @@ namespace GritGud.Presentation.Gameplay
                 ? Mathf.Clamp01(elbowHintWeight)
                 : 0f;
             blendSeconds = Mathf.Max(0.01f, handBlendSeconds);
-            blendTarget = leftGripSocket != null ? 1f : 0f;
+            RefreshSupportBlendTarget();
             maximumAimCorrectionDegrees = Mathf.Clamp(
                 maxAimCorrectionDegrees,
                 0f,
@@ -188,6 +196,18 @@ namespace GritGud.Presentation.Gameplay
                 sockets?.AnchorLocalRotation ?? Quaternion.identity);
             AlignWeaponToAnimatedPrimaryGrip();
             enabled = true;
+        }
+
+        internal void SetHandAvailability(
+            bool primaryUsable,
+            bool supportUsable)
+        {
+            primaryHandUsable = primaryUsable;
+            supportHandUsable = supportUsable;
+            RefreshSupportBlendTarget();
+            if (!primaryHandUsable
+                || (!supportHandUsable && leftGripSocket != null))
+                ClearAimPoint();
         }
 
         internal void SetAimPoint(Vector3 worldAimPoint)
@@ -320,6 +340,9 @@ namespace GritGud.Presentation.Gameplay
             recoilElapsed = snapshot.RecoilElapsed;
             AimErrorDegrees = snapshot.AimErrorDegrees;
             RecoilWeight = snapshot.RecoilWeight;
+            primaryHandUsable = snapshot.PrimaryHandUsable;
+            supportHandUsable = snapshot.SupportHandUsable;
+            RefreshSupportBlendTarget();
             enabled = snapshot.Enabled;
         }
 
@@ -364,6 +387,14 @@ namespace GritGud.Presentation.Gameplay
             }
 
             AlignWeaponToAnimatedPrimaryGrip();
+            if (!primaryHandUsable
+                || (!supportHandUsable && leftGripSocket != null))
+            {
+                blendWeight = 0f;
+                ApplyUnavailableHandlingOffset();
+                AimErrorDegrees = CalculateAimErrorDegrees();
+                return;
+            }
             ApplyBodyAimCorrection(Mathf.Max(0f, deltaTime), snapAim);
             AlignWeaponToAnimatedPrimaryGrip();
             ApplyWeaponAimCorrection(Mathf.Max(0f, deltaTime), snapAim);
@@ -525,6 +556,31 @@ namespace GritGud.Presentation.Gameplay
             weaponAnchor.SetPositionAndRotation(
                 rightHand.position - anchorRotation * gripInAnchor.position,
                 anchorRotation);
+        }
+
+        private void ApplyUnavailableHandlingOffset()
+        {
+            if (weaponAnchor == null)
+                return;
+            Vector3 pivot = rightHand != null
+                ? rightHand.position
+                : weaponAnchor.position;
+            Vector3 pitchAxis = actorRoot != null
+                ? actorRoot.right
+                : transform.right;
+            Quaternion lowered = Quaternion.AngleAxis(35f, pitchAxis);
+            weaponAnchor.position = pivot + lowered
+                * (weaponAnchor.position - pivot);
+            weaponAnchor.rotation = lowered * weaponAnchor.rotation;
+        }
+
+        private void RefreshSupportBlendTarget()
+        {
+            blendTarget = primaryHandUsable
+                    && supportHandUsable
+                    && leftGripSocket != null
+                ? 1f
+                : 0f;
         }
 
         private void ApplyBodyAimCorrection(float deltaTime, bool snapAim)

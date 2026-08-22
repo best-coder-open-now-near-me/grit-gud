@@ -121,7 +121,13 @@ namespace GritGud.Application.Gameplay
                     nameof(wounds));
 
             ActorId = actorId;
-            Pose = pose;
+            Pose = pose.Stance == ActorStance.Standing
+                    && !resolvedInjuries.Capabilities.CanStand
+                ? new GameplayActorPose(
+                    pose.Position,
+                    pose.FacingDegrees,
+                    ActorStance.Crouched)
+                : pose;
             TurnBudget = turnBudget;
             Wounds = wounds;
             EquippedItemId = equippedItemId;

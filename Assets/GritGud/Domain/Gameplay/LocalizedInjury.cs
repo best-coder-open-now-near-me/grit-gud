@@ -215,6 +215,47 @@ namespace GritGud.Domain.Gameplay
             bool canUseLeftHand,
             bool canUseRightHand,
             bool canUseTwoHandedWeapon)
+            : this(
+                movementCapacity,
+                standingCapacity,
+                aimStability,
+                gripCapacity,
+                reloadCapacity,
+                throwCapacity,
+                canStand,
+                canUseLeftHand,
+                canUseRightHand,
+                canUseTwoHandedWeapon,
+                ActorMobilityCapability.CreateLegacy(
+                    movementCapacity,
+                    standingCapacity,
+                    canStand),
+                canUseLeftHand ? gripCapacity : 0,
+                canUseRightHand ? gripCapacity : 0,
+                canUseLeftHand ? throwCapacity : 0,
+                canUseRightHand ? throwCapacity : 0,
+                canStand || canUseLeftHand || canUseRightHand
+                    || canUseTwoHandedWeapon)
+        {
+        }
+
+        public ActorCapabilityState(
+            int movementCapacity,
+            int standingCapacity,
+            int aimStability,
+            int gripCapacity,
+            int reloadCapacity,
+            int throwCapacity,
+            bool canStand,
+            bool canUseLeftHand,
+            bool canUseRightHand,
+            bool canUseTwoHandedWeapon,
+            ActorMobilityCapability mobility,
+            int leftGripCapacity,
+            int rightGripCapacity,
+            int leftThrowCapacity,
+            int rightThrowCapacity,
+            bool isActive)
         {
             MovementCapacity = RequirePercent(
                 movementCapacity,
@@ -232,6 +273,33 @@ namespace GritGud.Domain.Gameplay
             CanUseLeftHand = canUseLeftHand;
             CanUseRightHand = canUseRightHand;
             CanUseTwoHandedWeapon = canUseTwoHandedWeapon;
+            Mobility = mobility ?? throw new ArgumentNullException(
+                nameof(mobility));
+            if (Mobility.MovementPercent != MovementCapacity
+                || Mobility.StandingPercent != StandingCapacity
+                || Mobility.CanStand != CanStand)
+                throw new ArgumentException(
+                    "Aggregate movement capability must match its gait projection.",
+                    nameof(mobility));
+            LeftGripCapacity = RequirePercent(
+                leftGripCapacity,
+                nameof(leftGripCapacity));
+            RightGripCapacity = RequirePercent(
+                rightGripCapacity,
+                nameof(rightGripCapacity));
+            LeftThrowCapacity = RequirePercent(
+                leftThrowCapacity,
+                nameof(leftThrowCapacity));
+            RightThrowCapacity = RequirePercent(
+                rightThrowCapacity,
+                nameof(rightThrowCapacity));
+            IsActive = isActive;
+            if (!IsActive
+                && (CanStand || CanUseLeftHand || CanUseRightHand
+                    || CanUseTwoHandedWeapon))
+                throw new ArgumentException(
+                    "Inactive actors cannot retain active action capabilities.",
+                    nameof(isActive));
         }
 
         public int MovementCapacity { get; }
@@ -244,6 +312,102 @@ namespace GritGud.Domain.Gameplay
         public bool CanUseLeftHand { get; }
         public bool CanUseRightHand { get; }
         public bool CanUseTwoHandedWeapon { get; }
+        public ActorMobilityCapability Mobility { get; }
+        public int LeftGripCapacity { get; }
+        public int RightGripCapacity { get; }
+        public int LeftThrowCapacity { get; }
+        public int RightThrowCapacity { get; }
+        public bool IsActive { get; }
+
+        private static int RequirePercent(int value, string parameter)
+        {
+            if (value < 0 || value > 100)
+                throw new ArgumentOutOfRangeException(parameter);
+            return value;
+        }
+    }
+
+    public enum ActorImpairedSide
+    {
+        None = 0,
+        Left = 1,
+        Right = 2,
+    }
+
+    public enum ActorGait
+    {
+        Normal = 0,
+        MildLimp = 1,
+        SevereLimp = 2,
+        Crawling = 3,
+        Immobile = 4,
+    }
+
+    public sealed class ActorMobilityCapability
+    {
+        public ActorMobilityCapability(
+            ActorGait gait,
+            ActorImpairedSide impairedSide,
+            int movementPercent,
+            int standingPercent,
+            bool canSprint,
+            bool canStand)
+        {
+            if (!Enum.IsDefined(typeof(ActorGait), gait))
+                throw new ArgumentOutOfRangeException(nameof(gait));
+            if (!Enum.IsDefined(typeof(ActorImpairedSide), impairedSide))
+                throw new ArgumentOutOfRangeException(nameof(impairedSide));
+            if (gait == ActorGait.Normal
+                && impairedSide != ActorImpairedSide.None)
+                throw new ArgumentException(
+                    "Normal gait cannot identify an impaired side.",
+                    nameof(impairedSide));
+            if ((gait == ActorGait.Crawling || gait == ActorGait.Immobile)
+                && canStand)
+                throw new ArgumentException(
+                    "Crawling and immobile actors cannot stand.",
+                    nameof(canStand));
+            if (canSprint && (!canStand || gait != ActorGait.Normal))
+                throw new ArgumentException(
+                    "Only actors with normal standing gait can sprint.",
+                    nameof(canSprint));
+            Gait = gait;
+            ImpairedSide = impairedSide;
+            MovementPercent = RequirePercent(
+                movementPercent,
+                nameof(movementPercent));
+            StandingPercent = RequirePercent(
+                standingPercent,
+                nameof(standingPercent));
+            CanSprint = canSprint;
+            CanStand = canStand;
+        }
+
+        public ActorGait Gait { get; }
+        public ActorImpairedSide ImpairedSide { get; }
+        public int MovementPercent { get; }
+        public int StandingPercent { get; }
+        public bool CanSprint { get; }
+        public bool CanStand { get; }
+
+        internal static ActorMobilityCapability CreateLegacy(
+            int movementPercent,
+            int standingPercent,
+            bool canStand)
+        {
+            bool resolvedCanStand = movementPercent > 0 && canStand;
+            return new ActorMobilityCapability(
+                movementPercent <= 0
+                    ? ActorGait.Immobile
+                    : resolvedCanStand
+                        ? ActorGait.Normal
+                        : ActorGait.Crawling,
+                ActorImpairedSide.None,
+                movementPercent,
+                standingPercent,
+                canSprint: resolvedCanStand,
+                canStand: resolvedCanStand);
+        }
 
         private static int RequirePercent(int value, string parameter)
         {
@@ -479,27 +643,108 @@ namespace GritGud.Domain.Gameplay
                 state.Physiology.Consciousness,
                 Math.Min(state.Physiology.BloodReserve,
                     state.Physiology.Respiration));
-            int movement = Scale((leftLeg + rightLeg) / 2, systemic);
-            int standing = Scale(Math.Min(leftLeg, rightLeg), systemic);
+            bool active = state.LifeState == ActorLifeState.Active;
+            ActorMobilityCapability mobility = ProjectMobility(
+                leftLeg,
+                rightLeg,
+                systemic,
+                active);
             int aim = Scale((headSense + leftArm + rightArm + torso) / 4,
                 systemic);
-            int grip = Scale((leftArm + rightArm) / 2, systemic);
+            int leftGrip = Scale(leftArm, systemic);
+            int rightGrip = Scale(rightArm, systemic);
+            int grip = (leftGrip + rightGrip) / 2;
             int reload = Scale(Math.Min(leftArm, rightArm), systemic);
-            int throwing = Scale(rightArm, systemic);
-            bool active = state.LifeState == ActorLifeState.Active;
-            bool leftHand = active && leftArm >= 30;
-            bool rightHand = active && rightArm >= 30;
+            int leftThrow = Scale(leftArm, systemic);
+            int rightThrow = Scale(rightArm, systemic);
+            int throwing = Math.Max(leftThrow, rightThrow);
+            bool leftHand = active && leftGrip >= 30;
+            bool rightHand = active && rightGrip >= 30;
             return new ActorCapabilityState(
-                movement,
-                standing,
+                mobility.MovementPercent,
+                mobility.StandingPercent,
                 aim,
                 grip,
                 reload,
                 throwing,
-                active && standing >= 25,
+                mobility.CanStand,
                 leftHand,
                 rightHand,
-                leftHand && rightHand && aim >= 20);
+                leftHand && rightHand && aim >= 20,
+                mobility,
+                leftGrip,
+                rightGrip,
+                leftThrow,
+                rightThrow,
+                active);
+        }
+
+        private static ActorMobilityCapability ProjectMobility(
+            int leftLeg,
+            int rightLeg,
+            int systemic,
+            bool active)
+        {
+            int weaker = Math.Min(leftLeg, rightLeg);
+            ActorImpairedSide side = leftLeg == rightLeg
+                ? ActorImpairedSide.None
+                : leftLeg < rightLeg
+                    ? ActorImpairedSide.Left
+                    : ActorImpairedSide.Right;
+            ActorGait gait;
+            int regionalMovement;
+            int regionalStanding;
+            if (leftLeg < 10 && rightLeg < 10)
+            {
+                gait = ActorGait.Immobile;
+                regionalMovement = 0;
+                regionalStanding = 0;
+            }
+            else if (leftLeg < 40 && rightLeg < 40)
+            {
+                gait = ActorGait.Crawling;
+                regionalMovement = 15;
+                regionalStanding = 0;
+            }
+            else if (weaker < 40)
+            {
+                gait = ActorGait.SevereLimp;
+                regionalMovement = weaker < 15 ? 35 : 45;
+                regionalStanding = 40;
+            }
+            else if (weaker < 70)
+            {
+                gait = ActorGait.MildLimp;
+                regionalMovement = 75;
+                regionalStanding = 75;
+            }
+            else
+            {
+                gait = ActorGait.Normal;
+                side = ActorImpairedSide.None;
+                regionalMovement = 100;
+                regionalStanding = 100;
+            }
+
+            int movement = active
+                ? Scale(regionalMovement, systemic)
+                : 0;
+            int standing = active
+                ? Scale(regionalStanding, systemic)
+                : 0;
+            bool canStand = active
+                && gait != ActorGait.Crawling
+                && gait != ActorGait.Immobile
+                && standing >= 25;
+            return new ActorMobilityCapability(
+                gait,
+                side,
+                movement,
+                standing,
+                canSprint: active
+                    && gait == ActorGait.Normal
+                    && systemic >= 70,
+                canStand: canStand);
         }
 
         private static int Scale(int regional, int systemic) =>

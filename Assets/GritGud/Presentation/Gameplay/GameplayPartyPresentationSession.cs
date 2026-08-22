@@ -100,6 +100,10 @@ namespace GritGud.Presentation.Gameplay
                                 weapon));
                         view.Wounds.PresentAuthoritative(
                             session.GetActor(actorId).Wounds);
+                        view.InjuryOverlay.PresentAuthoritative(
+                            session.GetActor(actorId).Capabilities);
+                        view.Motor.SetMobilityCapability(
+                            session.GetActor(actorId).Capabilities.Mobility);
                     }
                     catch
                     {
@@ -190,6 +194,10 @@ namespace GritGud.Presentation.Gameplay
             {
                 actor.View.Wounds.PresentAuthoritative(
                     session.GetActor(actorId).Wounds);
+                actor.View.InjuryOverlay.PresentAuthoritative(
+                    session.GetActor(actorId).Capabilities);
+                actor.View.Motor.SetMobilityCapability(
+                    session.GetActor(actorId).Capabilities.Mobility);
             }
         }
 

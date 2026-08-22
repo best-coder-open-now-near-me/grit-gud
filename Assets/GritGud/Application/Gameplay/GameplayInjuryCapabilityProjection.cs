@@ -48,10 +48,54 @@ namespace GritGud.Application.Gameplay
             if (capabilities == null) throw new ArgumentNullException(
                 nameof(capabilities));
             if (attack == null) throw new ArgumentNullException(nameof(attack));
-            return attack.Contact == null
-                ? capabilities.CanUseTwoHandedWeapon
-                : capabilities.CanUseLeftHand
-                    || capabilities.CanUseRightHand;
+            WeaponHandlingProfileDefinition handling = attack.HandlingProfile;
+            bool primaryIsLeft = handling.PrimaryHand
+                == WeaponPrimaryHand.Left;
+            int primaryGrip = primaryIsLeft
+                ? capabilities.LeftGripCapacity
+                : capabilities.RightGripCapacity;
+            int supportGrip = primaryIsLeft
+                ? capabilities.RightGripCapacity
+                : capabilities.LeftGripCapacity;
+            bool primaryUsable = primaryIsLeft
+                ? capabilities.CanUseLeftHand
+                : capabilities.CanUseRightHand;
+            bool supportUsable = primaryIsLeft
+                ? capabilities.CanUseRightHand
+                : capabilities.CanUseLeftHand;
+            if (!primaryUsable
+                || primaryGrip < handling.MinimumPrimaryGrip
+                || capabilities.AimStability
+                    < handling.MinimumAimStability)
+            {
+                return false;
+            }
+            if (handling.RequiredHands == 1)
+                return true;
+            return (supportUsable
+                    && supportGrip >= handling.MinimumSupportGrip)
+                || handling.CanBraceWithOneHand;
+        }
+
+        public static bool CanThrowExplosive(
+            ActorCapabilityState capabilities,
+            int minimumArmMotor = 35,
+            int minimumThrowCapacity = 30)
+        {
+            if (capabilities == null) throw new ArgumentNullException(
+                nameof(capabilities));
+            if (minimumArmMotor < 0 || minimumArmMotor > 100)
+                throw new ArgumentOutOfRangeException(nameof(minimumArmMotor));
+            if (minimumThrowCapacity < 0 || minimumThrowCapacity > 100)
+                throw new ArgumentOutOfRangeException(
+                    nameof(minimumThrowCapacity));
+            bool left = capabilities.CanUseLeftHand
+                && capabilities.LeftGripCapacity >= minimumArmMotor
+                && capabilities.LeftThrowCapacity >= minimumThrowCapacity;
+            bool right = capabilities.CanUseRightHand
+                && capabilities.RightGripCapacity >= minimumArmMotor
+                && capabilities.RightThrowCapacity >= minimumThrowCapacity;
+            return left || right;
         }
 
         public static int CalculateConditionPercent(ActorInjuryState injuries)
