@@ -612,10 +612,10 @@ namespace GritGud.PlayMode.Tests
                             ActorAnimationAction.IncapacitateShoulder));
 
                     replay.Present(incapacitatedSnapshot, action: null);
-                    Assert.That(
-                        animation.ReplayAction,
-                        Is.EqualTo(ActorAnimationAction.Incapacitate));
-                    Assert.That(animation.ReplayActionProgress, Is.EqualTo(1f));
+                    Assert.That(animation.ReplayAction, Is.Null,
+                        "State-only frames must not replace a terminal episode "
+                        + "with the generic incapacitation pose.");
+                    Assert.That(animation.ReplayActionProgress, Is.Zero);
 
                     replay.Present(
                         new GameplayActorSnapshot(

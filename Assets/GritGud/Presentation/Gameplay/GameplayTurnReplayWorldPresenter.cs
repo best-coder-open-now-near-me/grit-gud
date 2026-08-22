@@ -447,24 +447,26 @@ namespace GritGud.Presentation.Gameplay
                 return;
             GameplaySemanticReplayPlaybackPosition position = playback.Locate(
                 hud.TimeSeconds);
-            Present(position);
+            Present(position, hud.TimeSeconds);
         }
 
         private void Present(
-            GameplaySemanticReplayPlaybackPosition position)
+            GameplaySemanticReplayPlaybackPosition position,
+            float timeSeconds)
         {
             GameplayPresentationWorldStateSample sample =
                 GameplaySemanticReplaySampler.Sample(
                     position.Frame,
                     position.Progress);
-            PresentActors(sample, position);
+            PresentActors(sample, position, timeSeconds);
             foreach (OptionalWorldProjection projection in optionalProjections)
                 projection.Present(sample);
         }
 
         private void PresentActors(
             GameplayPresentationWorldStateSample sample,
-            GameplaySemanticReplayPlaybackPosition position)
+            GameplaySemanticReplayPlaybackPosition position,
+            float timeSeconds)
         {
             var actionStates = new Dictionary<
                 string,
@@ -493,12 +495,15 @@ namespace GritGud.Presentation.Gameplay
                     entry.Key,
                     out Vector3 replayVelocity,
                     out bool replayGrounded);
+                ReplayActorTerminalPoseSample terminalPose = hud.Playback
+                    .SampleTerminalPose(entry.Key, timeSeconds);
                 actor.Present(
                     entry.Value,
                     action,
                     position,
                     replayVelocity,
-                    replayGrounded);
+                    replayGrounded,
+                    terminalPose);
             }
         }
 
@@ -548,7 +553,7 @@ namespace GritGud.Presentation.Gameplay
                     crossedEvent.TimeSeconds
                         - crossedEvent.PlaybackFrame.DurationSeconds
                         * PreEventNormalizedOffset);
-                Present(playback.Locate(preEventTime));
+                Present(playback.Locate(preEventTime), preEventTime);
                 PresentTimedEvent(crossedEvent.PresentationEvent);
             }
         }

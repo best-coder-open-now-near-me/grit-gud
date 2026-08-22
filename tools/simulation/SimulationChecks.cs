@@ -3483,6 +3483,98 @@ internal static class SimulationChecks
         var combatPlayback = new GameplaySemanticReplayPlaybackTimeline(
             loadedArtifactReplay);
         var combatTranscript = new ReplayCombatTranscript(combatPlayback);
+        ReplayActorTerminalPoseEpisode warehousePatrolEpisode = null;
+        ReplayActorTerminalPoseEpisode finalOrenEpisode = null;
+        foreach (ReplayActorTerminalPoseEpisode episode in
+            combatPlayback.TerminalPoseEpisodes)
+        {
+            if (string.Equals(
+                    episode.ActorId,
+                    "depot-warehouse-patrol",
+                    StringComparison.Ordinal)
+                && episode.SourceTransitionSequence == 7)
+                warehousePatrolEpisode = episode;
+            if (string.Equals(
+                    episode.ActorId,
+                    "oren-vale",
+                    StringComparison.Ordinal)
+                && episode.SourceTransitionSequence == 50)
+                finalOrenEpisode = episode;
+        }
+        Require(warehousePatrolEpisode != null
+            && warehousePatrolEpisode.PoseKind
+                == ReplayActorTerminalPoseKind.ShoulderFall
+            && warehousePatrolEpisode.HitRegion == TargetRegionId.Torso
+            && string.Equals(
+                warehousePatrolEpisode.EpisodeId,
+                "terminal:depot-warehouse-patrol:7",
+                StringComparison.Ordinal),
+            "Embedded replay lost its localized warehouse-patrol terminal episode.");
+        GameplaySemanticReplayPlaybackFrame warehouseSourceFrame = null;
+        GameplaySemanticReplayPlaybackFrame warehouseLaterFrame = null;
+        foreach (GameplaySemanticReplayPlaybackFrame frame in
+            combatPlayback.Frames)
+        {
+            if (frame.Frame.Transition.Identity.Sequence == 7)
+                warehouseSourceFrame = frame;
+            else if (warehouseSourceFrame != null
+                && warehouseLaterFrame == null
+                && frame.StartSeconds >= warehouseSourceFrame.EndSeconds)
+                warehouseLaterFrame = frame;
+        }
+        ReplayActorTerminalPoseSample warehouseLaterSample =
+            warehouseLaterFrame == null
+                ? null
+                : combatPlayback.SampleTerminalPose(
+                    warehousePatrolEpisode.ActorId,
+                    warehouseLaterFrame.StartSeconds);
+        Require(warehouseSourceFrame != null
+            && warehouseLaterFrame != null
+            && combatPlayback.SampleTerminalPose(
+                warehousePatrolEpisode.ActorId,
+                warehousePatrolEpisode.StartSeconds - 0.001f) == null
+            && warehouseLaterSample != null
+            && string.Equals(
+                warehouseLaterSample.EpisodeId,
+                warehousePatrolEpisode.EpisodeId,
+                StringComparison.Ordinal)
+            && warehouseLaterSample.NormalizedProgress > 0f,
+            "Terminal pose did not remain seekable after its source frame.");
+        float warehouseDeathTime = -1f;
+        foreach (ReplayCombatTranscriptEntry entry in combatTranscript.Entries)
+            if (entry.EventKind == ReplayCombatTranscriptEventKind.Death
+                && string.Equals(
+                    entry.TargetId,
+                    warehousePatrolEpisode.ActorId,
+                    StringComparison.Ordinal))
+            {
+                warehouseDeathTime = entry.TimeSeconds;
+                break;
+            }
+        Require(Math.Abs(
+                warehouseDeathTime
+                    - warehousePatrolEpisode.StartSeconds) < 0.0001f,
+            "Terminal pose and transcript death timing diverged.");
+        ReplayActorTerminalPoseSample finalOrenSample = finalOrenEpisode == null
+            ? null
+            : combatPlayback.SampleTerminalPose(
+                finalOrenEpisode.ActorId,
+                combatPlayback.TotalDurationSeconds);
+        Require(finalOrenEpisode != null
+            && finalOrenEpisode.PoseKind
+                == ReplayActorTerminalPoseKind.FallOver
+            && combatPlayback.TotalDurationSeconds
+                > combatPlayback.SemanticDurationSeconds
+            && Math.Abs(
+                combatPlayback.TotalDurationSeconds
+                    - finalOrenEpisode.AnimationEndSeconds) < 0.0001f
+            && Math.Abs(
+                combatPlayback.TurnGroups[
+                    combatPlayback.TurnGroups.Count - 1].EndSeconds
+                    - combatPlayback.TotalDurationSeconds) < 0.0001f
+            && finalOrenSample != null
+            && finalOrenSample.NormalizedProgress == 1f,
+            "Final terminal episode did not extend the seekable replay tail.");
         playbackClock.Stop();
         Console.WriteLine(
             "Artifact playback decode + load: "

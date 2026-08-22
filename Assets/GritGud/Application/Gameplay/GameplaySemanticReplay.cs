@@ -333,7 +333,8 @@ namespace GritGud.Application.Gameplay
     {
         internal GameplaySemanticReplayTurnGroup(
             int index,
-            IEnumerable<GameplaySemanticReplayPlaybackFrame> groupedFrames)
+            IEnumerable<GameplaySemanticReplayPlaybackFrame> groupedFrames,
+            float? presentationEndSeconds = null)
         {
             var copied = new List<GameplaySemanticReplayPlaybackFrame>(
                 groupedFrames ?? throw new ArgumentNullException(
@@ -345,7 +346,17 @@ namespace GritGud.Application.Gameplay
             Index = index;
             Frames = copied.AsReadOnly();
             StartSeconds = copied[0].StartSeconds;
-            EndSeconds = copied[copied.Count - 1].EndSeconds;
+            float semanticEndSeconds = copied[copied.Count - 1].EndSeconds;
+            if (presentationEndSeconds.HasValue)
+            {
+                GameplayNumericPolicy.RequireFinite(
+                    presentationEndSeconds.Value,
+                    nameof(presentationEndSeconds));
+                if (presentationEndSeconds.Value < semanticEndSeconds)
+                    throw new ArgumentOutOfRangeException(
+                        nameof(presentationEndSeconds));
+            }
+            EndSeconds = presentationEndSeconds ?? semanticEndSeconds;
             ActorId = ResolveActorId(copied);
             EndsWithTurnRecord = copied[copied.Count - 1].Frame
                 .SemanticRecord is TurnEndRecord;
@@ -392,6 +403,10 @@ namespace GritGud.Application.Gameplay
             frames;
         private readonly IReadOnlyList<GameplaySemanticReplayTurnGroup>
             turnGroups;
+        private readonly IReadOnlyList<ReplayActorLifeStateEvent>
+            lifeStateEvents;
+        private readonly IReadOnlyList<ReplayActorTerminalPoseEpisode>
+            terminalPoseEpisodes;
 
         public GameplaySemanticReplayPlaybackTimeline(
             GameplaySemanticReplayTimeline replay)
@@ -411,8 +426,19 @@ namespace GritGud.Application.Gameplay
                 cursor += duration;
             }
             frames = built.AsReadOnly();
-            turnGroups = BuildTurnGroups(built);
-            TotalDurationSeconds = cursor;
+            SemanticDurationSeconds = cursor;
+            terminalPoseEpisodes = ReplayActorTerminalPoseEpisodeProjector
+                .Project(built, out lifeStateEvents);
+            float presentationEndSeconds = cursor;
+            foreach (ReplayActorTerminalPoseEpisode episode in
+                terminalPoseEpisodes)
+            {
+                presentationEndSeconds = Math.Max(
+                    presentationEndSeconds,
+                    episode.PresentationEndSeconds);
+            }
+            TotalDurationSeconds = presentationEndSeconds;
+            turnGroups = BuildTurnGroups(built, TotalDurationSeconds);
         }
 
         public GameplaySemanticReplayTimeline Replay { get; }
@@ -420,7 +446,44 @@ namespace GritGud.Application.Gameplay
             frames;
         public IReadOnlyList<GameplaySemanticReplayTurnGroup> TurnGroups =>
             turnGroups;
+        public IReadOnlyList<ReplayActorLifeStateEvent> LifeStateEvents =>
+            lifeStateEvents;
+        public IReadOnlyList<ReplayActorTerminalPoseEpisode>
+            TerminalPoseEpisodes => terminalPoseEpisodes;
+        public float SemanticDurationSeconds { get; }
         public float TotalDurationSeconds { get; }
+
+        public ReplayActorTerminalPoseSample SampleTerminalPose(
+            string actorId,
+            float timeSeconds)
+        {
+            if (string.IsNullOrWhiteSpace(actorId))
+                throw new ArgumentException(
+                    "Terminal pose samples require an actor identifier.",
+                    nameof(actorId));
+            GameplayNumericPolicy.RequireFinite(timeSeconds, nameof(timeSeconds));
+            float time = Math.Max(
+                0f,
+                Math.Min(TotalDurationSeconds, timeSeconds));
+            for (int index = terminalPoseEpisodes.Count - 1;
+                index >= 0;
+                index--)
+            {
+                ReplayActorTerminalPoseEpisode episode =
+                    terminalPoseEpisodes[index];
+                if (!string.Equals(
+                        episode.ActorId,
+                        actorId,
+                        StringComparison.Ordinal)
+                    || !episode.Contains(time))
+                    continue;
+                return new ReplayActorTerminalPoseSample(
+                    episode,
+                    (time - episode.StartSeconds)
+                        / episode.AnimationDurationSeconds);
+            }
+            return null;
+        }
 
         public GameplaySemanticReplayPlaybackPosition Locate(
             float timeSeconds)
@@ -471,23 +534,32 @@ namespace GritGud.Application.Gameplay
 
         private static IReadOnlyList<GameplaySemanticReplayTurnGroup>
             BuildTurnGroups(
-                IReadOnlyList<GameplaySemanticReplayPlaybackFrame> playbackFrames)
+                IReadOnlyList<GameplaySemanticReplayPlaybackFrame> playbackFrames,
+                float totalDurationSeconds)
         {
-            var result = new List<GameplaySemanticReplayTurnGroup>();
+            var grouped = new List<
+                IReadOnlyList<GameplaySemanticReplayPlaybackFrame>>();
             var current = new List<GameplaySemanticReplayPlaybackFrame>();
             foreach (GameplaySemanticReplayPlaybackFrame frame in playbackFrames)
             {
                 current.Add(frame);
                 if (!(frame.Frame.SemanticRecord is TurnEndRecord)) continue;
-                result.Add(new GameplaySemanticReplayTurnGroup(
-                    result.Count,
-                    current));
+                grouped.Add(current.AsReadOnly());
                 current = new List<GameplaySemanticReplayPlaybackFrame>();
             }
             if (current.Count > 0)
+                grouped.Add(current.AsReadOnly());
+
+            var result = new List<GameplaySemanticReplayTurnGroup>(
+                grouped.Count);
+            for (int index = 0; index < grouped.Count; index++)
+            {
+                bool isLast = index == grouped.Count - 1;
                 result.Add(new GameplaySemanticReplayTurnGroup(
-                    result.Count,
-                    current));
+                    index,
+                    grouped[index],
+                    isLast ? totalDurationSeconds : (float?)null));
+            }
             return result.AsReadOnly();
         }
     }
@@ -496,6 +568,7 @@ namespace GritGud.Application.Gameplay
     {
         public const float ContactResolutionProgress = 0.4f;
         public const float ActionResolutionProgress = 0.65f;
+        public const float TerminalCollapseSeconds = 1.2f;
 
         public static float GetProjectileImpactProgress(
             ProjectileAdvanceRecord advance)

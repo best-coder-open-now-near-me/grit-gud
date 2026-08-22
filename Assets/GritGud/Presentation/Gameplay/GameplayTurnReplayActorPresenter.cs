@@ -103,7 +103,8 @@ namespace GritGud.Presentation.Gameplay
             TurnReplayActorActionState action,
             GameplaySemanticReplayPlaybackPosition? playback = null,
             Vector3? replayVelocity = null,
-            bool replayGrounded = true)
+            bool replayGrounded = true,
+            ReplayActorTerminalPoseSample terminalPose = null)
         {
             if (!presenting)
             {
@@ -182,6 +183,7 @@ namespace GritGud.Presentation.Gameplay
             ResolveAnimationProjection(
                 snapshot,
                 action,
+                terminalPose,
                 out ActorAnimationAction? animationAction,
                 out float animationProgress,
                 out TargetRegionId? hitReactionRegion,
@@ -192,6 +194,7 @@ namespace GritGud.Presentation.Gameplay
                     hitReactionRegion,
                     hitReactionProgress));
             bool requiresAnimation = action != null
+                || terminalPose != null
                 || replayVelocity.GetValueOrDefault().sqrMagnitude > 0.000001f
                 || snapshot.IsIncapacitated;
             if (requiresAnimation && animation == null)
@@ -414,6 +417,7 @@ namespace GritGud.Presentation.Gameplay
         private void ResolveAnimationProjection(
             GameplayActorSnapshot snapshot,
             TurnReplayActorActionState state,
+            ReplayActorTerminalPoseSample terminalPose,
             out ActorAnimationAction? action,
             out float progress,
             out TargetRegionId? hitReactionRegion,
@@ -421,8 +425,23 @@ namespace GritGud.Presentation.Gameplay
         {
             hitReactionRegion = null;
             hitReactionProgress = 0f;
-            progress = state?.NormalizedProgress ??
-                (snapshot.IsIncapacitated ? 1f : 0f);
+            progress = state?.NormalizedProgress ?? 0f;
+            if (terminalPose != null)
+            {
+                if (!string.Equals(
+                        terminalPose.ActorId,
+                        snapshot.ActorId,
+                        StringComparison.Ordinal))
+                    throw new ArgumentException(
+                        "Terminal pose sample must match the replay actor.",
+                        nameof(terminalPose));
+                action = terminalPose.PoseKind
+                    == ReplayActorTerminalPoseKind.ShoulderFall
+                    ? ActorAnimationAction.IncapacitateShoulder
+                    : ActorAnimationAction.Incapacitate;
+                progress = terminalPose.NormalizedProgress;
+                return;
+            }
             if (state?.TargetFacingPhase != null)
             {
                 progress = state.TargetFacingPhase.SampleActionProgress(
@@ -430,12 +449,10 @@ namespace GritGud.Presentation.Gameplay
             }
             if (state == null)
             {
-                action = snapshot.IsIncapacitated
+                action = view.TargetProfile.ProfileKind
+                    == ActorTargetProfileKind.PinnedDown
                     ? ActorAnimationAction.Incapacitate
-                    : view.TargetProfile.ProfileKind
-                        == ActorTargetProfileKind.PinnedDown
-                        ? ActorAnimationAction.Incapacitate
-                        : (ActorAnimationAction?)null;
+                    : (ActorAnimationAction?)null;
                 return;
             }
 

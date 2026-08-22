@@ -210,6 +210,80 @@ namespace GritGud.Domain.Tests
                     .ImpactNormalizedTime).Within(0.0001f));
         }
 
+        [Test]
+        public void TerminalPoseEpisodeSurvivesStatusChangesUntilRecovery()
+        {
+            ReplayActorLifeStateEvent Event(
+                long sequence,
+                ActorLifeState previous,
+                ActorLifeState resulting,
+                float timeSeconds,
+                TargetRegionId? region) => new ReplayActorLifeStateEvent(
+                new ReplayActorLifeStateTransition(
+                    sequence,
+                    "target",
+                    previous,
+                    resulting,
+                    normalizedTime: 0.5f,
+                    region,
+                    region.HasValue
+                        ? DamageMechanism.Ballistic
+                        : (DamageMechanism?)null),
+                timeSeconds);
+
+            ReplayActorLifeStateEvent[] lifeStateEvents =
+            {
+                Event(
+                    1,
+                    ActorLifeState.Active,
+                    ActorLifeState.Incapacitated,
+                    1f,
+                    TargetRegionId.Torso),
+                Event(
+                    2,
+                    ActorLifeState.Incapacitated,
+                    ActorLifeState.Dead,
+                    1.2f,
+                    TargetRegionId.Head),
+                Event(
+                    3,
+                    ActorLifeState.Dead,
+                    ActorLifeState.Active,
+                    1.6f,
+                    region: null),
+                Event(
+                    4,
+                    ActorLifeState.Active,
+                    ActorLifeState.Dead,
+                    2f,
+                    TargetRegionId.LeftLeg),
+            };
+
+            var episodes = ReplayActorTerminalPoseEpisodeProjector.Project(
+                lifeStateEvents);
+
+            Assert.That(episodes, Has.Count.EqualTo(2));
+            Assert.That(
+                episodes[0].EpisodeId,
+                Is.EqualTo("terminal:target:1"));
+            Assert.That(
+                episodes[0].EnteredLifeState,
+                Is.EqualTo(ActorLifeState.Incapacitated));
+            Assert.That(
+                episodes[0].PoseKind,
+                Is.EqualTo(ReplayActorTerminalPoseKind.ShoulderFall));
+            Assert.That(episodes[0].HitRegion, Is.EqualTo(TargetRegionId.Torso));
+            Assert.That(episodes[0].RecoveryTimeSeconds, Is.EqualTo(1.6f));
+            Assert.That(episodes[0].Contains(1.5f), Is.True);
+            Assert.That(episodes[0].Contains(1.6f), Is.False);
+            Assert.That(
+                episodes[1].EpisodeId,
+                Is.EqualTo("terminal:target:4"));
+            Assert.That(
+                episodes[1].PoseKind,
+                Is.EqualTo(ReplayActorTerminalPoseKind.FallOver));
+        }
+
         private static GameplayActionRecord CreateThrownAction()
         {
             var cost = new ActionCost(1, 0f, ActionMobility.Mobile);

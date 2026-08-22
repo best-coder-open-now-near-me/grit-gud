@@ -235,6 +235,413 @@ namespace GritGud.Application.Gameplay
         public ActorLifeState? ResultingLifeState { get; }
     }
 
+    /// <summary>
+    /// Canonical evidence for one actor life-state change inside a semantic
+    /// replay frame. This is presentation metadata only: it identifies when
+    /// the already-verified state change becomes visible and, when an injury
+    /// caused it, preserves the localized evidence used to select a pose.
+    /// </summary>
+    public sealed class ReplayActorLifeStateTransition
+    {
+        public ReplayActorLifeStateTransition(
+            long transitionSequence,
+            string actorId,
+            ActorLifeState previousLifeState,
+            ActorLifeState resultingLifeState,
+            float normalizedTime,
+            TargetRegionId? hitRegion,
+            DamageMechanism? damageMechanism)
+        {
+            if (transitionSequence <= 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(transitionSequence));
+            ActorId = string.IsNullOrWhiteSpace(actorId)
+                ? throw new ArgumentException(
+                    "Replay life-state transitions require an actor identifier.",
+                    nameof(actorId))
+                : actorId;
+            if (!Enum.IsDefined(typeof(ActorLifeState), previousLifeState))
+                throw new ArgumentOutOfRangeException(
+                    nameof(previousLifeState));
+            if (!Enum.IsDefined(typeof(ActorLifeState), resultingLifeState))
+                throw new ArgumentOutOfRangeException(
+                    nameof(resultingLifeState));
+            if (previousLifeState == resultingLifeState)
+                throw new ArgumentException(
+                    "Replay life-state transitions must change state.",
+                    nameof(resultingLifeState));
+            if (float.IsNaN(normalizedTime)
+                || float.IsInfinity(normalizedTime)
+                || normalizedTime < 0f
+                || normalizedTime > 1f)
+                throw new ArgumentOutOfRangeException(nameof(normalizedTime));
+            if (hitRegion.HasValue
+                && !Enum.IsDefined(typeof(TargetRegionId), hitRegion.Value))
+                throw new ArgumentOutOfRangeException(nameof(hitRegion));
+            if (damageMechanism.HasValue
+                && !Enum.IsDefined(
+                    typeof(DamageMechanism),
+                    damageMechanism.Value))
+                throw new ArgumentOutOfRangeException(
+                    nameof(damageMechanism));
+
+            TransitionSequence = transitionSequence;
+            PreviousLifeState = previousLifeState;
+            ResultingLifeState = resultingLifeState;
+            NormalizedTime = normalizedTime;
+            HitRegion = hitRegion;
+            DamageMechanism = damageMechanism;
+        }
+
+        public long TransitionSequence { get; }
+        public string ActorId { get; }
+        public ActorLifeState PreviousLifeState { get; }
+        public ActorLifeState ResultingLifeState { get; }
+        public float NormalizedTime { get; }
+        public TargetRegionId? HitRegion { get; }
+        public DamageMechanism? DamageMechanism { get; }
+        public bool EntersTerminalPose =>
+            PreviousLifeState == ActorLifeState.Active
+            && ResultingLifeState != ActorLifeState.Active;
+        public bool Recovers =>
+            PreviousLifeState != ActorLifeState.Active
+            && ResultingLifeState == ActorLifeState.Active;
+        public string StableKey => "replay-life-state:"
+            + TransitionSequence + ":" + ActorId + ":"
+            + PreviousLifeState + ":" + ResultingLifeState;
+    }
+
+    /// <summary>
+    /// Absolute-time form of a canonical life-state transition.
+    /// </summary>
+    public sealed class ReplayActorLifeStateEvent
+    {
+        internal ReplayActorLifeStateEvent(
+            ReplayActorLifeStateTransition transition,
+            float timeSeconds)
+        {
+            Transition = transition ?? throw new ArgumentNullException(
+                nameof(transition));
+            GameplayNumericPolicy.RequireFinite(timeSeconds, nameof(timeSeconds));
+            if (timeSeconds < 0f)
+                throw new ArgumentOutOfRangeException(nameof(timeSeconds));
+            TimeSeconds = timeSeconds;
+        }
+
+        public ReplayActorLifeStateTransition Transition { get; }
+        public float TimeSeconds { get; }
+        public long TransitionSequence => Transition.TransitionSequence;
+        public string ActorId => Transition.ActorId;
+        public ActorLifeState PreviousLifeState =>
+            Transition.PreviousLifeState;
+        public ActorLifeState ResultingLifeState =>
+            Transition.ResultingLifeState;
+        public TargetRegionId? HitRegion => Transition.HitRegion;
+        public DamageMechanism? DamageMechanism =>
+            Transition.DamageMechanism;
+        public string StableKey => Transition.StableKey;
+    }
+
+    public enum ReplayActorTerminalPoseKind
+    {
+        FallOver = 0,
+        ShoulderFall = 1,
+    }
+
+    /// <summary>
+    /// A seekable presentation episode for one transition from active to a
+    /// non-active life state. Later incapacitated/dead status changes do not
+    /// restart the pose. A recovery closes the episode and a later terminal
+    /// transition creates a new identity.
+    /// </summary>
+    public sealed class ReplayActorTerminalPoseEpisode
+    {
+        internal ReplayActorTerminalPoseEpisode(
+            ReplayActorLifeStateEvent source,
+            ReplayActorTerminalPoseKind poseKind,
+            float animationDurationSeconds,
+            float? recoveryTimeSeconds)
+        {
+            Source = source ?? throw new ArgumentNullException(nameof(source));
+            if (!source.Transition.EntersTerminalPose)
+                throw new ArgumentException(
+                    "Terminal pose episodes require an active-to-terminal transition.",
+                    nameof(source));
+            if (!Enum.IsDefined(
+                    typeof(ReplayActorTerminalPoseKind),
+                    poseKind))
+                throw new ArgumentOutOfRangeException(nameof(poseKind));
+            GameplayNumericPolicy.RequireFinite(
+                animationDurationSeconds,
+                nameof(animationDurationSeconds));
+            if (animationDurationSeconds <= 0f)
+                throw new ArgumentOutOfRangeException(
+                    nameof(animationDurationSeconds));
+            if (recoveryTimeSeconds.HasValue)
+            {
+                GameplayNumericPolicy.RequireFinite(
+                    recoveryTimeSeconds.Value,
+                    nameof(recoveryTimeSeconds));
+                if (recoveryTimeSeconds.Value < source.TimeSeconds)
+                    throw new ArgumentOutOfRangeException(
+                        nameof(recoveryTimeSeconds));
+            }
+
+            PoseKind = poseKind;
+            AnimationDurationSeconds = animationDurationSeconds;
+            RecoveryTimeSeconds = recoveryTimeSeconds;
+        }
+
+        public ReplayActorLifeStateEvent Source { get; }
+        public string EpisodeId => "terminal:" + ActorId + ":"
+            + Source.TransitionSequence;
+        public string ActorId => Source.ActorId;
+        public long SourceTransitionSequence => Source.TransitionSequence;
+        public ActorLifeState EnteredLifeState => Source.ResultingLifeState;
+        public ReplayActorTerminalPoseKind PoseKind { get; }
+        public TargetRegionId? HitRegion => Source.HitRegion;
+        public DamageMechanism? DamageMechanism => Source.DamageMechanism;
+        public float StartSeconds => Source.TimeSeconds;
+        public float AnimationDurationSeconds { get; }
+        public float AnimationEndSeconds =>
+            StartSeconds + AnimationDurationSeconds;
+        public float? RecoveryTimeSeconds { get; }
+        public float PresentationEndSeconds => RecoveryTimeSeconds.HasValue
+            ? Math.Min(AnimationEndSeconds, RecoveryTimeSeconds.Value)
+            : AnimationEndSeconds;
+
+        public bool Contains(float timeSeconds)
+        {
+            GameplayNumericPolicy.RequireFinite(timeSeconds, nameof(timeSeconds));
+            return timeSeconds >= StartSeconds
+                && (!RecoveryTimeSeconds.HasValue
+                    || timeSeconds < RecoveryTimeSeconds.Value);
+        }
+    }
+
+    public sealed class ReplayActorTerminalPoseSample
+    {
+        internal ReplayActorTerminalPoseSample(
+            ReplayActorTerminalPoseEpisode episode,
+            float normalizedProgress)
+        {
+            Episode = episode ?? throw new ArgumentNullException(
+                nameof(episode));
+            GameplayNumericPolicy.RequireFinite(
+                normalizedProgress,
+                nameof(normalizedProgress));
+            NormalizedProgress = Math.Max(
+                0f,
+                Math.Min(1f, normalizedProgress));
+        }
+
+        public ReplayActorTerminalPoseEpisode Episode { get; }
+        public string EpisodeId => Episode.EpisodeId;
+        public string ActorId => Episode.ActorId;
+        public ReplayActorTerminalPoseKind PoseKind => Episode.PoseKind;
+        public float NormalizedProgress { get; }
+    }
+
+    /// <summary>
+    /// Single canonical projector for replay life-state timing and localized
+    /// terminal-pose evidence. Markers, transcript entries, and terminal pose
+    /// episodes consume this same projection.
+    /// </summary>
+    public static class ReplayActorLifeStateEventProjector
+    {
+        public static IReadOnlyList<ReplayActorLifeStateTransition> Project(
+            GameplaySemanticReplayFrame frame)
+        {
+            if (frame == null) throw new ArgumentNullException(nameof(frame));
+            var projected = new List<ReplayActorLifeStateTransition>();
+            foreach (GameplayActorSnapshot resulting in
+                frame.Resulting.Session.Actors)
+            {
+                if (!TryFindActor(
+                        frame.Previous.Session.Actors,
+                        resulting.ActorId,
+                        out GameplayActorSnapshot previous)
+                    || previous.LifeState == resulting.LifeState)
+                    continue;
+                InjuryRecord sourceInjury = FindNewestInjury(
+                    previous,
+                    resulting);
+                projected.Add(new ReplayActorLifeStateTransition(
+                    frame.Transition.Identity.Sequence,
+                    resulting.ActorId,
+                    previous.LifeState,
+                    resulting.LifeState,
+                    sourceInjury == null
+                        ? 1f
+                        : ResolveInjuryEventTime(frame),
+                    sourceInjury?.Region,
+                    sourceInjury?.Mechanism));
+            }
+            return projected.Count == 0
+                ? Array.Empty<ReplayActorLifeStateTransition>()
+                : projected.AsReadOnly();
+        }
+
+        public static IReadOnlyList<ReplayActorLifeStateEvent> Project(
+            GameplaySemanticReplayPlaybackFrame playbackFrame)
+        {
+            if (playbackFrame == null)
+                throw new ArgumentNullException(nameof(playbackFrame));
+            var projected = new List<ReplayActorLifeStateEvent>();
+            foreach (ReplayActorLifeStateTransition transition in
+                Project(playbackFrame.Frame))
+            {
+                projected.Add(new ReplayActorLifeStateEvent(
+                    transition,
+                    playbackFrame.StartSeconds
+                        + playbackFrame.DurationSeconds
+                        * transition.NormalizedTime));
+            }
+            return projected.Count == 0
+                ? Array.Empty<ReplayActorLifeStateEvent>()
+                : projected.AsReadOnly();
+        }
+
+        private static InjuryRecord FindNewestInjury(
+            GameplayActorSnapshot previous,
+            GameplayActorSnapshot resulting)
+        {
+            if (resulting.Injuries.Injuries.Count
+                <= previous.Injuries.Injuries.Count)
+                return null;
+            return resulting.Injuries.Injuries[
+                resulting.Injuries.Injuries.Count - 1];
+        }
+
+        private static float ResolveInjuryEventTime(
+            GameplaySemanticReplayFrame frame)
+        {
+            if (frame.SemanticRecord is ProjectileAdvanceRecord projectile
+                && projectile.Resulting.Impact != null)
+                return GameplaySemanticReplayPresentationTiming
+                    .GetProjectileImpactProgress(projectile);
+            if (frame.SemanticRecord is GameplayActionRecord action)
+            {
+                foreach (GameplayActionOutcome outcome in action.Outcomes)
+                    if (outcome is ThrownExplosiveActionOutcome)
+                        return GameplayThrownExplosivePresentationTiming
+                            .ImpactNormalizedTime;
+                return GameplaySemanticReplayPresentationTiming
+                    .GetActionResolutionProgress(action);
+            }
+            return GameplaySemanticReplayPresentationTiming
+                .ActionResolutionProgress;
+        }
+
+        private static bool TryFindActor(
+            IReadOnlyList<GameplayActorSnapshot> actors,
+            string actorId,
+            out GameplayActorSnapshot result)
+        {
+            foreach (GameplayActorSnapshot actor in actors)
+                if (string.Equals(
+                        actor.ActorId,
+                        actorId,
+                        StringComparison.Ordinal))
+                {
+                    result = actor;
+                    return true;
+                }
+            result = default;
+            return false;
+        }
+    }
+
+    internal static class ReplayActorTerminalPoseEpisodeProjector
+    {
+        private sealed class EpisodeBuilder
+        {
+            public EpisodeBuilder(ReplayActorLifeStateEvent source)
+            {
+                Source = source;
+            }
+
+            public ReplayActorLifeStateEvent Source { get; }
+            public float? RecoveryTimeSeconds { get; set; }
+        }
+
+        public static IReadOnlyList<ReplayActorTerminalPoseEpisode> Project(
+            IReadOnlyList<GameplaySemanticReplayPlaybackFrame> frames,
+            out IReadOnlyList<ReplayActorLifeStateEvent> lifeStateEvents)
+        {
+            if (frames == null) throw new ArgumentNullException(nameof(frames));
+            var events = new List<ReplayActorLifeStateEvent>();
+            foreach (GameplaySemanticReplayPlaybackFrame frame in frames)
+            {
+                foreach (ReplayActorLifeStateEvent lifeEvent in
+                    ReplayActorLifeStateEventProjector.Project(frame))
+                    events.Add(lifeEvent);
+            }
+            lifeStateEvents = events.Count == 0
+                ? Array.Empty<ReplayActorLifeStateEvent>()
+                : events.AsReadOnly();
+            return Project(lifeStateEvents);
+        }
+
+        internal static IReadOnlyList<ReplayActorTerminalPoseEpisode> Project(
+            IReadOnlyList<ReplayActorLifeStateEvent> lifeStateEvents)
+        {
+            if (lifeStateEvents == null)
+                throw new ArgumentNullException(nameof(lifeStateEvents));
+            var builders = new List<EpisodeBuilder>();
+            var active = new Dictionary<string, EpisodeBuilder>(
+                StringComparer.Ordinal);
+            foreach (ReplayActorLifeStateEvent lifeEvent in lifeStateEvents)
+            {
+                if (lifeEvent == null)
+                    throw new ArgumentException(
+                        "Terminal episode evidence cannot contain null events.",
+                        nameof(lifeStateEvents));
+                if (lifeEvent.Transition.EntersTerminalPose)
+                {
+                    var builder = new EpisodeBuilder(lifeEvent);
+                    builders.Add(builder);
+                    active[lifeEvent.ActorId] = builder;
+                }
+                else if (lifeEvent.Transition.Recovers
+                    && active.TryGetValue(
+                        lifeEvent.ActorId,
+                        out EpisodeBuilder builder))
+                {
+                    builder.RecoveryTimeSeconds = lifeEvent.TimeSeconds;
+                    active.Remove(lifeEvent.ActorId);
+                }
+            }
+
+            var episodes = new List<ReplayActorTerminalPoseEpisode>(
+                builders.Count);
+            foreach (EpisodeBuilder builder in builders)
+                episodes.Add(new ReplayActorTerminalPoseEpisode(
+                    builder.Source,
+                    ResolvePoseKind(builder.Source.HitRegion),
+                    GameplaySemanticReplayPresentationTiming
+                        .TerminalCollapseSeconds,
+                    builder.RecoveryTimeSeconds));
+            return episodes.Count == 0
+                ? Array.Empty<ReplayActorTerminalPoseEpisode>()
+                : episodes.AsReadOnly();
+        }
+
+        private static ReplayActorTerminalPoseKind ResolvePoseKind(
+            TargetRegionId? hitRegion)
+        {
+            switch (hitRegion)
+            {
+                case TargetRegionId.Torso:
+                case TargetRegionId.LeftArm:
+                case TargetRegionId.RightArm:
+                    return ReplayActorTerminalPoseKind.ShoulderFall;
+                default:
+                    return ReplayActorTerminalPoseKind.FallOver;
+            }
+        }
+    }
+
     public static class ReplayCombatPresentationEventProjector
     {
         public static IReadOnlyList<ReplayCombatPresentationEvent> Project(
@@ -587,8 +994,6 @@ namespace GritGud.Application.Gameplay
             GameplaySemanticReplayFrame frame,
             ICollection<ReplayCombatPresentationEvent> events)
         {
-            var reactionTimes = new Dictionary<string, float>(
-                StringComparer.Ordinal);
             foreach (TurnReplayActorActionState state in
                 TurnReplayActorActionProjector.Project(frame, 1f))
             {
@@ -608,37 +1013,32 @@ namespace GritGud.Application.Gameplay
                     position,
                     position,
                     state.EventNormalizedTime));
-                reactionTimes[state.ActorId] = state.EventNormalizedTime;
             }
 
-            foreach (GameplayActorSnapshot resulting in
-                frame.Resulting.Session.Actors)
+            foreach (ReplayActorLifeStateTransition transition in
+                ReplayActorLifeStateEventProjector.Project(frame))
             {
-                GameplayActorSnapshot previous = frame.Previous.Session
-                    .GetActor(resulting.ActorId);
-                if (previous.LifeState == resulting.LifeState) continue;
                 ReplayCombatPresentationEventKind? kind =
-                    resulting.LifeState == ActorLifeState.Dead
+                    transition.ResultingLifeState == ActorLifeState.Dead
                         ? ReplayCombatPresentationEventKind.Death
-                        : resulting.LifeState == ActorLifeState.Incapacitated
+                        : transition.ResultingLifeState
+                            == ActorLifeState.Incapacitated
                             ? ReplayCombatPresentationEventKind.Incapacitation
                             : null;
                 if (!kind.HasValue) continue;
+                GameplayActorSnapshot resulting = frame.Resulting.Session
+                    .GetActor(transition.ActorId);
                 GameplayPosition position = AddHeight(
                     resulting.Pose.Position,
                     1f);
                 events.Add(new ReplayCombatPresentationEvent(
-                    frame.Transition.Identity.Sequence,
+                    transition.TransitionSequence,
                     kind.Value,
-                    resulting.ActorId,
-                    resulting.ActorId,
+                    transition.ActorId,
+                    transition.ActorId,
                     position,
                     position,
-                    reactionTimes.TryGetValue(
-                        resulting.ActorId,
-                        out float reactionTime)
-                        ? reactionTime
-                        : 0f));
+                    transition.NormalizedTime));
             }
         }
 
@@ -760,73 +1160,9 @@ namespace GritGud.Application.Gameplay
                             progress);
                     break;
             }
-            AppendLifeStateReactions(frame, sequence, progress, states);
             return states.Count == 0
                 ? Array.Empty<TurnReplayActorActionState>()
                 : states.AsReadOnly();
-        }
-
-        private static void AppendLifeStateReactions(
-            GameplaySemanticReplayFrame frame,
-            long sequence,
-            float progress,
-            ICollection<TurnReplayActorActionState> states)
-        {
-            foreach (GameplayActorSnapshot resulting in
-                frame.Resulting.Session.Actors)
-            {
-                GameplayActorSnapshot previous = frame.Previous.Session
-                    .GetActor(resulting.ActorId);
-                if (previous.LifeState == resulting.LifeState
-                    || resulting.LifeState == ActorLifeState.Active)
-                    continue;
-                bool alreadyPresented = false;
-                foreach (TurnReplayActorActionState state in states)
-                    if (state.Kind == TurnReplayActorActionKind.Reaction
-                        && string.Equals(
-                            state.ActorId,
-                            resulting.ActorId,
-                            StringComparison.Ordinal))
-                    {
-                        alreadyPresented = true;
-                        break;
-                    }
-                if (alreadyPresented) continue;
-                float eventTime = resulting.Injuries.Injuries.Count
-                        > previous.Injuries.Injuries.Count
-                    ? ResolveStateChangeEventTime(frame)
-                    : 1f;
-                states.Add(new TurnReplayActorActionState(
-                    resulting.ActorId,
-                    TurnReplayActorActionKind.Reaction,
-                    sequence,
-                    progress,
-                    contactReaction: false,
-                    resulting.Wounds.WoundCount,
-                    hitRegion: null,
-                    eventNormalizedTime: eventTime,
-                    resultingLifeState: resulting.LifeState));
-            }
-        }
-
-        private static float ResolveStateChangeEventTime(
-            GameplaySemanticReplayFrame frame)
-        {
-            if (frame.SemanticRecord is ProjectileAdvanceRecord projectile
-                && projectile.Resulting.Impact != null)
-                return GameplaySemanticReplayPresentationTiming
-                    .GetProjectileImpactProgress(projectile);
-            if (frame.SemanticRecord is GameplayActionRecord action)
-            {
-                foreach (GameplayActionOutcome outcome in action.Outcomes)
-                    if (outcome is ThrownExplosiveActionOutcome)
-                        return GameplayThrownExplosivePresentationTiming
-                            .ImpactNormalizedTime;
-                return GameplaySemanticReplayPresentationTiming
-                    .GetActionResolutionProgress(action);
-            }
-            return GameplaySemanticReplayPresentationTiming
-                .ActionResolutionProgress;
         }
 
         private static void ProjectTraversal(
