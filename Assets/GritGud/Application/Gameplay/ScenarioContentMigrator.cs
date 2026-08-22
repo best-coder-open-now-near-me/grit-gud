@@ -21,8 +21,23 @@ namespace GritGud.Application.Gameplay
             document.Normalize();
             if (document.schemaVersion < 17)
                 InstallLegacyActionPointEconomy(document);
+            if (document.schemaVersion < 22)
+                RenameLegacyDroneSummoners(document);
             document.schemaVersion = ScenarioContentDocument.CurrentSchemaVersion;
             return document;
+        }
+
+        private static void RenameLegacyDroneSummoners(
+            ScenarioContentDocument document)
+        {
+            foreach (ScenarioDroneContentData drone in document.drones)
+            {
+                if (drone == null) continue;
+                if (string.IsNullOrWhiteSpace(drone.summonerActorId))
+                    drone.summonerActorId = drone.controllerActorId
+                        ?? string.Empty;
+                drone.controllerActorId = string.Empty;
+            }
         }
 
         private static void InstallLegacyActionPointEconomy(

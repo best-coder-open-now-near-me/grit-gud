@@ -410,7 +410,7 @@ namespace GritGud.Application.Gameplay
                 movement.DroneId + " MOVES",
                 new[]
                 {
-                    "CONTROLLER - " + movement.ControllerActorId,
+                    "SUMMONER PARTNER - " + movement.SummonerActorId,
                     "POSITION - " + FormatPosition(movement.Origin)
                         + " -> " + FormatPosition(movement.Destination),
                     "FACING - " + Format(movement.ResultingFacingDegrees)
@@ -424,7 +424,7 @@ namespace GritGud.Application.Gameplay
         {
             var lines = new List<string>
             {
-                "CONTROLLER - " + attack.ControllerActorId,
+                "SUMMONER PARTNER - " + attack.SummonerActorId,
                 "TARGET - " + attack.TargetKind + " " + attack.TargetId,
                 "AP - " + attack.PreviousBudget.ActionPoints
                     + " -> " + attack.ResultingBudget.ActionPoints,

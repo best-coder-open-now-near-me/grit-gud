@@ -15,7 +15,7 @@ namespace GritGud.Application.Gameplay
             : base(
                 GameplayCapabilityProfiles.DroneAttack(attack, targetKind),
                 (action ?? throw new ArgumentNullException(nameof(action)))
-                    .ControllerActorId,
+                    .SummonerActorId,
                 action.TargetId)
         {
             if (!string.Equals(
@@ -43,7 +43,7 @@ namespace GritGud.Application.Gameplay
             {
                 return profile.GetTrait("delivery") == "immediate-ranged"
                     && profile.GetTrait("targeting") == "semantic-subject"
-                    && profile.GetTrait("resource") == "controller-drone-weapon"
+                    && profile.GetTrait("resource") == "summoner-drone-weapon"
                     && (profile.GetTrait("consequence") == "actor-wound"
                         || profile.GetTrait("consequence")
                             == "destructible-damage"
@@ -70,28 +70,26 @@ namespace GritGud.Application.Gameplay
             GameplaySessionStateSnapshot session = state.Session;
             DroneAttackRecord action = payload.Action;
             DroneSnapshot drone = FindDrone(state.Drones, action.DroneId);
-            GameplayActorSnapshot controller = session.GetActor(
-                action.ControllerActorId);
+            GameplayActorSnapshot summoner = session.GetActor(
+                action.SummonerActorId);
             if (!drone.IsOperational
-                || drone.Definition.InitiativeBinding
-                    != DroneInitiativeBinding.ControllerTurn
-                || !string.Equals(
-                    drone.Definition.ControllerActorId,
-                    controller.ActorId,
-                    StringComparison.Ordinal))
+                || drone.Definition.TurnPartnership.PoolingPolicy
+                    != DroneTurnPoolingPolicy.SharedSummonerBudget
+                || !drone.Definition.TurnPartnership.OwnsSharedBudget(
+                    summoner.ActorId))
                 throw new InvalidOperationException(
-                    "Drone weapon use requires its operational bound controller.");
+                    "Drone weapon use requires its operational summoner partnership.");
             if (session.Mode != GameplaySessionMode.TurnBased
                 || session.Operation != GameplaySessionOperation.None
                 || !string.Equals(
                     session.ActiveActorId,
-                    controller.ActorId,
+                    summoner.ActorId,
                     StringComparison.Ordinal)
-                || controller.IsIncapacitated)
+                || summoner.IsIncapacitated)
                 throw new InvalidOperationException(
-                    "A drone can attack only during its capable controller's idle turn.");
+                    "A drone can attack only during its capable summoner partner's idle turn.");
             if (!CostsMatch(action.Cost, drone.Definition.Attack.TurnCost)
-                || !BudgetsMatch(controller.TurnBudget, action.PreviousBudget))
+                || !BudgetsMatch(summoner.TurnBudget, action.PreviousBudget))
                 throw new InvalidOperationException(
                     "Drone attack was prepared against stale cost or budget evidence.");
 
@@ -106,7 +104,7 @@ namespace GritGud.Application.Gameplay
                 LastTransitionSequence = transition.Identity.Sequence,
             };
             mutation.ReplaceActor(GameplayCanonicalStateMutation.CopyActor(
-                controller,
+                summoner,
                 budget: action.ResultingBudget));
             ApplyConsequence(
                 state,

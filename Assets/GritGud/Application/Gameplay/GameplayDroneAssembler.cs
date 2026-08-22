@@ -24,11 +24,11 @@ namespace GritGud.Application.Gameplay
             {
                 Require(drone != null, "Scenario drones cannot contain null entries.");
                 RequireText(drone.entityId, "Scenario drone entity ID");
-                RequireText(drone.controllerActorId, "Scenario drone controller actor ID");
+                RequireText(drone.summonerActorId, "Scenario drone summoner actor ID");
                 Require(entities.TryGetValue(drone.entityId, out LevelEntity entity),
                     $"Drone '{drone.entityId}' is missing from level '{level.levelId}'.");
-                Require(actors.ContainsKey(drone.controllerActorId),
-                    $"Drone '{drone.entityId}' references undefined controller '{drone.controllerActorId}'.");
+                Require(actors.ContainsKey(drone.summonerActorId),
+                    $"Drone '{drone.entityId}' references undefined summoner '{drone.summonerActorId}'.");
                 Require(drone.attackCapability?.enabled == true,
                     $"Drone '{drone.entityId}' requires an enabled attack capability.");
                 ScenarioActionCostData cost = drone.moveCost
@@ -37,7 +37,7 @@ namespace GritGud.Application.Gameplay
                 Float3Data position = entity.transform.position;
                 var definition = new DroneDefinition(
                     drone.entityId,
-                    drone.controllerActorId,
+                    new DroneTurnPartnership(drone.summonerActorId),
                     new GameplayPosition(position.x, position.y, position.z),
                     entity.transform.yawDegrees,
                     drone.maximumIntegrity,

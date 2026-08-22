@@ -115,10 +115,10 @@ namespace GritGud.Application.Gameplay
             }
             if (!target.IsOperational)
                 return Illegal(context, candidate, "drone-destroyed");
-            ScenarioActorDefinition targetController = scenario.GetActor(
-                target.Definition.ControllerActorId);
+            ScenarioActorDefinition targetSummoner = scenario.GetActor(
+                target.Definition.SummonerActorId);
             if (!scenario.GetActor(attacker.ActorId).Combat.IsHostileTo(
-                targetController.Combat.AllegianceId))
+                targetSummoner.Combat.AllegianceId))
                 return Illegal(context, candidate, "target-not-hostile");
 
             DroneExposureSnapshot exposure = GameplayHeadlessEncounterEvidence
@@ -281,7 +281,7 @@ namespace GritGud.Application.Gameplay
                     && profile.GetTrait("delivery") == "immediate-ranged"
                     && profile.GetTrait("targeting") == "semantic-subject"
                     && profile.GetTrait("resource")
-                        == "controller-drone-weapon"
+                        == "summoner-drone-weapon"
                     && (profile.GetTrait("consequence") == "actor-wound"
                         || profile.GetTrait("consequence")
                             == "destructible-damage");
@@ -313,21 +313,21 @@ namespace GritGud.Application.Gameplay
             {
                 return Illegal(context, candidate, "source-drone-not-found");
             }
-            GameplayActorSnapshot controller = state.Session.GetActor(
+            GameplayActorSnapshot summoner = state.Session.GetActor(
                 candidate.ActorId);
             if (!string.Equals(
-                drone.Definition.ControllerActorId,
-                controller.ActorId,
+                drone.Definition.SummonerActorId,
+                summoner.ActorId,
                 StringComparison.Ordinal))
-                return Illegal(context, candidate, "controller-mismatch");
+                return Illegal(context, candidate, "summoner-partner-mismatch");
             if (!candidate.Profile.Equals(
                 GameplayCapabilityProfiles.DroneAttack(
                     drone.Definition.Attack,
                     candidate.SubjectKind)))
                 return Illegal(context, candidate, "drone-profile-mismatch");
-            string readiness = ValidateControllerReadiness(
+            string readiness = ValidateSummonerReadiness(
                 state.Session,
-                controller,
+                summoner,
                 drone);
             if (readiness.Length > 0)
                 return Illegal(context, candidate, readiness);
@@ -345,7 +345,7 @@ namespace GritGud.Application.Gameplay
                             context,
                             candidate,
                             "target-incapacitated");
-                    if (!scenario.GetActor(controller.ActorId).Combat.IsHostileTo(
+                    if (!scenario.GetActor(summoner.ActorId).Combat.IsHostileTo(
                         scenario.GetActor(target.ActorId).Combat.AllegianceId))
                         return Illegal(
                             context,
@@ -367,7 +367,7 @@ namespace GritGud.Application.Gameplay
                     var identity = new GameplayTransitionIdentity(
                         resolutionSequence,
                         GameplaySemanticCapability.DirectAttack.ToString(),
-                        controller.ActorId,
+                        summoner.ActorId,
                         target.ActorId);
                     AttackResolutionRecord resolution = AttackResolutionRules
                         .Resolve(
@@ -429,13 +429,13 @@ namespace GritGud.Application.Gameplay
             }
 
             var record = new DroneAttackRecord(
-                controller.ActorId,
+                summoner.ActorId,
                 drone.DroneId,
                 candidate.SubjectId,
                 candidate.SubjectKind.ToString(),
                 drone.Definition.Attack.TurnCost,
-                controller.TurnBudget,
-                controller.TurnBudget.SpendAction(
+                summoner.TurnBudget,
+                summoner.TurnBudget.SpendAction(
                     drone.Definition.Attack.TurnCost),
                 consequence);
             return new GameplayExecutableCandidateEvaluation(
@@ -484,9 +484,9 @@ namespace GritGud.Application.Gameplay
                 prepared.Record);
         }
 
-        private static string ValidateControllerReadiness(
+        private static string ValidateSummonerReadiness(
             GameplaySessionStateSnapshot session,
-            GameplayActorSnapshot controller,
+            GameplayActorSnapshot summoner,
             DroneSnapshot drone)
         {
             if (!drone.IsOperational) return "source-drone-destroyed";
@@ -496,14 +496,14 @@ namespace GritGud.Application.Gameplay
                 return "operation-in-progress";
             if (!string.Equals(
                 session.ActiveActorId,
-                controller.ActorId,
+                summoner.ActorId,
                 StringComparison.Ordinal))
-                return "controller-not-active";
-            if (controller.IsIncapacitated)
-                return "controller-incapacitated";
-            if (controller.TurnBudget.ActionPoints
+                return "summoner-partner-not-active";
+            if (summoner.IsIncapacitated)
+                return "summoner-partner-incapacitated";
+            if (summoner.TurnBudget.ActionPoints
                     < drone.Definition.Attack.TurnCost.ActionPoints
-                || controller.TurnBudget.MovementOpportunity
+                || summoner.TurnBudget.MovementOpportunity
                     < drone.Definition.Attack.TurnCost.MovementOpportunity)
                 return "insufficient-budget";
             return string.Empty;

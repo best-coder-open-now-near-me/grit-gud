@@ -10,7 +10,7 @@ namespace GritGud.Domain.Tests.Gameplay
     public sealed class GameplayDroneTransitionTests
     {
         [Test]
-        public void DroneMoveSpendsControllerApAndReplaysDeterministically()
+        public void DroneMoveSpendsSummonerApAndReplaysDeterministically()
         {
             GameplayCombatStateSnapshot initial = CreateState(
                 activeActorId: "controller");
@@ -39,6 +39,80 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(replay.Resulting.CanonicalHash,
                 Is.EqualTo(first.Resulting.CanonicalHash));
 
+        }
+
+        [Test]
+        public void SummonerAndDroneSpendOneSharedTurnBudget()
+        {
+            GameplayCombatStateSnapshot initial = CreateState(
+                activeActorId: "controller");
+            GameplayActorSnapshot summoner = initial.Session.GetActor(
+                "controller");
+            var actorRoute = new MovementRouteRecord(
+                summoner.ActorId,
+                summoner.Pose,
+                summoner.TurnBudget,
+                new[]
+                {
+                    new MovementRouteSegmentRecord(
+                        summoner.Pose.Position,
+                        new GameplayPosition(1f, 0f, 0f),
+                        movementCost: 1f,
+                        actionPointCost: 1),
+                });
+            var actorTransition = new GameplaySemanticTransition(
+                new GameplayTransitionIdentity(
+                    1L,
+                    GameplaySemanticCapability.Move.ToString(),
+                    summoner.ActorId,
+                    summoner.ActorId),
+                initial.CanonicalHash,
+                new GameplayMoveTransitionPayload(
+                    GameplayCapabilityProfiles.GroundedMove(),
+                    actorRoute));
+            GameplayReductionResult afterSummoner =
+                new GameplayCoreTransitionReducer().Reduce(
+                    initial,
+                    actorTransition);
+            TurnBudget sharedBudget = afterSummoner.Resulting.Session
+                .GetActor(summoner.ActorId)
+                .TurnBudget;
+            DroneSnapshot drone = afterSummoner.Resulting.Drones[0];
+            var droneMove = new DroneMoveRecord(
+                summoner.ActorId,
+                drone.DroneId,
+                drone.Position,
+                new GameplayPosition(2f, 2f, 1f),
+                0f,
+                drone.Definition.MoveCost,
+                sharedBudget,
+                sharedBudget.SpendAction(drone.Definition.MoveCost));
+            var droneTransition = new GameplaySemanticTransition(
+                new GameplayTransitionIdentity(
+                    2L,
+                    GameplaySemanticCapability.Move.ToString(),
+                    summoner.ActorId,
+                    drone.DroneId),
+                afterSummoner.Resulting.CanonicalHash,
+                new GameplayDroneMoveTransitionPayload(droneMove));
+
+            GameplayReductionResult afterDrone =
+                new GameplayWorldTransitionReducer().Reduce(
+                    afterSummoner.Resulting,
+                    droneTransition);
+
+            DroneTurnPartnership partnership = drone.Definition
+                .TurnPartnership;
+            Assert.That(partnership.SharedBudgetActorId,
+                Is.EqualTo(summoner.ActorId));
+            Assert.That(partnership.PoolingPolicy,
+                Is.EqualTo(DroneTurnPoolingPolicy.SharedSummonerBudget));
+            Assert.That(sharedBudget.ActionPoints, Is.EqualTo(3));
+            Assert.That(afterDrone.Resulting.Session
+                .GetActor(summoner.ActorId)
+                .TurnBudget.ActionPoints, Is.EqualTo(2));
+            Assert.That(afterDrone.Resulting.Session.InitiativeOrder,
+                Is.EqualTo(new[] { "controller", "other" }));
         }
 
         [Test]
@@ -122,7 +196,7 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
-        public void DroneMoveRejectsInactiveControllerAndDestroyedDrone()
+        public void DroneMoveRejectsInactiveSummonerAndDestroyedDrone()
         {
             var movement = new DroneMoveRecord(
                 "controller",
@@ -148,7 +222,7 @@ namespace GritGud.Domain.Tests.Gameplay
         }
 
         [Test]
-        public void DroneAttackSpendsControllerApAndAppliesFrozenActorWound()
+        public void DroneAttackSpendsSummonerApAndAppliesFrozenActorWound()
         {
             GameplayCombatStateSnapshot initial = CreateState("controller");
             GameplayActorSnapshot target = initial.Session.GetActor("other");
@@ -236,7 +310,7 @@ namespace GritGud.Domain.Tests.Gameplay
                 new GameplayTransitionIdentity(
                     1L,
                     GameplaySemanticCapability.Move.ToString(),
-                    movement.ControllerActorId,
+                    movement.SummonerActorId,
                     movement.DroneId),
                 state.CanonicalHash,
                 payload);
@@ -304,7 +378,7 @@ namespace GritGud.Domain.Tests.Gameplay
 
         private static DroneDefinition CreateDroneDefinition() => new DroneDefinition(
             "drone.scout",
-            "controller",
+            new DroneTurnPartnership("controller"),
             new GameplayPosition(1f, 2f, 1f),
             0f,
             maximumIntegrity: 6f,

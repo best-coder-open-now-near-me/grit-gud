@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 21,
+  "schemaVersion": 22,
   "scenarioId": "depot-yard",
   "displayName": "Depot Yard",
   "levelId": "main-depot-yard-v1",
@@ -1863,7 +1863,7 @@
   "drones": [
     {
       "entityId": "scout-drone-01",
-      "controllerActorId": "player",
+      "summonerActorId": "player",
       "maximumIntegrity": 4.0,
       "maximumMoveDistance": 5.0,
       "moveCost": {

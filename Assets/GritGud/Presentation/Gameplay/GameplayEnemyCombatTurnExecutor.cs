@@ -326,7 +326,7 @@ namespace GritGud.Presentation.Gameplay
                 case DroneMoveRecord move:
                     drones.RefreshAuthoritativePresentation();
                     actionController.PresentExternalStatus(
-                        $"{move.ControllerActorId} moved {move.DroneId}.");
+                        $"{move.SummonerActorId} moved {move.DroneId}.");
                     decisionDelaySeconds = enemy.Presentation
                         .PresentationDefinition.PostDecisionDelaySeconds;
                     return;

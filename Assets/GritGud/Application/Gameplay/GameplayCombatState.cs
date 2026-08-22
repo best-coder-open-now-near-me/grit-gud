@@ -22,7 +22,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplaySessionStateSnapshot
     {
-        public const int CurrentSchemaVersion = 12;
+        public const int CurrentSchemaVersion = 13;
 
         public GameplaySessionStateSnapshot(
             string scenarioId,
@@ -207,7 +207,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplayCombatStateSnapshot
     {
-        public const int CurrentSchemaVersion = 12;
+        public const int CurrentSchemaVersion = 13;
 
         public GameplayCombatStateSnapshot(
             GameplaySessionStateSnapshot session,
@@ -495,7 +495,9 @@ namespace GritGud.Application.Gameplay
                 string root = "drone." + drone.DroneId;
                 DroneDefinition definition = drone.Definition;
                 AttackDefinition attack = definition.Attack;
-                Append(text, root + ".controller", definition.ControllerActorId);
+                Append(text, root + ".summoner", definition.SummonerActorId);
+                Append(text, root + ".turn-pooling",
+                    definition.TurnPartnership.PoolingPolicy.ToString());
                 Append(text, root + ".position", drone.Position);
                 Append(text, root + ".facing", drone.FacingDegrees);
                 Append(text, root + ".integrity.maximum", definition.MaximumIntegrity);
@@ -506,7 +508,6 @@ namespace GritGud.Application.Gameplay
                 Append(text, root + ".move.cost.mobility", (int)definition.MoveCost.Mobility);
                 Append(text, root + ".sensor.range", definition.Sensor.Range);
                 Append(text, root + ".sensor.angle", definition.Sensor.ViewAngleDegrees);
-                Append(text, root + ".initiative", (int)definition.InitiativeBinding);
                 Append(text, root + ".attack.id", attack.ActionId);
                 Append(text, root + ".attack.cost.ap", attack.TurnCost.ActionPoints);
                 Append(text, root + ".attack.cost.movement", attack.TurnCost.MovementOpportunity);

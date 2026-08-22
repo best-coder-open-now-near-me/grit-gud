@@ -10,8 +10,8 @@ namespace GritGud.Application.Gameplay
             RequireLegacyMutationAllowed(nameof(CommitDroneMoveBudget));
             if (record == null) throw new ArgumentNullException(nameof(record));
             GameplayActorState actor = RequireActiveActor(
-                record.ControllerActorId);
-            RequireDroneControllerBudget(
+                record.SummonerActorId);
+            RequireCurrentBudget(
                 actor,
                 record.PreviousBudget,
                 "movement");
@@ -25,8 +25,8 @@ namespace GritGud.Application.Gameplay
             RequireLegacyMutationAllowed(nameof(CommitDroneAttackBudget));
             if (record == null) throw new ArgumentNullException(nameof(record));
             GameplayActorState actor = RequireActiveActor(
-                record.ControllerActorId);
-            RequireDroneControllerBudget(
+                record.SummonerActorId);
+            RequireCurrentBudget(
                 actor,
                 record.PreviousBudget,
                 "attack");
@@ -43,17 +43,17 @@ namespace GritGud.Application.Gameplay
             if (record == null) throw new ArgumentNullException(nameof(record));
             if (resolution == null) throw new ArgumentNullException(
                 nameof(resolution));
-            GameplayActorState controller = RequireActiveActor(
-                record.ControllerActorId);
+            GameplayActorState summoner = RequireActiveActor(
+                record.SummonerActorId);
             GameplayActorState target = RequireActor(resolution.TargetId);
-            RequireDroneControllerBudget(
-                controller,
+            RequireCurrentBudget(
+                summoner,
                 record.PreviousBudget,
                 "actor attack");
             if (!target.Wounds.HasSameState(resolution.TargetWoundsBefore))
                 throw new InvalidOperationException(
                     "Drone actor attack starts from stale target state.");
-            controller.TurnBudget = record.ResultingBudget;
+            summoner.TurnBudget = record.ResultingBudget;
             if (resolution.Hit)
                 target.ApplyAttack(resolution);
             Journal.RecordDroneAttackResolved(record);
@@ -64,7 +64,7 @@ namespace GritGud.Application.Gameplay
             notifications.Publish();
         }
 
-        private static void RequireDroneControllerBudget(
+        private static void RequireCurrentBudget(
             GameplayActorState actor,
             GritGud.Domain.Turns.TurnBudget expected,
             string actionLabel)
@@ -76,7 +76,7 @@ namespace GritGud.Application.Gameplay
                 || actor.TurnBudget.MovementOpportunity
                     != expected.MovementOpportunity)
                 throw new InvalidOperationException(
-                    $"Drone {actionLabel} was prepared against a stale controller budget.");
+                    $"Drone {actionLabel} was prepared against a stale shared partner budget.");
         }
 
         internal void CommitActorDroneAttack(ActorDroneAttackRecord record)
@@ -87,7 +87,7 @@ namespace GritGud.Application.Gameplay
             if (record.Sequence != NextActionSequence)
                 throw new InvalidOperationException(
                     "Actor-drone attack is not the next action sequence.");
-            RequireDroneControllerBudget(
+            RequireCurrentBudget(
                 actor,
                 record.PreviousBudget,
                 "integrity attack");

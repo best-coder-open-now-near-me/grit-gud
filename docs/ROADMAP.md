@@ -454,9 +454,11 @@ initiative participant:
    Exercise broader enemy action selection, destructible-pile authoring,
    viewport transforms, Windows/WebGL artifacts, and browser-playable preview
    handoff against the same authoritative contracts.
-9. **Add the deployable drone as the final substantial gameplay expansion.**
-   Deployment, ownership, command range, initiative insertion, destruction,
-   and removal must use the proven party, transition, replay, and simulation
+9. **Complete the deployable drone as the final substantial gameplay expansion.**
+   The drone and its summoner are turn partners: the summoner keeps the only
+   initiative slot, and either partner spends from that actor's shared AP pool.
+   Add deployment, command range, destruction, and removal around that durable
+   foundation through the proven party, transition, replay, and simulation
    seams.
 10. **Run the alpha adversarial capstone.** Complete the scripted, random,
    novelty, optimized, mirrored, held-out, and archived search corpus only after
@@ -831,10 +833,11 @@ their data-derived tooltip.
     Application owns actor-only reach validation and records the evidence,
     while targeting, tooltips, enemy decisions, diagnostics, and the authored
     strike presentation consume that same definition.
-- Explore a deployable-drone player ability that adds the launched drone as a
-  temporary character in combat initiative. Treat deployment, ownership,
-  command range, destruction, and removal from rotation as authored gameplay
-  rules rather than a presentation-only companion effect.
+- Complete the deployable-drone player ability around the partnered-turn
+  foundation. The launched drone does not enter initiative independently; it
+  shares its summoner's activation and AP pool. Treat deployment, ownership,
+  command range, destruction, and removal as authored gameplay rules rather
+  than a presentation-only companion effect.
 
 **Exit:** the character can develop and change equipment without becoming a
 blank classless build or requiring a broad character creator.

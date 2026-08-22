@@ -46,8 +46,8 @@ namespace GritGud.Application.Gameplay
             DroneSnapshot drone = FindDrone(
                 context.State.Drones,
                 intent.DroneId);
-            GameplayActorSnapshot controller = session.GetActor(
-                drone.Definition.ControllerActorId);
+            GameplayActorSnapshot summoner = session.GetActor(
+                drone.Definition.SummonerActorId);
             string failure = !string.Equals(
                     intent.StateHash,
                     context.State.CanonicalHash,
@@ -67,11 +67,11 @@ namespace GritGud.Application.Gameplay
                                 ? "operation-in-progress"
                                 : !string.Equals(
                                     session.ActiveActorId,
-                                    controller.ActorId,
+                                    summoner.ActorId,
                                     StringComparison.Ordinal)
-                                    ? "controller-not-active"
-                                    : controller.IsIncapacitated
-                                        ? "controller-incapacitated"
+                                    ? "summoner-partner-not-active"
+                                    : summoner.IsIncapacitated
+                                        ? "summoner-partner-incapacitated"
                                         : drone.Position.DistanceTo(
                                             intent.Origin) != 0f
                                             ? "drone-origin-stale"
@@ -80,12 +80,12 @@ namespace GritGud.Application.Gameplay
                                                 > drone.Definition
                                                     .MaximumMoveDistance
                                                 ? "drone-destination-out-of-range"
-                                                : controller.TurnBudget
+                                                : summoner.TurnBudget
                                                     .ActionPoints
                                                     < drone.Definition.MoveCost
                                                         .ActionPoints
                                                     ? "insufficient-action-points"
-                                                    : controller.TurnBudget
+                                                    : summoner.TurnBudget
                                                         .MovementOpportunity
                                                         < drone.Definition
                                                             .MoveCost
@@ -95,14 +95,14 @@ namespace GritGud.Application.Gameplay
             bool legal = failure.Length == 0;
             DroneMoveRecord movement = legal
                 ? new DroneMoveRecord(
-                    controller.ActorId,
+                    summoner.ActorId,
                     drone.DroneId,
                     drone.Position,
                     intent.Destination,
                     intent.FacingDegrees,
                     drone.Definition.MoveCost,
-                    controller.TurnBudget,
-                    controller.TurnBudget.SpendAction(
+                    summoner.TurnBudget,
+                    summoner.TurnBudget.SpendAction(
                         drone.Definition.MoveCost))
                 : null;
             float visibilityBefore = legal
@@ -201,15 +201,15 @@ namespace GritGud.Application.Gameplay
             GameplayCombatStateSnapshot state,
             DroneSnapshot drone)
         {
-            ScenarioActorDefinition controller = scenario.GetActor(
-                drone.Definition.ControllerActorId);
+            ScenarioActorDefinition summoner = scenario.GetActor(
+                drone.Definition.SummonerActorId);
             float result = 0f;
             foreach (GameplayActorSnapshot actor in state.Session.Actors)
             {
                 if (actor.IsIncapacitated) continue;
                 ScenarioActorDefinition target = scenario.GetActor(
                     actor.ActorId);
-                if (!controller.Combat.IsHostileTo(
+                if (!summoner.Combat.IsHostileTo(
                         target.Combat.AllegianceId))
                     continue;
                 result += GameplayHeadlessEncounterEvidence.CaptureDroneSight(
@@ -226,15 +226,15 @@ namespace GritGud.Application.Gameplay
             DroneSnapshot drone,
             GameplayPosition position)
         {
-            ScenarioActorDefinition controller = scenario.GetActor(
-                drone.Definition.ControllerActorId);
+            ScenarioActorDefinition summoner = scenario.GetActor(
+                drone.Definition.SummonerActorId);
             float nearest = 100000f;
             foreach (GameplayActorSnapshot actor in state.Session.Actors)
             {
                 if (actor.IsIncapacitated) continue;
                 ScenarioActorDefinition target = scenario.GetActor(
                     actor.ActorId);
-                if (!controller.Combat.IsHostileTo(
+                if (!summoner.Combat.IsHostileTo(
                         target.Combat.AllegianceId))
                     continue;
                 nearest = Math.Min(

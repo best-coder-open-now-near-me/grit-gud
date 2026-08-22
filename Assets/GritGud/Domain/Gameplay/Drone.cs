@@ -3,9 +3,39 @@ using GritGud.Domain.Turns;
 
 namespace GritGud.Domain.Gameplay
 {
-    public enum DroneInitiativeBinding
+    public enum DroneTurnPoolingPolicy
     {
-        ControllerTurn,
+        SharedSummonerBudget,
+    }
+
+    /// <summary>
+    /// Canonical ownership for a partnered summoner/drone activation. The
+    /// summoner keeps the initiative slot and owns the one AP pool consumed by
+    /// actions from either partner.
+    /// </summary>
+    public sealed class DroneTurnPartnership
+    {
+        public DroneTurnPartnership(
+            string summonerActorId,
+            DroneTurnPoolingPolicy poolingPolicy =
+                DroneTurnPoolingPolicy.SharedSummonerBudget)
+        {
+            SummonerActorId = DroneDefinition.RequireText(
+                summonerActorId,
+                nameof(summonerActorId));
+            if (!Enum.IsDefined(typeof(DroneTurnPoolingPolicy), poolingPolicy))
+                throw new ArgumentOutOfRangeException(nameof(poolingPolicy));
+            PoolingPolicy = poolingPolicy;
+        }
+
+        public string SummonerActorId { get; }
+        public string SharedBudgetActorId => SummonerActorId;
+        public DroneTurnPoolingPolicy PoolingPolicy { get; }
+
+        public bool OwnsSharedBudget(string actorId) => string.Equals(
+            SharedBudgetActorId,
+            actorId,
+            StringComparison.Ordinal);
     }
 
     public sealed class DroneSensorDefinition
@@ -35,29 +65,26 @@ namespace GritGud.Domain.Gameplay
     }
 
     /// <summary>
-    /// An unmanned vehicle controlled through an actor's canonical turn. The
-    /// explicit initiative binding leaves autonomous scheduling as a future
-    /// policy instead of making the drone a disguised humanoid actor.
+    /// An unmanned summon partnered with its summoner's canonical turn. Either
+    /// partner can act while the summoner is active, and both consume the
+    /// summoner-owned shared AP pool.
     /// </summary>
     public sealed class DroneDefinition
     {
         public DroneDefinition(
             string id,
-            string controllerActorId,
+            DroneTurnPartnership turnPartnership,
             GameplayPosition startingPosition,
             float startingFacingDegrees,
             float maximumIntegrity,
             float maximumMoveDistance,
             ActionCost moveCost,
             DroneSensorDefinition sensor,
-            AttackDefinition attack,
-            DroneInitiativeBinding initiativeBinding =
-                DroneInitiativeBinding.ControllerTurn)
+            AttackDefinition attack)
         {
             Id = RequireText(id, nameof(id));
-            ControllerActorId = RequireText(
-                controllerActorId,
-                nameof(controllerActorId));
+            TurnPartnership = turnPartnership ?? throw new ArgumentNullException(
+                nameof(turnPartnership));
             if (!IsFinite(startingFacingDegrees))
                 throw new ArgumentOutOfRangeException(
                     nameof(startingFacingDegrees));
@@ -66,8 +93,6 @@ namespace GritGud.Domain.Gameplay
             if (!IsFinite(maximumMoveDistance) || maximumMoveDistance <= 0f)
                 throw new ArgumentOutOfRangeException(
                     nameof(maximumMoveDistance));
-            if (!Enum.IsDefined(typeof(DroneInitiativeBinding), initiativeBinding))
-                throw new ArgumentOutOfRangeException(nameof(initiativeBinding));
             StartingPosition = startingPosition;
             StartingFacingDegrees = NormalizeDegrees(startingFacingDegrees);
             MaximumIntegrity = maximumIntegrity;
@@ -78,11 +103,11 @@ namespace GritGud.Domain.Gameplay
             if (attack.Projectile != null || attack.Contact != null)
                 throw new NotSupportedException(
                     "Drone weapons currently require immediate ranged delivery.");
-            InitiativeBinding = initiativeBinding;
         }
 
         public string Id { get; }
-        public string ControllerActorId { get; }
+        public DroneTurnPartnership TurnPartnership { get; }
+        public string SummonerActorId => TurnPartnership.SummonerActorId;
         public GameplayPosition StartingPosition { get; }
         public float StartingFacingDegrees { get; }
         public float MaximumIntegrity { get; }
@@ -90,7 +115,6 @@ namespace GritGud.Domain.Gameplay
         public ActionCost MoveCost { get; }
         public DroneSensorDefinition Sensor { get; }
         public AttackDefinition Attack { get; }
-        public DroneInitiativeBinding InitiativeBinding { get; }
 
         public DroneSnapshot CreateInitialSnapshot() => new DroneSnapshot(
             this,
@@ -172,7 +196,7 @@ namespace GritGud.Domain.Gameplay
     public sealed class DroneMoveRecord
     {
         public DroneMoveRecord(
-            string controllerActorId,
+            string summonerActorId,
             string droneId,
             GameplayPosition origin,
             GameplayPosition destination,
@@ -181,9 +205,9 @@ namespace GritGud.Domain.Gameplay
             TurnBudget previousBudget,
             TurnBudget resultingBudget)
         {
-            ControllerActorId = DroneDefinition.RequireText(
-                controllerActorId,
-                nameof(controllerActorId));
+            SummonerActorId = DroneDefinition.RequireText(
+                summonerActorId,
+                nameof(summonerActorId));
             DroneId = DroneDefinition.RequireText(
                 droneId,
                 nameof(droneId));
@@ -207,7 +231,7 @@ namespace GritGud.Domain.Gameplay
             ResultingBudget = resultingBudget;
         }
 
-        public string ControllerActorId { get; }
+        public string SummonerActorId { get; }
         public string DroneId { get; }
         public GameplayPosition Origin { get; }
         public GameplayPosition Destination { get; }
@@ -448,7 +472,7 @@ namespace GritGud.Domain.Gameplay
     public sealed class DroneAttackRecord
     {
         public DroneAttackRecord(
-            string controllerActorId,
+            string summonerActorId,
             string droneId,
             string targetId,
             string targetKind,
@@ -457,8 +481,8 @@ namespace GritGud.Domain.Gameplay
             TurnBudget resultingBudget,
             object consequence)
         {
-            ControllerActorId = DroneDefinition.RequireText(
-                controllerActorId, nameof(controllerActorId));
+            SummonerActorId = DroneDefinition.RequireText(
+                summonerActorId, nameof(summonerActorId));
             DroneId = DroneDefinition.RequireText(droneId, nameof(droneId));
             TargetId = DroneDefinition.RequireText(targetId, nameof(targetId));
             TargetKind = DroneDefinition.RequireText(targetKind, nameof(targetKind));
@@ -476,7 +500,7 @@ namespace GritGud.Domain.Gameplay
             ResultingBudget = resultingBudget;
         }
 
-        public string ControllerActorId { get; }
+        public string SummonerActorId { get; }
         public string DroneId { get; }
         public string TargetId { get; }
         public string TargetKind { get; }

@@ -792,7 +792,7 @@ namespace GritGud.Application.Gameplay
                 state.Drones,
                 input.SourceSubjectId ?? input.SubjectIdHint);
             GameplayActorSnapshot controller = state.Session.GetActor(
-                drone.Definition.ControllerActorId);
+                drone.Definition.SummonerActorId);
             if (!drone.IsOperational
                 || controller.IsIncapacitated
                 || controller.TurnBudget.ActionPoints
@@ -810,7 +810,7 @@ namespace GritGud.Application.Gameplay
             foreach (float distance in distances)
             foreach (GameplayPosition direction in EnumerateTacticalDirections(
                 state,
-                drone.Definition.ControllerActorId,
+                drone.Definition.SummonerActorId,
                 drone.Position))
             {
                 double length = Math.Sqrt(
@@ -882,7 +882,7 @@ namespace GritGud.Application.Gameplay
             yield return travelFacing;
             if (scenario == null) yield break;
             ScenarioActorDefinition controller = scenario.GetActor(
-                drone.Definition.ControllerActorId);
+                drone.Definition.SummonerActorId);
             foreach (GameplayActorSnapshot actor in state.Session.Actors)
             {
                 if (actor.IsIncapacitated) continue;

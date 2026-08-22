@@ -472,6 +472,8 @@ namespace GritGud.Domain.Gameplay
     public sealed class ScenarioDroneContentData
     {
         public string entityId = string.Empty;
+        public string summonerActorId = string.Empty;
+        // Retained only so schema-21 content can be migrated without data loss.
         public string controllerActorId = string.Empty;
         public float maximumIntegrity;
         public float maximumMoveDistance;
@@ -499,7 +501,7 @@ namespace GritGud.Domain.Gameplay
     [Serializable]
     public sealed class ScenarioContentDocument
     {
-        public const int CurrentSchemaVersion = 21;
+        public const int CurrentSchemaVersion = 22;
 
         public int schemaVersion = CurrentSchemaVersion;
         public string scenarioId = string.Empty;

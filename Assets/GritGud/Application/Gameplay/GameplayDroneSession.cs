@@ -34,7 +34,7 @@ namespace GritGud.Application.Gameplay
                     throw new ArgumentException(
                         "Drone definitions must be non-null and unique.",
                         nameof(definitions));
-                _ = gameplay.GetActor(definition.ControllerActorId);
+                _ = gameplay.GetActor(definition.SummonerActorId);
             }
         }
 
@@ -122,7 +122,7 @@ namespace GritGud.Application.Gameplay
             float facingDegrees)
         {
             DroneSnapshot drone = GetDrone(droneId);
-            RequireControllerTurn(drone);
+            RequireSummonerPartnerTurn(drone);
             if (!drone.IsOperational)
                 throw new InvalidOperationException(
                     "Destroyed drones cannot move.");
@@ -131,9 +131,9 @@ namespace GritGud.Application.Gameplay
                 throw new InvalidOperationException(
                     "Drone destination exceeds its movement range.");
             TurnBudget previous = gameplay.GetActor(
-                drone.Definition.ControllerActorId).TurnBudget;
+                drone.Definition.SummonerActorId).TurnBudget;
             return new DroneMoveRecord(
-                drone.Definition.ControllerActorId,
+                drone.Definition.SummonerActorId,
                 drone.DroneId,
                 drone.Position,
                 destination,
@@ -155,7 +155,7 @@ namespace GritGud.Application.Gameplay
             }
             RequireLegacyMutationAllowed(nameof(CommitMove));
             DroneSnapshot drone = GetDrone(record.DroneId);
-            RequireControllerTurn(drone);
+            RequireSummonerPartnerTurn(drone);
             gameplay.CommitDroneMoveBudget(record);
             drones[drone.DroneId] = new DroneSnapshot(
                 drone.Definition,
@@ -171,7 +171,7 @@ namespace GritGud.Application.Gameplay
             if (resolution == null) throw new ArgumentNullException(
                 nameof(resolution));
             DroneSnapshot drone = GetDrone(droneId);
-            RequireControllerTurn(drone);
+            RequireSummonerPartnerTurn(drone);
             if (!drone.IsOperational)
                 throw new InvalidOperationException(
                     "Destroyed drones cannot attack.");
@@ -183,10 +183,10 @@ namespace GritGud.Application.Gameplay
                     "Drone attack evidence must originate from the firing drone.",
                     nameof(resolution));
             TurnBudget previous = gameplay.GetActor(
-                drone.Definition.ControllerActorId).TurnBudget;
+                drone.Definition.SummonerActorId).TurnBudget;
             ActionCost cost = drone.Definition.Attack.TurnCost;
             return new DroneAttackRecord(
-                drone.Definition.ControllerActorId,
+                drone.Definition.SummonerActorId,
                 drone.DroneId,
                 resolution.TargetId,
                 GameplaySemanticSubjectKind.Actor.ToString(),
@@ -216,7 +216,7 @@ namespace GritGud.Application.Gameplay
             }
             RequireLegacyMutationAllowed(nameof(CommitAttack));
             DroneSnapshot drone = GetDrone(record.DroneId);
-            RequireControllerTurn(drone);
+            RequireSummonerPartnerTurn(drone);
             if (!drone.IsOperational)
                 throw new InvalidOperationException(
                     "Destroyed drones cannot attack.");
@@ -320,16 +320,16 @@ namespace GritGud.Application.Gameplay
                 drones[drone.DroneId] = record.Damage.Resulting;
         }
 
-        private void RequireControllerTurn(DroneSnapshot drone)
+        private void RequireSummonerPartnerTurn(DroneSnapshot drone)
         {
             if (gameplay.Mode != GameplaySessionMode.TurnBased
                 || gameplay.Operation != GameplaySessionOperation.None
                 || !string.Equals(
                     gameplay.ActiveActorId,
-                    drone.Definition.ControllerActorId,
+                    drone.Definition.SummonerActorId,
                     StringComparison.Ordinal))
                 throw new InvalidOperationException(
-                    "Drone commands require the controller's idle personal turn.");
+                    "Drone commands require the summoner partner's idle turn.");
         }
 
         private static bool StatesMatch(DroneSnapshot left, DroneSnapshot right) =>

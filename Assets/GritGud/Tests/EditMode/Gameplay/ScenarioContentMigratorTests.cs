@@ -57,6 +57,31 @@ namespace GritGud.Domain.Tests.Gameplay
                 ScenarioContentMigrator.Migrate(document));
         }
 
+        [Test]
+        public void SchemaTwentyOneDroneControllerMigratesToSummonerPartner()
+        {
+            var document = new ScenarioContentDocument
+            {
+                schemaVersion = 21,
+                drones = new List<ScenarioDroneContentData>
+                {
+                    new ScenarioDroneContentData
+                    {
+                        entityId = "drone",
+                        controllerActorId = "summoner",
+                    },
+                },
+            };
+
+            ScenarioContentMigrator.Migrate(document);
+
+            Assert.That(document.schemaVersion,
+                Is.EqualTo(ScenarioContentDocument.CurrentSchemaVersion));
+            Assert.That(document.drones[0].summonerActorId,
+                Is.EqualTo("summoner"));
+            Assert.That(document.drones[0].controllerActorId, Is.Empty);
+        }
+
         private static ScenarioActorContentData Actor(string id, int ap) =>
             new ScenarioActorContentData
             {

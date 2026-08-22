@@ -1137,7 +1137,7 @@ namespace GritGud.Application.Gameplay
                     {
                         droneMoves++;
                         MutableActorScore score = actorScores[
-                            droneMove.ControllerActorId];
+                            droneMove.SummonerActorId];
                         score.DroneMoves++;
                     }
                     else if (record is DroneAttackRecord droneAttack)
@@ -1145,7 +1145,7 @@ namespace GritGud.Application.Gameplay
                         droneAttacks++;
                         attacks++;
                         MutableActorScore score = actorScores[
-                            droneAttack.ControllerActorId];
+                            droneAttack.SummonerActorId];
                         score.DroneAttacks++;
                         score.Attacks++;
                         if (droneAttack.Consequence

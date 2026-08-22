@@ -536,6 +536,22 @@ namespace GritGud.Application.Gameplay
                     GameplayBattleArtifactCodec.JsonNode> properties,
                 ParameterInfo parameter)
             {
+                if (parameter.ParameterType == typeof(DroneTurnPartnership)
+                    && TryGetProperty(
+                        properties,
+                        "ControllerActorId",
+                        out _))
+                    return true;
+                if (parameter.ParameterType == typeof(string)
+                    && string.Equals(
+                        parameter.Name,
+                        "summonerActorId",
+                        StringComparison.OrdinalIgnoreCase)
+                    && TryGetProperty(
+                        properties,
+                        "ControllerActorId",
+                        out _))
+                    return true;
                 if (!TryGetProperty(properties, "Profile", out _))
                     return false;
                 if (parameter.ParameterType
@@ -564,6 +580,10 @@ namespace GritGud.Application.Gameplay
                             resource,
                             "controller-drone-weapon",
                             StringComparison.Ordinal)
+                        || string.Equals(
+                            resource,
+                            "summoner-drone-weapon",
+                            StringComparison.Ordinal)
                         || (string.Equals(
                                 resource,
                                 "equipped-weapon",
@@ -588,6 +608,27 @@ namespace GritGud.Application.Gameplay
                 {
                     value = null;
                     return false;
+                }
+                if (parameter.ParameterType == typeof(DroneTurnPartnership)
+                    || (parameter.ParameterType == typeof(string)
+                        && string.Equals(
+                            parameter.Name,
+                            "summonerActorId",
+                            StringComparison.OrdinalIgnoreCase)))
+                {
+                    TryGetProperty(
+                        properties,
+                        "ControllerActorId",
+                        out GameplayBattleArtifactCodec.JsonNode actorNode);
+                    string actorId = (string)ReadValue(
+                        actorNode,
+                        typeof(string),
+                        path + ".ControllerActorId");
+                    value = parameter.ParameterType
+                            == typeof(DroneTurnPartnership)
+                        ? new DroneTurnPartnership(actorId)
+                        : actorId;
+                    return true;
                 }
                 GameplayCapabilityProfile profile = ReadProfile(
                     properties,

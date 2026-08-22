@@ -151,7 +151,7 @@ namespace GritGud.Application.Gameplay
             GameplaySemanticCapability.Move,
             Subject(GameplaySemanticSubjectKind.Vehicle),
             Trait("path", "aerial-direct"),
-            Trait("resource", "controller-turn-ap"));
+            Trait("resource", "summoner-partner-ap"));
 
         public static GameplayCapabilityProfile ChangeStance() => Profile(
             GameplaySemanticCapability.ChangeStance,
@@ -240,7 +240,7 @@ namespace GritGud.Application.Gameplay
                 Subject(subjectKind),
                 Trait("delivery", "immediate-ranged"),
                 Trait("targeting", "semantic-subject"),
-                Trait("resource", "controller-drone-weapon"),
+                Trait("resource", "summoner-drone-weapon"),
                 Trait("consequence", consequence));
         }
 

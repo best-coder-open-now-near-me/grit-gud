@@ -54,6 +54,7 @@ internal static class SimulationChecks
             VerifyCommittedActionConsequenceTrajectory();
             VerifyBankedActionPointEconomy();
             executedFixtureChecks.Add("sim-ap-banking");
+            VerifyDronePartnerBudgetPooling();
             VerifyDroneHeadlessTrajectory();
             executedFixtureChecks.Add("sim-drone-control");
             SimulationParityChecks.Verify();
@@ -73,6 +74,132 @@ internal static class SimulationChecks
         }
     }
 
+    private static void VerifyDronePartnerBudgetPooling()
+    {
+        GameplayActorSnapshot summoner = CreateDronePartnerActor("summoner");
+        GameplayActorSnapshot other = CreateDronePartnerActor("other");
+        var session = new GameplaySessionStateSnapshot(
+            "drone-partner-budget",
+            GameplaySessionMode.TurnBased,
+            GameplaySessionOperation.None,
+            TurnModeContext.InitiatedEncounter,
+            encounterActive: true,
+            encounterCompletionRequested: false,
+            activeActorId: summoner.ActorId,
+            GameplayTurnPhase.Normal,
+            new[] { summoner, other },
+            new[] { summoner.ActorId, other.ActorId },
+            Array.Empty<GameplayObjectiveSnapshot>(),
+            Array.Empty<string>(),
+            emergencyResponderIndex: -1,
+            emergencyResumeActorId: string.Empty,
+            lastActionSequence: 0L,
+            lastTurnSequence: 0L,
+            journalSequence: 0L,
+            encounterState: new GameplayEncounterStateSnapshot(
+                encounterParticipantIds: new[]
+                {
+                    summoner.ActorId,
+                    other.ActorId,
+                }));
+        var partnership = new DroneTurnPartnership(summoner.ActorId);
+        var definition = new DroneDefinition(
+            "drone.partner",
+            partnership,
+            new GameplayPosition(1f, 2f, 1f),
+            startingFacingDegrees: 0f,
+            maximumIntegrity: 6f,
+            maximumMoveDistance: 5f,
+            moveCost: new ActionCost(1, 0f, ActionMobility.Mobile),
+            sensor: new DroneSensorDefinition(14f, 120f),
+            attack: CreateDroneRifle());
+        var initial = new GameplayCombatStateSnapshot(
+            session,
+            coverage: GameplayCombatStateCoverage.Session
+                | GameplayCombatStateCoverage.Drones,
+            drones: new[] { definition.CreateInitialSnapshot() });
+        var actorRoute = new MovementRouteRecord(
+            summoner.ActorId,
+            summoner.Pose,
+            summoner.TurnBudget,
+            new[]
+            {
+                new MovementRouteSegmentRecord(
+                    summoner.Pose.Position,
+                    new GameplayPosition(1f, 0f, 0f),
+                    movementCost: 1f,
+                    actionPointCost: 1),
+            });
+        var actorTransition = new GameplaySemanticTransition(
+            new GameplayTransitionIdentity(
+                1L,
+                GameplaySemanticCapability.Move.ToString(),
+                summoner.ActorId,
+                summoner.ActorId),
+            initial.CanonicalHash,
+            new GameplayMoveTransitionPayload(
+                GameplayCapabilityProfiles.GroundedMove(),
+                actorRoute));
+        GameplayReductionResult afterSummoner =
+            new GameplayCoreTransitionReducer().Reduce(
+                initial,
+                actorTransition);
+        TurnBudget sharedBudget = afterSummoner.Resulting.Session
+            .GetActor(summoner.ActorId)
+            .TurnBudget;
+        DroneSnapshot drone = afterSummoner.Resulting.Drones[0];
+        var droneMove = new DroneMoveRecord(
+            summoner.ActorId,
+            drone.DroneId,
+            drone.Position,
+            new GameplayPosition(2f, 2f, 1f),
+            resultingFacingDegrees: 0f,
+            drone.Definition.MoveCost,
+            sharedBudget,
+            sharedBudget.SpendAction(drone.Definition.MoveCost));
+        var droneTransition = new GameplaySemanticTransition(
+            new GameplayTransitionIdentity(
+                2L,
+                GameplaySemanticCapability.Move.ToString(),
+                summoner.ActorId,
+                drone.DroneId),
+            afterSummoner.Resulting.CanonicalHash,
+            new GameplayDroneMoveTransitionPayload(droneMove));
+        GameplayReductionResult afterDrone =
+            new GameplayWorldTransitionReducer().Reduce(
+                afterSummoner.Resulting,
+                droneTransition);
+
+        Require(partnership.SharedBudgetActorId == summoner.ActorId
+            && partnership.PoolingPolicy
+                == DroneTurnPoolingPolicy.SharedSummonerBudget
+            && sharedBudget.ActionPoints == 3
+            && afterDrone.Resulting.Session.GetActor(summoner.ActorId)
+                .TurnBudget.ActionPoints == 2
+            && afterDrone.Resulting.Session.InitiativeOrder.Count == 2
+            && string.Equals(
+                afterDrone.Resulting.Session.InitiativeOrder[0],
+                summoner.ActorId,
+                StringComparison.Ordinal)
+            && string.Equals(
+                afterDrone.Resulting.Session.InitiativeOrder[1],
+                other.ActorId,
+                StringComparison.Ordinal),
+            "Summoner and drone did not spend one shared AP pool without adding a drone initiative slot.");
+    }
+
+    private static GameplayActorSnapshot CreateDronePartnerActor(
+        string actorId) => new GameplayActorSnapshot(
+            actorId,
+            new GameplayActorPose(new GameplayPosition(0f, 0f, 0f), 0f),
+            new TurnBudget(4, 8f),
+            new ActorWoundSnapshot(actorId, 0, 0f),
+            equippedItemId: null,
+            equipmentEffects: EquipmentEffectSet.None,
+            maximumWounds: 3,
+            actionPointEconomy: new TurnActionPointEconomy(4, 4, 6),
+            turnMovementAllowance: 8f);
+
     private static void VerifyDroneHeadlessTrajectory()
     {
         GameplaySession gameplay = CreateHostileGameplay(CreateRifle());
@@ -82,7 +209,7 @@ internal static class SimulationChecks
             gameplay);
         var droneDefinition = new DroneDefinition(
             "drone.fixture",
-            "player",
+            new DroneTurnPartnership("player"),
             new GameplayPosition(0f, 2f, 0f),
             0f,
             5f,
@@ -801,7 +928,7 @@ internal static class SimulationChecks
                         new GameplayTransitionIdentity(
                             attackSequence,
                             GameplaySemanticCapability.DirectAttack.ToString(),
-                            droneDefinition.ControllerActorId,
+                            droneDefinition.SummonerActorId,
                             droneTarget.ActorId),
                         "resolution"),
                     droneExposure,
@@ -2433,7 +2560,7 @@ internal static class SimulationChecks
         string droneControllerId = gameplay.InitiativeOrder[1];
         var droneDefinition = new DroneDefinition(
             "drone.projection",
-            droneControllerId,
+            new DroneTurnPartnership(droneControllerId),
             new GameplayPosition(0f, 2f, 5f),
             startingFacingDegrees: 0f,
             maximumIntegrity: 5f,

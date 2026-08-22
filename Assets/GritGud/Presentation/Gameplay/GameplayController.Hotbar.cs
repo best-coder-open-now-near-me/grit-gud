@@ -58,7 +58,7 @@ namespace GritGud.Presentation.Gameplay
             if (scenarioAssembly == null) return false;
             foreach (DroneDefinition drone in scenarioAssembly.Drones)
                 if (string.Equals(
-                    drone.ControllerActorId,
+                    drone.SummonerActorId,
                     actorId,
                     StringComparison.Ordinal)) return true;
             return false;

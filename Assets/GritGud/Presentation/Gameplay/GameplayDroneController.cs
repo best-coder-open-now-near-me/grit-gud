@@ -84,10 +84,10 @@ namespace GritGud.Presentation.Gameplay
             enabled = copied.Count > 0;
         }
 
-        public bool TryToggle(string controllerActorId, string optionId)
+        public bool TryToggle(string summonerActorId, string optionId)
         {
             DroneSnapshot drone;
-            if (!TryFindControllerDrone(controllerActorId, out drone))
+            if (!TryFindSummonerDrone(summonerActorId, out drone))
                 return false;
             CommandMode requested = string.Equals(optionId, MoveOptionId,
                 StringComparison.Ordinal)
@@ -265,7 +265,7 @@ namespace GritGud.Presentation.Gameplay
                 if (!drone.IsOperational
                     || !gameplay.IsHostile(
                         attackingActorId,
-                        drone.Definition.ControllerActorId))
+                        drone.Definition.SummonerActorId))
                     continue;
                 DroneExposureSnapshot exposure = CaptureActorExposure(
                     attackingActorId,
@@ -472,7 +472,7 @@ namespace GritGud.Presentation.Gameplay
                 candidate => candidate.Targetable
                     && !gameplay.IsActorIncapacitated(candidate.ActorId)
                     && gameplay.IsHostile(
-                        drone.Definition.ControllerActorId,
+                        drone.Definition.SummonerActorId,
                         candidate.ActorId));
             if (!query.TryAcquire(ray, out GameplayActorView target)) return;
             GameplayActorSnapshot targetState = gameplay.GetActor(target.ActorId);
@@ -506,7 +506,7 @@ namespace GritGud.Presentation.Gameplay
             var transitionIdentity = new GameplayTransitionIdentity(
                 resolutionSequence,
                 GameplaySemanticCapability.DirectAttack.ToString(),
-                drone.Definition.ControllerActorId,
+                drone.Definition.SummonerActorId,
                 target.ActorId);
             AttackResolutionRecord resolution = AttackResolutionRules.Resolve(
                 resolutionSequence,
@@ -538,15 +538,15 @@ namespace GritGud.Presentation.Gameplay
             }
         }
 
-        private bool TryFindControllerDrone(
-            string actorId,
+        private bool TryFindSummonerDrone(
+            string summonerActorId,
             out DroneSnapshot result)
         {
             if (drones != null)
                 foreach (DroneSnapshot drone in drones.CaptureDrones())
                     if (string.Equals(
-                        drone.Definition.ControllerActorId,
-                        actorId,
+                        drone.Definition.SummonerActorId,
+                        summonerActorId,
                         StringComparison.Ordinal))
                     {
                         result = drone;

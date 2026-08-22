@@ -51,7 +51,7 @@ namespace GritGud.Application.Gameplay
             : base(
                 GameplayCapabilityProfiles.AerialDroneMove(),
                 (movement ?? throw new ArgumentNullException(nameof(movement)))
-                    .ControllerActorId,
+                    .SummonerActorId,
                 movement.DroneId)
         {
             Movement = movement;
@@ -154,27 +154,25 @@ namespace GritGud.Application.Gameplay
             if (!drone.IsOperational)
                 throw new InvalidOperationException(
                     "Destroyed drones cannot receive movement commands.");
-            if (drone.Definition.InitiativeBinding
-                    != DroneInitiativeBinding.ControllerTurn
-                || !string.Equals(
-                    drone.Definition.ControllerActorId,
-                    movement.ControllerActorId,
-                    StringComparison.Ordinal))
+            if (drone.Definition.TurnPartnership.PoolingPolicy
+                    != DroneTurnPoolingPolicy.SharedSummonerBudget
+                || !drone.Definition.TurnPartnership.OwnsSharedBudget(
+                    movement.SummonerActorId))
                 throw new InvalidOperationException(
-                    "Drone movement does not match its controller binding.");
+                    "Drone movement does not match its summoner partnership.");
             if (session.Mode != GameplaySessionMode.TurnBased
                 || session.Operation != GameplaySessionOperation.None
                 || !string.Equals(
                     session.ActiveActorId,
-                    movement.ControllerActorId,
+                    movement.SummonerActorId,
                     StringComparison.Ordinal))
                 throw new InvalidOperationException(
-                    "A drone can move only during its controller's idle turn.");
-            GameplayActorSnapshot controller = session.GetActor(
-                movement.ControllerActorId);
-            if (controller.IsIncapacitated)
+                    "A drone can move only during its summoner partner's idle turn.");
+            GameplayActorSnapshot summoner = session.GetActor(
+                movement.SummonerActorId);
+            if (summoner.IsIncapacitated)
                 throw new InvalidOperationException(
-                    "An incapacitated actor cannot control a drone.");
+                    "An incapacitated summoner cannot command a drone.");
             if (drone.Position.DistanceTo(movement.Origin) != 0f)
                 throw new InvalidOperationException(
                     "Drone movement starts from a stale position.");
@@ -184,7 +182,7 @@ namespace GritGud.Application.Gameplay
                     "Drone movement exceeds its authored maximum distance.");
             if (!CostsMatch(movement.Cost, drone.Definition.MoveCost)
                 || !BudgetsMatch(
-                    controller.TurnBudget,
+                    summoner.TurnBudget,
                     movement.PreviousBudget))
                 throw new InvalidOperationException(
                     "Drone movement was prepared against stale authored costs or budget.");
@@ -196,7 +194,7 @@ namespace GritGud.Application.Gameplay
                 LastTransitionSequence = transition.Identity.Sequence,
             };
             mutation.ReplaceActor(GameplayCanonicalStateMutation.CopyActor(
-                controller,
+                summoner,
                 budget: movement.ResultingBudget));
             mutation.ReplaceDrone(new DroneSnapshot(
                 drone.Definition,

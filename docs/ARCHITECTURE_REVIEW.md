@@ -839,7 +839,8 @@ turn. The current full EditMode gate passes 854 tests.
   are preferable at the current scale.
 - A full `GameplaySession` rewrite. Focused extraction should follow feature
   seams and preserve journal ordering.
-- The deployable drone. It remains valuable, but adding another initiative
-  participant before end-to-end toppling, close-quarters animation, and the
-  shared simulation foundation are proven would deepen the current hotspots
-  and force the final alpha gauntlet to be rerun around unfinished seams.
+- The remaining deployable-drone lifecycle. Its partnered-turn foundation is
+  now explicit: the drone has no independent initiative slot and spends its
+  summoner's AP. Deployment, command range, destruction, and removal remain
+  deferred until the shared simulation foundation is ready for that complete
+  vertical slice.

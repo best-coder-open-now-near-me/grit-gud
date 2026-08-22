@@ -21,7 +21,8 @@ The first simulation milestone is complete only when one multi-enemy battle:
 The first retained Depot battle must contain multiple hostile actors and cover
 the intended first-simulation systems: ordinary actor movement and attacks,
 persistent fire, concussive current-AP reduction, and the controllable drone's
-movement, perception, targeting, damage, and initiative behavior.
+movement, perception, targeting, damage, and partnered summoner-turn/AP
+behavior.
 
 ## One execution spine
 

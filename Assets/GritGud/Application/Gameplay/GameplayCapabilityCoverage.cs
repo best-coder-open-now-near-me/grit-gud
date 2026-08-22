@@ -390,13 +390,13 @@ namespace GritGud.Application.Gameplay
             {
                 Add(result, GameplayReachableInputKind.MovementControl,
                     drone.Id + ".move",
-                    drone.ControllerActorId,
+                    drone.SummonerActorId,
                     GameplayCapabilityProfiles.AerialDroneMove(),
                     drone.Id,
                     drone.Id);
                 Add(result, GameplayReachableInputKind.EquippedAttack,
                     drone.Id + ".attack->Actor",
-                    drone.ControllerActorId,
+                    drone.SummonerActorId,
                     GameplayCapabilityProfiles.DroneAttack(
                         drone.Attack,
                         GameplaySemanticSubjectKind.Actor),
@@ -405,7 +405,7 @@ namespace GritGud.Application.Gameplay
                     && drone.Attack.DirectFireDamage != null)
                     Add(result, GameplayReachableInputKind.EquippedAttack,
                         drone.Id + ".attack->DestructibleProp",
-                        drone.ControllerActorId,
+                        drone.SummonerActorId,
                         GameplayCapabilityProfiles.DroneAttack(
                             drone.Attack,
                             GameplaySemanticSubjectKind.DestructibleProp),
@@ -413,7 +413,7 @@ namespace GritGud.Application.Gameplay
                 if (assembly.Drones.Count > 1)
                     Add(result, GameplayReachableInputKind.EquippedAttack,
                         drone.Id + ".attack->Vehicle",
-                        drone.ControllerActorId,
+                        drone.SummonerActorId,
                         GameplayCapabilityProfiles.DroneAttack(
                             drone.Attack,
                             GameplaySemanticSubjectKind.Vehicle),
