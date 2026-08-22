@@ -1,5 +1,7 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Turns;
@@ -15,6 +17,262 @@ namespace GritGud.PlayMode.Tests
 {
     public sealed class TurnReplayPresentationPlayModeTests
     {
+        [UnityTest]
+        public IEnumerator LiveAwayTurnReplayDrivesWorldAndCombatTranscript()
+        {
+            GameplaySession gameplay = CreateLiveReplayGameplay(
+                out AttackDefinition enemyAttack);
+            Assert.That(gameplay.BeginEncounter(), Is.True);
+            GameplayCombatStateSnapshot initial =
+                GameplayCombatStateCapture.Capture(gameplay);
+            GameplayTransitionReducerRegistry reducers =
+                GameplaySimulationReducers.CreateCurrent();
+            GameplayReachableInput[] inputs =
+            {
+                new GameplayReachableInput(
+                    GameplayReachableInputKind.EndTurnControl,
+                    "control.end-turn.player",
+                    "player",
+                    GameplayCapabilityProfiles.EndTurn(emergency: false)),
+                new GameplayReachableInput(
+                    GameplayReachableInputKind.MovementControl,
+                    "ai.move.enemy",
+                    "enemy",
+                    GameplayCapabilityProfiles.GroundedMove()),
+                new GameplayReachableInput(
+                    GameplayReachableInputKind.EquippedAttack,
+                    "weapon.rifle.power->Actor",
+                    "enemy",
+                    GameplayCapabilityProfiles.Attack(enemyAttack),
+                    "player"),
+                new GameplayReachableInput(
+                    GameplayReachableInputKind.EndTurnControl,
+                    "ai.end-turn.enemy",
+                    "enemy",
+                    GameplayCapabilityProfiles.EndTurn(emergency: false)),
+            };
+            GameplayCapabilityRegistry capabilities =
+                GameplayCurrentCapabilityCatalog.Create(reducers, inputs);
+
+            GameplayLiveSessionRuntime live = null;
+            LevelWorld world = null;
+            GameplayWorldRegistry registry = null;
+            GameplayTurnReplayWorldPresenter worldPresenter = null;
+            GameplayReplayTranscriptPresenter transcriptPresenter = null;
+            GameplayWeaponPresenter enemyWeapon = null;
+            GameObject host = null;
+            GameObject playerActor = null;
+            GameObject enemyActor = null;
+            float originalTimeScale = Time.timeScale;
+            try
+            {
+                live = new GameplayLiveSessionRuntime(
+                    gameplay,
+                    CreateReplayExecutionIdentity(gameplay),
+                    initial,
+                    reducers,
+                    capabilities);
+
+                Assert.That(gameplay.TryEndTurn(
+                    "player",
+                    out TurnEndFailure playerEndFailure), Is.True,
+                    playerEndFailure.ToString());
+                GameplayActorPose enemyOrigin = gameplay.GetActor("enemy").Pose;
+                var route = new MovementRouteRecord(
+                    "enemy",
+                    enemyOrigin,
+                    new[] { new GameplayPosition(3f, 0f, 0f) });
+                gameplay.CommitMovementRoute(route);
+
+                var attacks = new GameplayAttackSession(gameplay);
+                Assert.That(attacks.TryResolve(
+                    "enemy",
+                    CreateFullyExposedTarget("enemy", "player"),
+                    out GameplayActionRecord attackAction,
+                    out AttackResolutionFailure attackFailure), Is.True,
+                    attackFailure.ToString());
+                Assert.That(attackAction.Outcomes.Any(outcome =>
+                    outcome is AttackResolvedActionOutcome), Is.True);
+                Assert.That(gameplay.TryEndTurn(
+                    "enemy",
+                    out TurnEndFailure enemyEndFailure), Is.True,
+                    enemyEndFailure.ToString());
+
+                Assert.That(live.TryCreateLastCompletedTurnReplay(
+                    out GameplaySemanticReplayTimeline lastTurn), Is.True);
+                Assert.That(lastTurn.Frames.Select(frame =>
+                        frame.SemanticRecord.GetType()),
+                    Is.EqualTo(new[]
+                    {
+                        typeof(MovementRouteRecord),
+                        typeof(GameplayActionRecord),
+                        typeof(TurnEndRecord),
+                    }));
+                Assert.That(live.TryCreateReplaySinceActorLastTurn(
+                    "player",
+                    out GameplaySemanticReplayTimeline awayReplay,
+                    out GameplayPlayerAwayReplayInterval interval), Is.True);
+                Assert.That(interval.Windows.Select(window => window.ActorId),
+                    Is.EqualTo(new[] { "enemy" }));
+                Assert.That(interval.TransitionCount, Is.EqualTo(3));
+                Assert.That(awayReplay.Frames, Has.Count.EqualTo(3));
+
+                var transcript = new ReplayCombatTranscript(
+                    new GameplaySemanticReplayPlaybackTimeline(awayReplay));
+                Assert.That(transcript.Entries.Any(entry =>
+                    entry.EventKind ==
+                        ReplayCombatTranscriptEventKind.WeaponDischarge),
+                    Is.True);
+
+                GameObject prefab = Resources.Load<GameObject>(
+                    "Actors/DefaultPlayerActor");
+                Assert.That(prefab, Is.Not.Null);
+                playerActor = Object.Instantiate(prefab);
+                enemyActor = Object.Instantiate(prefab);
+                yield return null;
+
+                world = new LevelWorld(
+                    new GameObject("Live Away Replay World"),
+                    new Dictionary<string, LevelEntityView>(),
+                    null);
+                registry = new GameplayWorldRegistry(world);
+                registry.RegisterActor(
+                    "player",
+                    ActorPresentationIds.DefaultPlayer,
+                    targetable: true,
+                    playerActor);
+                registry.RegisterActor(
+                    "enemy",
+                    ActorPresentationIds.DefaultPlayer,
+                    targetable: true,
+                    enemyActor);
+
+                host = new GameObject("Live Away Replay Presentation Host");
+                GameplayAttackController attackController =
+                    host.AddComponent<GameplayAttackController>();
+                GameplayProjectileController projectileController =
+                    host.AddComponent<GameplayProjectileController>();
+                enemyWeapon = enemyActor.AddComponent<
+                    GameplayWeaponPresenter>();
+                enemyWeapon.Bind(
+                    gameplay,
+                    registry,
+                    attackController,
+                    projectileController,
+                    enemyActor.GetComponent<ActorAnimationCoordinator>(),
+                    "enemy",
+                    presentAsLocalPlayer: false);
+
+                GameplayInputController input =
+                    host.AddComponent<GameplayInputController>();
+                GameplayTurnReplayHud hud =
+                    host.AddComponent<GameplayTurnReplayHud>();
+                GameplayHud gameplayHud = host.AddComponent<GameplayHud>();
+                GameplayPartyHud partyHud =
+                    host.AddComponent<GameplayPartyHud>();
+                GameplayEnemyController enemies =
+                    host.AddComponent<GameplayEnemyController>();
+                GameplayDialogueDrawer drawer =
+                    host.AddComponent<GameplayDialogueDrawer>();
+                var liveDialogue = new GameplayDialogueLog();
+                liveDialogue.Append(
+                    GameplayDialogueChannel.System,
+                    "LIVE LOG",
+                    "The live transcript must be restored after replay.");
+                drawer.Bind(liveDialogue);
+                drawer.SetExpanded(false);
+
+                hud.Bind(
+                    gameplay,
+                    live,
+                    GameplayReplaySource.LiveEncounter,
+                    () => "player");
+                worldPresenter = new GameplayTurnReplayWorldPresenter();
+                worldPresenter.Bind(
+                    registry,
+                    input,
+                    hud,
+                    projectileController: null,
+                    thrownExplosiveController: null,
+                    destructibleController: null,
+                    vehicleController: null,
+                    droneController: null,
+                    smokeController: null,
+                    fireController: null,
+                    liveGameplayHud: gameplayHud,
+                    livePartyHud: partyHud,
+                    enemyController: enemies,
+                    behavioursToSuspend: Array.Empty<Behaviour>());
+                transcriptPresenter = new GameplayReplayTranscriptPresenter();
+                transcriptPresenter.Bind(
+                    hud,
+                    drawer,
+                    liveDialogue,
+                    onLiveExportRequested: null);
+
+                hud.Toggle();
+
+                Assert.That(hud.IsOpen, Is.True, hud.LastOpenFailure);
+                Assert.That(hud.Replay.Frames, Has.Count.EqualTo(3));
+                Assert.That(hud.ContentSummary.IsReadyToOpen, Is.True,
+                    hud.ContentSummary.ValidationMessage);
+                Assert.That(hud.ContentSummary.SemanticFrames, Is.EqualTo(3));
+                Assert.That(hud.ContentSummary.ActorPoseDeltaFrames,
+                    Is.GreaterThanOrEqualTo(1));
+                StringAssert.Contains(
+                    "LIVE SINCE PLAYER'S LAST TURN",
+                    hud.ContentSummary.SourceLabel);
+                Assert.That(drawer.HeaderLabel,
+                    Is.EqualTo("REPLAY COMBAT TRANSCRIPT"));
+                Assert.That(drawer.IsExpanded, Is.True);
+                Assert.That(drawer.Source,
+                    Is.SameAs(transcriptPresenter.VisibleSource));
+                Assert.That(enemyActor.transform.position,
+                    Is.EqualTo(new Vector3(5f, 0f, 0f)));
+
+                float movementDuration = hud.Playback.Frames[0]
+                    .DurationSeconds;
+                hud.AdvancePlayback(movementDuration * 0.5f);
+
+                Assert.That(enemyActor.transform.position.x,
+                    Is.EqualTo(4f).Within(0.001f));
+
+                hud.AdvancePlayback(hud.Playback.TotalDurationSeconds);
+
+                Assert.That(drawer.VisibleEntryCount, Is.GreaterThan(0));
+                Assert.That(transcriptPresenter.Transcript.Entries.Any(entry =>
+                    entry.EventKind ==
+                        ReplayCombatTranscriptEventKind.WeaponDischarge),
+                    Is.True);
+                Assert.That(enemyActor.transform.position,
+                    Is.EqualTo(new Vector3(3f, 0f, 0f)));
+
+                hud.Toggle();
+
+                Assert.That(hud.IsOpen, Is.False);
+                Assert.That(drawer.Source, Is.SameAs(liveDialogue));
+                Assert.That(drawer.IsExpanded, Is.False);
+                Assert.That(drawer.HeaderLabel,
+                    Is.EqualTo("DIALOGUE - TRANSCRIPT"));
+            }
+            finally
+            {
+                transcriptPresenter?.Unbind();
+                worldPresenter?.Dispose();
+                enemyWeapon?.Unbind();
+                live?.Dispose();
+                registry?.Dispose();
+                world?.Dispose();
+                if (registry == null)
+                {
+                    if (playerActor != null) Object.Destroy(playerActor);
+                    if (enemyActor != null) Object.Destroy(enemyActor);
+                }
+                if (host != null) Object.Destroy(host);
+                Time.timeScale = originalTimeScale;
+            }
+        }
+
         [UnityTest]
         public IEnumerator ActorReplayLifecycleRestoresLivePresentation()
         {
@@ -443,5 +701,107 @@ namespace GritGud.PlayMode.Tests
                     new GameplayPosition(0f, 1f, 0f),
                     0.1f));
         }
+
+        private static GameplaySession CreateLiveReplayGameplay(
+            out AttackDefinition enemyAttack)
+        {
+            var regions = new List<RegionConsequenceProfile>();
+            foreach (TargetRegionId region in Enum.GetValues(
+                typeof(TargetRegionId)))
+            {
+                regions.Add(new RegionConsequenceProfile(
+                    region,
+                    systemicPerHundred: 10,
+                    structuralPerHundred: 10,
+                    motorPerHundred: 5,
+                    sensoryPerHundred: 5,
+                    bleedPerHundred: 0,
+                    consciousnessPerHundred: 0,
+                    respirationPerHundred: 0));
+            }
+            var damage = new WeaponDamageProfileDefinition(
+                WeaponDamageProfileDefinition.CurrentSchemaVersion,
+                "damage.replay-test.rifle",
+                DamageMechanism.Ballistic,
+                baseImpact: 100,
+                penetration: 50,
+                WeaponDamageRangeProfile.NoDecay,
+                regions);
+            enemyAttack = new AttackDefinition(
+                "attack.replay-test.rifle",
+                "Replay-test rifle",
+                new ActionCost(1, 0f, ActionMobility.Set),
+                damage,
+                accuracyDecay: AccuracyDecayDefinition.None);
+            var weapon = new InventoryItemDefinition(
+                "weapon.rifle",
+                "Rifle",
+                hotbarSlot: 1,
+                InventoryItemKind.Weapon,
+                new ActionCost(1, 0f, ActionMobility.Set),
+                EquipmentEffectSet.None,
+                enemyAttack,
+                occupiedHands: 2);
+            var player = new ScenarioActorDefinition(
+                "player",
+                20,
+                new GameplayActorPose(
+                    new GameplayPosition(0f, 0f, 0f),
+                    0f),
+                new TurnBudget(4, 8f),
+                combat: new ActorCombatDefinition(
+                    "party",
+                    new[] { "hostile" },
+                    maximumWounds: 10));
+            var enemy = new ScenarioActorDefinition(
+                "enemy",
+                10,
+                new GameplayActorPose(
+                    new GameplayPosition(5f, 0f, 0f),
+                    180f),
+                new TurnBudget(4, 8f),
+                new[] { weapon },
+                weapon.Id,
+                combat: new ActorCombatDefinition(
+                    "hostile",
+                    new[] { "party" },
+                    maximumWounds: 10));
+            return new GameplaySession(
+                new ScenarioDefinition(
+                    "live-away-replay-playmode",
+                    new ScenarioTimingDefinition(1f),
+                    new[] { player, enemy },
+                    Array.Empty<ScenarioObjectiveDefinition>()),
+                scenarioSeed: 29u);
+        }
+
+        private static TargetExposureSnapshot CreateFullyExposedTarget(
+            string observerId,
+            string targetId)
+        {
+            var regions = new List<TargetRegionExposure>();
+            foreach (TargetRegionId region in Enum.GetValues(
+                typeof(TargetRegionId)))
+                regions.Add(new TargetRegionExposure(region, 1, 1));
+            return new TargetExposureSnapshot(
+                observerId,
+                targetId,
+                regions);
+        }
+
+        private static GameplayExecutionIdentity CreateReplayExecutionIdentity(
+            GameplaySession gameplay) => new GameplayExecutionIdentity(
+            new GameplayContentIdentity(
+                gameplay.Scenario.Id,
+                scenarioSchemaVersion: 1,
+                rulesSchemaVersion:
+                    GameplayCombatStateSnapshot.CurrentSchemaVersion,
+                new string('a', 64)),
+            new SpatialContentIdentity(
+                "live-away-replay-level",
+                levelSchemaVersion: 1,
+                evidenceAlgorithmVersion: 1,
+                new string('b', 64)),
+            gameplay.RunIdentity);
     }
 }
