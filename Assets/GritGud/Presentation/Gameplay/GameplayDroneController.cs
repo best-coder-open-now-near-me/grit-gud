@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
+using GritGud.Domain.Turns;
 using GritGud.Presentation.Levels.Runtime;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -14,9 +15,10 @@ namespace GritGud.Presentation.Gameplay
         internal const string AbilityId = "ability.control-drone";
         internal const string MoveOptionId = "drone.move";
         internal const string AttackOptionId = "drone.attack";
+        internal const string DismissOptionId = "drone.dismiss";
         internal const int HotbarSlot = 8;
 
-        private enum CommandMode { None, Move, Attack }
+        private enum CommandMode { None, Summon, Move, Attack }
 
         private readonly Dictionary<string, GameObject> roots =
             new Dictionary<string, GameObject>(StringComparer.Ordinal);
@@ -24,9 +26,16 @@ namespace GritGud.Presentation.Gameplay
         private GameplaySession gameplay;
         private GameplayWorldRegistry registry;
         private GameplaySmokeFieldSession smoke;
+        private DestructiblePropSession destructibles;
+        private GameplayScenarioAssembly assembly;
+        private GameplayHeadlessSpatialEvidence spatial;
+        private DronePresentationCatalog presentations;
+        private Transform presentationParent;
         private GameplayDialogueLog dialogue;
         private Func<Vector2, bool> pointerBlocked;
+        private Action<string> hotbarChanged;
         private string commandDroneId;
+        private string commandSummonerId;
         private CommandMode mode;
         private bool replayPresentation;
         private int replayPresentedDischargeCount;
@@ -51,44 +60,71 @@ namespace GritGud.Presentation.Gameplay
             LevelWorld world,
             GameplaySession gameplaySession,
             GameplayWorldRegistry worldRegistry,
-            IEnumerable<DroneDefinition> definitions,
+            GameplayScenarioAssembly scenarioAssembly,
+            GameplayStaticSpatialContent spatialContent,
             DestructiblePropSession destructibles,
             GameplaySmokeFieldSession smokeFields,
             GameplayDialogueLog dialogueLog,
             uint randomSeed,
-            Func<Vector2, bool> isPointerBlocked)
+            Func<Vector2, bool> isPointerBlocked,
+            Action<string> onHotbarChanged = null,
+            DronePresentationCatalog presentationCatalog = null)
         {
             Unbind();
             gameplay = gameplaySession ?? throw new ArgumentNullException(
                 nameof(gameplaySession));
             registry = worldRegistry ?? throw new ArgumentNullException(
                 nameof(worldRegistry));
+            assembly = scenarioAssembly ?? throw new ArgumentNullException(
+                nameof(scenarioAssembly));
+            if (spatialContent == null)
+                throw new ArgumentNullException(nameof(spatialContent));
+            spatial = spatialContent.CreateEvidence();
+            presentations = presentationCatalog
+                ?? DronePresentationCatalog.LoadDefault();
+            presentationParent = (world ?? throw new ArgumentNullException(
+                nameof(world))).Root.transform;
+            this.destructibles = destructibles;
             smoke = smokeFields;
             dialogue = dialogueLog ?? throw new ArgumentNullException(
                 nameof(dialogueLog));
             pointerBlocked = isPointerBlocked;
-            var copied = new List<DroneDefinition>(definitions
-                ?? throw new ArgumentNullException(nameof(definitions)));
-            drones = new GameplayDroneSession(gameplay, copied, destructibles);
-            foreach (DroneDefinition definition in copied)
-            {
-                if (!world.TryGetEntity(definition.Id, out LevelEntityView view))
-                    throw new InvalidOperationException(
-                        $"Level is missing drone entity '{definition.Id}'.");
-                roots.Add(definition.Id, view.gameObject);
-                GameplayDroneVisualPresenter visual = view.gameObject
-                    .GetComponent<GameplayDroneVisualPresenter>()
-                    ?? view.gameObject.AddComponent<GameplayDroneVisualPresenter>();
-                visual.Build();
-            }
-            enabled = copied.Count > 0;
+            hotbarChanged = onHotbarChanged;
+            drones = new GameplayDroneSession(
+                gameplay,
+                assembly.DroneArchetypes,
+                destructibles);
+            enabled = assembly.DroneSummonAbilities.Count > 0;
         }
 
         public bool TryToggle(string summonerActorId, string optionId)
         {
-            DroneSnapshot drone;
+            SummonedDroneSnapshot drone;
             if (!TryFindSummonerDrone(summonerActorId, out drone))
-                return false;
+            {
+                if (optionId != null
+                    || assembly.GetDroneSummonAbilities(
+                        summonerActorId).Count == 0)
+                    return false;
+                if (mode == CommandMode.Summon)
+                {
+                    CancelTargeting();
+                    return true;
+                }
+                mode = CommandMode.Summon;
+                commandDroneId = null;
+                commandSummonerId = summonerActorId;
+                dialogue.Append(
+                    GameplayDialogueChannel.System,
+                    "SUMMON DRONE",
+                    "Select a clear deployment position within summon range.");
+                return true;
+            }
+            if (string.Equals(
+                    optionId,
+                    DismissOptionId,
+                    StringComparison.Ordinal))
+                return TryDismiss(drone);
             CommandMode requested = string.Equals(optionId, MoveOptionId,
                 StringComparison.Ordinal)
                     ? CommandMode.Move
@@ -106,6 +142,7 @@ namespace GritGud.Presentation.Gameplay
             }
             mode = requested;
             commandDroneId = drone.DroneId;
+            commandSummonerId = drone.SummonerActorId;
             dialogue.Append(
                 GameplayDialogueChannel.System,
                 "SCOUT DRONE",
@@ -115,10 +152,14 @@ namespace GritGud.Presentation.Gameplay
             return true;
         }
 
+        internal bool HasActiveSummon(string summonerActorId) =>
+            TryFindSummonerDrone(summonerActorId, out _);
+
         public void CancelTargeting()
         {
             mode = CommandMode.None;
             commandDroneId = null;
+            commandSummonerId = null;
         }
 
         internal void RefreshAuthoritativePresentation()
@@ -126,8 +167,10 @@ namespace GritGud.Presentation.Gameplay
             if (drones == null)
                 throw new InvalidOperationException(
                     "Bind drones before refreshing their presentation.");
-            foreach (DroneSnapshot snapshot in drones.CaptureDrones())
-                ApplySnapshot(snapshot);
+            Reconcile(drones.CaptureDrones());
+            foreach (ScenarioDroneSummonRuntimeDefinition ability in
+                assembly.DroneSummonAbilities)
+                hotbarChanged?.Invoke(ability.SummonerActorId);
         }
 
         internal void BeginReplayPresentation()
@@ -144,21 +187,14 @@ namespace GritGud.Presentation.Gameplay
             replayPresentation = true;
         }
 
-        internal void PresentReplay(IReadOnlyList<DroneSnapshot> snapshots)
+        internal void PresentReplay(IReadOnlyList<SummonedDroneSnapshot> snapshots)
         {
             if (!replayPresentation)
                 throw new InvalidOperationException(
                     "Begin drone replay presentation before projecting state.");
             if (snapshots == null) throw new ArgumentNullException(
                 nameof(snapshots));
-            var retained = new HashSet<string>(StringComparer.Ordinal);
-            foreach (DroneSnapshot snapshot in snapshots)
-            {
-                retained.Add(snapshot.DroneId);
-                ApplySnapshot(snapshot);
-            }
-            foreach (KeyValuePair<string, GameObject> entry in roots)
-                if (!retained.Contains(entry.Key)) entry.Value.SetActive(false);
+            Reconcile(snapshots);
         }
 
         internal void PresentReplayEvent(
@@ -221,7 +257,7 @@ namespace GritGud.Presentation.Gameplay
         {
             if (drones == null
                 || string.IsNullOrWhiteSpace(attackingActorId)
-                || !TryAcquireDrone(pointerRay, out DroneSnapshot drone))
+                || !TryAcquireDrone(pointerRay, out SummonedDroneSnapshot drone))
                 return false;
             AttackDefinition attack = gameplay.GetEquippedAttack(
                 attackingActorId);
@@ -260,12 +296,12 @@ namespace GritGud.Presentation.Gameplay
             int accuracyDelta = GameplayInjuryCapabilityProjection
                 .CalculateAccuracyDeltaPercent(attackingActor.Capabilities);
             float bestDistance = float.PositiveInfinity;
-            foreach (DroneSnapshot drone in drones.CaptureDrones())
+            foreach (SummonedDroneSnapshot drone in drones.CaptureDrones())
             {
                 if (!drone.IsOperational
                     || !gameplay.IsHostile(
                         attackingActorId,
-                        drone.Definition.SummonerActorId))
+                        drone.SummonerActorId))
                     continue;
                 DroneExposureSnapshot exposure = CaptureActorExposure(
                     attackingActorId,
@@ -297,7 +333,7 @@ namespace GritGud.Presentation.Gameplay
         {
             resolved = null;
             if (drones == null || exposure == null) return false;
-            DroneSnapshot drone = drones.GetDrone(exposure.DroneId);
+            SummonedDroneSnapshot drone = drones.GetDrone(exposure.DroneId);
             AttackDefinition attack = gameplay.GetEquippedAttack(
                 attackingActorId);
             if (attack == null || attack.DirectVehicleIntegrityDamage <= 0f)
@@ -320,8 +356,18 @@ namespace GritGud.Presentation.Gameplay
                             GameplaySemanticCapability.DirectAttack.ToString(),
                             attackingActorId,
                             drone.DroneId),
-                        "resolution"));
+                        "resolution"),
+                    spatial.ResolveDroneCrashTrajectory(
+                        drone.Position,
+                        origin,
+                        drone.Definition.Crash.MaximumDriftDistance,
+                        checked(gameplay.LastTransitionSequence + 1L)));
                 drones.CommitActorAttack(record);
+                if (record.Damage?.StartedCrash == true)
+                    CommitCrashImpact(
+                        attackingActorId,
+                        record.Damage.Resulting);
+                RefreshAuthoritativePresentation();
                 GameplayDroneVisualPresenter visual = targetRoot.GetComponent<
                     GameplayDroneVisualPresenter>();
                 visual?.SetOperational(drones.GetDrone(drone.DroneId)
@@ -341,9 +387,46 @@ namespace GritGud.Presentation.Gameplay
             }
         }
 
+        private void CommitCrashImpact(
+            string advancingActorId,
+            SummonedDroneSnapshot crashing)
+        {
+            GameplayCombatStateSnapshot state = GameplayCombatStateCapture
+                .Capture(
+                    gameplay,
+                    destructibles,
+                    smokeFields: smoke,
+                    drones: drones);
+            var candidate = new GameplayCandidate(
+                "live.drone-crash." + crashing.DroneId,
+                GameplayCapabilityProfiles.AdvanceDroneCrash(),
+                advancingActorId,
+                crashing.DroneId,
+                new GameplayDroneCrashIntent(crashing.DroneId));
+            var context = new GameplayDecisionContext(
+                state,
+                GameplayObservationSnapshot.FullState(
+                    advancingActorId,
+                    state));
+            var route = new GameplayDroneCrashCandidateExecutionRoute(spatial);
+            GameplayExecutableCandidateEvaluation evaluation = route.Evaluate(
+                context,
+                candidate);
+            if (!evaluation.IsLegal)
+                throw new InvalidOperationException(
+                    "Drone crash impact preparation failed: "
+                    + evaluation.FailureCode);
+            var payload = (GameplayDroneCrashImpactTransitionPayload)
+                route.PreparePayload(context, evaluation);
+            drones.CommitCrashImpact(
+                advancingActorId,
+                payload.Impact,
+                evaluation.Evidence);
+        }
+
         private DroneExposureSnapshot CaptureActorExposure(
             string attackingActorId,
-            DroneSnapshot drone)
+            SummonedDroneSnapshot drone)
         {
             GameplayActorView observer = registry.GetActor(attackingActorId);
             GameObject targetRoot = roots[drone.DroneId];
@@ -383,23 +466,54 @@ namespace GritGud.Presentation.Gameplay
         {
             EndReplayPresentation();
             CancelTargeting();
+            foreach (GameObject root in roots.Values)
+                DestroyPresentationRoot(root);
             roots.Clear();
             drones = null;
             gameplay = null;
             registry = null;
+            destructibles = null;
+            assembly = null;
+            spatial = null;
+            presentations = null;
+            presentationParent = null;
             smoke = null;
             dialogue = null;
             pointerBlocked = null;
+            hotbarChanged = null;
             replayPresentation = false;
             replayPresentedDischargeCount = 0;
             enabled = false;
         }
 
-        private void ApplySnapshot(DroneSnapshot snapshot)
+        private void ApplySnapshot(SummonedDroneSnapshot snapshot)
         {
+            if (!snapshot.IsVisible)
+            {
+                if (roots.TryGetValue(
+                        snapshot.DroneId,
+                        out GameObject hidden))
+                {
+                    roots.Remove(snapshot.DroneId);
+                    DestroyPresentationRoot(hidden);
+                }
+                return;
+            }
             if (!roots.TryGetValue(snapshot.DroneId, out GameObject root))
-                throw new InvalidOperationException(
-                    $"Drone snapshot '{snapshot.DroneId}' has no visual.");
+            {
+                DronePresentationDefinition definition = presentations.Get(
+                    snapshot.Definition.PresentationId);
+                root = definition.Prefab == null
+                    ? new GameObject(snapshot.DroneId)
+                    : Instantiate(definition.Prefab, presentationParent);
+                root.name = snapshot.DroneId;
+                root.transform.SetParent(presentationParent, worldPositionStays: true);
+                GameplayDroneVisualPresenter visual = root.GetComponent<
+                    GameplayDroneVisualPresenter>()
+                    ?? root.AddComponent<GameplayDroneVisualPresenter>();
+                visual.Build();
+                roots.Add(snapshot.DroneId, root);
+            }
             root.SetActive(true);
             root.transform.SetPositionAndRotation(
                 new Vector3(
@@ -409,6 +523,34 @@ namespace GritGud.Presentation.Gameplay
                 Quaternion.Euler(0f, snapshot.FacingDegrees, 0f));
             root.GetComponent<GameplayDroneVisualPresenter>()?
                 .SetOperational(snapshot.IsOperational);
+        }
+
+        private void Reconcile(
+            IReadOnlyList<SummonedDroneSnapshot> snapshots)
+        {
+            var retained = new HashSet<string>(StringComparer.Ordinal);
+            foreach (SummonedDroneSnapshot snapshot in snapshots)
+            {
+                if (snapshot.IsVisible) retained.Add(snapshot.DroneId);
+                ApplySnapshot(snapshot);
+            }
+            var removed = new List<string>();
+            foreach (KeyValuePair<string, GameObject> entry in roots)
+                if (!retained.Contains(entry.Key)) removed.Add(entry.Key);
+            foreach (string droneId in removed)
+            {
+                GameObject root = roots[droneId];
+                roots.Remove(droneId);
+                DestroyPresentationRoot(root);
+            }
+        }
+
+        private static void DestroyPresentationRoot(GameObject root)
+        {
+            if (root == null) return;
+            if (UnityEngine.Application.isPlaying)
+                UnityEngine.Object.Destroy(root);
+            else UnityEngine.Object.DestroyImmediate(root);
         }
 
         private void Update()
@@ -425,8 +567,113 @@ namespace GritGud.Presentation.Gameplay
             Camera gameplayCamera = Camera.main;
             if (gameplayCamera == null) return;
             Ray ray = gameplayCamera.ScreenPointToRay(pointer);
-            if (mode == CommandMode.Move) TryCommitMove(ray);
+            if (mode == CommandMode.Summon) TryCommitSummon(ray);
+            else if (mode == CommandMode.Move) TryCommitMove(ray);
             else TryCommitAttack(ray);
+        }
+
+        private void TryCommitSummon(Ray ray)
+        {
+            if (!Physics.Raycast(
+                    ray,
+                    out RaycastHit hit,
+                    250f,
+                    Physics.DefaultRaycastLayers,
+                    QueryTriggerInteraction.Ignore))
+                return;
+            IReadOnlyList<ScenarioDroneSummonRuntimeDefinition> abilities =
+                assembly.GetDroneSummonAbilities(commandSummonerId);
+            if (abilities.Count == 0) return;
+            ScenarioDroneSummonRuntimeDefinition runtime = abilities[0];
+            DroneArchetypeDefinition archetype = assembly.GetDroneArchetype(
+                runtime.Ability.DroneArchetypeId);
+            GameplayActorSnapshot summoner = gameplay.GetActor(
+                commandSummonerId);
+            var position = new GameplayPosition(
+                hit.point.x,
+                hit.point.y + runtime.Ability.SpawnHeight,
+                hit.point.z);
+            GameplayCombatStateSnapshot state = GameplayCombatStateCapture
+                .Capture(
+                    gameplay,
+                    destructibles,
+                    smokeFields: smoke,
+                    drones: drones);
+            if (summoner.Pose.Position.DistanceTo(position)
+                    > runtime.Ability.MaximumSpawnDistance
+                || spatial.BlocksPath(
+                    state,
+                    summoner.Pose.Position,
+                    position,
+                    clearanceRadius: 0.25f))
+            {
+                dialogue.Append(
+                    GameplayDialogueChannel.System,
+                    "DRONE SUMMON REJECTED",
+                    "Choose a clear position within summon range.");
+                return;
+            }
+            try
+            {
+                var record = new SummonDroneRecord(
+                    checked(gameplay.LastTransitionSequence + 1L),
+                    summoner.ActorId,
+                    runtime.Ability,
+                    archetype,
+                    position,
+                    summoner.Pose.FacingDegrees,
+                    summoner.TurnBudget,
+                    summoner.TurnBudget.SpendAction(
+                        runtime.Ability.SummonCost));
+                drones.CommitSummon(record);
+                RefreshAuthoritativePresentation();
+                dialogue.Append(
+                    GameplayDialogueChannel.System,
+                    "SCOUT DRONE",
+                    $"Summoned {record.DroneInstanceId}; shared AP {record.ResultingBudget.ActionPoints}.");
+                CancelTargeting();
+            }
+            catch (InvalidOperationException exception)
+            {
+                dialogue.Append(
+                    GameplayDialogueChannel.System,
+                    "DRONE SUMMON REJECTED",
+                    exception.Message);
+            }
+        }
+
+        private bool TryDismiss(SummonedDroneSnapshot drone)
+        {
+            GameplayActorSnapshot summoner = gameplay.GetActor(
+                drone.SummonerActorId);
+            var cost = new ActionCost(0, 0f, ActionMobility.Mobile);
+            try
+            {
+                SummonedDroneSnapshot dismissed = drone.WithLifecycle(
+                    SummonLifecycleState.Dismissed,
+                    drone.RemainingIntegrity,
+                    drone.RemainingDurationTurns);
+                var record = new DismissDroneRecord(
+                    checked(gameplay.LastTransitionSequence + 1L),
+                    summoner.ActorId,
+                    cost,
+                    summoner.TurnBudget,
+                    summoner.TurnBudget.SpendAction(cost),
+                    drone,
+                    dismissed);
+                drones.CommitDismiss(record);
+                RefreshAuthoritativePresentation();
+                CancelTargeting();
+                return true;
+            }
+            catch (InvalidOperationException exception)
+            {
+                dialogue.Append(
+                    GameplayDialogueChannel.System,
+                    "DRONE DISMISS REJECTED",
+                    exception.Message);
+                return false;
+            }
         }
 
         private void TryCommitMove(Ray ray)
@@ -434,7 +681,7 @@ namespace GritGud.Presentation.Gameplay
             if (!Physics.Raycast(ray, out RaycastHit hit, 250f,
                 Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
                 return;
-            DroneSnapshot drone = drones.GetDrone(commandDroneId);
+            SummonedDroneSnapshot drone = drones.GetDrone(commandDroneId);
             var destination = new GameplayPosition(
                 hit.point.x,
                 drone.Position.Y,
@@ -463,7 +710,7 @@ namespace GritGud.Presentation.Gameplay
 
         private void TryCommitAttack(Ray ray)
         {
-            DroneSnapshot drone = drones.GetDrone(commandDroneId);
+            SummonedDroneSnapshot drone = drones.GetDrone(commandDroneId);
             GameObject root = roots[drone.DroneId];
             var query = new UnityPointerTargetQuery(
                 root.transform,
@@ -472,7 +719,7 @@ namespace GritGud.Presentation.Gameplay
                 candidate => candidate.Targetable
                     && !gameplay.IsActorIncapacitated(candidate.ActorId)
                     && gameplay.IsHostile(
-                        drone.Definition.SummonerActorId,
+                        drone.SummonerActorId,
                         candidate.ActorId));
             if (!query.TryAcquire(ray, out GameplayActorView target)) return;
             GameplayActorSnapshot targetState = gameplay.GetActor(target.ActorId);
@@ -506,7 +753,7 @@ namespace GritGud.Presentation.Gameplay
             var transitionIdentity = new GameplayTransitionIdentity(
                 resolutionSequence,
                 GameplaySemanticCapability.DirectAttack.ToString(),
-                drone.Definition.SummonerActorId,
+                drone.SummonerActorId,
                 target.ActorId);
             AttackResolutionRecord resolution = AttackResolutionRules.Resolve(
                 resolutionSequence,
@@ -540,14 +787,15 @@ namespace GritGud.Presentation.Gameplay
 
         private bool TryFindSummonerDrone(
             string summonerActorId,
-            out DroneSnapshot result)
+            out SummonedDroneSnapshot result)
         {
             if (drones != null)
-                foreach (DroneSnapshot drone in drones.CaptureDrones())
+                foreach (SummonedDroneSnapshot drone in drones.CaptureDrones())
                     if (string.Equals(
-                        drone.Definition.SummonerActorId,
+                        drone.SummonerActorId,
                         summonerActorId,
-                        StringComparison.Ordinal))
+                        StringComparison.Ordinal)
+                        && drone.IsOperational)
                     {
                         result = drone;
                         return true;
@@ -558,7 +806,7 @@ namespace GritGud.Presentation.Gameplay
 
         private bool TryAcquireDrone(
             Ray ray,
-            out DroneSnapshot result)
+            out SummonedDroneSnapshot result)
         {
             RaycastHit[] hits = Physics.RaycastAll(
                 ray,
@@ -570,12 +818,16 @@ namespace GritGud.Presentation.Gameplay
             foreach (RaycastHit hit in hits)
             {
                 if (hit.collider == null) continue;
-                foreach (DroneSnapshot drone in drones.CaptureDrones())
+                foreach (SummonedDroneSnapshot drone in drones.CaptureDrones())
                 {
-                    Transform root = roots[drone.DroneId].transform;
+                    if (!drone.IsOperational
+                        || !roots.TryGetValue(
+                            drone.DroneId,
+                            out GameObject rootObject))
+                        continue;
+                    Transform root = rootObject.transform;
                     Transform candidate = hit.collider.transform;
-                    if (drone.IsOperational
-                        && (candidate == root || candidate.IsChildOf(root)))
+                    if (candidate == root || candidate.IsChildOf(root))
                     {
                         result = drone;
                         return true;

@@ -307,6 +307,7 @@ namespace GritGud.Presentation.Gameplay
                         $"{actorId} is repositioning.");
                     return;
                 case TurnEndRecord turn:
+                    drones.RefreshAuthoritativePresentation();
                     actionController.PresentExternalStatus(
                         $"{turn.EndingActorId} ended its turn.");
                     sessionPresenter.RefreshModePresentation();
@@ -345,6 +346,21 @@ namespace GritGud.Presentation.Gameplay
                             : $"{attack.AttackerId} missed {attack.DroneId}.");
                     decisionDelaySeconds = enemy.Presentation
                         .PresentationDefinition.PostAttackDelaySeconds;
+                    return;
+                case SummonDroneRecord summon:
+                    drones.RefreshAuthoritativePresentation();
+                    actionController.PresentExternalStatus(
+                        $"{summon.SummonerActorId} summoned {summon.DroneInstanceId}.");
+                    return;
+                case DismissDroneRecord dismiss:
+                    drones.RefreshAuthoritativePresentation();
+                    actionController.PresentExternalStatus(
+                        $"{dismiss.SummonerActorId} dismissed {dismiss.DroneId}.");
+                    return;
+                case DroneCrashImpactRecord impact:
+                    drones.RefreshAuthoritativePresentation();
+                    actionController.PresentExternalStatus(
+                        $"{impact.DroneId} crashed.");
                     return;
                 case StanceChangeRecord _:
                 case EnemyAwarenessTransitionRecord _:

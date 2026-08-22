@@ -49,7 +49,7 @@ namespace GritGud.Application.Gameplay
             if (state == null) throw new ArgumentNullException(nameof(state));
             if (spatial == null) throw new ArgumentNullException(nameof(spatial));
             state.RequireCoverage(GameplayCombatStateCoverage.Drones);
-            DroneSnapshot drone = FindDrone(state.Drones, droneId);
+            SummonedDroneSnapshot drone = FindDrone(state.Drones, droneId);
             GameplayActorSnapshot target = state.Session.GetActor(targetActorId);
             IReadOnlyList<TargetRegionSample> samples =
                 ActorTargetProfileCatalog.CreateWorldSamples(
@@ -83,7 +83,7 @@ namespace GritGud.Application.Gameplay
             TargetRegionSample observerHead = GetRegionSample(
                 observer,
                 TargetRegionId.Head);
-            DroneSnapshot drone = FindDrone(state.Drones, droneId);
+            SummonedDroneSnapshot drone = FindDrone(state.Drones, droneId);
             TargetExposureSnapshot raster = GameplayTargetExposureRaster.Capture(
                 observerActorId,
                 observerHead.Center,
@@ -195,11 +195,11 @@ namespace GritGud.Application.Gameplay
                 $"Actor target profile does not contain region '{regionId}'.");
         }
 
-        private static DroneSnapshot FindDrone(
-            IReadOnlyList<DroneSnapshot> drones,
+        private static SummonedDroneSnapshot FindDrone(
+            IReadOnlyList<SummonedDroneSnapshot> drones,
             string droneId)
         {
-            foreach (DroneSnapshot drone in drones)
+            foreach (SummonedDroneSnapshot drone in drones)
                 if (string.Equals(drone.DroneId, droneId,
                     StringComparison.Ordinal)) return drone;
             throw new KeyNotFoundException(
@@ -237,7 +237,7 @@ namespace GritGud.Application.Gameplay
         private const float SampleRadius = 0.15f;
 
         public static IReadOnlyList<TargetRegionSample> CreateWorldSamples(
-            DroneSnapshot drone)
+            SummonedDroneSnapshot drone)
         {
             var result = new List<TargetRegionSample>(6)
             {
@@ -258,7 +258,7 @@ namespace GritGud.Application.Gameplay
         }
 
         private static TargetRegionSample Sample(
-            DroneSnapshot drone,
+            SummonedDroneSnapshot drone,
             TargetRegionId id,
             GameplayPosition local)
         {

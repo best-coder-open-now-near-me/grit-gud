@@ -14,7 +14,7 @@ namespace GritGud.Application.Gameplay
         private readonly List<ProjectileFlightSnapshot> projectiles;
         private readonly List<SmokeFieldSnapshot> smokeFields;
         private readonly List<FireFieldSnapshot> fireFields;
-        private readonly List<DroneSnapshot> drones;
+        private readonly List<SummonedDroneSnapshot> drones;
 
         public GameplayCanonicalStateMutation(
             GameplayCombatStateSnapshot canonicalState)
@@ -30,7 +30,7 @@ namespace GritGud.Application.Gameplay
             projectiles = new List<ProjectileFlightSnapshot>(source.Projectiles);
             smokeFields = new List<SmokeFieldSnapshot>(source.SmokeFields);
             fireFields = new List<FireFieldSnapshot>(source.FireFields);
-            drones = new List<DroneSnapshot>(source.Drones);
+            drones = new List<SummonedDroneSnapshot>(source.Drones);
             Mode = session.Mode;
             Operation = session.Operation;
             TurnContext = session.TurnContext;
@@ -114,7 +114,7 @@ namespace GritGud.Application.Gameplay
             prop,
                 "destructible");
 
-        public DroneSnapshot GetDrone(string droneId) =>
+        public SummonedDroneSnapshot GetDrone(string droneId) =>
             Find(drones, value => value.DroneId, droneId, "drone");
 
         public void ReplaceVehicle(VehicleMomentumState vehicle) => Replace(
@@ -124,12 +124,22 @@ namespace GritGud.Application.Gameplay
             vehicle,
             "vehicle");
 
-        public void ReplaceDrone(DroneSnapshot drone) => Replace(
+        public void ReplaceDrone(SummonedDroneSnapshot drone) => Replace(
             drones,
             value => value.DroneId,
             drone.DroneId,
             drone,
             "drone");
+
+        public void AddDrone(SummonedDroneSnapshot drone)
+        {
+            EnsureMissing(
+                drones,
+                value => value.DroneId,
+                drone.DroneId,
+                "drone");
+            drones.Add(drone);
+        }
 
         public void ReplaceProjectile(ProjectileFlightSnapshot projectile) =>
             Replace(

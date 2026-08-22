@@ -104,7 +104,7 @@ namespace GritGud.Application.Gameplay
                     < attack.TurnCost.MovementOpportunity)
                 return Illegal(context, candidate, "insufficient-budget");
 
-            DroneSnapshot target;
+            SummonedDroneSnapshot target;
             try
             {
                 target = FindDrone(state.Drones, candidate.SubjectId);
@@ -116,7 +116,7 @@ namespace GritGud.Application.Gameplay
             if (!target.IsOperational)
                 return Illegal(context, candidate, "drone-destroyed");
             ScenarioActorDefinition targetSummoner = scenario.GetActor(
-                target.Definition.SummonerActorId);
+                target.SummonerActorId);
             if (!scenario.GetActor(attacker.ActorId).Combat.IsHostileTo(
                 targetSummoner.Combat.AllegianceId))
                 return Illegal(context, candidate, "target-not-hostile");
@@ -150,7 +150,12 @@ namespace GritGud.Application.Gameplay
                 attacker.Pose.Position.DistanceTo(target.Position),
                 target,
                 GameplayInjuryCapabilityProjection
-                    .CalculateAccuracyDeltaPercent(attacker.Capabilities));
+                    .CalculateAccuracyDeltaPercent(attacker.Capabilities),
+                spatial.ResolveDroneCrashTrajectory(
+                    target.Position,
+                    attacker.Pose.Position,
+                    target.Definition.Crash.MaximumDriftDistance,
+                    checked(session.LastTransitionSequence + 1L)));
             return new GameplayExecutableCandidateEvaluation(
                 Id,
                 candidate,
@@ -208,11 +213,11 @@ namespace GritGud.Application.Gameplay
             public ActorDroneAttackRecord Record { get; }
         }
 
-        private static DroneSnapshot FindDrone(
-            IEnumerable<DroneSnapshot> drones,
+        private static SummonedDroneSnapshot FindDrone(
+            IEnumerable<SummonedDroneSnapshot> drones,
             string droneId)
         {
-            foreach (DroneSnapshot drone in drones)
+            foreach (SummonedDroneSnapshot drone in drones)
                 if (string.Equals(
                     drone.DroneId,
                     droneId,
@@ -304,7 +309,7 @@ namespace GritGud.Application.Gameplay
             GameplayCombatStateSnapshot state = context.State;
             state.RequireCoverage(GameplayCombatStateCoverage.Drones);
             string sourceDroneId = GetSourceDroneId(candidate);
-            DroneSnapshot drone;
+            SummonedDroneSnapshot drone;
             try
             {
                 drone = FindDrone(state.Drones, sourceDroneId);
@@ -316,7 +321,7 @@ namespace GritGud.Application.Gameplay
             GameplayActorSnapshot summoner = state.Session.GetActor(
                 candidate.ActorId);
             if (!string.Equals(
-                drone.Definition.SummonerActorId,
+                drone.SummonerActorId,
                 summoner.ActorId,
                 StringComparison.Ordinal))
                 return Illegal(context, candidate, "summoner-partner-mismatch");
@@ -487,7 +492,7 @@ namespace GritGud.Application.Gameplay
         private static string ValidateSummonerReadiness(
             GameplaySessionStateSnapshot session,
             GameplayActorSnapshot summoner,
-            DroneSnapshot drone)
+            SummonedDroneSnapshot drone)
         {
             if (!drone.IsOperational) return "source-drone-destroyed";
             if (session.Mode != GameplaySessionMode.TurnBased)
@@ -522,11 +527,11 @@ namespace GritGud.Application.Gameplay
                 "source drone ID");
         }
 
-        private static DroneSnapshot FindDrone(
-            IEnumerable<DroneSnapshot> drones,
+        private static SummonedDroneSnapshot FindDrone(
+            IEnumerable<SummonedDroneSnapshot> drones,
             string droneId)
         {
-            foreach (DroneSnapshot drone in drones)
+            foreach (SummonedDroneSnapshot drone in drones)
                 if (string.Equals(
                     drone.DroneId,
                     droneId,

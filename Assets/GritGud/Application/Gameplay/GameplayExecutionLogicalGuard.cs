@@ -21,6 +21,10 @@ namespace GritGud.Application.Gameplay
                     in state.Projectiles)
                     if (projectile.Status == ProjectileFlightStatus.InFlight)
                         return true;
+            if (state.Covers(GameplayCombatStateCoverage.Drones))
+                foreach (SummonedDroneSnapshot drone in state.Drones)
+                    if (drone.Lifecycle == SummonLifecycleState.Crashing)
+                        return true;
             return false;
         }
     }

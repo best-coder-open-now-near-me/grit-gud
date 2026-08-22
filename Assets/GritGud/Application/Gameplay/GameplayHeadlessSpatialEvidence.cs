@@ -115,12 +115,13 @@ namespace GritGud.Application.Gameplay
                 Append(text, "position", vehicle.Position);
                 Append(text, "forward", vehicle.ForwardDegrees);
             }
-            foreach (DroneSnapshot drone in state.Drones)
+            foreach (SummonedDroneSnapshot drone in state.Drones)
             {
                 Append(text, "drone", drone.DroneId);
                 Append(text, "position", drone.Position);
                 Append(text, "facing", drone.FacingDegrees);
                 Append(text, "integrity", drone.RemainingIntegrity);
+                Append(text, "lifecycle", drone.Lifecycle.ToString());
             }
             foreach (SmokeFieldSnapshot smoke in state.SmokeFields)
             {
@@ -534,6 +535,39 @@ namespace GritGud.Application.Gameplay
                 authoredPosition.X,
                 height + rootGroundClearance,
                 authoredPosition.Z);
+        }
+
+        public DroneCrashTrajectoryRecord ResolveDroneCrashTrajectory(
+            GameplayPosition droneOrigin,
+            GameplayPosition attackerOrigin,
+            float maximumDriftDistance,
+            long disabledTransitionSequence)
+        {
+            GameplayNumericPolicy.RequireFinite(
+                maximumDriftDistance,
+                nameof(maximumDriftDistance));
+            if (maximumDriftDistance < 0f)
+                throw new ArgumentOutOfRangeException(
+                    nameof(maximumDriftDistance));
+            float dx = droneOrigin.X - attackerOrigin.X;
+            float dz = droneOrigin.Z - attackerOrigin.Z;
+            float length = (float)Math.Sqrt((dx * dx) + (dz * dz));
+            if (length <= 0.0001f)
+            {
+                dx = 0f;
+                dz = 1f;
+                length = 1f;
+            }
+            float drift = maximumDriftDistance;
+            GameplayPosition requested = new GameplayPosition(
+                droneOrigin.X + ((dx / length) * drift),
+                droneOrigin.Y,
+                droneOrigin.Z + ((dz / length) * drift));
+            GameplayPosition impact = ResolveSpawnPosition(requested);
+            return new DroneCrashTrajectoryRecord(
+                droneOrigin,
+                impact,
+                disabledTransitionSequence);
         }
 
         public bool TryResolveMovementPosition(

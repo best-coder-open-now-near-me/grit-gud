@@ -252,7 +252,7 @@ namespace GritGud.Application.Gameplay
             foreach (VehicleMomentumState vehicle in state.Vehicles)
                 if (string.Equals(vehicle.VehicleId, subjectId, StringComparison.Ordinal))
                     return GameplaySemanticSubjectKind.Vehicle;
-            foreach (DroneSnapshot drone in state.Drones)
+            foreach (SummonedDroneSnapshot drone in state.Drones)
                 if (string.Equals(drone.DroneId, subjectId, StringComparison.Ordinal))
                     return GameplaySemanticSubjectKind.Vehicle;
             return GameplaySemanticSubjectKind.WorldPosition;

@@ -5,6 +5,30 @@ namespace GritGud.Application.Gameplay
 {
     public sealed partial class GameplaySession
     {
+        internal void CommitDroneSummon(SummonDroneRecord record)
+        {
+            RequireLegacyMutationAllowed(nameof(CommitDroneSummon));
+            if (record == null) throw new ArgumentNullException(nameof(record));
+            GameplayActorState actor = RequireActiveActor(
+                record.SummonerActorId);
+            RequireCurrentBudget(actor, record.PreviousBudget, "summon");
+            actor.TurnBudget = record.ResultingBudget;
+            Journal.RecordDroneSummoned(record);
+            MarkStateChanged();
+        }
+
+        internal void CommitDroneDismiss(DismissDroneRecord record)
+        {
+            RequireLegacyMutationAllowed(nameof(CommitDroneDismiss));
+            if (record == null) throw new ArgumentNullException(nameof(record));
+            GameplayActorState actor = RequireActiveActor(
+                record.SummonerActorId);
+            RequireCurrentBudget(actor, record.PreviousBudget, "dismissal");
+            actor.TurnBudget = record.ResultingBudget;
+            Journal.RecordDroneDismissed(record);
+            MarkStateChanged();
+        }
+
         internal void CommitDroneMoveBudget(DroneMoveRecord record)
         {
             RequireLegacyMutationAllowed(nameof(CommitDroneMoveBudget));

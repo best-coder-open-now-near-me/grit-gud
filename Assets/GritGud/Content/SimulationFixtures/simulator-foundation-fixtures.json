@@ -63,8 +63,8 @@
       "id": "sim-drone-control",
       "behaviorCheckId": "sim-drone-control",
       "actorIds": ["player", "depot-rifleman"],
-      "entityIds": ["scout-drone-01"],
-      "assertions": ["controller-turn-gates-commands", "movement-and-attack-spend-controller-ap", "sensor-origin-and-facing-drive-exposure", "integrity-and-operational-state-are-authoritative", "live-headless-and-replay-reduction-match"]
+      "entityIds": [],
+      "assertions": ["summon-transition-creates-deterministic-instance", "summoner-turn-gates-commands", "movement-and-attack-spend-shared-summoner-ap", "drone-never-enters-initiative", "dismissal-expiry-and-reset-remove-commandability", "lethal-integrity-starts-grounded-crash", "crash-impact-is-localized-friendly-fire-and-leaves-wreck", "live-headless-and-replay-reduction-match"]
     },
     {
       "id": "sim-pinned-recovery",
@@ -77,7 +77,7 @@
       "id": "sim-integrated-encounter",
       "behaviorCheckId": "sim-integrated-encounter",
       "actorIds": ["player", "oren-vale", "depot-rifleman", "depot-yard-support", "depot-warehouse-patrol", "depot-loading-guard"],
-      "entityIds": ["crate-exposure-demo", "yard-runner", "scout-drone-01"],
+      "entityIds": ["crate-exposure-demo", "yard-runner"],
       "assertions": ["multi-enemy-lifecycle-terminates", "trajectory-reduces-exactly", "detached-headless-replay-matches", "all-reachable-inputs-have-complete-routes"]
     }
   ]

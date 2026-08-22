@@ -386,41 +386,61 @@ namespace GritGud.Application.Gameplay
                     GameplayCapabilityProfiles.VehicleMove(),
                     vehicle.EntityId);
             }
-            foreach (DroneDefinition drone in assembly.Drones)
+            foreach (ScenarioDroneSummonRuntimeDefinition summon in
+                assembly.DroneSummonAbilities)
             {
+                DroneArchetypeDefinition drone = assembly.GetDroneArchetype(
+                    summon.Ability.DroneArchetypeId);
+                Add(result, GameplayReachableInputKind.ContextualInteraction,
+                    summon.Ability.AbilityId + ".summon",
+                    summon.SummonerActorId,
+                    GameplayCapabilityProfiles.SummonDrone(),
+                    summon.Ability.AbilityId,
+                    drone.ArchetypeId);
                 Add(result, GameplayReachableInputKind.MovementControl,
-                    drone.Id + ".move",
-                    drone.SummonerActorId,
+                    summon.Ability.AbilityId + ".move",
+                    summon.SummonerActorId,
                     GameplayCapabilityProfiles.AerialDroneMove(),
-                    drone.Id,
-                    drone.Id);
+                    drone.ArchetypeId,
+                    drone.ArchetypeId);
                 Add(result, GameplayReachableInputKind.EquippedAttack,
-                    drone.Id + ".attack->Actor",
-                    drone.SummonerActorId,
+                    summon.Ability.AbilityId + ".attack->Actor",
+                    summon.SummonerActorId,
                     GameplayCapabilityProfiles.DroneAttack(
                         drone.Attack,
                         GameplaySemanticSubjectKind.Actor),
-                    sourceSubjectId: drone.Id);
+                    sourceSubjectId: drone.ArchetypeId);
                 if (HasTacticalDestructible(level)
                     && drone.Attack.DirectFireDamage != null)
                     Add(result, GameplayReachableInputKind.EquippedAttack,
-                        drone.Id + ".attack->DestructibleProp",
-                        drone.SummonerActorId,
+                        summon.Ability.AbilityId
+                            + ".attack->DestructibleProp",
+                        summon.SummonerActorId,
                         GameplayCapabilityProfiles.DroneAttack(
                             drone.Attack,
                             GameplaySemanticSubjectKind.DestructibleProp),
-                        sourceSubjectId: drone.Id);
-                if (assembly.Drones.Count > 1)
+                        sourceSubjectId: drone.ArchetypeId);
+                if (assembly.DroneArchetypes.Count > 1)
                     Add(result, GameplayReachableInputKind.EquippedAttack,
-                        drone.Id + ".attack->Vehicle",
-                        drone.SummonerActorId,
+                        summon.Ability.AbilityId + ".attack->Vehicle",
+                        summon.SummonerActorId,
                         GameplayCapabilityProfiles.DroneAttack(
                             drone.Attack,
                             GameplaySemanticSubjectKind.Vehicle),
-                        sourceSubjectId: drone.Id);
+                        sourceSubjectId: drone.ArchetypeId);
+                Add(result, GameplayReachableInputKind.ContextualInteraction,
+                    summon.Ability.AbilityId + ".dismiss",
+                    summon.SummonerActorId,
+                    GameplayCapabilityProfiles.DismissDrone(),
+                    drone.ArchetypeId,
+                    drone.ArchetypeId);
             }
-            if (assembly.Drones.Count > 0)
+            if (assembly.DroneArchetypes.Count > 0)
             {
+                Add(result, GameplayReachableInputKind.SystemContinuation,
+                    "drone.crash.advance",
+                    assembly.InitiallySelectedActorId,
+                    GameplayCapabilityProfiles.AdvanceDroneCrash());
                 foreach (ScenarioActorDefinition actor in
                     assembly.Scenario.Actors)
                 {

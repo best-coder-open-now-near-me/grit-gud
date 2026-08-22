@@ -26,6 +26,9 @@ namespace GritGud.Application.Gameplay
         ChangeEncounter,
         ObserveEncounter,
         Patrol,
+        SummonDrone,
+        DismissDrone,
+        AdvanceDroneCrash,
     }
 
     public enum GameplaySemanticSubjectKind
@@ -152,6 +155,24 @@ namespace GritGud.Application.Gameplay
             Subject(GameplaySemanticSubjectKind.Vehicle),
             Trait("path", "aerial-direct"),
             Trait("resource", "summoner-partner-ap"));
+
+        public static GameplayCapabilityProfile SummonDrone() => Profile(
+            GameplaySemanticCapability.SummonDrone,
+            Subject(GameplaySemanticSubjectKind.WorldPosition),
+            Trait("instance", "deterministic-transition-sequence"),
+            Trait("resource", "summoner-partner-ap"));
+
+        public static GameplayCapabilityProfile DismissDrone() => Profile(
+            GameplaySemanticCapability.DismissDrone,
+            Subject(GameplaySemanticSubjectKind.Vehicle),
+            Trait("lifecycle", "dismissed"),
+            Trait("resource", "summoner-partner-ap"));
+
+        public static GameplayCapabilityProfile AdvanceDroneCrash() => Profile(
+            GameplaySemanticCapability.AdvanceDroneCrash,
+            Subject(GameplaySemanticSubjectKind.Vehicle),
+            Trait("lifecycle", "crashing-to-destroyed"),
+            Trait("resource", "mandatory-world-work"));
 
         public static GameplayCapabilityProfile ChangeStance() => Profile(
             GameplaySemanticCapability.ChangeStance,

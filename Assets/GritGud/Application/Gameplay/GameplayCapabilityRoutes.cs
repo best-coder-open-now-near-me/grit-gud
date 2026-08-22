@@ -436,6 +436,9 @@ namespace GritGud.Application.Gameplay
             yield return GameplayCapabilityProfiles.GroundedMove();
             yield return GameplayCapabilityProfiles.TraversalMove();
             yield return GameplayCapabilityProfiles.AerialDroneMove();
+            yield return GameplayCapabilityProfiles.SummonDrone();
+            yield return GameplayCapabilityProfiles.DismissDrone();
+            yield return GameplayCapabilityProfiles.AdvanceDroneCrash();
             yield return GameplayCapabilityProfiles.ChangeStance();
             yield return GameplayCapabilityProfiles.Equip();
             yield return GameplayCapabilityProfiles.Interact();

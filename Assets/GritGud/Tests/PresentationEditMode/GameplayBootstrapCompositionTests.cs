@@ -31,6 +31,8 @@ namespace GritGud.Presentation.Tests
             GameplayAttackController attacks = runtime.Attacks;
             GameplayEquipmentController equipment = runtime.Equipment;
             GameplayHotbarController hotbar = runtime.Hotbar;
+            GameplayDroneController droneController = runtime.Bootstrap
+                .GetComponent<GameplayDroneController>();
             GameplayObjectivePresenter objectivePresenter =
                 runtime.ObjectivePresenter;
 
@@ -130,6 +132,15 @@ namespace GritGud.Presentation.Tests
             Assert.That(
                 hotbar.ActorAbilities.Select(ability => ability.Id),
                 Does.Contain(GameplayDroneController.AbilityId));
+            GameplayActorAbilityHotbarDefinition droneAbility = hotbar
+                .ActorAbilities.Single(ability => ability.Id ==
+                    GameplayDroneController.AbilityId);
+            Assert.That(droneAbility.DisplayName, Is.EqualTo("Summon Drone"));
+            Assert.That(droneAbility.Options, Is.Empty);
+            Assert.That(droneController.Session.CaptureDrones(), Is.Empty,
+                "The depot must begin without a preplaced drone instance.");
+            Assert.That(GameObject.Find("scout-drone-01"), Is.Null,
+                "Drone presentation must be created only by a summon transition.");
             var stanceBinding = new GameplayHotbarBinding(
                 GameplayHotbarBindingKind.ActorAbility,
                 GameplayCoreActorAbilities.StanceId);

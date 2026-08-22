@@ -14,6 +14,7 @@ namespace GritGud.Application.Gameplay
         ThrownExplosiveRelease = 5,
         ThrownExplosiveImpact = 6,
         Death = 7,
+        DroneCrashImpact = 8,
     }
 
     public enum ReplayCombatPresentationOutcome
@@ -718,7 +719,7 @@ namespace GritGud.Application.Gameplay
                 {
                     GameplayActorSnapshot attacker = frame.Previous.Session
                         .GetActor(attack.AttackerId);
-                    DroneSnapshot target = FindDrone(
+                    SummonedDroneSnapshot target = FindDrone(
                         frame.Previous.Drones,
                         attack.DroneId);
                     events.Add(new ReplayCombatPresentationEvent(
@@ -741,7 +742,7 @@ namespace GritGud.Application.Gameplay
                 }
                 case DroneAttackRecord attack:
                 {
-                    DroneSnapshot shooter = FindDrone(
+                    SummonedDroneSnapshot shooter = FindDrone(
                         frame.Previous.Drones,
                         attack.DroneId);
                     ReplayCombatPresentationSubjectKind targetKind =
@@ -829,7 +830,7 @@ namespace GritGud.Application.Gameplay
             foreach (GameplayActorSnapshot actor in frame.Previous.Session.Actors)
                 if (string.Equals(actor.ActorId, subjectId, StringComparison.Ordinal))
                     return ReplayCombatPresentationSubjectKind.Actor;
-            foreach (DroneSnapshot drone in frame.Previous.Drones)
+            foreach (SummonedDroneSnapshot drone in frame.Previous.Drones)
                 if (string.Equals(drone.DroneId, subjectId, StringComparison.Ordinal))
                     return ReplayCombatPresentationSubjectKind.Drone;
             foreach (DestructiblePropSnapshot prop in frame.Previous.Destructibles)
@@ -864,11 +865,11 @@ namespace GritGud.Application.Gameplay
             return new GameplayPosition(0f, 0f, 0f);
         }
 
-        private static DroneSnapshot FindDrone(
-            IEnumerable<DroneSnapshot> drones,
+        private static SummonedDroneSnapshot FindDrone(
+            IEnumerable<SummonedDroneSnapshot> drones,
             string droneId)
         {
-            foreach (DroneSnapshot drone in drones)
+            foreach (SummonedDroneSnapshot drone in drones)
                 if (string.Equals(
                         drone.DroneId,
                         droneId,
@@ -969,6 +970,22 @@ namespace GritGud.Application.Gameplay
                     GameplaySemanticReplayPresentationTiming
                         .GetProjectileImpactProgress(advance),
                     advance.ProjectileId));
+            }
+            else if (semanticRecord is DroneCrashImpactRecord crash)
+            {
+                events.Add(new ReplayCombatPresentationEvent(
+                    sequence,
+                    ReplayCombatPresentationEventKind.DroneCrashImpact,
+                    crash.DroneId,
+                    GameplayTargetIds.WorldAimPoint,
+                    crash.Origin,
+                    crash.ImpactPosition,
+                    crash.ImpactNormalizedTime,
+                    shooterKind:
+                        ReplayCombatPresentationSubjectKind.Drone,
+                    targetKind:
+                        ReplayCombatPresentationSubjectKind.World,
+                    outcome: ReplayCombatPresentationOutcome.Hit));
             }
 
             for (int index = 0; index < events.Count; index++)
@@ -1126,7 +1143,7 @@ namespace GritGud.Application.Gameplay
                 {
                     GameplayActorSnapshot attacker = frame.Previous.Session
                         .GetActor(attack.AttackerId);
-                    DroneSnapshot target = FindDrone(
+                    SummonedDroneSnapshot target = FindDrone(
                         frame.Previous.Drones,
                         attack.DroneId);
                     states.Add(new TurnReplayActorActionState(
@@ -1149,6 +1166,26 @@ namespace GritGud.Application.Gameplay
                         progress,
                         states);
                     break;
+                case DroneCrashImpactRecord crash:
+                {
+                    var reacted = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (BlastEffectRecord effect in crash.Effects)
+                    {
+                        if (effect.SubjectKind != BlastSubjectKind.Actor
+                            || !reacted.Add(effect.EntityId))
+                            continue;
+                        AddProjectileReaction(
+                            frame.Previous.Session.Actors,
+                            frame.Resulting.Session.Actors,
+                            effect.EntityId,
+                            effect.InjuryRegion,
+                            sequence,
+                            progress,
+                            crash.ImpactNormalizedTime,
+                            states);
+                    }
+                    break;
+                }
                 case GameplayEmergencyReactionTransitionPayload emergency
                     when emergency.Phase == "begin":
                     foreach (string responderId in emergency.Responders)
@@ -1199,11 +1236,11 @@ namespace GritGud.Application.Gameplay
             }
         }
 
-        private static DroneSnapshot FindDrone(
-            IEnumerable<DroneSnapshot> drones,
+        private static SummonedDroneSnapshot FindDrone(
+            IEnumerable<SummonedDroneSnapshot> drones,
             string droneId)
         {
-            foreach (DroneSnapshot drone in drones)
+            foreach (SummonedDroneSnapshot drone in drones)
                 if (string.Equals(
                         drone.DroneId,
                         droneId,

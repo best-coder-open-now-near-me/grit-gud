@@ -186,6 +186,7 @@ namespace GritGud.Application.Gameplay
         private readonly GameplayTacticalCandidateBuilder tacticalCandidates;
         private readonly GameplayHeadlessSpatialEvidence spatial;
         private readonly ScenarioDefinition scenario;
+        private readonly GameplayScenarioAssembly assembly;
         private readonly IReadOnlyList<LevelTraversalLinkData> traversalLinks;
         private readonly float maximumCandidateDistance;
 
@@ -194,7 +195,8 @@ namespace GritGud.Application.Gameplay
             GameplayHeadlessSpatialEvidence spatialEvidence,
             float maximumMovementCandidateDistance = 6f,
             ScenarioDefinition scenarioDefinition = null,
-            IEnumerable<LevelTraversalLinkData> authoredTraversalLinks = null)
+            IEnumerable<LevelTraversalLinkData> authoredTraversalLinks = null,
+            GameplayScenarioAssembly scenarioAssembly = null)
         {
             candidates = new GameplayReachableCandidateBuilder(
                 capabilities ?? throw new ArgumentNullException(
@@ -203,7 +205,8 @@ namespace GritGud.Application.Gameplay
                 capabilities);
             spatial = spatialEvidence ?? throw new ArgumentNullException(
                 nameof(spatialEvidence));
-            scenario = scenarioDefinition;
+            assembly = scenarioAssembly;
+            scenario = scenarioDefinition ?? scenarioAssembly?.Scenario;
             var links = new List<LevelTraversalLinkData>();
             foreach (LevelTraversalLinkData link in authoredTraversalLinks
                 ?? Array.Empty<LevelTraversalLinkData>())
@@ -289,6 +292,30 @@ namespace GritGud.Application.Gameplay
                     continue;
                 }
                 if (effectiveInput.Profile.Equals(
+                    GameplayCapabilityProfiles.SummonDrone()))
+                {
+                    result.AddRange(BuildDroneSummons(
+                        state,
+                        effectiveInput));
+                    continue;
+                }
+                if (effectiveInput.Profile.Equals(
+                    GameplayCapabilityProfiles.DismissDrone()))
+                {
+                    result.AddRange(BuildDroneDismissals(
+                        state,
+                        effectiveInput));
+                    continue;
+                }
+                if (effectiveInput.Profile.Equals(
+                    GameplayCapabilityProfiles.AdvanceDroneCrash()))
+                {
+                    result.AddRange(BuildDroneCrashes(
+                        state,
+                        effectiveInput));
+                    continue;
+                }
+                if (effectiveInput.Profile.Equals(
                     GameplayCapabilityProfiles.AdvanceProjectile()))
                 {
                     result.AddRange(BuildProjectileAdvances(
@@ -320,6 +347,13 @@ namespace GritGud.Application.Gameplay
                         effectiveInput));
                     continue;
                 }
+                if (IsDroneWeaponInput(effectiveInput))
+                {
+                    result.AddRange(BuildDroneWeaponCandidates(
+                        state,
+                        effectiveInput));
+                    continue;
+                }
                 result.AddRange(tacticalCandidates.Build(
                     state,
                     new[] { effectiveInput }));
@@ -328,6 +362,106 @@ namespace GritGud.Application.Gameplay
                 left.CandidateId,
                 right.CandidateId));
             return result.AsReadOnly();
+        }
+
+        private IEnumerable<GameplayCandidate> BuildDroneSummons(
+            GameplayCombatStateSnapshot state,
+            GameplayReachableInput input)
+        {
+            if (assembly == null || string.IsNullOrWhiteSpace(
+                    input.SubjectIdHint))
+                yield break;
+            ScenarioDroneSummonRuntimeDefinition runtime;
+            try
+            {
+                runtime = assembly.GetDroneSummonAbility(
+                    input.SubjectIdHint);
+            }
+            catch (KeyNotFoundException)
+            {
+                yield break;
+            }
+            GameplayActorSnapshot actor = state.Session.GetActor(input.ActorId);
+            if (actor.IsIncapacitated) yield break;
+            DroneSummonAbilityDefinition ability = runtime.Ability;
+            float vertical = ability.SpawnHeight;
+            float horizontalLimit = (float)Math.Sqrt(Math.Max(
+                0f,
+                (ability.MaximumSpawnDistance
+                    * ability.MaximumSpawnDistance)
+                - (vertical * vertical)));
+            float horizontal = horizontalLimit * 0.6f;
+            var offsets = new[]
+            {
+                new GameplayPosition(0f, vertical, 0f),
+                new GameplayPosition(0f, vertical, horizontal),
+                new GameplayPosition(horizontal, vertical, 0f),
+                new GameplayPosition(0f, vertical, -horizontal),
+                new GameplayPosition(-horizontal, vertical, 0f),
+            };
+            for (int index = 0; index < offsets.Length; index++)
+            {
+                GameplayPosition offset = offsets[index];
+                GameplayPosition position = new GameplayPosition(
+                    actor.Pose.Position.X + offset.X,
+                    actor.Pose.Position.Y + offset.Y,
+                    actor.Pose.Position.Z + offset.Z);
+                float facing = offset.X == 0f && offset.Z == 0f
+                    ? actor.Pose.FacingDegrees
+                    : (float)(Math.Atan2(offset.X, offset.Z)
+                        * (180d / Math.PI));
+                yield return new GameplayCandidate(
+                    input.SourceId + "." + index,
+                    input.Profile,
+                    input.ActorId,
+                    "summon-position:" + input.SubjectIdHint + ":" + index,
+                    new GameplayDroneSummonIntent(
+                        input.SubjectIdHint,
+                        position,
+                        facing));
+            }
+        }
+
+        private static IEnumerable<GameplayCandidate> BuildDroneDismissals(
+            GameplayCombatStateSnapshot state,
+            GameplayReachableInput input)
+        {
+            foreach (SummonedDroneSnapshot drone in state.Drones)
+            {
+                if (!drone.IsOperational
+                    || !string.Equals(
+                        drone.SummonerActorId,
+                        input.ActorId,
+                        StringComparison.Ordinal)
+                    || !string.Equals(
+                        drone.ArchetypeId,
+                        input.SourceSubjectId,
+                        StringComparison.Ordinal))
+                    continue;
+                yield return new GameplayCandidate(
+                    input.SourceId + "." + drone.DroneId,
+                    input.Profile,
+                    input.ActorId,
+                    drone.DroneId,
+                    new GameplayDroneDismissIntent(drone.DroneId));
+            }
+        }
+
+        private static IEnumerable<GameplayCandidate> BuildDroneCrashes(
+            GameplayCombatStateSnapshot state,
+            GameplayReachableInput input)
+        {
+            foreach (SummonedDroneSnapshot drone in state.Drones)
+            {
+                if (drone.Lifecycle != SummonLifecycleState.Crashing)
+                    continue;
+                yield return new GameplayCandidate(
+                    input.SourceId + "." + drone.DroneId,
+                    input.Profile,
+                    input.ActorId,
+                    drone.DroneId,
+                    new GameplayDroneCrashIntent(drone.DroneId));
+            }
         }
 
         private IEnumerable<GameplayCandidate> BuildTraversals(
@@ -788,11 +922,19 @@ namespace GritGud.Application.Gameplay
             GameplayReachableInput input)
         {
             state.RequireCoverage(GameplayCombatStateCoverage.Drones);
-            DroneSnapshot drone = FindDrone(
-                state.Drones,
-                input.SourceSubjectId ?? input.SubjectIdHint);
+            foreach (SummonedDroneSnapshot drone in state.Drones)
+            {
+            if (!string.Equals(
+                    drone.ArchetypeId,
+                    input.SourceSubjectId ?? input.SubjectIdHint,
+                    StringComparison.Ordinal)
+                || !string.Equals(
+                    drone.SummonerActorId,
+                    input.ActorId,
+                    StringComparison.Ordinal))
+                continue;
             GameplayActorSnapshot controller = state.Session.GetActor(
-                drone.Definition.SummonerActorId);
+                drone.SummonerActorId);
             if (!drone.IsOperational
                 || controller.IsIncapacitated
                 || controller.TurnBudget.ActionPoints
@@ -810,7 +952,7 @@ namespace GritGud.Application.Gameplay
             foreach (float distance in distances)
             foreach (GameplayPosition direction in EnumerateTacticalDirections(
                 state,
-                drone.Definition.SummonerActorId,
+                drone.SummonerActorId,
                 drone.Position))
             {
                 double length = Math.Sqrt(
@@ -871,18 +1013,65 @@ namespace GritGud.Application.Gameplay
                             + destinationKey + ".f" + facingKey);
                 }
             }
+            }
+        }
+
+        private IEnumerable<GameplayCandidate> BuildDroneWeaponCandidates(
+            GameplayCombatStateSnapshot state,
+            GameplayReachableInput input)
+        {
+            foreach (SummonedDroneSnapshot drone in state.Drones)
+            {
+                if (!drone.IsOperational
+                    || !string.Equals(
+                        drone.ArchetypeId,
+                        input.SourceSubjectId,
+                        StringComparison.Ordinal)
+                    || !string.Equals(
+                        drone.SummonerActorId,
+                        input.ActorId,
+                        StringComparison.Ordinal))
+                    continue;
+                var expanded = new GameplayReachableInput(
+                    input.Kind,
+                    input.SourceId + "." + drone.DroneId,
+                    input.ActorId,
+                    input.Profile,
+                    input.SubjectIdHint,
+                    drone.DroneId);
+                foreach (GameplayCandidate candidate in tacticalCandidates.Build(
+                    state,
+                    new[] { expanded }))
+                    yield return candidate;
+            }
+        }
+
+        private static bool IsDroneWeaponInput(GameplayReachableInput input)
+        {
+            if (input.Profile.Capability
+                != GameplaySemanticCapability.DirectAttack)
+                return false;
+            try
+            {
+                return input.Profile.GetTrait("resource")
+                    == "summoner-drone-weapon";
+            }
+            catch (KeyNotFoundException)
+            {
+                return false;
+            }
         }
 
         private IEnumerable<float> EnumerateDroneFacings(
             GameplayCombatStateSnapshot state,
-            DroneSnapshot drone,
+            SummonedDroneSnapshot drone,
             GameplayPosition destination,
             float travelFacing)
         {
             yield return travelFacing;
             if (scenario == null) yield break;
             ScenarioActorDefinition controller = scenario.GetActor(
-                drone.Definition.SummonerActorId);
+                drone.SummonerActorId);
             foreach (GameplayActorSnapshot actor in state.Session.Actors)
             {
                 if (actor.IsIncapacitated) continue;
@@ -1005,11 +1194,11 @@ namespace GritGud.Application.Gameplay
             return true;
         }
 
-        private static DroneSnapshot FindDrone(
-            IEnumerable<DroneSnapshot> drones,
+        private static SummonedDroneSnapshot FindDrone(
+            IEnumerable<SummonedDroneSnapshot> drones,
             string droneId)
         {
-            foreach (DroneSnapshot drone in drones)
+            foreach (SummonedDroneSnapshot drone in drones)
                 if (string.Equals(
                     drone.DroneId,
                     droneId,

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using GritGud.Domain.Gameplay;
 
 namespace GritGud.Application.Gameplay
@@ -23,8 +24,72 @@ namespace GritGud.Application.Gameplay
                 InstallLegacyActionPointEconomy(document);
             if (document.schemaVersion < 22)
                 RenameLegacyDroneSummoners(document);
+            if (document.schemaVersion < 23)
+                SplitLegacyDroneDefinitions(document);
             document.schemaVersion = ScenarioContentDocument.CurrentSchemaVersion;
             return document;
+        }
+
+        private static void SplitLegacyDroneDefinitions(
+            ScenarioContentDocument document)
+        {
+            var archetypeIds = new HashSet<string>(StringComparer.Ordinal);
+            var abilityIds = new HashSet<string>(StringComparer.Ordinal);
+            int index = 0;
+            foreach (ScenarioDroneContentData legacy in document.drones)
+            {
+                if (legacy == null) continue;
+                index++;
+                string archetypeId = "drone-archetype."
+                    + (legacy.entityId ?? string.Empty);
+                string abilityId = index == 1
+                    ? "ability.summon-drone"
+                    : "ability.summon-drone." + index;
+                if (!archetypeIds.Add(archetypeId)
+                    || !abilityIds.Add(abilityId))
+                    throw new InvalidOperationException(
+                        "Legacy drone migration produced duplicate archetype or ability IDs.");
+                document.droneArchetypes.Add(
+                    new ScenarioDroneArchetypeContentData
+                    {
+                        archetypeId = archetypeId,
+                        presentationId = "presentation.drone.scout",
+                        maximumIntegrity = legacy.maximumIntegrity,
+                        maximumMoveDistance = legacy.maximumMoveDistance,
+                        moveCost = legacy.moveCost,
+                        sensorRange = legacy.sensorRange,
+                        sensorViewAngleDegrees =
+                            legacy.sensorViewAngleDegrees,
+                        attackCapability = legacy.attackCapability,
+                        crash = new ScenarioDroneCrashData
+                        {
+                            impactRadius = 2.5f,
+                            injuryMovementPenalty = 0.75f,
+                            destructibleIntegrityDamage = 1f,
+                            maximumActionPointReduction = 1,
+                            maximumDriftDistance = 0.75f,
+                            impactPlaybackSeconds = 0.7f,
+                        },
+                    });
+                document.droneSummonAbilities.Add(
+                    new ScenarioDroneSummonAbilityContentData
+                    {
+                        abilityId = abilityId,
+                        summonerActorId = legacy.summonerActorId,
+                        droneArchetypeId = archetypeId,
+                        summonCost = new ScenarioActionCostData
+                        {
+                            actionPoints = 1,
+                            movementOpportunity = 0f,
+                            mobility = "Set",
+                        },
+                        maximumSpawnDistance = 5f,
+                        maximumActiveInstances = 1,
+                        durationTurns = 0,
+                        spawnHeight = 2f,
+                    });
+            }
+            document.drones.Clear();
         }
 
         private static void RenameLegacyDroneSummoners(

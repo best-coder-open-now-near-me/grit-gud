@@ -9,8 +9,11 @@ namespace GritGud.Application.Gameplay
     {
         private readonly GameplaySession gameplay;
         private readonly DestructiblePropSession destructibles;
-        private readonly Dictionary<string, DroneSnapshot> drones =
-            new Dictionary<string, DroneSnapshot>(StringComparer.Ordinal);
+        private readonly Dictionary<string, DroneArchetypeDefinition>
+            archetypes = new Dictionary<string, DroneArchetypeDefinition>(
+                StringComparer.Ordinal);
+        private readonly Dictionary<string, SummonedDroneSnapshot> drones =
+            new Dictionary<string, SummonedDroneSnapshot>(StringComparer.Ordinal);
         private bool canonicalProjectionBound;
         private Func<
             GameplayTransitionPayload,
@@ -19,28 +22,27 @@ namespace GritGud.Application.Gameplay
 
         public GameplayDroneSession(
             GameplaySession gameplaySession,
-            IEnumerable<DroneDefinition> definitions,
+            IEnumerable<DroneArchetypeDefinition> definitions,
             DestructiblePropSession destructibleSession = null)
         {
             gameplay = gameplaySession ?? throw new ArgumentNullException(
                 nameof(gameplaySession));
             destructibles = destructibleSession;
-            foreach (DroneDefinition definition in definitions
+            foreach (DroneArchetypeDefinition definition in definitions
                 ?? throw new ArgumentNullException(nameof(definitions)))
             {
-                if (definition == null || !drones.TryAdd(
-                    definition.Id,
-                    definition.CreateInitialSnapshot()))
+                if (definition == null || !archetypes.TryAdd(
+                    definition.ArchetypeId,
+                    definition))
                     throw new ArgumentException(
                         "Drone definitions must be non-null and unique.",
                         nameof(definitions));
-                _ = gameplay.GetActor(definition.SummonerActorId);
             }
         }
 
-        public IReadOnlyList<DroneSnapshot> CaptureDrones()
+        public IReadOnlyList<SummonedDroneSnapshot> CaptureDrones()
         {
-            var result = new List<DroneSnapshot>(drones.Values);
+            var result = new List<SummonedDroneSnapshot>(drones.Values);
             result.Sort((left, right) => StringComparer.Ordinal.Compare(
                 left.DroneId, right.DroneId));
             return result.AsReadOnly();
@@ -60,68 +62,110 @@ namespace GritGud.Application.Gameplay
         }
 
         internal void BindCanonicalProjection(
-            IReadOnlyList<DroneSnapshot> snapshots)
+            IReadOnlyList<SummonedDroneSnapshot> snapshots)
         {
             if (canonicalProjectionBound)
                 throw new InvalidOperationException(
                     "Drones already have a canonical runtime projection.");
             ValidateCanonicalProjection(snapshots);
-            foreach (DroneSnapshot snapshot in snapshots)
-                if (!StatesMatch(drones[snapshot.DroneId], snapshot))
-                    throw new InvalidOperationException(
-                        "Drone session does not match the initial canonical state.");
+            drones.Clear();
+            foreach (SummonedDroneSnapshot snapshot in snapshots)
+                drones.Add(snapshot.DroneId, snapshot);
             canonicalProjectionBound = true;
         }
 
         internal void ValidateCanonicalProjection(
-            IReadOnlyList<DroneSnapshot> snapshots)
+            IReadOnlyList<SummonedDroneSnapshot> snapshots)
         {
             if (snapshots == null)
                 throw new ArgumentNullException(nameof(snapshots));
-            if (snapshots.Count != drones.Count)
-                throw new InvalidOperationException(
-                    "Canonical projection changed the drone set.");
-            foreach (DroneSnapshot snapshot in snapshots)
+            var instanceIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (SummonedDroneSnapshot snapshot in snapshots)
             {
-                if (!drones.TryGetValue(
-                        snapshot.DroneId,
-                        out DroneSnapshot current)
+                if (!instanceIds.Add(snapshot.DroneId)
+                    || !archetypes.TryGetValue(
+                        snapshot.ArchetypeId,
+                        out DroneArchetypeDefinition definition)
                     || !string.Equals(
-                        GameplayCanonicalValueDigest.Calculate(
-                            current.Definition),
+                        GameplayCanonicalValueDigest.Calculate(definition),
                         GameplayCanonicalValueDigest.Calculate(
                             snapshot.Definition),
                         StringComparison.Ordinal))
                 {
                     throw new InvalidOperationException(
-                        $"Canonical drone '{snapshot.DroneId}' changed its definition.");
+                        $"Canonical drone '{snapshot.DroneId}' has an unknown or changed archetype.");
                 }
             }
         }
 
         internal void InstallCanonicalProjection(
-            IReadOnlyList<DroneSnapshot> snapshots)
+            IReadOnlyList<SummonedDroneSnapshot> snapshots)
         {
             if (!canonicalProjectionBound)
                 throw new InvalidOperationException(
                     "Drones are not bound to a canonical runtime.");
             ValidateCanonicalProjection(snapshots);
-            foreach (DroneSnapshot snapshot in snapshots)
-                drones[snapshot.DroneId] = snapshot;
+            drones.Clear();
+            foreach (SummonedDroneSnapshot snapshot in snapshots)
+                drones.Add(snapshot.DroneId, snapshot);
         }
 
-        public DroneSnapshot GetDrone(string droneId) =>
-            drones.TryGetValue(droneId ?? string.Empty, out DroneSnapshot drone)
+        public SummonedDroneSnapshot GetDrone(string droneId) =>
+            drones.TryGetValue(droneId ?? string.Empty, out SummonedDroneSnapshot drone)
                 ? drone
                 : throw new KeyNotFoundException(
                     $"Drone '{droneId}' is not active.");
+
+        public void CommitSummon(SummonDroneRecord record)
+        {
+            if (record == null) throw new ArgumentNullException(nameof(record));
+            if (canonicalProjectionBound)
+            {
+                canonicalExecutor(
+                    new GameplaySummonDroneTransitionPayload(record),
+                    null);
+                return;
+            }
+            RequireLegacyMutationAllowed(nameof(CommitSummon));
+            if (!archetypes.TryGetValue(
+                    record.Archetype.ArchetypeId,
+                    out DroneArchetypeDefinition archetype)
+                || !string.Equals(
+                    GameplayCanonicalValueDigest.Calculate(archetype),
+                    GameplayCanonicalValueDigest.Calculate(record.Archetype),
+                    StringComparison.Ordinal)
+                || drones.ContainsKey(record.DroneInstanceId))
+                throw new InvalidOperationException(
+                    "Drone summon does not match the live archetype catalog.");
+            gameplay.CommitDroneSummon(record);
+            drones.Add(record.DroneInstanceId, record.Resulting);
+        }
+
+        public void CommitDismiss(DismissDroneRecord record)
+        {
+            if (record == null) throw new ArgumentNullException(nameof(record));
+            if (canonicalProjectionBound)
+            {
+                canonicalExecutor(
+                    new GameplayDismissDroneTransitionPayload(record),
+                    null);
+                return;
+            }
+            RequireLegacyMutationAllowed(nameof(CommitDismiss));
+            SummonedDroneSnapshot current = GetDrone(record.DroneId);
+            if (!StatesMatch(current, record.Previous))
+                throw new InvalidOperationException(
+                    "Drone dismissal starts from stale live state.");
+            gameplay.CommitDroneDismiss(record);
+            drones[record.DroneId] = record.Resulting;
+        }
 
         public DroneMoveRecord PrepareMove(
             string droneId,
             GameplayPosition destination,
             float facingDegrees)
         {
-            DroneSnapshot drone = GetDrone(droneId);
+            SummonedDroneSnapshot drone = GetDrone(droneId);
             RequireSummonerPartnerTurn(drone);
             if (!drone.IsOperational)
                 throw new InvalidOperationException(
@@ -131,9 +175,9 @@ namespace GritGud.Application.Gameplay
                 throw new InvalidOperationException(
                     "Drone destination exceeds its movement range.");
             TurnBudget previous = gameplay.GetActor(
-                drone.Definition.SummonerActorId).TurnBudget;
+                drone.SummonerActorId).TurnBudget;
             return new DroneMoveRecord(
-                drone.Definition.SummonerActorId,
+                drone.SummonerActorId,
                 drone.DroneId,
                 drone.Position,
                 destination,
@@ -154,14 +198,12 @@ namespace GritGud.Application.Gameplay
                 return;
             }
             RequireLegacyMutationAllowed(nameof(CommitMove));
-            DroneSnapshot drone = GetDrone(record.DroneId);
+            SummonedDroneSnapshot drone = GetDrone(record.DroneId);
             RequireSummonerPartnerTurn(drone);
             gameplay.CommitDroneMoveBudget(record);
-            drones[drone.DroneId] = new DroneSnapshot(
-                drone.Definition,
+            drones[drone.DroneId] = drone.WithPose(
                 record.Destination,
-                record.ResultingFacingDegrees,
-                drone.RemainingIntegrity);
+                record.ResultingFacingDegrees);
         }
 
         public DroneAttackRecord PrepareActorAttack(
@@ -170,7 +212,7 @@ namespace GritGud.Application.Gameplay
         {
             if (resolution == null) throw new ArgumentNullException(
                 nameof(resolution));
-            DroneSnapshot drone = GetDrone(droneId);
+            SummonedDroneSnapshot drone = GetDrone(droneId);
             RequireSummonerPartnerTurn(drone);
             if (!drone.IsOperational)
                 throw new InvalidOperationException(
@@ -183,10 +225,10 @@ namespace GritGud.Application.Gameplay
                     "Drone attack evidence must originate from the firing drone.",
                     nameof(resolution));
             TurnBudget previous = gameplay.GetActor(
-                drone.Definition.SummonerActorId).TurnBudget;
+                drone.SummonerActorId).TurnBudget;
             ActionCost cost = drone.Definition.Attack.TurnCost;
             return new DroneAttackRecord(
-                drone.Definition.SummonerActorId,
+                drone.SummonerActorId,
                 drone.DroneId,
                 resolution.TargetId,
                 GameplaySemanticSubjectKind.Actor.ToString(),
@@ -215,7 +257,7 @@ namespace GritGud.Application.Gameplay
                 return;
             }
             RequireLegacyMutationAllowed(nameof(CommitAttack));
-            DroneSnapshot drone = GetDrone(record.DroneId);
+            SummonedDroneSnapshot drone = GetDrone(record.DroneId);
             RequireSummonerPartnerTurn(drone);
             if (!drone.IsOperational)
                 throw new InvalidOperationException(
@@ -234,7 +276,7 @@ namespace GritGud.Application.Gameplay
                     destructibles.CommitDamage(damage);
                     break;
                 case DroneIntegrityDamageRecord damage:
-                    DroneSnapshot target = GetDrone(damage.DroneId);
+                    SummonedDroneSnapshot target = GetDrone(damage.DroneId);
                     if (!StatesMatch(target, damage.Previous))
                         throw new InvalidOperationException(
                             "Drone damage starts from stale integrity state.");
@@ -251,7 +293,7 @@ namespace GritGud.Application.Gameplay
         {
             RequireLegacyMutationAllowed(nameof(ApplyIntegrityDamage));
             if (damage == null) throw new ArgumentNullException(nameof(damage));
-            DroneSnapshot current = GetDrone(damage.DroneId);
+            SummonedDroneSnapshot current = GetDrone(damage.DroneId);
             if (!StatesMatch(current, damage.Previous))
                 throw new InvalidOperationException(
                     "Drone damage starts from stale integrity state.");
@@ -263,9 +305,10 @@ namespace GritGud.Application.Gameplay
             string droneId,
             DroneExposureSnapshot exposure,
             float distance,
-            uint resolutionSeed)
+            uint resolutionSeed,
+            DroneCrashTrajectoryRecord crashTrajectory = null)
         {
-            DroneSnapshot drone = GetDrone(droneId);
+            SummonedDroneSnapshot drone = GetDrone(droneId);
             if (!drone.IsOperational)
                 throw new InvalidOperationException(
                     "Destroyed drones cannot be attacked again.");
@@ -294,7 +337,24 @@ namespace GritGud.Application.Gameplay
                 distance,
                 drone,
                 GameplayInjuryCapabilityProjection
-                    .CalculateAccuracyDeltaPercent(attacker.Capabilities));
+                    .CalculateAccuracyDeltaPercent(attacker.Capabilities),
+                crashTrajectory);
+        }
+
+        public void CommitCrashImpact(
+            string advancingActorId,
+            DroneCrashImpactRecord impact,
+            IEnumerable<GameplayEvidenceRecord> evidence = null)
+        {
+            if (impact == null) throw new ArgumentNullException(nameof(impact));
+            if (!canonicalProjectionBound)
+                throw new InvalidOperationException(
+                    "Drone crash impact requires the canonical semantic runtime.");
+            canonicalExecutor(
+                new GameplayDroneCrashImpactTransitionPayload(
+                    advancingActorId,
+                    impact),
+                evidence);
         }
 
         public void CommitActorAttack(ActorDroneAttackRecord record)
@@ -310,7 +370,7 @@ namespace GritGud.Application.Gameplay
                 return;
             }
             RequireLegacyMutationAllowed(nameof(CommitActorAttack));
-            DroneSnapshot drone = GetDrone(record.DroneId);
+            SummonedDroneSnapshot drone = GetDrone(record.DroneId);
             if (record.Damage != null
                 && !StatesMatch(drone, record.Damage.Previous))
                 throw new InvalidOperationException(
@@ -320,23 +380,25 @@ namespace GritGud.Application.Gameplay
                 drones[drone.DroneId] = record.Damage.Resulting;
         }
 
-        private void RequireSummonerPartnerTurn(DroneSnapshot drone)
+        private void RequireSummonerPartnerTurn(SummonedDroneSnapshot drone)
         {
             if (gameplay.Mode != GameplaySessionMode.TurnBased
                 || gameplay.Operation != GameplaySessionOperation.None
                 || !string.Equals(
                     gameplay.ActiveActorId,
-                    drone.Definition.SummonerActorId,
+                    drone.SummonerActorId,
                     StringComparison.Ordinal))
                 throw new InvalidOperationException(
                     "Drone commands require the summoner partner's idle turn.");
         }
 
-        private static bool StatesMatch(DroneSnapshot left, DroneSnapshot right) =>
+        private static bool StatesMatch(SummonedDroneSnapshot left, SummonedDroneSnapshot right) =>
             string.Equals(left.DroneId, right.DroneId, StringComparison.Ordinal)
             && left.Position.DistanceTo(right.Position) == 0f
             && left.FacingDegrees == right.FacingDegrees
-            && left.RemainingIntegrity == right.RemainingIntegrity;
+            && left.RemainingIntegrity == right.RemainingIntegrity
+            && left.Lifecycle == right.Lifecycle
+            && left.RemainingDurationTurns == right.RemainingDurationTurns;
 
         private void RequireLegacyMutationAllowed(string operation)
         {

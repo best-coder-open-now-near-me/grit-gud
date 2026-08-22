@@ -54,6 +54,15 @@ namespace GritGud.Application.Gameplay
                 case ActorDroneAttackRecord actorDroneAttack:
                     projection = FormatActorDroneAttack(actorDroneAttack);
                     return true;
+                case SummonDroneRecord summon:
+                    projection = FormatDroneSummon(summon);
+                    return true;
+                case DismissDroneRecord dismissal:
+                    projection = FormatDroneDismissal(dismissal);
+                    return true;
+                case DroneCrashImpactRecord crash:
+                    projection = FormatDroneCrash(crash);
+                    return true;
                 default:
                     projection = null;
                     return false;
@@ -285,6 +294,14 @@ namespace GritGud.Application.Gameplay
                         actorDroneAttack.Attack);
                     return true;
 
+                case DroneSummonedJournalEntry summoned:
+                    projection = FormatDroneSummon(summoned.Summon);
+                    return true;
+
+                case DroneDismissedJournalEntry dismissed:
+                    projection = FormatDroneDismissal(dismissed.Dismissal);
+                    return true;
+
                 case ProjectileAdvancedJournalEntry projectile:
                     projection = FormatProjectileAdvance(projectile.Advance);
                     return true;
@@ -350,6 +367,8 @@ namespace GritGud.Application.Gameplay
                 case GameplayJournalEntryKind.DroneMoved:
                 case GameplayJournalEntryKind.DroneAttackResolved:
                 case GameplayJournalEntryKind.ActorDroneAttackResolved:
+                case GameplayJournalEntryKind.DroneSummoned:
+                case GameplayJournalEntryKind.DroneDismissed:
                 case GameplayJournalEntryKind.ProjectileAdvanced:
                 case GameplayJournalEntryKind.EmergencyReactionChanged:
                     return GameplayDiagnosticPolicy.Formatted;
@@ -436,6 +455,60 @@ namespace GritGud.Application.Gameplay
                     : "RESULT - MISS");
             return new GameplayDiagnosticProjection(
                 attack.DroneId + " ATTACKS",
+                lines);
+        }
+
+        private static GameplayDiagnosticProjection FormatDroneSummon(
+            SummonDroneRecord summon) => new GameplayDiagnosticProjection(
+                summon.SummonerActorId + " SUMMONS "
+                    + summon.DroneInstanceId,
+                new[]
+                {
+                    "ARCHETYPE - " + summon.Archetype.ArchetypeId,
+                    "ABILITY - " + summon.Ability.AbilityId,
+                    "POSITION - " + FormatPosition(summon.SpawnPosition),
+                    "AP - " + summon.PreviousBudget.ActionPoints
+                        + " -> " + summon.ResultingBudget.ActionPoints,
+                });
+
+        private static GameplayDiagnosticProjection FormatDroneDismissal(
+            DismissDroneRecord dismissal) => new GameplayDiagnosticProjection(
+                dismissal.SummonerActorId + " DISMISSES "
+                    + dismissal.DroneId,
+                new[]
+                {
+                    "LIFECYCLE - " + dismissal.Previous.Lifecycle
+                        + " -> " + dismissal.Resulting.Lifecycle,
+                    "AP - " + dismissal.PreviousBudget.ActionPoints
+                        + " -> " + dismissal.ResultingBudget.ActionPoints,
+                });
+
+        private static GameplayDiagnosticProjection FormatDroneCrash(
+            DroneCrashImpactRecord crash)
+        {
+            var lines = new List<string>
+            {
+                "TRAJECTORY - " + FormatPosition(crash.Origin)
+                    + " -> " + FormatPosition(crash.ImpactPosition),
+                "BLAST RADIUS - " + Format(crash.Definition.ImpactRadius)
+                    + " m",
+                "LIFECYCLE - " + crash.Previous.Lifecycle
+                    + " -> " + crash.Resulting.Lifecycle,
+            };
+            AppendBlastEffects(
+                lines,
+                crash.Effects,
+                crash.Definition.InjuryMovementPenalty,
+                crash.Definition.DestructibleIntegrityDamage,
+                "CRASH");
+            foreach (ConcussiveActionPointEffectRecord effect in
+                crash.ConcussiveEffects)
+                lines.Add("CONCUSSION - " + effect.ActorId
+                    + " - AP " + effect.PreviousActionPoints
+                    + " - " + effect.RemovedActionPoints
+                    + " = " + effect.ResultingActionPoints);
+            return new GameplayDiagnosticProjection(
+                crash.DroneId + " CRASHES",
                 lines);
         }
 

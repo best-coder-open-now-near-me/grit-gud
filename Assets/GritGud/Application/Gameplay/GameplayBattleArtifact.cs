@@ -517,6 +517,10 @@ namespace GritGud.Application.Gameplay
             int fireDeployments,
             int droneMoves,
             int droneAttacks,
+            int droneSummons,
+            int droneDismissals,
+            int droneExpirations,
+            int droneCrashes,
             int reloads,
             int roundsSpent,
             int roundsReloaded,
@@ -544,6 +548,14 @@ namespace GritGud.Application.Gameplay
                 nameof(fireDeployments));
             DroneMoves = NonNegative(droneMoves, nameof(droneMoves));
             DroneAttacks = NonNegative(droneAttacks, nameof(droneAttacks));
+            DroneSummons = NonNegative(droneSummons, nameof(droneSummons));
+            DroneDismissals = NonNegative(
+                droneDismissals,
+                nameof(droneDismissals));
+            DroneExpirations = NonNegative(
+                droneExpirations,
+                nameof(droneExpirations));
+            DroneCrashes = NonNegative(droneCrashes, nameof(droneCrashes));
             Reloads = NonNegative(reloads, nameof(reloads));
             RoundsSpent = NonNegative(roundsSpent, nameof(roundsSpent));
             RoundsReloaded = NonNegative(
@@ -608,6 +620,10 @@ namespace GritGud.Application.Gameplay
         public int FireDeployments { get; }
         public int DroneMoves { get; }
         public int DroneAttacks { get; }
+        public int DroneSummons { get; }
+        public int DroneDismissals { get; }
+        public int DroneExpirations { get; }
+        public int DroneCrashes { get; }
         public int Reloads { get; }
         public int RoundsSpent { get; }
         public int RoundsReloaded { get; }
@@ -774,7 +790,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplayBattleArtifact
     {
-        public const int CurrentSchemaVersion = 5;
+        public const int CurrentSchemaVersion = 6;
         public const string FormatId = "grit-gud-battle-artifact";
 
         public GameplayBattleArtifact(
@@ -1108,6 +1124,10 @@ namespace GritGud.Application.Gameplay
             int fires = 0;
             int droneMoves = 0;
             int droneAttacks = 0;
+            int droneSummons = 0;
+            int droneDismissals = 0;
+            int droneExpirations = 0;
+            int droneCrashes = 0;
             int reloads = 0;
             int roundsSpent = 0;
             int roundsReloaded = 0;
@@ -1124,6 +1144,11 @@ namespace GritGud.Application.Gameplay
                 foreach (GameplayDomainEvent domainEvent in
                     transition.DomainEvents)
                 {
+                    if (domainEvent is GameplayDroneExpiredEvent)
+                    {
+                        droneExpirations++;
+                        continue;
+                    }
                     if (!(domainEvent is GameplayTransitionReducedEvent reduced))
                         continue;
                     object record = reduced.SemanticRecord;
@@ -1151,6 +1176,29 @@ namespace GritGud.Application.Gameplay
                         if (droneAttack.Consequence
                             is AttackResolutionRecord resolution)
                             AddResolution(score, resolution, ref hits, ref wounds);
+                    }
+                    else if (record is SummonDroneRecord)
+                    {
+                        droneSummons++;
+                    }
+                    else if (record is DismissDroneRecord)
+                    {
+                        droneDismissals++;
+                    }
+                    else if (record is DroneCrashImpactRecord crash)
+                    {
+                        droneCrashes++;
+                        int affected = crash.ConcussiveEffects.Count;
+                        concussive += affected;
+                        MutableActorScore score = actorScores[
+                            crash.SummonerActorId];
+                        score.ConcussiveTargets += affected;
+                        foreach (BlastEffectRecord effect in crash.Effects)
+                        {
+                            if (!effect.IsLocalizedActorInjury) continue;
+                            wounds++;
+                            score.WoundsDealt++;
+                        }
                     }
                     else if (record is ActorDroneAttackRecord actorDrone)
                     {
@@ -1272,6 +1320,10 @@ namespace GritGud.Application.Gameplay
                 fires,
                 droneMoves,
                 droneAttacks,
+                droneSummons,
+                droneDismissals,
+                droneExpirations,
+                droneCrashes,
                 reloads,
                 roundsSpent,
                 roundsReloaded,

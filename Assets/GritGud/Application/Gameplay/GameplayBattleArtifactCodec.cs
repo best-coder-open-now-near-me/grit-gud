@@ -354,6 +354,10 @@ namespace GritGud.Application.Gameplay
             int decisions = value.Int32("Decisions");
             int droneAttacks = value.Int32("DroneAttacks");
             int droneMoves = value.Int32("DroneMoves");
+            int droneSummons = value.Int32("DroneSummons");
+            int droneDismissals = value.Int32("DroneDismissals");
+            int droneExpirations = value.Int32("DroneExpirations");
+            int droneCrashes = value.Int32("DroneCrashes");
             int throws = value.Int32("ExplosiveThrows");
             int finalLoaded = value.Int32("FinalLoadedRounds");
             int finalReserve = value.Int32("FinalReserveRounds");
@@ -378,6 +382,10 @@ namespace GritGud.Application.Gameplay
                 fires,
                 droneMoves,
                 droneAttacks,
+                droneSummons,
+                droneDismissals,
+                droneExpirations,
+                droneCrashes,
                 reloads,
                 roundsSpent,
                 roundsReloaded,

@@ -146,7 +146,8 @@ namespace GritGud.Presentation.Gameplay
                 capabilities,
                 spatial,
                 scenarioDefinition: assembly.Scenario,
-                authoredTraversalLinks: level.traversalLinks);
+                authoredTraversalLinks: level.traversalLinks,
+                scenarioAssembly: assembly);
             var source = new GameplayHeadlessDecisionCandidateSource(
                 candidateBuilder,
                 reachable,

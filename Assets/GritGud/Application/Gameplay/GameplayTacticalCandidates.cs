@@ -99,7 +99,7 @@ namespace GritGud.Application.Gameplay
                         | GameplayTacticalAffordance.AffectsSight
                         | GameplayTacticalAffordance.AffectsRouting
                         | GameplayTacticalAffordance.AffectsBlast));
-            foreach (DroneSnapshot drone in state.Drones)
+            foreach (SummonedDroneSnapshot drone in state.Drones)
             {
                 if (!drone.IsOperational) continue;
                 result.Add(new GameplayTacticalSubject(
@@ -210,7 +210,7 @@ namespace GritGud.Application.Gameplay
                     subject.Subject.Id,
                     StringComparison.Ordinal))
                 return false;
-            DroneSnapshot sourceDrone = default;
+            SummonedDroneSnapshot sourceDrone = default;
             bool hasSourceDrone = input.SourceSubjectId != null;
             GameplayPosition sourcePosition = hasSourceDrone
                 ? (sourceDrone = FindDrone(
@@ -296,11 +296,11 @@ namespace GritGud.Application.Gameplay
             || subjectKind == GameplaySemanticSubjectKind.Projectile
             || subjectKind == GameplaySemanticSubjectKind.System;
 
-        private static DroneSnapshot FindDrone(
-            IReadOnlyList<DroneSnapshot> drones,
+        private static SummonedDroneSnapshot FindDrone(
+            IReadOnlyList<SummonedDroneSnapshot> drones,
             string droneId)
         {
-            foreach (DroneSnapshot drone in drones)
+            foreach (SummonedDroneSnapshot drone in drones)
                 if (string.Equals(drone.DroneId, droneId,
                     StringComparison.Ordinal)) return drone;
             throw new KeyNotFoundException(

@@ -10,13 +10,66 @@ namespace GritGud.Domain.Tests.Gameplay
     public sealed class GameplayDroneTransitionTests
     {
         [Test]
+        public void SummonCreatesRuntimePartnerAndKeepsSummonerInitiativeSlot()
+        {
+            GameplayCombatStateSnapshot initial = CreateState(
+                activeActorId: "controller",
+                includeDrone: false);
+            DroneArchetypeDefinition archetype =
+                CreateDroneArchetypeDefinition();
+            var ability = new DroneSummonAbilityDefinition(
+                "ability.summon-drone",
+                archetype.ArchetypeId,
+                new ActionCost(1, 0f, ActionMobility.Mobile),
+                maximumSpawnDistance: 6f,
+                maximumActiveInstances: 1,
+                durationTurns: null,
+                spawnHeight: 2f);
+            GameplayActorSnapshot summoner = initial.Session.GetActor(
+                "controller");
+            var summon = new SummonDroneRecord(
+                sequence: 1L,
+                summoner.ActorId,
+                ability,
+                archetype,
+                new GameplayPosition(2f, 2f, 0f),
+                spawnFacingDegrees: 90f,
+                summoner.TurnBudget,
+                summoner.TurnBudget.SpendAction(ability.SummonCost));
+            var transition = new GameplaySemanticTransition(
+                new GameplayTransitionIdentity(
+                    1L,
+                    GameplaySemanticCapability.SummonDrone.ToString(),
+                    summoner.ActorId,
+                    ability.AbilityId),
+                initial.CanonicalHash,
+                new GameplaySummonDroneTransitionPayload(summon));
+
+            GameplayReductionResult result =
+                new GameplayDroneLifecycleTransitionReducer().Reduce(
+                    initial,
+                    transition);
+
+            Assert.That(initial.Drones, Is.Empty);
+            Assert.That(result.Resulting.Drones, Has.Count.EqualTo(1));
+            Assert.That(result.Resulting.Drones[0].DroneId,
+                Is.EqualTo("drone:controller:1"));
+            Assert.That(result.Resulting.Drones[0].SummonerActorId,
+                Is.EqualTo(summoner.ActorId));
+            Assert.That(result.Resulting.Session.GetActor(summoner.ActorId)
+                .TurnBudget.ActionPoints, Is.EqualTo(3));
+            Assert.That(result.Resulting.Session.InitiativeOrder,
+                Is.EqualTo(new[] { "controller", "other" }));
+        }
+
+        [Test]
         public void DroneMoveSpendsSummonerApAndReplaysDeterministically()
         {
             GameplayCombatStateSnapshot initial = CreateState(
                 activeActorId: "controller");
             var movement = new DroneMoveRecord(
                 "controller",
-                "drone.scout",
+                "drone:controller:1",
                 new GameplayPosition(1f, 2f, 1f),
                 new GameplayPosition(4f, 3f, 1f),
                 90f,
@@ -77,7 +130,7 @@ namespace GritGud.Domain.Tests.Gameplay
             TurnBudget sharedBudget = afterSummoner.Resulting.Session
                 .GetActor(summoner.ActorId)
                 .TurnBudget;
-            DroneSnapshot drone = afterSummoner.Resulting.Drones[0];
+            SummonedDroneSnapshot drone = afterSummoner.Resulting.Drones[0];
             var droneMove = new DroneMoveRecord(
                 summoner.ActorId,
                 drone.DroneId,
@@ -101,8 +154,7 @@ namespace GritGud.Domain.Tests.Gameplay
                     afterSummoner.Resulting,
                     droneTransition);
 
-            DroneTurnPartnership partnership = drone.Definition
-                .TurnPartnership;
+            DroneTurnPartnership partnership = drone.TurnPartnership;
             Assert.That(partnership.SharedBudgetActorId,
                 Is.EqualTo(summoner.ActorId));
             Assert.That(partnership.PoolingPolicy,
@@ -121,7 +173,7 @@ namespace GritGud.Domain.Tests.Gameplay
             GameplayCombatStateSnapshot initial = CreateState(
                 "controller",
                 controllerEquippedItemId: "weapon.rifle");
-            DroneSnapshot drone = initial.Drones[0];
+            SummonedDroneSnapshot drone = initial.Drones[0];
             var attack = new AttackDefinition(
                 "attack.rifle",
                 "Rifle",
@@ -200,7 +252,7 @@ namespace GritGud.Domain.Tests.Gameplay
         {
             var movement = new DroneMoveRecord(
                 "controller",
-                "drone.scout",
+                "drone:controller:1",
                 new GameplayPosition(1f, 2f, 1f),
                 new GameplayPosition(2f, 2f, 1f),
                 0f,
@@ -211,6 +263,9 @@ namespace GritGud.Domain.Tests.Gameplay
             GameplayCombatStateSnapshot destroyed = CreateState(
                 "controller",
                 remainingIntegrity: 0f);
+            GameplayCombatStateSnapshot incapacitated = CreateState(
+                "controller",
+                controllerIncapacitated: true);
             var reducer = new GameplayWorldTransitionReducer();
 
             Assert.Throws<InvalidOperationException>(() => reducer.Reduce(
@@ -219,6 +274,13 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.Throws<InvalidOperationException>(() => reducer.Reduce(
                 destroyed,
                 CreateTransition(destroyed, movement)));
+            Assert.Throws<InvalidOperationException>(() => reducer.Reduce(
+                incapacitated,
+                CreateTransition(incapacitated, movement)));
+            Assert.That(incapacitated.Drones[0].IsVisible, Is.True,
+                "An incapacitated summoner leaves the drone in the world.");
+            Assert.That(incapacitated.Session.InitiativeOrder,
+                Does.Not.Contain(incapacitated.Drones[0].DroneId));
         }
 
         [Test]
@@ -226,9 +288,9 @@ namespace GritGud.Domain.Tests.Gameplay
         {
             GameplayCombatStateSnapshot initial = CreateState("controller");
             GameplayActorSnapshot target = initial.Session.GetActor("other");
-            DroneDefinition drone = initial.Drones[0].Definition;
+            DroneArchetypeDefinition drone = initial.Drones[0].Definition;
             var exposure = new TargetExposureSnapshot(
-                drone.Id,
+                initial.Drones[0].DroneId,
                 target.ActorId,
                 new[]
                 {
@@ -244,7 +306,7 @@ namespace GritGud.Domain.Tests.Gameplay
                 drone.Attack.WoundMovementPenalty);
             var action = new DroneAttackRecord(
                 "controller",
-                drone.Id,
+                initial.Drones[0].DroneId,
                 "other",
                 GameplaySemanticSubjectKind.Actor.ToString(),
                 drone.Attack.TurnCost,
@@ -289,7 +351,8 @@ namespace GritGud.Domain.Tests.Gameplay
             Assert.That(
                 presentationEvent.TargetKind,
                 Is.EqualTo(ReplayCombatPresentationSubjectKind.Actor));
-            Assert.That(presentationEvent.ShooterId, Is.EqualTo(drone.Id));
+            Assert.That(presentationEvent.ShooterId,
+                Is.EqualTo(initial.Drones[0].DroneId));
             Assert.That(presentationEvent.TargetId, Is.EqualTo("other"));
             Assert.That(
                 presentationEvent.PresentationId,
@@ -335,11 +398,16 @@ namespace GritGud.Domain.Tests.Gameplay
         private static GameplayCombatStateSnapshot CreateState(
             string activeActorId,
             float remainingIntegrity = 6f,
-            string controllerEquippedItemId = null)
+            string controllerEquippedItemId = null,
+            bool includeDrone = true,
+            bool controllerIncapacitated = false)
         {
             GameplayActorSnapshot controller = CreateActor(
                 "controller",
-                controllerEquippedItemId);
+                controllerEquippedItemId,
+                controllerIncapacitated
+                    ? ActorLifeState.Incapacitated
+                    : ActorLifeState.Active);
             GameplayActorSnapshot other = CreateActor("other");
             var session = new GameplaySessionStateSnapshot(
                 "drone-transition-test",
@@ -361,40 +429,63 @@ namespace GritGud.Domain.Tests.Gameplay
                 0L,
                 encounterState: new GameplayEncounterStateSnapshot(
                     encounterParticipantIds: new[] { "controller", "other" }));
-            DroneDefinition definition = CreateDroneDefinition();
+            DroneArchetypeDefinition definition = CreateDroneArchetypeDefinition();
+            var trajectory = remainingIntegrity > 0f
+                ? null
+                : new DroneCrashTrajectoryRecord(
+                    new GameplayPosition(1f, 2f, 1f),
+                    new GameplayPosition(1f, 0f, 1f),
+                    disabledTransitionSequence: 1L);
+            SummonedDroneSnapshot[] snapshots = includeDrone
+                ? new[]
+                {
+                    new SummonedDroneSnapshot(
+                        definition,
+                        "drone:controller:1",
+                        "ability.summon-drone",
+                        new DroneTurnPartnership("controller"),
+                        new GameplayPosition(1f, 2f, 1f),
+                        0f,
+                        remainingIntegrity,
+                        remainingIntegrity > 0f
+                            ? SummonLifecycleState.Active
+                            : SummonLifecycleState.Destroyed,
+                        crashTrajectory: trajectory),
+                }
+                : Array.Empty<SummonedDroneSnapshot>();
             return new GameplayCombatStateSnapshot(
                 session,
                 coverage: GameplayCombatStateCoverage.Session
                     | GameplayCombatStateCoverage.Drones,
-                drones: new[]
-                {
-                    new DroneSnapshot(
-                        definition,
-                        definition.StartingPosition,
-                        definition.StartingFacingDegrees,
-                        remainingIntegrity),
-                });
+                drones: snapshots);
         }
 
-        private static DroneDefinition CreateDroneDefinition() => new DroneDefinition(
-            "drone.scout",
-            new DroneTurnPartnership("controller"),
-            new GameplayPosition(1f, 2f, 1f),
-            0f,
-            maximumIntegrity: 6f,
-            maximumMoveDistance: 5f,
-            moveCost: new ActionCost(1, 0f, ActionMobility.Mobile),
-            sensor: new DroneSensorDefinition(14f, 120f),
-            attack: new AttackDefinition(
-                "attack.drone.light",
-                "Drone light weapon",
-                new ActionCost(1, 0f, ActionMobility.Set),
-                woundMovementPenalty: 1f,
-                accuracyDecay: AccuracyDecayDefinition.None));
+        private static DroneArchetypeDefinition
+            CreateDroneArchetypeDefinition() => new DroneArchetypeDefinition(
+                "drone.scout",
+                maximumIntegrity: 6f,
+                maximumMoveDistance: 5f,
+                moveCost: new ActionCost(1, 0f, ActionMobility.Mobile),
+                sensor: new DroneSensorDefinition(14f, 120f),
+                attack: new AttackDefinition(
+                    "attack.drone.light",
+                    "Drone light weapon",
+                    new ActionCost(1, 0f, ActionMobility.Set),
+                    woundMovementPenalty: 1f,
+                    accuracyDecay: AccuracyDecayDefinition.None),
+                presentationId: "presentation.drone.scout",
+                crash: new DroneCrashDefinition(
+                    impactRadius: 2f,
+                    injuryMovementPenalty: 0.5f,
+                    destructibleIntegrityDamage: 1f,
+                    maximumActionPointReduction: 1,
+                    maximumDriftDistance: 2f,
+                    impactPlaybackSeconds: 0.75f));
 
         private static GameplayActorSnapshot CreateActor(
             string actorId,
-            string equippedItemId = null) =>
+            string equippedItemId = null,
+            ActorLifeState lifeState = ActorLifeState.Active) =>
             new GameplayActorSnapshot(
                 actorId,
                 new GameplayActorPose(new GameplayPosition(0f, 0f, 0f), 0f),
@@ -404,6 +495,11 @@ namespace GritGud.Domain.Tests.Gameplay
                 equipmentEffects: EquipmentEffectSet.None,
                 maximumWounds: 3,
                 actionPointEconomy: new TurnActionPointEconomy(4, 4, 6),
-                turnMovementAllowance: 8f);
+                turnMovementAllowance: 8f,
+                injuries: new ActorInjuryState(
+                    actorId,
+                    Array.Empty<InjuryRecord>(),
+                    ActorPhysiologyState.Healthy,
+                    lifeState));
     }
 }

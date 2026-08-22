@@ -43,11 +43,11 @@ namespace GritGud.Application.Gameplay
                     $"Route '{Id}' cannot evaluate '{candidate.Profile.Signature}'.");
             context.State.RequireCoverage(GameplayCombatStateCoverage.Drones);
             GameplaySessionStateSnapshot session = context.State.Session;
-            DroneSnapshot drone = FindDrone(
+            SummonedDroneSnapshot drone = FindDrone(
                 context.State.Drones,
                 intent.DroneId);
             GameplayActorSnapshot summoner = session.GetActor(
-                drone.Definition.SummonerActorId);
+                drone.SummonerActorId);
             string failure = !string.Equals(
                     intent.StateHash,
                     context.State.CanonicalHash,
@@ -112,16 +112,12 @@ namespace GritGud.Application.Gameplay
                 ? CaptureHostileVisibility(
                     ReplaceDrone(
                         context.State,
-                        new DroneSnapshot(
-                            drone.Definition,
+                        drone.WithPose(
                             intent.Destination,
-                            intent.FacingDegrees,
-                            drone.RemainingIntegrity)),
-                    new DroneSnapshot(
-                        drone.Definition,
+                            intent.FacingDegrees)),
+                    drone.WithPose(
                         intent.Destination,
-                        intent.FacingDegrees,
-                        drone.RemainingIntegrity))
+                        intent.FacingDegrees))
                 : 0f;
             float hostileDistanceBefore = legal
                 ? NearestHostileDistance(
@@ -184,11 +180,11 @@ namespace GritGud.Application.Gameplay
                         "Drone movement preparation is missing.",
                         nameof(evaluation)));
 
-        private static DroneSnapshot FindDrone(
-            IEnumerable<DroneSnapshot> drones,
+        private static SummonedDroneSnapshot FindDrone(
+            IEnumerable<SummonedDroneSnapshot> drones,
             string droneId)
         {
-            foreach (DroneSnapshot drone in drones)
+            foreach (SummonedDroneSnapshot drone in drones)
                 if (string.Equals(
                     drone.DroneId,
                     droneId,
@@ -199,10 +195,10 @@ namespace GritGud.Application.Gameplay
 
         private float CaptureHostileVisibility(
             GameplayCombatStateSnapshot state,
-            DroneSnapshot drone)
+            SummonedDroneSnapshot drone)
         {
             ScenarioActorDefinition summoner = scenario.GetActor(
-                drone.Definition.SummonerActorId);
+                drone.SummonerActorId);
             float result = 0f;
             foreach (GameplayActorSnapshot actor in state.Session.Actors)
             {
@@ -223,11 +219,11 @@ namespace GritGud.Application.Gameplay
 
         private float NearestHostileDistance(
             GameplayCombatStateSnapshot state,
-            DroneSnapshot drone,
+            SummonedDroneSnapshot drone,
             GameplayPosition position)
         {
             ScenarioActorDefinition summoner = scenario.GetActor(
-                drone.Definition.SummonerActorId);
+                drone.SummonerActorId);
             float nearest = 100000f;
             foreach (GameplayActorSnapshot actor in state.Session.Actors)
             {
@@ -246,11 +242,11 @@ namespace GritGud.Application.Gameplay
 
         private static GameplayCombatStateSnapshot ReplaceDrone(
             GameplayCombatStateSnapshot state,
-            DroneSnapshot replacement)
+            SummonedDroneSnapshot replacement)
         {
-            var drones = new List<DroneSnapshot>(state.Drones.Count);
+            var drones = new List<SummonedDroneSnapshot>(state.Drones.Count);
             bool replaced = false;
-            foreach (DroneSnapshot drone in state.Drones)
+            foreach (SummonedDroneSnapshot drone in state.Drones)
             {
                 if (string.Equals(
                         drone.DroneId,

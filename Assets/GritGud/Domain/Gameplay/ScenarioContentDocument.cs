@@ -484,6 +484,44 @@ namespace GritGud.Domain.Gameplay
     }
 
     [Serializable]
+    public sealed class ScenarioDroneCrashData
+    {
+        public float impactRadius;
+        public float injuryMovementPenalty;
+        public float destructibleIntegrityDamage;
+        public int maximumActionPointReduction;
+        public float maximumDriftDistance;
+        public float impactPlaybackSeconds;
+    }
+
+    [Serializable]
+    public sealed class ScenarioDroneArchetypeContentData
+    {
+        public string archetypeId = string.Empty;
+        public string presentationId = string.Empty;
+        public float maximumIntegrity;
+        public float maximumMoveDistance;
+        public ScenarioActionCostData moveCost = new ScenarioActionCostData();
+        public float sensorRange;
+        public float sensorViewAngleDegrees;
+        public ScenarioAttackCapabilityData attackCapability;
+        public ScenarioDroneCrashData crash = new ScenarioDroneCrashData();
+    }
+
+    [Serializable]
+    public sealed class ScenarioDroneSummonAbilityContentData
+    {
+        public string abilityId = string.Empty;
+        public string summonerActorId = string.Empty;
+        public string droneArchetypeId = string.Empty;
+        public ScenarioActionCostData summonCost = new ScenarioActionCostData();
+        public float maximumSpawnDistance;
+        public int maximumActiveInstances;
+        public int durationTurns;
+        public float spawnHeight;
+    }
+
+    [Serializable]
     public sealed class ScenarioPlayerPartyData
     {
         public List<string> actorIds = new List<string>();
@@ -501,7 +539,7 @@ namespace GritGud.Domain.Gameplay
     [Serializable]
     public sealed class ScenarioContentDocument
     {
-        public const int CurrentSchemaVersion = 22;
+        public const int CurrentSchemaVersion = 23;
 
         public int schemaVersion = CurrentSchemaVersion;
         public string scenarioId = string.Empty;
@@ -523,6 +561,11 @@ namespace GritGud.Domain.Gameplay
             new List<ScenarioVehicleContentData>();
         public List<ScenarioDroneContentData> drones =
             new List<ScenarioDroneContentData>();
+        public List<ScenarioDroneArchetypeContentData> droneArchetypes =
+            new List<ScenarioDroneArchetypeContentData>();
+        public List<ScenarioDroneSummonAbilityContentData>
+            droneSummonAbilities =
+                new List<ScenarioDroneSummonAbilityContentData>();
         public List<ScenarioTacticalRuleData> tacticalRules =
             new List<ScenarioTacticalRuleData>();
 
@@ -543,6 +586,10 @@ namespace GritGud.Domain.Gameplay
             props = props ?? new List<ScenarioPropContentData>();
             vehicles = vehicles ?? new List<ScenarioVehicleContentData>();
             drones = drones ?? new List<ScenarioDroneContentData>();
+            droneArchetypes = droneArchetypes
+                ?? new List<ScenarioDroneArchetypeContentData>();
+            droneSummonAbilities = droneSummonAbilities
+                ?? new List<ScenarioDroneSummonAbilityContentData>();
             tacticalRules = tacticalRules
                 ?? new List<ScenarioTacticalRuleData>();
         }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using GritGud.Domain.Turns;
 
 namespace GritGud.Domain.Gameplay
@@ -6,6 +7,15 @@ namespace GritGud.Domain.Gameplay
     public enum DroneTurnPoolingPolicy
     {
         SharedSummonerBudget,
+    }
+
+    public enum SummonLifecycleState
+    {
+        Active = 0,
+        Crashing = 1,
+        Destroyed = 2,
+        Dismissed = 3,
+        Expired = 4,
     }
 
     /// <summary>
@@ -20,7 +30,7 @@ namespace GritGud.Domain.Gameplay
             DroneTurnPoolingPolicy poolingPolicy =
                 DroneTurnPoolingPolicy.SharedSummonerBudget)
         {
-            SummonerActorId = DroneDefinition.RequireText(
+            SummonerActorId = DroneArchetypeDefinition.RequireText(
                 summonerActorId,
                 nameof(summonerActorId));
             if (!Enum.IsDefined(typeof(DroneTurnPoolingPolicy), poolingPolicy))
@@ -64,63 +74,109 @@ namespace GritGud.Domain.Gameplay
             !float.IsNaN(value) && !float.IsInfinity(value);
     }
 
-    /// <summary>
-    /// An unmanned summon partnered with its summoner's canonical turn. Either
-    /// partner can act while the summoner is active, and both consume the
-    /// summoner-owned shared AP pool.
-    /// </summary>
-    public sealed class DroneDefinition
+    public sealed class DroneCrashDefinition
     {
-        public DroneDefinition(
-            string id,
-            DroneTurnPartnership turnPartnership,
-            GameplayPosition startingPosition,
-            float startingFacingDegrees,
+        public DroneCrashDefinition(
+            float impactRadius,
+            float injuryMovementPenalty,
+            float destructibleIntegrityDamage,
+            int maximumActionPointReduction,
+            float maximumDriftDistance,
+            float impactPlaybackSeconds)
+        {
+            RequirePositive(impactRadius, nameof(impactRadius));
+            RequireNonNegative(
+                injuryMovementPenalty,
+                nameof(injuryMovementPenalty));
+            RequireNonNegative(
+                destructibleIntegrityDamage,
+                nameof(destructibleIntegrityDamage));
+            if (maximumActionPointReduction < 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(maximumActionPointReduction));
+            RequireNonNegative(
+                maximumDriftDistance,
+                nameof(maximumDriftDistance));
+            RequirePositive(
+                impactPlaybackSeconds,
+                nameof(impactPlaybackSeconds));
+            ImpactRadius = impactRadius;
+            InjuryMovementPenalty = injuryMovementPenalty;
+            DestructibleIntegrityDamage = destructibleIntegrityDamage;
+            MaximumActionPointReduction = maximumActionPointReduction;
+            MaximumDriftDistance = maximumDriftDistance;
+            ImpactPlaybackSeconds = impactPlaybackSeconds;
+        }
+
+        public float ImpactRadius { get; }
+        public float InjuryMovementPenalty { get; }
+        public float DestructibleIntegrityDamage { get; }
+        public int MaximumActionPointReduction { get; }
+        public float MaximumDriftDistance { get; }
+        public float ImpactPlaybackSeconds { get; }
+
+        private static void RequirePositive(float value, string parameter)
+        {
+            if (!IsFinite(value) || value <= 0f)
+                throw new ArgumentOutOfRangeException(parameter);
+        }
+
+        private static void RequireNonNegative(float value, string parameter)
+        {
+            if (!IsFinite(value) || value < 0f)
+                throw new ArgumentOutOfRangeException(parameter);
+        }
+
+        private static bool IsFinite(float value) =>
+            !float.IsNaN(value) && !float.IsInfinity(value);
+    }
+
+    /// <summary>
+    /// Reusable authored drone capabilities. Instance identity, summoner,
+    /// position, integrity, duration, and lifecycle belong exclusively to the
+    /// summoned snapshot below.
+    /// </summary>
+    public sealed class DroneArchetypeDefinition
+    {
+        public DroneArchetypeDefinition(
+            string archetypeId,
             float maximumIntegrity,
             float maximumMoveDistance,
             ActionCost moveCost,
             DroneSensorDefinition sensor,
-            AttackDefinition attack)
+            AttackDefinition attack,
+            string presentationId,
+            DroneCrashDefinition crash)
         {
-            Id = RequireText(id, nameof(id));
-            TurnPartnership = turnPartnership ?? throw new ArgumentNullException(
-                nameof(turnPartnership));
-            if (!IsFinite(startingFacingDegrees))
-                throw new ArgumentOutOfRangeException(
-                    nameof(startingFacingDegrees));
+            ArchetypeId = RequireText(archetypeId, nameof(archetypeId));
             if (!IsFinite(maximumIntegrity) || maximumIntegrity <= 0f)
                 throw new ArgumentOutOfRangeException(nameof(maximumIntegrity));
             if (!IsFinite(maximumMoveDistance) || maximumMoveDistance <= 0f)
                 throw new ArgumentOutOfRangeException(
                     nameof(maximumMoveDistance));
-            StartingPosition = startingPosition;
-            StartingFacingDegrees = NormalizeDegrees(startingFacingDegrees);
             MaximumIntegrity = maximumIntegrity;
             MaximumMoveDistance = maximumMoveDistance;
             MoveCost = moveCost;
             Sensor = sensor ?? throw new ArgumentNullException(nameof(sensor));
             Attack = attack ?? throw new ArgumentNullException(nameof(attack));
+            PresentationId = RequireText(
+                presentationId,
+                nameof(presentationId));
+            Crash = crash ?? throw new ArgumentNullException(nameof(crash));
             if (attack.Projectile != null || attack.Contact != null)
                 throw new NotSupportedException(
                     "Drone weapons currently require immediate ranged delivery.");
         }
 
-        public string Id { get; }
-        public DroneTurnPartnership TurnPartnership { get; }
-        public string SummonerActorId => TurnPartnership.SummonerActorId;
-        public GameplayPosition StartingPosition { get; }
-        public float StartingFacingDegrees { get; }
+        public string ArchetypeId { get; }
+        public string Id => ArchetypeId;
         public float MaximumIntegrity { get; }
         public float MaximumMoveDistance { get; }
         public ActionCost MoveCost { get; }
         public DroneSensorDefinition Sensor { get; }
         public AttackDefinition Attack { get; }
-
-        public DroneSnapshot CreateInitialSnapshot() => new DroneSnapshot(
-            this,
-            StartingPosition,
-            StartingFacingDegrees,
-            MaximumIntegrity);
+        public string PresentationId { get; }
+        public DroneCrashDefinition Crash { get; }
 
         internal static float NormalizeDegrees(float value)
         {
@@ -138,16 +194,100 @@ namespace GritGud.Domain.Gameplay
                 : value;
     }
 
-    public readonly struct DroneSnapshot
+    public sealed class DroneSummonAbilityDefinition
     {
-        public DroneSnapshot(
-            DroneDefinition definition,
+        public DroneSummonAbilityDefinition(
+            string abilityId,
+            string droneArchetypeId,
+            ActionCost summonCost,
+            float maximumSpawnDistance,
+            int maximumActiveInstances,
+            int? durationTurns,
+            float spawnHeight)
+        {
+            AbilityId = DroneArchetypeDefinition.RequireText(
+                abilityId,
+                nameof(abilityId));
+            DroneArchetypeId = DroneArchetypeDefinition.RequireText(
+                droneArchetypeId,
+                nameof(droneArchetypeId));
+            if (!IsFinite(maximumSpawnDistance)
+                || maximumSpawnDistance <= 0f)
+                throw new ArgumentOutOfRangeException(
+                    nameof(maximumSpawnDistance));
+            if (maximumActiveInstances <= 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(maximumActiveInstances));
+            if (durationTurns.HasValue && durationTurns.Value <= 0)
+                throw new ArgumentOutOfRangeException(nameof(durationTurns));
+            if (!IsFinite(spawnHeight) || spawnHeight < 0f)
+                throw new ArgumentOutOfRangeException(nameof(spawnHeight));
+            SummonCost = summonCost;
+            MaximumSpawnDistance = maximumSpawnDistance;
+            MaximumActiveInstances = maximumActiveInstances;
+            DurationTurns = durationTurns;
+            SpawnHeight = spawnHeight;
+        }
+
+        public string AbilityId { get; }
+        public string Id => AbilityId;
+        public string DroneArchetypeId { get; }
+        public ActionCost SummonCost { get; }
+        public float MaximumSpawnDistance { get; }
+        public int MaximumActiveInstances { get; }
+        public int? DurationTurns { get; }
+        public float SpawnHeight { get; }
+
+        private static bool IsFinite(float value) =>
+            !float.IsNaN(value) && !float.IsInfinity(value);
+    }
+
+    public sealed class DroneCrashTrajectoryRecord
+    {
+        public DroneCrashTrajectoryRecord(
+            GameplayPosition origin,
+            GameplayPosition impactPosition,
+            long disabledTransitionSequence)
+        {
+            if (disabledTransitionSequence <= 0L)
+                throw new ArgumentOutOfRangeException(
+                    nameof(disabledTransitionSequence));
+            Origin = origin;
+            ImpactPosition = impactPosition;
+            DisabledTransitionSequence = disabledTransitionSequence;
+        }
+
+        public GameplayPosition Origin { get; }
+        public GameplayPosition ImpactPosition { get; }
+        public long DisabledTransitionSequence { get; }
+    }
+
+    public readonly struct SummonedDroneSnapshot
+    {
+        public SummonedDroneSnapshot(
+            DroneArchetypeDefinition definition,
+            string instanceId,
+            string summonAbilityId,
+            DroneTurnPartnership turnPartnership,
             GameplayPosition position,
             float facingDegrees,
-            float remainingIntegrity)
+            float remainingIntegrity,
+            SummonLifecycleState lifecycle = SummonLifecycleState.Active,
+            int? remainingDurationTurns = null,
+            DroneCrashTrajectoryRecord crashTrajectory = null)
         {
             Definition = definition ?? throw new ArgumentNullException(
                 nameof(definition));
+            InstanceId = DroneArchetypeDefinition.RequireText(
+                instanceId,
+                nameof(instanceId));
+            SummonAbilityId = DroneArchetypeDefinition.RequireText(
+                summonAbilityId,
+                nameof(summonAbilityId));
+            TurnPartnership = turnPartnership ?? throw new ArgumentNullException(
+                nameof(turnPartnership));
+            if (!Enum.IsDefined(typeof(SummonLifecycleState), lifecycle))
+                throw new ArgumentOutOfRangeException(nameof(lifecycle));
             if (float.IsNaN(facingDegrees) || float.IsInfinity(facingDegrees))
                 throw new ArgumentOutOfRangeException(nameof(facingDegrees));
             if (float.IsNaN(remainingIntegrity)
@@ -155,23 +295,89 @@ namespace GritGud.Domain.Gameplay
                 || remainingIntegrity < 0f
                 || remainingIntegrity > definition.MaximumIntegrity)
                 throw new ArgumentOutOfRangeException(nameof(remainingIntegrity));
+            if (remainingDurationTurns.HasValue
+                && remainingDurationTurns.Value < 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(remainingDurationTurns));
+            if (lifecycle == SummonLifecycleState.Active
+                && (remainingIntegrity <= 0f
+                    || remainingDurationTurns == 0
+                    || crashTrajectory != null))
+                throw new ArgumentException(
+                    "Active summons require integrity and cannot carry a crash trajectory.");
+            if ((lifecycle == SummonLifecycleState.Crashing
+                    || lifecycle == SummonLifecycleState.Destroyed)
+                && (remainingIntegrity != 0f || crashTrajectory == null))
+                throw new ArgumentException(
+                    "Crashing and destroyed summons require zero integrity and a trajectory.");
+            if ((lifecycle == SummonLifecycleState.Dismissed
+                    || lifecycle == SummonLifecycleState.Expired)
+                && crashTrajectory != null)
+                throw new ArgumentException(
+                    "Dismissed and expired summons cannot carry crash state.");
             Position = position;
-            FacingDegrees = DroneDefinition.NormalizeDegrees(facingDegrees);
+            FacingDegrees = DroneArchetypeDefinition.NormalizeDegrees(facingDegrees);
             RemainingIntegrity = remainingIntegrity;
+            Lifecycle = lifecycle;
+            RemainingDurationTurns = remainingDurationTurns;
+            CrashTrajectory = crashTrajectory;
         }
 
-        public string DroneId => Definition.Id;
-        public DroneDefinition Definition { get; }
+        public string InstanceId { get; }
+        public string DroneId => InstanceId;
+        public string ArchetypeId => Definition.ArchetypeId;
+        public string SummonAbilityId { get; }
+        public DroneTurnPartnership TurnPartnership { get; }
+        public string SummonerActorId => TurnPartnership.SummonerActorId;
+        public DroneArchetypeDefinition Definition { get; }
         public GameplayPosition Position { get; }
         public float FacingDegrees { get; }
         public float RemainingIntegrity { get; }
-        public bool IsOperational => RemainingIntegrity > 0f;
+        public SummonLifecycleState Lifecycle { get; }
+        public int? RemainingDurationTurns { get; }
+        public DroneCrashTrajectoryRecord CrashTrajectory { get; }
+        public bool IsOperational => Lifecycle == SummonLifecycleState.Active
+            && RemainingIntegrity > 0f;
+        public bool IsVisible => Lifecycle == SummonLifecycleState.Active
+            || Lifecycle == SummonLifecycleState.Crashing
+            || Lifecycle == SummonLifecycleState.Destroyed;
+
+        public SummonedDroneSnapshot WithPose(
+            GameplayPosition position,
+            float facingDegrees) => new SummonedDroneSnapshot(
+                Definition,
+                InstanceId,
+                SummonAbilityId,
+                TurnPartnership,
+                position,
+                facingDegrees,
+                RemainingIntegrity,
+                Lifecycle,
+                RemainingDurationTurns,
+                CrashTrajectory);
+
+        public SummonedDroneSnapshot WithLifecycle(
+            SummonLifecycleState lifecycle,
+            float remainingIntegrity,
+            int? remainingDurationTurns,
+            DroneCrashTrajectoryRecord crashTrajectory = null,
+            GameplayPosition? position = null) => new SummonedDroneSnapshot(
+                Definition,
+                InstanceId,
+                SummonAbilityId,
+                TurnPartnership,
+                position ?? Position,
+                FacingDegrees,
+                remainingIntegrity,
+                lifecycle,
+                remainingDurationTurns,
+                crashTrajectory);
     }
 
     public static class DroneSensorRules
     {
         public static bool CanObserve(
-            DroneSnapshot drone,
+            SummonedDroneSnapshot drone,
             GameplayPosition target)
         {
             if (!drone.IsOperational) return false;
@@ -193,6 +399,234 @@ namespace GritGud.Domain.Gameplay
         }
     }
 
+    public sealed class SummonDroneRecord
+    {
+        public SummonDroneRecord(
+            long sequence,
+            string summonerActorId,
+            DroneSummonAbilityDefinition ability,
+            DroneArchetypeDefinition archetype,
+            GameplayPosition spawnPosition,
+            float spawnFacingDegrees,
+            TurnBudget previousBudget,
+            TurnBudget resultingBudget)
+        {
+            if (sequence <= 0L)
+                throw new ArgumentOutOfRangeException(nameof(sequence));
+            SummonerActorId = DroneArchetypeDefinition.RequireText(
+                summonerActorId,
+                nameof(summonerActorId));
+            Ability = ability ?? throw new ArgumentNullException(nameof(ability));
+            Archetype = archetype ?? throw new ArgumentNullException(
+                nameof(archetype));
+            if (!string.Equals(
+                    ability.DroneArchetypeId,
+                    archetype.ArchetypeId,
+                    StringComparison.Ordinal))
+                throw new ArgumentException(
+                    "Summon ability and drone archetype do not match.",
+                    nameof(archetype));
+            TurnBudget expected = previousBudget.SpendAction(
+                ability.SummonCost);
+            if (!BudgetsMatch(expected, resultingBudget))
+                throw new ArgumentException(
+                    "Drone summon budget does not match its action cost.",
+                    nameof(resultingBudget));
+            Sequence = sequence;
+            SpawnPosition = spawnPosition;
+            SpawnFacingDegrees = DroneArchetypeDefinition.NormalizeDegrees(
+                spawnFacingDegrees);
+            PreviousBudget = previousBudget;
+            ResultingBudget = resultingBudget;
+            DroneInstanceId = CreateInstanceId(summonerActorId, sequence);
+            Resulting = new SummonedDroneSnapshot(
+                archetype,
+                DroneInstanceId,
+                ability.AbilityId,
+                new DroneTurnPartnership(summonerActorId),
+                spawnPosition,
+                SpawnFacingDegrees,
+                archetype.MaximumIntegrity,
+                remainingDurationTurns: ability.DurationTurns);
+        }
+
+        public long Sequence { get; }
+        public string SummonerActorId { get; }
+        public string DroneInstanceId { get; }
+        public DroneSummonAbilityDefinition Ability { get; }
+        public DroneArchetypeDefinition Archetype { get; }
+        public GameplayPosition SpawnPosition { get; }
+        public float SpawnFacingDegrees { get; }
+        public TurnBudget PreviousBudget { get; }
+        public TurnBudget ResultingBudget { get; }
+        public SummonedDroneSnapshot Resulting { get; }
+
+        public static string CreateInstanceId(
+            string summonerActorId,
+            long summonSequence) => "drone:"
+            + DroneArchetypeDefinition.RequireText(
+                summonerActorId,
+                nameof(summonerActorId))
+            + ":"
+            + (summonSequence > 0L
+                ? summonSequence.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture)
+                : throw new ArgumentOutOfRangeException(
+                    nameof(summonSequence)));
+
+        internal static bool BudgetsMatch(
+            TurnBudget left,
+            TurnBudget right) => left.ActionPoints == right.ActionPoints
+            && left.MovementOpportunity == right.MovementOpportunity;
+    }
+
+    public sealed class DismissDroneRecord
+    {
+        public DismissDroneRecord(
+            long sequence,
+            string summonerActorId,
+            ActionCost cost,
+            TurnBudget previousBudget,
+            TurnBudget resultingBudget,
+            SummonedDroneSnapshot previous,
+            SummonedDroneSnapshot resulting)
+        {
+            if (sequence <= 0L)
+                throw new ArgumentOutOfRangeException(nameof(sequence));
+            SummonerActorId = DroneArchetypeDefinition.RequireText(
+                summonerActorId,
+                nameof(summonerActorId));
+            if (!SummonDroneRecord.BudgetsMatch(
+                    previousBudget.SpendAction(cost),
+                    resultingBudget))
+                throw new ArgumentException(
+                    "Drone dismissal budget does not match its action cost.",
+                    nameof(resultingBudget));
+            if (!previous.IsOperational
+                || resulting.Lifecycle != SummonLifecycleState.Dismissed
+                || !SameInstance(previous, resulting)
+                || previous.Position.DistanceTo(resulting.Position) != 0f
+                || previous.FacingDegrees != resulting.FacingDegrees
+                || previous.RemainingIntegrity
+                    != resulting.RemainingIntegrity
+                || !string.Equals(
+                    previous.SummonerActorId,
+                    summonerActorId,
+                    StringComparison.Ordinal))
+                throw new ArgumentException(
+                    "Drone dismissal must terminate the summoner's active instance.",
+                    nameof(resulting));
+            Sequence = sequence;
+            Cost = cost;
+            PreviousBudget = previousBudget;
+            ResultingBudget = resultingBudget;
+            Previous = previous;
+            Resulting = resulting;
+        }
+
+        public long Sequence { get; }
+        public string SummonerActorId { get; }
+        public string DroneId => Previous.DroneId;
+        public ActionCost Cost { get; }
+        public TurnBudget PreviousBudget { get; }
+        public TurnBudget ResultingBudget { get; }
+        public SummonedDroneSnapshot Previous { get; }
+        public SummonedDroneSnapshot Resulting { get; }
+
+        internal static bool SameInstance(
+            SummonedDroneSnapshot left,
+            SummonedDroneSnapshot right) => string.Equals(
+                left.DroneId,
+                right.DroneId,
+                StringComparison.Ordinal)
+            && string.Equals(
+                left.ArchetypeId,
+                right.ArchetypeId,
+                StringComparison.Ordinal)
+            && string.Equals(
+                left.SummonerActorId,
+                right.SummonerActorId,
+                StringComparison.Ordinal);
+    }
+
+    public sealed class ExpireDroneRecord
+    {
+        public ExpireDroneRecord(
+            SummonedDroneSnapshot previous,
+            SummonedDroneSnapshot resulting)
+        {
+            if (!previous.IsOperational
+                || previous.RemainingDurationTurns != 1
+                || resulting.Lifecycle != SummonLifecycleState.Expired
+                || resulting.RemainingDurationTurns != 0
+                || !DismissDroneRecord.SameInstance(previous, resulting)
+                || previous.Position.DistanceTo(resulting.Position) != 0f
+                || previous.FacingDegrees != resulting.FacingDegrees
+                || previous.RemainingIntegrity
+                    != resulting.RemainingIntegrity)
+                throw new ArgumentException(
+                    "Drone expiration must consume the final authored duration turn.",
+                    nameof(resulting));
+            Previous = previous;
+            Resulting = resulting;
+        }
+
+        public string DroneId => Previous.DroneId;
+        public string SummonerActorId => Previous.SummonerActorId;
+        public SummonedDroneSnapshot Previous { get; }
+        public SummonedDroneSnapshot Resulting { get; }
+    }
+
+    public sealed class DroneCrashImpactRecord
+    {
+        public DroneCrashImpactRecord(
+            long sequence,
+            SummonedDroneSnapshot previous,
+            SummonedDroneSnapshot resulting,
+            DroneCrashDefinition definition,
+            IEnumerable<BlastEffectRecord> effects,
+            IEnumerable<ConcussiveActionPointEffectRecord> concussiveEffects)
+        {
+            if (sequence <= 0L)
+                throw new ArgumentOutOfRangeException(nameof(sequence));
+            Definition = definition ?? throw new ArgumentNullException(
+                nameof(definition));
+            if (previous.Lifecycle != SummonLifecycleState.Crashing
+                || resulting.Lifecycle != SummonLifecycleState.Destroyed
+                || previous.CrashTrajectory == null
+                || !DismissDroneRecord.SameInstance(previous, resulting)
+                || resulting.Position.DistanceTo(
+                    previous.CrashTrajectory.ImpactPosition) != 0f)
+                throw new ArgumentException(
+                    "Drone crash impact must finish its frozen trajectory.",
+                    nameof(resulting));
+            Sequence = sequence;
+            Previous = previous;
+            Resulting = resulting;
+            Effects = new List<BlastEffectRecord>(
+                effects ?? throw new ArgumentNullException(nameof(effects)))
+                .AsReadOnly();
+            ConcussiveEffects = new List<ConcussiveActionPointEffectRecord>(
+                concussiveEffects ?? throw new ArgumentNullException(
+                    nameof(concussiveEffects)))
+                .AsReadOnly();
+        }
+
+        public long Sequence { get; }
+        public string DroneId => Previous.DroneId;
+        public string SummonerActorId => Previous.SummonerActorId;
+        public GameplayPosition Origin => Previous.CrashTrajectory.Origin;
+        public GameplayPosition ImpactPosition =>
+            Previous.CrashTrajectory.ImpactPosition;
+        public float ImpactNormalizedTime => 1f;
+        public DroneCrashDefinition Definition { get; }
+        public IReadOnlyList<BlastEffectRecord> Effects { get; }
+        public IReadOnlyList<ConcussiveActionPointEffectRecord>
+            ConcussiveEffects { get; }
+        public SummonedDroneSnapshot Previous { get; }
+        public SummonedDroneSnapshot Resulting { get; }
+    }
+
     public sealed class DroneMoveRecord
     {
         public DroneMoveRecord(
@@ -205,10 +639,10 @@ namespace GritGud.Domain.Gameplay
             TurnBudget previousBudget,
             TurnBudget resultingBudget)
         {
-            SummonerActorId = DroneDefinition.RequireText(
+            SummonerActorId = DroneArchetypeDefinition.RequireText(
                 summonerActorId,
                 nameof(summonerActorId));
-            DroneId = DroneDefinition.RequireText(
+            DroneId = DroneArchetypeDefinition.RequireText(
                 droneId,
                 nameof(droneId));
             if (float.IsNaN(resultingFacingDegrees)
@@ -224,7 +658,7 @@ namespace GritGud.Domain.Gameplay
                     nameof(resultingBudget));
             Origin = origin;
             Destination = destination;
-            ResultingFacingDegrees = DroneDefinition.NormalizeDegrees(
+            ResultingFacingDegrees = DroneArchetypeDefinition.NormalizeDegrees(
                 resultingFacingDegrees);
             Cost = cost;
             PreviousBudget = previousBudget;
@@ -245,8 +679,8 @@ namespace GritGud.Domain.Gameplay
     {
         public DroneIntegrityDamageRecord(
             float appliedDamage,
-            DroneSnapshot previous,
-            DroneSnapshot resulting)
+            SummonedDroneSnapshot previous,
+            SummonedDroneSnapshot resulting)
         {
             if (float.IsNaN(appliedDamage)
                 || float.IsInfinity(appliedDamage)
@@ -256,10 +690,23 @@ namespace GritGud.Domain.Gameplay
                     previous.DroneId,
                     resulting.DroneId,
                     StringComparison.Ordinal)
+                || !string.Equals(
+                    previous.ArchetypeId,
+                    resulting.ArchetypeId,
+                    StringComparison.Ordinal)
+                || !string.Equals(
+                    previous.SummonerActorId,
+                    resulting.SummonerActorId,
+                    StringComparison.Ordinal)
                 || previous.Position.DistanceTo(resulting.Position) != 0f
                 || previous.FacingDegrees != resulting.FacingDegrees
                 || resulting.RemainingIntegrity
-                    != Math.Max(0f, previous.RemainingIntegrity - appliedDamage))
+                    != Math.Max(0f, previous.RemainingIntegrity - appliedDamage)
+                || !previous.IsOperational
+                || (resulting.RemainingIntegrity > 0f
+                    && resulting.Lifecycle != SummonLifecycleState.Active)
+                || (resulting.RemainingIntegrity == 0f
+                    && resulting.Lifecycle != SummonLifecycleState.Crashing))
                 throw new ArgumentException(
                     "Drone integrity damage must preserve identity and pose and clamp at zero.",
                     nameof(resulting));
@@ -270,8 +717,10 @@ namespace GritGud.Domain.Gameplay
 
         public string DroneId => Previous.DroneId;
         public float AppliedDamage { get; }
-        public DroneSnapshot Previous { get; }
-        public DroneSnapshot Resulting { get; }
+        public SummonedDroneSnapshot Previous { get; }
+        public SummonedDroneSnapshot Resulting { get; }
+        public bool StartedCrash => Resulting.Lifecycle
+            == SummonLifecycleState.Crashing;
     }
 
     public sealed class DroneExposureSnapshot
@@ -282,9 +731,9 @@ namespace GritGud.Domain.Gameplay
             int visibleSampleCount,
             int totalSampleCount)
         {
-            ObserverId = DroneDefinition.RequireText(
+            ObserverId = DroneArchetypeDefinition.RequireText(
                 observerId, nameof(observerId));
-            DroneId = DroneDefinition.RequireText(droneId, nameof(droneId));
+            DroneId = DroneArchetypeDefinition.RequireText(droneId, nameof(droneId));
             if (totalSampleCount <= 0
                 || visibleSampleCount < 0
                 || visibleSampleCount > totalSampleCount)
@@ -320,9 +769,9 @@ namespace GritGud.Domain.Gameplay
         {
             if (sequence <= 0) throw new ArgumentOutOfRangeException(
                 nameof(sequence));
-            AttackerId = DroneDefinition.RequireText(
+            AttackerId = DroneArchetypeDefinition.RequireText(
                 attackerId, nameof(attackerId));
-            AttackId = DroneDefinition.RequireText(attackId, nameof(attackId));
+            AttackId = DroneArchetypeDefinition.RequireText(attackId, nameof(attackId));
             Exposure = exposure ?? throw new ArgumentNullException(
                 nameof(exposure));
             if (!string.Equals(attackerId, exposure.ObserverId,
@@ -412,8 +861,9 @@ namespace GritGud.Domain.Gameplay
             TurnBudget previousBudget,
             DroneExposureSnapshot exposure,
             float distance,
-            DroneSnapshot target,
-            int capabilityAccuracyDeltaPercent = 0)
+            SummonedDroneSnapshot target,
+            int capabilityAccuracyDeltaPercent = 0,
+            DroneCrashTrajectoryRecord crashTrajectory = null)
         {
             if (attack == null) throw new ArgumentNullException(nameof(attack));
             if (attack.DirectVehicleIntegrityDamage <= 0f)
@@ -430,19 +880,33 @@ namespace GritGud.Domain.Gameplay
                 distance,
                 capabilityAccuracyDeltaPercent);
             int roll = Roll100(resolutionSeed);
-            DroneIntegrityDamageRecord damage = roll <= chance
-                ? new DroneIntegrityDamageRecord(
+            DroneIntegrityDamageRecord damage = null;
+            if (roll <= chance)
+            {
+                float remaining = Math.Max(
+                    0f,
+                    target.RemainingIntegrity
+                        - attack.DirectVehicleIntegrityDamage);
+                if (remaining == 0f && crashTrajectory == null)
+                    throw new InvalidOperationException(
+                        "Lethal drone damage requires a frozen crash trajectory.");
+                damage = new DroneIntegrityDamageRecord(
                     attack.DirectVehicleIntegrityDamage,
                     target,
-                    new DroneSnapshot(
+                    new SummonedDroneSnapshot(
                         target.Definition,
+                        target.InstanceId,
+                        target.SummonAbilityId,
+                        target.TurnPartnership,
                         target.Position,
                         target.FacingDegrees,
-                        Math.Max(
-                            0f,
-                            target.RemainingIntegrity
-                                - attack.DirectVehicleIntegrityDamage)))
-                : null;
+                        remaining,
+                        remaining > 0f
+                            ? SummonLifecycleState.Active
+                            : SummonLifecycleState.Crashing,
+                        target.RemainingDurationTurns,
+                        remaining > 0f ? null : crashTrajectory));
+            }
             return new ActorDroneAttackRecord(
                 sequence,
                 attackerId,
@@ -481,11 +945,11 @@ namespace GritGud.Domain.Gameplay
             TurnBudget resultingBudget,
             object consequence)
         {
-            SummonerActorId = DroneDefinition.RequireText(
+            SummonerActorId = DroneArchetypeDefinition.RequireText(
                 summonerActorId, nameof(summonerActorId));
-            DroneId = DroneDefinition.RequireText(droneId, nameof(droneId));
-            TargetId = DroneDefinition.RequireText(targetId, nameof(targetId));
-            TargetKind = DroneDefinition.RequireText(targetKind, nameof(targetKind));
+            DroneId = DroneArchetypeDefinition.RequireText(droneId, nameof(droneId));
+            TargetId = DroneArchetypeDefinition.RequireText(targetId, nameof(targetId));
+            TargetKind = DroneArchetypeDefinition.RequireText(targetKind, nameof(targetKind));
             TurnBudget expected = previousBudget.SpendAction(cost);
             if (expected.ActionPoints != resultingBudget.ActionPoints
                 || expected.MovementOpportunity

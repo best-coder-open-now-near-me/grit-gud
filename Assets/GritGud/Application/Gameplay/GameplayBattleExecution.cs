@@ -373,9 +373,6 @@ namespace GritGud.Application.Gameplay
                     entity.transform.yawDegrees,
                     vehicle.StartingSpeed));
             }
-            var drones = new List<DroneSnapshot>();
-            foreach (DroneDefinition drone in assembly.Drones)
-                drones.Add(drone.CreateInitialSnapshot());
             return new GameplayCombatStateSnapshot(
                 sessionState.Session,
                 propStates,
@@ -384,7 +381,7 @@ namespace GritGud.Application.Gameplay
                 Array.Empty<SmokeFieldSnapshot>(),
                 GameplayCombatStateSnapshot.AllCoverage,
                 Array.Empty<FireFieldSnapshot>(),
-                drones);
+                Array.Empty<SummonedDroneSnapshot>());
         }
 
         private static LevelEntity FindEntity(LevelDocument level, string id)
@@ -475,7 +472,8 @@ namespace GritGud.Application.Gameplay
                         capabilities,
                         spatial,
                         scenarioDefinition: assembly.Scenario,
-                        authoredTraversalLinks: level.traversalLinks),
+                        authoredTraversalLinks: level.traversalLinks,
+                        scenarioAssembly: assembly),
                     reachable,
                     routes),
                 routes,

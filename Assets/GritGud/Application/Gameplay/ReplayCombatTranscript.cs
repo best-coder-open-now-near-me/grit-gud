@@ -300,6 +300,7 @@ namespace GritGud.Application.Gameplay
                             launches++;
                             break;
                         case ReplayCombatPresentationEventKind.ProjectileImpact:
+                        case ReplayCombatPresentationEventKind.DroneCrashImpact:
                             impacts++;
                             break;
                         case ReplayCombatPresentationEventKind.Reaction:
@@ -428,6 +429,7 @@ namespace GritGud.Application.Gameplay
                 case ReplayCombatPresentationEventKind.ProjectileLaunch:
                     return ReplayCombatTranscriptEventKind.ProjectileLaunch;
                 case ReplayCombatPresentationEventKind.ProjectileImpact:
+                case ReplayCombatPresentationEventKind.DroneCrashImpact:
                     return ReplayCombatTranscriptEventKind.ProjectileImpact;
                 case ReplayCombatPresentationEventKind.Reaction:
                     return ReplayCombatTranscriptEventKind.Reaction;
@@ -849,7 +851,7 @@ namespace GritGud.Application.Gameplay
                 if (string.Equals(actor.ActorId, subjectId,
                     StringComparison.Ordinal))
                     return ReplayCombatPresentationSubjectKind.Actor;
-            foreach (DroneSnapshot drone in frame.Previous.Drones)
+            foreach (SummonedDroneSnapshot drone in frame.Previous.Drones)
                 if (string.Equals(drone.DroneId, subjectId,
                     StringComparison.Ordinal))
                     return ReplayCombatPresentationSubjectKind.Drone;
@@ -914,6 +916,13 @@ namespace GritGud.Application.Gameplay
                 case ReplayCombatPresentationEventKind.ProjectileImpact:
                     title = presentationEvent.ProjectileId + " IMPACTS";
                     lines = new[] { "TARGET - " + presentationEvent.TargetId };
+                    return;
+                case ReplayCombatPresentationEventKind.DroneCrashImpact:
+                    title = presentationEvent.ShooterId + " CRASHES";
+                    lines = new[]
+                    {
+                        "IMPACT - " + presentationEvent.Destination,
+                    };
                     return;
                 case ReplayCombatPresentationEventKind.ThrownExplosiveRelease:
                     title = presentationEvent.ShooterId + " THROWS "

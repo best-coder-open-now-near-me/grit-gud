@@ -48,6 +48,10 @@ namespace GritGud.Application.Gameplay
                     state,
                     mutation,
                     transition.Identity.Sequence);
+            IReadOnlyList<ExpireDroneRecord> expirations = AdvanceSummons(
+                state,
+                mutation,
+                payload.ActorId);
             mutation.LastTurnSequence = record.Sequence;
             mutation.LastTransitionSequence = transition.Identity.Sequence;
             GameplayCombatStateSnapshot resulting = mutation.Build();
@@ -62,6 +66,10 @@ namespace GritGud.Application.Gameplay
                 events.Add(new GameplayFireFieldsAdvancedEvent(
                     transition.Identity,
                     fireAdvances));
+            foreach (ExpireDroneRecord expiration in expirations)
+                events.Add(new GameplayDroneExpiredEvent(
+                    transition.Identity,
+                    expiration));
             return new GameplayReductionResult(
                 state,
                 resulting,
@@ -246,6 +254,42 @@ namespace GritGud.Application.Gameplay
             mutation.Revision = checked(
                 mutation.Revision + actorInjuries);
             return advances.AsReadOnly();
+        }
+
+        private static IReadOnlyList<ExpireDroneRecord> AdvanceSummons(
+            GameplayCombatStateSnapshot state,
+            GameplayCanonicalStateMutation mutation,
+            string endingActorId)
+        {
+            if (!state.Covers(GameplayCombatStateCoverage.Drones))
+                return Array.Empty<ExpireDroneRecord>();
+            var expirations = new List<ExpireDroneRecord>();
+            foreach (SummonedDroneSnapshot drone in state.Drones)
+            {
+                if (drone.Lifecycle != SummonLifecycleState.Active
+                    || !drone.RemainingDurationTurns.HasValue
+                    || !string.Equals(
+                        drone.SummonerActorId,
+                        endingActorId,
+                        StringComparison.Ordinal))
+                    continue;
+                int remaining = drone.RemainingDurationTurns.Value;
+                if (remaining > 1)
+                {
+                    mutation.ReplaceDrone(drone.WithLifecycle(
+                        SummonLifecycleState.Active,
+                        drone.RemainingIntegrity,
+                        remaining - 1));
+                    continue;
+                }
+                SummonedDroneSnapshot expired = drone.WithLifecycle(
+                    SummonLifecycleState.Expired,
+                    drone.RemainingIntegrity,
+                    0);
+                mutation.ReplaceDrone(expired);
+                expirations.Add(new ExpireDroneRecord(drone, expired));
+            }
+            return expirations.AsReadOnly();
         }
 
         private static PersonalTurnStartRecord RefreshActor(

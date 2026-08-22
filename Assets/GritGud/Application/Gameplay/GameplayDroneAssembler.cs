@@ -1,63 +1,120 @@
 using System;
 using System.Collections.Generic;
 using GritGud.Domain.Gameplay;
-using GritGud.Domain.Levels;
 using GritGud.Domain.Turns;
 
 namespace GritGud.Application.Gameplay
 {
+    internal sealed class GameplayDroneAssemblyResult
+    {
+        public GameplayDroneAssemblyResult(
+            Dictionary<string, DroneArchetypeDefinition> archetypes,
+            Dictionary<string, ScenarioDroneSummonRuntimeDefinition> abilities)
+        {
+            Archetypes = archetypes ?? throw new ArgumentNullException(
+                nameof(archetypes));
+            Abilities = abilities ?? throw new ArgumentNullException(
+                nameof(abilities));
+        }
+
+        public Dictionary<string, DroneArchetypeDefinition> Archetypes
+        {
+            get;
+        }
+
+        public Dictionary<string, ScenarioDroneSummonRuntimeDefinition>
+            Abilities { get; }
+    }
+
     internal static class GameplayDroneAssembler
     {
-        internal static Dictionary<string, DroneDefinition> Index(
-            IReadOnlyList<ScenarioDroneContentData> drones,
-            LevelDocument level,
+        internal static GameplayDroneAssemblyResult Assemble(
+            IReadOnlyList<ScenarioDroneArchetypeContentData> archetypeContent,
+            IReadOnlyList<ScenarioDroneSummonAbilityContentData> abilityContent,
             IReadOnlyDictionary<string, ScenarioActorContentData> actors)
         {
-            var entities = new Dictionary<string, LevelEntity>(
+            var archetypes = new Dictionary<string, DroneArchetypeDefinition>(
                 StringComparer.Ordinal);
-            foreach (LevelEntity entity in level.entities)
-                entities.Add(entity.id, entity);
-            var result = new Dictionary<string, DroneDefinition>(
-                StringComparer.Ordinal);
-            foreach (ScenarioDroneContentData drone in drones
-                ?? Array.Empty<ScenarioDroneContentData>())
+            foreach (ScenarioDroneArchetypeContentData data in archetypeContent
+                ?? Array.Empty<ScenarioDroneArchetypeContentData>())
             {
-                Require(drone != null, "Scenario drones cannot contain null entries.");
-                RequireText(drone.entityId, "Scenario drone entity ID");
-                RequireText(drone.summonerActorId, "Scenario drone summoner actor ID");
-                Require(entities.TryGetValue(drone.entityId, out LevelEntity entity),
-                    $"Drone '{drone.entityId}' is missing from level '{level.levelId}'.");
-                Require(actors.ContainsKey(drone.summonerActorId),
-                    $"Drone '{drone.entityId}' references undefined summoner '{drone.summonerActorId}'.");
-                Require(drone.attackCapability?.enabled == true,
-                    $"Drone '{drone.entityId}' requires an enabled attack capability.");
-                ScenarioActionCostData cost = drone.moveCost
+                Require(data != null,
+                    "Scenario drone archetypes cannot contain null entries.");
+                RequireText(data.archetypeId, "Drone archetype ID");
+                RequireText(data.presentationId, "Drone presentation ID");
+                Require(data.attackCapability?.enabled == true,
+                    $"Drone archetype '{data.archetypeId}' requires an enabled attack capability.");
+                ScenarioActionCostData moveCost = data.moveCost
                     ?? throw new InvalidOperationException(
-                        $"Drone '{drone.entityId}' requires a movement cost.");
-                Float3Data position = entity.transform.position;
-                var definition = new DroneDefinition(
-                    drone.entityId,
-                    new DroneTurnPartnership(drone.summonerActorId),
-                    new GameplayPosition(position.x, position.y, position.z),
-                    entity.transform.yawDegrees,
-                    drone.maximumIntegrity,
-                    drone.maximumMoveDistance,
-                    new ActionCost(
-                        cost.actionPoints,
-                        cost.movementOpportunity,
-                        GameplayScenarioAssemblyValidation.ParseMobility(
-                            cost.mobility)),
+                        $"Drone archetype '{data.archetypeId}' requires a movement cost.");
+                ScenarioDroneCrashData crash = data.crash
+                    ?? throw new InvalidOperationException(
+                        $"Drone archetype '{data.archetypeId}' requires crash behavior.");
+                var archetype = new DroneArchetypeDefinition(
+                    data.archetypeId,
+                    data.maximumIntegrity,
+                    data.maximumMoveDistance,
+                    CreateCost(moveCost),
                     new DroneSensorDefinition(
-                        drone.sensorRange,
-                        drone.sensorViewAngleDegrees),
+                        data.sensorRange,
+                        data.sensorViewAngleDegrees),
                     GameplayActorCombatAssembler.CreateAttackDefinition(
-                        drone.entityId,
-                        drone.attackCapability));
-                Require(result.TryAdd(definition.Id, definition),
-                    $"Drone '{definition.Id}' is defined more than once.");
+                        data.archetypeId,
+                        data.attackCapability),
+                    data.presentationId,
+                    new DroneCrashDefinition(
+                        crash.impactRadius,
+                        crash.injuryMovementPenalty,
+                        crash.destructibleIntegrityDamage,
+                        crash.maximumActionPointReduction,
+                        crash.maximumDriftDistance,
+                        crash.impactPlaybackSeconds));
+                Require(archetypes.TryAdd(archetype.ArchetypeId, archetype),
+                    $"Drone archetype '{archetype.ArchetypeId}' is defined more than once.");
             }
-            return result;
+
+            var abilities = new Dictionary<
+                string,
+                ScenarioDroneSummonRuntimeDefinition>(StringComparer.Ordinal);
+            foreach (ScenarioDroneSummonAbilityContentData data in abilityContent
+                ?? Array.Empty<ScenarioDroneSummonAbilityContentData>())
+            {
+                Require(data != null,
+                    "Scenario drone summon abilities cannot contain null entries.");
+                RequireText(data.abilityId, "Drone summon ability ID");
+                RequireText(data.summonerActorId, "Drone summoner actor ID");
+                RequireText(data.droneArchetypeId, "Summoned drone archetype ID");
+                Require(actors.ContainsKey(data.summonerActorId),
+                    $"Drone ability '{data.abilityId}' references undefined summoner '{data.summonerActorId}'.");
+                Require(archetypes.ContainsKey(data.droneArchetypeId),
+                    $"Drone ability '{data.abilityId}' references undefined archetype '{data.droneArchetypeId}'.");
+                ScenarioActionCostData summonCost = data.summonCost
+                    ?? throw new InvalidOperationException(
+                        $"Drone ability '{data.abilityId}' requires a summon cost.");
+                var runtime = new ScenarioDroneSummonRuntimeDefinition(
+                    data.summonerActorId,
+                    new DroneSummonAbilityDefinition(
+                        data.abilityId,
+                        data.droneArchetypeId,
+                        CreateCost(summonCost),
+                        data.maximumSpawnDistance,
+                        data.maximumActiveInstances,
+                        data.durationTurns > 0
+                            ? data.durationTurns
+                            : (int?)null,
+                        data.spawnHeight));
+                Require(abilities.TryAdd(runtime.Ability.AbilityId, runtime),
+                    $"Drone summon ability '{runtime.Ability.AbilityId}' is defined more than once.");
+            }
+            return new GameplayDroneAssemblyResult(archetypes, abilities);
         }
+
+        private static ActionCost CreateCost(ScenarioActionCostData data) =>
+            new ActionCost(
+                data.actionPoints,
+                data.movementOpportunity,
+                GameplayScenarioAssemblyValidation.ParseMobility(
+                    data.mobility));
 
         private static void RequireText(string value, string label) =>
             GameplayScenarioAssemblyValidation.RequireText(value, label);

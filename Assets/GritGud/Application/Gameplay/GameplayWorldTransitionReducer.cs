@@ -150,13 +150,13 @@ namespace GritGud.Application.Gameplay
             state.RequireCoverage(GameplayCombatStateCoverage.Drones);
             GameplaySessionStateSnapshot session = state.Session;
             DroneMoveRecord movement = payload.Movement;
-            DroneSnapshot drone = FindDrone(state.Drones, movement.DroneId);
+            SummonedDroneSnapshot drone = FindDrone(state.Drones, movement.DroneId);
             if (!drone.IsOperational)
                 throw new InvalidOperationException(
                     "Destroyed drones cannot receive movement commands.");
-            if (drone.Definition.TurnPartnership.PoolingPolicy
+            if (drone.TurnPartnership.PoolingPolicy
                     != DroneTurnPoolingPolicy.SharedSummonerBudget
-                || !drone.Definition.TurnPartnership.OwnsSharedBudget(
+                || !drone.TurnPartnership.OwnsSharedBudget(
                     movement.SummonerActorId))
                 throw new InvalidOperationException(
                     "Drone movement does not match its summoner partnership.");
@@ -196,11 +196,9 @@ namespace GritGud.Application.Gameplay
             mutation.ReplaceActor(GameplayCanonicalStateMutation.CopyActor(
                 summoner,
                 budget: movement.ResultingBudget));
-            mutation.ReplaceDrone(new DroneSnapshot(
-                drone.Definition,
+            mutation.ReplaceDrone(drone.WithPose(
                 movement.Destination,
-                movement.ResultingFacingDegrees,
-                drone.RemainingIntegrity));
+                movement.ResultingFacingDegrees));
             return Result(state, mutation.Build(), transition, movement);
         }
 
@@ -233,11 +231,11 @@ namespace GritGud.Application.Gameplay
                 $"Vehicle '{vehicleId}' is absent from canonical state.");
         }
 
-        private static DroneSnapshot FindDrone(
-            IEnumerable<DroneSnapshot> drones,
+        private static SummonedDroneSnapshot FindDrone(
+            IEnumerable<SummonedDroneSnapshot> drones,
             string droneId)
         {
-            foreach (DroneSnapshot drone in drones)
+            foreach (SummonedDroneSnapshot drone in drones)
                 if (string.Equals(
                     drone.DroneId,
                     droneId,

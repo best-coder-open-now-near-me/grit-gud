@@ -247,6 +247,10 @@ namespace GritGud.Application.Gameplay
                 new GameplayOutcomeFeatureWeight(
                     "drone.integrity-damage", 10f),
                 new GameplayOutcomeFeatureWeight(
+                    "drone.summoned", 8f),
+                new GameplayOutcomeFeatureWeight(
+                    "drone.dismissed", -20f),
+                new GameplayOutcomeFeatureWeight(
                     "projectile.collision", 20f),
                 new GameplayOutcomeFeatureWeight(
                     "projectile.launch", 12f),

@@ -12,7 +12,8 @@ namespace GritGud.Presentation.Gameplay
         private static IReadOnlyList<GameplayActorAbilityHotbarDefinition>
             CreateActorAbilityHotbarDefinitions(
                 DisplacementAbilityDefinition displacementAbility,
-                bool hasControlledDrone)
+                bool hasDroneAbility,
+                bool hasActiveDrone)
         {
             var definitions = new List<GameplayActorAbilityHotbarDefinition>
             {
@@ -21,21 +22,29 @@ namespace GritGud.Presentation.Gameplay
                     "Crouch / Stand",
                     GameplayCoreActorAbilities.StanceHotbarSlot),
             };
-            if (hasControlledDrone)
+            if (hasDroneAbility)
             {
-                definitions.Add(new GameplayActorAbilityHotbarDefinition(
-                    GameplayDroneController.AbilityId,
-                    "Scout Drone",
-                    GameplayDroneController.HotbarSlot,
-                    new[]
-                    {
-                        new GameplayActorAbilityOptionDefinition(
-                            GameplayDroneController.MoveOptionId,
-                            "Move Drone"),
-                        new GameplayActorAbilityOptionDefinition(
-                            GameplayDroneController.AttackOptionId,
-                            "Drone Attack"),
-                    }));
+                definitions.Add(hasActiveDrone
+                    ? new GameplayActorAbilityHotbarDefinition(
+                        GameplayDroneController.AbilityId,
+                        "Scout Drone",
+                        GameplayDroneController.HotbarSlot,
+                        new[]
+                        {
+                            new GameplayActorAbilityOptionDefinition(
+                                GameplayDroneController.MoveOptionId,
+                                "Move Drone"),
+                            new GameplayActorAbilityOptionDefinition(
+                                GameplayDroneController.AttackOptionId,
+                                "Drone Attack"),
+                            new GameplayActorAbilityOptionDefinition(
+                                GameplayDroneController.DismissOptionId,
+                                "Dismiss Drone"),
+                        })
+                    : new GameplayActorAbilityHotbarDefinition(
+                        GameplayDroneController.AbilityId,
+                        "Summon Drone",
+                        GameplayDroneController.HotbarSlot));
             }
             if (displacementAbility == null) return definitions;
             var options = new List<GameplayActorAbilityOptionDefinition>(
@@ -53,15 +62,30 @@ namespace GritGud.Presentation.Gameplay
             return definitions;
         }
 
-        private bool HasControlledDrone(string actorId)
+        private bool HasDroneAbility(string actorId)
         {
             if (scenarioAssembly == null) return false;
-            foreach (DroneDefinition drone in scenarioAssembly.Drones)
-                if (string.Equals(
-                    drone.SummonerActorId,
+            return scenarioAssembly.GetDroneSummonAbilities(actorId).Count > 0;
+        }
+
+        private bool HasActiveDrone(string actorId) =>
+            droneController?.HasActiveSummon(actorId) == true;
+
+        private void RefreshDroneHotbar(string actorId)
+        {
+            if (hotbarController?.Session == null
+                || !string.Equals(
+                    partyControl?.CommandActorId,
                     actorId,
-                    StringComparison.Ordinal)) return true;
-            return false;
+                    StringComparison.Ordinal))
+                return;
+            hotbarController.SetActor(
+                actorId,
+                CreateActorAbilityHotbarDefinitions(
+                    scenarioAssembly.GetActorDefinition(actorId)
+                        .DisplacementAbility,
+                    HasDroneAbility(actorId),
+                    HasActiveDrone(actorId)));
         }
 
         private static Vector2 ReadPointer() => Mouse.current == null

@@ -588,7 +588,7 @@ namespace GritGud.Presentation.Gameplay
                     view.Transform));
             }
             if (drones != null)
-                foreach (DroneSnapshot drone in sample.Drones)
+                foreach (SummonedDroneSnapshot drone in sample.Drones)
                     subjects.Add(new ReplayCameraSubject(
                         ReplayCombatPresentationSubjectKind.Drone,
                         drone.DroneId,
@@ -783,6 +783,13 @@ namespace GritGud.Presentation.Gameplay
                         + $"cannot project impact for projectile "
                         + $"'{presentationEvent.ProjectileId}': no projectile presenter is bound.");
                 projectiles.PresentReplayImpact(presentationEvent);
+                presentedProjectileImpactEvents.Add(
+                    presentationEvent.StableKey);
+                return;
+            }
+            if (presentationEvent.Kind ==
+                ReplayCombatPresentationEventKind.DroneCrashImpact)
+            {
                 presentedProjectileImpactEvents.Add(
                     presentationEvent.StableKey);
                 return;

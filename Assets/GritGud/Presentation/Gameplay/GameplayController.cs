@@ -406,18 +406,20 @@ namespace GritGud.Presentation.Gameplay
                     session,
                     scenarioAssembly.Vehicles);
             }
-            if (scenarioAssembly.Drones.Count > 0)
+            if (scenarioAssembly.DroneSummonAbilities.Count > 0)
             {
                 droneController.Bind(
                     levelWorld,
                     session,
                     worldRegistry,
-                    scenarioAssembly.Drones,
+                    scenarioAssembly,
+                    content.SpatialContent,
                     destructibleController.Session,
                     smokeFieldSession,
                     dialogueLog,
                     scenarioAssembly.RandomSeed,
-                    IsPointerOverGameplayInterface);
+                    IsPointerOverGameplayInterface,
+                    RefreshDroneHotbar);
             }
             sessionPresenter.Bind(
                 session,
@@ -520,7 +522,8 @@ namespace GritGud.Presentation.Gameplay
                     CreateActorAbilityHotbarDefinitions(
                         scenarioAssembly.GetActorDefinition(actorId)
                             .DisplacementAbility,
-                        HasControlledDrone(actorId)),
+                        HasDroneAbility(actorId),
+                        HasActiveDrone(actorId)),
                     equipmentController.TryActivateItem,
                     TryActivateActorAbility,
                     CanActivateHotbarBinding,
@@ -837,7 +840,8 @@ namespace GritGud.Presentation.Gameplay
                 control.SelectedActorId,
                 CreateActorAbilityHotbarDefinitions(
                     ability,
-                    HasControlledDrone(control.SelectedActorId)));
+                    HasDroneAbility(control.SelectedActorId),
+                    HasActiveDrone(control.SelectedActorId)));
             weaponTargetingController.SetActor(control.SelectedActorId);
             hud.SetActor(control.SelectedActorId);
             player = selectedView.Motor;

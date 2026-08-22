@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 22,
+  "schemaVersion": 23,
   "scenarioId": "depot-yard",
   "displayName": "Depot Yard",
   "levelId": "main-depot-yard-v1",
@@ -1860,10 +1860,10 @@
       "startingOccupantActorId": ""
     }
   ],
-  "drones": [
+  "droneArchetypes": [
     {
-      "entityId": "scout-drone-01",
-      "summonerActorId": "player",
+      "archetypeId": "drone.scout",
+      "presentationId": "presentation.drone.scout",
       "maximumIntegrity": 4.0,
       "maximumMoveDistance": 5.0,
       "moveCost": {
@@ -1899,7 +1899,31 @@
           "minimumAccuracyPercent": 20.0
         },
         "soundSignature": 0.65
+      },
+      "crash": {
+        "impactRadius": 2.5,
+        "injuryMovementPenalty": 0.75,
+        "destructibleIntegrityDamage": 1.0,
+        "maximumActionPointReduction": 1,
+        "maximumDriftDistance": 0.75,
+        "impactPlaybackSeconds": 0.7
       }
+    }
+  ],
+  "droneSummonAbilities": [
+    {
+      "abilityId": "ability.summon-drone",
+      "summonerActorId": "player",
+      "droneArchetypeId": "drone.scout",
+      "summonCost": {
+        "actionPoints": 1,
+        "movementOpportunity": 0.0,
+        "mobility": "set"
+      },
+      "maximumSpawnDistance": 5.0,
+      "maximumActiveInstances": 1,
+      "durationTurns": 0,
+      "spawnHeight": 2.0
     }
   ]
 }

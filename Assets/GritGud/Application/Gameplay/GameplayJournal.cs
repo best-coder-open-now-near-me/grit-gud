@@ -26,6 +26,8 @@ namespace GritGud.Application.Gameplay
         DroneMoved,
         DroneAttackResolved,
         ActorDroneAttackResolved,
+        DroneSummoned,
+        DroneDismissed,
     }
 
     public sealed class DroneMovedJournalEntry : GameplayJournalEntry
@@ -65,6 +67,33 @@ namespace GritGud.Application.Gameplay
         }
 
         public ActorDroneAttackRecord Attack { get; }
+    }
+
+    public sealed class DroneSummonedJournalEntry : GameplayJournalEntry
+    {
+        public DroneSummonedJournalEntry(
+            long sequence,
+            SummonDroneRecord summon)
+            : base(sequence, GameplayJournalEntryKind.DroneSummoned)
+        {
+            Summon = summon ?? throw new ArgumentNullException(nameof(summon));
+        }
+
+        public SummonDroneRecord Summon { get; }
+    }
+
+    public sealed class DroneDismissedJournalEntry : GameplayJournalEntry
+    {
+        public DroneDismissedJournalEntry(
+            long sequence,
+            DismissDroneRecord dismissal)
+            : base(sequence, GameplayJournalEntryKind.DroneDismissed)
+        {
+            Dismissal = dismissal ?? throw new ArgumentNullException(
+                nameof(dismissal));
+        }
+
+        public DismissDroneRecord Dismissal { get; }
     }
 
     public sealed class EnemyAwarenessChangedJournalEntry :
@@ -434,6 +463,12 @@ namespace GritGud.Application.Gameplay
         internal void RecordActorDroneAttackResolved(
             ActorDroneAttackRecord record) => Append(
                 new ActorDroneAttackResolvedJournalEntry(NextSequence, record));
+
+        internal void RecordDroneSummoned(SummonDroneRecord record) =>
+            Append(new DroneSummonedJournalEntry(NextSequence, record));
+
+        internal void RecordDroneDismissed(DismissDroneRecord record) =>
+            Append(new DroneDismissedJournalEntry(NextSequence, record));
 
         internal void RecordProjectileAdvanced(ProjectileAdvanceRecord record) =>
             Append(new ProjectileAdvancedJournalEntry(NextSequence, record));

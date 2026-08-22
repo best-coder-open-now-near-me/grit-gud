@@ -90,7 +90,7 @@ namespace GritGud.Application.Gameplay
             if (action.ResolutionSeed != expectedSeed)
                 throw new InvalidOperationException(
                     "Actor-drone attack seed does not match its canonical action identity.");
-            DroneSnapshot drone = FindDrone(state.Drones, action.DroneId);
+            SummonedDroneSnapshot drone = FindDrone(state.Drones, action.DroneId);
             if (!drone.IsOperational)
                 throw new InvalidOperationException(
                     "Destroyed drones cannot be targeted as operational threats.");
@@ -98,6 +98,12 @@ namespace GritGud.Application.Gameplay
                 && !DroneStatesMatch(drone, action.Damage.Previous))
                 throw new InvalidOperationException(
                     "Actor-drone attack starts from stale drone integrity.");
+            if (action.Damage?.StartedCrash == true
+                && action.Damage.Resulting.CrashTrajectory
+                    .DisabledTransitionSequence
+                    != transition.Identity.Sequence)
+                throw new InvalidOperationException(
+                    "Lethal drone damage has a stale crash trajectory.");
 
             var mutation = new GameplayCanonicalStateMutation(state)
             {
@@ -126,11 +132,11 @@ namespace GritGud.Application.Gameplay
                 });
         }
 
-        private static DroneSnapshot FindDrone(
-            IEnumerable<DroneSnapshot> drones,
+        private static SummonedDroneSnapshot FindDrone(
+            IEnumerable<SummonedDroneSnapshot> drones,
             string droneId)
         {
-            foreach (DroneSnapshot drone in drones)
+            foreach (SummonedDroneSnapshot drone in drones)
                 if (string.Equals(drone.DroneId, droneId,
                     StringComparison.Ordinal)) return drone;
             throw new KeyNotFoundException(
@@ -142,11 +148,12 @@ namespace GritGud.Application.Gameplay
             && left.MovementOpportunity == right.MovementOpportunity;
 
         private static bool DroneStatesMatch(
-            DroneSnapshot left,
-            DroneSnapshot right) =>
+            SummonedDroneSnapshot left,
+            SummonedDroneSnapshot right) =>
             string.Equals(left.DroneId, right.DroneId, StringComparison.Ordinal)
             && left.Position.DistanceTo(right.Position) == 0f
             && left.FacingDegrees == right.FacingDegrees
-            && left.RemainingIntegrity == right.RemainingIntegrity;
+            && left.RemainingIntegrity == right.RemainingIntegrity
+            && left.Lifecycle == right.Lifecycle;
     }
 }

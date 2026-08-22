@@ -65,7 +65,7 @@ namespace GritGud.Application.Gameplay
                         ref bestFraction,
                         ref bestEntityId);
             }
-            foreach (DroneSnapshot drone in state.Drones)
+            foreach (SummonedDroneSnapshot drone in state.Drones)
             {
                 if (!drone.IsOperational) continue;
                 foreach (TargetRegionSample sample in

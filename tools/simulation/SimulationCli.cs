@@ -181,8 +181,12 @@ internal static class SimulationCli
             + " explosives=" + score.ExplosiveThrows
             + " concussive-targets=" + score.ConcussiveTargets
             + " fire=" + score.FireDeployments
+            + " drone-summons=" + score.DroneSummons
             + " drone-moves=" + score.DroneMoves
-            + " drone-attacks=" + score.DroneAttacks);
+            + " drone-attacks=" + score.DroneAttacks
+            + " drone-dismissals=" + score.DroneDismissals
+            + " drone-expirations=" + score.DroneExpirations
+            + " drone-crashes=" + score.DroneCrashes);
         Console.WriteLine(
             "reloads=" + score.Reloads
             + " rounds-spent=" + score.RoundsSpent

@@ -257,7 +257,7 @@ namespace GritGud.Application.Gameplay
             IReadOnlyList<ProjectileFlightSnapshot> projectiles,
             IReadOnlyList<SmokeFieldSnapshot> smokeFields,
             IReadOnlyList<FireFieldSnapshot> fireFields,
-            IReadOnlyList<DroneSnapshot> drones)
+            IReadOnlyList<SummonedDroneSnapshot> drones)
         {
             Frame = frame ?? throw new ArgumentNullException(nameof(frame));
             Progress = progress;
@@ -281,7 +281,7 @@ namespace GritGud.Application.Gameplay
         public IReadOnlyList<ProjectileFlightSnapshot> Projectiles { get; }
         public IReadOnlyList<SmokeFieldSnapshot> SmokeFields { get; }
         public IReadOnlyList<FireFieldSnapshot> FireFields { get; }
-        public IReadOnlyList<DroneSnapshot> Drones { get; }
+        public IReadOnlyList<SummonedDroneSnapshot> Drones { get; }
     }
 
     public sealed class GameplaySemanticReplayPlaybackFrame
@@ -628,6 +628,12 @@ namespace GritGud.Application.Gameplay
                 case DroneAttackRecord _:
                 case ActorDroneAttackRecord _:
                     return 0.8f;
+                case SummonDroneRecord _:
+                    return 0.5f;
+                case DismissDroneRecord _:
+                    return 0.25f;
+                case DroneCrashImpactRecord crash:
+                    return crash.Definition.ImpactPlaybackSeconds;
                 case StanceChangeRecord _:
                     return 0.3f;
                 case TurnEndRecord _:
@@ -713,7 +719,7 @@ namespace GritGud.Application.Gameplay
             var vehicles = new List<VehicleMomentumState>(baseState.Vehicles);
             var projectiles = new List<ProjectileFlightSnapshot>(
                 baseState.Projectiles);
-            var drones = new List<DroneSnapshot>(baseState.Drones);
+            var drones = new List<SummonedDroneSnapshot>(baseState.Drones);
 
             switch (frame.SemanticRecord)
             {
@@ -737,6 +743,11 @@ namespace GritGud.Application.Gameplay
                     break;
                 case DroneMoveRecord drone:
                     ReplaceDrone(drones, SampleDrone(frame, drone, progress));
+                    break;
+                case DroneCrashImpactRecord crash:
+                    ReplaceDrone(
+                        drones,
+                        SampleDroneCrash(crash, progress));
                     break;
                 case GameplayWorldAdvanceTransitionPayload world
                     when world.ExplorationPose != null:
@@ -917,26 +928,35 @@ namespace GritGud.Application.Gameplay
                     movement.Resulting.Speed,
                     progress));
 
-        private static DroneSnapshot SampleDrone(
+        private static SummonedDroneSnapshot SampleDrone(
             GameplaySemanticReplayFrame frame,
             DroneMoveRecord movement,
             float progress)
         {
-            DroneSnapshot previous = FindDrone(
+            SummonedDroneSnapshot previous = FindDrone(
                 frame.Previous.Drones,
                 movement.DroneId);
-            DroneSnapshot resulting = FindDrone(
+            SummonedDroneSnapshot resulting = FindDrone(
                 frame.Resulting.Drones,
                 movement.DroneId);
-            return new DroneSnapshot(
-                resulting.Definition,
+            return resulting.WithPose(
                 Lerp(movement.Origin, movement.Destination, progress),
                 Lerp(
                     previous.FacingDegrees,
                     movement.ResultingFacingDegrees,
-                    progress),
-                resulting.RemainingIntegrity);
+                    progress));
         }
+
+        private static SummonedDroneSnapshot SampleDroneCrash(
+            DroneCrashImpactRecord crash,
+            float progress) => progress >= 1f
+                ? crash.Resulting
+                : crash.Previous.WithPose(
+                    Lerp(
+                        crash.Origin,
+                        crash.ImpactPosition,
+                        progress),
+                    crash.Previous.FacingDegrees);
 
         private static Dictionary<string, GameplayActorSnapshot> IndexActors(
             IEnumerable<GameplayActorSnapshot> actors)
@@ -979,11 +999,11 @@ namespace GritGud.Application.Gameplay
                 $"Replay destructible '{id}' is missing.");
         }
 
-        private static DroneSnapshot FindDrone(
-            IEnumerable<DroneSnapshot> values,
+        private static SummonedDroneSnapshot FindDrone(
+            IEnumerable<SummonedDroneSnapshot> values,
             string id)
         {
-            foreach (DroneSnapshot value in values)
+            foreach (SummonedDroneSnapshot value in values)
                 if (string.Equals(value.DroneId, id, StringComparison.Ordinal))
                     return value;
             throw new KeyNotFoundException($"Replay drone '{id}' is missing.");
@@ -1041,8 +1061,8 @@ namespace GritGud.Application.Gameplay
         }
 
         private static void ReplaceDrone(
-            IList<DroneSnapshot> values,
-            DroneSnapshot replacement)
+            IList<SummonedDroneSnapshot> values,
+            SummonedDroneSnapshot replacement)
         {
             for (int index = 0; index < values.Count; index++)
                 if (string.Equals(

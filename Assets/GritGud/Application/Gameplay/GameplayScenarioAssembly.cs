@@ -120,13 +120,34 @@ namespace GritGud.Application.Gameplay
         public string StartingOccupantActorId { get; }
     }
 
+    public sealed class ScenarioDroneSummonRuntimeDefinition
+    {
+        public ScenarioDroneSummonRuntimeDefinition(
+            string summonerActorId,
+            DroneSummonAbilityDefinition ability)
+        {
+            SummonerActorId = GameplayContentIdentity.RequireText(
+                summonerActorId,
+                nameof(summonerActorId));
+            Ability = ability ?? throw new ArgumentNullException(
+                nameof(ability));
+        }
+
+        public string SummonerActorId { get; }
+        public DroneSummonAbilityDefinition Ability { get; }
+    }
+
     public sealed class GameplayScenarioAssembly
     {
         private readonly Dictionary<string, ScenarioActorRuntimeDefinition>
             actors;
         private readonly Dictionary<string, ScenarioVehicleRuntimeDefinition>
             vehicles;
-        private readonly Dictionary<string, DroneDefinition> drones;
+        private readonly Dictionary<string, DroneArchetypeDefinition>
+            droneArchetypes;
+        private readonly Dictionary<
+            string,
+            ScenarioDroneSummonRuntimeDefinition> droneSummonAbilities;
         private readonly Dictionary<string, ScenarioObjectiveRuntimeDefinition>
             objectives;
         private readonly Dictionary<string, DisplacementSubjectDefinition>
@@ -147,7 +168,10 @@ namespace GritGud.Application.Gameplay
             Dictionary<string, DisplacementSubjectDefinition>
                 displacementSubjectIndex,
             IEnumerable<TacticalContextRuleDefinition> tacticalRuleDefinitions = null,
-            Dictionary<string, DroneDefinition> droneIndex = null)
+            Dictionary<string, DroneArchetypeDefinition>
+                droneArchetypeIndex = null,
+            Dictionary<string, ScenarioDroneSummonRuntimeDefinition>
+                droneSummonAbilityIndex = null)
         {
             DisplayName = string.IsNullOrWhiteSpace(displayName)
                 ? throw new ArgumentException(
@@ -162,8 +186,14 @@ namespace GritGud.Application.Gameplay
                 ?? throw new ArgumentNullException(nameof(actorIndex));
             vehicles = vehicleIndex
                 ?? throw new ArgumentNullException(nameof(vehicleIndex));
-            drones = droneIndex ?? new Dictionary<string, DroneDefinition>(
-                StringComparer.Ordinal);
+            droneArchetypes = droneArchetypeIndex
+                ?? new Dictionary<string, DroneArchetypeDefinition>(
+                    StringComparer.Ordinal);
+            droneSummonAbilities = droneSummonAbilityIndex
+                ?? new Dictionary<
+                    string,
+                    ScenarioDroneSummonRuntimeDefinition>(
+                        StringComparer.Ordinal);
             objectives = objectiveIndex
                 ?? throw new ArgumentNullException(nameof(objectiveIndex));
             displacementSubjects = displacementSubjectIndex
@@ -222,13 +252,44 @@ namespace GritGud.Application.Gameplay
         public IReadOnlyCollection<ScenarioVehicleRuntimeDefinition> Vehicles =>
             vehicles.Values;
 
-        public IReadOnlyCollection<DroneDefinition> Drones => drones.Values;
+        public IReadOnlyCollection<DroneArchetypeDefinition> DroneArchetypes =>
+            droneArchetypes.Values;
 
-        public DroneDefinition GetDrone(string droneId) =>
-            drones.TryGetValue(droneId ?? string.Empty, out DroneDefinition drone)
-                ? drone
+        public IReadOnlyCollection<ScenarioDroneSummonRuntimeDefinition>
+            DroneSummonAbilities => droneSummonAbilities.Values;
+
+        public DroneArchetypeDefinition GetDroneArchetype(string archetypeId) =>
+            droneArchetypes.TryGetValue(
+                archetypeId ?? string.Empty,
+                out DroneArchetypeDefinition archetype)
+                ? archetype
                 : throw new KeyNotFoundException(
-                    $"Scenario drone '{droneId}' is not defined.");
+                    $"Scenario drone archetype '{archetypeId}' is not defined.");
+
+        public ScenarioDroneSummonRuntimeDefinition GetDroneSummonAbility(
+            string abilityId) => droneSummonAbilities.TryGetValue(
+                abilityId ?? string.Empty,
+                out ScenarioDroneSummonRuntimeDefinition ability)
+                ? ability
+                : throw new KeyNotFoundException(
+                    $"Scenario drone summon ability '{abilityId}' is not defined.");
+
+        public IReadOnlyList<ScenarioDroneSummonRuntimeDefinition>
+            GetDroneSummonAbilities(string actorId)
+        {
+            var result = new List<ScenarioDroneSummonRuntimeDefinition>();
+            foreach (ScenarioDroneSummonRuntimeDefinition ability in
+                droneSummonAbilities.Values)
+                if (string.Equals(
+                        ability.SummonerActorId,
+                        actorId,
+                        StringComparison.Ordinal))
+                    result.Add(ability);
+            result.Sort((left, right) => StringComparer.Ordinal.Compare(
+                left.Ability.AbilityId,
+                right.Ability.AbilityId));
+            return result.AsReadOnly();
+        }
 
         public IReadOnlyCollection<DisplacementSubjectDefinition>
             DisplacementSubjects => displacementSubjects.Values;
@@ -269,7 +330,8 @@ namespace GritGud.Application.Gameplay
                 vehicles,
                 displacementSubjects,
                 tacticalRules,
-                drones);
+                droneArchetypes,
+                droneSummonAbilities);
         }
 
         public bool TryGetDisplacementSubject(

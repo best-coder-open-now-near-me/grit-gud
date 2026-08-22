@@ -271,10 +271,8 @@ namespace GritGud.Presentation.Gameplay
                 "vehicle",
                 initial.Vehicles.Select(value => value.VehicleId),
                 assembly.Vehicles.Select(value => value.EntityId));
-            RequireSameIds(
-                "drone",
-                initial.Drones.Select(value => value.DroneId),
-                assembly.Drones.Select(value => value.Id));
+            foreach (SummonedDroneSnapshot drone in initial.Drones)
+                _ = assembly.GetDroneArchetype(drone.ArchetypeId);
         }
 
         internal static void RequireViewerWeaponPresentationCompatibility(

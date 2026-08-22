@@ -207,7 +207,7 @@ namespace GritGud.Application.Gameplay
 
     public sealed class GameplayCombatStateSnapshot
     {
-        public const int CurrentSchemaVersion = 13;
+        public const int CurrentSchemaVersion = 14;
 
         public GameplayCombatStateSnapshot(
             GameplaySessionStateSnapshot session,
@@ -218,7 +218,7 @@ namespace GritGud.Application.Gameplay
             GameplayCombatStateCoverage coverage =
                 GameplayCombatStateCoverage.Session,
             IEnumerable<FireFieldSnapshot> fireFields = null,
-            IEnumerable<DroneSnapshot> drones = null)
+            IEnumerable<SummonedDroneSnapshot> drones = null)
         {
             Session = session ?? throw new ArgumentNullException(nameof(session));
             if ((coverage & GameplayCombatStateCoverage.Session) == 0
@@ -256,7 +256,7 @@ namespace GritGud.Application.Gameplay
         public IReadOnlyList<ProjectileFlightSnapshot> Projectiles { get; }
         public IReadOnlyList<SmokeFieldSnapshot> SmokeFields { get; }
         public IReadOnlyList<FireFieldSnapshot> FireFields { get; }
-        public IReadOnlyList<DroneSnapshot> Drones { get; }
+        public IReadOnlyList<SummonedDroneSnapshot> Drones { get; }
         public string CanonicalHash { get; }
 
         public bool Covers(GameplayCombatStateCoverage required) =>
@@ -490,16 +490,27 @@ namespace GritGud.Application.Gameplay
                 Append(text, root + ".forward", vehicle.ForwardDegrees);
                 Append(text, root + ".speed", vehicle.Speed);
             }
-            foreach (DroneSnapshot drone in state.Drones)
+            foreach (SummonedDroneSnapshot drone in state.Drones)
             {
                 string root = "drone." + drone.DroneId;
-                DroneDefinition definition = drone.Definition;
+                DroneArchetypeDefinition definition = drone.Definition;
                 AttackDefinition attack = definition.Attack;
-                Append(text, root + ".summoner", definition.SummonerActorId);
+                Append(text, root + ".archetype", drone.ArchetypeId);
+                Append(text, root + ".summon-ability", drone.SummonAbilityId);
+                Append(text, root + ".summoner", drone.SummonerActorId);
                 Append(text, root + ".turn-pooling",
-                    definition.TurnPartnership.PoolingPolicy.ToString());
+                    drone.TurnPartnership.PoolingPolicy.ToString());
                 Append(text, root + ".position", drone.Position);
                 Append(text, root + ".facing", drone.FacingDegrees);
+                Append(text, root + ".lifecycle", (int)drone.Lifecycle);
+                Append(text, root + ".duration",
+                    drone.RemainingDurationTurns ?? -1);
+                Append(text, root + ".crash.origin",
+                    drone.CrashTrajectory?.Origin ?? default);
+                Append(text, root + ".crash.impact",
+                    drone.CrashTrajectory?.ImpactPosition ?? default);
+                Append(text, root + ".crash.sequence",
+                    drone.CrashTrajectory?.DisabledTransitionSequence ?? 0L);
                 Append(text, root + ".integrity.maximum", definition.MaximumIntegrity);
                 Append(text, root + ".integrity.remaining", drone.RemainingIntegrity);
                 Append(text, root + ".move.maximum", definition.MaximumMoveDistance);

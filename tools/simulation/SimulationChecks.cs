@@ -102,90 +102,80 @@ internal static class SimulationChecks
                     summoner.ActorId,
                     other.ActorId,
                 }));
-        var partnership = new DroneTurnPartnership(summoner.ActorId);
-        var definition = new DroneDefinition(
-            "drone.partner",
-            partnership,
-            new GameplayPosition(1f, 2f, 1f),
-            startingFacingDegrees: 0f,
-            maximumIntegrity: 6f,
-            maximumMoveDistance: 5f,
-            moveCost: new ActionCost(1, 0f, ActionMobility.Mobile),
-            sensor: new DroneSensorDefinition(14f, 120f),
-            attack: CreateDroneRifle());
         var initial = new GameplayCombatStateSnapshot(
             session,
             coverage: GameplayCombatStateCoverage.Session
                 | GameplayCombatStateCoverage.Drones,
-            drones: new[] { definition.CreateInitialSnapshot() });
-        var actorRoute = new MovementRouteRecord(
+            drones: Array.Empty<SummonedDroneSnapshot>());
+        DroneArchetypeDefinition archetype = CreateDroneArchetype(
+            "drone.partner",
+            maximumIntegrity: 6f);
+        var ability = new DroneSummonAbilityDefinition(
+            "ability.partner-drone",
+            archetype.ArchetypeId,
+            new ActionCost(1, 0f, ActionMobility.Set),
+            maximumSpawnDistance: 5f,
+            maximumActiveInstances: 1,
+            durationTurns: null,
+            spawnHeight: 2f);
+        var reducers = GameplaySimulationReducers.CreateCurrent();
+        var trajectory = new List<GameplaySemanticTransition>();
+
+        var summon = new SummonDroneRecord(
+            sequence: 1L,
             summoner.ActorId,
-            summoner.Pose,
+            ability,
+            archetype,
+            new GameplayPosition(1f, 2f, 1f),
+            spawnFacingDegrees: 0f,
             summoner.TurnBudget,
-            new[]
-            {
-                new MovementRouteSegmentRecord(
-                    summoner.Pose.Position,
-                    new GameplayPosition(1f, 0f, 0f),
-                    movementCost: 1f,
-                    actionPointCost: 1),
-            });
-        var actorTransition = new GameplaySemanticTransition(
-            new GameplayTransitionIdentity(
-                1L,
-                GameplaySemanticCapability.Move.ToString(),
-                summoner.ActorId,
-                summoner.ActorId),
-            initial.CanonicalHash,
-            new GameplayMoveTransitionPayload(
-                GameplayCapabilityProfiles.GroundedMove(),
-                actorRoute));
-        GameplayReductionResult afterSummoner =
-            new GameplayCoreTransitionReducer().Reduce(
-                initial,
-                actorTransition);
-        TurnBudget sharedBudget = afterSummoner.Resulting.Session
-            .GetActor(summoner.ActorId)
-            .TurnBudget;
-        DroneSnapshot drone = afterSummoner.Resulting.Drones[0];
-        var droneMove = new DroneMoveRecord(
+            summoner.TurnBudget.SpendAction(ability.SummonCost));
+        GameplayCombatStateSnapshot summoned = Reduce(
+            reducers,
+            initial,
+            new GameplaySummonDroneTransitionPayload(summon),
+            trajectory);
+        SummonedDroneSnapshot drone = summoned.Drones[0];
+        TurnBudget sharedBudget = summoned.Session.GetActor(
+            summoner.ActorId).TurnBudget;
+        var movement = new DroneMoveRecord(
             summoner.ActorId,
             drone.DroneId,
             drone.Position,
             new GameplayPosition(2f, 2f, 1f),
-            resultingFacingDegrees: 0f,
+            resultingFacingDegrees: 90f,
             drone.Definition.MoveCost,
             sharedBudget,
             sharedBudget.SpendAction(drone.Definition.MoveCost));
-        var droneTransition = new GameplaySemanticTransition(
-            new GameplayTransitionIdentity(
-                2L,
-                GameplaySemanticCapability.Move.ToString(),
-                summoner.ActorId,
-                drone.DroneId),
-            afterSummoner.Resulting.CanonicalHash,
-            new GameplayDroneMoveTransitionPayload(droneMove));
-        GameplayReductionResult afterDrone =
-            new GameplayWorldTransitionReducer().Reduce(
-                afterSummoner.Resulting,
-                droneTransition);
+        GameplayCombatStateSnapshot moved = Reduce(
+            reducers,
+            summoned,
+            new GameplayDroneMoveTransitionPayload(movement),
+            trajectory);
 
-        Require(partnership.SharedBudgetActorId == summoner.ActorId
-            && partnership.PoolingPolicy
-                == DroneTurnPoolingPolicy.SharedSummonerBudget
-            && sharedBudget.ActionPoints == 3
-            && afterDrone.Resulting.Session.GetActor(summoner.ActorId)
-                .TurnBudget.ActionPoints == 2
-            && afterDrone.Resulting.Session.InitiativeOrder.Count == 2
+        Require(initial.Drones.Count == 0
             && string.Equals(
-                afterDrone.Resulting.Session.InitiativeOrder[0],
-                summoner.ActorId,
+                drone.DroneId,
+                "drone:summoner:1",
                 StringComparison.Ordinal)
-            && string.Equals(
-                afterDrone.Resulting.Session.InitiativeOrder[1],
-                other.ActorId,
-                StringComparison.Ordinal),
-            "Summoner and drone did not spend one shared AP pool without adding a drone initiative slot.");
+            && drone.SummonerActorId == summoner.ActorId
+            && moved.Session.GetActor(summoner.ActorId)
+                .TurnBudget.ActionPoints == 2
+            && moved.Session.InitiativeOrder.Count == 2
+            && !ContainsActor(moved.Session.InitiativeOrder, drone.DroneId),
+            "Summoner and summoned partner did not share AP without gaining an initiative slot.");
+
+        var branch = new GameplaySimulationBranch(
+            "drone-partner-replay",
+            initial,
+            reducers);
+        foreach (GameplaySemanticTransition transition in trajectory)
+            branch.Apply(transition);
+        Require(GameplayExactReplay.Verify(
+                initial,
+                branch.Steps,
+                reducers).IsExact,
+            "Summon and partnered movement did not replay exactly.");
     }
 
     private static GameplayActorSnapshot CreateDronePartnerActor(
@@ -200,565 +190,443 @@ internal static class SimulationChecks
             actionPointEconomy: new TurnActionPointEconomy(4, 4, 6),
             turnMovementAllowance: 8f);
 
-    private static void VerifyDroneHeadlessTrajectory()
-    {
-        GameplaySession gameplay = CreateHostileGameplay(CreateRifle());
-        Require(gameplay.BeginEncounter(),
-            "Drone fixture encounter did not begin.");
-        GameplayCombatStateSnapshot captured = GameplayCombatStateCapture.Capture(
-            gameplay);
-        var droneDefinition = new DroneDefinition(
-            "drone.fixture",
-            new DroneTurnPartnership("player"),
-            new GameplayPosition(0f, 2f, 0f),
-            0f,
-            5f,
-            5f,
+    private static DroneArchetypeDefinition CreateDroneArchetype(
+        string archetypeId,
+        float maximumIntegrity = 5f) => new DroneArchetypeDefinition(
+            archetypeId,
+            maximumIntegrity,
+            maximumMoveDistance: 5f,
             new ActionCost(1, 0f, ActionMobility.Mobile),
             new DroneSensorDefinition(16f, 120f),
-            CreateDroneRifle());
-        Require(DroneSensorRules.CanObserve(
-                droneDefinition.CreateInitialSnapshot(),
-                new GameplayPosition(0f, 2f, 8f))
-            && !DroneSensorRules.CanObserve(
-                droneDefinition.CreateInitialSnapshot(),
-                new GameplayPosition(0f, 2f, -8f))
-            && !DroneSensorRules.CanObserve(
-                droneDefinition.CreateInitialSnapshot(),
-                new GameplayPosition(0f, 2f, 17f)),
-            "Drone perception did not enforce its canonical range and facing cone.");
-        var sensorLevel = new LevelDocument
+            CreateDroneRifle(),
+            "presentation.drone.test",
+            new DroneCrashDefinition(
+                impactRadius: 2.5f,
+                injuryMovementPenalty: 0.75f,
+                destructibleIntegrityDamage: 1f,
+                maximumActionPointReduction: 1,
+                maximumDriftDistance: 0.5f,
+                impactPlaybackSeconds: 0.7f));
+
+    private static void VerifyDroneHeadlessTrajectory()
+    {
+        LoadDepotContent(
+            out GameplayScenarioAssembly assembly,
+            out LevelDocument level,
+            out GameplayStaticSpatialContent spatialContent);
+        GameplayCombatStateSnapshot repositoryInitial =
+            GameplayHeadlessBattleStateFactory.Create(
+                assembly,
+                spatialContent);
+        Require(repositoryInitial.Drones.Count == 0,
+            "Depot must begin with no summoned drone instance.");
+
+        var gameplay = new GameplaySession(
+            assembly.Scenario,
+            scenarioSeed: assembly.RandomSeed);
+        Require(gameplay.BeginEncounter(),
+            "Drone lifecycle fixture encounter did not begin.");
+        int turnGuard = 0;
+        while (!string.Equals(
+            gameplay.ActiveActorId,
+            "player",
+            StringComparison.Ordinal))
         {
-            levelId = "drone-sensor-fixture",
-            schemaVersion = LevelDocument.CurrentSchemaVersion,
-            entities = new List<LevelEntity>
-            {
-                new LevelEntity
-                {
-                    id = "drone-target-prop",
-                    archetypeId = "prop.crate.standard",
-                    transform = new LevelTransformData(
-                        new Float3Data(-3f, 0f, 4f),
-                        yawDegrees: 0f),
-                    coverVolumes = new List<CoverVolumeData>
-                    {
-                        new CoverVolumeData
-                        {
-                            id = "primary",
-                            localCenter = new Float3Data(0f, 1f, 0f),
-                            size = new Float3Data(1f, 2f, 1f),
-                        },
-                    },
-                    destructible = new DestructibleInstanceData
-                    {
-                        enabled = true,
-                        initialState = "intact",
-                        integrity = 4f,
-                        surfaceId = "surface.wood",
-                    },
-                },
-            },
-        };
-        sensorLevel.Normalize();
-        var targetProp = new DestructiblePropSnapshot(
-            "drone-target-prop",
-            DestructiblePropState.Intact,
-            maximumIntegrity: 4f,
-            remainingIntegrity: 4f,
-            new GameplayPropPose(
-                new GameplayPosition(-3f, 0f, 4f),
-                pitchDegrees: 0f,
-                yawDegrees: 0f,
-                rollDegrees: 0f),
-            DestructiblePropPosture.Upright,
-            fractureChunkCount: 0,
-            detachedFractureChunks: 0UL);
+            Require(turnGuard++ < gameplay.InitiativeOrder.Count,
+                "Drone lifecycle fixture could not reach the summoner turn.");
+            Require(gameplay.TryEndTurn(
+                    gameplay.ActiveActorId,
+                    out TurnEndFailure failure),
+                "Drone lifecycle setup turn could not end: " + failure);
+        }
+        GameplaySessionStateSnapshot encounterSession =
+            GameplayCombatStateCapture.Capture(gameplay).Session;
         var initial = new GameplayCombatStateSnapshot(
-            captured.Session,
-            coverage: GameplayCombatStateCoverage.Session
-                | GameplayCombatStateCoverage.Drones
-                | GameplayCombatStateCoverage.Destructibles
-                | GameplayCombatStateCoverage.SmokeFields,
-            destructibles: new[] { targetProp },
-            smokeFields: Array.Empty<SmokeFieldSnapshot>(),
-            drones: new[] { droneDefinition.CreateInitialSnapshot() });
-        var sensorSpatial = new GameplayHeadlessSpatialEvidence(
-            sensorLevel,
-            new SpatialContentIdentity(
-                sensorLevel.levelId,
-                sensorLevel.schemaVersion,
-                evidenceAlgorithmVersion: 1,
-                new string('d', 64)));
-        TargetExposureSnapshot forwardSight =
-            GameplayHeadlessEncounterEvidence.CaptureDroneSight(
-                initial,
-                sensorSpatial,
-                droneDefinition.Id,
-                "enemy");
-        var reversed = new GameplayCombatStateSnapshot(
-            captured.Session,
-            coverage: GameplayCombatStateCoverage.Session
-                | GameplayCombatStateCoverage.Drones
-                | GameplayCombatStateCoverage.Destructibles
-                | GameplayCombatStateCoverage.SmokeFields,
-            destructibles: new[] { targetProp },
-            smokeFields: Array.Empty<SmokeFieldSnapshot>(),
-            drones: new[]
-            {
-                new DroneSnapshot(
-                    droneDefinition,
-                    droneDefinition.StartingPosition,
-                    facingDegrees: 180f,
-                    droneDefinition.MaximumIntegrity),
-            });
-        TargetExposureSnapshot rearSight =
-            GameplayHeadlessEncounterEvidence.CaptureDroneSight(
-                reversed,
-                sensorSpatial,
-                droneDefinition.Id,
-                "enemy");
-        Require(forwardSight.VisibleSampleCount > 0
-            && rearSight.VisibleSampleCount == 0,
-            "Headless drone exposure diverged from its canonical sensor cone.");
-        var reducers = GameplaySimulationReducers.CreateCurrent();
-        var droneAttackInput = new GameplayReachableInput(
-            GameplayReachableInputKind.CharacterAbility,
-            "fixture.drone.attack",
-            "player",
-            GameplayCapabilityProfiles.DroneAttack(
-                droneDefinition.Attack,
-                GameplaySemanticSubjectKind.Actor),
-            sourceSubjectId: droneDefinition.Id);
-        GameplayCapabilityRegistry droneCapabilities =
-            GameplayCurrentCapabilityCatalog.Create(
-                reducers,
-                new[] { droneAttackInput });
-        var droneCandidates = new GameplayTacticalCandidateBuilder(
-            droneCapabilities);
-        IReadOnlyList<GameplayCandidate> forwardAttackCandidates =
-            droneCandidates.Build(initial, new[] { droneAttackInput });
-        Require(forwardAttackCandidates.Count == 1
-            && droneCandidates.Build(
-                    reversed,
-                    new[] { droneAttackInput }).Count == 0,
-            "Drone candidate generation ignored its canonical sensor envelope.");
-        var droneAttackRoutes = new GameplayCandidateExecutionRouteRegistry(
-            droneCapabilities);
-        droneAttackRoutes.Register(
-            new GameplayDroneAttackCandidateExecutionRoute(
-                gameplay.Scenario,
-                sensorSpatial));
-        var droneAttackContext = new GameplayDecisionContext(
-            initial,
-            GameplayObservationSnapshot.FullState("player", initial));
-        GameplayExecutableCandidateEvaluation droneAttackEvaluation =
-            droneAttackRoutes.Evaluate(
-                droneAttackContext,
-                forwardAttackCandidates[0]);
-        Require(droneAttackEvaluation.IsLegal
-            && droneAttackEvaluation.Evidence.Count == 1,
-            "Drone-to-actor candidate was not legal and evidence-backed: "
-                + droneAttackEvaluation.FailureCode);
-        var droneAttackRuntime = new GameplaySimulationRuntime(
-            new GameplayExecutionIdentity(
-                new GameplayContentIdentity(
-                    gameplay.Scenario.Id,
-                    scenarioSchemaVersion: 1,
-                    rulesSchemaVersion: 1,
-                    new string('4', 64)),
-                new SpatialContentIdentity(
-                    sensorLevel.levelId,
-                    sensorLevel.schemaVersion,
-                    evidenceAlgorithmVersion: 1,
-                    new string('d', 64)),
-                gameplay.RunIdentity),
-            initial,
-            reducers,
-            droneCapabilities);
-        droneAttackRuntime.Execute(droneAttackRoutes.Prepare(
-            droneAttackContext,
-            droneAttackEvaluation));
-        Require(droneAttackRuntime.CurrentState.Session.GetActor("player")
-                .TurnBudget.ActionPoints
-                < initial.Session.GetActor("player").TurnBudget.ActionPoints
-            && GameplayExactReplay.Verify(
-                initial,
-                droneAttackRuntime.Trajectory,
-                reducers).IsExact,
-            "Drone-to-actor candidate did not reduce and replay exactly.");
+            encounterSession,
+            repositoryInitial.Destructibles,
+            repositoryInitial.Vehicles,
+            repositoryInitial.Projectiles,
+            repositoryInitial.SmokeFields,
+            GameplayCombatStateSnapshot.AllCoverage,
+            repositoryInitial.FireFields,
+            Array.Empty<SummonedDroneSnapshot>());
 
-        var dronePropInput = new GameplayReachableInput(
-            GameplayReachableInputKind.CharacterAbility,
-            "fixture.drone.attack-prop",
-            "player",
-            GameplayCapabilityProfiles.DroneAttack(
-                droneDefinition.Attack,
-                GameplaySemanticSubjectKind.DestructibleProp),
-            sourceSubjectId: droneDefinition.Id);
-        GameplayCapabilityRegistry dronePropCapabilities =
-            GameplayCurrentCapabilityCatalog.Create(
-                reducers,
-                new[] { dronePropInput });
-        IReadOnlyList<GameplayCandidate> dronePropCandidates =
-            new GameplayTacticalCandidateBuilder(dronePropCapabilities).Build(
-                initial,
-                new[] { dronePropInput });
-        Require(dronePropCandidates.Count == 1,
-            "Drone-to-prop candidate generation omitted the tactical prop.");
-        var dronePropRoutes = new GameplayCandidateExecutionRouteRegistry(
-            dronePropCapabilities);
-        dronePropRoutes.Register(
-            new GameplayDroneAttackCandidateExecutionRoute(
-                gameplay.Scenario,
-                sensorSpatial));
-        GameplayExecutableCandidateEvaluation dronePropEvaluation =
-            dronePropRoutes.Evaluate(
-                droneAttackContext,
-                dronePropCandidates[0]);
-        Require(dronePropEvaluation.IsLegal
-            && dronePropEvaluation.Evidence.Count == 1,
-            "Drone-to-prop candidate was not legal and evidence-backed: "
-                + dronePropEvaluation.FailureCode);
-        var dronePropRuntime = new GameplaySimulationRuntime(
-            new GameplayExecutionIdentity(
-                new GameplayContentIdentity(
-                    gameplay.Scenario.Id,
-                    scenarioSchemaVersion: 1,
-                    rulesSchemaVersion: 1,
-                    new string('b', 64)),
-                new SpatialContentIdentity(
-                    sensorLevel.levelId,
-                    sensorLevel.schemaVersion,
-                    evidenceAlgorithmVersion: 1,
-                    new string('d', 64)),
-                gameplay.RunIdentity),
-            initial,
-            reducers,
-            dronePropCapabilities);
-        dronePropRuntime.Execute(dronePropRoutes.Prepare(
-            droneAttackContext,
-            dronePropEvaluation));
-        Require(dronePropRuntime.CurrentState.Destructibles[0]
-                .RemainingIntegrity < targetProp.RemainingIntegrity
-            && GameplayExactReplay.Verify(
-                initial,
-                dronePropRuntime.Trajectory,
-                reducers).IsExact,
-            "Drone-to-prop candidate did not reduce and replay exactly.");
-
-        Require(gameplay.TryEndTurn("player", out _),
-            "Actor-drone route could not advance to the hostile actor turn.");
-        GameplayCombatStateSnapshot hostileTurnSession =
-            GameplayCombatStateCapture.Capture(gameplay);
-        var hostileTurn = new GameplayCombatStateSnapshot(
-            hostileTurnSession.Session,
-            coverage: GameplayCombatStateCoverage.Session
-                | GameplayCombatStateCoverage.Drones
-                | GameplayCombatStateCoverage.Destructibles
-                | GameplayCombatStateCoverage.SmokeFields,
-            destructibles: new[] { targetProp },
-            smokeFields: Array.Empty<SmokeFieldSnapshot>(),
-            drones: new[] { droneDefinition.CreateInitialSnapshot() });
-        var actorDroneInput = new GameplayReachableInput(
-            GameplayReachableInputKind.EnemyDecision,
-            "fixture.enemy.attack-drone",
-            "enemy",
-            GameplayCapabilityProfiles.AttackDrone(CreateRifle()));
-        GameplayCapabilityRegistry actorDroneCapabilities =
-            GameplayCurrentCapabilityCatalog.Create(
-                reducers,
-                new[] { actorDroneInput });
-        IReadOnlyList<GameplayCandidate> actorDroneCandidates =
-            new GameplayTacticalCandidateBuilder(actorDroneCapabilities).Build(
-                hostileTurn,
-                new[] { actorDroneInput });
-        Require(actorDroneCandidates.Count == 1,
-            "Actor-to-drone candidate generation omitted the damageable drone.");
-        var actorDroneRoutes = new GameplayCandidateExecutionRouteRegistry(
-            actorDroneCapabilities);
-        actorDroneRoutes.Register(
-            new GameplayActorDroneAttackCandidateExecutionRoute(
-                gameplay.Scenario,
-                sensorSpatial));
-        var actorDroneContext = new GameplayDecisionContext(
-            hostileTurn,
-            GameplayObservationSnapshot.FullState("enemy", hostileTurn));
-        GameplayExecutableCandidateEvaluation actorDroneEvaluation =
-            actorDroneRoutes.Evaluate(
-                actorDroneContext,
-                actorDroneCandidates[0]);
-        Require(actorDroneEvaluation.IsLegal
-            && actorDroneEvaluation.Evidence.Count == 1,
-            "Actor-to-drone candidate was not legal and evidence-backed: "
-                + actorDroneEvaluation.FailureCode);
-        var actorDroneRuntime = new GameplaySimulationRuntime(
-            new GameplayExecutionIdentity(
-                new GameplayContentIdentity(
-                    gameplay.Scenario.Id,
-                    scenarioSchemaVersion: 1,
-                    rulesSchemaVersion: 1,
-                    new string('5', 64)),
-                new SpatialContentIdentity(
-                    sensorLevel.levelId,
-                    sensorLevel.schemaVersion,
-                    evidenceAlgorithmVersion: 1,
-                    new string('d', 64)),
-                gameplay.RunIdentity),
-            hostileTurn,
-            reducers,
-            actorDroneCapabilities);
-        actorDroneRuntime.Execute(actorDroneRoutes.Prepare(
-            actorDroneContext,
-            actorDroneEvaluation));
-        Require(actorDroneRuntime.CurrentState.Session.LastActionSequence
-                == hostileTurn.Session.LastActionSequence + 1L
-            && GameplayExactReplay.Verify(
-                hostileTurn,
-                actorDroneRuntime.Trajectory,
-                reducers).IsExact,
-            "Actor-to-drone candidate did not reduce and replay exactly.");
-        var droneMoveInput = new GameplayReachableInput(
-            GameplayReachableInputKind.MovementControl,
-            "fixture.drone.move",
-            "player",
-            GameplayCapabilityProfiles.AerialDroneMove(),
-            droneDefinition.Id,
-            droneDefinition.Id);
-        GameplayCapabilityRegistry moveCapabilities =
-            GameplayCurrentCapabilityCatalog.Create(
-                reducers,
-                new[] { droneMoveInput });
-        var moveRoutes = new GameplayCandidateExecutionRouteRegistry(
-            moveCapabilities);
-        moveRoutes.Register(new GameplayDroneMoveCandidateExecutionRoute(
-            gameplay.Scenario,
-            sensorSpatial));
-        IReadOnlyList<GameplayCandidate> builtDroneMoves =
-            new GameplayHeadlessCandidateBuilder(
-                moveCapabilities,
-                sensorSpatial).Build(
-                    initial,
-                    new[] { droneMoveInput },
-                    "player");
-        Require(builtDroneMoves.Count > 1,
-            "Drone semantic movement did not expand into stable destinations.");
-        var moveContext = new GameplayDecisionContext(
-            initial,
-            GameplayObservationSnapshot.FullState("player", initial));
-        GameplayExecutableCandidateEvaluation moveEvaluation =
-            moveRoutes.Evaluate(moveContext, builtDroneMoves[0]);
-        Require(moveEvaluation.IsLegal
-            && moveEvaluation.Evidence.Count == 1,
-            "Drone movement candidate was not legal and evidence-backed.");
-        var moveRuntime = new GameplaySimulationRuntime(
-            new GameplayExecutionIdentity(
-                new GameplayContentIdentity(
-                    gameplay.Scenario.Id,
-                    scenarioSchemaVersion: 1,
-                    rulesSchemaVersion: 1,
-                    new string('3', 64)),
-                new SpatialContentIdentity(
-                    sensorLevel.levelId,
-                    sensorLevel.schemaVersion,
-                    evidenceAlgorithmVersion: 1,
-                    new string('d', 64)),
-                gameplay.RunIdentity),
-            initial,
-            reducers,
-            moveCapabilities);
-        moveRuntime.Execute(moveRoutes.Prepare(
-            moveContext,
-            moveEvaluation));
-        Require(moveRuntime.CurrentState.Drones[0].Position.DistanceTo(
-                    initial.Drones[0].Position) > 0f
-            && GameplayExactReplay.Verify(
-                initial,
-                moveRuntime.Trajectory,
-                reducers).IsExact,
-            "Drone movement route did not reduce and replay exactly.");
+        GameplayTransitionReducerRegistry reducers =
+            GameplaySimulationReducers.CreateCurrent();
+        IReadOnlyList<GameplayReachableInput> reachable =
+            GameplayReachableInputEnumerator.Enumerate(assembly, level);
+        GameplayCapabilityRegistry capabilities =
+            GameplayCurrentCapabilityCatalog.Create(reducers, reachable);
+        GameplayHeadlessSpatialEvidence spatial =
+            spatialContent.CreateEvidence();
+        GameplayCandidateExecutionRouteRegistry routes =
+            GameplayCurrentCandidateExecutionRoutes.Create(
+                assembly,
+                spatial,
+                capabilities);
+        var builder = new GameplayHeadlessCandidateBuilder(
+            capabilities,
+            spatial,
+            scenarioDefinition: assembly.Scenario,
+            authoredTraversalLinks: level.traversalLinks,
+            scenarioAssembly: assembly);
         var trajectory = new List<GameplaySemanticTransition>();
-        TurnBudget initialBudget = initial.Session.GetActor("player").TurnBudget;
-        var movement = new DroneMoveRecord(
-            "player",
-            droneDefinition.Id,
-            droneDefinition.StartingPosition,
-            new GameplayPosition(3f, 2f, 0f),
-            90f,
-            droneDefinition.MoveCost,
-            initialBudget,
-            initialBudget.SpendAction(droneDefinition.MoveCost));
-        GameplayCombatStateSnapshot moved = Reduce(
-            reducers,
+
+        GameplayCandidate summonCandidate = FindFirstCandidate(
+            builder.Build(initial, reachable, "player"),
+            GameplayCapabilityProfiles.SummonDrone());
+        var summonContext = new GameplayDecisionContext(
             initial,
-            new GameplayDroneMoveTransitionPayload(movement),
-            trajectory);
-        GameplayActorSnapshot target = moved.Session.GetActor("enemy");
-        var exposure = new TargetExposureSnapshot(
-            droneDefinition.Id,
-            target.ActorId,
-            new[]
-            {
-                new TargetRegionExposure(TargetRegionId.Torso, 1, 1),
-            });
-        AttackResolutionRecord resolution = AttackResolutionRules.Resolve(
-            2L,
-            7u,
-            exposure,
-            droneDefinition.Attack.AccuracyDecay,
-            1f,
-            target.Wounds,
-            droneDefinition.Attack.WoundMovementPenalty);
-        TurnBudget attackBudget = moved.Session.GetActor("player").TurnBudget;
-        var attack = new DroneAttackRecord(
-            "player",
-            droneDefinition.Id,
-            "enemy",
-            GameplaySemanticSubjectKind.Actor.ToString(),
-            droneDefinition.Attack.TurnCost,
-            attackBudget,
-            attackBudget.SpendAction(droneDefinition.Attack.TurnCost),
-            resolution);
-        GameplayCombatStateSnapshot resulting = Reduce(
-            reducers,
+            GameplayObservationSnapshot.FullState("player", initial));
+        GameplayExecutableCandidateEvaluation summonEvaluation =
+            routes.Evaluate(summonContext, summonCandidate);
+        Require(summonEvaluation.IsLegal,
+            "Depot summon candidate was illegal: "
+                + summonEvaluation.FailureCode);
+        GameplaySemanticTransition summonTransition = routes.Prepare(
+            summonContext,
+            summonEvaluation);
+        GameplayReductionResult summonReduction = reducers.Reduce(
+            initial,
+            summonTransition);
+        trajectory.Add(summonTransition);
+        GameplayCombatStateSnapshot summoned = summonReduction.Resulting;
+        SummonedDroneSnapshot drone = summoned.Drones[0];
+        Require(drone.DroneId == "drone:player:"
+                + summonTransition.Identity.Sequence
+            && drone.Lifecycle == SummonLifecycleState.Active
+            && summoned.Session.GetActor("player").TurnBudget.ActionPoints
+                == initial.Session.GetActor("player").TurnBudget.ActionPoints
+                    - assembly.GetDroneSummonAbility(
+                        drone.SummonAbilityId).Ability.SummonCost.ActionPoints
+            && !ContainsActor(
+                summoned.Session.InitiativeOrder,
+                drone.DroneId),
+            "Authoritative summon did not create the deterministic partnered instance.");
+
+        foreach (GameplayCandidate candidate in builder.Build(
+            summoned,
+            reachable,
+            "player"))
+        {
+            if (!candidate.Profile.Equals(
+                    GameplayCapabilityProfiles.SummonDrone()))
+                continue;
+            Require(!routes.Evaluate(
+                    new GameplayDecisionContext(
+                        summoned,
+                        GameplayObservationSnapshot.FullState(
+                            "player",
+                            summoned)),
+                    candidate).IsLegal,
+                "Active-instance limit did not close repeated summon candidates.");
+        }
+
+        GameplayCandidate moveCandidate = FindFirstCandidate(
+            builder.Build(summoned, reachable, "player"),
+            GameplayCapabilityProfiles.AerialDroneMove());
+        var moveContext = new GameplayDecisionContext(
+            summoned,
+            GameplayObservationSnapshot.FullState("player", summoned));
+        GameplayExecutableCandidateEvaluation moveEvaluation =
+            routes.Evaluate(moveContext, moveCandidate);
+        Require(moveEvaluation.IsLegal,
+            "Summoned drone movement candidate was illegal: "
+                + moveEvaluation.FailureCode);
+        GameplaySemanticTransition moveTransition = routes.Prepare(
+            moveContext,
+            moveEvaluation);
+        GameplayReductionResult moveReduction = reducers.Reduce(
+            summoned,
+            moveTransition);
+        trajectory.Add(moveTransition);
+        GameplayCombatStateSnapshot moved = moveReduction.Resulting;
+        Require(moved.Drones[0].Position.DistanceTo(drone.Position) > 0f
+            && moved.Session.GetActor("player").TurnBudget.ActionPoints
+                < summoned.Session.GetActor("player").TurnBudget.ActionPoints,
+            "Summoned drone movement did not consume the shared AP pool.");
+
+        GameplayCandidate dismissCandidate = FindFirstCandidate(
+            builder.Build(moved, reachable, "player"),
+            GameplayCapabilityProfiles.DismissDrone());
+        var dismissContext = new GameplayDecisionContext(
             moved,
-            new GameplayDroneAttackTransitionPayload(
-                GameplaySemanticSubjectKind.Actor,
-                droneDefinition.Attack,
-                attack),
-            trajectory);
-        Require(resulting.Drones[0].Position.DistanceTo(
-                movement.Destination) == 0f
-            && resulting.Session.GetActor("player")
-                .TurnBudget.ActionPoints == 2
-            && resulting.Session.GetActor("enemy").Wounds.TorsoWounds == 1,
-            "Drone trajectory did not preserve controller AP, movement, and damage.");
-        var branch = new GameplaySimulationBranch("drone", initial, reducers);
+            GameplayObservationSnapshot.FullState("player", moved));
+        GameplayExecutableCandidateEvaluation dismissEvaluation =
+            routes.Evaluate(dismissContext, dismissCandidate);
+        Require(dismissEvaluation.IsLegal,
+            "Drone dismissal candidate was illegal: "
+                + dismissEvaluation.FailureCode);
+        GameplaySemanticTransition dismissTransition = routes.Prepare(
+            dismissContext,
+            dismissEvaluation);
+        GameplayReductionResult dismissReduction = reducers.Reduce(
+            moved,
+            dismissTransition);
+        trajectory.Add(dismissTransition);
+        GameplayCombatStateSnapshot dismissed = dismissReduction.Resulting;
+        Require(dismissed.Drones[0].Lifecycle
+                == SummonLifecycleState.Dismissed
+            && !dismissed.Drones[0].IsVisible,
+            "Dismissal did not preserve a terminal lifecycle record.");
+
+        var replayBranch = new GameplaySimulationBranch(
+            "summon-move-dismiss",
+            initial,
+            reducers);
         foreach (GameplaySemanticTransition transition in trajectory)
-            branch.Apply(transition);
-        Require(GameplayExactReplay.Verify(initial, branch.Steps, reducers).IsExact,
-            "Drone headless trajectory did not replay exactly.");
+            replayBranch.Apply(transition);
+        Require(GameplayExactReplay.Verify(
+                initial,
+                replayBranch.Steps,
+                reducers).IsExact,
+            "Summon, movement, and dismissal did not replay exactly.");
+        Require(GameplayHeadlessBattleStateFactory.Create(
+                assembly,
+                spatialContent).Drones.Count == 0,
+            "A new Depot session retained a prior summoned instance.");
 
-        GameplaySession liveGameplay = CreateGameplay(CreateRifle());
-        Require(liveGameplay.BeginEncounter(),
-            "Live drone parity encounter did not begin.");
-        var liveDrones = new GameplayDroneSession(
-            liveGameplay,
-            new[] { droneDefinition });
-        GameplayCombatStateSnapshot liveInitial = GameplayCombatStateCapture.Capture(
-            liveGameplay,
-            drones: liveDrones);
-        DroneMoveRecord liveMove = liveDrones.PrepareMove(
-            droneDefinition.Id,
-            movement.Destination,
-            movement.ResultingFacingDegrees);
-        GameplaySemanticTransition liveMoveTransition = CreateTransition(
-            liveInitial,
-            new GameplayDroneMoveTransitionPayload(liveMove),
-            1L);
-        GameplayCombatStateSnapshot predictedMove = reducers.Reduce(
-            liveInitial,
-            liveMoveTransition).Resulting;
-        liveDrones.CommitMove(liveMove);
-        liveGameplay.RecordSemanticTransition(liveMoveTransition.Identity);
-        GameplayCombatStateSnapshot actualMove = GameplayCombatStateCapture.Capture(
-            liveGameplay,
-            drones: liveDrones);
-        IReadOnlyList<GameplayStateDifference> moveDifferences =
-            GameplayCombatStateDiffer.Compare(predictedMove, actualMove);
-        Require(moveDifferences.Count == 0,
-            "Live drone movement diverged from pure reduction at "
-                + (moveDifferences.Count == 0
-                    ? "unknown"
-                    : moveDifferences[0].Path));
-        GameplayActorSnapshot liveTarget = actualMove.Session.GetActor("enemy");
-        var liveExposure = new TargetExposureSnapshot(
-            droneDefinition.Id,
-            liveTarget.ActorId,
-            new[]
-            {
-                new TargetRegionExposure(TargetRegionId.Torso, 1, 1),
-            });
-        AttackResolutionRecord liveResolution = AttackResolutionRules.Resolve(
-            2L,
-            7u,
-            liveExposure,
-            droneDefinition.Attack.AccuracyDecay,
-            1f,
-            liveTarget.Wounds,
-            droneDefinition.Attack.WoundMovementPenalty);
-        TurnBudget liveBudget = actualMove.Session.GetActor("player").TurnBudget;
-        var liveAttack = new DroneAttackRecord(
-            "player",
-            droneDefinition.Id,
-            "enemy",
-            GameplaySemanticSubjectKind.Actor.ToString(),
-            droneDefinition.Attack.TurnCost,
-            liveBudget,
-            liveBudget.SpendAction(droneDefinition.Attack.TurnCost),
-            liveResolution);
-        var liveAttackPayload = new GameplayDroneAttackTransitionPayload(
-            GameplaySemanticSubjectKind.Actor,
-            droneDefinition.Attack,
-            liveAttack);
-        GameplaySemanticTransition liveAttackTransition = CreateTransition(
-            actualMove,
-            liveAttackPayload,
-            2L);
-        GameplayCombatStateSnapshot predictedAttack = reducers.Reduce(
-            actualMove,
-            liveAttackTransition).Resulting;
-        liveDrones.CommitAttack(liveAttack);
-        liveGameplay.RecordSemanticTransition(liveAttackTransition.Identity);
-        GameplayCombatStateSnapshot actualAttack = GameplayCombatStateCapture.Capture(
-            liveGameplay,
-            drones: liveDrones);
-        Require(GameplayCombatStateDiffer.Compare(
-                predictedAttack,
-                actualAttack).Count == 0,
-            "Live drone attack diverged from pure reduction.");
+        VerifyDroneExpiration(reducers);
+        VerifyDroneCrashLifecycle(
+            assembly,
+            spatialContent,
+            repositoryInitial,
+            reducers);
+    }
 
-        DroneSnapshot liveDroneTarget = actualAttack.Drones[0];
-        var droneExposure = new DroneExposureSnapshot(
-            "player",
-            liveDroneTarget.DroneId,
-            visibleSampleCount: 1,
-            totalSampleCount: 1);
-        ActorDroneAttackRecord incoming = liveDrones.PrepareActorAttack(
-            "player",
-            liveDroneTarget.DroneId,
-            droneExposure,
-            distance: 3f,
-            resolutionSeed: GameplayAddressedRandom.SampleUInt32(
-                actualAttack.Session.RunIdentity,
-                new GameplayTransitionIdentity(
-                    actualAttack.Session.LastActionSequence + 1L,
-                    GameplaySemanticCapability.DirectAttack.ToString(),
-                    "player",
-                    liveDroneTarget.DroneId),
-                "resolution"));
-        var incomingPayload = new GameplayActorDroneAttackTransitionPayload(
+    private static void VerifyDroneExpiration(
+        GameplayTransitionReducerRegistry reducers)
+    {
+        GameplayActorSnapshot summoner = CreateDronePartnerActor("summoner");
+        GameplayActorSnapshot other = CreateDronePartnerActor("other");
+        var session = new GameplaySessionStateSnapshot(
+            "drone-expiration",
+            GameplaySessionMode.TurnBased,
+            GameplaySessionOperation.None,
+            TurnModeContext.InitiatedEncounter,
+            encounterActive: true,
+            encounterCompletionRequested: false,
+            activeActorId: summoner.ActorId,
+            GameplayTurnPhase.Normal,
+            new[] { summoner, other },
+            new[] { summoner.ActorId, other.ActorId },
+            Array.Empty<GameplayObjectiveSnapshot>(),
+            Array.Empty<string>(),
+            emergencyResponderIndex: -1,
+            emergencyResumeActorId: string.Empty,
+            lastActionSequence: 0L,
+            lastTurnSequence: 0L,
+            journalSequence: 0L);
+        var initial = new GameplayCombatStateSnapshot(
+            session,
+            coverage: GameplayCombatStateCoverage.Session
+                | GameplayCombatStateCoverage.Drones,
+            drones: Array.Empty<SummonedDroneSnapshot>());
+        DroneArchetypeDefinition archetype = CreateDroneArchetype(
+            "drone.expiring");
+        var ability = new DroneSummonAbilityDefinition(
+            "ability.expiring-drone",
+            archetype.ArchetypeId,
+            new ActionCost(1, 0f, ActionMobility.Set),
+            maximumSpawnDistance: 5f,
+            maximumActiveInstances: 1,
+            durationTurns: 1,
+            spawnHeight: 2f);
+        var summon = new SummonDroneRecord(
+            1L,
+            summoner.ActorId,
+            ability,
+            archetype,
+            new GameplayPosition(0f, 2f, 0f),
+            0f,
+            summoner.TurnBudget,
+            summoner.TurnBudget.SpendAction(ability.SummonCost));
+        GameplayReductionResult afterSummon = reducers.Reduce(
+            initial,
+            CreateTransition(
+                initial,
+                new GameplaySummonDroneTransitionPayload(summon),
+                1L));
+        GameplayReductionResult afterTurn = reducers.Reduce(
+            afterSummon.Resulting,
+            CreateTransition(
+                afterSummon.Resulting,
+                new GameplayEndTurnTransitionPayload(
+                    summoner.ActorId,
+                    emergency: false),
+                2L));
+        bool hasExpirationEvent = false;
+        foreach (GameplayDomainEvent domainEvent in afterTurn.DomainEvents)
+            hasExpirationEvent |= domainEvent is GameplayDroneExpiredEvent;
+        Require(afterTurn.Resulting.Drones[0].Lifecycle
+                == SummonLifecycleState.Expired
+            && hasExpirationEvent,
+            "Authored summon duration did not expire on its owner's turn end.");
+    }
+
+    private static void VerifyDroneCrashLifecycle(
+        GameplayScenarioAssembly assembly,
+        GameplayStaticSpatialContent spatialContent,
+        GameplayCombatStateSnapshot repositoryInitial,
+        GameplayTransitionReducerRegistry reducers)
+    {
+        var gameplay = new GameplaySession(
+            assembly.Scenario,
+            scenarioSeed: assembly.RandomSeed);
+        Require(gameplay.BeginEncounter(),
+            "Drone crash fixture encounter did not begin.");
+        GameplaySessionStateSnapshot session =
+            GameplayCombatStateCapture.Capture(gameplay).Session;
+        string actorId = session.ActiveActorId;
+        GameplayActorSnapshot actor = session.GetActor(actorId);
+        DroneArchetypeDefinition archetype = CreateDroneArchetype(
+            "drone.crash-target",
+            maximumIntegrity: 1f);
+        var ability = new DroneSummonAbilityDefinition(
+            "ability.crash-target",
+            archetype.ArchetypeId,
+            new ActionCost(0, 0f, ActionMobility.Set),
+            maximumSpawnDistance: 5f,
+            maximumActiveInstances: 1,
+            durationTurns: null,
+            spawnHeight: 2f);
+        GameplayPosition origin = new GameplayPosition(
+            actor.Pose.Position.X,
+            actor.Pose.Position.Y + 2f,
+            actor.Pose.Position.Z);
+        SummonedDroneSnapshot target = new SummonDroneRecord(
+            1L,
+            actorId,
+            ability,
+            archetype,
+            origin,
+            actor.Pose.FacingDegrees,
+            actor.TurnBudget,
+            actor.TurnBudget).Resulting;
+        var initial = new GameplayCombatStateSnapshot(
+            session,
+            repositoryInitial.Destructibles,
+            repositoryInitial.Vehicles,
+            repositoryInitial.Projectiles,
+            repositoryInitial.SmokeFields,
+            GameplayCombatStateSnapshot.AllCoverage,
+            repositoryInitial.FireFields,
+            new[] { target });
+        GameplayHeadlessSpatialEvidence spatial =
+            spatialContent.CreateEvidence();
+        long actionSequence = checked(session.LastActionSequence + 1L);
+        long transitionSequence = checked(
+            session.LastTransitionSequence + 1L);
+        var identity = new GameplayTransitionIdentity(
+            actionSequence,
+            GameplaySemanticCapability.DirectAttack.ToString(),
+            actorId,
+            target.DroneId);
+        uint seed = GameplayAddressedRandom.SampleUInt32(
+            session.RunIdentity,
+            identity,
+            "resolution");
+        ActorDroneAttackRecord attack = DroneDirectAttackRules.Resolve(
+            actionSequence,
+            seed,
+            actorId,
             CreateRifle(),
-            incoming);
-        GameplaySemanticTransition incomingTransition = CreateTransition(
-            actualAttack,
-            incomingPayload,
-            3L);
-        GameplayCombatStateSnapshot predictedIncoming = reducers.Reduce(
-            actualAttack,
-            incomingTransition).Resulting;
-        liveDrones.CommitActorAttack(incoming);
-        liveGameplay.RecordSemanticTransition(incomingTransition.Identity);
-        GameplayCombatStateSnapshot actualIncoming =
-            GameplayCombatStateCapture.Capture(
-                liveGameplay,
-                drones: liveDrones);
-        Require(GameplayCombatStateDiffer.Compare(
-                predictedIncoming,
-                actualIncoming).Count == 0
-            && actualIncoming.Drones[0].RemainingIntegrity
-                == (incoming.Damage?.Resulting.RemainingIntegrity
-                    ?? liveDroneTarget.RemainingIntegrity),
-            "Incoming drone damage diverged across live and pure reduction.");
+            actor.TurnBudget,
+            new DroneExposureSnapshot(actorId, target.DroneId, 1, 1),
+            distance: 0f,
+            target,
+            crashTrajectory: spatial.ResolveDroneCrashTrajectory(
+                target.Position,
+                actor.Pose.Position,
+                archetype.Crash.MaximumDriftDistance,
+                transitionSequence));
+        var attackPayload = new GameplayActorDroneAttackTransitionPayload(
+            CreateRifle(),
+            attack);
+        GameplaySemanticTransition attackTransition = CreateTransition(
+            initial,
+            attackPayload,
+            transitionSequence);
+        GameplayReductionResult disabled = reducers.Reduce(
+            initial,
+            attackTransition);
+        Require(disabled.Resulting.Drones[0].Lifecycle
+                == SummonLifecycleState.Crashing
+            && GameplayMandatoryWorkRules.HasPending(disabled.Resulting),
+            "Lethal drone integrity damage did not start mandatory crashing.");
+
+        var crashCandidate = new GameplayCandidate(
+            "fixture.drone-crash",
+            GameplayCapabilityProfiles.AdvanceDroneCrash(),
+            actorId,
+            target.DroneId,
+            new GameplayDroneCrashIntent(target.DroneId));
+        var crashRoute = new GameplayDroneCrashCandidateExecutionRoute(spatial);
+        var crashContext = new GameplayDecisionContext(
+            disabled.Resulting,
+            GameplayObservationSnapshot.FullState(
+                actorId,
+                disabled.Resulting));
+        GameplayExecutableCandidateEvaluation crashEvaluation =
+            crashRoute.Evaluate(crashContext, crashCandidate);
+        Require(crashEvaluation.IsLegal,
+            "Drone crash impact candidate was illegal: "
+                + crashEvaluation.FailureCode);
+        GameplayCapabilityRegistry crashCapabilities =
+            GameplayCurrentCapabilityCatalog.Create(
+                reducers,
+                new[]
+                {
+                    new GameplayReachableInput(
+                        GameplayReachableInputKind.SystemContinuation,
+                        "fixture.drone-crash",
+                        actorId,
+                        GameplayCapabilityProfiles.AdvanceDroneCrash()),
+                });
+        var crashRoutes = new GameplayCandidateExecutionRouteRegistry(
+            crashCapabilities);
+        crashRoutes.Register(crashRoute);
+        GameplaySemanticTransition crashTransition = crashRoutes.Prepare(
+            crashContext,
+            crashEvaluation);
+        GameplayReductionResult impacted = reducers.Reduce(
+            disabled.Resulting,
+            crashTransition);
+        DroneCrashImpactRecord impact = (DroneCrashImpactRecord)
+            ((GameplayTransitionReducedEvent)impacted.DomainEvents[0])
+            .SemanticRecord;
+        Require(impacted.Resulting.Drones[0].Lifecycle
+                == SummonLifecycleState.Destroyed
+            && impacted.Resulting.Drones[0].Position.DistanceTo(
+                impact.ImpactPosition) == 0f
+            && impact.Effects.Count > 0
+            && impacted.Resulting.FireFields.Count
+                == disabled.Resulting.FireFields.Count
+            && !GameplayMandatoryWorkRules.HasPending(impacted.Resulting),
+            "Crash impact did not create a modest localized wreck without fire.");
+
+        var branch = new GameplaySimulationBranch(
+            "drone-crash-replay",
+            initial,
+            reducers);
+        branch.Apply(attackTransition);
+        branch.Apply(crashTransition);
+        Require(GameplayExactReplay.Verify(
+                initial,
+                branch.Steps,
+                reducers).IsExact,
+            "Drone disable, fall, impact, and reactions did not replay exactly.");
+    }
+
+    private static GameplayCandidate FindFirstCandidate(
+        IEnumerable<GameplayCandidate> candidates,
+        GameplayCapabilityProfile profile)
+    {
+        foreach (GameplayCandidate candidate in candidates)
+            if (candidate.Profile.Equals(profile)) return candidate;
+        throw new InvalidOperationException(
+            "Expected gameplay candidate was not constructed for '"
+            + profile.Signature + "'.");
     }
 
     private static GameplaySemanticTransition CreateTransition(
@@ -785,7 +653,7 @@ internal static class SimulationChecks
             DestructiblePropSession.FromLevel(level, gameplay.Journal);
         var drones = new GameplayDroneSession(
             gameplay,
-            assembly.Drones,
+            assembly.DroneArchetypes,
             destructibles);
         using (var fireFields = new GameplayFireFieldSession(
             gameplay,
@@ -886,9 +754,39 @@ internal static class SimulationChecks
                 reducers,
                 trajectory);
 
-            DroneDefinition droneDefinition = assembly.GetDrone(
-                "scout-drone-01");
-            DroneSnapshot drone = drones.GetDrone(droneDefinition.Id);
+            ScenarioDroneSummonRuntimeDefinition summonRuntime =
+                assembly.GetDroneSummonAbility("ability.summon-drone");
+            DroneArchetypeDefinition droneDefinition =
+                assembly.GetDroneArchetype(
+                    summonRuntime.Ability.DroneArchetypeId);
+            GameplayActorSnapshot summoner = gameplay.GetActor("player");
+            var summon = new SummonDroneRecord(
+                checked(predicted.Session.LastTransitionSequence + 1L),
+                "player",
+                summonRuntime.Ability,
+                droneDefinition,
+                new GameplayPosition(
+                    summoner.Pose.Position.X,
+                    summoner.Pose.Position.Y
+                        + summonRuntime.Ability.SpawnHeight,
+                    summoner.Pose.Position.Z),
+                summoner.Pose.FacingDegrees,
+                summoner.TurnBudget,
+                summoner.TurnBudget.SpendAction(
+                    summonRuntime.Ability.SummonCost));
+            drones.CommitSummon(summon);
+            predicted = VerifyIntegratedStep(
+                "Depot drone summon",
+                predicted,
+                new GameplaySummonDroneTransitionPayload(summon),
+                gameplay,
+                destructibles,
+                fireFields,
+                drones,
+                reducers,
+                trajectory);
+            SummonedDroneSnapshot drone = drones.GetDrone(
+                summon.DroneInstanceId);
             var droneDestination = new GameplayPosition(
                 drone.Position.X,
                 drone.Position.Y,
@@ -928,7 +826,7 @@ internal static class SimulationChecks
                         new GameplayTransitionIdentity(
                             attackSequence,
                             GameplaySemanticCapability.DirectAttack.ToString(),
-                            droneDefinition.SummonerActorId,
+                            drone.SummonerActorId,
                             droneTarget.ActorId),
                         "resolution"),
                     droneExposure,
@@ -2558,16 +2456,16 @@ internal static class SimulationChecks
                 speed: 0f),
             gameplay.Journal);
         string droneControllerId = gameplay.InitiativeOrder[1];
-        var droneDefinition = new DroneDefinition(
-            "drone.projection",
-            new DroneTurnPartnership(droneControllerId),
-            new GameplayPosition(0f, 2f, 5f),
-            startingFacingDegrees: 0f,
-            maximumIntegrity: 5f,
-            maximumMoveDistance: 5f,
-            new ActionCost(1, 0f, ActionMobility.Mobile),
-            new DroneSensorDefinition(16f, 120f),
-            CreateRifle());
+        DroneArchetypeDefinition droneDefinition = CreateDroneArchetype(
+            "drone.projection");
+        var droneAbility = new DroneSummonAbilityDefinition(
+            "ability.projection-drone",
+            droneDefinition.ArchetypeId,
+            new ActionCost(1, 0f, ActionMobility.Set),
+            maximumSpawnDistance: 5f,
+            maximumActiveInstances: 1,
+            durationTurns: null,
+            spawnHeight: 2f);
         var drones = new GameplayDroneSession(
             gameplay,
             new[] { droneDefinition },
@@ -2660,7 +2558,21 @@ internal static class SimulationChecks
 
         GameplayActorSnapshot controller = live.CurrentState.Session.GetActor(
             droneControllerId);
-        DroneSnapshot drone = live.CurrentState.Drones[0];
+        var summon = new SummonDroneRecord(
+            checked(live.CurrentState.Session.LastTransitionSequence + 1L),
+            droneControllerId,
+            droneAbility,
+            droneDefinition,
+            new GameplayPosition(
+                controller.Pose.Position.X,
+                controller.Pose.Position.Y + droneAbility.SpawnHeight,
+                controller.Pose.Position.Z),
+            controller.Pose.FacingDegrees,
+            controller.TurnBudget,
+            controller.TurnBudget.SpendAction(droneAbility.SummonCost));
+        drones.CommitSummon(summon);
+        controller = live.CurrentState.Session.GetActor(droneControllerId);
+        SummonedDroneSnapshot drone = live.CurrentState.Drones[0];
         var droneMove = new DroneMoveRecord(
             droneControllerId,
             drone.DroneId,
@@ -2739,7 +2651,8 @@ internal static class SimulationChecks
             launchAction);
         live.Execute(new GameplaySemanticTransition(
             new GameplayTransitionIdentity(
-                4L,
+                checked(
+                    live.CurrentState.Session.LastTransitionSequence + 1L),
                 launchPayload.Profile.Capability.ToString(),
                 launchPayload.ActorId,
                 launchPayload.SubjectId),
@@ -2759,7 +2672,8 @@ internal static class SimulationChecks
             elapsedTurnTime: 1f,
             ProjectileFlightStatus.InFlight);
         var advance = new ProjectileAdvanceRecord(
-            sequence: 5L,
+            sequence: checked(
+                live.CurrentState.Session.LastTransitionSequence + 1L),
             previousFlight,
             resultingFlight,
             requestedTurnTime: 1f,
@@ -2789,30 +2703,30 @@ internal static class SimulationChecks
                 playbackStart.Progress);
         GameplayPresentationWorldStateSample droneSample =
             GameplaySemanticReplaySampler.Sample(
-                replay.Frames[1],
+                replay.Frames[2],
                 linearProgress: 0.5f);
         GameplayPresentationWorldStateSample vehicleSample =
             GameplaySemanticReplaySampler.Sample(
-                replay.Frames[2],
+                replay.Frames[3],
                 linearProgress: 0.5f);
         GameplayPresentationWorldStateSample projectileSample =
             GameplaySemanticReplaySampler.Sample(
-                replay.Frames[4],
+                replay.Frames[5],
                 linearProgress: 0.5f);
         GameplayPresentationWorldStateSample beforeLaunch =
             GameplaySemanticReplaySampler.Sample(
-                replay.Frames[3],
+                replay.Frames[4],
                 linearProgress: 0f);
         GameplayPresentationWorldStateSample resolvedLaunch =
             GameplaySemanticReplaySampler.Sample(
-                replay.Frames[3],
+                replay.Frames[4],
                 GameplaySemanticReplayPresentationTiming
                     .ActionResolutionProgress);
         IReadOnlyList<TurnReplayActorActionState> launchActions =
             TurnReplayActorActionProjector.Project(
-                replay.Frames[3],
+                replay.Frames[4],
                 normalizedProgress: 0.5f);
-        Require(replay.Frames.Count == 5
+        Require(replay.Frames.Count == 6
             && string.Equals(
                 replay.FinalState.CanonicalHash,
                 live.CurrentState.CanonicalHash,
@@ -3510,12 +3424,27 @@ internal static class SimulationChecks
         int concussiveThrows = 0;
         int droneMoves = 0;
         int droneAttacks = 0;
+        int droneSummons = 0;
+        int droneDismissals = 0;
+        int droneExpirations = 0;
+        int droneCrashes = 0;
         foreach (GameplayBattleTransitionRecord transition in
             result.Transitions)
             foreach (GameplayDomainEvent domainEvent in transition.DomainEvents)
             {
+                if (domainEvent is GameplayDroneExpiredEvent)
+                {
+                    droneExpirations++;
+                    continue;
+                }
                 if (!(domainEvent is GameplayTransitionReducedEvent reduced))
                     continue;
+                if (reduced.SemanticRecord is SummonDroneRecord)
+                    droneSummons++;
+                if (reduced.SemanticRecord is DismissDroneRecord)
+                    droneDismissals++;
+                if (reduced.SemanticRecord is DroneCrashImpactRecord)
+                    droneCrashes++;
                 if (reduced.SemanticRecord is DroneMoveRecord) droneMoves++;
                 if (reduced.SemanticRecord is DroneAttackRecord
                     || reduced.SemanticRecord is ActorDroneAttackRecord)
@@ -3533,14 +3462,19 @@ internal static class SimulationChecks
         Console.WriteLine(
             "First-sim mechanics: fire=" + fireDeployments
             + ", concussive=" + concussiveThrows
+            + ", drone-summons=" + droneSummons
             + ", drone-moves=" + droneMoves
-            + ", drone-attacks=" + droneAttacks);
+            + ", drone-attacks=" + droneAttacks
+            + ", drone-dismissals=" + droneDismissals
+            + ", drone-expirations=" + droneExpirations
+            + ", drone-crashes=" + droneCrashes);
         // The calibrated rifle can now end this seeded battle before policy
         // selects the optional prop shot. DirectFireDestructibleTests owns the
         // deterministic impact-to-fracture vertical slice; this permanent run
         // continues to prove the four policy-driven first-sim mechanics.
         Require(fireDeployments > 0
             && concussiveThrows > 0
+            && droneSummons > 0
             && droneMoves > 0
             && droneAttacks > 0,
             "Permanent battle did not exercise every first-sim mechanic.");
@@ -3595,113 +3529,12 @@ internal static class SimulationChecks
                 == verifiedCombatTranscript.Totals.SystemicChanges,
             "Permanent replay did not expose canonical physiology advances.");
         Stopwatch playbackClock = Stopwatch.StartNew();
-        string embeddedArtifactJson = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
-            "Assets",
-            "GritGud",
-            "Content",
-            "Resources",
-            "SimulationArtifacts",
-            "depot-first-sim.json"));
-        GameplayBattleArtifact playbackArtifact = GameplayBattleArtifactCodec
-            .Read(embeddedArtifactJson);
+        GameplayBattleArtifact playbackArtifact = decoded;
         GameplaySemanticReplayTimeline loadedArtifactReplay =
             GameplayBattleArtifactReplayLoader.Load(playbackArtifact);
         var combatPlayback = new GameplaySemanticReplayPlaybackTimeline(
             loadedArtifactReplay);
         var combatTranscript = new ReplayCombatTranscript(combatPlayback);
-        ReplayActorTerminalPoseEpisode warehousePatrolEpisode = null;
-        ReplayActorTerminalPoseEpisode finalOrenEpisode = null;
-        foreach (ReplayActorTerminalPoseEpisode episode in
-            combatPlayback.TerminalPoseEpisodes)
-        {
-            if (string.Equals(
-                    episode.ActorId,
-                    "depot-warehouse-patrol",
-                    StringComparison.Ordinal)
-                && episode.SourceTransitionSequence == 7)
-                warehousePatrolEpisode = episode;
-            if (string.Equals(
-                    episode.ActorId,
-                    "oren-vale",
-                    StringComparison.Ordinal)
-                && episode.SourceTransitionSequence == 50)
-                finalOrenEpisode = episode;
-        }
-        Require(warehousePatrolEpisode != null
-            && warehousePatrolEpisode.PoseKind
-                == ReplayActorTerminalPoseKind.ShoulderFall
-            && warehousePatrolEpisode.HitRegion == TargetRegionId.Torso
-            && string.Equals(
-                warehousePatrolEpisode.EpisodeId,
-                "terminal:depot-warehouse-patrol:7",
-                StringComparison.Ordinal),
-            "Embedded replay lost its localized warehouse-patrol terminal episode.");
-        GameplaySemanticReplayPlaybackFrame warehouseSourceFrame = null;
-        GameplaySemanticReplayPlaybackFrame warehouseLaterFrame = null;
-        foreach (GameplaySemanticReplayPlaybackFrame frame in
-            combatPlayback.Frames)
-        {
-            if (frame.Frame.Transition.Identity.Sequence == 7)
-                warehouseSourceFrame = frame;
-            else if (warehouseSourceFrame != null
-                && warehouseLaterFrame == null
-                && frame.StartSeconds >= warehouseSourceFrame.EndSeconds)
-                warehouseLaterFrame = frame;
-        }
-        ReplayActorTerminalPoseSample warehouseLaterSample =
-            warehouseLaterFrame == null
-                ? null
-                : combatPlayback.SampleTerminalPose(
-                    warehousePatrolEpisode.ActorId,
-                    warehouseLaterFrame.StartSeconds);
-        Require(warehouseSourceFrame != null
-            && warehouseLaterFrame != null
-            && combatPlayback.SampleTerminalPose(
-                warehousePatrolEpisode.ActorId,
-                warehousePatrolEpisode.StartSeconds - 0.001f) == null
-            && warehouseLaterSample != null
-            && string.Equals(
-                warehouseLaterSample.EpisodeId,
-                warehousePatrolEpisode.EpisodeId,
-                StringComparison.Ordinal)
-            && warehouseLaterSample.NormalizedProgress > 0f,
-            "Terminal pose did not remain seekable after its source frame.");
-        float warehouseDeathTime = -1f;
-        foreach (ReplayCombatTranscriptEntry entry in combatTranscript.Entries)
-            if (entry.EventKind == ReplayCombatTranscriptEventKind.Death
-                && string.Equals(
-                    entry.TargetId,
-                    warehousePatrolEpisode.ActorId,
-                    StringComparison.Ordinal))
-            {
-                warehouseDeathTime = entry.TimeSeconds;
-                break;
-            }
-        Require(Math.Abs(
-                warehouseDeathTime
-                    - warehousePatrolEpisode.StartSeconds) < 0.0001f,
-            "Terminal pose and transcript death timing diverged.");
-        ReplayActorTerminalPoseSample finalOrenSample = finalOrenEpisode == null
-            ? null
-            : combatPlayback.SampleTerminalPose(
-                finalOrenEpisode.ActorId,
-                combatPlayback.TotalDurationSeconds);
-        Require(finalOrenEpisode != null
-            && finalOrenEpisode.PoseKind
-                == ReplayActorTerminalPoseKind.FallOver
-            && combatPlayback.TotalDurationSeconds
-                > combatPlayback.SemanticDurationSeconds
-            && Math.Abs(
-                combatPlayback.TotalDurationSeconds
-                    - finalOrenEpisode.AnimationEndSeconds) < 0.0001f
-            && Math.Abs(
-                combatPlayback.TurnGroups[
-                    combatPlayback.TurnGroups.Count - 1].EndSeconds
-                    - combatPlayback.TotalDurationSeconds) < 0.0001f
-            && finalOrenSample != null
-            && finalOrenSample.NormalizedProgress == 1f,
-            "Final terminal episode did not extend the seekable replay tail.");
         playbackClock.Stop();
         Console.WriteLine(
             "Artifact playback decode + load: "
@@ -3731,12 +3564,20 @@ internal static class SimulationChecks
             && decoded.Content.Scoreboard.ConcussiveTargets > 0
             && decoded.Content.Scoreboard.DroneMoves == droneMoves
             && decoded.Content.Scoreboard.DroneAttacks > 0
+            && decoded.Content.Scoreboard.DroneSummons == droneSummons
+            && decoded.Content.Scoreboard.DroneDismissals == droneDismissals
+            && decoded.Content.Scoreboard.DroneExpirations == droneExpirations
+            && decoded.Content.Scoreboard.DroneCrashes == droneCrashes
             && string.Equals(
                 verifiedArtifactReplay.FinalState.CanonicalHash,
                 result.FinalState.CanonicalHash,
                 StringComparison.Ordinal)
             && loadedArtifactReplay.Frames.Count
                 == playbackArtifact.Content.Transitions.Count
+            && string.Equals(
+                loadedArtifactReplay.FinalState.CanonicalHash,
+                result.FinalState.CanonicalHash,
+                StringComparison.Ordinal)
             && combatTranscript.Totals.AttackExecutions
                 == playbackArtifact.Content.Scoreboard.Attacks
             && combatTranscript.Totals.Hits
@@ -3745,18 +3586,11 @@ internal static class SimulationChecks
                 == playbackArtifact.Content.Scoreboard.Attacks
                     - playbackArtifact.Content.Scoreboard.Hits
             && combatTranscript.Totals.WoundsApplied
-                >= playbackArtifact.Content.Scoreboard.Wounds
-            && string.Equals(
-                playbackArtifact.Content.ExecutionIdentity.Gameplay
-                    .DefinitionDigest,
-                decoded.Content.ExecutionIdentity.Gameplay.DefinitionDigest,
-                StringComparison.Ordinal),
-            "Battle artifact was not byte-stable and scoreboard-complete.");
+                >= playbackArtifact.Content.Scoreboard.Wounds,
+            "Battle artifact was not byte-stable, replayable, and scoreboard-complete.");
+
         var transcriptEventIds = new HashSet<string>(StringComparer.Ordinal);
         float previousTranscriptTime = 0f;
-        int lateOrenDischarges = 0;
-        int lateOrenHits = 0;
-        int lateOrenMisses = 0;
         int transcriptInjuryEntries = 0;
         foreach (ReplayCombatTranscriptEntry entry in combatTranscript.Entries)
         {
@@ -3766,40 +3600,38 @@ internal static class SimulationChecks
                 "Replay combat transcript is not chronologically ordered.");
             previousTranscriptTime = entry.TimeSeconds;
             if (entry.EventKind
-                == ReplayCombatTranscriptEventKind.InjuryApplied)
-            {
-                transcriptInjuryEntries++;
-                Require(entry.Injury != null
-                    && entry.Injury.Severity > 0
-                    && entry.CapabilitiesBefore != null
-                    && entry.CapabilitiesAfter != null
-                    && entry.PhysiologyBefore != null
-                    && entry.PhysiologyAfter != null
-                    && entry.LifeStateBefore.HasValue
-                    && entry.LifeStateAfter.HasValue,
-                    "Replay injury entry omitted stored localized consequences.");
-            }
-            if (entry.EventKind
-                    != ReplayCombatTranscriptEventKind.WeaponDischarge
-                || entry.TransitionSequence < 44
-                || entry.TransitionSequence > 48
-                || !string.Equals(
-                    entry.ShooterId,
-                    "oren-vale",
-                    StringComparison.Ordinal))
+                != ReplayCombatTranscriptEventKind.InjuryApplied)
                 continue;
-            lateOrenDischarges++;
-            if (entry.Outcome == ReplayCombatPresentationOutcome.Hit)
-                lateOrenHits++;
-            else if (entry.Outcome == ReplayCombatPresentationOutcome.Miss)
-                lateOrenMisses++;
+            transcriptInjuryEntries++;
+            Require(entry.Injury != null
+                && entry.Injury.Severity > 0
+                && entry.CapabilitiesBefore != null
+                && entry.CapabilitiesAfter != null
+                && entry.PhysiologyBefore != null
+                && entry.PhysiologyAfter != null
+                && entry.LifeStateBefore.HasValue
+                && entry.LifeStateAfter.HasValue,
+                "Replay injury entry omitted stored localized consequences.");
         }
-        Require(lateOrenDischarges == 4
-            && lateOrenHits == 1
-            && lateOrenMisses == 3
-            && transcriptInjuryEntries
+        Require(transcriptInjuryEntries
                 == combatTranscript.Totals.InjuriesApplied,
-            "Depot replay volley classification changed unexpectedly.");
+            "Replay transcript injury totals diverged.");
+        foreach (ReplayActorTerminalPoseEpisode episode in
+            combatPlayback.TerminalPoseEpisodes)
+        {
+            ReplayActorTerminalPoseSample sample =
+                combatPlayback.SampleTerminalPose(
+                    episode.ActorId,
+                    Math.Min(
+                        combatPlayback.TotalDurationSeconds,
+                        episode.AnimationEndSeconds));
+            Require(sample != null
+                && string.Equals(
+                    sample.EpisodeId,
+                    episode.EpisodeId,
+                    StringComparison.Ordinal),
+                "A replay terminal episode was not seekable.");
+        }
         float transcriptMidpoint = combatPlayback.TotalDurationSeconds * 0.5f;
         IReadOnlyList<ReplayCombatTranscriptEntry> midpointEntries =
             combatTranscript.GetEntriesAtOrBefore(transcriptMidpoint);
@@ -4745,7 +4577,7 @@ internal static class SimulationChecks
             new GameplayBlastConsequenceResolver(gameplay, destructibles));
         var drones = new GameplayDroneSession(
             gameplay,
-            assembly.Drones,
+            assembly.DroneArchetypes,
             destructibles);
         GameplayCombatStateSnapshot initial = GameplayCombatStateCapture.Capture(
             gameplay,

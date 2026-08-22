@@ -69,13 +69,13 @@ namespace GritGud.Application.Gameplay
             state.RequireCoverage(GameplayCombatStateCoverage.Drones);
             GameplaySessionStateSnapshot session = state.Session;
             DroneAttackRecord action = payload.Action;
-            DroneSnapshot drone = FindDrone(state.Drones, action.DroneId);
+            SummonedDroneSnapshot drone = FindDrone(state.Drones, action.DroneId);
             GameplayActorSnapshot summoner = session.GetActor(
                 action.SummonerActorId);
             if (!drone.IsOperational
-                || drone.Definition.TurnPartnership.PoolingPolicy
+                || drone.TurnPartnership.PoolingPolicy
                     != DroneTurnPoolingPolicy.SharedSummonerBudget
-                || !drone.Definition.TurnPartnership.OwnsSharedBudget(
+                || !drone.TurnPartnership.OwnsSharedBudget(
                     summoner.ActorId))
                 throw new InvalidOperationException(
                     "Drone weapon use requires its operational summoner partnership.");
@@ -193,7 +193,7 @@ namespace GritGud.Application.Gameplay
                     return;
                 case GameplaySemanticSubjectKind.Vehicle
                     when action.Consequence is DroneIntegrityDamageRecord damage:
-                    DroneSnapshot targetDrone = mutation.GetDrone(action.TargetId);
+                    SummonedDroneSnapshot targetDrone = mutation.GetDrone(action.TargetId);
                     if (!DroneStatesMatch(targetDrone, damage.Previous))
                         throw new InvalidOperationException(
                             "Drone attack integrity consequence is stale.");
@@ -206,11 +206,11 @@ namespace GritGud.Application.Gameplay
             }
         }
 
-        private static DroneSnapshot FindDrone(
-            IEnumerable<DroneSnapshot> drones,
+        private static SummonedDroneSnapshot FindDrone(
+            IEnumerable<SummonedDroneSnapshot> drones,
             string droneId)
         {
-            foreach (DroneSnapshot drone in drones)
+            foreach (SummonedDroneSnapshot drone in drones)
                 if (string.Equals(drone.DroneId, droneId,
                     StringComparison.Ordinal)) return drone;
             throw new KeyNotFoundException(
@@ -227,8 +227,8 @@ namespace GritGud.Application.Gameplay
             && left.MovementOpportunity == right.MovementOpportunity;
 
         private static bool DroneStatesMatch(
-            DroneSnapshot left,
-            DroneSnapshot right) =>
+            SummonedDroneSnapshot left,
+            SummonedDroneSnapshot right) =>
             string.Equals(left.DroneId, right.DroneId, StringComparison.Ordinal)
             && left.Position.DistanceTo(right.Position) == 0f
             && left.FacingDegrees == right.FacingDegrees
