@@ -365,7 +365,7 @@ namespace GritGud.Presentation.Tests
                 runtime.DialogueDrawer;
             GameplayDroneController drones = runtime.Bootstrap
                 .GetComponent<GameplayDroneController>();
-            GameplayCameraController camera = runtime.Bootstrap
+            GameplayCameraController camera = Camera.main
                 .GetComponent<GameplayCameraController>();
 
             Assert.That(
@@ -435,6 +435,10 @@ namespace GritGud.Presentation.Tests
                 sampledDronePosition.X,
                 sampledDronePosition.Y,
                 sampledDronePosition.Z);
+            var droneReplayStart = new Vector3(
+                droneMovement.Origin.X,
+                droneMovement.Origin.Y,
+                droneMovement.Origin.Z);
 
             // Reopen the verified replay to prove every world presenter owns a
             // reversible projection boundary, including drones.
@@ -450,8 +454,6 @@ namespace GritGud.Presentation.Tests
             float cameraZoom = camera.ThirdPersonZoom;
             Transform replayedActor = gameplay.WorldRegistry
                 .GetActor(movement.ActorId).Transform;
-            Transform replayedDrone = drones.GetPresentationTransform(
-                droneMovement.DroneId);
             replayHud.OpenVerifiedExternalReplay();
 
             GameplaySemanticReplayPlaybackFrame thrownFrame = replayHud
@@ -520,7 +522,6 @@ namespace GritGud.Presentation.Tests
             replayHud.OpenVerifiedExternalReplay();
 
             Vector3 replayStart = replayedActor.position;
-            Vector3 droneReplayStart = replayedDrone.position;
             replayHud.AdvancePlayback(
                 movementFrame.StartSeconds
                 + (movementFrame.DurationSeconds * movementProgress));
@@ -559,6 +560,8 @@ namespace GritGud.Presentation.Tests
                 + (droneMovementFrame.DurationSeconds * movementProgress);
             replayHud.AdvancePlayback(
                 droneMovementTime - replayHud.TimeSeconds);
+            Transform replayedDrone = drones.GetPresentationTransform(
+                droneMovement.DroneId);
             Assert.That(
                 Vector3.Distance(replayedDrone.position, expectedDronePosition),
                 Is.LessThan(0.001f));
@@ -606,11 +609,26 @@ namespace GritGud.Presentation.Tests
             int expectedIncapacitations = replayHud.Playback.Frames.Sum(frame =>
                 ReplayCombatPresentationEventProjector.Project(frame.Frame)
                     .Count(presentationEvent => presentationEvent.Kind ==
-                        ReplayCombatPresentationEventKind.Incapacitation));
+                            ReplayCombatPresentationEventKind.Incapacitation
+                        || presentationEvent.Kind ==
+                            ReplayCombatPresentationEventKind.Death));
             int expectedDroneDischarges = replayHud.Playback.Frames.Sum(frame =>
                 ReplayCombatPresentationEventProjector.Project(frame.Frame)
                     .Count(presentationEvent => presentationEvent.ShooterKind ==
                         ReplayCombatPresentationSubjectKind.Drone));
+            int expectedDroneTransientVisuals = replayHud.Playback.Frames.Sum(
+                frame => ReplayCombatPresentationEventProjector
+                    .Project(frame.Frame)
+                    .Where(presentationEvent =>
+                        presentationEvent.ShooterKind ==
+                            ReplayCombatPresentationSubjectKind.Drone)
+                    .Sum(presentationEvent => 1 +
+                        (presentationEvent.Outcome !=
+                                ReplayCombatPresentationOutcome.Miss
+                            && presentationEvent.Outcome !=
+                                ReplayCombatPresentationOutcome.Blocked
+                                ? 1
+                                : 0)));
             int expectedActorDroneDischarges = replayHud.Playback.Frames.Sum(
                 frame => ReplayCombatPresentationEventProjector
                     .Project(frame.Frame)
@@ -642,9 +660,10 @@ namespace GritGud.Presentation.Tests
                 Is.EqualTo(expectedDroneDischarges));
             Assert.That(
                 drones.ReplayTransientVisualCount,
-                Is.EqualTo(expectedDroneDischarges * 2),
+                Is.EqualTo(expectedDroneTransientVisuals),
                 "Every crossed drone discharge must create a visible muzzle "
-                + "light and historical tracer.");
+                + "light, while successful shots also create a historical "
+                + "tracer.");
 
             runtime.Bootstrap.PlayMainLevel();
             Assert.That(

@@ -171,8 +171,10 @@ namespace GritGud.Presentation.Tests
                     .RequireViewerIdentityCompatibility(artifact, viewer));
         }
 
-        [TestCase(7)]
-        [TestCase(10)]
+        [TestCase(
+            GameplayBattleArtifactReplayLoader
+                .OldestSupportedRulesSchemaVersion - 1)]
+        [TestCase(GameplayCombatStateSnapshot.CurrentSchemaVersion + 1)]
         public void ViewerRejectsUnsupportedArtifactRules(int rulesSchemaVersion)
         {
             GameplayExecutionIdentity artifact = CreateIdentity(

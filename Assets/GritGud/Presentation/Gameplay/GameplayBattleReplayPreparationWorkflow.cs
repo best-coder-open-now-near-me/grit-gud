@@ -114,7 +114,7 @@ namespace GritGud.Presentation.Gameplay
     /// </summary>
     internal static class GameplayFirstSimulationPreparationService
     {
-        public static async Task<GameplayBattleReplayPreparationResult<
+        public static Task<GameplayBattleReplayPreparationResult<
             GameplayBattleArtifact,
             GameplaySemanticReplayTimeline>> PrepareAsync(
             GameplayScenarioAssembly assembly,
@@ -125,7 +125,6 @@ namespace GritGud.Presentation.Gameplay
                 nameof(assembly));
             if (spatialContent == null)
                 throw new ArgumentNullException(nameof(spatialContent));
-            await Task.Yield();
             cancellationToken.ThrowIfCancellationRequested();
 
             GameplayBattleArtifact artifact = LoadArtifact();
@@ -145,9 +144,9 @@ namespace GritGud.Presentation.Gameplay
             RequireViewerWeaponPresentationCompatibility(
                 replay,
                 WeaponPresentationCatalog.LoadDefault());
-            return GameplayBattleReplayPreparationResult<
+            return Task.FromResult(GameplayBattleReplayPreparationResult<
                 GameplayBattleArtifact,
-                GameplaySemanticReplayTimeline>.Ready(artifact, replay);
+                GameplaySemanticReplayTimeline>.Ready(artifact, replay));
         }
 
         private static GameplayBattleArtifact LoadArtifact()
