@@ -153,6 +153,38 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void ProceduralScoutDroneUsesSupportedProjectMaterial()
+        {
+            var root = new GameObject("Scout Drone Material Test");
+            try
+            {
+                GameplayDroneVisualPresenter presenter = root.AddComponent<
+                    GameplayDroneVisualPresenter>();
+                presenter.Build();
+
+                Renderer[] renderers = root.GetComponentsInChildren<Renderer>();
+                Assert.That(renderers, Is.Not.Empty);
+                foreach (Renderer renderer in renderers)
+                {
+                    Assert.That(renderer.sharedMaterial, Is.Not.Null);
+                    Assert.That(renderer.sharedMaterial.shader, Is.Not.Null);
+                    Assert.That(
+                        renderer.sharedMaterial.shader.isSupported,
+                        Is.True,
+                        renderer.name);
+                    Assert.That(
+                        renderer.sharedMaterial.shader.name,
+                        Is.EqualTo("GritGud/CelSurface"),
+                        renderer.name);
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
         public void EveryLevelArchetypeSelectsAnAvailableSurface()
         {
             LevelArchetypeCatalog archetypes = LevelArchetypeCatalog.LoadDefault();

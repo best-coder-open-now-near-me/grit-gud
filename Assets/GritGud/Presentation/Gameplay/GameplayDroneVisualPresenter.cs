@@ -37,8 +37,12 @@ namespace GritGud.Presentation.Gameplay
         internal void Build()
         {
             if (rotors != null) return;
-            material = new Material(Shader.Find("Standard"));
-            material.color = new Color(0.12f, 0.18f, 0.2f, 1f);
+            material = RuntimeMaterialFactory.CreateCelColor(
+                new Color(0.12f, 0.18f, 0.2f, 1f),
+                "Scout Drone Surface");
+            if (material == null)
+                throw new MissingReferenceException(
+                    "Scout drone presentation requires a supported runtime material.");
             CreatePart("Body", PrimitiveType.Sphere, Vector3.zero,
                 new Vector3(0.8f, 0.32f, 0.65f));
             CreatePart("Sensor", PrimitiveType.Sphere,
