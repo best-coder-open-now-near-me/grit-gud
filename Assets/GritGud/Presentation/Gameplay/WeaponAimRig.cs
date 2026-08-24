@@ -382,6 +382,9 @@ namespace GritGud.Presentation.Gameplay
             {
                 blendWeight = 0f;
                 AlignWeaponToAnimatedPrimaryGrip();
+                AdvanceRecoilEnvelope(
+                    Mathf.Max(0f, deltaTime),
+                    applyToWeapon: false);
                 AimErrorDegrees = CalculateAimErrorDegrees();
                 return;
             }
@@ -392,13 +395,18 @@ namespace GritGud.Presentation.Gameplay
             {
                 blendWeight = 0f;
                 ApplyUnavailableHandlingOffset();
+                AdvanceRecoilEnvelope(
+                    Mathf.Max(0f, deltaTime),
+                    applyToWeapon: false);
                 AimErrorDegrees = CalculateAimErrorDegrees();
                 return;
             }
             ApplyBodyAimCorrection(Mathf.Max(0f, deltaTime), snapAim);
             AlignWeaponToAnimatedPrimaryGrip();
             ApplyWeaponAimCorrection(Mathf.Max(0f, deltaTime), snapAim);
-            ApplyRecoilImpulse(Mathf.Max(0f, deltaTime));
+            AdvanceRecoilEnvelope(
+                Mathf.Max(0f, deltaTime),
+                applyToWeapon: true);
             AlignPrimaryWristRotation();
             SolveSupportHandAfterAnimation();
             AimErrorDegrees = CalculateAimErrorDegrees();
@@ -445,10 +453,11 @@ namespace GritGud.Presentation.Gameplay
             return !currentIsIdle || !nextIsIdle;
         }
 
-        private void ApplyRecoilImpulse(float deltaTime)
+        private void AdvanceRecoilEnvelope(
+            float deltaTime,
+            bool applyToWeapon)
         {
-            if (recoilElapsed < 0f || recoilKickDegrees <= 0f ||
-                weaponAnchor == null || muzzle == null)
+            if (recoilElapsed < 0f || recoilKickDegrees <= 0f)
             {
                 RecoilWeight = 0f;
                 return;
@@ -458,31 +467,36 @@ namespace GritGud.Presentation.Gameplay
                 recoilElapsed,
                 recoilHoldSeconds,
                 recoilReturnSeconds);
-            Vector3 actorUp = actorRoot != null
-                ? actorRoot.up
-                : transform.up;
-            Vector3 fallbackRight = actorRoot != null
-                ? actorRoot.right
-                : transform.right;
-            Vector3 pitchAxis = CalculateRecoilPitchAxis(
-                muzzle.forward,
-                actorUp,
-                fallbackRight);
-            Quaternion recoilRotation = Quaternion.AngleAxis(
-                -recoilKickDegrees * RecoilWeight,
-                pitchAxis);
-            Vector3 gripPivot = rightHand != null
-                ? rightHand.position
-                : rightGripSocket != null
-                    ? rightGripSocket.position
-                    : weaponAnchor.position;
-            weaponAnchor.position = gripPivot + recoilRotation
-                * (weaponAnchor.position - gripPivot);
-            weaponAnchor.rotation = recoilRotation * weaponAnchor.rotation;
+            if (applyToWeapon && weaponAnchor != null && muzzle != null)
+            {
+                Vector3 actorUp = actorRoot != null
+                    ? actorRoot.up
+                    : transform.up;
+                Vector3 fallbackRight = actorRoot != null
+                    ? actorRoot.right
+                    : transform.right;
+                Vector3 pitchAxis = CalculateRecoilPitchAxis(
+                    muzzle.forward,
+                    actorUp,
+                    fallbackRight);
+                Quaternion recoilRotation = Quaternion.AngleAxis(
+                    -recoilKickDegrees * RecoilWeight,
+                    pitchAxis);
+                Vector3 gripPivot = rightHand != null
+                    ? rightHand.position
+                    : rightGripSocket != null
+                        ? rightGripSocket.position
+                        : weaponAnchor.position;
+                weaponAnchor.position = gripPivot + recoilRotation
+                    * (weaponAnchor.position - gripPivot);
+                weaponAnchor.rotation =
+                    recoilRotation * weaponAnchor.rotation;
+            }
             recoilElapsed += deltaTime;
             if (recoilElapsed >= recoilHoldSeconds + recoilReturnSeconds)
             {
                 recoilElapsed = -1f;
+                RecoilWeight = 0f;
             }
         }
 

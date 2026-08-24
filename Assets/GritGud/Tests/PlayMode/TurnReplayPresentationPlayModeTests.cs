@@ -831,7 +831,7 @@ namespace GritGud.PlayMode.Tests
                 occupiedHands: 2);
             var player = new ScenarioActorDefinition(
                 "player",
-                20,
+                30,
                 new GameplayActorPose(
                     new GameplayPosition(0f, 0f, 0f),
                     0f),
