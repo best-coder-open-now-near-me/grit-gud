@@ -53,8 +53,6 @@ namespace GritGud.Presentation.Tests
                     projectile,
                     Vector3.zero,
                     1f,
-                    0.55f,
-                    0.3f,
                     Vector3.one,
                     0.2f,
                     0.8f,
@@ -92,17 +90,16 @@ namespace GritGud.Presentation.Tests
                 Assert.That(
                     host.transform.GetChild(0).gameObject.activeSelf,
                     Is.False,
-                    "Smoke should wait for the grenade's authored release "
-                    + "and flight time.");
+                    "Smoke should wait for the shared release and flight "
+                    + "timeline.");
                 Assert.That(
                     host.transform.GetChild(0).GetComponent<BoxCollider>()
                         .enabled,
                     Is.False,
                     "Smoke visuals must never participate in projectile physics.");
                 Assert.That(
-                    catalog.GetThrownExplosive("item.smoke-grenade")
-                        .ImpactDelaySeconds,
-                    Is.EqualTo(0.85f).Within(0.001f));
+                    GameplayThrownExplosivePresentationTiming.ImpactSeconds,
+                    Is.EqualTo(1f).Within(0.001f));
 
                 controller.BeginReplayPresentation();
                 Assert.That(controller.ActiveVisualCount, Is.Zero);

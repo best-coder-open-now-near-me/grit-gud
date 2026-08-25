@@ -251,7 +251,7 @@ namespace GritGud.Presentation.Gameplay
             var visual = new SmokeVisual(field, presentation, root)
             {
                 ActivationSecondsRemaining = delayForThrow
-                    ? presentation.ImpactDelaySeconds
+                    ? GameplayThrownExplosivePresentationTiming.ImpactSeconds
                     : 0f,
             };
             bool activateImmediately = visual.ActivationSecondsRemaining <= 0f;

@@ -20,14 +20,6 @@ namespace GritGud.Presentation.Gameplay
         [SerializeField, Min(0.01f)]
         private float visualScale = 1f;
 
-        [SerializeField, Min(0.01f)]
-        private float flightSeconds =
-            GameplayThrownExplosivePresentationTiming.FlightSeconds;
-
-        [SerializeField, Min(0f)]
-        private float releaseDelaySeconds =
-            GameplayThrownExplosivePresentationTiming.ReleaseSeconds;
-
         [SerializeField]
         private Vector3 spinDegreesPerSecond = new Vector3(310f, 190f, 240f);
 
@@ -105,8 +97,6 @@ namespace GritGud.Presentation.Gameplay
             GameObject visualPrefab,
             Vector3 localRotationEuler,
             float modelScale,
-            float playbackSeconds,
-            float releaseSeconds,
             Vector3 spinEulerPerSecond,
             float arcScalePerMeter,
             float minimumArc,
@@ -134,8 +124,6 @@ namespace GritGud.Presentation.Gameplay
             projectilePrefab = visualPrefab;
             visualRotationEuler = localRotationEuler;
             visualScale = modelScale;
-            flightSeconds = playbackSeconds;
-            releaseDelaySeconds = releaseSeconds;
             spinDegreesPerSecond = spinEulerPerSecond;
             arcHeightPerMeter = arcScalePerMeter;
             minimumArcHeight = minimumArc;
@@ -169,13 +157,6 @@ namespace GritGud.Presentation.Gameplay
         public Quaternion VisualRotation => Quaternion.Euler(visualRotationEuler);
 
         public float VisualScale => Mathf.Max(0.01f, visualScale);
-
-        public float FlightSeconds => Mathf.Max(0.01f, flightSeconds);
-
-        public float ReleaseDelaySeconds => Mathf.Max(0f, releaseDelaySeconds);
-
-        public float ImpactDelaySeconds =>
-            ReleaseDelaySeconds + FlightSeconds;
 
         public Vector3 SpinDegreesPerSecond => spinDegreesPerSecond;
 
@@ -330,21 +311,6 @@ namespace GritGud.Presentation.Gameplay
                     && entry.PersistentEffectScalePerRadius <= 0f)
                     throw new InvalidOperationException(
                         $"Thrown-explosive presentation '{entry.ItemId}' persistent effect requires a positive radius scale.");
-                if (Mathf.Abs(
-                        entry.ReleaseDelaySeconds -
-                        GameplayThrownExplosivePresentationTiming
-                            .ReleaseSeconds) > 0.001f
-                    || Mathf.Abs(
-                        entry.FlightSeconds -
-                        GameplayThrownExplosivePresentationTiming
-                            .FlightSeconds) > 0.001f)
-                {
-                    throw new InvalidOperationException(
-                        $"Thrown-explosive presentation '{entry.ItemId}' "
-                        + "must use the shared deterministic release and "
-                        + "flight timing contract.");
-                }
-
                 if (!thrownExplosiveIndex.TryAdd(entry.ItemId, entry))
                 {
                     throw new InvalidOperationException(

@@ -93,20 +93,10 @@ namespace GritGud.Presentation.Tests
 
             Assert.That(presentation.ProjectilePrefab, Is.Not.Null);
             Assert.That(presentation.ImpactEffectPrefab, Is.Not.Null);
-            Assert.That(presentation.FlightSeconds, Is.EqualTo(0.55f));
-            Assert.That(presentation.ReleaseDelaySeconds, Is.EqualTo(0.45f));
             Assert.That(
-                presentation.ImpactDelaySeconds,
+                GameplayThrownExplosivePresentationTiming.ImpactSeconds,
                 Is.EqualTo(1f).Within(0.001f));
             Assert.That(presentation.ImpactEffectSeconds, Is.EqualTo(0.65f));
-            Assert.That(
-                presentation.FlightSeconds,
-                Is.EqualTo(GameplayThrownExplosivePresentationTiming
-                    .FlightSeconds));
-            Assert.That(
-                presentation.ReleaseDelaySeconds,
-                Is.EqualTo(GameplayThrownExplosivePresentationTiming
-                    .ReleaseSeconds));
             Assert.That(
                 presentation.ImpactEffectSeconds,
                 Is.EqualTo(GameplayThrownExplosivePresentationTiming
@@ -569,8 +559,6 @@ namespace GritGud.Presentation.Tests
                 grenadeVisual,
                 Vector3.zero,
                 1f,
-                0.55f,
-                0.45f,
                 new Vector3(310f, 190f, 240f),
                 arcHeightPerMeter,
                 minimumArcHeight,

@@ -23,8 +23,6 @@ namespace GritGud.Presentation.Tests
                     projectile,
                     Vector3.zero,
                     1f,
-                    0.5f,
-                    0.3f,
                     Vector3.one,
                     0.2f,
                     0.8f,

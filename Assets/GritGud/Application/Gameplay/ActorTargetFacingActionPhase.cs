@@ -134,14 +134,15 @@ namespace GritGud.Application.Gameplay
         public const float RecoveryEndSeconds = 0.8f;
         public const float PostImpactSeconds = 0.65f;
         public const float DefaultImpactEffectSeconds = 0.65f;
+        public const float ImpactSeconds = ReleaseSeconds + FlightSeconds;
         public const float TotalSequenceSeconds =
-            ReleaseSeconds + FlightSeconds + PostImpactSeconds;
+            ImpactSeconds + PostImpactSeconds;
         public const float ReleaseNormalizedTime =
             ReleaseSeconds / TotalSequenceSeconds;
         public const float RecoveryEndNormalizedTime =
             RecoveryEndSeconds / TotalSequenceSeconds;
         public const float ImpactNormalizedTime =
-            (ReleaseSeconds + FlightSeconds) / TotalSequenceSeconds;
+            ImpactSeconds / TotalSequenceSeconds;
 
         public static ActorTargetFacingActionPhase CreateFacingPhase(
             float startingFacingDegrees,

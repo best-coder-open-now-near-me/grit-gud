@@ -716,10 +716,11 @@ namespace GritGud.Presentation.Gameplay
             ActorTargetFacingActionPhase facingPhase)
         {
             float elapsedSequence = 0f;
-            while (elapsedSequence < presentation.ReleaseDelaySeconds)
+            while (elapsedSequence <
+                GameplayThrownExplosivePresentationTiming.ReleaseSeconds)
             {
                 elapsedSequence = Mathf.Min(
-                    presentation.ReleaseDelaySeconds,
+                    GameplayThrownExplosivePresentationTiming.ReleaseSeconds,
                     elapsedSequence + Time.unscaledDeltaTime);
                 PresentFacing(
                     facingPhase.SampleFacingDegrees(
@@ -765,11 +766,14 @@ namespace GritGud.Presentation.Gameplay
             LastReleaseSocketPosition = releaseSocketPosition;
             LastVisualReleasePosition = origin;
             float elapsed = 0f;
-            while (elapsed < presentation.FlightSeconds && playbackRoot != null)
+            while (elapsed <
+                    GameplayThrownExplosivePresentationTiming.FlightSeconds
+                && playbackRoot != null)
             {
                 elapsed += Time.unscaledDeltaTime;
                 float progress = Mathf.Clamp01(
-                    elapsed / presentation.FlightSeconds);
+                    elapsed / GameplayThrownExplosivePresentationTiming
+                        .FlightSeconds);
                 playbackRoot.transform.position = EvaluateThrowPosition(
                     origin,
                     landing,
@@ -902,7 +906,7 @@ namespace GritGud.Presentation.Gameplay
                         flightProgress,
                         presentation);
                 float flightSeconds = flightProgress
-                    * presentation.FlightSeconds;
+                    * GameplayThrownExplosivePresentationTiming.FlightSeconds;
                 replayFlightProjectileRoot.transform.rotation =
                     presentation.VisualRotation
                     * Quaternion.Euler(
