@@ -323,6 +323,9 @@ namespace GritGud.PlayMode.Tests
                 Assert.That(drawer.IsExpanded, Is.True);
                 Assert.That(drawer.Source,
                     Is.SameAs(transcriptPresenter.VisibleSource));
+                Assert.That(
+                    transcriptPresenter.TranscriptProjectionPassCount,
+                    Is.EqualTo(1));
                 Assert.That(enemyAActor.transform.position,
                     Is.EqualTo(new Vector3(5f, 0f, 0f)));
                 Assert.That(enemyBActor.transform.position,
@@ -365,6 +368,10 @@ namespace GritGud.PlayMode.Tests
                     entry.EventKind ==
                         ReplayCombatTranscriptEventKind.WeaponDischarge),
                     Is.True);
+                Assert.That(
+                    transcriptPresenter.TranscriptProjectionPassCount,
+                    Is.EqualTo(1),
+                    "Advancing the playhead must reuse the projected transcript.");
                 Assert.That(enemyAActor.transform.position,
                     Is.EqualTo(new Vector3(3f, 0f, 0f)));
                 Assert.That(enemyBActor.transform.position,

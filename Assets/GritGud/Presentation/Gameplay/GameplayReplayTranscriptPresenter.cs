@@ -10,6 +10,8 @@ namespace GritGud.Presentation.Gameplay
     {
         private readonly List<GameplayDialogueEntry> entries =
             new List<GameplayDialogueEntry>();
+        private readonly List<GameplayDialogueEntry> projectedEntries =
+            new List<GameplayDialogueEntry>();
         private readonly IReadOnlyList<GameplayDialogueEntry> readOnlyEntries;
 
         public GameplayReplayTranscriptSource()
@@ -23,11 +25,17 @@ namespace GritGud.Presentation.Gameplay
             ? 0
             : entries[entries.Count - 1].Sequence;
         public long HighlightedSequence => LatestSequence;
+        internal int ProjectionPassCount { get; private set; }
 
         public void Bind(ReplayCombatTranscript transcript)
         {
             Transcript = transcript ?? throw new ArgumentNullException(
                 nameof(transcript));
+            projectedEntries.Clear();
+            foreach (ReplayCombatTranscriptEntry entry in Transcript.Entries)
+                projectedEntries.Add(Project(entry));
+            ProjectionPassCount++;
+            entries.Clear();
             SetPlayhead(0f);
         }
 
@@ -36,25 +44,35 @@ namespace GritGud.Presentation.Gameplay
             if (Transcript == null)
                 throw new InvalidOperationException(
                     "Bind a replay transcript before setting its playhead.");
-            entries.Clear();
-            foreach (ReplayCombatTranscriptEntry entry in
-                Transcript.GetEntriesAtOrBefore(timeSeconds))
+            int targetCount = Transcript.CountEntriesAtOrBefore(timeSeconds);
+            if (targetCount < entries.Count)
             {
-                string timestamp = entry.TimeSeconds.ToString(
-                    "00.000",
-                    CultureInfo.InvariantCulture);
-                entries.Add(new GameplayDialogueEntry(
-                    entry.Sequence,
-                    GameplayDialogueChannel.CombatDiagnostics,
-                    timestamp + "  " + entry.DisplayTitle,
-                    string.Join(Environment.NewLine, entry.DisplayLines)));
+                entries.RemoveRange(
+                    targetCount,
+                    entries.Count - targetCount);
             }
+            else
+                for (int index = entries.Count; index < targetCount; index++)
+                    entries.Add(projectedEntries[index]);
         }
 
         public int CountVisible(GameplayDialogueChannel filters) =>
             (filters & GameplayDialogueChannel.CombatDiagnostics) == 0
                 ? 0
                 : entries.Count;
+
+        private static GameplayDialogueEntry Project(
+            ReplayCombatTranscriptEntry entry)
+        {
+            string timestamp = entry.TimeSeconds.ToString(
+                "00.000",
+                CultureInfo.InvariantCulture);
+            return new GameplayDialogueEntry(
+                entry.Sequence,
+                GameplayDialogueChannel.CombatDiagnostics,
+                timestamp + "  " + entry.DisplayTitle,
+                string.Join(Environment.NewLine, entry.DisplayLines));
+        }
     }
 
     internal sealed class GameplayReplayTranscriptPresenter
@@ -74,6 +92,8 @@ namespace GritGud.Presentation.Gameplay
 
         internal ReplayCombatTranscript Transcript => replaySource?.Transcript;
         internal IGameplayDialogueEntrySource VisibleSource => drawer?.Source;
+        internal int TranscriptProjectionPassCount =>
+            replaySource?.ProjectionPassCount ?? 0;
 
         public void Bind(
             GameplayTurnReplayHud replayHud,

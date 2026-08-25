@@ -396,17 +396,30 @@ namespace GritGud.Application.Gameplay
         public IReadOnlyList<ReplayCombatTranscriptEntry> GetEntriesAtOrBefore(
             float timeSeconds)
         {
+            int count = CountEntriesAtOrBefore(timeSeconds);
+            if (count == 0)
+                return Array.Empty<ReplayCombatTranscriptEntry>();
+            var visible = new List<ReplayCombatTranscriptEntry>(count);
+            for (int index = 0; index < count; index++)
+                visible.Add(entries[index]);
+            return visible.AsReadOnly();
+        }
+
+        public int CountEntriesAtOrBefore(float timeSeconds)
+        {
             if (float.IsNaN(timeSeconds) || float.IsInfinity(timeSeconds))
                 throw new ArgumentOutOfRangeException(nameof(timeSeconds));
-            var visible = new List<ReplayCombatTranscriptEntry>();
-            foreach (ReplayCombatTranscriptEntry entry in entries)
+            int lower = 0;
+            int upper = entries.Count;
+            while (lower < upper)
             {
-                if (entry.TimeSeconds > timeSeconds) break;
-                visible.Add(entry);
+                int middle = lower + ((upper - lower) / 2);
+                if (entries[middle].TimeSeconds <= timeSeconds)
+                    lower = middle + 1;
+                else
+                    upper = middle;
             }
-            return visible.Count == 0
-                ? Array.Empty<ReplayCombatTranscriptEntry>()
-                : visible.AsReadOnly();
+            return lower;
         }
 
         private static bool ContainsDischarge(
