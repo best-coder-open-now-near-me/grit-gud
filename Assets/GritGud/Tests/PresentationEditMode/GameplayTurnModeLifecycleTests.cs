@@ -167,6 +167,7 @@ namespace GritGud.Presentation.Tests
             StringAssert.Contains(
                 "3 combatants engaged",
                 encounterStarted.Message);
+            gameplay.PartyHud.TickRosterReveal(0f);
             Assert.That(gameplay.PartyHud.RevealingRosterMemberCount,
                 Is.GreaterThan(0));
             Assert.That(gameplay.PartyHud.RosterRevealActive, Is.True);
