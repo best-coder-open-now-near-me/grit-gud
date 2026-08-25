@@ -153,6 +153,66 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void OpeningShotDefersInitiativeUntilHitReactionCompletes()
+        {
+            var host = new GameObject("Deferred Opening Shot Test");
+            try
+            {
+                GameplaySession session = CreateSession(
+                    reactiveTarget: true,
+                    playerInitiative: 1,
+                    targetInitiative: 20);
+                host.AddComponent<ThirdPersonMotor>();
+                ExplorationMovementInput movementInput =
+                    host.AddComponent<ExplorationMovementInput>();
+                GameplaySessionPresenter sessionPresenter =
+                    host.AddComponent<GameplaySessionPresenter>();
+                sessionPresenter.Bind(
+                    session,
+                    movementInput,
+                    host.transform,
+                    "player");
+                sessionPresenter.BindEncounterPresentation(
+                    new GameplayDialogueLog());
+                GameplayAttackController controller =
+                    host.AddComponent<GameplayAttackController>();
+                controller.Bind(
+                    session,
+                    host.AddComponent<TargetAcquisitionPresenter>(),
+                    new GameplayDialogueLog(),
+                    "player",
+                    sessionPresenter.TryBeginEncounterFromAction);
+                bool reactionPublishedBeforeEncounter = false;
+                controller.AttackResolved += _ =>
+                    reactionPublishedBeforeEncounter =
+                        !session.EncounterActive;
+
+                Assert.That(controller.TryAttack(CreateExposure()), Is.True);
+
+                Assert.That(reactionPublishedBeforeEncounter, Is.True);
+                Assert.That(session.GetActor("target").Wounds.WoundCount,
+                    Is.EqualTo(1));
+                Assert.That(session.EncounterActive, Is.False);
+                Assert.That(sessionPresenter.EncounterStartPending, Is.True);
+                Assert.That(movementInput.InputEnabled, Is.False);
+
+                sessionPresenter.Tick(
+                    ActorInjuryAnimationOverlayProjector.HitReactionSeconds
+                    - 0.01f);
+                Assert.That(session.EncounterActive, Is.False);
+
+                sessionPresenter.Tick(0.02f);
+                Assert.That(session.EncounterActive, Is.True);
+                Assert.That(session.ActiveActorId, Is.EqualTo("target"));
+                Assert.That(sessionPresenter.EncounterStartPending, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
+        [Test]
         public void ExplorationWorldDischargeDoesNotBeginEncounter()
         {
             var host = new GameObject("Exploration World Discharge Test");

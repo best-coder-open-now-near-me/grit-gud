@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using UnityEngine;
@@ -6,12 +7,10 @@ using UnityEngine;
 namespace GritGud.Presentation.Gameplay
 {
     [DisallowMultipleComponent]
-    public sealed class GameplaySessionPresenter : MonoBehaviour,
-        IGameplayWarningHintSource
+    public sealed class GameplaySessionPresenter : MonoBehaviour
     {
         private const float ExplorationSimulationStepSeconds = 0.1f;
-        private const float EncounterNoticeDurationSeconds = 6f;
-        private const int EncounterNoticePriority = 200;
+        private const float DefaultShotPresentationSeconds = 0.18f;
 
         private ExplorationMovementInput explorationInput;
         private ThirdPersonMotor motor;
@@ -21,8 +20,11 @@ namespace GritGud.Presentation.Gameplay
         private string actorId;
         private float explorationElapsedSeconds;
         private GameplayDialogueLog encounterDialogue;
-        private GameplayWarningHintModel encounterWarningHint;
-        private float encounterNoticeSecondsRemaining;
+        private WeaponPresentationCatalog encounterWeapons;
+        private GameplayInputController encounterInput;
+        private GameplayActionRecord pendingEncounterAction;
+        private IReadOnlyList<string> pendingEncounterParticipantIds;
+        private float pendingEncounterSecondsRemaining;
 
         public GameplaySession Session { get; private set; }
 
@@ -30,10 +32,14 @@ namespace GritGud.Presentation.Gameplay
 
         public string LastStanceFailureCode { get; private set; } = string.Empty;
 
-        public GameplayWarningHintModel CurrentWarningHint =>
-            encounterWarningHint;
+        internal bool EncounterStartPending => pendingEncounterAction != null;
 
-        internal void BindEncounterPresentation(GameplayDialogueLog dialogue)
+        internal float PendingEncounterSecondsRemaining =>
+            pendingEncounterSecondsRemaining;
+
+        internal void BindEncounterPresentation(
+            GameplayDialogueLog dialogue,
+            WeaponPresentationCatalog weaponCatalog = null)
         {
             if (Session == null)
             {
@@ -43,6 +49,13 @@ namespace GritGud.Presentation.Gameplay
 
             encounterDialogue = dialogue ?? throw new ArgumentNullException(
                 nameof(dialogue));
+            encounterWeapons = weaponCatalog;
+        }
+
+        internal void BindEncounterInput(GameplayInputController input)
+        {
+            encounterInput = input ?? throw new ArgumentNullException(
+                nameof(input));
         }
 
         public void Bind(
@@ -173,7 +186,9 @@ namespace GritGud.Presentation.Gameplay
         public bool TryBeginEncounter(
             System.Collections.Generic.IEnumerable<string> participantIds)
         {
-            if (Session == null || Session.EncounterActive)
+            if (Session == null
+                || Session.EncounterActive
+                || pendingEncounterAction != null)
             {
                 return false;
             }
@@ -182,32 +197,64 @@ namespace GritGud.Presentation.Gameplay
             return PresentEncounterStart(Session.BeginEncounter(participantIds));
         }
 
-        private void Update()
+        internal void Tick(float deltaTime)
         {
-            if (encounterNoticeSecondsRemaining <= 0f)
+            if (pendingEncounterAction == null)
             {
                 return;
             }
 
-            encounterNoticeSecondsRemaining -= Mathf.Max(
-                0f,
-                Time.unscaledDeltaTime);
-            if (encounterNoticeSecondsRemaining <= 0f)
+            if (Session == null || Session.EncounterActive)
             {
-                encounterNoticeSecondsRemaining = 0f;
-                encounterWarningHint = null;
+                ClearPendingEncounterStart();
+                ApplyMode();
+                return;
+            }
+
+            pendingEncounterSecondsRemaining -= Mathf.Max(0f, deltaTime);
+            if (pendingEncounterSecondsRemaining > 0f)
+                return;
+
+            IReadOnlyList<string> participantIds =
+                pendingEncounterParticipantIds;
+            ClearPendingEncounterStart();
+            if (!PresentEncounterStart(
+                    Session.BeginEncounter(participantIds)))
+            {
+                ApplyMode();
             }
         }
 
+        private void Update() => Tick(Time.unscaledDeltaTime);
+
         public bool TryBeginEncounterFromAction(GameplayActionRecord action)
         {
-            if (Session == null || Session.EncounterActive)
+            if (Session == null
+                || Session.EncounterActive
+                || pendingEncounterAction != null
+                || action == null
+                || !Session.ActionStartsEncounter(action))
             {
                 return false;
             }
 
             SynchronizeExplorationPose();
-            return PresentEncounterStart(Session.BeginEncounterFromAction(action));
+            float delaySeconds = ResolveEncounterStartDelay(action);
+            if (delaySeconds <= 0f)
+            {
+                return PresentEncounterStart(
+                    Session.BeginEncounterFromAction(action));
+            }
+
+            pendingEncounterAction = action;
+            pendingEncounterParticipantIds = Session.CreateEncounterScope(
+                action.Request.ActorId,
+                action.Request.TargetId);
+            pendingEncounterSecondsRemaining = delaySeconds;
+            encounterInput?.SetSuppressed(true);
+            motor?.StopPlanarMovement();
+            ApplyMode();
+            return true;
         }
 
         public void RefreshModePresentation()
@@ -289,8 +336,9 @@ namespace GritGud.Presentation.Gameplay
             actorId = null;
             explorationElapsedSeconds = 0f;
             encounterDialogue = null;
-            encounterWarningHint = null;
-            encounterNoticeSecondsRemaining = 0f;
+            encounterWeapons = null;
+            ClearPendingEncounterStart();
+            encounterInput = null;
             Session = null;
             LastStanceFailure = StanceChangeFailure.None;
             LastStanceFailureCode = string.Empty;
@@ -305,42 +353,21 @@ namespace GritGud.Presentation.Gameplay
 
             explorationInput.SetInputEnabled(
                 Session.Mode == GameplaySessionMode.Exploration
+                && pendingEncounterAction == null
                 && !Session.IsActorIncapacitated(actorId)
                 && !Session.GetActor(actorId).IsPinned);
         }
 
         private void PresentEncounterStarted()
         {
-            var combatants = new System.Collections.Generic.List<string>();
-            foreach (string participantId in Session.InitiativeOrder)
-            {
-                combatants.Add(GetActorDisplayName(participantId));
-            }
-
-            string roster = combatants.Count == 0
-                ? "No combatants were registered."
-                : "Roster ("
-                    + combatants.Count
-                    + "): "
-                    + string.Join(", ", combatants)
-                    + ".";
             string activeActor = GetActorDisplayName(Session.ActiveActorId);
-            string message = "Combat started. "
-                + activeActor
-                + " has initiative. "
-                + roster;
             encounterDialogue?.Append(
                 GameplayDialogueChannel.System,
-                "ENCOUNTER STARTED",
-                message);
-            encounterWarningHint = new GameplayWarningHintModel(
-                "encounter.started",
-                "COMBAT STARTED\n"
-                + activeActor.ToUpperInvariant()
-                + " HAS INITIATIVE\n"
-                + roster.ToUpperInvariant(),
-                EncounterNoticePriority);
-            encounterNoticeSecondsRemaining = EncounterNoticeDurationSeconds;
+                "COMBAT",
+                activeActor
+                    + " has initiative. "
+                    + Session.InitiativeOrder.Count
+                    + " combatants engaged.");
         }
 
         private string GetActorDisplayName(string participantId) =>
@@ -358,6 +385,96 @@ namespace GritGud.Presentation.Gameplay
             ApplyMode();
             PresentEncounterStarted();
             return true;
+        }
+
+        private float ResolveEncounterStartDelay(GameplayActionRecord action)
+        {
+            foreach (GameplayActionOutcome outcome in action.Outcomes)
+            {
+                if (outcome is AttackResolvedActionOutcome attack)
+                {
+                    AttackResolutionRecord resolution = attack.Attack;
+                    float impactDelay = ResolveContactImpactDelay(resolution);
+                    float responseSeconds = resolution.Hit
+                        ? ActorInjuryAnimationOverlayProjector.HitReactionSeconds
+                        : ResolveShotPresentationSeconds(
+                            resolution.AttackerId);
+                    return impactDelay + responseSeconds;
+                }
+
+                if (outcome is WeaponDischargedActionOutcome discharge)
+                {
+                    return ResolveShotPresentationSeconds(
+                        discharge.Discharge.AttackerId);
+                }
+            }
+
+            return 0f;
+        }
+
+        private float ResolveContactImpactDelay(
+            AttackResolutionRecord resolution)
+        {
+            if (!resolution.IsContactAttack)
+                return 0f;
+
+            WeaponPresentationDefinition weapon = ResolveWeaponPresentation(
+                resolution.AttackerId);
+            return weapon != null
+                && weapon.AttackPresentation
+                    == WeaponAttackPresentationKind.ContactStrike
+                ? weapon.ContactStrikeSeconds
+                    * weapon.ContactImpactNormalizedTime
+                : GameplayCloseQuartersPresentationTiming.ContactStrikeSeconds
+                    * GameplayCloseQuartersPresentationTiming
+                        .ContactImpactNormalizedTime;
+        }
+
+        private float ResolveShotPresentationSeconds(string attackerId)
+        {
+            WeaponPresentationDefinition weapon = ResolveWeaponPresentation(
+                attackerId);
+            return weapon?.ShotEffectSeconds
+                ?? DefaultShotPresentationSeconds;
+        }
+
+        private WeaponPresentationDefinition ResolveWeaponPresentation(
+            string attackerId)
+        {
+            if (Session == null || string.IsNullOrWhiteSpace(attackerId))
+                return null;
+
+            string itemId = Session.GetActor(attackerId).EquippedItemId;
+            if (string.IsNullOrWhiteSpace(itemId))
+                return null;
+
+            if (encounterWeapons == null)
+            {
+                try
+                {
+                    encounterWeapons = WeaponPresentationCatalog.LoadDefault();
+                }
+                catch (InvalidOperationException)
+                {
+                    return null;
+                }
+            }
+
+            return encounterWeapons.TryGet(
+                itemId,
+                out WeaponPresentationDefinition weapon)
+                ? weapon
+                : null;
+        }
+
+        private void ClearPendingEncounterStart()
+        {
+            bool wasPending = pendingEncounterAction != null;
+            pendingEncounterAction = null;
+            pendingEncounterParticipantIds = null;
+            pendingEncounterSecondsRemaining = 0f;
+            if (wasPending)
+                encounterInput?.SetSuppressed(false);
         }
 
         private void HandleEquipmentChanged(EquipmentChangeRecord _)

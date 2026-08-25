@@ -7,8 +7,6 @@ namespace GritGud.Presentation.Gameplay
     [DisallowMultipleComponent]
     internal sealed class GameplayTacticalTransitionPresenter : MonoBehaviour
     {
-        private const float EncounterAnnouncementDurationSeconds = 2.5f;
-
         private GameplaySession session;
         private GameplayInputController input;
         private GameplayHud hud;
@@ -18,9 +16,6 @@ namespace GritGud.Presentation.Gameplay
         private float remainingSeconds;
         private Texture2D whiteTexture;
         private bool combatEntryActive;
-        private string combatEntryMessage = string.Empty;
-        private float encounterAnnouncementSecondsRemaining;
-        private string encounterAnnouncementMessage = string.Empty;
 
         public void Bind(
             GameplaySession gameplaySession,
@@ -62,9 +57,6 @@ namespace GritGud.Presentation.Gameplay
             remainingSeconds = 0f;
             whiteTexture = null;
             combatEntryActive = false;
-            combatEntryMessage = string.Empty;
-            encounterAnnouncementSecondsRemaining = 0f;
-            encounterAnnouncementMessage = string.Empty;
             enabled = false;
         }
 
@@ -80,18 +72,14 @@ namespace GritGud.Presentation.Gameplay
             // Combat entry is a state transition, not a modal cinematic.  The
             // coordinator may use this one-frame marker to sequence its
             // detection result, but player input and the existing interface
-            // stay live throughout.  The mode-change announcement below is
-            // responsible for communicating that combat has started.
+            // stay live throughout.
             remainingSeconds = 0f;
-            combatEntryMessage = "CONTACT\n" + detectedActorId.ToUpperInvariant()
-                + " DETECTED";
         }
 
         public void CompleteCombatEntry()
         {
             combatEntryActive = false;
             remainingSeconds = 0f;
-            combatEntryMessage = string.Empty;
         }
 
         private void Update()
@@ -103,40 +91,18 @@ namespace GritGud.Presentation.Gameplay
 
             if (!combatEntryActive && session.Mode != observedMode)
             {
-                bool enteredEncounter = observedMode
-                    == GameplaySessionMode.Exploration
-                    && session.Mode == GameplaySessionMode.TurnBased
-                    && session.EncounterActive;
                 observedMode = session.Mode;
                 remainingSeconds = definition.DurationSeconds;
-                if (enteredEncounter)
-                {
-                    encounterAnnouncementSecondsRemaining =
-                        EncounterAnnouncementDurationSeconds;
-                    encounterAnnouncementMessage = "COMBAT ENGAGED\n"
-                        + GetActorDisplayName(session.ActiveActorId)
-                            .ToUpperInvariant()
-                        + " HAS INITIATIVE";
-                }
             }
 
             remainingSeconds = Mathf.Max(
                 0f,
                 remainingSeconds - Time.unscaledDeltaTime);
-            encounterAnnouncementSecondsRemaining = Mathf.Max(
-                0f,
-                encounterAnnouncementSecondsRemaining - Time.unscaledDeltaTime);
-            if (encounterAnnouncementSecondsRemaining <= 0f)
-            {
-                encounterAnnouncementMessage = string.Empty;
-            }
         }
 
         private void OnGUI()
         {
-            bool showAnnouncement = combatEntryActive
-                || encounterAnnouncementSecondsRemaining > 0f;
-            if ((remainingSeconds <= 0f && !showAnnouncement)
+            if (remainingSeconds <= 0f
                 || definition == null
                 || whiteTexture == null)
             {
@@ -209,45 +175,7 @@ namespace GritGud.Presentation.Gameplay
                     edgeColor);
             }
 
-            if (showAnnouncement)
-            {
-                float announcementProgress = combatEntryActive
-                    ? Mathf.Clamp01(progress)
-                    : 1f - (encounterAnnouncementSecondsRemaining
-                        / EncounterAnnouncementDurationSeconds);
-                float announcementFade = Mathf.Sin(
-                    Mathf.Clamp01(announcementProgress) * Mathf.PI);
-                var banner = new Rect(
-                    Screen.width * 0.5f - 280f,
-                    Screen.height * 0.18f,
-                    560f,
-                    118f);
-                DrawRect(banner, new Color(
-                    0.015f,
-                    0.025f,
-                    0.04f,
-                    0.96f * announcementFade));
-                DrawRect(new Rect(banner.x, banner.y, banner.width, 4f),
-                    new Color(signal.r, signal.g, signal.b, announcementFade));
-                var style = new GUIStyle(GUI.skin.label)
-                {
-                    alignment = TextAnchor.MiddleCenter,
-                    fontStyle = FontStyle.Bold,
-                    fontSize = 28,
-                };
-                style.normal.textColor = new Color(1f, 1f, 1f, announcementFade);
-                GUI.Label(
-                    banner,
-                    combatEntryActive
-                        ? combatEntryMessage
-                        : encounterAnnouncementMessage,
-                    style);
-            }
         }
-
-        private string GetActorDisplayName(string actorId) =>
-            session.Scenario.GetActor(actorId).CharacterProfile?.DisplayName
-            ?? actorId;
 
         private void DrawRect(Rect rectangle, Color color)
         {

@@ -198,11 +198,6 @@ namespace GritGud.Presentation.Gameplay
                 GameplayWeaponActionOutcomes
                     .RequirePrimary<WeaponDischargedActionOutcome>(action)
                     .Discharge;
-            GameplayEncounterActionTransition.BeginAfterCommittedAction(
-                Session,
-                action,
-                beginEncounter,
-                "attack");
             LastFailure = AttackResolutionFailure.None;
             LastResolvedAction = action;
             LastResolution = null;
@@ -219,6 +214,11 @@ namespace GritGud.Presentation.Gameplay
                 dialogue.AppendCombatDiagnostic(diagnostic);
             }
             WeaponDischarged?.Invoke(action);
+            GameplayEncounterActionTransition.BeginAfterCommittedAction(
+                Session,
+                action,
+                beginEncounter,
+                "attack");
             return true;
         }
 
@@ -292,12 +292,12 @@ namespace GritGud.Presentation.Gameplay
                 GameplayWeaponActionOutcomes
                     .RequirePrimary<AttackResolvedActionOutcome>(action)
                     .Attack;
+            PresentResolvedAction(action);
             GameplayEncounterActionTransition.BeginAfterCommittedAction(
                 Session,
                 action,
                 beginEncounter,
                 "attack");
-            PresentResolvedAction(action);
             failure = AttackResolutionFailure.None;
             return true;
         }

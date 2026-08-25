@@ -158,17 +158,18 @@ namespace GritGud.Presentation.Tests
             foreach (GameplayDialogueEntry entry in gameplay.DialogueLog.Entries)
             {
                 if (entry.Channel == GameplayDialogueChannel.System
-                    && entry.Title == "ENCOUNTER STARTED")
+                    && entry.Title == "COMBAT")
                 {
                     encounterStarted = entry;
                 }
             }
             Assert.That(encounterStarted, Is.Not.Null);
-            StringAssert.Contains("Roster (3)", encounterStarted.Message);
-            Assert.That(sessionPresenter.CurrentWarningHint, Is.Not.Null);
             StringAssert.Contains(
-                "ENCOUNTER STARTED",
-                sessionPresenter.CurrentWarningHint.Text);
+                "3 combatants engaged",
+                encounterStarted.Message);
+            Assert.That(gameplay.PartyHud.RevealingRosterMemberCount,
+                Is.GreaterThan(0));
+            Assert.That(gameplay.PartyHud.RosterRevealActive, Is.True);
             Assert.That(gameplay.Session.ActiveActorId, Is.EqualTo("oren-vale"));
             Assert.That(actions.CanExitTurnMode, Is.False);
             Assert.That(

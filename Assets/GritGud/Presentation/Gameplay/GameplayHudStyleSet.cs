@@ -49,7 +49,6 @@ namespace GritGud.Presentation.Gameplay
         public GUIStyle Tooltip { get; private set; }
         public GUIStyle ConfirmationFlyout { get; private set; }
         public GUIStyle WarningHint { get; private set; }
-        public GUIStyle EncounterNotice { get; private set; }
         public GUIStyle ChoiceHeader { get; private set; }
         public GUIStyle TipTitle { get; private set; }
         public GUIStyle TipBody { get; private set; }
@@ -356,19 +355,6 @@ namespace GritGud.Presentation.Gameplay
                     textColor = EquipmentSignalColor,
                 },
             };
-            EncounterNotice = new GUIStyle(WarningHint)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                clipping = TextClipping.Clip,
-                fontSize = 17,
-                fontStyle = FontStyle.Bold,
-                wordWrap = true,
-                padding = new RectOffset(18, 18, 8, 8),
-                normal =
-                {
-                    textColor = GameplayVisualPalette.TextBright,
-                },
-            };
             Button = new GUIStyle(GUI.skin.button)
             {
                 alignment = TextAnchor.MiddleLeft,
@@ -424,7 +410,6 @@ namespace GritGud.Presentation.Gameplay
             Tooltip = null;
             ConfirmationFlyout = null;
             WarningHint = null;
-            EncounterNotice = null;
             ChoiceHeader = null;
             TipTitle = null;
             TipBody = null;

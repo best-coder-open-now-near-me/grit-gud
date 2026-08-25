@@ -359,8 +359,8 @@ namespace GritGud.Presentation.Gameplay
             GameplayControlRouter controlRouter = resolveControlRouter()
                 ?? throw new InvalidOperationException(
                     "Control routing must install before the gameplay HUD.");
+            sessionPresenter.BindEncounterInput(input);
             hud.BindInputSource(input);
-            hud.BindWarningHintSource(sessionPresenter);
             hud.BindTurnModeToggle(() =>
                 controlRouter.Handle(GameplayControl.ToggleTurnMode));
             hud.BindBugReportExport(exportBugReport);

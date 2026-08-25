@@ -31,10 +31,6 @@ namespace GritGud.Presentation.Gameplay
         internal const float WarningHintHeight =
             GameplayHudLayout.WarningHintHeight;
         internal const float WarningHintGap = GameplayHudLayout.WarningHintGap;
-        internal const float EncounterNoticeTop = GameplayHudLayout.EncounterNoticeTop;
-        internal const float EncounterNoticeHeight = GameplayHudLayout.EncounterNoticeHeight;
-        internal const float EncounterNoticeMaximumWidth =
-            GameplayHudLayout.EncounterNoticeMaximumWidth;
         internal const float PendingPowerPulseCyclesPerSecond =
             GameplayHudRenderer.PendingPowerPulseCyclesPerSecond;
         internal const float PendingPowerPulseMinimumAlpha =
@@ -267,10 +263,6 @@ namespace GritGud.Presentation.Gameplay
             Rect commandBarRectangle) =>
             GameplayHudLayout.CalculateWarningHintRectangle(
                 commandBarRectangle);
-
-        internal static Rect CalculateEncounterNoticeRectangle(
-            float canvasWidth) =>
-            GameplayHudLayout.CalculateEncounterNoticeRectangle(canvasWidth);
 
         internal static Rect CalculateBodyStatusRectangle(
             float canvasWidth,
