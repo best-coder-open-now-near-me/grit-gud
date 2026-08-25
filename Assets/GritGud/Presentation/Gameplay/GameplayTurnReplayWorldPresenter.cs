@@ -6,6 +6,33 @@ using UnityEngine;
 
 namespace GritGud.Presentation.Gameplay
 {
+    internal sealed class ReplayActorActionChannels
+    {
+        internal TurnReplayActorActionState Primary { get; private set; }
+
+        internal TurnReplayActorActionState Reaction { get; private set; }
+
+        internal void Add(TurnReplayActorActionState state)
+        {
+            if (state == null) throw new ArgumentNullException(nameof(state));
+            bool reaction = state.Kind == TurnReplayActorActionKind.Reaction
+                || state.Kind == TurnReplayActorActionKind.Pinned;
+            TurnReplayActorActionState existing = reaction
+                ? Reaction
+                : Primary;
+            if (existing != null)
+                throw new InvalidOperationException(
+                    $"Replay actor '{state.ActorId}' has multiple "
+                    + $"{(reaction ? "reaction" : "primary action")} states "
+                    + $"for transition {state.TransitionSequence}: "
+                    + $"{existing.Kind} and {state.Kind}.");
+            if (reaction)
+                Reaction = state;
+            else
+                Primary = state;
+        }
+    }
+
     internal sealed class ReplayTimedPresentationEventCursor
     {
         private readonly HashSet<string> emitted = new HashSet<string>(
@@ -676,13 +703,20 @@ namespace GritGud.Presentation.Gameplay
         {
             var actionStates = new Dictionary<
                 string,
-                TurnReplayActorActionState>(StringComparer.Ordinal);
+                ReplayActorActionChannels>(StringComparer.Ordinal);
             foreach (TurnReplayActorActionState state in
                 TurnReplayActorActionProjector.Project(
                     position.Frame,
                     position.Progress))
             {
-                actionStates[state.ActorId] = state;
+                if (!actionStates.TryGetValue(
+                        state.ActorId,
+                        out ReplayActorActionChannels channels))
+                {
+                    channels = new ReplayActorActionChannels();
+                    actionStates.Add(state.ActorId, channels);
+                }
+                channels.Add(state);
             }
             foreach (KeyValuePair<string, GameplayActorSnapshot> entry in
                 sample.Actors)
@@ -695,7 +729,7 @@ namespace GritGud.Presentation.Gameplay
                         + $"cannot project actor '{entry.Key}': no replay actor presenter exists.");
                 actionStates.TryGetValue(
                     entry.Key,
-                    out TurnReplayActorActionState action);
+                    out ReplayActorActionChannels actions);
                 TryResolveReplayLocomotion(
                     position,
                     entry.Key,
@@ -705,11 +739,12 @@ namespace GritGud.Presentation.Gameplay
                     .SampleTerminalPose(entry.Key, timeSeconds);
                 actor.Present(
                     entry.Value,
-                    action,
+                    actions?.Primary,
                     position,
                     replayVelocity,
                     replayGrounded,
-                    terminalPose);
+                    terminalPose,
+                    actions?.Reaction);
             }
         }
 

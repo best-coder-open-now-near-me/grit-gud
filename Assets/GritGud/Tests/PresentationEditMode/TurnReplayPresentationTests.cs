@@ -182,6 +182,71 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void SelfHitKeepsPrimaryAttackAndIndependentReactionOverlay()
+        {
+            GameObject prefab = Resources.Load<GameObject>(
+                "Actors/DefaultPlayerActor");
+            GameObject actor = Object.Instantiate(prefab);
+            try
+            {
+                var view = new GameplayActorView(
+                    "self-hit-actor",
+                    string.Empty,
+                    targetable: true,
+                    actor);
+                ActorAnimationCoordinator animation = actor.GetComponent<
+                    ActorAnimationCoordinator>();
+                animation.TargetAnimator.cullingMode =
+                    AnimatorCullingMode.AlwaysAnimate;
+                using var presenter = new GameplayTurnReplayActorPresenter(view);
+                presenter.Begin();
+                var primary = new TurnReplayActorActionState(
+                    "self-hit-actor",
+                    TurnReplayActorActionKind.Attack,
+                    journalSequence: 52,
+                    normalizedProgress: 0.8f,
+                    eventNormalizedTime: 0.65f,
+                    origin: new GameplayPosition(0f, 1f, 0f),
+                    destination: new GameplayPosition(0f, 1f, 0f));
+                var reaction = new TurnReplayActorActionState(
+                    "self-hit-actor",
+                    TurnReplayActorActionKind.Reaction,
+                    journalSequence: 52,
+                    normalizedProgress: 0.8f,
+                    contactReaction: false,
+                    resultingWoundCount: 1,
+                    hitRegion: TargetRegionId.Torso,
+                    resultingLifeState: ActorLifeState.Active);
+                var channels = new ReplayActorActionChannels();
+                channels.Add(reaction);
+                channels.Add(primary);
+
+                presenter.Present(
+                    CreateActorSnapshot(
+                        "self-hit-actor",
+                        woundCount: 1,
+                        maximumWounds: 3),
+                    channels.Primary,
+                    reaction: channels.Reaction);
+
+                Assert.That(
+                    animation.ReplayAction,
+                    Is.EqualTo(ActorAnimationAction.WeaponFire));
+                Assert.That(view.InjuryOverlay.HitReactionActive, Is.True);
+                Assert.That(
+                    view.ReplayActions.CurrentState,
+                    Is.SameAs(primary));
+                Assert.That(
+                    view.ReplayActions.CurrentReactionState,
+                    Is.SameAs(reaction));
+            }
+            finally
+            {
+                Object.DestroyImmediate(actor);
+            }
+        }
+
+        [Test]
         public void WoundVariantsSeekAndRestoreExactLivePresentation()
         {
             var actor = new GameObject("Replay Wound Actor");

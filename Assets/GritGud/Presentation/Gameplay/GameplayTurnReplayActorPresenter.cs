@@ -104,7 +104,8 @@ namespace GritGud.Presentation.Gameplay
             GameplaySemanticReplayPlaybackPosition? playback = null,
             Vector3? replayVelocity = null,
             bool replayGrounded = true,
-            ReplayActorTerminalPoseSample terminalPose = null)
+            ReplayActorTerminalPoseSample terminalPose = null,
+            TurnReplayActorActionState reaction = null)
         {
             if (!presenting)
             {
@@ -121,16 +122,23 @@ namespace GritGud.Presentation.Gameplay
                     nameof(snapshot));
             }
 
+            TurnReplayActorActionState primaryAction = IsReaction(action)
+                ? null
+                : action;
+            TurnReplayActorActionState reactionAction = reaction
+                ?? (IsReaction(action) ? action : null);
             GameplayActorPose pose = snapshot.Pose;
-            long transitionSequence = action?.TransitionSequence
+            long transitionSequence = primaryAction?.TransitionSequence
+                ?? reactionAction?.TransitionSequence
                 ?? playback?.Frame.Transition.Identity.Sequence
                 ?? 0L;
             string replayRecord = playback?.Frame.SemanticRecord
                     ?.GetType().Name
-                ?? action?.Kind.ToString()
+                ?? primaryAction?.Kind.ToString()
+                ?? reactionAction?.Kind.ToString()
                 ?? "state sample";
-            float presentedFacing = action?.TargetFacingPhase
-                ?.SampleFacingDegrees(action.NormalizedProgress)
+            float presentedFacing = primaryAction?.TargetFacingPhase
+                ?.SampleFacingDegrees(primaryAction.NormalizedProgress)
                 ?? pose.FacingDegrees;
             view.Transform.SetPositionAndRotation(
                 new Vector3(
@@ -170,19 +178,21 @@ namespace GritGud.Presentation.Gameplay
                     {
                         weapon.PresentReplayEquipment(snapshot.EquippedItemId);
                         weapon.PresentReplayAction(
-                            action,
+                            primaryAction,
                             playback?.PlaybackFrame.DurationSeconds ?? 0f);
                     });
             TryOptional(
                 "actor-state hooks",
                 () =>
                 {
-                    view.ReplayActions.Present(action);
+                    view.ReplayActions.Present(primaryAction ?? reactionAction);
+                    view.ReplayActions.PresentReaction(reactionAction);
                     view.ReplayActions.PresentPinState(snapshot.PinState);
                 });
             ResolveAnimationProjection(
                 snapshot,
-                action,
+                primaryAction,
+                reactionAction,
                 terminalPose,
                 out ActorAnimationAction? animationAction,
                 out float animationProgress,
@@ -193,7 +203,8 @@ namespace GritGud.Presentation.Gameplay
                 () => view.InjuryOverlay.PresentReplayHitReaction(
                     hitReactionRegion,
                     hitReactionProgress));
-            bool requiresAnimation = action != null
+            bool requiresAnimation = primaryAction != null
+                || reactionAction != null
                 || terminalPose != null
                 || replayVelocity.GetValueOrDefault().sqrMagnitude > 0.000001f
                 || snapshot.IsIncapacitated;
@@ -416,7 +427,8 @@ namespace GritGud.Presentation.Gameplay
 
         private void ResolveAnimationProjection(
             GameplayActorSnapshot snapshot,
-            TurnReplayActorActionState state,
+            TurnReplayActorActionState primaryState,
+            TurnReplayActorActionState reactionState,
             ReplayActorTerminalPoseSample terminalPose,
             out ActorAnimationAction? action,
             out float progress,
@@ -425,7 +437,9 @@ namespace GritGud.Presentation.Gameplay
         {
             hitReactionRegion = null;
             hitReactionProgress = 0f;
-            progress = state?.NormalizedProgress ?? 0f;
+            progress = primaryState?.NormalizedProgress
+                ?? reactionState?.NormalizedProgress
+                ?? 0f;
             if (terminalPose != null)
             {
                 if (!string.Equals(
@@ -442,75 +456,85 @@ namespace GritGud.Presentation.Gameplay
                 progress = terminalPose.NormalizedProgress;
                 return;
             }
-            if (state?.TargetFacingPhase != null)
+            if (primaryState?.TargetFacingPhase != null)
             {
-                progress = state.TargetFacingPhase.SampleActionProgress(
+                progress = primaryState.TargetFacingPhase.SampleActionProgress(
                     progress);
             }
-            if (state == null)
+            if (reactionState != null
+                && (reactionState.ResultingLifeState ?? snapshot.LifeState)
+                    != ActorLifeState.Active
+                && reactionState.NormalizedProgress
+                    >= reactionState.EventNormalizedTime)
+            {
+                action = ActorAnimationCoordinator.SelectIncapacitationAction(
+                    reactionState.HitRegion);
+                progress = Mathf.InverseLerp(
+                    reactionState.EventNormalizedTime,
+                    1f,
+                    reactionState.NormalizedProgress);
+                return;
+            }
+            if (primaryState == null)
             {
                 action = view.TargetProfile.ProfileKind
                     == ActorTargetProfileKind.PinnedDown
                     ? ActorAnimationAction.Incapacitate
                     : (ActorAnimationAction?)null;
-                return;
             }
-
-            switch (state.Kind)
+            else switch (primaryState.Kind)
             {
                 case TurnReplayActorActionKind.Attack:
                     action = weapon?.ResolveReplayAttackAnimation(
-                            state.IsContactAttack)
+                            primaryState.IsContactAttack)
                         ?? ActorAnimationAction.WeaponFire;
-                    return;
+                    break;
                 case TurnReplayActorActionKind.Equipment:
                 case TurnReplayActorActionKind.Displacement:
                     action = ActorAnimationAction.Interact;
-                    return;
+                    break;
                 case TurnReplayActorActionKind.Throw:
                     action = ActorAnimationAction.Throw;
-                    return;
-                case TurnReplayActorActionKind.Reaction:
-                    float eventTime = state.EventNormalizedTime;
-                    if (progress < eventTime)
-                    {
-                        action = null;
-                        progress = 0f;
-                        return;
-                    }
-                    progress = Mathf.InverseLerp(eventTime, 1f, progress);
-                    if ((state.ResultingLifeState ?? snapshot.LifeState)
-                        != ActorLifeState.Active)
-                    {
-                        action = ActorAnimationCoordinator
-                            .SelectIncapacitationAction(state.HitRegion);
-                    }
-                    else
-                    {
-                        action = null;
-                        hitReactionRegion = state.HitRegion
-                            ?? TargetRegionId.Torso;
-                        hitReactionProgress = progress;
-                    }
-                    return;
+                    break;
                 case TurnReplayActorActionKind.Pinned:
                     action = ActorAnimationAction.Incapacitate;
-                    return;
+                    break;
                 case TurnReplayActorActionKind.GetUp:
                     action = ActorAnimationAction.Interact;
-                    return;
+                    break;
                 case TurnReplayActorActionKind.Push:
                     action = ActorAnimationAction.Push;
-                    return;
+                    break;
                 case TurnReplayActorActionKind.Jump:
                 case TurnReplayActorActionKind.Vault:
                 case TurnReplayActorActionKind.Mantle:
                     action = ActorAnimationAction.Jump;
-                    return;
+                    break;
                 default:
                     action = null;
-                    return;
+                    break;
             }
+
+            if (reactionState == null
+                || reactionState.Kind != TurnReplayActorActionKind.Reaction
+                || reactionState.NormalizedProgress
+                    < reactionState.EventNormalizedTime
+                || (reactionState.ResultingLifeState ?? snapshot.LifeState)
+                    != ActorLifeState.Active)
+            {
+                return;
+            }
+            hitReactionRegion = reactionState.HitRegion
+                ?? TargetRegionId.Torso;
+            hitReactionProgress = Mathf.InverseLerp(
+                reactionState.EventNormalizedTime,
+                1f,
+                reactionState.NormalizedProgress);
         }
+
+        private static bool IsReaction(TurnReplayActorActionState state) =>
+            state != null
+            && (state.Kind == TurnReplayActorActionKind.Reaction
+                || state.Kind == TurnReplayActorActionKind.Pinned);
     }
 }

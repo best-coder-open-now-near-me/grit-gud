@@ -20,6 +20,12 @@ namespace GritGud.Presentation.Gameplay
 
         public TurnReplayActorActionState CurrentState { get; private set; }
 
+        public TurnReplayActorActionState CurrentReactionState
+        {
+            get;
+            private set;
+        }
+
         public ActorPinState CurrentPinState { get; private set; }
 
         internal void Present(TurnReplayActorActionState state)
@@ -31,11 +37,17 @@ namespace GritGud.Presentation.Gameplay
                 StatePresented?.Invoke(state);
         }
 
+        internal void PresentReaction(TurnReplayActorActionState state)
+        {
+            CurrentReactionState = state;
+        }
+
         internal void Clear()
         {
-            if (CurrentState == null)
+            if (CurrentState == null && CurrentReactionState == null)
                 return;
             CurrentState = null;
+            CurrentReactionState = null;
             Cleared?.Invoke();
         }
 
