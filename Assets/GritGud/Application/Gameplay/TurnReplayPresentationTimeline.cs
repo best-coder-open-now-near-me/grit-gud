@@ -515,24 +515,9 @@ namespace GritGud.Application.Gameplay
         }
 
         private static float ResolveInjuryEventTime(
-            GameplaySemanticReplayFrame frame)
-        {
-            if (frame.SemanticRecord is ProjectileAdvanceRecord projectile
-                && projectile.Resulting.Impact != null)
-                return GameplaySemanticReplayPresentationTiming
-                    .GetProjectileImpactProgress(projectile);
-            if (frame.SemanticRecord is GameplayActionRecord action)
-            {
-                foreach (GameplayActionOutcome outcome in action.Outcomes)
-                    if (outcome is ThrownExplosiveActionOutcome)
-                        return GameplayThrownExplosivePresentationTiming
-                            .ImpactNormalizedTime;
-                return GameplaySemanticReplayPresentationTiming
-                    .GetActionResolutionProgress(action);
-            }
-            return GameplaySemanticReplayPresentationTiming
-                .ActionResolutionProgress;
-        }
+            GameplaySemanticReplayFrame frame) =>
+            GameplaySemanticReplayPresentationTiming.GetResolutionProgress(
+                frame.SemanticRecord);
 
         private static bool TryFindActor(
             IReadOnlyList<GameplayActorSnapshot> actors,

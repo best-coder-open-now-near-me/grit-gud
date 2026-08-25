@@ -1,3 +1,4 @@
+using System;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Domain.Turns;
@@ -134,6 +135,67 @@ namespace GritGud.Domain.Tests
                 state.EventNormalizedTime,
                 Is.EqualTo(GameplaySemanticReplayPresentationTiming
                     .ActionResolutionProgress));
+        }
+
+        [Test]
+        public void DroneCrashConsequencesWaitForGroundImpact()
+        {
+            var crash = new DroneCrashDefinition(
+                impactRadius: 2f,
+                injuryMovementPenalty: 0.5f,
+                destructibleIntegrityDamage: 1f,
+                maximumActionPointReduction: 1,
+                maximumDriftDistance: 2f,
+                impactPlaybackSeconds: 0.75f);
+            var definition = new DroneArchetypeDefinition(
+                "drone.scout",
+                maximumIntegrity: 6f,
+                maximumMoveDistance: 5f,
+                moveCost: new ActionCost(1, 0f, ActionMobility.Mobile),
+                sensor: new DroneSensorDefinition(14f, 120f),
+                attack: new AttackDefinition(
+                    "attack.drone.light",
+                    "Drone light weapon",
+                    new ActionCost(1, 0f, ActionMobility.Set),
+                    woundMovementPenalty: 1f,
+                    accuracyDecay: AccuracyDecayDefinition.None),
+                presentationId: "presentation.drone.scout",
+                crash: crash);
+            var trajectory = new DroneCrashTrajectoryRecord(
+                new GameplayPosition(1f, 2f, 1f),
+                new GameplayPosition(2f, 0f, 1f),
+                disabledTransitionSequence: 18L);
+            var crashing = new SummonedDroneSnapshot(
+                definition,
+                "drone:controller:1",
+                "ability.summon-drone",
+                new DroneTurnPartnership("controller"),
+                trajectory.Origin,
+                facingDegrees: 0f,
+                remainingIntegrity: 0f,
+                lifecycle: SummonLifecycleState.Crashing,
+                crashTrajectory: trajectory);
+            SummonedDroneSnapshot destroyed = crashing.WithLifecycle(
+                SummonLifecycleState.Destroyed,
+                0f,
+                null,
+                trajectory,
+                trajectory.ImpactPosition);
+            var record = new DroneCrashImpactRecord(
+                19L,
+                crashing,
+                destroyed,
+                crash,
+                Array.Empty<BlastEffectRecord>(),
+                Array.Empty<ConcussiveActionPointEffectRecord>());
+
+            Assert.That(
+                GameplaySemanticReplayPresentationTiming
+                    .GetResolutionProgress(record),
+                Is.EqualTo(1f));
+            ReplayCombatPresentationEvent presentationEvent =
+                ReplayCombatPresentationEventProjector.Project(19L, record)[0];
+            Assert.That(presentationEvent.NormalizedTime, Is.EqualTo(1f));
         }
 
         [Test]

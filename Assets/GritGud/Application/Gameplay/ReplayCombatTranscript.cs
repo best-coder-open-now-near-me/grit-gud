@@ -815,24 +815,9 @@ namespace GritGud.Application.Gameplay
         }
 
         private static float ResolveWoundEventTime(
-            GameplaySemanticReplayFrame frame)
-        {
-            if (frame.SemanticRecord is ProjectileAdvanceRecord advance
-                && advance.Resulting.Impact != null)
-                return GameplaySemanticReplayPresentationTiming
-                    .GetProjectileImpactProgress(advance);
-            if (frame.SemanticRecord is GameplayActionRecord action)
-            {
-                foreach (GameplayActionOutcome outcome in action.Outcomes)
-                    if (outcome is ThrownExplosiveActionOutcome)
-                        return GameplayThrownExplosivePresentationTiming
-                            .ImpactNormalizedTime;
-                return GameplaySemanticReplayPresentationTiming
-                    .GetActionResolutionProgress(action);
-            }
-            return GameplaySemanticReplayPresentationTiming
-                .ActionResolutionProgress;
-        }
+            GameplaySemanticReplayFrame frame) =>
+            GameplaySemanticReplayPresentationTiming.GetResolutionProgress(
+                frame.SemanticRecord);
 
         private static string ResolveWoundSource(
             GameplaySemanticReplayFrame frame)

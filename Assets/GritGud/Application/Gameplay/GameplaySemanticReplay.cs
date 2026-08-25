@@ -600,6 +600,20 @@ namespace GritGud.Application.Gameplay
             return ActionResolutionProgress;
         }
 
+        public static float GetResolutionProgress(object semanticRecord)
+        {
+            if (semanticRecord == null)
+                throw new ArgumentNullException(nameof(semanticRecord));
+            if (semanticRecord is ProjectileAdvanceRecord projectile
+                && projectile.Resulting.Impact != null)
+                return GetProjectileImpactProgress(projectile);
+            if (semanticRecord is GameplayActionRecord action)
+                return GetActionResolutionProgress(action);
+            if (semanticRecord is DroneCrashImpactRecord crash)
+                return crash.ImpactNormalizedTime;
+            return ActionResolutionProgress;
+        }
+
         public static float GetDurationSeconds(
             GameplaySemanticReplayFrame frame)
         {
