@@ -413,10 +413,9 @@ namespace GritGud.Presentation.Tests
             var movement = (MovementRouteRecord)movementFrame.Frame
                 .SemanticRecord;
             const float movementProgress = 0.5f;
-            GameplayPosition sampledPosition = GameplaySemanticReplaySampler
-                .Sample(movementFrame.Frame, movementProgress)
-                .Actors[movement.ActorId]
-                .Pose.Position;
+            GameplayPosition sampledPosition = SampleExpectedMovement(
+                movement,
+                movementProgress);
             var expectedPosition = new Vector3(
                 sampledPosition.X,
                 sampledPosition.Y,
@@ -427,10 +426,10 @@ namespace GritGud.Presentation.Tests
                     && frame.StartSeconds >= movementFrame.EndSeconds);
             var droneMovement = (DroneMoveRecord)droneMovementFrame.Frame
                 .SemanticRecord;
-            GameplayPosition sampledDronePosition = GameplaySemanticReplaySampler
-                .Sample(droneMovementFrame.Frame, movementProgress)
-                .Drones.Single(value => value.DroneId == droneMovement.DroneId)
-                .Position;
+            GameplayPosition sampledDronePosition = LerpExpected(
+                droneMovement.Origin,
+                droneMovement.Destination,
+                movementProgress);
             var expectedDronePosition = new Vector3(
                 sampledDronePosition.X,
                 sampledDronePosition.Y,
@@ -587,58 +586,21 @@ namespace GritGud.Presentation.Tests
             replayHud.RequestCameraCommand(GameplayReplayCameraCommand.Auto);
 
             int expectedDischarges = replayHud.Playback.Frames.Sum(frame =>
-                ReplayCombatPresentationEventProjector.Project(frame.Frame)
-                    .Count(presentationEvent => presentationEvent.Kind ==
-                            ReplayCombatPresentationEventKind.WeaponDischarge
-                        || presentationEvent.Kind ==
-                            ReplayCombatPresentationEventKind.ProjectileLaunch
-                        || presentationEvent.Kind ==
-                            ReplayCombatPresentationEventKind
-                                .ThrownExplosiveRelease));
+                CountExpectedDischarges(frame.Frame));
             int expectedImpacts = replayHud.Playback.Frames.Sum(frame =>
-                ReplayCombatPresentationEventProjector.Project(frame.Frame)
-                    .Count(presentationEvent => presentationEvent.Kind ==
-                            ReplayCombatPresentationEventKind.ProjectileImpact
-                        || presentationEvent.Kind ==
-                            ReplayCombatPresentationEventKind
-                                .ThrownExplosiveImpact));
+                CountExpectedImpacts(frame.Frame));
             int expectedReactions = replayHud.Playback.Frames.Sum(frame =>
-                ReplayCombatPresentationEventProjector.Project(frame.Frame)
-                    .Count(presentationEvent => presentationEvent.Kind ==
-                        ReplayCombatPresentationEventKind.Reaction));
+                CountExpectedInjuryReactions(frame.Frame));
             int expectedIncapacitations = replayHud.Playback.Frames.Sum(frame =>
-                ReplayCombatPresentationEventProjector.Project(frame.Frame)
-                    .Count(presentationEvent => presentationEvent.Kind ==
-                            ReplayCombatPresentationEventKind.Incapacitation
-                        || presentationEvent.Kind ==
-                            ReplayCombatPresentationEventKind.Death));
+                CountExpectedTerminalTransitions(frame.Frame));
             int expectedDroneDischarges = replayHud.Playback.Frames.Sum(frame =>
-                ReplayCombatPresentationEventProjector.Project(frame.Frame)
-                    .Count(presentationEvent => presentationEvent.ShooterKind ==
-                        ReplayCombatPresentationSubjectKind.Drone));
+                frame.Frame.SemanticRecord is DroneAttackRecord ? 1 : 0);
             int expectedDroneTransientVisuals = replayHud.Playback.Frames.Sum(
-                frame => ReplayCombatPresentationEventProjector
-                    .Project(frame.Frame)
-                    .Where(presentationEvent =>
-                        presentationEvent.ShooterKind ==
-                            ReplayCombatPresentationSubjectKind.Drone)
-                    .Sum(presentationEvent => 1 +
-                        (presentationEvent.Outcome !=
-                                ReplayCombatPresentationOutcome.Miss
-                            && presentationEvent.Outcome !=
-                                ReplayCombatPresentationOutcome.Blocked
-                                ? 1
-                                : 0)));
+                frame => CountExpectedDroneTransientVisuals(frame.Frame));
             int expectedActorDroneDischarges = replayHud.Playback.Frames.Sum(
-                frame => ReplayCombatPresentationEventProjector
-                    .Project(frame.Frame)
-                    .Count(presentationEvent =>
-                        presentationEvent.ShooterKind ==
-                            ReplayCombatPresentationSubjectKind.Actor
-                        && presentationEvent.TargetKind ==
-                            ReplayCombatPresentationSubjectKind.Drone
-                        && presentationEvent.Kind ==
-                            ReplayCombatPresentationEventKind.WeaponDischarge));
+                frame => frame.Frame.SemanticRecord is ActorDroneAttackRecord
+                    ? 1
+                    : 0);
             replayHud.AdvancePlayback(replayHud.Playback.TotalDurationSeconds);
 
             Assert.That(
@@ -679,5 +641,117 @@ namespace GritGud.Presentation.Tests
             Assert.That(runtime.InputController.CameraOnly, Is.False);
             Assert.That(Time.timeScale, Is.EqualTo(1f));
         }
+
+        private static int CountExpectedDischarges(
+            GameplaySemanticReplayFrame frame)
+        {
+            switch (frame.SemanticRecord)
+            {
+                case DroneAttackRecord _:
+                case ActorDroneAttackRecord _:
+                    return 1;
+                case GameplayActionRecord action:
+                {
+                    int count = action.Outcomes.Count(outcome =>
+                        outcome is WeaponDischargedActionOutcome
+                        || outcome is ProjectileLaunchedActionOutcome
+                        || outcome is ThrownExplosiveActionOutcome);
+                    if (count > 0) return count;
+                    return action.Outcomes.Any(outcome =>
+                            outcome is AttackResolvedActionOutcome resolved
+                            && !resolved.Attack.IsContactAttack)
+                        ? 1
+                        : 0;
+                }
+                default:
+                    return 0;
+            }
+        }
+
+        private static int CountExpectedImpacts(
+            GameplaySemanticReplayFrame frame)
+        {
+            if (frame.SemanticRecord is ProjectileAdvanceRecord advance)
+                return advance.Resulting.Impact == null ? 0 : 1;
+            if (frame.SemanticRecord is DroneCrashImpactRecord)
+                return 1;
+            if (frame.SemanticRecord is GameplayActionRecord action)
+                return action.Outcomes.Count(outcome =>
+                    outcome is ThrownExplosiveActionOutcome);
+            return 0;
+        }
+
+        private static int CountExpectedInjuryReactions(
+            GameplaySemanticReplayFrame frame)
+        {
+            if (!(frame.SemanticRecord is GameplayActionRecord)
+                && !(frame.SemanticRecord is DroneAttackRecord)
+                && !(frame.SemanticRecord is ProjectileAdvanceRecord)
+                && !(frame.SemanticRecord is DroneCrashImpactRecord))
+                return 0;
+            return frame.Resulting.Session.Actors.Count(resulting =>
+                resulting.Wounds.WoundCount > frame.Previous.Session
+                    .GetActor(resulting.ActorId).Wounds.WoundCount);
+        }
+
+        private static int CountExpectedTerminalTransitions(
+            GameplaySemanticReplayFrame frame) =>
+            frame.Resulting.Session.Actors.Count(resulting =>
+            {
+                ActorLifeState previous = frame.Previous.Session
+                    .GetActor(resulting.ActorId).LifeState;
+                return previous != resulting.LifeState
+                    && (resulting.LifeState == ActorLifeState.Incapacitated
+                        || resulting.LifeState == ActorLifeState.Dead);
+            });
+
+        private static int CountExpectedDroneTransientVisuals(
+            GameplaySemanticReplayFrame frame)
+        {
+            if (!(frame.SemanticRecord is DroneAttackRecord attack)) return 0;
+            bool hit = !(attack.Consequence is AttackResolutionRecord resolved)
+                || resolved.Hit;
+            return hit ? 2 : 1;
+        }
+
+        private static GameplayPosition SampleExpectedMovement(
+            MovementRouteRecord route,
+            float normalizedProgress)
+        {
+            float remaining = route.TotalPlaybackDurationSeconds
+                * Mathf.Clamp01(normalizedProgress);
+            for (int index = 0; index < route.Segments.Count; index++)
+            {
+                MovementRouteSegmentRecord segment = route.Segments[index];
+                if (remaining >= segment.PlaybackDurationSeconds
+                    && index < route.Segments.Count - 1)
+                {
+                    remaining -= segment.PlaybackDurationSeconds;
+                    continue;
+                }
+                float progress = Mathf.Clamp01(
+                    remaining / segment.PlaybackDurationSeconds);
+                GameplayPosition position = LerpExpected(
+                    segment.From,
+                    segment.To,
+                    progress);
+                if (!segment.IsTraversal) return position;
+                float lift = 4f * segment.ArcHeight * progress
+                    * (1f - progress);
+                return new GameplayPosition(
+                    position.X,
+                    position.Y + lift,
+                    position.Z);
+            }
+            return route.Destination;
+        }
+
+        private static GameplayPosition LerpExpected(
+            GameplayPosition origin,
+            GameplayPosition destination,
+            float progress) => new GameplayPosition(
+            origin.X + ((destination.X - origin.X) * progress),
+            origin.Y + ((destination.Y - origin.Y) * progress),
+            origin.Z + ((destination.Z - origin.Z) * progress));
     }
 }
