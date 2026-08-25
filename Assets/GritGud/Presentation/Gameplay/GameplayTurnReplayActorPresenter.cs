@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using GritGud.Application.Gameplay;
 using GritGud.Domain.Gameplay;
 using GritGud.Presentation.Actors;
@@ -19,8 +18,6 @@ namespace GritGud.Presentation.Gameplay
         private readonly ActorRagdollPresenter ragdoll;
         private readonly ThirdPersonMotor motor;
         private readonly ExplorationMovementInput movementInput;
-        private readonly HashSet<string> failedOptionalPresentation =
-            new HashSet<string>(StringComparer.Ordinal);
         private bool locomotionEnabled;
         private bool aimEnabled;
         private bool aimRigEnabled;
@@ -66,9 +63,8 @@ namespace GritGud.Presentation.Gameplay
             originalRotation = view.Transform.rotation;
             originalStance = view.Stance.Stance;
             originalPinState = view.ReplayActions.CurrentPinState;
-            failedOptionalPresentation.Clear();
             presenting = true;
-            TryOptional(
+            BeginRequired(
                 "ragdoll",
                 () => ragdoll?.BeginReplayPresentation());
             BeginRequired("animation", () => animation?.BeginReplayPresentation());
@@ -77,10 +73,10 @@ namespace GritGud.Presentation.Gameplay
             BeginRequired(
                 "weapon aim rig",
                 () => aimRig?.BeginReplayPresentation());
-            TryOptional(
+            BeginRequired(
                 "wounds",
                 view.Wounds.BeginReplayPresentation);
-            TryOptional(
+            BeginRequired(
                 "injury overlay",
                 view.InjuryOverlay.BeginReplayPresentation);
             if (locomotion != null)
@@ -148,11 +144,15 @@ namespace GritGud.Presentation.Gameplay
                 Quaternion.Euler(0f, presentedFacing, 0f));
             if (view.Stance.Stance != pose.Stance)
                 view.Stance.ApplyResolved(pose.Stance);
-            TryOptional(
+            PresentRequired(
                 "wounds",
+                transitionSequence,
+                replayRecord,
                 () => view.Wounds.PresentReplay(snapshot.Wounds));
-            TryOptional(
+            PresentRequired(
                 "injury overlay",
+                transitionSequence,
+                replayRecord,
                 () => view.InjuryOverlay.PresentReplay(
                     snapshot.Capabilities));
             if (!string.IsNullOrWhiteSpace(snapshot.EquippedItemId)
@@ -181,8 +181,10 @@ namespace GritGud.Presentation.Gameplay
                             primaryAction,
                             playback?.PlaybackFrame.DurationSeconds ?? 0f);
                     });
-            TryOptional(
+            PresentRequired(
                 "actor-state hooks",
+                transitionSequence,
+                replayRecord,
                 () =>
                 {
                     view.ReplayActions.Present(primaryAction ?? reactionAction);
@@ -198,8 +200,10 @@ namespace GritGud.Presentation.Gameplay
                 out float animationProgress,
                 out TargetRegionId? hitReactionRegion,
                 out float hitReactionProgress);
-            TryOptional(
+            PresentRequired(
                 "hit reaction overlay",
+                transitionSequence,
+                replayRecord,
                 () => view.InjuryOverlay.PresentReplayHitReaction(
                     hitReactionRegion,
                     hitReactionProgress));
@@ -252,9 +256,14 @@ namespace GritGud.Presentation.Gameplay
 
         internal void ClearTransients()
         {
-            TryOptional(
-                "weapon",
-                () => weapon?.ClearReplayTransients());
+            if (weapon != null)
+            {
+                PresentRequired(
+                    "weapon transients",
+                    transitionSequence: 0L,
+                    replayRecord: "frame reset",
+                    weapon.ClearReplayTransients);
+            }
         }
 
         internal void PresentEvent(
@@ -329,7 +338,6 @@ namespace GritGud.Presentation.Gameplay
                 },
                 ref failure);
             presenting = false;
-            failedOptionalPresentation.Clear();
             if (failure != null)
             {
                 Debug.LogWarning(
@@ -348,27 +356,6 @@ namespace GritGud.Presentation.Gameplay
             catch (Exception exception)
             {
                 failure ??= exception;
-            }
-        }
-
-        private void TryOptional(string feature, Action present)
-        {
-            if (present == null
-                || failedOptionalPresentation.Contains(feature))
-            {
-                return;
-            }
-            try
-            {
-                present();
-            }
-            catch (Exception exception)
-            {
-                failedOptionalPresentation.Add(feature);
-                Debug.LogWarning(
-                    $"Replay actor '{view.ActorId}' disabled optional "
-                    + $"{feature} presentation: {exception.Message}",
-                    view.Root);
             }
         }
 

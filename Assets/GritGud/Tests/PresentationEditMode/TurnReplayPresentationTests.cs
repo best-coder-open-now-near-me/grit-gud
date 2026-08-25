@@ -100,6 +100,49 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
+        public void AvailableReplayProjectionFailureIsNotSilentlyDisabled()
+        {
+            var actor = new GameObject("Replay Actor With Broken Projection");
+            try
+            {
+                actor.AddComponent<CharacterController>();
+                actor.AddComponent<ActorStancePresenter>();
+                var view = new GameplayActorView(
+                    "party.broken-projection",
+                    string.Empty,
+                    targetable: false,
+                    actor);
+                using var presenter = new GameplayTurnReplayActorPresenter(view);
+                presenter.Begin();
+                view.Wounds.EndReplayPresentation();
+                var action = new TurnReplayActorActionState(
+                    "party.broken-projection",
+                    TurnReplayActorActionKind.Equipment,
+                    journalSequence: 73,
+                    normalizedProgress: 0.5f);
+
+                InvalidOperationException exception = Assert.Throws<
+                    InvalidOperationException>(() => presenter.Present(
+                        CreateActorSnapshot(
+                            "party.broken-projection",
+                            woundCount: 0,
+                            maximumWounds: 3),
+                        action));
+
+                Assert.That(exception.Message, Does.Contain("transition 73"));
+                Assert.That(
+                    exception.Message,
+                    Does.Contain("party.broken-projection"));
+                Assert.That(exception.Message, Does.Contain("wounds"));
+                Assert.That(exception.InnerException, Is.Not.Null);
+            }
+            finally
+            {
+                Object.DestroyImmediate(actor);
+            }
+        }
+
+        [Test]
         public void BackwardScrubbingRebuildsTimedEventCursorWithoutDuplicates()
         {
             var cursor = new ReplayTimedPresentationEventCursor();
