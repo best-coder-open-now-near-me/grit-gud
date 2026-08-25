@@ -421,33 +421,38 @@ namespace GritGud.Presentation.Gameplay
             {
                 speed = speed >= 2f ? 0.5f : speed * 2f;
             }
-            if (GUI.Button(
-                new Rect(bar.x + 184f, controlsY, 46f, 20f),
-                "AUTO"))
-                RequestCameraCommand(GameplayReplayCameraCommand.Auto);
-            if (GUI.Button(
-                new Rect(bar.x + 234f, controlsY, 24f, 20f),
-                "<"))
-                RequestCameraCommand(
-                    GameplayReplayCameraCommand.PreviousSubject);
-            GUI.Label(
-                new Rect(bar.x + 262f, controlsY, 100f, 20f),
-                replayCameraLabel,
-                titleStyle);
-            if (GUI.Button(
-                new Rect(bar.x + 366f, controlsY, 24f, 20f),
-                ">"))
-                RequestCameraCommand(
-                    GameplayReplayCameraCommand.NextSubject);
-            if (GUI.Button(
-                new Rect(bar.x + 394f, controlsY, 46f, 20f),
-                "FREE"))
-                RequestCameraCommand(GameplayReplayCameraCommand.Free);
+            float scrubberOffset = 188f;
+            if (source == GameplayReplaySource.VerifiedSimulation)
+            {
+                if (GUI.Button(
+                    new Rect(bar.x + 184f, controlsY, 46f, 20f),
+                    "AUTO"))
+                    RequestCameraCommand(GameplayReplayCameraCommand.Auto);
+                if (GUI.Button(
+                    new Rect(bar.x + 234f, controlsY, 24f, 20f),
+                    "<"))
+                    RequestCameraCommand(
+                        GameplayReplayCameraCommand.PreviousSubject);
+                GUI.Label(
+                    new Rect(bar.x + 262f, controlsY, 100f, 20f),
+                    replayCameraLabel,
+                    titleStyle);
+                if (GUI.Button(
+                    new Rect(bar.x + 366f, controlsY, 24f, 20f),
+                    ">"))
+                    RequestCameraCommand(
+                        GameplayReplayCameraCommand.NextSubject);
+                if (GUI.Button(
+                    new Rect(bar.x + 394f, controlsY, 46f, 20f),
+                    "FREE"))
+                    RequestCameraCommand(GameplayReplayCameraCommand.Free);
+                scrubberOffset = 448f;
+            }
 
             Rect scrubber = new Rect(
-                bar.x + 448f,
+                bar.x + scrubberOffset,
                 controlsY + 1f,
-                Mathf.Max(40f, bar.width - 458f),
+                Mathf.Max(40f, bar.width - scrubberOffset - 10f),
                 18f);
             Event guiEvent = Event.current;
             if (guiEvent.rawType == EventType.MouseDown
@@ -533,7 +538,9 @@ namespace GritGud.Presentation.Gameplay
         {
             if (!Enum.IsDefined(typeof(GameplayReplayCameraCommand), command))
                 throw new ArgumentOutOfRangeException(nameof(command));
-            if (!isOpen || playback == null)
+            if (!isOpen
+                || playback == null
+                || source != GameplayReplaySource.VerifiedSimulation)
                 return;
             if (!TryNotifyCameraCommand(command))
                 AbortPlayback();

@@ -75,8 +75,10 @@ namespace GritGud.PlayMode.Tests
             GameplayWorldRegistry registry = null;
             GameplayTurnReplayWorldPresenter worldPresenter = null;
             GameplayReplayTranscriptPresenter transcriptPresenter = null;
+            GameplayCameraRig cameraRig = null;
             GameplayWeaponPresenter enemyAWeapon = null;
             GameplayWeaponPresenter enemyBWeapon = null;
+            Camera ownedSceneCamera = null;
             GameObject host = null;
             GameObject playerActor = null;
             GameObject enemyAActor = null;
@@ -241,6 +243,20 @@ namespace GritGud.PlayMode.Tests
 
                 GameplayInputController input =
                     host.AddComponent<GameplayInputController>();
+                ExplorationMovementInput movementInput =
+                    host.AddComponent<ExplorationMovementInput>();
+                movementInput.BindInputSource(input);
+                if (Camera.main == null)
+                {
+                    ownedSceneCamera = new GameObject(
+                        "Live Away Replay Scene Camera").AddComponent<Camera>();
+                    ownedSceneCamera.gameObject.tag = "MainCamera";
+                }
+                cameraRig = GameplayCameraRig.Create(
+                    playerActor.transform,
+                    movementInput,
+                    input,
+                    playerActor.GetComponentsInChildren<Renderer>(true));
                 GameplayTurnReplayHud hud =
                     host.AddComponent<GameplayTurnReplayHud>();
                 GameplayHud gameplayHud = host.AddComponent<GameplayHud>();
@@ -278,7 +294,8 @@ namespace GritGud.PlayMode.Tests
                     liveGameplayHud: gameplayHud,
                     livePartyHud: partyHud,
                     enemyController: enemies,
-                    behavioursToSuspend: Array.Empty<Behaviour>());
+                    behavioursToSuspend: Array.Empty<Behaviour>(),
+                    replayCamera: cameraRig);
                 transcriptPresenter = new GameplayReplayTranscriptPresenter();
                 transcriptPresenter.Bind(
                     hud,
@@ -310,6 +327,25 @@ namespace GritGud.PlayMode.Tests
                     Is.EqualTo(new Vector3(5f, 0f, 0f)));
                 Assert.That(enemyBActor.transform.position,
                     Is.EqualTo(new Vector3(-5f, 0f, 0f)));
+                Assert.That(cameraRig.Target, Is.SameAs(playerActor.transform),
+                    "Combat replay must remain attached to the controlled character.");
+                Assert.That(cameraRig.IsReplayFreeCameraActive, Is.False);
+
+                hud.RequestCameraCommand(
+                    GameplayReplayCameraCommand.NextSubject);
+                hud.RequestCameraCommand(GameplayReplayCameraCommand.Free);
+                hud.RequestCameraCommand(GameplayReplayCameraCommand.Auto);
+                Assert.That(cameraRig.Target, Is.SameAs(playerActor.transform),
+                    "Simulation-viewer camera commands must be inert in combat replay.");
+                Assert.That(cameraRig.IsReplayFreeCameraActive, Is.False);
+                GameplayCameraView initialReplayView = Camera.main
+                    .GetComponent<GameplayCameraController>().View;
+                Assert.That(
+                    cameraRig.ToggleView(),
+                    Is.Not.EqualTo(initialReplayView),
+                    "The controlled character must retain normal camera controls.");
+                Assert.That(cameraRig.Target, Is.SameAs(playerActor.transform));
+                Assert.That(cameraRig.ToggleView(), Is.EqualTo(initialReplayView));
 
                 float movementDuration = hud.Playback.Frames[0]
                     .DurationSeconds;
@@ -319,6 +355,8 @@ namespace GritGud.PlayMode.Tests
                     Is.EqualTo(4f).Within(0.001f));
                 Assert.That(enemyBActor.transform.position,
                     Is.EqualTo(new Vector3(-5f, 0f, 0f)));
+                Assert.That(cameraRig.Target, Is.SameAs(playerActor.transform),
+                    "Enemy turns must not take ownership of the combat replay camera.");
 
                 hud.AdvancePlayback(hud.Playback.TotalDurationSeconds);
 
@@ -331,6 +369,7 @@ namespace GritGud.PlayMode.Tests
                     Is.EqualTo(new Vector3(3f, 0f, 0f)));
                 Assert.That(enemyBActor.transform.position,
                     Is.EqualTo(new Vector3(-3f, 0f, 0f)));
+                Assert.That(cameraRig.Target, Is.SameAs(playerActor.transform));
 
                 hud.Toggle();
 
@@ -344,6 +383,7 @@ namespace GritGud.PlayMode.Tests
             {
                 transcriptPresenter?.Unbind();
                 worldPresenter?.Dispose();
+                cameraRig?.Dispose();
                 enemyAWeapon?.Unbind();
                 enemyBWeapon?.Unbind();
                 live?.Dispose();
@@ -356,6 +396,8 @@ namespace GritGud.PlayMode.Tests
                     if (enemyBActor != null) Object.Destroy(enemyBActor);
                 }
                 if (host != null) Object.Destroy(host);
+                if (ownedSceneCamera != null)
+                    Object.Destroy(ownedSceneCamera.gameObject);
                 Time.timeScale = originalTimeScale;
             }
         }

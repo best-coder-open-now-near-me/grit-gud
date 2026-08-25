@@ -386,9 +386,10 @@ namespace GritGud.Presentation.Gameplay
                 manualReplayCameraSubjectKey = null;
                 replayCameraSample = null;
                 hasReplayCameraPosition = false;
-                hud.SetReplayCameraState(
-                    GameplayReplayCameraMode.Auto,
-                    "AUTO");
+                if (hud.Source == GameplayReplaySource.VerifiedSimulation)
+                    hud.SetReplayCameraState(
+                        GameplayReplayCameraMode.Auto,
+                        "AUTO");
                 Time.timeScale = 0f;
                 gameplayHud.Hide();
                 partyHud.SetPresentationSuppressed(true);
@@ -520,6 +521,8 @@ namespace GritGud.Presentation.Gameplay
             GameplayPresentationWorldStateSample sample,
             GameplaySemanticReplayPlaybackPosition position)
         {
+            if (hud.Source != GameplayReplaySource.VerifiedSimulation)
+                return;
             replayCameraSample = sample;
             replayCameraPosition = position;
             hasReplayCameraPosition = true;
@@ -599,7 +602,10 @@ namespace GritGud.Presentation.Gameplay
         private void HandleCameraCommand(
             GameplayReplayCameraCommand command)
         {
-            if (!presenting || camera == null || replayCameraSample == null
+            if (hud.Source != GameplayReplaySource.VerifiedSimulation
+                || !presenting
+                || camera == null
+                || replayCameraSample == null
                 || !hasReplayCameraPosition)
                 return;
             if (command == GameplayReplayCameraCommand.Free)
