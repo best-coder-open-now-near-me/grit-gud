@@ -26,13 +26,13 @@ namespace GritGud.Presentation.Gameplay
         }
 
         private const float ReplayDischargeSeconds = 0.12f;
-        private readonly List<TransientVisual> replayTransients =
+        private readonly List<TransientVisual> transients =
             new List<TransientVisual>();
         private Transform[] rotors;
         private Material material;
         private bool operational = true;
 
-        internal int ReplayTransientVisualCount => replayTransients.Count;
+        internal int TransientVisualCount => transients.Count;
 
         internal void Build()
         {
@@ -85,7 +85,7 @@ namespace GritGud.Presentation.Gameplay
                     : new Color(0.16f, 0.08f, 0.06f, 1f);
         }
 
-        internal void PresentReplayDischarge(
+        internal void PresentDischarge(
             string presentationId,
             GameplayPosition origin,
             GameplayPosition destination,
@@ -97,7 +97,7 @@ namespace GritGud.Presentation.Gameplay
                 ? "Drone Weapon"
                 : presentationId;
 
-            var lightRoot = new GameObject(effectName + " Replay Muzzle Light");
+            var lightRoot = new GameObject(effectName + " Muzzle Light");
             lightRoot.transform.position = from;
             Light light = lightRoot.AddComponent<Light>();
             light.type = LightType.Point;
@@ -105,14 +105,14 @@ namespace GritGud.Presentation.Gameplay
             light.intensity = 2.5f;
             light.range = 3.5f;
             light.shadows = LightShadows.None;
-            replayTransients.Add(new TransientVisual(
+            transients.Add(new TransientVisual(
                 lightRoot,
                 ownedMaterial: null,
                 ReplayDischargeSeconds));
 
             if (!drawTracer) return;
 
-            var tracerRoot = new GameObject(effectName + " Replay Tracer");
+            var tracerRoot = new GameObject(effectName + " Tracer");
             LineRenderer tracer = tracerRoot.AddComponent<LineRenderer>();
             tracer.useWorldSpace = true;
             tracer.positionCount = 2;
@@ -126,22 +126,22 @@ namespace GritGud.Presentation.Gameplay
             tracer.endColor = new Color(color.r, color.g, color.b, 0.35f);
             Material tracerMaterial = RuntimeMaterialFactory.CreateColor(
                 color,
-                effectName + " Replay Tracer Material");
+                effectName + " Tracer Material");
             tracer.sharedMaterial = tracerMaterial;
-            replayTransients.Add(new TransientVisual(
+            transients.Add(new TransientVisual(
                 tracerRoot,
                 tracerMaterial,
                 ReplayDischargeSeconds));
         }
 
-        internal void ClearReplayTransients()
+        internal void ClearTransients()
         {
-            foreach (TransientVisual visual in replayTransients)
+            foreach (TransientVisual visual in transients)
             {
                 GameplayObjectLifecycle.Destroy(visual.Root);
                 GameplayObjectLifecycle.Destroy(visual.OwnedMaterial);
             }
-            replayTransients.Clear();
+            transients.Clear();
         }
 
         private void Update()
@@ -152,20 +152,20 @@ namespace GritGud.Presentation.Gameplay
                 foreach (Transform rotor in rotors)
                     rotor.Rotate(0f, rotation, 0f, Space.Self);
             }
-            TickReplayTransients(Time.unscaledDeltaTime);
+            TickTransients(Time.unscaledDeltaTime);
         }
 
-        private void TickReplayTransients(float deltaTime)
+        private void TickTransients(float deltaTime)
         {
             float elapsed = Mathf.Max(0f, deltaTime);
-            for (int index = replayTransients.Count - 1; index >= 0; index--)
+            for (int index = transients.Count - 1; index >= 0; index--)
             {
-                TransientVisual visual = replayTransients[index];
+                TransientVisual visual = transients[index];
                 visual.RemainingSeconds -= elapsed;
                 if (visual.RemainingSeconds > 0f) continue;
                 GameplayObjectLifecycle.Destroy(visual.Root);
                 GameplayObjectLifecycle.Destroy(visual.OwnedMaterial);
-                replayTransients.RemoveAt(index);
+                transients.RemoveAt(index);
             }
         }
 
@@ -205,7 +205,7 @@ namespace GritGud.Presentation.Gameplay
 
         private void OnDestroy()
         {
-            ClearReplayTransients();
+            ClearTransients();
             if (material != null) GameplayObjectLifecycle.Destroy(material);
         }
 

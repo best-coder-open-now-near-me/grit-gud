@@ -1,4 +1,5 @@
 using System.Linq;
+using GritGud.Domain.Gameplay;
 using GritGud.Presentation.Gameplay;
 using GritGud.Presentation.Levels.Runtime;
 using NUnit.Framework;
@@ -177,6 +178,37 @@ namespace GritGud.Presentation.Tests
                         Is.EqualTo("GritGud/CelSurface"),
                         renderer.name);
                 }
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void DroneDischargesUseOneTransientVisualRoute()
+        {
+            var root = new GameObject("Shared Drone Discharge Test");
+            try
+            {
+                GameplayDroneVisualPresenter presenter = root.AddComponent<
+                    GameplayDroneVisualPresenter>();
+                presenter.Build();
+
+                presenter.PresentDischarge(
+                    "attack.drone-pulse",
+                    new GameplayPosition(0f, 2f, 0f),
+                    new GameplayPosition(4f, 1f, 0f),
+                    drawTracer: true);
+                Assert.That(presenter.TransientVisualCount, Is.EqualTo(2));
+
+                presenter.ClearTransients();
+                presenter.PresentDischarge(
+                    "attack.drone-pulse",
+                    new GameplayPosition(0f, 2f, 0f),
+                    new GameplayPosition(4f, 1f, 0f),
+                    drawTracer: false);
+                Assert.That(presenter.TransientVisualCount, Is.EqualTo(1));
             }
             finally
             {

@@ -51,7 +51,7 @@ namespace GritGud.Presentation.Gameplay
                 int count = 0;
                 foreach (GameObject root in roots.Values)
                     count += root.GetComponent<GameplayDroneVisualPresenter>()?
-                        .ReplayTransientVisualCount ?? 0;
+                        .TransientVisualCount ?? 0;
                 return count;
             }
         }
@@ -213,26 +213,37 @@ namespace GritGud.Presentation.Gameplay
                 throw new InvalidOperationException(
                     $"Replay transition {presentationEvent.TransitionSequence} "
                     + $"has no drone shooter '{presentationEvent.ShooterId}'.");
-            GameplayDroneVisualPresenter visual = root.GetComponent<
-                GameplayDroneVisualPresenter>()
-                ?? throw new InvalidOperationException(
-                    $"Replay drone '{presentationEvent.ShooterId}' has no visual presenter.");
-            visual.PresentReplayDischarge(
-                presentationEvent.PresentationId,
-                presentationEvent.Origin,
-                presentationEvent.Destination,
-                presentationEvent.Outcome !=
-                        ReplayCombatPresentationOutcome.Miss
-                    && presentationEvent.Outcome !=
-                        ReplayCombatPresentationOutcome.Blocked);
+            PresentDischarge(root, presentationEvent);
             replayPresentedDischargeCount++;
+        }
+
+        internal void PresentAuthoritativeAttack(
+            DroneAttackRecord attack,
+            long transitionSequence)
+        {
+            if (replayPresentation)
+                throw new InvalidOperationException(
+                    "Authoritative drone attacks are paused during replay.");
+            if (attack == null) throw new ArgumentNullException(nameof(attack));
+            RefreshAuthoritativePresentation();
+            SummonedDroneSnapshot shooter = drones.GetDrone(attack.DroneId);
+            ReplayCombatPresentationSubjectKind targetKind =
+                ResolvePresentationSubjectKind(attack.TargetKind);
+            ReplayCombatPresentationEvent presentationEvent =
+                ReplayCombatPresentationEventProjector.ProjectDroneDischarge(
+                    transitionSequence,
+                    attack,
+                    shooter,
+                    ResolveAuthoritativeTargetPosition(attack, targetKind),
+                    targetKind);
+            PresentDischarge(roots[attack.DroneId], presentationEvent);
         }
 
         internal void ClearReplayTransients()
         {
             foreach (GameObject root in roots.Values)
                 root.GetComponent<GameplayDroneVisualPresenter>()?
-                    .ClearReplayTransients();
+                    .ClearTransients();
         }
 
         internal void EndReplayPresentation()
@@ -340,7 +351,6 @@ namespace GritGud.Presentation.Gameplay
                 return false;
             GameplayPosition origin = gameplay.GetActor(attackingActorId)
                 .Pose.Position;
-            GameObject targetRoot = roots[drone.DroneId];
             long sequence = gameplay.LastActionSequence + 1L;
             try
             {
@@ -368,10 +378,6 @@ namespace GritGud.Presentation.Gameplay
                         attackingActorId,
                         record.Damage.Resulting);
                 RefreshAuthoritativePresentation();
-                GameplayDroneVisualPresenter visual = targetRoot.GetComponent<
-                    GameplayDroneVisualPresenter>();
-                visual?.SetOperational(drones.GetDrone(drone.DroneId)
-                    .IsOperational);
                 dialogue.Append(GameplayDialogueChannel.System, "DRONE IMPACT",
                     record.Hit
                         ? $"{drone.DroneId} integrity {record.Damage.Resulting.RemainingIntegrity:0.#}/{drone.Definition.MaximumIntegrity:0.#}."
@@ -693,10 +699,7 @@ namespace GritGud.Presentation.Gameplay
                     destination,
                     CalculateFacing(drone.Position, destination));
                 drones.CommitMove(record);
-                GameObject root = roots[drone.DroneId];
-                root.transform.SetPositionAndRotation(
-                    new Vector3(destination.X, destination.Y, destination.Z),
-                    Quaternion.Euler(0f, record.ResultingFacingDegrees, 0f));
+                RefreshAuthoritativePresentation();
                 dialogue.Append(GameplayDialogueChannel.System, "SCOUT DRONE",
                     $"Moved to {destination.X:0.0}, {destination.Z:0.0}; controller AP {record.ResultingBudget.ActionPoints}.");
                 CancelTargeting();
@@ -772,6 +775,7 @@ namespace GritGud.Presentation.Gameplay
                     drone.DroneId,
                     resolution);
                 drones.CommitAttack(record);
+                PresentAuthoritativeAttack(record, resolutionSequence);
                 dialogue.Append(GameplayDialogueChannel.System, "SCOUT DRONE",
                     resolution.Hit
                         ? $"Hit {target.ActorId}: {resolution.HitRegion} wounded; controller AP {record.ResultingBudget.ActionPoints}."
@@ -802,6 +806,70 @@ namespace GritGud.Presentation.Gameplay
                     }
             result = default;
             return false;
+        }
+
+        private GameplayPosition ResolveAuthoritativeTargetPosition(
+            DroneAttackRecord attack,
+            ReplayCombatPresentationSubjectKind targetKind)
+        {
+            switch (targetKind)
+            {
+                case ReplayCombatPresentationSubjectKind.Actor:
+                {
+                    GameplayPosition position = gameplay.GetActor(
+                        attack.TargetId).Pose.Position;
+                    return new GameplayPosition(
+                        position.X,
+                        position.Y + 1f,
+                        position.Z);
+                }
+                case ReplayCombatPresentationSubjectKind.Drone:
+                    return drones.GetDrone(attack.TargetId).Position;
+                case ReplayCombatPresentationSubjectKind.Destructible:
+                    if (attack.Consequence is DestructibleDamageRecord damage)
+                        return damage.Previous.Pose.Position;
+                    break;
+            }
+            throw new InvalidOperationException(
+                $"Drone attack target '{attack.TargetId}' has no presentable "
+                + $"{targetKind} position.");
+        }
+
+        private static ReplayCombatPresentationSubjectKind
+            ResolvePresentationSubjectKind(string value)
+        {
+            if (!Enum.TryParse(
+                    value,
+                    out GameplaySemanticSubjectKind subjectKind))
+                throw new InvalidOperationException(
+                    $"Drone attack target kind '{value}' is not semantic.");
+            switch (subjectKind)
+            {
+                case GameplaySemanticSubjectKind.Actor:
+                    return ReplayCombatPresentationSubjectKind.Actor;
+                case GameplaySemanticSubjectKind.DestructibleProp:
+                    return ReplayCombatPresentationSubjectKind.Destructible;
+                default:
+                    return ReplayCombatPresentationSubjectKind.World;
+            }
+        }
+
+        private static void PresentDischarge(
+            GameObject root,
+            ReplayCombatPresentationEvent presentationEvent)
+        {
+            GameplayDroneVisualPresenter visual = root.GetComponent<
+                GameplayDroneVisualPresenter>()
+                ?? throw new InvalidOperationException(
+                    $"Drone '{presentationEvent.ShooterId}' has no visual presenter.");
+            visual.PresentDischarge(
+                presentationEvent.PresentationId,
+                presentationEvent.Origin,
+                presentationEvent.Destination,
+                presentationEvent.Outcome !=
+                        ReplayCombatPresentationOutcome.Miss
+                    && presentationEvent.Outcome !=
+                        ReplayCombatPresentationOutcome.Blocked);
         }
 
         private bool TryAcquireDrone(

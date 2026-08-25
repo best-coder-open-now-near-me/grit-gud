@@ -332,7 +332,9 @@ namespace GritGud.Presentation.Gameplay
                         .PresentationDefinition.PostDecisionDelaySeconds;
                     return;
                 case DroneAttackRecord attack:
-                    drones.RefreshAuthoritativePresentation();
+                    drones.PresentAuthoritativeAttack(
+                        attack,
+                        result.Transition.Identity.Sequence);
                     actionController.PresentExternalStatus(
                         $"{attack.DroneId} attacked {attack.TargetId}.");
                     decisionDelaySeconds = enemy.Presentation

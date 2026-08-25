@@ -747,27 +747,48 @@ namespace GritGud.Application.Gameplay
                         attack.DroneId);
                     ReplayCombatPresentationSubjectKind targetKind =
                         ResolveSubjectKind(frame, attack.TargetId);
-                    events.Add(new ReplayCombatPresentationEvent(
+                    events.Add(ProjectDroneDischarge(
                         sequence,
-                        ReplayCombatPresentationEventKind.WeaponDischarge,
-                        attack.DroneId,
-                        attack.TargetId,
-                        shooter.Position,
+                        attack,
+                        shooter,
                         ResolveSubjectPosition(
                             frame,
                             attack.TargetId,
                             targetKind),
-                        GameplaySemanticReplayPresentationTiming
-                            .ActionResolutionProgress,
-                        shooterKind:
-                            ReplayCombatPresentationSubjectKind.Drone,
-                        targetKind: targetKind,
-                        presentationId:
-                            shooter.Definition.Attack.ActionId,
-                        outcome: ResolveOutcome(attack.Consequence)));
+                        targetKind));
                     break;
                 }
             }
+        }
+
+        public static ReplayCombatPresentationEvent ProjectDroneDischarge(
+            long transitionSequence,
+            DroneAttackRecord attack,
+            SummonedDroneSnapshot shooter,
+            GameplayPosition destination,
+            ReplayCombatPresentationSubjectKind targetKind)
+        {
+            if (attack == null) throw new ArgumentNullException(nameof(attack));
+            if (!string.Equals(
+                    attack.DroneId,
+                    shooter.DroneId,
+                    StringComparison.Ordinal))
+                throw new ArgumentException(
+                    "Drone discharge state must match its semantic record.",
+                    nameof(shooter));
+            return new ReplayCombatPresentationEvent(
+                transitionSequence,
+                ReplayCombatPresentationEventKind.WeaponDischarge,
+                attack.DroneId,
+                attack.TargetId,
+                shooter.Position,
+                destination,
+                GameplaySemanticReplayPresentationTiming
+                    .ActionResolutionProgress,
+                shooterKind: ReplayCombatPresentationSubjectKind.Drone,
+                targetKind: targetKind,
+                presentationId: shooter.Definition.Attack.ActionId,
+                outcome: ResolveOutcome(attack.Consequence));
         }
 
         private static ReplayCombatPresentationEvent CompleteEventIdentity(
