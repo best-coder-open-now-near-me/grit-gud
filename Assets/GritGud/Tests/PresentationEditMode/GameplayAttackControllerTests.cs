@@ -153,7 +153,7 @@ namespace GritGud.Presentation.Tests
         }
 
         [Test]
-        public void OpeningShotDefersInitiativeUntilHitReactionCompletes()
+        public void LiveOpeningShotDefersInitiativeUntilHitReactionCompletes()
         {
             var host = new GameObject("Deferred Opening Shot Test");
             try
@@ -174,6 +174,12 @@ namespace GritGud.Presentation.Tests
                     "player");
                 sessionPresenter.BindEncounterPresentation(
                     new GameplayDialogueLog());
+                using var committedConsequences =
+                    new GameplayCommittedActionConsequenceCoordinator(
+                        session,
+                        new SilentCommittedActionSoundQuery(),
+                        sessionPresenter
+                            .TryBeginEncounterFromCommittedAction);
                 GameplayAttackController controller =
                     host.AddComponent<GameplayAttackController>();
                 controller.Bind(
@@ -195,6 +201,9 @@ namespace GritGud.Presentation.Tests
                 Assert.That(session.EncounterActive, Is.False);
                 Assert.That(sessionPresenter.EncounterStartPending, Is.True);
                 Assert.That(movementInput.InputEnabled, Is.False);
+                Assert.That(
+                    committedConsequences.LastEncounterStartFailure,
+                    Is.Empty);
 
                 sessionPresenter.Tick(
                     ActorInjuryAnimationOverlayProjector.HitReactionSeconds
@@ -552,6 +561,20 @@ namespace GritGud.Presentation.Tests
                 new[] { player, target },
                 Array.Empty<ScenarioObjectiveDefinition>(),
                 responses));
+        }
+
+        private sealed class SilentCommittedActionSoundQuery :
+            IGameplayCommittedActionSoundQuery
+        {
+            public EncounterSoundEvidence Capture(
+                string observerActorId,
+                string sourceActorId,
+                GameplayPosition origin,
+                float soundSignature) =>
+                new EncounterSoundEvidence(
+                    sourceActorId,
+                    origin,
+                    0f);
         }
 
         private static GameplaySession CreateContactSession(

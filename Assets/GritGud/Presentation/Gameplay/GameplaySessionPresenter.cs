@@ -229,27 +229,53 @@ namespace GritGud.Presentation.Gameplay
 
         public bool TryBeginEncounterFromAction(GameplayActionRecord action)
         {
-            if (Session == null
-                || Session.EncounterActive
+            if (Session == null || action == null)
+                return false;
+            if (ReferenceEquals(pendingEncounterAction, action))
+                return true;
+            if (Session.EncounterActive
                 || pendingEncounterAction != null
-                || action == null
                 || !Session.ActionStartsEncounter(action))
             {
                 return false;
             }
 
+            return QueueEncounterFromCommittedAction(
+                action,
+                Session.CreateEncounterScope(
+                    action.Request.ActorId,
+                    action.Request.TargetId));
+        }
+
+        internal bool TryBeginEncounterFromCommittedAction(
+            GameplayActionRecord action,
+            IReadOnlyList<string> participantIds)
+        {
+            if (Session == null || action == null || participantIds == null)
+                return false;
+            if (ReferenceEquals(pendingEncounterAction, action))
+                return true;
+            if (Session.EncounterActive || pendingEncounterAction != null)
+                return false;
+
+            return QueueEncounterFromCommittedAction(action, participantIds);
+        }
+
+        private bool QueueEncounterFromCommittedAction(
+            GameplayActionRecord action,
+            IEnumerable<string> participantIds)
+        {
             SynchronizeExplorationPose();
+            var scope = new List<string>(participantIds).AsReadOnly();
             float delaySeconds = ResolveEncounterStartDelay(action);
             if (delaySeconds <= 0f)
             {
                 return PresentEncounterStart(
-                    Session.BeginEncounterFromAction(action));
+                    Session.BeginEncounter(scope));
             }
 
             pendingEncounterAction = action;
-            pendingEncounterParticipantIds = Session.CreateEncounterScope(
-                action.Request.ActorId,
-                action.Request.TargetId);
+            pendingEncounterParticipantIds = scope;
             pendingEncounterSecondsRemaining = delaySeconds;
             encounterInput?.SetSuppressed(true);
             motor?.StopPlanarMovement();

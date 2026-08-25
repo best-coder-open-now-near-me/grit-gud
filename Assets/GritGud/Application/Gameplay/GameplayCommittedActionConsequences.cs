@@ -201,7 +201,10 @@ namespace GritGud.Application.Gameplay
     {
         private readonly GameplaySession session;
         private readonly IGameplayCommittedActionSoundQuery soundQuery;
-        private readonly Func<IReadOnlyList<string>, bool> beginEncounter;
+        private readonly Func<
+            GameplayActionRecord,
+            IReadOnlyList<string>,
+            bool> beginEncounter;
         private bool disposed;
 
         /// <summary>
@@ -216,6 +219,20 @@ namespace GritGud.Application.Gameplay
             GameplaySession gameplaySession,
             IGameplayCommittedActionSoundQuery committedSoundQuery,
             Func<IReadOnlyList<string>, bool> encounterStart)
+            : this(
+                gameplaySession,
+                committedSoundQuery,
+                AdaptEncounterStart(encounterStart))
+        {
+        }
+
+        public GameplayCommittedActionConsequenceCoordinator(
+            GameplaySession gameplaySession,
+            IGameplayCommittedActionSoundQuery committedSoundQuery,
+            Func<
+                GameplayActionRecord,
+                IReadOnlyList<string>,
+                bool> encounterStart)
         {
             session = gameplaySession ?? throw new ArgumentNullException(
                 nameof(gameplaySession));
@@ -286,6 +303,7 @@ namespace GritGud.Application.Gameplay
                         alertedObservers[0],
                         source.ActorId);
                 TryBeginEncounter(
+                    action,
                     scope,
                     "Committed sound produced Alert awareness but could not begin its encounter.");
                 return;
@@ -296,18 +314,20 @@ namespace GritGud.Application.Gameplay
                     source.ActorId,
                     action.Request.TargetId);
                 TryBeginEncounter(
+                    action,
                     scope,
                     "Authored committed action could not begin its encounter.");
             }
         }
 
         private void TryBeginEncounter(
+            GameplayActionRecord action,
             IReadOnlyList<string> scope,
             string failureMessage)
         {
             try
             {
-                if (beginEncounter(scope))
+                if (beginEncounter(action, scope))
                     return;
 
                 LastEncounterStartFailure = failureMessage;
@@ -339,6 +359,17 @@ namespace GritGud.Application.Gameplay
                         StringComparison.Ordinal))
                     return item.Attack.SoundSignature;
             return 0f;
+        }
+
+        private static Func<
+            GameplayActionRecord,
+            IReadOnlyList<string>,
+            bool> AdaptEncounterStart(
+                Func<IReadOnlyList<string>, bool> encounterStart)
+        {
+            if (encounterStart == null)
+                throw new ArgumentNullException(nameof(encounterStart));
+            return (action, scope) => encounterStart(scope);
         }
     }
 }

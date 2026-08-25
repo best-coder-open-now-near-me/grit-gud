@@ -82,7 +82,8 @@ namespace GritGud.Presentation.Gameplay
                 new GameplayCommittedActionConsequenceCoordinator(
                     session,
                     new GameplayEnemyCommittedActionSoundQuery(enemies),
-                    beginEncounter);
+                    sessionPresenter
+                        .TryBeginEncounterFromCommittedAction);
             exploration = new GameplayEnemyExplorationCoordinator(
                 session,
                 enemies,
