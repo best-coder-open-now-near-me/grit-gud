@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using GritGud.Presentation.Levels.Runtime;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.SceneManagement;
 
 namespace GritGud.Presentation.Gameplay
 {
@@ -30,8 +31,11 @@ namespace GritGud.Presentation.Gameplay
 
         private readonly List<TransientVisual> transientVisuals = new();
         private WeaponMountPresenter mount;
+        private Transform worldEffectsRoot;
 
         internal int TransientVisualCount => transientVisuals.Count;
+
+        internal Transform WorldEffectsRoot => worldEffectsRoot;
 
         internal void Bind(WeaponMountPresenter weaponMount)
         {
@@ -97,6 +101,11 @@ namespace GritGud.Presentation.Gameplay
         internal void Clear()
         {
             ClearTransientVisuals();
+            GameplayObjectLifecycle.Destroy(
+                worldEffectsRoot != null
+                    ? worldEffectsRoot.gameObject
+                    : null);
+            worldEffectsRoot = null;
             mount = null;
         }
 
@@ -114,7 +123,7 @@ namespace GritGud.Presentation.Gameplay
                 definition.MuzzleEffectPrefab,
                 position,
                 rotation,
-                transform);
+                EnsureWorldEffectsRoot());
             effect.name = definition.ItemId + " Muzzle Effect";
             foreach (ParticleSystem particles in
                 effect.GetComponentsInChildren<ParticleSystem>(true))
@@ -139,7 +148,7 @@ namespace GritGud.Presentation.Gameplay
 
             var lightRoot = new GameObject(
                 definition.ItemId + " Muzzle Light");
-            lightRoot.transform.SetParent(transform, false);
+            lightRoot.transform.SetParent(EnsureWorldEffectsRoot(), false);
             lightRoot.transform.position = position;
             Light light = lightRoot.AddComponent<Light>();
             light.type = LightType.Point;
@@ -160,7 +169,7 @@ namespace GritGud.Presentation.Gameplay
             Vector3 destination)
         {
             var tracer = new GameObject("Instant Shot Tracer");
-            tracer.transform.SetParent(transform, false);
+            tracer.transform.SetParent(EnsureWorldEffectsRoot(), false);
             LineRenderer line = tracer.AddComponent<LineRenderer>();
             line.useWorldSpace = true;
             line.positionCount = 2;
@@ -182,6 +191,19 @@ namespace GritGud.Presentation.Gameplay
                 tracer,
                 material,
                 definition.ShotEffectSeconds));
+        }
+
+        private Transform EnsureWorldEffectsRoot()
+        {
+            if (worldEffectsRoot != null)
+                return worldEffectsRoot;
+
+            var root = new GameObject(name + " - Weapon Action Effects");
+            Scene ownerScene = gameObject.scene;
+            if (ownerScene.IsValid() && root.scene != ownerScene)
+                SceneManager.MoveGameObjectToScene(root, ownerScene);
+            worldEffectsRoot = root.transform;
+            return worldEffectsRoot;
         }
 
         private static void DestroyTransientVisual(TransientVisual visual)

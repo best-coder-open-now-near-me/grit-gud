@@ -1517,8 +1517,14 @@ namespace GritGud.Presentation.Tests
                 effects.Tick(0.07f);
 
                 LineRenderer tracer =
-                    host.GetComponentInChildren<LineRenderer>();
+                    effects.WorldEffectsRoot.GetComponentInChildren<
+                        LineRenderer>();
                 Assert.That(tracer, Is.Not.Null);
+                Assert.That(
+                    effects.WorldEffectsRoot.IsChildOf(host.transform),
+                    Is.False,
+                    "World-space shot effects must not inherit actor visibility "
+                        + "or motion.");
                 Assert.That(tracer.positionCount, Is.EqualTo(2));
                 Assert.That(tracer.GetPosition(0), Is.EqualTo(origin));
                 Assert.That(tracer.GetPosition(1), Is.EqualTo(destination));
@@ -1537,6 +1543,62 @@ namespace GritGud.Presentation.Tests
             {
                 Object.DestroyImmediate(host);
                 Object.DestroyImmediate(grip);
+                Object.DestroyImmediate(weaponPrefab);
+            }
+        }
+
+        [Test]
+        public void FirstPersonVisibilityKeepsRifleShotEffectsVisible()
+        {
+            var actor = new GameObject("First Person Rifle Actor");
+            var cameraObject = new GameObject("First Person Rifle Camera");
+            var weaponPrefab = new GameObject("First Person Rifle Weapon");
+            WeaponActionEffectsPresenter effects = null;
+            try
+            {
+                actor.AddComponent<CharacterController>();
+                var stance = actor.AddComponent<ActorStancePresenter>();
+                Transform grip = new GameObject("First Person Rifle Grip")
+                    .transform;
+                grip.SetParent(actor.transform, false);
+                ConfigureTestRig(weaponPrefab, supportHand: false);
+                WeaponPresentationDefinition definition = CreateDefinition(
+                    "test.first-person-rifle",
+                    weaponPrefab,
+                    ActorAnimationPoseIds.Rifle);
+                WeaponMountPresenter mount =
+                    actor.AddComponent<WeaponMountPresenter>();
+                mount.Bind(grip, presentAsLocalPlayer: true);
+                WeaponRigSocketSet sockets = mount.Mount(definition);
+                effects = actor.AddComponent<WeaponActionEffectsPresenter>();
+                effects.Bind(mount);
+
+                cameraObject.AddComponent<Camera>();
+                GameplayCameraController camera = cameraObject
+                    .AddComponent<GameplayCameraController>();
+                camera.Bind(actor.transform, new EmptyInputSource(), stance);
+                camera.SetView(GameplayCameraView.FirstPerson);
+
+                Vector3 origin = sockets.Muzzle.position;
+                effects.PresentShot(
+                    definition,
+                    origin,
+                    origin + (Vector3.forward * 8f),
+                    drawTracer: true);
+                camera.RefreshNow();
+
+                LineRenderer tracer = effects.WorldEffectsRoot
+                    .GetComponentInChildren<LineRenderer>();
+                Assert.That(tracer, Is.Not.Null);
+                Assert.That(tracer.forceRenderingOff, Is.False,
+                    "First person may hide the local character and weapon, "
+                        + "but not the rifle's committed shot effects.");
+            }
+            finally
+            {
+                effects?.Clear();
+                Object.DestroyImmediate(cameraObject);
+                Object.DestroyImmediate(actor);
                 Object.DestroyImmediate(weaponPrefab);
             }
         }
@@ -1955,5 +2017,13 @@ namespace GritGud.Presentation.Tests
                 new ActionCost(1, 0f, ActionMobility.Set),
                 2f,
                 accuracyDecay: AccuracyDecayDefinition.None);
+
+        private sealed class EmptyInputSource : IGameplayInputSource
+        {
+            public GameplayInputFrame CurrentFrame => default;
+
+            public string GetBindingDisplay(GameplayControl control) =>
+                control.ToString();
+        }
     }
 }
