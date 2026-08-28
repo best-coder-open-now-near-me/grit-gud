@@ -16,6 +16,7 @@ namespace GritGud.Presentation.Gameplay
         private const float MemberGap = 6f;
         private const float RosterMemberRevealSeconds = 0.28f;
         private const float RosterMemberStaggerSeconds = 0.1f;
+        private const float RosterMemberReorderSeconds = 0.42f;
         private const float RosterMemberSlideDistance = 24f;
         private static readonly Color PanelColor = GameplayVisualPalette.HudPanel;
         private static readonly Color BorderColor = GameplayVisualPalette.HudBorder;
@@ -49,7 +50,10 @@ namespace GritGud.Presentation.Gameplay
         private bool presentationSuppressed;
         private readonly HashSet<string> visibleMemberIds = new(
             StringComparer.Ordinal);
+        private readonly List<string> visibleMemberOrder = new();
         private readonly Dictionary<string, int> rosterRevealOrder = new(
+            StringComparer.Ordinal);
+        private readonly Dictionary<string, int> rosterStartOrder = new(
             StringComparer.Ordinal);
         private bool observedCombatRoster;
         private float rosterRevealElapsed;
@@ -58,12 +62,19 @@ namespace GritGud.Presentation.Gameplay
 
         internal bool IsPresentationSuppressed => presentationSuppressed;
 
-        internal bool RosterRevealActive => rosterRevealOrder.Count > 0
-            && rosterRevealElapsed < RosterMemberRevealSeconds
-                + ((rosterRevealOrder.Count - 1)
-                    * RosterMemberStaggerSeconds);
+        internal bool RosterRevealActive =>
+            (rosterRevealOrder.Count > 0 || rosterStartOrder.Count > 0)
+            && rosterRevealElapsed < RosterTransitionSeconds;
 
         internal int RevealingRosterMemberCount => rosterRevealOrder.Count;
+
+        private float RosterTransitionSeconds => Mathf.Max(
+            rosterStartOrder.Count > 0 ? RosterMemberReorderSeconds : 0f,
+            rosterRevealOrder.Count > 0
+                ? RosterMemberRevealSeconds
+                    + ((rosterRevealOrder.Count - 1)
+                        * RosterMemberStaggerSeconds)
+                : 0f);
 
         internal void SetPresentationSuppressed(bool suppressed)
         {
@@ -114,7 +125,9 @@ namespace GritGud.Presentation.Gameplay
             presentationSuppressed = false;
             status = string.Empty;
             visibleMemberIds.Clear();
+            visibleMemberOrder.Clear();
             rosterRevealOrder.Clear();
+            rosterStartOrder.Clear();
             observedCombatRoster = false;
             rosterRevealElapsed = 0f;
             enabled = false;
@@ -190,7 +203,7 @@ namespace GritGud.Presentation.Gameplay
                 return;
 
             SynchronizeRosterTransition(model);
-            if (rosterRevealOrder.Count > 0)
+            if (rosterRevealOrder.Count > 0 || rosterStartOrder.Count > 0)
             {
                 rosterRevealElapsed += Mathf.Max(0f, deltaTime);
             }
@@ -208,6 +221,26 @@ namespace GritGud.Presentation.Gameplay
                 (rosterRevealElapsed
                     - (order * RosterMemberStaggerSeconds))
                 / RosterMemberRevealSeconds);
+        }
+
+        internal float GetRosterMemberVerticalPosition(
+            string actorId,
+            int finalIndex)
+        {
+            float stride = MemberHeight + MemberGap;
+            float finalPosition = finalIndex * stride;
+            if (string.IsNullOrWhiteSpace(actorId)
+                || !rosterStartOrder.TryGetValue(actorId, out int startIndex))
+            {
+                return finalPosition;
+            }
+
+            float progress = Mathf.SmoothStep(
+                0f,
+                1f,
+                Mathf.Clamp01(
+                    rosterRevealElapsed / RosterMemberReorderSeconds));
+            return Mathf.Lerp(startIndex * stride, finalPosition, progress);
         }
 
         private void Draw(GameplayPartyHudModel model, Rect panel)
@@ -243,8 +276,8 @@ namespace GritGud.Presentation.Gameplay
                 header,
                 headerStyle);
 
-            float y = panel.y + HeaderHeight;
-            bool drewMember = false;
+            float memberOriginY = panel.y + HeaderHeight;
+            int finalIndex = 0;
             foreach (GameplayPartyMemberHudModel member in model.Members)
             {
                 float reveal = Mathf.SmoothStep(
@@ -252,14 +285,17 @@ namespace GritGud.Presentation.Gameplay
                     1f,
                     GetRosterMemberRevealProgress(member.ActorId));
                 if (reveal <= 0f)
+                {
+                    finalIndex++;
                     continue;
+                }
 
-                if (drewMember)
-                    y += MemberGap * reveal;
                 float revealedHeight = MemberHeight * reveal;
                 var clip = new Rect(
                     panel.x + 8f,
-                    y,
+                    memberOriginY + GetRosterMemberVerticalPosition(
+                        member.ActorId,
+                        finalIndex),
                     panel.width - 16f,
                     revealedHeight);
                 GUI.BeginClip(clip);
@@ -281,14 +317,17 @@ namespace GritGud.Presentation.Gameplay
                         MemberHeight));
                 GUI.color = previousColor;
                 GUI.EndClip();
-                y += revealedHeight;
-                drewMember = true;
+                finalIndex++;
             }
 
             if (!string.IsNullOrWhiteSpace(status))
             {
                 GUI.Label(
-                    new Rect(panel.x + 12f, y, panel.width - 24f, 18f),
+                    new Rect(
+                        panel.x + 12f,
+                        panel.yMax - 34f,
+                        panel.width - 24f,
+                        18f),
                     status,
                     disabledDetailStyle);
             }
@@ -329,9 +368,17 @@ namespace GritGud.Presentation.Gameplay
                 return;
 
             rosterRevealOrder.Clear();
+            rosterStartOrder.Clear();
             rosterRevealElapsed = 0f;
             if (model.CombatRoster)
             {
+                for (int index = 0; index < visibleMemberOrder.Count; index++)
+                {
+                    string actorId = visibleMemberOrder[index];
+                    if (visibleMemberIds.Contains(actorId))
+                        rosterStartOrder[actorId] = index;
+                }
+
                 int revealIndex = 0;
                 foreach (GameplayPartyMemberHudModel member in model.Members)
                 {
@@ -351,10 +398,14 @@ namespace GritGud.Presentation.Gameplay
         private void CaptureVisibleMemberIds(GameplayPartyHudModel model)
         {
             visibleMemberIds.Clear();
+            visibleMemberOrder.Clear();
             if (model == null)
                 return;
             foreach (GameplayPartyMemberHudModel member in model.Members)
+            {
                 visibleMemberIds.Add(member.ActorId);
+                visibleMemberOrder.Add(member.ActorId);
+            }
         }
 
         private void DrawMember(

@@ -11,6 +11,7 @@ namespace GritGud.Presentation.Gameplay
     {
         private const float ExplorationSimulationStepSeconds = 0.1f;
         private const float DefaultShotPresentationSeconds = 0.18f;
+        private const float PostHitReactionSettleSeconds = 0.16f;
 
         private ExplorationMovementInput explorationInput;
         private ThirdPersonMotor motor;
@@ -19,7 +20,6 @@ namespace GritGud.Presentation.Gameplay
         private Transform actorTransform;
         private string actorId;
         private float explorationElapsedSeconds;
-        private GameplayDialogueLog encounterDialogue;
         private WeaponPresentationCatalog encounterWeapons;
         private GameplayInputController encounterInput;
         private GameplayActionRecord pendingEncounterAction;
@@ -47,8 +47,7 @@ namespace GritGud.Presentation.Gameplay
                     "Bind the gameplay session presenter before encounter presentation.");
             }
 
-            encounterDialogue = dialogue ?? throw new ArgumentNullException(
-                nameof(dialogue));
+            _ = dialogue ?? throw new ArgumentNullException(nameof(dialogue));
             encounterWeapons = weaponCatalog;
         }
 
@@ -73,6 +72,7 @@ namespace GritGud.Presentation.Gameplay
             Session = session;
             Session.EquipmentChanged += HandleEquipmentChanged;
             Session.ActorCapabilityChanged += HandleActorCapabilityChanged;
+            Session.ActionResolved += HandleActionResolved;
             SetActor(
                 movementInput,
                 authoritativeActorTransform,
@@ -254,7 +254,10 @@ namespace GritGud.Presentation.Gameplay
             if (Session == null || action == null || participantIds == null)
                 return false;
             if (ReferenceEquals(pendingEncounterAction, action))
+            {
+                pendingEncounterParticipantIds = CopyScope(participantIds);
                 return true;
+            }
             if (Session.EncounterActive || pendingEncounterAction != null)
                 return false;
 
@@ -266,7 +269,7 @@ namespace GritGud.Presentation.Gameplay
             IEnumerable<string> participantIds)
         {
             SynchronizeExplorationPose();
-            var scope = new List<string>(participantIds).AsReadOnly();
+            IReadOnlyList<string> scope = CopyScope(participantIds);
             float delaySeconds = ResolveEncounterStartDelay(action);
             if (delaySeconds <= 0f)
             {
@@ -341,6 +344,7 @@ namespace GritGud.Presentation.Gameplay
             {
                 Session.EquipmentChanged -= HandleEquipmentChanged;
                 Session.ActorCapabilityChanged -= HandleActorCapabilityChanged;
+                Session.ActionResolved -= HandleActionResolved;
             }
 
             if (explorationInput != null)
@@ -361,7 +365,6 @@ namespace GritGud.Presentation.Gameplay
             actorTransform = null;
             actorId = null;
             explorationElapsedSeconds = 0f;
-            encounterDialogue = null;
             encounterWeapons = null;
             ClearPendingEncounterStart();
             encounterInput = null;
@@ -384,22 +387,6 @@ namespace GritGud.Presentation.Gameplay
                 && !Session.GetActor(actorId).IsPinned);
         }
 
-        private void PresentEncounterStarted()
-        {
-            string activeActor = GetActorDisplayName(Session.ActiveActorId);
-            encounterDialogue?.Append(
-                GameplayDialogueChannel.System,
-                "COMBAT",
-                activeActor
-                    + " has initiative. "
-                    + Session.InitiativeOrder.Count
-                    + " combatants engaged.");
-        }
-
-        private string GetActorDisplayName(string participantId) =>
-            Session.Scenario.GetActor(participantId).CharacterProfile?.DisplayName
-            ?? participantId;
-
         private bool PresentEncounterStart(bool encounterStarted)
         {
             if (!encounterStarted)
@@ -409,7 +396,6 @@ namespace GritGud.Presentation.Gameplay
 
             motor.StopPlanarMovement();
             ApplyMode();
-            PresentEncounterStarted();
             return true;
         }
 
@@ -423,6 +409,7 @@ namespace GritGud.Presentation.Gameplay
                     float impactDelay = ResolveContactImpactDelay(resolution);
                     float responseSeconds = resolution.Hit
                         ? ActorInjuryAnimationOverlayProjector.HitReactionSeconds
+                            + PostHitReactionSettleSeconds
                         : ResolveShotPresentationSeconds(
                             resolution.AttackerId);
                     return impactDelay + responseSeconds;
@@ -501,6 +488,41 @@ namespace GritGud.Presentation.Gameplay
             pendingEncounterSecondsRemaining = 0f;
             if (wasPending)
                 encounterInput?.SetSuppressed(false);
+        }
+
+        private void HandleActionResolved(GameplayActionRecord action)
+        {
+            if (Session == null
+                || Session.EncounterActive
+                || pendingEncounterAction != null
+                || action == null
+                || !Session.ActionStartsEncounter(action))
+            {
+                return;
+            }
+
+            try
+            {
+                QueueEncounterFromCommittedAction(
+                    action,
+                    Session.CreateEncounterScope(
+                        action.Request.ActorId,
+                        action.Request.TargetId));
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning(
+                    "Committed action could not stage its combat presentation: "
+                    + exception.Message);
+            }
+        }
+
+        private static IReadOnlyList<string> CopyScope(
+            IEnumerable<string> participantIds)
+        {
+            if (participantIds == null)
+                throw new ArgumentNullException(nameof(participantIds));
+            return new List<string>(participantIds).AsReadOnly();
         }
 
         private void HandleEquipmentChanged(EquipmentChangeRecord _)

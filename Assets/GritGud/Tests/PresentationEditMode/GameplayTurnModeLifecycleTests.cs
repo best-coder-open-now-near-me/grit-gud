@@ -163,10 +163,10 @@ namespace GritGud.Presentation.Tests
                     encounterStarted = entry;
                 }
             }
-            Assert.That(encounterStarted, Is.Not.Null);
-            StringAssert.Contains(
-                "3 combatants engaged",
-                encounterStarted.Message);
+            Assert.That(
+                encounterStarted,
+                Is.Null,
+                "Combat entry must not inject a redundant encounter banner.");
             gameplay.PartyHud.TickRosterReveal(0f);
             Assert.That(gameplay.PartyHud.RevealingRosterMemberCount,
                 Is.GreaterThan(0));

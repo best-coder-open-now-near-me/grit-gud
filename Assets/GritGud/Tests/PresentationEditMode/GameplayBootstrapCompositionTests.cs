@@ -272,6 +272,68 @@ namespace GritGud.Presentation.Tests
         }
 
         [UnityTest]
+        public IEnumerator MainLevelOpeningShotCompletesReactionBeforeRosterSwap()
+        {
+            using var runtime = new GameplayRuntimeTestHarness();
+            yield return runtime.Start();
+
+            GameplaySession session = runtime.Gameplay.Session;
+            Assert.That(session.Mode,
+                Is.EqualTo(GameplaySessionMode.Exploration));
+            Assert.That(session.EncounterActive, Is.False);
+            Assert.That(runtime.PartyHud.CurrentModel.Members,
+                Has.Count.EqualTo(2));
+
+            var exposure = new TargetExposureSnapshot(
+                "player",
+                "depot-rifleman",
+                new[]
+                {
+                    new TargetRegionExposure(TargetRegionId.Torso, 5, 5),
+                });
+
+            Assert.That(runtime.Attacks.TryAttack(exposure), Is.True);
+            Assert.That(runtime.Attacks.LastResolution.Hit, Is.True);
+            Assert.That(runtime.SessionPresenter.EncounterStartPending,
+                Is.True);
+            Assert.That(session.EncounterActive, Is.False);
+            Assert.That(runtime.PartyHud.CurrentModel.CombatRoster, Is.False);
+            Assert.That(runtime.PartyHud.CurrentModel.Members,
+                Has.Count.EqualTo(2));
+            Assert.That(
+                runtime.Gameplay.DialogueLog.Entries.Select(entry => entry.Title),
+                Does.Not.Contain("COMBAT"));
+
+            runtime.SessionPresenter.Tick(
+                ActorInjuryAnimationOverlayProjector.HitReactionSeconds
+                + 0.15f);
+            Assert.That(session.EncounterActive, Is.False);
+
+            runtime.SessionPresenter.Tick(0.02f);
+            Assert.That(session.EncounterActive, Is.True);
+            runtime.PartyHud.TickRosterReveal(0f);
+            Assert.That(runtime.PartyHud.CurrentModel.CombatRoster, Is.True);
+            Assert.That(runtime.PartyHud.RevealingRosterMemberCount,
+                Is.EqualTo(2));
+            Assert.That(runtime.PartyHud.RosterRevealActive, Is.True);
+            Assert.That(
+                runtime.PartyHud.GetRosterMemberRevealProgress(
+                    "depot-rifleman"),
+                Is.Zero);
+
+            int playerFinalIndex = runtime.PartyHud.CurrentModel.Members
+                .Select((member, index) => new { member.ActorId, Index = index })
+                .Single(item => item.ActorId == "player")
+                .Index;
+            Assert.That(
+                runtime.PartyHud.GetRosterMemberVerticalPosition(
+                    "player",
+                    playerFinalIndex),
+                Is.Zero,
+                "The existing party row must not jump to its initiative slot.");
+        }
+
+        [UnityTest]
         public IEnumerator WatchSimsKeepsTheMenuUntilPlaybackIsReady()
         {
             GameObject ownedApplication = null;

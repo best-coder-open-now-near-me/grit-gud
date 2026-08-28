@@ -207,7 +207,7 @@ namespace GritGud.Presentation.Tests
 
                 sessionPresenter.Tick(
                     ActorInjuryAnimationOverlayProjector.HitReactionSeconds
-                    - 0.01f);
+                    + 0.15f);
                 Assert.That(session.EncounterActive, Is.False);
 
                 sessionPresenter.Tick(0.02f);
